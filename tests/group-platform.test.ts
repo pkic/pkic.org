@@ -6,6 +6,7 @@ import {
   assignLocalGroupLeadership,
   canManageGroup,
   createGroup,
+  getVisibleGroup,
   joinGroup,
   leaveGroup,
   listEligibleGroupCapacities,
@@ -51,11 +52,14 @@ describe("group visibility", () => {
     expect(publicPage.groups.some((group) => group.slug === "pqc" && group.visibility === "public")).toBe(true);
     expect(publicPage.groups.some((group) => group.slug === "all-members")).toBe(false);
     expect(publicPage.groups.some((group) => group.slug === "executive-council")).toBe(false);
+    expect((await getVisibleGroup(env.DB, "pqc", { canReadAll: false }))?.slug).toBe("pqc");
+    expect(await getVisibleGroup(env.DB, "executive-council", { canReadAll: false })).toBeNull();
 
     const userId = await insertUser(env.DB, "visibility@example.test");
     const authenticatedPage = await listGroups(env.DB, { limit: 100, offset: 0 }, { canReadAll: false, userId });
     expect(authenticatedPage.groups.some((group) => group.slug === "all-members")).toBe(true);
     expect(authenticatedPage.groups.some((group) => group.slug === "executive-council")).toBe(false);
+    expect((await getVisibleGroup(env.DB, "all-members", { canReadAll: false, userId }))?.slug).toBe("all-members");
   });
 });
 

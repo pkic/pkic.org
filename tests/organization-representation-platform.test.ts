@@ -259,8 +259,19 @@ describe("organization-contact association lifecycle", () => {
     );
     expect(restored).toEqual({ source: "organization_contact", left_at: null, blocked_at: null });
     expect(
-      await queryAll(env.DB, "SELECT id FROM group_memberships WHERE user_id = ? AND left_at IS NULL", targetUserId),
+      await queryAll(
+        env.DB,
+        "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+        [group.id, targetUserId],
+      ),
     ).toHaveLength(0);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM group_memberships WHERE group_id = '20000000-0000-4000-8000-000000000001' AND user_id = ? AND left_at IS NULL",
+        targetUserId,
+      ),
+    ).toHaveLength(1);
     expect(
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_user_id = ?", targetUserId),
     ).toHaveLength(3);

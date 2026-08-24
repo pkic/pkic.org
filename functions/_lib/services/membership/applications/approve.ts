@@ -61,7 +61,7 @@ import { getApplicationAnswers, getMemberApplicationById } from "./queries";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
 import { buildProvisionOrganizationMembership } from "../provisioning";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../../google-groups";
-import { resolveAutoSyncListEmails } from "../../mailing-lists";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../../groups/automatic-enrollment";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
@@ -180,6 +180,7 @@ export async function approveApplication(
   const fromStage = application.stage;
   const requireNoEcDecline = params.approvalMode === "automatic_no_ec_objection";
   const statements: StatementLike[] = [...provisioning.statements];
+  statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, member.userId, now));
 
   // Compare-and-set: only applies if the application is still in ec_review,
   // guarding against a stale read racing a concurrent decline/on-hold/
@@ -211,24 +212,6 @@ export async function approveApplication(
       )
       .bind(uuid(), application.id, fromStage, databaseActorUserId, params.eventNote ?? "Application approved", now),
   );
-
-  // Google Groups enqueue (real API client is in google-groups.ts; this
-  // only writes queue rows, safe regardless of whether the live
-  // integration is configured). Which lists to add depends on the
-  // staff-managed mailing_lists config, not a hardcoded constant/category
-  // check — resolveAutoSyncListEmails reads it at runtime. (This happens to
-  // still resolve to "pkic@ always, consultation@ only for A-G" out of the
-  // box, since that's how consolidated migration 0035 seeded auto_sync_categories_json —
-  // but it's now data, not code.)
-  const autoSyncListEmails = await resolveAutoSyncListEmails(db, application.membership_category);
-  for (const googleGroupEmail of autoSyncListEmails) {
-    const { statement } = buildEnqueueGoogleGroupsSyncStatement(db, {
-      userId: member.userId,
-      googleGroupEmail,
-      action: "add_to_list",
-    });
-    statements.push(statement);
-  }
 
   const workingGroupNames: string[] = [];
   for (const slug of workingGroupSlugs) {

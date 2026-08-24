@@ -164,6 +164,11 @@ export const groupMembershipMutationResponseSchema = z.object({
   endedMembershipIds: z.array(databaseIdSchema),
 });
 export type GroupMembershipMutationResponse = z.infer<typeof groupMembershipMutationResponseSchema>;
+export const groupAutomaticEnrollmentPreferenceSchema = z.object({ optedOut: z.boolean() });
+export const groupAutomaticEnrollmentPreferenceResponseSchema = z.object({
+  success: z.literal(true),
+  optedOut: z.boolean(),
+});
 
 export const GROUP_LEADERSHIP_ROLE_IDS = ["role-group_lead", "role-group_deputy_lead"] as const;
 export const groupLeadershipRoleIdSchema = z.enum(GROUP_LEADERSHIP_ROLE_IDS);

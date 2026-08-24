@@ -136,6 +136,16 @@ user or authorized-manager action.
 This table does not apply to structural parent eligibility and does not affect
 unrelated groups.
 
+Automatic-enrollment reconciliation uses the same canonical active-capacity
+projection as explicit joins. If a user has any active organization capacity,
+the projection excludes their individual capacity for IPR clarity. Every
+eligible organization capacity is enrolled; reconciliation closes only stale
+automatic-policy rows and never silently recreates a former explicit join.
+
+An automatically enrolled group is constrained to be top-level and cannot be
+a structural parent. Its opt-out therefore cannot make unrelated child groups
+ineligible.
+
 ## Governance and roles
 
 The existing roles, role_permissions, user_roles, and permission_grants tables
@@ -419,17 +429,24 @@ and compatibility fallback.
 
 ## Mailing lists
 
-The unreleased mailing_lists table uses group_id -> groups.id and permits
-multiple rows per group. One list may be marked as the primary discussion list.
+The unreleased mailing_lists table uses nullable group_id -> groups.id and
+permits multiple rows per group. A partial unique index permits at most one
+active, unarchived primary discussion list for a group. Lists are archived
+rather than deleted so provider sync and audit history remain attributable.
 
 Membership and subscription are separate:
 
 - a group policy determines the default subscription;
-- the existing scoped unsubscribe or preference model stores a user's override;
+- mailing_list_subscription_preferences stores a durable per-user, per-list
+  subscribed or unsubscribed override;
 - each list has independent purpose, posting, moderation, and default rules.
 
-Google Groups desired state and sync queue consume the canonical effective
-subscription projection. They do not become a second membership source.
+The effective subscription projection combines active capacity, current group
+membership, list eligibility, list default, and the durable user preference.
+The same SQL builders drive reads and reconciliation. Reconciliation is
+set-based in D1 and writes the Google Groups sync queue only when the desired
+provider state changes. Desired state and the sync queue never become a second
+membership source.
 
 ## Voting
 

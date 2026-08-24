@@ -2,8 +2,7 @@
  * GET  /api/v1/admin/mailing-lists — list all managed mailing lists
  * POST /api/v1/admin/mailing-lists — add a new one
  *
- * Admin role required — not a named permission (see
- * assets/shared/schemas/admin-mailing-lists.ts's header note).
+ * Admin role required — not a named permission.
  */
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
@@ -13,7 +12,7 @@ import {
   mailingListResponseSchema,
   mailingListsListResponseSchema,
   mailingListsListRouteSchema,
-} from "../../../../../assets/shared/schemas/admin-mailing-lists";
+} from "../../../../../assets/shared/schemas/mailing-lists";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";

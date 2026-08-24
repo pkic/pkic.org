@@ -2,8 +2,7 @@
  * Admin → Mailing Lists. CRUD over the mailing_lists config
  * table the Google Groups sync engine reads at runtime — see
  * resolveAutoSyncListEmails (functions/_lib/services/mailing-lists.ts).
- * Admin role required (
- * assets/shared/schemas/admin-mailing-lists.ts's header note).
+ * This legacy view consumes the same canonical contracts as the group portal.
  */
 import { useState } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
@@ -13,118 +12,26 @@ import { useApiPage } from "../../hooks/useApiPage";
 import { runGoogleGroupsSync } from "../services/google-groups-sync";
 import { api, apiCommand } from "../api";
 import { toast } from "../ui";
-import type { MailingList } from "../types";
 import {
-  MAILING_LIST_TYPES as LIST_TYPES,
   mailingListsListResponseSchema,
   mailingListResponseSchema,
   type MailingListsListResponse,
-} from "../../../shared/schemas/admin-mailing-lists";
+} from "../../../shared/schemas/mailing-lists";
+import { MailingListForm } from "./mailing-lists/MailingListForm";
+import {
+  emptyMailingListDraft,
+  mailingListDraftToPayload,
+  mailingListToDraft,
+  type MailingListDraft,
+} from "./mailing-lists/model";
 
-type SortKey = "email" | "label" | "list_type" | "active";
+type SortKey = "email" | "label" | "purpose" | "active";
 type SortDir = "asc" | "desc";
-
-interface Draft {
-  email: string;
-  label: string;
-  listType: (typeof LIST_TYPES)[number];
-  workingGroupId: string;
-  autoSyncCategories: string;
-  active: boolean;
-}
-
-function emptyDraft(): Draft {
-  return { email: "", label: "", listType: "custom", workingGroupId: "", autoSyncCategories: "", active: true };
-}
-
-function toDraft(list: MailingList): Draft {
-  return {
-    email: list.email,
-    label: list.label,
-    listType: list.listType,
-    workingGroupId: list.workingGroupId ?? "",
-    autoSyncCategories: list.autoSyncCategories?.join(", ") ?? "",
-    active: list.active,
-  };
-}
-
-function draftToPayload(draft: Draft) {
-  return {
-    email: draft.email.trim(),
-    label: draft.label.trim(),
-    listType: draft.listType,
-    workingGroupId: draft.workingGroupId.trim() || null,
-    autoSyncCategories: draft.autoSyncCategories.trim()
-      ? draft.autoSyncCategories
-          .split(",")
-          .map((c) => c.trim())
-          .filter(Boolean)
-      : null,
-    active: draft.active,
-  };
-}
-
-function MailingListForm({ draft, onChange }: { draft: Draft; onChange: (patch: Partial<Draft>) => void }) {
-  return (
-    <div class="row g-2">
-      <div class="col-sm-4">
-        <label class="form-label small">Email</label>
-        <input
-          class="form-control form-control-sm"
-          value={draft.email}
-          onInput={(e) => onChange({ email: (e.target as HTMLInputElement).value })}
-        />
-      </div>
-      <div class="col-sm-3">
-        <label class="form-label small">Label</label>
-        <input
-          class="form-control form-control-sm"
-          value={draft.label}
-          onInput={(e) => onChange({ label: (e.target as HTMLInputElement).value })}
-        />
-      </div>
-      <div class="col-sm-2">
-        <label class="form-label small">Type</label>
-        <select
-          class="form-select form-select-sm"
-          value={draft.listType}
-          onChange={(e) => onChange({ listType: (e.target as HTMLSelectElement).value as Draft["listType"] })}
-        >
-          {LIST_TYPES.map((t) => (
-            <option value={t} key={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-sm-2">
-        <label class="form-label small">Auto-sync categories</label>
-        <input
-          class="form-control form-control-sm"
-          placeholder="A,B,C (blank = all)"
-          value={draft.autoSyncCategories}
-          onInput={(e) => onChange({ autoSyncCategories: (e.target as HTMLInputElement).value })}
-        />
-      </div>
-      <div class="col-sm-1 d-flex align-items-end">
-        <div class="form-check">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            checked={draft.active}
-            onChange={(e) => onChange({ active: (e.target as HTMLInputElement).checked })}
-          />
-          <label class="form-check-label small">Active</label>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function MailingLists() {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<Draft>(emptyDraft());
-  const [newDraft, setNewDraft] = useState<Draft>(emptyDraft());
+  const [editDraft, setEditDraft] = useState<MailingListDraft>(emptyMailingListDraft());
+  const [newDraft, setNewDraft] = useState<MailingListDraft>(emptyMailingListDraft());
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -172,10 +79,10 @@ export function MailingLists() {
     try {
       await api("/api/v1/admin/mailing-lists", mailingListResponseSchema, {
         method: "POST",
-        body: JSON.stringify(draftToPayload(newDraft)),
+        body: JSON.stringify(mailingListDraftToPayload(newDraft)),
       });
       toast("Mailing list added", "success");
-      setNewDraft(emptyDraft());
+      setNewDraft(emptyMailingListDraft());
       setShowAdd(false);
       await listing.reload();
     } catch (e) {
@@ -190,7 +97,7 @@ export function MailingLists() {
     try {
       await api(`/api/v1/admin/mailing-lists/${id}`, mailingListResponseSchema, {
         method: "PATCH",
-        body: JSON.stringify(draftToPayload(editDraft)),
+        body: JSON.stringify(mailingListDraftToPayload(editDraft)),
       });
       toast("Saved", "success");
       setEditingId(null);
@@ -203,14 +110,12 @@ export function MailingLists() {
   }
 
   async function remove(id: string, label: string) {
-    if (
-      !confirm(`Delete mailing list "${label}"? The portal stops managing it; the Google Group itself is not deleted.`)
-    ) {
+    if (!confirm(`Archive mailing list "${label}"? The portal will stop managing it.`)) {
       return;
     }
     try {
       await apiCommand(`/api/v1/admin/mailing-lists/${id}`, { method: "DELETE" });
-      toast("Deleted", "success");
+      toast("Archived", "success");
       await listing.reload();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -263,7 +168,7 @@ export function MailingLists() {
             <tr>
               {sortTh("Email", "email")}
               {sortTh("Label", "label")}
-              {sortTh("Type", "list_type")}
+              {sortTh("Purpose", "purpose")}
               <th>Auto-sync categories</th>
               {sortTh("Active", "active")}
               <th></th>
@@ -298,7 +203,7 @@ export function MailingLists() {
                   <td>{list.email}</td>
                   <td>{list.label}</td>
                   <td>
-                    <span class="badge text-bg-light text-capitalize">{list.listType.replace("_", " ")}</span>
+                    <span class="badge text-bg-light text-capitalize">{list.purpose.replace("_", " ")}</span>
                   </td>
                   <td class="small text-muted">{list.autoSyncCategories?.join(", ") ?? "all"}</td>
                   <td>
@@ -314,7 +219,7 @@ export function MailingLists() {
                       class="btn btn-outline-secondary btn-sm me-1"
                       onClick={() => {
                         setEditingId(list.id);
-                        setEditDraft(toDraft(list));
+                        setEditDraft(mailingListToDraft(list));
                       }}
                     >
                       Edit
@@ -324,7 +229,7 @@ export function MailingLists() {
                       class="btn btn-outline-danger btn-sm"
                       onClick={() => remove(list.id, list.label)}
                     >
-                      Delete
+                      Archive
                     </button>
                   </td>
                 </tr>

@@ -1232,6 +1232,54 @@ BEGIN
   ) THEN RAISE(ABORT, 'group hierarchy cycle') END;
 END;
 
+-- Automatic enrollment is a convenience policy, never a hierarchy shortcut.
+-- Such groups must remain top-level and cannot become structural parents.
+CREATE TRIGGER trg_groups_automatic_enrollment_top_level_insert
+BEFORE INSERT ON groups
+WHEN NEW.automatic_enrollment_mode != 'none' AND NEW.parent_group_id IS NOT NULL
+BEGIN
+  SELECT RAISE(ABORT, 'automatic enrollment groups must be top-level');
+END;
+
+CREATE TRIGGER trg_groups_automatic_enrollment_top_level_update
+BEFORE UPDATE OF automatic_enrollment_mode, parent_group_id ON groups
+WHEN NEW.automatic_enrollment_mode != 'none' AND NEW.parent_group_id IS NOT NULL
+BEGIN
+  SELECT RAISE(ABORT, 'automatic enrollment groups must be top-level');
+END;
+
+CREATE TRIGGER trg_groups_automatic_enrollment_not_parent_insert
+BEFORE INSERT ON groups
+WHEN NEW.parent_group_id IS NOT NULL
+ AND EXISTS (
+   SELECT 1 FROM groups parent
+    WHERE parent.id = NEW.parent_group_id
+      AND parent.automatic_enrollment_mode != 'none'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'automatic enrollment groups cannot be structural parents');
+END;
+
+CREATE TRIGGER trg_groups_automatic_enrollment_not_parent_update
+BEFORE UPDATE OF parent_group_id ON groups
+WHEN NEW.parent_group_id IS NOT NULL
+ AND EXISTS (
+   SELECT 1 FROM groups parent
+    WHERE parent.id = NEW.parent_group_id
+      AND parent.automatic_enrollment_mode != 'none'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'automatic enrollment groups cannot be structural parents');
+END;
+
+CREATE TRIGGER trg_groups_prevent_parent_becoming_automatic
+BEFORE UPDATE OF automatic_enrollment_mode ON groups
+WHEN NEW.automatic_enrollment_mode != 'none'
+ AND EXISTS (SELECT 1 FROM groups child WHERE child.parent_group_id = NEW.id)
+BEGIN
+  SELECT RAISE(ABORT, 'a structural parent cannot enable automatic enrollment');
+END;
+
 -- One row represents one user participating in one group on behalf of one
 -- membership aggregate. Multiple represented organizations therefore use
 -- multiple rows, without a participant/mandate join-table hierarchy.
@@ -3198,6 +3246,7 @@ CREATE TABLE mailing_lists (
   -- resolveAutoSyncListEmails in mailing-lists.ts. NULL means "every
   -- membership category" (used by the all_members list).
   active                    INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  archived_at               TEXT,
   created_at                TEXT NOT NULL,
   updated_at                TEXT NOT NULL
 );
@@ -3207,6 +3256,31 @@ CREATE INDEX idx_mailing_lists_group_active ON mailing_lists(group_id, active, l
 CREATE UNIQUE INDEX uq_mailing_lists_primary_discussion
   ON mailing_lists(group_id)
   WHERE is_primary_discussion = 1 AND active = 1;
+
+-- Absence means inherit the list default. An explicit row is a durable user
+-- choice and survives group/category eligibility loss and later re-entry.
+CREATE TABLE mailing_list_subscription_preferences (
+  mailing_list_id   TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  preference        TEXT NOT NULL,
+  updated_by_user_id TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  PRIMARY KEY (mailing_list_id, user_id),
+  FOREIGN KEY(mailing_list_id) REFERENCES mailing_lists(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(updated_by_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_mailing_list_preferences_user
+  ON mailing_list_subscription_preferences(user_id, mailing_list_id);
+
+-- List configuration and subscription history are archived, not erased.
+CREATE TRIGGER trg_mailing_lists_prevent_delete
+BEFORE DELETE ON mailing_lists
+BEGIN
+  SELECT RAISE(ABORT, 'mailing lists must be archived, not deleted');
+END;
 
 -- Stable IDs and explicit ownership make these seeds deterministic and usable
 -- immediately. Tests delete business rows in FK-safe order and re-seed only

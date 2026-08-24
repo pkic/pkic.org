@@ -10,7 +10,7 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getConfig } from "../../../../_lib/config";
 import { runGoogleGroupsSyncPass } from "../../../../_lib/services/membership/scheduled-jobs";
-import { mailingListSyncRouteSchema } from "../../../../../assets/shared/schemas/admin-mailing-lists";
+import { mailingListSyncRouteSchema } from "../../../../../assets/shared/schemas/mailing-lists";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 

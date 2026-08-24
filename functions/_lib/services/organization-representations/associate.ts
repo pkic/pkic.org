@@ -2,6 +2,7 @@ import type { OrganizationRepresentative } from "../../../../assets/shared/schem
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildAddRepresentativeStatement } from "../membership/representatives";
 import { requireOrganizationRepresentativeManagement } from "./authorization";
 import { isConcurrentRepresentationConflict } from "./conflicts";
@@ -50,6 +51,7 @@ export async function associateOrganizationRepresentative(
         action: "associated",
         at,
       }),
+      ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at),
     ]);
   } catch (error) {
     if (isConcurrentRepresentationConflict(error)) {

@@ -2,6 +2,8 @@
 import { apiErrorPayloadSchema } from "./api-common";
 import {
   groupCategoryRulesReplaceSchema,
+  groupAutomaticEnrollmentPreferenceResponseSchema,
+  groupAutomaticEnrollmentPreferenceSchema,
   groupCreateSchema,
   groupJoinSchema,
   groupLeadershipAssignSchema,
@@ -131,6 +133,22 @@ export const groupLeaveRouteSchema = {
       description: "Remaining and ended capacities.",
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
+  },
+};
+
+export const groupAutomaticEnrollmentPreferenceRouteSchema = {
+  tags: ["Groups"],
+  summary: "Opt out of or re-enter automatic enrollment",
+  request: {
+    params: groupReferenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupAutomaticEnrollmentPreferenceSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Automatic-enrollment preference updated.",
+      content: { "application/json": { schema: groupAutomaticEnrollmentPreferenceResponseSchema } },
+    },
+    "409": jsonError("The group does not permit automatic-enrollment opt-out."),
   },
 };
 

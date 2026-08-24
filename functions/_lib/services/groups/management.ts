@@ -16,6 +16,7 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
+import { prepareAutomaticGroupEnrollmentForGroupStatements } from "./automatic-enrollment-group";
 import { canEnableLocalOnlyGovernance, requireGroupManagement } from "./governance";
 import { getGroup } from "./read-model";
 
@@ -132,6 +133,17 @@ function translateGroupWriteError(error: unknown): never {
   }
   if (message.includes("group hierarchy cycle")) {
     throw new AppError(409, "GROUP_HIERARCHY_CYCLE", "A group cannot contain itself through its parent hierarchy");
+  }
+  if (
+    message.includes("automatic enrollment groups must be top-level") ||
+    message.includes("automatic enrollment groups cannot be structural parents") ||
+    message.includes("a structural parent cannot enable automatic enrollment")
+  ) {
+    throw new AppError(
+      409,
+      "GROUP_AUTOMATIC_ENROLLMENT_HIERARCHY",
+      "Automatic-enrollment groups must be top-level and cannot be structural parents",
+    );
   }
   throw error;
 }
@@ -274,7 +286,7 @@ export async function updateGroup(
   const at = nowIso();
   add("updated_at", at);
   try {
-    await db.batch([
+    const statements: StatementLike[] = [
       db.prepare(`UPDATE groups SET ${setters.join(", ")} WHERE id = ?`).bind(...bindings, existing.id),
       prepareScopedAuditLog(
         db,
@@ -286,7 +298,16 @@ export async function updateGroup(
         existing.id,
         patch,
       ),
-    ]);
+    ];
+    if (
+      patch.active !== undefined ||
+      patch.eligibilityMode !== undefined ||
+      patch.automaticEnrollmentMode !== undefined ||
+      patch.allowAutomaticOptOut !== undefined
+    ) {
+      statements.push(...prepareAutomaticGroupEnrollmentForGroupStatements(db, existing.id, at));
+    }
+    await db.batch(statements);
   } catch (error) {
     translateGroupWriteError(error);
   }
@@ -328,6 +349,7 @@ export async function replaceGroupCategoryRules(
         rules: input.rules,
       },
     ),
+    ...prepareAutomaticGroupEnrollmentForGroupStatements(db, group.id, at),
   ];
   await db.batch(statements);
 }

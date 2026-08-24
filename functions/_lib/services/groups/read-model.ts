@@ -127,6 +127,61 @@ export interface GroupListAccess {
   canReadAll?: boolean;
 }
 
+interface GroupVisibilityFilter {
+  sql: string;
+  bindings: unknown[];
+}
+
+function buildGroupVisibilityFilter(access: GroupListAccess): GroupVisibilityFilter | null {
+  if (access.canReadAll) return null;
+  if (!access.userId) return { sql: "g.visibility = 'public'", bindings: [] };
+  return {
+    sql: `(
+      g.visibility IN ('public', 'authenticated')
+      OR EXISTS (
+        SELECT 1 FROM group_memberships visible_membership
+        WHERE visible_membership.group_id = g.id
+          AND visible_membership.user_id = ?
+          AND visible_membership.left_at IS NULL
+      )
+      OR EXISTS (
+        SELECT 1 FROM permission_grants visible_grant
+        WHERE visible_grant.user_id = ?
+          AND visible_grant.permission = 'groups:read'
+          AND visible_grant.context_type = 'group'
+          AND visible_grant.context_id = g.id
+          AND visible_grant.revoked_at IS NULL
+          AND (visible_grant.expires_at IS NULL OR visible_grant.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )
+      OR EXISTS (
+        WITH RECURSIVE visible_lineage(id, continue_up) AS (
+          SELECT g.id, CASE WHEN g.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+          UNION ALL
+          SELECT parent.id, CASE WHEN parent.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+          FROM visible_lineage lineage
+          JOIN groups child ON child.id = lineage.id
+          JOIN groups parent ON parent.id = child.parent_group_id
+          WHERE lineage.continue_up = 1
+        )
+        SELECT 1
+        FROM visible_lineage lineage
+        JOIN user_roles visible_role
+          ON visible_role.context_type = 'group'
+         AND visible_role.context_id = lineage.id
+         AND visible_role.user_id = ?
+         AND visible_role.role_id IN ('role-group_lead', 'role-group_deputy_lead')
+         AND visible_role.revoked_at IS NULL
+         AND (visible_role.expires_at IS NULL OR visible_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        JOIN role_permissions visible_permission
+          ON visible_permission.role_id = visible_role.role_id
+         AND visible_permission.permission = 'groups:read'
+        LIMIT 1
+      )
+    )`,
+    bindings: [access.userId, access.userId, access.userId],
+  };
+}
+
 export async function listGroups(
   db: DatabaseLike,
   query: GroupsListQuery,
@@ -135,54 +190,10 @@ export async function listGroups(
   const search = query.q ? buildD1TextSearchFilter(query.q, ["g.name", "g.slug", "g.description"]) : null;
   const conditions: string[] = [];
   const bindings: unknown[] = [];
-  if (!access.canReadAll) {
-    if (!access.userId) {
-      conditions.push("g.visibility = 'public'");
-    } else {
-      conditions.push(`(
-        g.visibility IN ('public', 'authenticated')
-        OR EXISTS (
-          SELECT 1 FROM group_memberships visible_membership
-          WHERE visible_membership.group_id = g.id
-            AND visible_membership.user_id = ?
-            AND visible_membership.left_at IS NULL
-        )
-        OR EXISTS (
-          SELECT 1 FROM permission_grants visible_grant
-          WHERE visible_grant.user_id = ?
-            AND visible_grant.permission = 'groups:read'
-            AND visible_grant.context_type = 'group'
-            AND visible_grant.context_id = g.id
-            AND visible_grant.revoked_at IS NULL
-            AND (visible_grant.expires_at IS NULL OR visible_grant.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-        )
-        OR EXISTS (
-          WITH RECURSIVE visible_lineage(id, continue_up) AS (
-            SELECT g.id, CASE WHEN g.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
-            UNION ALL
-            SELECT parent.id, CASE WHEN parent.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
-            FROM visible_lineage lineage
-            JOIN groups child ON child.id = lineage.id
-            JOIN groups parent ON parent.id = child.parent_group_id
-            WHERE lineage.continue_up = 1
-          )
-          SELECT 1
-          FROM visible_lineage lineage
-          JOIN user_roles visible_role
-            ON visible_role.context_type = 'group'
-           AND visible_role.context_id = lineage.id
-           AND visible_role.user_id = ?
-           AND visible_role.role_id IN ('role-group_lead', 'role-group_deputy_lead')
-           AND visible_role.revoked_at IS NULL
-           AND (visible_role.expires_at IS NULL OR visible_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-          JOIN role_permissions visible_permission
-            ON visible_permission.role_id = visible_role.role_id
-           AND visible_permission.permission = 'groups:read'
-          LIMIT 1
-        )
-      )`);
-      bindings.push(access.userId, access.userId, access.userId);
-    }
+  const visibility = buildGroupVisibilityFilter(access);
+  if (visibility) {
+    conditions.push(visibility.sql);
+    bindings.push(...visibility.bindings);
   }
   if (search) {
     conditions.push(search.sql);
@@ -240,8 +251,15 @@ export async function getVisibleGroup(
   idOrSlug: string,
   access: GroupListAccess,
 ): Promise<Group | null> {
-  const { groups } = await listGroups(db, { q: idOrSlug, active: true, limit: 200, offset: 0 }, access);
-  return groups.find((group) => group.id === idOrSlug || group.slug === idOrSlug) ?? null;
+  const visibility = buildGroupVisibilityFilter(access);
+  const conditions = ["(g.id = ? OR g.slug = ?)", "g.active = 1"];
+  const bindings: unknown[] = [idOrSlug, idOrSlug];
+  if (visibility) {
+    conditions.push(visibility.sql);
+    bindings.push(...visibility.bindings);
+  }
+  const row = await first<GroupRow>(db, `${GROUP_SELECT} ${GROUP_FROM} WHERE ${conditions.join(" AND ")}`, bindings);
+  return row ? mapGroup(row) : null;
 }
 
 interface MembershipRow {

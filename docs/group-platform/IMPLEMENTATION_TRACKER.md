@@ -21,17 +21,17 @@ not intent.
 ## 0. Foundation
 
 - [x] Create a fresh ScanDisk worktree from the verified PR3 head.
-  Evidence: branch starts at bb22b0e8; original PR3 worktree remains unchanged.
+      Evidence: branch starts at bb22b0e8; original PR3 worktree remains unchanged.
 - [x] Verify PR3 head and target on GitHub.
-  Evidence: PR3 head bb22b0e8, target migrate-to-rest-endpoints.
+      Evidence: PR3 head bb22b0e8, target migrate-to-rest-endpoints.
 - [x] Verify migration 0035 is pending in preview.
-  Evidence: Wrangler migration listing on 2026-08-24.
+      Evidence: Wrangler migration listing on 2026-08-24.
 - [x] Verify migration 0035 is pending in production.
-  Evidence: Wrangler migration listing on 2026-08-24.
+      Evidence: Wrangler migration listing on 2026-08-24.
 - [x] Record the accepted architecture and data model.
-  Evidence: ARCHITECTURE.md and DATA_MODEL.md.
+      Evidence: ARCHITECTURE.md and DATA_MODEL.md.
 - [x] Create the stacked pull request and keep its description synchronized.
-  Evidence: draft PR pkic/dev-pkic.org#7 targets the verified PR3 branch.
+      Evidence: draft PR pkic/dev-pkic.org#7 targets the verified PR3 branch.
 
 ## 1. Canonical schema and contracts
 
@@ -52,10 +52,9 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-  Evidence: all 37 migrations, including 207 statements in 0035, applied to
-  a sixth independent local D1 state under ScanDisk after the representation
-  lifecycle, verification evidence, notification, and concurrency refinements
-  on 2026-08-24.
+      Evidence: all 37 migrations, including 212 statements in 0035, applied to
+      a seventh independent local D1 state under ScanDisk after the conditional
+      enrollment and mailing-list refinements on 2026-08-24.
 - [ ] Prove production-shaped upgrade fixture application.
 - [ ] Prove importers target only the final schema.
 
@@ -77,9 +76,9 @@ Status: In progress
 - [x] Make roster, hierarchy, and management queries set-based and paginated.
 - [ ] Cover multiple capacities, parent loss, alternative capacity, cycles,
       inherited management, local-only management, and concurrent joins.
-  Evidence: group-platform.test.ts covers every listed behavior except direct
-  cycle and concurrent-join races; the focused group and representation run is
-  15/15 passing.
+      Evidence: group-platform.test.ts covers every listed behavior except direct
+      cycle and concurrent-join races; the focused group and representation run is
+      15/15 passing.
 
 ## 3. Organization representatives
 
@@ -100,30 +99,37 @@ Status: Complete
 - [x] Verify authorization against current representative state on every action.
 - [x] Cover domain normalization, unverified email, claimed-domain collision,
       explicit association, blocking, restoration, and concurrent reconciliation.
-  Evidence: organization-representation-platform.test.ts,
-  organization-representation-endpoints.test.ts,
-  organization-representatives.test.ts, magic-link-purpose.test.ts, and
-  registration-email-change.test.ts pass 40 focused tests. D1 uniqueness makes
-  one domain claim authoritative; ambiguous lookup remains fail-closed. The
-  mounted API proves contact authorization and shared response contracts.
+      Evidence: organization-representation-platform.test.ts,
+      organization-representation-endpoints.test.ts,
+      organization-representatives.test.ts, magic-link-purpose.test.ts, and
+      registration-email-change.test.ts pass 40 focused tests. D1 uniqueness makes
+      one domain claim authoritative; ambiguous lookup remains fail-closed. The
+      mounted API proves contact authorization and shared response contracts.
 
 ## 4. Conditional enrollment and mailing lists
 
-Status: Pending
+Status: Complete
 
-- [ ] Implement backend-evaluated membership-category eligibility.
-- [ ] Keep eligibility distinct from automatic enrollment.
-- [ ] Reconcile derived enrollment without overriding explicit opt-outs.
-- [ ] Keep automatically enrolled coordination groups top-level and
+- [x] Implement backend-evaluated membership-category eligibility.
+- [x] Keep eligibility distinct from automatic enrollment.
+- [x] Reconcile derived enrollment without overriding explicit opt-outs.
+- [x] Keep automatically enrolled coordination groups top-level and
       non-structural.
-- [ ] Support multiple mailing lists per group.
-- [ ] Support one optional primary discussion list.
-- [ ] Keep group membership and list subscription independent.
-- [ ] Reuse the existing preference or unsubscribe model for user overrides.
-- [ ] Make Google Groups desired state consume the canonical effective
+- [x] Support multiple mailing lists per group.
+- [x] Support one optional primary discussion list.
+- [x] Keep group membership and list subscription independent.
+- [x] Store durable per-list subscription preferences as user overrides.
+- [x] Make Google Groups desired state consume the canonical effective
       subscription projection.
-- [ ] Cover category changes, eligibility loss, opt-out persistence, re-entry,
+- [x] Cover category changes, eligibility loss, opt-out persistence, re-entry,
       multiple lists, and idempotent sync.
+      Evidence: group-enrollment-mailing-lists.test.ts, group-platform.test.ts,
+      mailing-lists.test.ts, and organization-representation-platform.test.ts pass
+      27 focused tests. Reconciliation is set-based in D1, shares one active
+      capacity CTE, preserves explicit opt-outs and preferences, and only queues
+      effective provider-state changes. SQL projection, dependency architecture,
+      API-contract, duplication, max-lines, filename, ESLint, and formatting gates
+      pass for this round.
 
 ## 5. Events, meetings, guests, and attendance
 
@@ -213,7 +219,8 @@ Status: In progress
 
 - [x] Add canonical /api/v1/groups routes.
 - [x] Add nested members and leadership routes.
-- [ ] Add nested forms, votes, mailing lists, stats, and audit routes.
+- [ ] Add nested forms, votes, stats, and audit routes.
+- [x] Add nested mailing-list discovery and preference routes.
 - [ ] Add /api/v1/groups/:groupId/meetings/series routes.
 - [ ] Add series occurrence, guest, join, and attendance routes.
 - [x] Keep routes thin and SQL-free.
@@ -251,8 +258,8 @@ Status: Pending
 Status: Pending
 
 - [x] Run focused tests during every implementation round.
-- [ ] Run SQL projection lint and architecture lint after backend boundaries move.
-- [ ] Run duplication checks and fix new duplication rather than suppress it.
+- [x] Run SQL projection lint and architecture lint after backend boundaries move.
+- [x] Run duplication checks and fix new duplication rather than suppress it.
 - [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
 - [ ] Run migration tests against production-shaped databases.
 - [x] Run migration tests against empty databases.

@@ -4,8 +4,8 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLogAfterOneChange } from "../audit";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { requireOrganizationRepresentativeManagement } from "./authorization";
-import { prepareRepresentationMailingListRemovals } from "./mailing-list-removals";
 import { loadRepresentationNotificationContext, prepareRepresentationNotification } from "./notifications";
 import type { RepresentativeManagerActor } from "./types";
 
@@ -53,12 +53,6 @@ export async function blockOrganizationRepresentative(
   const notification = await loadRepresentationNotificationContext(db, input.memberId, input.userId, false);
   const at = nowIso();
   const statements: StatementLike[] = [
-    prepareRepresentationMailingListRemovals(db, {
-      userId: input.userId,
-      memberId: input.memberId,
-      representativeId: representative.id,
-      at,
-    }),
     db
       .prepare(
         `UPDATE organization_representatives
@@ -84,6 +78,7 @@ export async function blockOrganizationRepresentative(
       action: "blocked",
       at,
     }),
+    ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at),
   ];
   await db.batch(statements);
 }
@@ -132,5 +127,6 @@ export async function restoreOrganizationRepresentative(
       action: "restored",
       at,
     }),
+    ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at),
   ]);
 }

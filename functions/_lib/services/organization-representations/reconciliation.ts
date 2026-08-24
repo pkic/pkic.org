@@ -8,6 +8,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildAddRepresentativeStatement } from "../membership/representatives";
 import { isConcurrentRepresentationConflict } from "./conflicts";
 import { listVerifiedDomainMatches } from "./domain-assessment";
@@ -54,6 +55,7 @@ async function reconcileVerifiedDomainRepresentationsAttempt(
     );
   }
   if (statements.length > 0) {
+    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, userId, at));
     try {
       await db.batch(statements);
     } catch (error) {
@@ -118,5 +120,6 @@ export async function prepareVerifiedDomainAssociationStatements(
       { userId: input.userId, email: input.normalizedEmail, domain },
       input.at,
     ),
+    ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at),
   ];
 }

@@ -64,7 +64,7 @@ describe("atomic service audit boundaries", () => {
       body: JSON.stringify({
         email: "audit-rollback@lists.pkic.org",
         label: "Audit rollback",
-        listType: "custom",
+        purpose: "custom",
       }),
     });
     expect(response.status).toBe(500);

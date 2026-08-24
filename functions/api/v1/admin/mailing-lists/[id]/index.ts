@@ -9,7 +9,7 @@ import {
   mailingListDeleteRouteSchema,
   mailingListResponseSchema,
   mailingListUpdateRouteSchema,
-} from "../../../../../../assets/shared/schemas/admin-mailing-lists";
+} from "../../../../../../assets/shared/schemas/mailing-lists";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 

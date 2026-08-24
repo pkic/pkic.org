@@ -2,6 +2,7 @@ import type { GroupCapacitySelection } from "../../../../assets/shared/schemas/g
 import { AppError } from "../../errors";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
+import { ACTIVE_USER_CAPACITIES_CTE } from "../membership/capacity-query";
 
 export interface EligibleGroupCapacity {
   memberId: string;
@@ -30,29 +31,10 @@ export async function listEligibleGroupCapacities(
 ): Promise<EligibleGroupCapacity[]> {
   const rows = await all<CapacityRow>(
     db,
-    `WITH candidate_capacities AS (
-       SELECT m.id AS member_id, m.member_type, NULL AS organization_name,
-              mca.category_code AS membership_category
-       FROM members m
-       JOIN member_category_assignments mca ON mca.member_id = m.id
-       WHERE m.user_id = ? AND m.member_type = 'individual' AND m.status = 'active'
-         AND NOT EXISTS (
-           SELECT 1 FROM organization_representatives represented
-           WHERE represented.user_id = ?
-             AND represented.left_at IS NULL AND represented.blocked_at IS NULL
-         )
-       UNION ALL
-       SELECT m.id, m.member_type, o.name, mca.category_code
-       FROM organization_representatives represented
-       JOIN members m ON m.id = represented.member_id AND m.status = 'active'
-       JOIN organizations o ON o.id = m.organization_id
-       JOIN member_category_assignments mca ON mca.member_id = m.id
-       WHERE represented.user_id = ?
-         AND represented.left_at IS NULL AND represented.blocked_at IS NULL
-     )
+    `${ACTIVE_USER_CAPACITIES_CTE}
      SELECT capacity.member_id, capacity.member_type, capacity.organization_name,
             capacity.membership_category
-     FROM candidate_capacities capacity
+     FROM active_user_capacities capacity
      JOIN groups g ON g.id = ? AND g.active = 1
      LEFT JOIN group_membership_category_rules rule
        ON rule.group_id = g.id
@@ -61,7 +43,7 @@ export async function listEligibleGroupCapacities(
         OR (g.eligibility_mode = 'category' AND rule.permits_join = 1)
         OR (g.eligibility_mode = 'managed' AND ? = 1)
      ORDER BY capacity.organization_name COLLATE NOCASE, capacity.member_id`,
-    [userId, userId, userId, groupId, options.allowManaged ? 1 : 0],
+    [userId, groupId, options.allowManaged ? 1 : 0],
   );
   return rows.map((row) => ({
     memberId: row.member_id,

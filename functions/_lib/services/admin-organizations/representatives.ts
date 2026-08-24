@@ -27,6 +27,7 @@ import {
   buildRevokeRepresentativeRoleStatement,
 } from "../membership/representative-roles";
 import { prepareAuditLog } from "../audit";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { getOrgAggregate } from "./queries";
@@ -126,6 +127,7 @@ export async function addOrganizationRepresentative(
     assignedRole = "secondary";
   }
   statements.push(
+    ...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now),
     prepareAuditLog(db, "admin", actor.id, "organization_representative_added", "organization", organizationId, {
       representativeId,
       email: user.email,
@@ -225,6 +227,9 @@ export async function updateAdminMember(db: DatabaseLike, actorUserId: string, i
         .bind(input.membershipCategory, nowIso(), id),
     );
   }
+  if (input.membershipCategory !== undefined || input.status !== undefined) {
+    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, member.user_id, nowIso()));
+  }
   if (member.status === "active" && input.status !== undefined && input.status !== "active") {
     statements.push(
       ...(await buildMembershipAccessOffboardingStatements(db, {
@@ -267,6 +272,7 @@ export async function grantIndividualMembership(
 
   const now = nowIso();
   const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, membershipCategory, now);
+  statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, userId, now));
   statements.push(
     prepareAuditLog(db, "admin", actorUserId, "member_created", "member", memberId, {
       userId,
@@ -403,6 +409,7 @@ export async function removeAdminMember(
         causeKey: `representative:${representative.id}:removed`,
         at: now,
       })),
+      ...prepareAutomaticGroupEnrollmentForUserStatements(db, representative.user_id, now),
       prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
         userId: representative.user_id,
         organizationId: orgRow?.organization_id ?? null,
@@ -432,8 +439,8 @@ export async function removeAdminMember(
       causeKey: `member:${member.id}:removed`,
       at,
     })),
-    db.prepare("DELETE FROM member_category_assignments WHERE member_id = ?").bind(id),
-    db.prepare("DELETE FROM members WHERE id = ?").bind(id),
+    db.prepare("UPDATE members SET status = 'inactive', updated_at = ? WHERE id = ?").bind(at, id),
+    ...prepareAutomaticGroupEnrollmentForUserStatements(db, member.user_id, at),
     prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
       userId: member.user_id,
       organizationId: null,

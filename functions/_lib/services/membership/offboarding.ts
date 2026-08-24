@@ -32,6 +32,9 @@ export async function buildUserAccessOffboardingStatements(
       .prepare("UPDATE working_group_members SET left_at = ? WHERE user_id = ? AND left_at IS NULL")
       .bind(input.at, input.userId),
     db
+      .prepare("UPDATE group_memberships SET left_at = ?, updated_at = ? WHERE user_id = ? AND left_at IS NULL")
+      .bind(input.at, input.at, input.userId),
+    db
       .prepare(
         `UPDATE organization_representatives
             SET left_at = ?, updated_at = ?
@@ -73,36 +76,6 @@ function enqueueMembershipRemovals(
                   )
                 )
               )
-           UNION
-           SELECT ml.email
-             FROM mailing_lists ml
-             JOIN member_category_assignments removed_category ON removed_category.member_id = ?
-            WHERE ml.active = 1
-              AND ml.list_type IN ('all_members', 'consultation')
-              AND (
-                ml.auto_sync_categories_json IS NULL
-                OR EXISTS (
-                  SELECT 1 FROM json_each(ml.auto_sync_categories_json)
-                   WHERE value = removed_category.category_code
-                )
-              )
-              AND NOT EXISTS (
-                SELECT 1
-                  FROM member_category_assignments remaining_category
-                  JOIN members remaining_member ON remaining_member.id = remaining_category.member_id
-                  LEFT JOIN organization_representatives remaining_rep
-                    ON remaining_rep.member_id = remaining_member.id
-                   AND remaining_rep.user_id = ? AND remaining_rep.left_at IS NULL
-                 WHERE remaining_member.id != ? AND remaining_member.status = 'active'
-                   AND (remaining_member.user_id = ? OR remaining_rep.id IS NOT NULL)
-                   AND (
-                     ml.auto_sync_categories_json IS NULL
-                     OR EXISTS (
-                       SELECT 1 FROM json_each(ml.auto_sync_categories_json)
-                        WHERE value = remaining_category.category_code
-                     )
-                   )
-              )
          ) removal_emails
         ORDER BY email`,
     )
@@ -111,10 +84,6 @@ function enqueueMembershipRemovals(
       input.causeKey,
       input.at,
       input.at,
-      input.userId,
-      input.memberId,
-      input.userId,
-      input.memberId,
       input.userId,
       input.memberId,
       input.userId,

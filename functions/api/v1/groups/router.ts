@@ -11,6 +11,9 @@ import { GroupMembershipEnd } from "./[groupId]/memberships/[membershipId]";
 import { GroupLeadershipAssign, GroupLeadershipList } from "./[groupId]/leadership/index";
 import { GroupLeadershipRevoke } from "./[groupId]/leadership/[userRoleId]";
 import { GroupCategoryRulesReplace } from "./[groupId]/category-rules";
+import { GroupMailingListSubscriptions } from "./[groupId]/mailing-lists/index";
+import { GroupMailingListPreferenceUpdate } from "./[groupId]/mailing-lists/[listId]";
+import { GroupAutomaticEnrollmentPreference } from "./[groupId]/automatic-enrollment";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -29,5 +32,8 @@ openapi.get("/:groupId/leadership", GroupLeadershipList);
 openapi.post("/:groupId/leadership", GroupLeadershipAssign);
 openapi.delete("/:groupId/leadership/:userRoleId", GroupLeadershipRevoke);
 openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
+openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
+openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
+openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
 
 export default openapi;

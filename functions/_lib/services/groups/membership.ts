@@ -11,6 +11,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
+import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { selectGroupCapacities } from "./capacities";
 import { getGroup, listActiveGroupMembershipsForUser } from "./read-model";
 
@@ -83,6 +84,7 @@ export async function joinGroup(
       ),
   );
   statements.push(
+    prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
     prepareScopedAuditLog(
       db,
       { type: "group", id: group.id },
@@ -141,6 +143,7 @@ export async function leaveGroup(
     db
       .prepare(`UPDATE group_memberships SET left_at = ?, updated_at = ? WHERE ${conditions.join(" AND ")}`)
       .bind(at, at, ...bindings),
+    prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
     prepareScopedAuditLog(
       db,
       { type: "group", id: group.id },

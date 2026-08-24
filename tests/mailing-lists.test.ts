@@ -16,7 +16,7 @@ import { resolveAutoSyncListEmails } from "../functions/_lib/services/mailing-li
 import { signAdminSessionToken } from "../functions/_lib/auth/admin";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
-import { mailingListsListResponseSchema } from "../assets/shared/schemas/admin-mailing-lists";
+import { mailingListsListResponseSchema } from "../assets/shared/schemas/mailing-lists";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -75,7 +75,7 @@ describe("Managed mailing list configuration", () => {
   it("POST creates a new mailing list", async () => {
     const response = await call(adminToken, "/api/v1/admin/mailing-lists", {
       method: "POST",
-      body: JSON.stringify({ email: "custom@lists.pkic.org", label: "Custom List", listType: "custom" }),
+      body: JSON.stringify({ email: "custom@lists.pkic.org", label: "Custom List", purpose: "custom" }),
     });
     expect(response.status).toBe(201);
     const body = (await response.json()) as { mailingList: { id: string; email: string } };
@@ -92,7 +92,7 @@ describe("Managed mailing list configuration", () => {
   it("rejects a duplicate email with 409", async () => {
     const response = await call(adminToken, "/api/v1/admin/mailing-lists", {
       method: "POST",
-      body: JSON.stringify({ email: "pkic@lists.pkic.org", label: "Duplicate", listType: "custom" }),
+      body: JSON.stringify({ email: "pkic@lists.pkic.org", label: "Duplicate", purpose: "custom" }),
     });
     expect(response.status).toBe(409);
   });
@@ -100,7 +100,7 @@ describe("Managed mailing list configuration", () => {
   it("PATCH edits a list's label/active state, DELETE removes it", async () => {
     const created = await call(adminToken, "/api/v1/admin/mailing-lists", {
       method: "POST",
-      body: JSON.stringify({ email: "temp@lists.pkic.org", label: "Temp", listType: "custom" }),
+      body: JSON.stringify({ email: "temp@lists.pkic.org", label: "Temp", purpose: "custom" }),
     });
     const { mailingList } = (await created.json()) as { mailingList: { id: string } };
 
@@ -117,8 +117,13 @@ describe("Managed mailing list configuration", () => {
       method: "DELETE",
     });
     expect(deleteResponse.status).toBe(200);
-    const rows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM mailing_lists WHERE id = ?", mailingList.id);
-    expect(rows).toHaveLength(0);
+    const rows = await queryAll<{ active: number; archived_at: string | null }>(
+      env.DB,
+      "SELECT active, archived_at FROM mailing_lists WHERE id = ?",
+      mailingList.id,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ active: 0, archived_at: expect.any(String) });
   });
 
   it("POST /api/v1/admin/mailing-lists/sync processes the queue on demand", async () => {
