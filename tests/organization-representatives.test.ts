@@ -56,8 +56,9 @@ describe("organization_representatives — concurrent multi-organization represe
 
     await addRepresentative(env.DB, memberId, userId);
 
-    const { statement } = buildAddRepresentativeStatement(env.DB, { memberId, userId });
-    await expect(env.DB.batch([statement])).rejects.toThrow();
+    await expect(buildAddRepresentativeStatement(env.DB, { memberId, userId, source: "staff" })).rejects.toMatchObject({
+      code: "ALREADY_MEMBER",
+    });
   });
 });
 
@@ -71,10 +72,11 @@ describe("organization_representatives — transfer", () => {
 
     await addRepresentative(env.DB, fromMemberId, userId);
 
-    const { statements } = buildTransferRepresentativeStatements(env.DB, {
+    const { statements } = await buildTransferRepresentativeStatements(env.DB, {
       fromMemberId,
       toMemberId,
       userId,
+      source: "staff",
     });
     await env.DB.batch(statements);
 
@@ -104,7 +106,7 @@ describe("organization_representatives — transfer", () => {
 });
 
 describe("organization_representatives — rejoin", () => {
-  it("a former representative rejoining the same organization creates a new row, not a reactivated one", async () => {
+  it("reactivates the durable association instead of creating a second row", async () => {
     const userId = await insertUser(env.DB);
     const orgId = await insertOrganization(env.DB);
     const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
@@ -113,11 +115,10 @@ describe("organization_representatives — rejoin", () => {
     await env.DB.batch([buildCloseRepresentativeStatement(env.DB, { memberId, userId })]);
     expect(await isActiveRepresentative(env.DB, memberId, userId)).toBe(false);
 
-    // Rejoin: the partial unique index only constrains left_at IS NULL
-    // rows, so a fresh insert for the same (member, user) pair succeeds
-    // even though the old, now-inactive row still exists.
+    // Rejoin preserves one durable (organization, user) association so a
+    // contact block cannot be bypassed by creating a fresh row.
     const secondRepId = await addRepresentative(env.DB, memberId, userId);
-    expect(secondRepId).not.toBe(firstRepId);
+    expect(secondRepId).toBe(firstRepId);
     expect(await isActiveRepresentative(env.DB, memberId, userId)).toBe(true);
 
     const rows = await queryAll<RepresentativeRow>(
@@ -126,7 +127,7 @@ describe("organization_representatives — rejoin", () => {
       memberId,
       userId,
     );
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(1);
     const active = rows.filter((r) => r.left_at === null);
     expect(active).toHaveLength(1);
     expect(active[0].id).toBe(secondRepId);

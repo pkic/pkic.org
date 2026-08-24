@@ -9,7 +9,12 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 export const groupIdSchema = databaseIdSchema;
 export const groupSlugSchema = z.string().trim().min(1).max(200).regex(slugPattern);
 export const groupReferenceSchema = z.union([groupIdSchema, groupSlugSchema]);
-export const groupTypeKeySchema = z.string().trim().min(1).max(80).regex(/^[a-z][a-z0-9_]*$/);
+export const groupTypeKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z][a-z0-9_]*$/);
 
 export const GROUP_GOVERNANCE_INHERITANCE_MODES = ["inherited", "local_only"] as const;
 export const groupGovernanceInheritanceModeSchema = z.enum(GROUP_GOVERNANCE_INHERITANCE_MODES);
@@ -17,6 +22,8 @@ export const GROUP_ELIGIBILITY_MODES = ["open", "category", "managed"] as const;
 export const groupEligibilityModeSchema = z.enum(GROUP_ELIGIBILITY_MODES);
 export const GROUP_AUTOMATIC_ENROLLMENT_MODES = ["none", "category"] as const;
 export const groupAutomaticEnrollmentModeSchema = z.enum(GROUP_AUTOMATIC_ENROLLMENT_MODES);
+export const GROUP_VISIBILITIES = ["public", "authenticated", "participants", "managed"] as const;
+export const groupVisibilitySchema = z.enum(GROUP_VISIBILITIES);
 
 export const groupTypeSchema = z.object({
   key: groupTypeKeySchema,
@@ -27,6 +34,7 @@ export const groupTypeSchema = z.object({
   defaultEligibilityMode: groupEligibilityModeSchema,
   defaultAutomaticEnrollmentMode: groupAutomaticEnrollmentModeSchema,
   defaultAllowAutomaticOptOut: z.boolean(),
+  defaultVisibility: groupVisibilitySchema,
   active: z.boolean(),
   sortOrder: z.number().int(),
 });
@@ -34,6 +42,7 @@ export type GroupType = z.infer<typeof groupTypeSchema>;
 export const groupTypesListQuerySchema = listQuerySchema(["sort_order", "singular_label", "key"] as const).extend({
   active: booleanQueryFlagSchema.optional(),
 });
+export type GroupTypesListQuery = z.infer<typeof groupTypesListQuerySchema>;
 export const groupTypesListResponseSchema = paginatedResponseSchema("groupTypes", groupTypeSchema);
 
 export const groupLabelSchema = z.object({
@@ -49,6 +58,7 @@ export const groupSchema = z.object({
   parentGroup: groupLabelSchema.nullable(),
   description: z.string().nullable(),
   links: linksSchema,
+  visibility: groupVisibilitySchema,
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema,
   eligibilityMode: groupEligibilityModeSchema,
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema,
@@ -78,6 +88,7 @@ export const groupCreateSchema = z.object({
   slug: groupSlugSchema.optional(),
   description: trimmedString(0, 4000).nullable().optional(),
   links: linksSchema.optional(),
+  visibility: groupVisibilitySchema.optional(),
   ...groupPolicyInputShape,
 });
 export type GroupCreateInput = z.infer<typeof groupCreateSchema>;
@@ -89,6 +100,7 @@ export const groupUpdateSchema = z.object({
   slug: groupSlugSchema.optional(),
   description: trimmedString(0, 4000).nullable().optional(),
   links: linksSchema.optional(),
+  visibility: groupVisibilitySchema.optional(),
   active: z.boolean().optional(),
   ...groupPolicyInputShape,
 });
@@ -103,6 +115,7 @@ export const groupCategoryRuleSchema = z.object({
 export const groupCategoryRulesReplaceSchema = z.object({
   rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })).max(100),
 });
+export type GroupCategoryRulesReplaceInput = z.infer<typeof groupCategoryRulesReplaceSchema>;
 
 export const GROUP_MEMBERSHIP_SOURCES = [
   "self_service",
@@ -112,6 +125,7 @@ export const GROUP_MEMBERSHIP_SOURCES = [
   "migration",
 ] as const;
 export const groupMembershipSourceSchema = z.enum(GROUP_MEMBERSHIP_SOURCES);
+export type GroupMembershipSource = z.infer<typeof groupMembershipSourceSchema>;
 
 export const groupMembershipSchema = z.object({
   id: databaseIdSchema,
@@ -134,6 +148,7 @@ export const groupCapacitySelectionSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("all_eligible"), confirmed: z.literal(true) }),
   z.object({ mode: z.literal("selected"), memberIds: z.array(databaseIdSchema).min(1).max(50) }),
 ]);
+export type GroupCapacitySelection = z.infer<typeof groupCapacitySelectionSchema>;
 
 export const groupJoinSchema = z.object({ capacitySelection: groupCapacitySelectionSchema });
 export const groupMemberAddSchema = groupJoinSchema.extend({ userId: databaseIdSchema });
@@ -141,12 +156,14 @@ export const groupLeaveSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("all") }),
   z.object({ mode: z.literal("selected"), memberIds: z.array(databaseIdSchema).min(1).max(50) }),
 ]);
+export type GroupLeaveInput = z.infer<typeof groupLeaveSchema>;
 
 export const groupMembershipMutationResponseSchema = z.object({
   group: groupLabelSchema,
   memberships: z.array(groupMembershipSchema),
   endedMembershipIds: z.array(databaseIdSchema),
 });
+export type GroupMembershipMutationResponse = z.infer<typeof groupMembershipMutationResponseSchema>;
 
 export const GROUP_LEADERSHIP_ROLE_IDS = ["role-group_lead", "role-group_deputy_lead"] as const;
 export const groupLeadershipRoleIdSchema = z.enum(GROUP_LEADERSHIP_ROLE_IDS);
@@ -161,16 +178,19 @@ export const groupLeadershipAssignmentSchema = z.object({
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+export type GroupLeadershipAssignment = z.infer<typeof groupLeadershipAssignmentSchema>;
 export const groupLeadershipAssignSchema = z.object({
   userId: databaseIdSchema,
   roleId: groupLeadershipRoleIdSchema,
   expiresAt: z.iso.datetime().nullable().optional(),
 });
+export type GroupLeadershipAssignInput = z.infer<typeof groupLeadershipAssignSchema>;
 export const groupLeadershipListResponseSchema = z.object({
   group: groupLabelSchema,
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema,
   assignments: z.array(groupLeadershipAssignmentSchema),
 });
+export type GroupLeadershipListResponse = z.infer<typeof groupLeadershipListResponseSchema>;
 
 export const GROUP_SORT_COLUMNS = ["name", "slug", "type", "participant_count", "created_at"] as const;
 export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend({
@@ -179,6 +199,7 @@ export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend(
   parentGroupId: groupIdSchema.nullable().optional(),
   eligibilityMode: groupEligibilityModeSchema.optional(),
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema.optional(),
+  visibility: groupVisibilitySchema.optional(),
 });
 export type GroupsListQuery = z.infer<typeof groupsListQuerySchema>;
 export const groupsListResponseSchema = paginatedResponseSchema("groups", groupSchema);

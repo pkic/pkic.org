@@ -1149,6 +1149,7 @@ CREATE TABLE group_types (
   default_eligibility_mode TEXT NOT NULL DEFAULT 'open',
   default_automatic_enrollment_mode TEXT NOT NULL DEFAULT 'none',
   default_allow_automatic_opt_out INTEGER NOT NULL DEFAULT 1 CHECK (default_allow_automatic_opt_out IN (0, 1)),
+  default_visibility TEXT NOT NULL DEFAULT 'participants',
   active           INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   sort_order       INTEGER NOT NULL DEFAULT 0,
   created_at       TEXT NOT NULL,
@@ -1158,14 +1159,14 @@ CREATE TABLE group_types (
 INSERT INTO group_types
   (key, singular_label, plural_label, description,
    default_governance_inheritance_mode, default_eligibility_mode,
-   default_automatic_enrollment_mode, default_allow_automatic_opt_out,
+   default_automatic_enrollment_mode, default_allow_automatic_opt_out, default_visibility,
    active, sort_order, created_at, updated_at)
 VALUES
-  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 1, 10, datetime('now'), datetime('now')),
-  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 1, 20, datetime('now'), datetime('now')),
-  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 1, 30, datetime('now'), datetime('now')),
-  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 1, 40, datetime('now'), datetime('now')),
-  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 1, 50, datetime('now'), datetime('now'));
+  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 'public', 1, 10, datetime('now'), datetime('now')),
+  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 'participants', 1, 20, datetime('now'), datetime('now')),
+  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 'participants', 1, 30, datetime('now'), datetime('now')),
+  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 40, datetime('now'), datetime('now')),
+  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 50, datetime('now'), datetime('now'));
 
 CREATE TABLE groups (
   id                          TEXT NOT NULL PRIMARY KEY,
@@ -1175,6 +1176,7 @@ CREATE TABLE groups (
   slug                        TEXT NOT NULL UNIQUE,
   description                 TEXT,
   links_json                  TEXT,
+  visibility                  TEXT NOT NULL DEFAULT 'participants',
   governance_inheritance_mode TEXT NOT NULL DEFAULT 'inherited',
   eligibility_mode            TEXT NOT NULL DEFAULT 'open',
   automatic_enrollment_mode   TEXT NOT NULL DEFAULT 'none',
@@ -1192,6 +1194,8 @@ CREATE INDEX idx_groups_parent_active
   ON groups(parent_group_id, active, name, id);
 CREATE INDEX idx_groups_type_active
   ON groups(type_key, active, name, id);
+CREATE INDEX idx_groups_visibility_active
+  ON groups(visibility, active, name, id);
 
 -- D1 cannot defer recursive hierarchy validation to application code because
 -- other writers may exist. Reject direct and indirect cycles at the database
@@ -1373,34 +1377,34 @@ CREATE INDEX idx_group_auto_opt_outs_user
   ON group_automatic_enrollment_opt_outs(user_id, group_id);
 
 INSERT OR IGNORE INTO groups
-  (id, type_key, parent_group_id, name, slug, description,
+  (id, type_key, parent_group_id, name, slug, description, visibility,
    governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
    allow_automatic_opt_out, min_endorsers_for_ballot, active, created_at, updated_at)
 VALUES
   ('20000000-0000-4000-8000-000000000001', 'community', NULL, 'All Members', 'all-members',
    'The default communication and coordination group for active consortium members.',
-   'inherited', 'category', 'category', 1, 0, 1, datetime('now'), datetime('now')),
+   'authenticated', 'inherited', 'category', 'category', 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000002', 'board', NULL, 'Executive Council', 'executive-council',
    'The consortium governing group.',
-   'inherited', 'managed', 'none', 0, 0, 1, datetime('now'), datetime('now')),
+   'participants', 'inherited', 'managed', 'none', 0, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000003', 'working_group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000004', 'working_group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000005', 'working_group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000006', 'working_group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000007', 'working_group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   'inherited', 'category', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'category', 'none', 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000008', 'working_group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now'));
+   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
   (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)

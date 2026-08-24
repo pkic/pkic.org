@@ -95,7 +95,12 @@ export async function addOrganizationRepresentative(
   });
 
   const now = nowIso();
-  const { representativeId, statement } = buildAddRepresentativeStatement(db, { memberId, userId: user.id, now });
+  const { representativeId, statement } = await buildAddRepresentativeStatement(db, {
+    memberId,
+    userId: user.id,
+    source: "staff",
+    now,
+  });
   const holders = await resolveRepresentativeRoleHolders(db, memberId);
   const statements: StatementLike[] = [];
   if (userStatement) statements.push(userStatement);

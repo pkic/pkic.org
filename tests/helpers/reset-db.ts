@@ -47,9 +47,23 @@ const EXCLUDED_TABLES = new Set([
   "membership_settings",
   "mailing_lists",
   "membership_categories",
+  "group_types",
+  "groups",
+  "group_membership_category_rules",
   "sponsorship_tier_catalog",
   "sponsorship_tier_config",
 ]);
+
+const SEEDED_GROUP_IDS = [
+  "20000000-0000-4000-8000-000000000001",
+  "20000000-0000-4000-8000-000000000002",
+  "20000000-0000-4000-8000-000000000003",
+  "20000000-0000-4000-8000-000000000004",
+  "20000000-0000-4000-8000-000000000005",
+  "20000000-0000-4000-8000-000000000006",
+  "20000000-0000-4000-8000-000000000007",
+  "20000000-0000-4000-8000-000000000008",
+] as const;
 
 async function listResettableTables(): Promise<string[]> {
   const { results } = await env.DB.prepare(
@@ -101,13 +115,48 @@ async function clearMembershipSettingsActorReference(): Promise<void> {
   await env.DB.prepare(`UPDATE membership_settings SET updated_by_user_id = NULL WHERE id = 'default'`).run();
 }
 
+/** Test isolation may delete history, while production code remains unable to do so. */
+async function suspendHistoryDeleteTrigger(): Promise<string | null> {
+  const trigger = await env.DB.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_group_memberships_prevent_delete'",
+  ).first<{ sql: string }>();
+  if (!trigger?.sql) return null;
+  await env.DB.prepare("DROP TRIGGER trg_group_memberships_prevent_delete").run();
+  return trigger.sql;
+}
+
+async function restoreHistoryDeleteTrigger(sql: string | null): Promise<void> {
+  if (!sql) return;
+  // D1 exec() splits on the semicolon inside the trigger body. A prepared
+  // schema statement preserves the complete CREATE TRIGGER statement.
+  await env.DB.prepare(sql).run();
+}
+
+/** Preserve migration-owned group configuration while removing test-created groups. */
+async function clearTestGroups(): Promise<void> {
+  const seedIdsJson = JSON.stringify(SEEDED_GROUP_IDS);
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM group_membership_category_rules
+          WHERE group_id NOT IN (SELECT value FROM json_each(?))`,
+    ).bind(seedIdsJson),
+    env.DB.prepare(`DELETE FROM groups WHERE id NOT IN (SELECT value FROM json_each(?))`).bind(seedIdsJson),
+  ]);
+}
+
 /**
  * Clears all domain data from the test database while preserving the schema
  * and the D1 migration tracking table.  Call inside `beforeEach` in test files
  * that create multiple independent DB scenarios.
  */
 export async function resetDb(): Promise<void> {
-  await clearMembershipSettingsActorReference();
-  const tableNames = await listResettableTables();
-  await clearTablesWithRetry(tableNames);
+  const historyDeleteTriggerSql = await suspendHistoryDeleteTrigger();
+  try {
+    await clearMembershipSettingsActorReference();
+    const tableNames = await listResettableTables();
+    await clearTablesWithRetry(tableNames);
+    await clearTestGroups();
+  } finally {
+    await restoreHistoryDeleteTrigger(historyDeleteTriggerSql);
+  }
 }

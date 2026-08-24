@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { workingGroupIdSchema } from "./working-groups";
+import { groupIdSchema } from "./groups";
 
 export const MAILING_LIST_TYPES = ["all_members", "consultation", "ec", "working_group", "custom"] as const;
 export const mailingListTypeSchema = z.enum(MAILING_LIST_TYPES);
@@ -19,7 +19,7 @@ export const mailingListSchema = z.object({
   email: z.string(),
   label: z.string(),
   listType: mailingListTypeSchema,
-  workingGroupId: workingGroupIdSchema.nullable(),
+  workingGroupId: groupIdSchema.nullable(),
   autoSyncCategories: z.array(z.string()).nullable(),
   active: z.boolean(),
   createdAt: z.string(),
@@ -50,7 +50,7 @@ export const mailingListCreateSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   label: trimmedString(1, 200),
   listType: mailingListTypeSchema,
-  workingGroupId: workingGroupIdSchema.nullable().optional(),
+  workingGroupId: groupIdSchema.nullable().optional(),
   autoSyncCategories: z.array(z.string()).nullable().optional(),
   active: z.boolean().optional(),
 });

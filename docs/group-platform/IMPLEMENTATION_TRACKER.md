@@ -52,34 +52,38 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-  Evidence: all 37 migrations, including 206 statements in 0035, applied to
-  a fourth independent local D1 state under ScanDisk after the group-type,
-  form-identity, and optimistic-edit refinements on 2026-08-24.
+  Evidence: all 37 migrations, including 207 statements in 0035, applied to
+  a fifth independent local D1 state under ScanDisk after group visibility,
+  representative provenance, form identity, and optimistic-edit refinements
+  on 2026-08-24.
 - [ ] Prove production-shaped upgrade fixture application.
 - [ ] Prove importers target only the final schema.
 
 ## 2. Group membership and governance
 
-Status: Pending
+Status: In progress
 
-- [ ] Implement group creation and update with parent-cycle prevention.
-- [ ] Implement explicit join using all eligible organizations by default.
-- [ ] Permit the user to select a non-empty subset of represented organizations.
-- [ ] Reject individual capacity whenever organization representation exists.
-- [ ] Implement leave-one-capacity and leave-all behavior.
-- [ ] Enforce active parent membership before child join.
-- [ ] End descendants only after the last active parent capacity ends.
-- [ ] Do not restore descendants when a parent is rejoined.
-- [ ] Resolve inherited parent leadership recursively.
-- [ ] Extend inherited leadership with local roles by default.
-- [ ] Implement safely authorized local-only governance.
-- [ ] Make roster, hierarchy, and management queries set-based and paginated.
+- [x] Implement group creation and update with parent-cycle prevention.
+- [x] Implement explicit join using all eligible organizations by default.
+- [x] Permit the user to select a non-empty subset of represented organizations.
+- [x] Reject individual capacity whenever organization representation exists.
+- [x] Implement leave-one-capacity and leave-all behavior.
+- [x] Enforce active parent membership before child join.
+- [x] End descendants only after the last active parent capacity ends.
+- [x] Do not restore descendants when a parent is rejoined.
+- [x] Resolve inherited parent leadership recursively.
+- [x] Extend inherited leadership with local roles by default.
+- [x] Implement safely authorized local-only governance.
+- [x] Make roster, hierarchy, and management queries set-based and paginated.
 - [ ] Cover multiple capacities, parent loss, alternative capacity, cycles,
       inherited management, local-only management, and concurrent joins.
+  Evidence: group-platform.test.ts covers every listed behavior except direct
+  cycle and concurrent-join races; the focused group and representation run is
+  15/15 passing.
 
 ## 3. Organization representatives
 
-Status: Pending
+Status: In progress
 
 - [ ] Reuse organization_domain_claims as the sole exact domain owner.
 - [ ] Record verification evidence for all email identities used in matching.
@@ -90,9 +94,9 @@ Status: Pending
 - [ ] Permit primary and secondary contacts to associate a representative.
 - [ ] Permit primary and secondary contacts to remove a representative.
 - [ ] Persist a removal block until an authorized contact restores it.
-- [ ] End all active group capacities for the removed organization atomically.
-- [ ] Revoke affected organization roles atomically.
-- [ ] Preserve historical activity and audit evidence.
+- [x] End all active group capacities for the removed organization atomically.
+- [x] Revoke affected organization roles atomically.
+- [x] Preserve historical activity and audit evidence.
 - [ ] Verify authorization against current representative state on every action.
 - [ ] Cover domain normalization, unverified email, claimed-domain collision,
       explicit association, blocking, restoration, and concurrent reconciliation.
@@ -199,17 +203,19 @@ Status: Pending
 
 ## 9. Group-scoped REST API
 
-Status: Pending
+Status: In progress
 
-- [ ] Add canonical /api/v1/groups routes.
-- [ ] Add nested members and leadership routes.
+- [x] Add canonical /api/v1/groups routes.
+- [x] Add nested members and leadership routes.
 - [ ] Add nested forms, votes, mailing lists, stats, and audit routes.
 - [ ] Add /api/v1/groups/:groupId/meetings/series routes.
 - [ ] Add series occurrence, guest, join, and attendance routes.
-- [ ] Keep routes thin and SQL-free.
-- [ ] Reuse shared list query and page response contracts everywhere.
-- [ ] Run filters, search, sort, aggregation, and pagination in D1.
-- [ ] Add deterministic tie-break sorting.
+- [x] Keep routes thin and SQL-free.
+- [x] Reuse shared list query and page response contracts for implemented group
+      and membership listings.
+- [x] Run filters, search, sort, aggregation, and pagination in D1 for
+      implemented group and membership listings.
+- [x] Add deterministic tie-break sorting for implemented listings.
 - [ ] Add mounted Hono/Chanfana tests for validation and middleware.
 - [ ] Remove temporary working-group endpoint compatibility before completion
       unless a documented external consumer requires a timed deprecation.
@@ -238,11 +244,12 @@ Status: Pending
 
 Status: Pending
 
-- [ ] Run focused tests during every implementation round.
+- [x] Run focused tests during every implementation round.
 - [ ] Run SQL projection lint and architecture lint after backend boundaries move.
 - [ ] Run duplication checks and fix new duplication rather than suppress it.
 - [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
-- [ ] Run migration tests against empty and production-shaped databases.
+- [ ] Run migration tests against production-shaped databases.
+- [x] Run migration tests against empty databases.
 - [ ] Run representative and group authorization security tests.
 - [ ] Run join-token, terms, guest, and attendance security tests.
 - [ ] Run voting replacement and race tests.

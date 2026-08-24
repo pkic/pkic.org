@@ -264,9 +264,16 @@ export const formFieldOptionSchema = z
     active: z.boolean(),
   })
   .strict();
+const formFieldOptionInputSchema = z.union([formFieldOptionSchema, legacyFormFieldOptionSchema]);
 export const formFieldOptionsSchema = z
-  .array(formFieldOptionSchema)
+  .array(formFieldOptionInputSchema)
   .max(200)
+  .transform((entries) =>
+    entries.map((entry) => {
+      if (typeof entry === "string") return { value: entry, label: entry, active: true };
+      return "active" in entry ? entry : { value: entry.value, label: entry.label ?? entry.value, active: true };
+    }),
+  )
   .superRefine((options, context) => {
     const seen = new Set<string>();
     for (const [index, option] of options.entries()) {
@@ -276,7 +283,7 @@ export const formFieldOptionsSchema = z
       seen.add(option.value);
     }
   });
-export const persistedFormFieldOptionsSchema = z.array(z.union([formFieldOptionSchema, legacyFormFieldOptionSchema])).max(200);
+export const persistedFormFieldOptionsSchema = z.array(formFieldOptionInputSchema).max(200);
 export interface FormFieldOption {
   value: string;
   label: string;
@@ -296,7 +303,11 @@ export function parseFormFieldOptions(value: unknown): FormFieldOption[] {
     const legacy = legacyFormFieldOptionSchema.safeParse(entry);
     if (!legacy.success) continue;
     const value = typeof legacy.data === "string" ? legacy.data : legacy.data.value;
-    options.push({ value, label: typeof legacy.data === "string" ? value : (legacy.data.label ?? value), active: true });
+    options.push({
+      value,
+      label: typeof legacy.data === "string" ? value : (legacy.data.label ?? value),
+      active: true,
+    });
   }
   return options;
 }

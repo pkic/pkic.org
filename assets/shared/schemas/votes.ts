@@ -12,6 +12,11 @@ import { groupIdSchema } from "./groups";
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
 
+/** @deprecated Temporary parser for legacy vote callers while they migrate to ownerGroupId. */
+export const VOTE_SCOPE_TYPES = ["forum", "working_group"] as const;
+/** @deprecated Use ownerGroupId. */
+export const voteScopeTypeSchema = z.enum(VOTE_SCOPE_TYPES);
+
 export const VOTE_ELECTORATE_MODES = ["per_member", "per_person"] as const;
 export const voteElectorateModeSchema = z.enum(VOTE_ELECTORATE_MODES);
 
@@ -320,8 +325,7 @@ export const submitProposalResponseSchema = z.object({ proposal: proposalSummary
 export const submitProposalRouteSchema = {
   tags: ["Vote Proposals"],
   summary: "Submit a vote proposal (A–G members only)",
-  description:
-    "Available only when the owning group's minEndorsersForBallot policy is greater than zero.",
+  description: "Available only when the owning group's minEndorsersForBallot policy is greater than zero.",
   request: {
     body: { content: { "application/json": { schema: submitProposalSchema } }, required: true },
   },
@@ -331,8 +335,7 @@ export const submitProposalRouteSchema = {
       content: { "application/json": { schema: submitProposalResponseSchema } },
     },
     "403": {
-      description:
-        "Not an eligible group participant or the endorsement path is disabled for this group.",
+      description: "Not an eligible group participant or the endorsement path is disabled for this group.",
     },
   },
 };

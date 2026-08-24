@@ -32,6 +32,7 @@ Configurable labels and defaults for groups.
     default_eligibility_mode
     default_automatic_enrollment_mode
     default_allow_automatic_opt_out
+    default_visibility
     active
     created_at
     updated_at
@@ -51,6 +52,7 @@ Replaces the unreleased working_groups table.
     slug
     description
     links_json
+    visibility (public, authenticated, participants, or managed)
     governance_inheritance_mode
     eligibility_mode
     automatic_enrollment_mode
@@ -65,6 +67,7 @@ Required indexes:
 - unique slug;
 - parent group plus active;
 - type plus active;
+- visibility plus active;
 - active plus name plus id for deterministic lists.
 
 The service rejects self-parenting and cycles before writes. Parent changes

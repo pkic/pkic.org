@@ -55,7 +55,11 @@ import {
   readOrganizationMemberAggregate,
   assertNoAggregateCategoryConflict,
 } from "./memberships";
-import { buildAddRepresentativeStatement, isActiveRepresentative } from "./representatives";
+import {
+  buildAddRepresentativeStatement,
+  isActiveRepresentative,
+  type OrganizationRepresentationSource,
+} from "./representatives";
 import {
   REPRESENTATIVE_ROLE_IDS,
   buildAssignRepresentativeRoleStatementsForNewRepresentative,
@@ -84,6 +88,8 @@ export interface ProvisionMembershipInput {
   /** Only applied when given; the organization-tied path never overwrites an already-set member_since. */
   memberSince?: string | null;
   representatives: ProvisionRepresentativeInput[];
+  /** Provenance for organization representation rows. Required for org-tied provisioning. */
+  representationSource: OrganizationRepresentationSource;
   workingGroupSlugs: string[];
   /** Backing users.id for relational role-grant attribution; null for synthetic/system actors. */
   grantedByUserId?: string | null;
@@ -366,9 +372,10 @@ async function buildProvisionOrganizationTiedMemberships(
     const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep);
     if (userStatement) statements.push(userStatement);
 
-    const { representativeId, statement: repStatement } = buildAddRepresentativeStatement(db, {
+    const { representativeId, statement: repStatement } = await buildAddRepresentativeStatement(db, {
       memberId: aggregateId,
       userId: user.id,
+      source: input.representationSource,
       now,
     });
     statements.push(repStatement);

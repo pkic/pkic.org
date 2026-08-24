@@ -76,9 +76,10 @@ export async function addCoworker(
   });
 
   const now = nowIso();
-  const { representativeId, statement: representativeStatement } = buildAddRepresentativeStatement(db, {
+  const { representativeId, statement: representativeStatement } = await buildAddRepresentativeStatement(db, {
     memberId: member.memberId,
     userId: user.id,
+    source: "organization_contact",
     now,
   });
   const statements = userStatement ? [userStatement, representativeStatement] : [representativeStatement];

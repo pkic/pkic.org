@@ -166,6 +166,7 @@ export async function approveApplication(
     domainClaimApplicationId: isIndividual ? null : application.id,
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
+    representationSource: "staff",
     workingGroupSlugs,
     grantedByUserId: databaseActorUserId,
   });

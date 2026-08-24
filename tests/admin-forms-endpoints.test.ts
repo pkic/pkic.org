@@ -237,7 +237,7 @@ describe("admin forms endpoints", () => {
       scopeRef: eventId,
       purpose: "event_registration",
       title: "Registration form with linked row",
-      fields: [],
+      fields: [{ key: "company", label: "Company", fieldType: "text" }],
       submission: {
         contextType: "registration",
         contextRef: doubleCountRegistrationContextRef,
@@ -268,7 +268,7 @@ describe("admin forms endpoints", () => {
       scopeRef: eventId,
       purpose: "proposal_submission",
       title: "Proposal form with linked row",
-      fields: [],
+      fields: [{ key: "abstract", label: "Abstract", fieldType: "textarea" }],
       submission: {
         contextType: "proposal",
         contextRef: doubleCountProposalContextRef,
@@ -765,9 +765,13 @@ describe("admin forms endpoints", () => {
     });
 
     expect(patchResponse.status, await patchResponse.clone().text()).toBe(200);
-    const patchPayload = (await patchResponse.json()) as { success: boolean; fields: Array<{ key: string }> };
+    const patchPayload = (await patchResponse.json()) as {
+      success: boolean;
+      fields: Array<{ key: string; archivedAt: string | null }>;
+    };
     expect(patchPayload.success).toBe(true);
-    expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "topics"]);
+    expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "old_field", "topics"]);
+    expect(patchPayload.fields.find((field) => field.key === "old_field")?.archivedAt).toBeTruthy();
 
     const deleteResponse = await callAdmin("/api/v1/admin/forms/mutable-form", { method: "DELETE" });
     expect(deleteResponse.status).toBe(200);
