@@ -151,15 +151,14 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 }
 
 /**
- * One `organization_representatives` row for (org, user) — idempotent via
- * `uq_organization_representatives_active_pair` (consolidated migration 0035), the same
- * partial-unique-index guard `buildAddRepresentativeStatement` in
- * `functions/_lib/services/membership/representatives.ts` relies on.
+ * One durable `organization_representatives` row for each (org, user) pair.
+ * INSERT OR IGNORE keeps the migration importer idempotent without changing
+ * an existing association's source or lifecycle state.
  */
 export function buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, showOnOrgProfile) {
   return `
-INSERT OR IGNORE INTO organization_representatives (id, member_id, user_id, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, m.id, u.id, ${showOnOrgProfile ? 1 : 0}, datetime('now'), NULL, datetime('now'), datetime('now')
+INSERT OR IGNORE INTO organization_representatives (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, m.id, u.id, 'migration', ${showOnOrgProfile ? 1 : 0}, datetime('now'), NULL, datetime('now'), datetime('now')
 FROM members m
 JOIN organizations o ON o.id = m.organization_id
 JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}

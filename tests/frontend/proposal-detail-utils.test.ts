@@ -12,6 +12,8 @@ const formFields: AdminFormDetailField[] = [
     options: null,
     validation: null,
     sortOrder: 1,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
   {
     id: "field-format",
@@ -20,11 +22,13 @@ const formFields: AdminFormDetailField[] = [
     fieldType: "select",
     required: true,
     options: [
-      { value: "talk", label: "Talk" },
-      { value: "panel", label: "Panel discussion" },
+      { value: "talk", label: "Talk", active: true },
+      { value: "panel", label: "Panel discussion", active: true },
     ],
     validation: null,
     sortOrder: 2,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
   {
     id: "field-tracks",
@@ -33,11 +37,13 @@ const formFields: AdminFormDetailField[] = [
     fieldType: "multi_select",
     required: false,
     options: [
-      { value: "pki", label: "PKI" },
-      { value: "policy", label: "Policy" },
+      { value: "pki", label: "PKI", active: true },
+      { value: "policy", label: "Policy", active: true },
     ],
     validation: null,
     sortOrder: 3,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
   {
     id: "field-recording",
@@ -48,6 +54,8 @@ const formFields: AdminFormDetailField[] = [
     options: null,
     validation: null,
     sortOrder: 4,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
 ];
 

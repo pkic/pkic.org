@@ -63,9 +63,10 @@ function buildFieldStatistics(fields: FieldRow[], rows: AggregatedStatRow[]): Fi
 }
 
 const AGGREGATED_STATISTICS_SELECT = `normalized_answers AS (
-    SELECT m.id AS submission_id, a.field_key, a.data_json
+    SELECT m.id AS submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
     FROM merged m
     JOIN form_submission_answers a ON m.source = 'submission' AND a.submission_id = m.source_id
+    LEFT JOIN form_fields ff ON ff.id = a.field_id
     UNION ALL
     SELECT m.id AS submission_id, je.key AS field_key,
            CASE je.type
@@ -141,7 +142,7 @@ export async function getFormSubmissionStats(
   const [fieldsResult, countResult, statisticsResult] = await db.batch([
     db
       .prepare(
-        `SELECT key, options_json
+        `SELECT id, key, options_json
          FROM form_fields
          WHERE form_id = ?
          ORDER BY sort_order ASC, key ASC`,
@@ -157,6 +158,7 @@ export async function getFormSubmissionStats(
       key: population.form.key,
       title: population.form.title,
       purpose: population.form.purpose,
+      placement: population.placement,
     },
     total: Number(batchFirst<{ total: number }>(countResult)?.total ?? 0),
     stats: buildFieldStatistics(batchRows<FieldRow>(fieldsResult), batchRows<AggregatedStatRow>(statisticsResult)),

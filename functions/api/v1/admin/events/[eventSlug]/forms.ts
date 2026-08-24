@@ -48,5 +48,13 @@ export const AdminEventFormsCreate = openApiRoute(adminEventFormCreateRouteSchem
     { type: "event", ref: event.id, eventSlug: event.slug },
     data.body,
   );
-  return json(adminFormCreateResponseSchema.parse({ success: true, formId: form.id, key: form.key }), 201);
+  return json(
+    adminFormCreateResponseSchema.parse({
+      success: true,
+      formId: form.id,
+      placementId: form.placementId,
+      key: form.key,
+    }),
+    201,
+  );
 });

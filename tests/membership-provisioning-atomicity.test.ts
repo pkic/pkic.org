@@ -30,6 +30,7 @@ describe("provisionOrganizationMembership atomicity", () => {
         organizationName: orgName,
         membershipCategory: "NOT_A_REAL_CATEGORY",
         representatives: [{ name: "Alice Anderson", email: `alice-${crypto.randomUUID()}@example.test` }],
+        representationSource: "staff",
         workingGroupSlugs: [],
       }),
     ).rejects.toMatchObject({ status: 422 });
@@ -57,6 +58,7 @@ describe("provisionOrganizationMembership atomicity", () => {
       organizationName: orgName,
       membershipCategory: "A",
       representatives: [{ name: "Bob Builder", email }],
+      representationSource: "staff",
       workingGroupSlugs: [],
     });
 
@@ -87,6 +89,7 @@ describe("provisionOrganizationMembership atomicity", () => {
         organizationName: org[0]!.name,
         membershipCategory: "B", // conflicts with the existing "A" assignment
         representatives: [{ name: "Carol Contact", email }],
+        representationSource: "staff",
         workingGroupSlugs: [],
       }),
     ).rejects.toMatchObject({ status: 409, code: "MEMBER_CATEGORY_CONFLICT" });
@@ -112,6 +115,7 @@ describe("provisionOrganizationMembership atomicity", () => {
         organizationName: org[0]!.name,
         membershipCategory: "A",
         representatives: [{ name: "Existing Rep", email }],
+        representationSource: "staff",
         workingGroupSlugs: [],
       }),
     ).rejects.toMatchObject({ status: 409, code: "ALREADY_MEMBER" });

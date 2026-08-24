@@ -2,7 +2,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
-import { workingGroupIdSchema } from "./working-groups";
+import { groupIdSchema } from "./groups";
 import {
   VOTE_PROPOSALS_LIST_SORT_COLUMNS,
   candidateSummarySchema,
@@ -12,7 +12,7 @@ import {
   publicDetailLevelSchema,
   voteIdParamsSchema,
   voteProposalStatusSchema,
-  voteScopeTypeSchema,
+  voteElectorateModeSchema,
   voteStatusSchema,
   voteSummaryFieldsSchema,
   voteTypeSchema,
@@ -70,8 +70,8 @@ export const adminVoteCreateSchema = z.object({
   title: z.string().trim().min(1).max(300),
   description: z.string().trim().max(10000).optional(),
   voteType: voteTypeSchema,
-  scopeType: voteScopeTypeSchema,
-  scopeId: workingGroupIdSchema.nullable().optional(),
+  ownerGroupId: groupIdSchema,
+  electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   opensAt: z.iso.datetime({ offset: true }).optional(),
@@ -82,7 +82,7 @@ export const adminVoteCreateSchema = z.object({
 export const adminVoteCreateRouteSchema = {
   tags: ["Admin Votes"],
   summary: "Create a vote directly (bypasses endorsement)",
-  description: "Staff admin (any scope) or WG chair/vice-chair (their own WG only, enforced via votes:create).",
+  description: "Consortium administrators or effective group leadership with votes:create for the owning group.",
   request: { body: { content: { "application/json": { schema: adminVoteCreateSchema } }, required: true } },
   responses: {
     "200": {
@@ -148,16 +148,17 @@ export const adminVoteProposalRejectResponseSchema = z.object({ proposal: propos
 export const adminBallotSchema = z.object({
   id: databaseIdSchema,
   userId: databaseIdSchema,
-  organizationId: databaseIdSchema.nullable(),
+  memberId: databaseIdSchema.nullable(),
   choice: z.string(),
   round: z.number(),
   submittedAt: z.string(),
+  updatedAt: z.string(),
 });
 
 export type AdminVoteBallot = z.infer<typeof adminBallotSchema>;
 export type AdminVoteProposalSummary = z.infer<typeof proposalSummarySchema>;
 
-export const ADMIN_VOTE_BALLOT_SORT_COLUMNS = ["submittedAt", "round", "choice", "userId", "organizationId"] as const;
+export const ADMIN_VOTE_BALLOT_SORT_COLUMNS = ["submittedAt", "round", "choice", "userId", "memberId"] as const;
 
 export const adminVoteBallotsListQuerySchema = listQuerySchema(ADMIN_VOTE_BALLOT_SORT_COLUMNS).extend({
   round: z.coerce.number().int().min(1).optional(),
@@ -181,8 +182,7 @@ export const adminVoteBallotsRouteSchema = {
 };
 
 export const adminListProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
-  scopeType: voteScopeTypeSchema.optional(),
-  scopeId: workingGroupIdSchema.optional(),
+  ownerGroupId: groupIdSchema.optional(),
   status: voteProposalStatusSchema.optional(),
 });
 export type AdminListProposalsQuery = z.infer<typeof adminListProposalsQuerySchema>;
@@ -191,7 +191,7 @@ export const adminVoteProposalDetailResponseSchema = proposalDetailResponseSchem
 
 export const adminListProposalsRouteSchema = {
   tags: ["Admin Vote Proposals"],
-  summary: "List all proposals, filterable by status/scope",
+  summary: "List all proposals, filterable by status and owning group",
   request: { query: adminListProposalsQuerySchema },
   responses: {
     "200": {

@@ -7,7 +7,7 @@ import type {
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import type { DatabaseLike } from "../types";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
-import { validateCustomAnswersByPurpose } from "./forms";
+import { prepareReplaceContextFormSubmission, validateCustomAnswersForSubmission } from "./forms";
 import { listProposalSpeakersWithStatus } from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord, updateProposalForVerifiedOwner } from "./proposals";
 import { getEventById, requireConfiguredSessionType } from "./events";
@@ -72,20 +72,36 @@ export async function saveProposalManageChanges(
           (await getEventById(db, proposal.event_id)).settings_json,
           input.body.proposalType,
         );
-  const details =
+  const validatedForm =
     input.body.details === undefined
       ? undefined
-      : await validateCustomAnswersByPurpose(db, {
+      : await validateCustomAnswersForSubmission(db, {
           eventId: proposal.event_id,
           purpose: "proposal_submission",
           customAnswers: input.body.details,
         });
+  const details = validatedForm?.answers;
+  const formSubmission = validatedForm?.form
+    ? await prepareReplaceContextFormSubmission(
+        db,
+        validatedForm.form,
+        {
+          submittedByUserId: proposal.proposer_user_id,
+          contextType: "proposal",
+          contextRef: proposal.id,
+        },
+        details ?? {},
+        new Date().toISOString(),
+      )
+    : null;
   const saved = await updateProposalForVerifiedOwner(db, proposal, {
     action: input.body.action,
     proposalType,
     title: input.body.title,
     abstract: input.body.abstract,
     detailsJson: details === undefined ? undefined : Object.keys(details).length > 0 ? stringifyJson(details) : null,
+    formSubmissionStatements: formSubmission?.statements,
+    formPlacementId: validatedForm?.form?.placement?.id ?? null,
   });
 
   return { success: true, proposal: toManagedProposal(saved) };

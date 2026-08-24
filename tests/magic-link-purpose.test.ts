@@ -39,7 +39,16 @@ describe("shared auth magic-link purpose isolation", () => {
   });
 
   it("does not let member and admin verifiers exchange or consume each other's tokens", async () => {
-    await seedDualContextUser();
+    const userId = await seedDualContextUser();
+    const verifiedDomainOrganizationId = await insertOrganization(env.DB, "Verified domain organization");
+    const verifiedDomainMemberId = await seedOrganizationAggregate(env.DB, verifiedDomainOrganizationId);
+    await env.DB.prepare(
+      `INSERT INTO organization_domain_claims
+         (id, domain, application_id, organization_id, created_at, updated_at)
+       VALUES (?, 'pkic.org', NULL, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), verifiedDomainOrganizationId)
+      .run();
 
     const adminMagic = await requestAdminMagicLink(env.DB, {
       email: ADMIN_EMAIL,
@@ -56,6 +65,13 @@ describe("shared auth magic-link purpose isolation", () => {
     await expect(verifyAdminMagicLink(env.DB, { token: adminToken, sessionTtlHours: 8 })).resolves.toMatchObject({
       admin: { email: ADMIN_EMAIL },
     });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+        [verifiedDomainMemberId, userId],
+      ),
+    ).toHaveLength(1);
 
     const memberMagic = await requestMemberMagicLink(env.DB, {
       email: ADMIN_EMAIL,
@@ -72,6 +88,13 @@ describe("shared auth magic-link purpose isolation", () => {
     await expect(verifyMemberMagicLink(env.DB, { token: memberToken, sessionTtlHours: 8 })).resolves.toMatchObject({
       member: { email: ADMIN_EMAIL },
     });
+    const [verified] = await queryAll<{ email_verified_at: string | null; email_verification_method: string | null }>(
+      env.DB,
+      "SELECT email_verified_at, email_verification_method FROM users WHERE id = ?",
+      userId,
+    );
+    expect(verified.email_verified_at).not.toBeNull();
+    expect(verified.email_verification_method).toBe("magic_link");
   });
 
   it("keeps MCP OAuth links out of the normal admin verifier", async () => {

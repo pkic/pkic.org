@@ -31,6 +31,7 @@ export interface CreateRegistrationPayload {
   sourceType: string;
   sourceRef?: string | null;
   customAnswersJson?: string | null;
+  formPlacementId?: string | null;
   inviteId?: string | null;
   referredByCode?: string | null;
   pendingConfirmationDeadlineHours?: number;
@@ -83,7 +84,7 @@ export async function buildCreateRegistration(
   const existing = await first<RegistrationRecord>(
     db,
     `SELECT id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-            custom_answers_json, referred_by_code, confirmation_link_secret,
+            custom_answers_json, form_placement_id, referred_by_code, confirmation_link_secret,
             pending_confirmation_deadline_at, manage_link_secret, capacity_exempt_in_person,
             capacity_exempt_reason, cancellation_reason_code, confirmed_at, cancelled_at, created_at, updated_at
      FROM registrations WHERE event_id = ? AND user_id = ?`,
@@ -124,6 +125,7 @@ export async function buildCreateRegistration(
     source_type: payload.sourceType,
     source_ref: payload.sourceRef ?? null,
     custom_answers_json: payload.customAnswersJson ?? null,
+    form_placement_id: payload.formPlacementId ?? null,
     referred_by_code: payload.referredByCode ?? null,
     confirmation_link_secret: confirmationLinkSecret,
     pending_confirmation_deadline_at: pendingConfirmationDeadlineAt,
@@ -148,7 +150,7 @@ export async function buildCreateRegistration(
         .prepare(
           `UPDATE registrations
        SET invite_id = ?, status = ?, attendance_type = ?, source_type = ?, source_ref = ?,
-           custom_answers_json = ?, referred_by_code = ?, confirmation_link_secret = ?,
+           custom_answers_json = ?, form_placement_id = ?, referred_by_code = ?, confirmation_link_secret = ?,
            pending_confirmation_deadline_at = ?,
            manage_link_secret = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
            cancellation_reason_code = NULL, created_identity_user_id = NULL,
@@ -162,6 +164,7 @@ export async function buildCreateRegistration(
           registration.source_type,
           registration.source_ref,
           registration.custom_answers_json,
+          registration.form_placement_id,
           registration.referred_by_code,
           registration.confirmation_link_secret,
           registration.pending_confirmation_deadline_at,
@@ -179,10 +182,10 @@ export async function buildCreateRegistration(
         .prepare(
           `INSERT INTO registrations (
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-      custom_answers_json, referred_by_code, confirmation_link_secret, pending_confirmation_deadline_at,
+      custom_answers_json, form_placement_id, referred_by_code, confirmation_link_secret, pending_confirmation_deadline_at,
       manage_link_secret, capacity_exempt_in_person, capacity_exempt_reason, cancellation_reason_code,
       created_identity_user_id, confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           registration.id,
@@ -194,6 +197,7 @@ export async function buildCreateRegistration(
           registration.source_type,
           registration.source_ref,
           registration.custom_answers_json,
+          registration.form_placement_id,
           registration.referred_by_code,
           registration.confirmation_link_secret,
           registration.pending_confirmation_deadline_at,

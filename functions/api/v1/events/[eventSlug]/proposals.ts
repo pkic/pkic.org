@@ -2,7 +2,7 @@ import type { ValidatedData } from "chanfana";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
-import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
+import { validateCustomAnswersForSubmission } from "../../../../_lib/services/forms";
 import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/invites";
 import { validateRequiredConsents } from "../../../../_lib/services/consent";
@@ -40,11 +40,12 @@ async function handleProposalCreate(
 
   const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "speaker");
   await validateRequiredConsents(requiredTerms, body.consents);
-  const proposalDetails = await validateCustomAnswersByPurpose(c.env.DB, {
+  const validatedForm = await validateCustomAnswersForSubmission(c.env.DB, {
     eventId: event.id,
     purpose: "proposal_submission",
     customAnswers: body.proposal.details,
   });
+  const proposalDetails = validatedForm.answers;
 
   const submitted = await submitProposal(c.env.DB, {
     event,
@@ -56,6 +57,7 @@ async function handleProposalCreate(
     acceptedInvite,
     ip: c.req.raw.headers.get("cf-connecting-ip"),
     userAgent: c.req.raw.headers.get("user-agent"),
+    formDefinition: validatedForm.form,
   });
 
   c.executionCtx.waitUntil(

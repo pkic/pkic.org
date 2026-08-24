@@ -135,11 +135,16 @@ export async function createApplicationFormSubmission(
     .run();
 
   for (const [key, value] of Object.entries(answers)) {
+    const [field] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM form_fields WHERE form_id = ? AND key = ? LIMIT 1",
+      [formId, key],
+    );
     await env.DB.prepare(
-      `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
+      `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
     )
-      .bind(crypto.randomUUID(), submissionId, key, JSON.stringify(value ?? null))
+      .bind(crypto.randomUUID(), submissionId, field.id, key, JSON.stringify(value ?? null))
       .run();
   }
 

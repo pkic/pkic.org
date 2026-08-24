@@ -12,14 +12,14 @@ import type { FormFieldRow, FormRow as ManagedFormRow } from "../forms/read";
 export type FormRow = Pick<ManagedFormRow, "id" | "key" | "title" | "purpose" | "scope_type" | "scope_ref">;
 
 /** Database columns required to render answer statistics. */
-export type FieldRow = Pick<FormFieldRow, "key" | "options_json">;
+export type FieldRow = Pick<FormFieldRow, "id" | "key" | "options_json">;
 
 export type AdminSubmissionPayload = z.infer<typeof adminFormSubmissionSchema>;
 export type FieldStatPayload = z.infer<typeof adminFormSubmissionStatSchema>;
 
 export type FormSubmissionFilters = { formKey: string } & Pick<
   AdminFormSubmissionStatsQuery,
-  "status" | "attendanceType" | "eventSlug" | "q"
+  "placementId" | "status" | "attendanceType" | "eventSlug" | "q"
 >;
 export type ListFormSubmissionsParams = FormSubmissionFilters &
   Pick<AdminFormSubmissionsQuery, "sort" | "limit" | "offset">;

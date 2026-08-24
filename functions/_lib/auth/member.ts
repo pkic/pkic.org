@@ -25,6 +25,9 @@ import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import type { AuthMember, EligibleMembership, DatabaseLike, Env } from "../types";
+import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
+import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
+import { nowIso } from "../utils/time";
 import {
   AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
@@ -357,6 +360,22 @@ export async function verifyMemberMagicLink(
   if (!member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer an active member");
   }
+
+  const normalizedEmail = normalizeEmail(member.email);
+  const verifiedAt = nowIso();
+  await db.batch([
+    prepareVerifyPrimaryEmailStatement(db, {
+      userId: row.subjectId,
+      normalizedEmail,
+      method: "magic_link",
+      verifiedAt,
+    }),
+    ...(await prepareVerifiedDomainAssociationStatements(db, {
+      userId: row.subjectId,
+      normalizedEmail,
+      at: verifiedAt,
+    })),
+  ]);
 
   return issueMemberSession(db, member, payload.sessionTtlHours);
 }

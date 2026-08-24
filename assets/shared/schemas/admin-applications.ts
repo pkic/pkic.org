@@ -9,7 +9,7 @@ import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema }
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
-import { workingGroupLabelSchema } from "./working-groups";
+import { groupLabelSchema } from "./groups";
 import {
   adminApplicationDocumentSchema,
   adminApplicationDocumentsListResponseSchema,
@@ -90,7 +90,7 @@ export const adminApplicationEcDecisionSchema = z.object({
 export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
-  requestedWorkingGroups: z.array(workingGroupLabelSchema),
+  requestedWorkingGroups: z.array(groupLabelSchema),
   events: z.array(adminApplicationEventSchema),
   communications: z.array(adminApplicationCommunicationSchema),
   concerns: z.array(adminApplicationConcernSchema),

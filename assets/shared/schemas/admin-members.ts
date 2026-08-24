@@ -11,7 +11,7 @@ import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { linksSchema } from "./links";
-import { workingGroupSlugSchema } from "./working-groups";
+import { groupSlugSchema } from "./groups";
 import {
   MEMBERSHIP_CATEGORIES,
   membershipCategorySchema,
@@ -37,7 +37,7 @@ export const memberCreateSchema = z
     membershipCategory: membershipCategorySchema,
     memberSince: z.iso.date(),
     representatives: z.array(representativeCreateSchema).min(1).max(10),
-    workingGroupSlugs: z.array(workingGroupSlugSchema).max(200).default([]),
+    workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
   })
   .superRefine((value, ctx) => {
     const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);

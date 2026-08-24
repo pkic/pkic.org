@@ -8,16 +8,16 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
-import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
+import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
-export const meetingSeriesIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
+export const meetingSeriesIdParamsSchema = z.object({ id: groupReferenceSchema });
 export const meetingSeriesWithMeetingIdParamsSchema = z.object({
-  id: workingGroupReferenceSchema,
+  id: groupReferenceSchema,
   meetingId: databaseIdSchema,
 });
 export const meetingIcsFileParamsSchema = z.object({
-  id: workingGroupReferenceSchema,
+  id: groupReferenceSchema,
   meetingId: databaseIdSchema,
   fileId: databaseIdSchema,
 });
@@ -49,7 +49,7 @@ export const adminMeetingSeriesSummarySchema = z.object({
   id: databaseIdSchema,
   name: z.string(),
   scopeType: z.enum(["consortium", "working_group"]),
-  workingGroupId: workingGroupIdSchema.nullable(),
+  workingGroupId: groupIdSchema.nullable(),
   active: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -310,7 +310,7 @@ export const publicMeetingSeriesListResponseSchema = paginatedResponseSchema(
 export const publicWgMeetingsRouteSchema = {
   tags: ["Working Groups"],
   summary: "List a working group's active meeting series (public)",
-  request: { params: z.object({ wgId: workingGroupReferenceSchema }), query: meetingSeriesListQuerySchema },
+  request: { params: z.object({ wgId: groupReferenceSchema }), query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Active meeting series for this working group.",

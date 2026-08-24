@@ -67,9 +67,10 @@ export async function addRepresentative(
   userId: string,
   opts: { showOnOrgProfile?: boolean } = {},
 ): Promise<string> {
-  const { representativeId, statement } = buildAddRepresentativeStatement(db, {
+  const { representativeId, statement } = await buildAddRepresentativeStatement(db, {
     memberId,
     userId,
+    source: "staff",
     showOnOrgProfile: opts.showOnOrgProfile,
   });
   await db.batch([statement]);

@@ -34,10 +34,15 @@ export interface RegistrationUpdatePayload {
   /** Admin-only transition that puts selected in-person days at the end of the waitlist. */
   forceWaitlistDayDates?: string[];
   customAnswersJson?: string | null;
+  formPlacementId?: string | null;
   sourceRef?: string | null;
   waitlistClaimWindowHours?: number;
   profilePatch?: UserProfilePatch;
   auditActor?: { type: "admin" | "user"; id: string; action: string };
+  /** Validates the form revision in the same D1 batch as customAnswersJson. */
+  formRevisionGuard?: StatementLike | null;
+  /** Canonical normalized answer replacement committed with the domain projection. */
+  formSubmissionStatements?: StatementLike[];
 }
 
 function prepareRegistrationUpdateAudit(
@@ -262,12 +267,16 @@ export async function buildRegistrationUpdate(
   }
   const now = nowIso();
   const statements: StatementLike[] = [
+    ...(payload.customAnswersJson !== undefined && payload.formRevisionGuard && !payload.formSubmissionStatements
+      ? [payload.formRevisionGuard]
+      : []),
     prepareRegistrationTransitionGuard(db, registration),
     db
       .prepare(
         `UPDATE registrations
          SET attendance_type = ?, status = ?, cancellation_reason_code = NULL,
              custom_answers_json = CASE WHEN ? = 1 THEN ? ELSE custom_answers_json END,
+             form_placement_id = CASE WHEN ? = 1 THEN ? ELSE form_placement_id END,
              source_ref = CASE WHEN ? = 1 THEN ? ELSE source_ref END,
              capacity_exempt_in_person = ?, capacity_exempt_reason = ?, cancelled_at = ?, updated_at = ?
          WHERE id = ?`,
@@ -277,6 +286,8 @@ export async function buildRegistrationUpdate(
         newStatus,
         payload.customAnswersJson !== undefined ? 1 : 0,
         payload.customAnswersJson ?? null,
+        payload.customAnswersJson !== undefined ? 1 : 0,
+        payload.formPlacementId ?? null,
         payload.sourceRef !== undefined ? 1 : 0,
         payload.sourceRef ?? null,
         capacityExemptReason ? 1 : 0,
@@ -285,6 +296,7 @@ export async function buildRegistrationUpdate(
         now,
         registration.id,
       ),
+    ...(payload.formSubmissionStatements ?? []),
   ];
   let plannedDayAttendance: BuiltRegistrationUpdate["dayAttendance"];
   let plannedDayWaitlist: BuiltRegistrationUpdate["dayWaitlist"];
@@ -340,6 +352,8 @@ export async function buildRegistrationUpdate(
     cancellation_reason_code: null,
     custom_answers_json:
       payload.customAnswersJson === undefined ? registration.custom_answers_json : payload.customAnswersJson,
+    form_placement_id:
+      payload.customAnswersJson === undefined ? registration.form_placement_id : (payload.formPlacementId ?? null),
     source_ref: payload.sourceRef === undefined ? registration.source_ref : payload.sourceRef,
     capacity_exempt_in_person: capacityExemptReason ? 1 : 0,
     capacity_exempt_reason: capacityExemptReason,
@@ -351,6 +365,7 @@ export async function buildRegistrationUpdate(
     registration.attendance_type !== updated.attendance_type ||
     registration.cancellation_reason_code !== updated.cancellation_reason_code ||
     registration.custom_answers_json !== updated.custom_answers_json ||
+    registration.form_placement_id !== updated.form_placement_id ||
     registration.source_ref !== updated.source_ref ||
     registration.capacity_exempt_in_person !== updated.capacity_exempt_in_person ||
     registration.capacity_exempt_reason !== updated.capacity_exempt_reason ||

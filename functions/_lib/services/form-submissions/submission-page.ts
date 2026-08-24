@@ -39,14 +39,15 @@ async function attachSubmissionAnswers(
   rows: MergedSubmissionRow[],
 ): Promise<AdminSubmissionPayload[]> {
   const submissionIds = rows.filter((row) => row.source === "submission").map((row) => row.source_id);
-  const submissionFilter = buildD1JsonMembershipFilter("submission_id", submissionIds);
+  const submissionFilter = buildD1JsonMembershipFilter("a.submission_id", submissionIds);
   const answerRows = submissionIds.length
     ? await all<AnswerRow>(
         db,
-        `SELECT submission_id, field_key, data_json
-         FROM form_submission_answers
+        `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
+         FROM form_submission_answers a
+         LEFT JOIN form_fields ff ON ff.id = a.field_id
          WHERE ${submissionFilter.sql}
-         ORDER BY submission_id, field_key`,
+         ORDER BY a.submission_id, COALESCE(ff.key, a.field_key)`,
         submissionFilter.bindings,
       )
     : [];
@@ -100,6 +101,7 @@ export async function listFormSubmissions(
       key: population.form.key,
       title: population.form.title,
       purpose: population.form.purpose,
+      placement: population.placement,
     },
     total: page.total,
     offset: params.offset,

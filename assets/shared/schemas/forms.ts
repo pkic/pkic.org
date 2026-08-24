@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventSlugParamsSchema } from "./api-common";
+import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { proposalTypeSchema } from "./proposal-management";
 import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
+import { groupIdSchema } from "./groups";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export {
   eventAttendanceOptionSchema,
@@ -55,6 +57,8 @@ export const formFieldDefinitionSchema = z.object({
   options: formFieldOptionsSchema.nullable(),
   validation: formFieldRulesSchema.nullable(),
   sortOrder: z.number(),
+  updatedAt: z.string(),
+  archivedAt: z.string().nullable(),
 });
 
 /** The common form projection embedded in registration and proposal detail responses. */
@@ -67,6 +71,77 @@ export const activeFormSummarySchema = z.object({
 
 export type FormFieldDefinition = z.infer<typeof formFieldDefinitionSchema>;
 export type ActiveFormSummary = z.infer<typeof activeFormSummarySchema>;
+
+export const FORM_PLACEMENT_CONTEXT_TYPES = ["installation", "group", "event", "organization"] as const;
+export const formPlacementContextTypeSchema = z.enum(FORM_PLACEMENT_CONTEXT_TYPES);
+export const formPlacementSchema = z.object({
+  id: databaseIdSchema,
+  formId: databaseIdSchema,
+  ownerGroupId: groupIdSchema.nullable(),
+  contextType: formPlacementContextTypeSchema,
+  contextRef: z.string().nullable(),
+  audience: z.string().trim().min(1).max(100),
+  active: z.boolean(),
+  opensAt: z.string().nullable(),
+  closesAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type FormPlacement = z.infer<typeof formPlacementSchema>;
+const formPlacementInputShape = {
+  ownerGroupId: groupIdSchema.nullable(),
+  contextType: formPlacementContextTypeSchema,
+  contextRef: z.string().trim().min(1).max(200).nullable(),
+  audience: z.string().trim().min(1).max(100),
+  active: z.boolean(),
+  opensAt: z.iso.datetime().nullable().optional(),
+  closesAt: z.iso.datetime().nullable().optional(),
+};
+
+function addPlacementIssues(
+  placement: {
+    contextType?: FormPlacement["contextType"];
+    contextRef?: string | null;
+    opensAt?: string | null;
+    closesAt?: string | null;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (placement.contextType === "installation" && placement.contextRef !== undefined && placement.contextRef !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["contextRef"],
+      message: "Installation placements cannot have a context reference",
+    });
+  }
+  if (placement.contextType && placement.contextType !== "installation" && placement.contextRef === null) {
+    context.addIssue({ code: "custom", path: ["contextRef"], message: "This placement context requires a reference" });
+  }
+  if (placement.opensAt && placement.closesAt && placement.opensAt >= placement.closesAt) {
+    context.addIssue({ code: "custom", path: ["closesAt"], message: "Closing time must be after opening time" });
+  }
+}
+
+export const formPlacementCreateSchema = z
+  .object(formPlacementInputShape)
+  .extend({
+    ownerGroupId: formPlacementInputShape.ownerGroupId.default(null),
+    contextRef: formPlacementInputShape.contextRef.default(null),
+    active: formPlacementInputShape.active.default(true),
+  })
+  .superRefine(addPlacementIssues);
+export const formPlacementUpdateSchema = z.object(formPlacementInputShape).partial().superRefine(addPlacementIssues);
+export const formPlacementsListQuerySchema = listQuerySchema(["audience", "opens_at", "created_at"] as const).extend({
+  ownerGroupId: groupIdSchema.optional(),
+  contextType: formPlacementContextTypeSchema.optional(),
+  contextRef: z.string().trim().min(1).max(200).optional(),
+  active: z.enum(["true", "false"]).optional(),
+});
+export const formPlacementsListResponseSchema = paginatedResponseSchema("placements", formPlacementSchema);
+export const formPlacementCreateResponseSchema = successResponseSchema.extend({ placement: formPlacementSchema });
+export type FormPlacementCreateInput = z.infer<typeof formPlacementCreateSchema>;
+export type FormPlacementUpdateInput = z.infer<typeof formPlacementUpdateSchema>;
+export type FormPlacementsListQuery = z.infer<typeof formPlacementsListQuerySchema>;
 
 export const eventAudienceSchema = z.enum(["attendee", "speaker"]);
 

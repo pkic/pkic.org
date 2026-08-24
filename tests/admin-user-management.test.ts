@@ -1093,8 +1093,18 @@ describe("admin users list — type filter", () => {
     const now = new Date().toISOString();
     const memberA = await getOrCreateOrganizationMemberAggregate(env.DB, orgAId, "A", now);
     const memberB = await getOrCreateOrganizationMemberAggregate(env.DB, orgBId, "B", now);
-    const { statement: repA } = buildAddRepresentativeStatement(env.DB, { memberId: memberA.id, userId, now });
-    const { statement: repB } = buildAddRepresentativeStatement(env.DB, { memberId: memberB.id, userId, now });
+    const { statement: repA } = await buildAddRepresentativeStatement(env.DB, {
+      memberId: memberA.id,
+      userId,
+      source: "staff",
+      now,
+    });
+    const { statement: repB } = await buildAddRepresentativeStatement(env.DB, {
+      memberId: memberB.id,
+      userId,
+      source: "staff",
+      now,
+    });
     await env.DB.batch([repA, repB]);
 
     const data = await listUsers("type=member&q=type-multi-org@example.test");

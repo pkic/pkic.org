@@ -6,7 +6,7 @@
  * review, Phase 8) — see queries.ts for reads and representatives.ts for
  * representative/member provisioning.
  */
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { normalizeOrgName } from "../sponsorship";
@@ -20,6 +20,7 @@ import {
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getOrgAggregate, fetchOrgDetailRow, getAdminOrganization } from "./queries";
 import { prepareAuditLog } from "../audit";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import {
   ORGANIZATION_SCALAR_CONTENT_COLUMN_BY_FIELD,
   serializeOrganizationContentValue,
@@ -128,6 +129,18 @@ export async function updateAdminOrganization(
         .prepare("UPDATE members SET member_since = ?, updated_at = ? WHERE id = ?")
         .bind(input.memberSince, now, aggregateId),
     );
+  }
+  if (aggregateId && input.membershipCategory !== undefined) {
+    const representatives = await all<{ user_id: string }>(
+      db,
+      `SELECT user_id FROM organization_representatives
+        WHERE member_id = ? AND left_at IS NULL AND blocked_at IS NULL
+        ORDER BY user_id`,
+      [aggregateId],
+    );
+    for (const representative of representatives) {
+      statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, representative.user_id, now));
+    }
   }
   if (aggregateId && input.primaryContactUserId !== undefined) {
     if (input.primaryContactUserId) {

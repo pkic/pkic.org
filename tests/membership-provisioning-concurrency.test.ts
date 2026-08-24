@@ -29,12 +29,14 @@ describe("provisionOrganizationMembership concurrency", () => {
         organizationName: orgName,
         membershipCategory: "A",
         representatives: [{ name: "Alice Anderson", email: emailA }],
+        representationSource: "staff",
         workingGroupSlugs: [],
       }),
       provisionOrganizationMembership(env.DB, {
         organizationName: orgName,
         membershipCategory: "A",
         representatives: [{ name: "Bob Builder", email: emailB }],
+        representationSource: "staff",
         workingGroupSlugs: [],
       }),
     ]);

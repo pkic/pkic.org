@@ -1,6 +1,6 @@
 import { api } from "../api";
 import { toast } from "../ui";
-import { mailingListSyncResponseSchema } from "../../../shared/schemas/admin-mailing-lists";
+import { mailingListSyncResponseSchema } from "../../../shared/schemas/mailing-lists";
 
 export async function runGoogleGroupsSync(): Promise<void> {
   const result = await api("/api/v1/admin/mailing-lists/sync", mailingListSyncResponseSchema, { method: "POST" });

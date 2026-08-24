@@ -9,13 +9,20 @@ import {
 import { successResponseSchema, trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { addDuplicateStringIssues } from "./refinements";
-import { formFieldRulesSchema } from "./form-field-rules";
-import { formFieldDefinitionSchema, formFieldTypeSchema, formPurposeSchema, formStatusSchema } from "./forms";
+import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
+import {
+  formFieldDefinitionSchema,
+  formFieldTypeSchema,
+  formPlacementSchema,
+  formPurposeSchema,
+  formStatusSchema,
+} from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
 
 export const adminFormFieldInputSchema = z.object({
+  id: databaseIdSchema.optional(),
   key: z
     .string()
     .trim()
@@ -26,7 +33,7 @@ export const adminFormFieldInputSchema = z.object({
   fieldType: formFieldTypeSchema,
   required: z.boolean().default(false),
   sortOrder: z.number().int().min(0).max(9999).default(0),
-  options: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
+  options: formFieldOptionsSchema.optional(),
   validation: formFieldRulesSchema.optional(),
 });
 
@@ -101,6 +108,7 @@ export const adminFormSummarySchema = adminFormRecordSchema.extend({
   event_slug: z.string().nullable(),
   event_name: z.string().nullable(),
   field_count: z.number(),
+  placement_count: z.number(),
   submission_count: z.number(),
 });
 export type AdminFormSummary = z.infer<typeof adminFormSummarySchema>;
@@ -113,12 +121,14 @@ export const adminFormUpdateResponseSchema = successResponseSchema.extend(adminF
 export const adminFormDeleteResponseSchema = z.object({ action: z.string(), message: z.string().optional() });
 export const adminFormCreateResponseSchema = successResponseSchema.extend({
   formId: databaseIdSchema,
+  placementId: databaseIdSchema,
   key: z.string(),
 });
 
 export const adminFormsListResponseSchema = paginatedResponseSchema("forms", adminFormSummarySchema);
 
 const adminFormSubmissionFiltersSchema = z.object({
+  placementId: databaseIdSchema.optional(),
   status: z.string().trim().max(50).optional(),
   attendanceType: z.string().trim().max(50).optional(),
   eventSlug: z.string().trim().min(1).max(200).optional(),
@@ -169,6 +179,7 @@ const adminFormReferenceSchema = z.object({
   key: z.string(),
   title: z.string(),
   purpose: formPurposeSchema,
+  placement: formPlacementSchema.nullable(),
 });
 
 export const adminFormSubmissionsResponseSchema = paginatedResponseSchema(

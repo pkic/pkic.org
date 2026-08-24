@@ -6,62 +6,120 @@
  * needing separate history bookkeeping.
  */
 import { all, first } from "../../db/queries";
+import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
+import type { z } from "zod";
+import { organizationRepresentationSourceSchema } from "../../../../assets/shared/schemas/organization-representation";
+
+export type OrganizationRepresentationSource = z.infer<typeof organizationRepresentationSourceSchema>;
 
 export interface OrganizationRepresentative {
   id: string;
   memberId: string;
   userId: string;
+  source: OrganizationRepresentationSource;
   showOnOrgProfile: boolean;
   joinedAt: string;
   leftAt: string | null;
+  blockedAt: string | null;
+  blockedByUserId: string | null;
 }
 
 interface RepresentativeRow {
   id: string;
   member_id: string;
   user_id: string;
+  source: OrganizationRepresentationSource;
   show_on_org_profile: number;
   joined_at: string;
   left_at: string | null;
+  blocked_at: string | null;
+  blocked_by_user_id: string | null;
 }
 
-const REPRESENTATIVE_COLUMNS = "id, member_id, user_id, show_on_org_profile, joined_at, left_at";
+const REPRESENTATIVE_COLUMNS =
+  "id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, blocked_at, blocked_by_user_id";
 
 function toRepresentative(row: RepresentativeRow): OrganizationRepresentative {
   return {
     id: row.id,
     memberId: row.member_id,
     userId: row.user_id,
+    source: row.source,
     showOnOrgProfile: row.show_on_org_profile === 1,
     joinedAt: row.joined_at,
     leftAt: row.left_at,
+    blockedAt: row.blocked_at,
+    blockedByUserId: row.blocked_by_user_id,
   };
 }
 
 /**
- * Builds the insert for a new active representative row. Relies on
- * `uq_organization_representatives_active_pair` (consolidated migration 0035) to reject
- * a duplicate active (member_id, user_id) pair at the database level — a
- * person may still represent more than one *different* organization
- * concurrently (product decision), so this is not a global per-user
- * uniqueness check.
+ * Builds one association mutation without committing it. A new pair is
+ * inserted, an inactive unblocked pair is restored in place, and active or
+ * blocked pairs fail before callers construct their atomic command batch.
+ * One person may still represent multiple different organizations.
  */
-export function buildAddRepresentativeStatement(
+export async function buildAddRepresentativeStatement(
   db: DatabaseLike,
-  input: { memberId: string; userId: string; showOnOrgProfile?: boolean; now?: string },
-): { representativeId: string; statement: StatementLike } {
-  const representativeId = uuid();
+  input: {
+    memberId: string;
+    userId: string;
+    source: OrganizationRepresentationSource;
+    showOnOrgProfile?: boolean;
+    now?: string;
+  },
+): Promise<{ representativeId: string; statement: StatementLike }> {
   const now = input.now ?? nowIso();
+  const existing = await first<{ id: string; left_at: string | null; blocked_at: string | null }>(
+    db,
+    `SELECT id, left_at, blocked_at
+       FROM organization_representatives
+      WHERE member_id = ? AND user_id = ?`,
+    [input.memberId, input.userId],
+  );
+  if (existing?.blocked_at) {
+    throw new AppError(
+      409,
+      "ORGANIZATION_REPRESENTATION_BLOCKED",
+      "This organization representation is blocked and must be explicitly restored",
+    );
+  }
+  if (existing?.left_at === null) {
+    throw new AppError(409, "ALREADY_MEMBER", "This user already represents the organization");
+  }
+  if (existing) {
+    return {
+      representativeId: existing.id,
+      statement: db
+        .prepare(
+          `UPDATE organization_representatives
+              SET source = ?, show_on_org_profile = ?, joined_at = ?, left_at = NULL,
+                  blocked_at = NULL, blocked_by_user_id = NULL, updated_at = ?
+            WHERE id = ? AND left_at IS NOT NULL AND blocked_at IS NULL`,
+        )
+        .bind(input.source, input.showOnOrgProfile === false ? 0 : 1, now, now, existing.id),
+    };
+  }
+  const representativeId = uuid();
   const statement = db
     .prepare(
       `INSERT INTO organization_representatives
-         (id, member_id, user_id, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+         (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     )
-    .bind(representativeId, input.memberId, input.userId, input.showOnOrgProfile === false ? 0 : 1, now, now, now);
+    .bind(
+      representativeId,
+      input.memberId,
+      input.userId,
+      input.source,
+      input.showOnOrgProfile === false ? 0 : 1,
+      now,
+      now,
+      now,
+    );
   return { representativeId, statement };
 }
 
@@ -80,15 +138,23 @@ export function buildCloseRepresentativeStatement(
 }
 
 /** Transfer: close the active row on the old organization, open a new one on the new organization. */
-export function buildTransferRepresentativeStatements(
+export async function buildTransferRepresentativeStatements(
   db: DatabaseLike,
-  input: { fromMemberId: string; toMemberId: string; userId: string; showOnOrgProfile?: boolean; now?: string },
-): { representativeId: string; statements: StatementLike[] } {
+  input: {
+    fromMemberId: string;
+    toMemberId: string;
+    userId: string;
+    source: OrganizationRepresentationSource;
+    showOnOrgProfile?: boolean;
+    now?: string;
+  },
+): Promise<{ representativeId: string; statements: StatementLike[] }> {
   const now = input.now ?? nowIso();
   const close = buildCloseRepresentativeStatement(db, { memberId: input.fromMemberId, userId: input.userId, now });
-  const { representativeId, statement: open } = buildAddRepresentativeStatement(db, {
+  const { representativeId, statement: open } = await buildAddRepresentativeStatement(db, {
     memberId: input.toMemberId,
     userId: input.userId,
+    source: input.source,
     showOnOrgProfile: input.showOnOrgProfile,
     now,
   });

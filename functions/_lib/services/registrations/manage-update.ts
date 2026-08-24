@@ -2,7 +2,7 @@ import { registrationManageSchema } from "../../../../assets/shared/schemas/regi
 import type { DatabaseLike } from "../../types";
 import { deriveEventAttendanceType } from "../event-days";
 import { getEventById } from "../events";
-import { validateCustomAnswersByPurpose } from "../forms";
+import { prepareReplaceContextFormSubmission, validateCustomAnswersForSubmission } from "../forms";
 import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
@@ -46,15 +46,29 @@ export async function updateManagedRegistration(
   const { body, registration: current } = input;
   const event = await getEventById(db, current.event_id);
   const attendanceType = body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined;
-  const customAnswers =
+  const validatedForm =
     body.customAnswers !== undefined
-      ? await validateCustomAnswersByPurpose(db, {
+      ? await validateCustomAnswersForSubmission(db, {
           eventId: event.id,
           purpose: "event_registration",
           customAnswers: body.customAnswers,
           context: { attendanceType, dayAttendance: body.dayAttendance },
         })
-      : {};
+      : null;
+  const customAnswers = validatedForm?.answers ?? {};
+  const formSubmission = validatedForm?.form
+    ? await prepareReplaceContextFormSubmission(
+        db,
+        validatedForm.form,
+        {
+          submittedByUserId: current.user_id,
+          contextType: "registration",
+          contextRef: current.id,
+        },
+        customAnswers,
+        new Date().toISOString(),
+      )
+    : null;
   const profilePatch =
     body.action === "update"
       ? {
@@ -74,6 +88,7 @@ export async function updateManagedRegistration(
     dayAttendance: body.dayAttendance,
     claimDayWaitlistOffers: body.claimDayWaitlistOffers,
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,
+    formPlacementId: validatedForm?.form?.placement?.id ?? null,
     sourceRef: body.sourceRef,
     waitlistClaimWindowHours: input.waitlistClaimWindowHours,
     profilePatch,
@@ -82,6 +97,7 @@ export async function updateManagedRegistration(
       id: input.isAdminManageJwt ? input.actorUserId : (input.authenticatedActor?.id ?? input.actorUserId),
       action: `self_service_${body.action}`,
     },
+    formSubmissionStatements: formSubmission?.statements,
   };
   const notification = {
     event,

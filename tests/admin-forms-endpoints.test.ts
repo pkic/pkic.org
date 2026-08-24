@@ -138,11 +138,16 @@ async function insertForm(opts: {
       .run();
 
     for (const [fieldKey, value] of Object.entries(opts.submission.answers ?? {})) {
+      const [field] = await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM form_fields WHERE form_id = ? AND key = ? LIMIT 1",
+        [formId, fieldKey],
+      );
       await env.DB.prepare(
-        `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-        .bind(crypto.randomUUID(), submissionId, fieldKey, JSON.stringify(value), timestamp)
+        .bind(crypto.randomUUID(), submissionId, field.id, fieldKey, JSON.stringify(value), timestamp)
         .run();
     }
   }
@@ -232,7 +237,7 @@ describe("admin forms endpoints", () => {
       scopeRef: eventId,
       purpose: "event_registration",
       title: "Registration form with linked row",
-      fields: [],
+      fields: [{ key: "company", label: "Company", fieldType: "text" }],
       submission: {
         contextType: "registration",
         contextRef: doubleCountRegistrationContextRef,
@@ -263,7 +268,7 @@ describe("admin forms endpoints", () => {
       scopeRef: eventId,
       purpose: "proposal_submission",
       title: "Proposal form with linked row",
-      fields: [],
+      fields: [{ key: "abstract", label: "Abstract", fieldType: "textarea" }],
       submission: {
         contextType: "proposal",
         contextRef: doubleCountProposalContextRef,
@@ -424,11 +429,16 @@ describe("admin forms endpoints", () => {
       title: "Original title",
       fields: [{ key: "original", label: "Original", fieldType: "text" }],
     });
+    const [formIdentity] = await queryAll<{ updated_at: string }>(
+      env.DB,
+      "SELECT updated_at FROM forms WHERE id = ? LIMIT 1",
+      [formId],
+    );
     await expect(
       updateManagedForm(
         env.DB,
         admin.id,
-        { id: formId, key: "must-preserve" },
+        { id: formId, key: "must-preserve", updated_at: formIdentity.updated_at },
         {
           title: "Should not persist",
           fields: duplicateFields,
@@ -500,28 +510,38 @@ describe("admin forms endpoints", () => {
       "SELECT id FROM form_submissions WHERE form_id = ? ORDER BY submitted_at DESC",
       [detailRow.id],
     );
+    const fields = await queryAll<{ id: string; key: string }>(
+      env.DB,
+      "SELECT id, key FROM form_fields WHERE form_id = ?",
+      [detailRow.id],
+    );
+    const fieldId = new Map(fields.map((field) => [field.key, field.id]));
     await env.DB.prepare(
-      `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         crypto.randomUUID(),
         submissions[0].id,
+        fieldId.get("company"),
         "company",
         JSON.stringify("Example Org"),
         nowIso(),
         crypto.randomUUID(),
         submissions[0].id,
+        fieldId.get("tracks"),
         "tracks",
         JSON.stringify(["PKI", "PQC"]),
         nowIso(),
         crypto.randomUUID(),
         submissions[1].id,
+        fieldId.get("company"),
         "company",
         JSON.stringify("Other Org"),
         nowIso(),
         crypto.randomUUID(),
         submissions[1].id,
+        fieldId.get("tracks"),
         "tracks",
         JSON.stringify(["PKI"]),
         nowIso(),
@@ -693,6 +713,46 @@ describe("admin forms endpoints", () => {
       contextRef: proposalId,
       answers: { audience: "Operators" },
     });
+
+    const registrationFieldPatch = await callAdmin("/api/v1/admin/forms/linked-registration-form", {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: [
+          {
+            key: "topics",
+            label: "Topics",
+            fieldType: "multi_select",
+            required: false,
+            sortOrder: 20,
+            options: ["PKI", "PQC"],
+          },
+        ],
+      }),
+    });
+    expect(registrationFieldPatch.status, await registrationFieldPatch.clone().text()).toBe(200);
+    const registrationFieldPayload = (await registrationFieldPatch.json()) as {
+      fields: Array<{ key: string; archivedAt: string | null }>;
+    };
+    expect(registrationFieldPayload.fields.find((field) => field.key === "food")?.archivedAt).toBeTruthy();
+
+    const proposalFieldPatch = await callAdmin("/api/v1/admin/forms/linked-proposal-form", {
+      method: "PATCH",
+      body: JSON.stringify({ fields: [] }),
+    });
+    expect(proposalFieldPatch.status, await proposalFieldPatch.clone().text()).toBe(200);
+    const proposalFieldPayload = (await proposalFieldPatch.json()) as {
+      fields: Array<{ key: string; archivedAt: string | null }>;
+    };
+    expect(proposalFieldPayload.fields.find((field) => field.key === "audience")?.archivedAt).toBeTruthy();
+
+    const deleteRegistrationForm = await callAdmin("/api/v1/admin/forms/linked-registration-form", {
+      method: "DELETE",
+    });
+    expect(deleteRegistrationForm.status).toBe(200);
+    await expect(deleteRegistrationForm.json()).resolves.toMatchObject({ action: "archived" });
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM forms WHERE key = 'linked-registration-form'"),
+    ).toEqual([{ status: "archived" }]);
   });
 
   it("replaces fields on patch and archives submitted forms on delete", async () => {
@@ -745,9 +805,13 @@ describe("admin forms endpoints", () => {
     });
 
     expect(patchResponse.status, await patchResponse.clone().text()).toBe(200);
-    const patchPayload = (await patchResponse.json()) as { success: boolean; fields: Array<{ key: string }> };
+    const patchPayload = (await patchResponse.json()) as {
+      success: boolean;
+      fields: Array<{ key: string; archivedAt: string | null }>;
+    };
     expect(patchPayload.success).toBe(true);
-    expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "topics"]);
+    expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "old_field", "topics"]);
+    expect(patchPayload.fields.find((field) => field.key === "old_field")?.archivedAt).toBeTruthy();
 
     const deleteResponse = await callAdmin("/api/v1/admin/forms/mutable-form", { method: "DELETE" });
     expect(deleteResponse.status).toBe(200);

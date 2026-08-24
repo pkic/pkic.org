@@ -69,6 +69,7 @@ export async function createAdminMember(
       jobTitle: rep.role,
       links: rep.links,
     })),
+    representationSource: "staff",
     workingGroupSlugs: input.workingGroupSlugs,
     grantedByUserId: adminDatabaseUserId(actor),
   });

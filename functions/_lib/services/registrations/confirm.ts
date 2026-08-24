@@ -15,6 +15,8 @@ import { signCapabilityToken, verifyDatabaseCapability } from "../capability-lin
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
+import { prepareVerifyPrimaryEmailStatement } from "../email-verification";
+import { prepareVerifiedDomainAssociationStatements } from "../organization-representations";
 
 export interface PreparedRegistrationConfirmation {
   stage: "confirmed";
@@ -178,10 +180,23 @@ export async function prepareConfirmRegistrationByToken(
     userId: registration.user_id,
   });
   const newStatus = "registered";
+  const verifiedEmail = inviteEmail ?? user.normalized_email;
+  const representationStatements = await prepareVerifiedDomainAssociationStatements(db, {
+    userId: registration.user_id,
+    normalizedEmail: verifiedEmail,
+    at: now,
+  });
 
   const updateStatements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
     ...emailFinalizeStatements,
+    prepareVerifyPrimaryEmailStatement(db, {
+      userId: registration.user_id,
+      normalizedEmail: verifiedEmail,
+      method: ownsPendingEmailChange ? "email_change_confirmation" : "registration_confirmation",
+      verifiedAt: now,
+    }),
+    ...representationStatements,
     db
       .prepare(
         `UPDATE registrations

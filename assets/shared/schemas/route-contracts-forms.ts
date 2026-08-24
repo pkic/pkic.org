@@ -11,6 +11,16 @@ import {
   adminFormUpdateResponseSchema,
 } from "./admin-forms";
 import { eventSlugParamsSchema, formKeyParamsSchema } from "./api-common";
+import {
+  formPlacementCreateResponseSchema,
+  formPlacementCreateSchema,
+  formPlacementUpdateSchema,
+  formPlacementsListQuerySchema,
+  formPlacementsListResponseSchema,
+} from "./forms";
+import { databaseIdSchema } from "./identifiers";
+
+const formPlacementParamsSchema = formKeyParamsSchema.extend({ placementId: databaseIdSchema });
 
 /**
  * Legacy browser form endpoint. The payload intentionally remains dynamic
@@ -127,6 +137,61 @@ export const adminFormSubmissionStatsRouteSchema = {
     },
     "401": { description: "Admin authorization required." },
     "404": { description: "Form not found." },
+  },
+};
+
+export const adminFormPlacementsListRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "List form placements",
+  description: "Returns the bounded response-set placements that reuse one form definition.",
+  request: { params: formKeyParamsSchema, query: formPlacementsListQuerySchema },
+  responses: {
+    "200": {
+      description: "Paginated form placements.",
+      content: { "application/json": { schema: formPlacementsListResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Form not found." },
+  },
+};
+
+export const adminFormPlacementCreateRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "Place a reusable form",
+  description: "Creates a distinct response set for an existing reusable form definition.",
+  request: {
+    params: formKeyParamsSchema,
+    body: { content: { "application/json": { schema: formPlacementCreateSchema } }, required: true },
+  },
+  responses: {
+    "201": {
+      description: "Form placement created.",
+      content: { "application/json": { schema: formPlacementCreateResponseSchema } },
+    },
+    "400": { description: "Invalid placement configuration." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Form not found." },
+    "409": { description: "This form already has the requested placement." },
+  },
+};
+
+export const adminFormPlacementUpdateRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "Update a form placement",
+  description: "Updates the audience, availability, context, or active state of one response set.",
+  request: {
+    params: formPlacementParamsSchema,
+    body: { content: { "application/json": { schema: formPlacementUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Form placement updated.",
+      content: { "application/json": { schema: formPlacementCreateResponseSchema } },
+    },
+    "400": { description: "Invalid placement configuration." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Form or placement not found." },
+    "409": { description: "The placement changed concurrently." },
   },
 };
 

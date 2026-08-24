@@ -36,5 +36,13 @@ export const AdminFormsList = openApiRoute(adminFormsListRouteSchema, async (c: 
 export const AdminFormsCreate = openApiRoute(adminFormCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const form = await createManagedForm(requestDb(c), admin.id, { type: "global", ref: null }, data.body);
-  return json(adminFormCreateResponseSchema.parse({ success: true, formId: form.id, key: form.key }), 201);
+  return json(
+    adminFormCreateResponseSchema.parse({
+      success: true,
+      formId: form.id,
+      placementId: form.placementId,
+      key: form.key,
+    }),
+    201,
+  );
 });

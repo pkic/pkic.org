@@ -22,7 +22,10 @@ import {
   updateRegistrationByIdWithNotification,
   forceRegistrationStatus,
 } from "../../../../../../../_lib/services/registrations";
-import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
+import {
+  prepareReplaceContextFormSubmission,
+  validateCustomAnswersForSubmission,
+} from "../../../../../../../_lib/services/forms";
 import { deriveEventAttendanceType } from "../../../../../../../_lib/services/event-days";
 import {
   adminRegistrationDetailRouteSchema,
@@ -98,9 +101,9 @@ async function handleAdminRegistrationPatch(
   }
 
   // ── update / cancel / report_unauthorized — full shared service logic ──────
-  const customAnswers =
+  const validatedForm =
     body.customAnswers !== undefined
-      ? await validateCustomAnswersByPurpose(requestDb(c), {
+      ? await validateCustomAnswersForSubmission(requestDb(c), {
           eventId: event.id,
           purpose: "event_registration",
           customAnswers: body.customAnswers,
@@ -109,7 +112,25 @@ async function handleAdminRegistrationPatch(
             dayAttendance: body.dayAttendance,
           },
         })
-      : {};
+      : null;
+  const customAnswers = validatedForm?.answers ?? {};
+  const currentRegistration = validatedForm?.form
+    ? await fetchAdminRegistrationWithDetails(requestDb(c), event.id, registrationId)
+    : null;
+  const formSubmission =
+    validatedForm?.form && currentRegistration
+      ? await prepareReplaceContextFormSubmission(
+          requestDb(c),
+          validatedForm.form,
+          {
+            submittedByUserId: currentRegistration.user_id,
+            contextType: "registration",
+            contextRef: registrationId,
+          },
+          customAnswers,
+          new Date().toISOString(),
+        )
+      : null;
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const currentUser =
@@ -125,6 +146,7 @@ async function handleAdminRegistrationPatch(
     dayAttendance: body.dayAttendance,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,
+    formPlacementId: validatedForm?.form?.placement?.id ?? null,
     sourceRef: body.sourceRef,
     profilePatch:
       body.action === "update"
@@ -136,6 +158,7 @@ async function handleAdminRegistrationPatch(
           }
         : undefined,
     auditActor: { type: "admin" as const, id: admin.id, action: "admin_registration_updated" },
+    formSubmissionStatements: formSubmission?.statements,
   };
   const notification = {
     event,

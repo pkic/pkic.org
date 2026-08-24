@@ -58,8 +58,8 @@ describe("canonical form-field rules", () => {
   it("uses one tolerant option codec", () => {
     const raw = ["one", { value: "two", label: " Second " }, { ignored: true }];
     expect(parseFormFieldOptions(raw)).toEqual([
-      { value: "one", label: "one" },
-      { value: "two", label: "Second" },
+      { value: "one", label: "one", active: true },
+      { value: "two", label: "Second", active: true },
     ]);
     expect(formFieldOptionValues(raw)).toEqual(["one", "two"]);
   });
