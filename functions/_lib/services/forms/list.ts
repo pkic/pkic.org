@@ -32,10 +32,20 @@ export async function listAdminForms(
   if (params.eventId) {
     conditions.push(
       params.includeGlobal
-        ? "((f.scope_type = 'event' AND f.scope_ref = ?) OR f.scope_type = 'global')"
-        : "f.scope_type = 'event' AND f.scope_ref = ?",
+        ? `((f.scope_type = 'event' AND f.scope_ref = ?) OR f.scope_type = 'global'
+            OR EXISTS (
+              SELECT 1 FROM form_placements fp
+              WHERE fp.form_id = f.id
+                AND ((fp.context_type = 'event' AND fp.context_ref = ?)
+                     OR fp.context_type = 'installation')
+            ))`
+        : `((f.scope_type = 'event' AND f.scope_ref = ?)
+            OR EXISTS (
+              SELECT 1 FROM form_placements fp
+              WHERE fp.form_id = f.id AND fp.context_type = 'event' AND fp.context_ref = ?
+            ))`,
     );
-    bindings.push(params.eventId);
+    bindings.push(params.eventId, params.eventId);
   }
   if (params.purpose) {
     conditions.push("f.purpose = ?");
@@ -80,6 +90,7 @@ export async function listAdminForms(
          e.slug AS event_slug,
          e.name AS event_name,
          COUNT(DISTINCT ff.id) AS field_count,
+         (SELECT COUNT(*) FROM form_placements fp WHERE fp.form_id = f.id) AS placement_count,
          COUNT(DISTINCT fs.id)
            + CASE WHEN f.scope_type = 'event' AND f.purpose = 'event_registration' THEN (
                SELECT COUNT(*) FROM registrations r

@@ -58,6 +58,7 @@ export async function getSpeakerByManageToken(
     sp_title: string;
     sp_abstract: string;
     sp_details_json: string | null;
+    sp_form_placement_id: string | null;
     sp_referral_code: string | null;
     sp_manage_link_secret: string;
     sp_review_round: number;
@@ -104,6 +105,7 @@ export async function getSpeakerByManageToken(
        sp.title           AS sp_title,
        sp.abstract        AS sp_abstract,
        sp.details_json    AS sp_details_json,
+       sp.form_placement_id AS sp_form_placement_id,
        sp.referral_code   AS sp_referral_code,
        sp.manage_link_secret AS sp_manage_link_secret,
        sp.review_round    AS sp_review_round,
@@ -156,6 +158,7 @@ export async function getSpeakerByManageToken(
       title: row.sp_title,
       abstract: row.sp_abstract,
       details_json: row.sp_details_json,
+      form_placement_id: row.sp_form_placement_id,
       referral_code: row.sp_referral_code,
       manage_link_secret: row.sp_manage_link_secret,
       review_round: row.sp_review_round,

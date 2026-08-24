@@ -52,10 +52,15 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-      Evidence: all 37 migrations, including 212 statements in 0035, applied to
-      a seventh independent local D1 state under ScanDisk after the conditional
-      enrollment and mailing-list refinements on 2026-08-24.
-- [ ] Prove production-shaped upgrade fixture application.
+      Evidence: all 37 migrations, including 224 statements in 0035, applied to
+      a fourteenth independent local D1 state under ScanDisk after the
+      reusable-form refinements on 2026-08-24.
+- [x] Prove production-shaped upgrade fixture application.
+      Evidence: consolidated-migration-upgrade.test.ts preserves realistic
+      pre-0035 rows and verifies stable form-field backfill plus historical-key
+      fallback without rebuilding members or organizations. Existing
+      registrations and proposals remain intact with deliberately unattributed
+      NULL placement IDs rather than a guessed backfill.
 - [ ] Prove importers target only the final schema.
 
 ## 2. Group membership and governance
@@ -164,7 +169,7 @@ Status: In progress
       group-enrollment-mailing-lists.test.ts pass 15 focused tests. The entry
       path encrypts provider URLs at rest, exposes them only after an intentional
       POST, rechecks eligibility on every use, and keeps terms acceptance and
-      attendance verification separate. All 37 migrations, including 212
+      attendance verification separate. All 37 migrations, including 224
       statements in migration 0035, replay on a fresh local D1 database. Focused
       ESLint/formatting and SQL projection, dependency architecture, API-contract,
       duplication, max-lines, and filename gates pass. Recurrence materialization,
@@ -176,22 +181,35 @@ Status: In progress
 
 ## 6. Reusable live-editable forms
 
-Status: In progress
+Status: Complete
 
 - [x] Add placements with owner group, context, audience, and response set.
 - [x] Update existing fields in place using stable IDs.
 - [x] Insert new fields without replacing existing fields.
 - [x] Archive answered fields and options instead of deleting them.
-- [ ] Permit labels, descriptions, order, required state, and configuration to
+- [x] Permit labels, descriptions, order, required state, and configuration to
       change after responses exist.
 - [x] Reference stable field IDs from new answers.
-- [ ] Preserve legacy field-key fallback for unmappable historical answers.
+- [x] Preserve legacy field-key fallback for unmappable historical answers.
 - [x] Stop deleting and recreating the complete field collection on updates.
-- [ ] Reuse one form definition across multiple placements.
-- [ ] Ensure editing a shared definition affects every placement.
-- [ ] Keep filtering, pagination, and statistics in D1 by placement.
-- [ ] Cover add, rename, reorder, type/configuration change, removal, historical
+- [x] Reuse one form definition across multiple placements.
+- [x] Ensure editing a shared definition affects every placement.
+- [x] Keep filtering, pagination, and statistics in D1 by placement.
+- [x] Cover add, rename, reorder, type/configuration change, removal, historical
       rendering, placement isolation, and concurrent submission versus edit.
+      Evidence: form-placements.test.ts and
+      form-domain-revision-guards.test.ts prove placement isolation, indexed D1
+      filtering, live shared edits, historical rendering, and atomic rollback
+      for stale registration/proposal creates and updates. New domain writes
+      persist the exact placement and a canonical stable-field-ID submission in
+      the same batch; field renames therefore render correctly. Inferred legacy
+      rows remain scoped to their own form. Preview and production each report
+      zero duplicate domain response contexts for the new uniqueness invariant.
+      The forms-only backend run passes 69 tests; the adjacent
+      admin-application suite retains five known leadership/voting seam
+      failures. Focused frontend rendering passes 7 tests. SQL projection,
+      dependency architecture, API-contract, duplication, max-lines, and
+      filename gates, ESLint, and formatting pass.
 
 ## 7. Voting
 
@@ -275,13 +293,23 @@ Status: Pending
 - [x] Run SQL projection lint and architecture lint after backend boundaries move.
 - [x] Run duplication checks and fix new duplication rather than suppress it.
 - [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
-- [ ] Run migration tests against production-shaped databases.
+- [x] Run migration tests against production-shaped databases.
+      Evidence: the realistic pre-0035 upgrade scenario passes integrity and
+      foreign-key checks without rebuilding members or organizations and
+      preserves unattributed historical event-form projections.
 - [x] Run migration tests against empty databases.
 - [ ] Run representative and group authorization security tests.
 - [ ] Run join-token, terms, guest, and attendance security tests.
 - [ ] Run voting replacement and race tests.
-- [ ] Run mutable-form concurrency and historical-integrity tests.
+- [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
+      Current evidence: the gate was rerun after the reusable-forms slice and
+      stops at the known, deliberately unsynchronized leadership/voting
+      type-contract cutover. The complete backend run reaches 1,662 passing,
+      261 failing, and one skipped test; the failures use removed legacy group,
+      meeting, leadership, and vote schema rather than the completed forms
+      paths. Do not mark this complete until that migration is authorized and
+      all repository-wide gates pass from the final schema.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.

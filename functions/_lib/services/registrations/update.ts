@@ -9,6 +9,7 @@ import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./updat
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
 import { sha256Hex } from "../../utils/crypto";
 import { emailTakenError, isEmailReservationConflict } from "../user-emails";
+import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "../forms";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
 
@@ -32,6 +33,7 @@ async function executeRegistrationUpdate<T>(
       return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
     });
   } catch (error) {
+    if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isEmailReservationConflict(error)) throw emailTakenError();
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();

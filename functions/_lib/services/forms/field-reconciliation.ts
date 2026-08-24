@@ -19,7 +19,7 @@ function reconcileOptions(field: FieldInput, existing: ExistingField | undefined
   const requested = field.options ?? [];
   if (!existing?.has_answers) return requested.length > 0 ? requested : null;
 
-  let persisted: unknown = null;
+  let persisted: unknown;
   try {
     persisted = existing.options_json ? JSON.parse(existing.options_json) : null;
   } catch {
@@ -93,7 +93,17 @@ export async function prepareFieldReconciliation(
   const existing = await all<ExistingField>(
     db,
     `SELECT ff.id, ff.key, ff.options_json,
-            EXISTS(SELECT 1 FROM form_submission_answers a WHERE a.field_id = ff.id) AS has_answers
+            (EXISTS(SELECT 1 FROM form_submission_answers a WHERE a.field_id = ff.id)
+             OR EXISTS(
+               SELECT 1
+               FROM form_domain_response_evidence evidence,
+                    json_each(
+                      CASE WHEN json_valid(evidence.answers_json)
+                           THEN evidence.answers_json ELSE '{}'
+                      END
+                    ) answer
+               WHERE evidence.form_id = ff.form_id AND answer.key = ff.key
+             )) AS has_answers
      FROM form_fields ff
      WHERE ff.form_id = ?`,
     [formId],

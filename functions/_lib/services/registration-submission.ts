@@ -12,6 +12,13 @@ import { isEventDayCapacityConflict, type PlannedDayWaitlistEntry } from "./regi
 import type { RegistrationRecord } from "./registrations";
 import type { DayAttendanceSelection } from "./event-days";
 import { buildFindOrCreateUserStatement, type FindOrCreateUserPayload, type UserRecord } from "./users";
+import {
+  formSubmissionContextChangedError,
+  isFormSubmissionContextConflict,
+  prepareReplaceContextFormSubmission,
+  type ActiveFormDefinition,
+  type CustomAnswerValue,
+} from "./forms";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
@@ -37,6 +44,9 @@ export async function prepareRegistrationSubmission(
     sourceType: string;
     sourceRef?: string | null;
     customAnswersJson?: string | null;
+    formPlacementId?: string | null;
+    formDefinition?: ActiveFormDefinition | null;
+    formAnswers?: Readonly<Record<string, CustomAnswerValue>>;
     referredByCode?: string | null;
     invite?: InviteRecord | null;
     consents: Array<{ termKey: string; version: string }>;
@@ -46,6 +56,7 @@ export async function prepareRegistrationSubmission(
     pendingConfirmationDeadlineHours: number;
     confirmationTtlHours?: number;
     referralCodeLength: number;
+    formRevisionGuard?: StatementLike | null;
   },
 ): Promise<PreparedRegistrationSubmission> {
   const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
@@ -57,6 +68,7 @@ export async function prepareRegistrationSubmission(
     sourceType: payload.sourceType,
     sourceRef: payload.sourceRef,
     customAnswersJson: payload.customAnswersJson,
+    formPlacementId: payload.formPlacementId,
     inviteId: payload.invite?.id ?? null,
     referredByCode: payload.referredByCode,
     pendingConfirmationDeadlineHours: payload.pendingConfirmationDeadlineHours,
@@ -77,10 +89,26 @@ export async function prepareRegistrationSubmission(
         length: payload.referralCodeLength,
       });
 
+  const formSubmission = payload.formDefinition
+    ? await prepareReplaceContextFormSubmission(
+        db,
+        payload.formDefinition,
+        {
+          submittedByUserId: preparedUser.user.id,
+          contextType: "registration",
+          contextRef: builtRegistration.registration.id,
+        },
+        payload.formAnswers ?? {},
+        builtRegistration.registration.updated_at,
+      )
+    : null;
+
   const statements: StatementLike[] = [];
+  if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
   if (preparedUser.statement) statements.push(preparedUser.statement);
   statements.push(
     ...builtRegistration.statements,
+    ...(formSubmission?.statements ?? []),
     ...(await prepareConsentStatements(db, {
       registrationId: builtRegistration.registration.id,
       eventId: payload.eventId,
@@ -137,6 +165,9 @@ export async function commitRegistrationSubmission(
   try {
     await db.batch([...prepared.statements, ...additionalStatements]);
   } catch (error) {
+    if (isFormSubmissionContextConflict(error)) {
+      throw formSubmissionContextChangedError();
+    }
     if (isEventDayCapacityConflict(error)) {
       throw new AppError(
         409,

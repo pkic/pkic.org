@@ -16,8 +16,16 @@ export function prepareFormMutationGuard(
     .bind(uuid(), formId, expectedUpdatedAt, newUpdatedAt);
 }
 
+export function prepareFormDeletionGuard(db: DatabaseLike, formId: string): StatementLike {
+  return db.prepare("INSERT INTO form_deletion_guards (id, form_id) VALUES (?, ?)").bind(uuid(), formId);
+}
+
 export function isFormMutationConflict(error: unknown): boolean {
   return error instanceof Error && error.message.includes("FORM_CHANGED");
+}
+
+export function isFormDeletionEvidenceConflict(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("FORM_HAS_RESPONSE_EVIDENCE");
 }
 
 export function formChangedError(): AppError {

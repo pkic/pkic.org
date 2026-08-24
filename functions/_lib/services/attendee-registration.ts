@@ -4,7 +4,7 @@ import { AppError } from "../errors";
 import { deriveEventAttendanceType } from "./event-days";
 import { validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
-import { validateCustomAnswersByPurpose } from "./forms";
+import { validateCustomAnswersForSubmission } from "./forms";
 import type { InviteRecord } from "./invites";
 import { prepareRegistrationSubmission } from "./registration-submission";
 
@@ -32,12 +32,13 @@ export async function prepareValidatedAttendeeRegistration(
 
   const requiredTerms = await getRequiredTerms(db, options.eventId, "attendee");
   await validateRequiredConsents(requiredTerms, input.consents);
-  const customAnswers = await validateCustomAnswersByPurpose(db, {
+  const validatedForm = await validateCustomAnswersForSubmission(db, {
     eventId: options.eventId,
     purpose: "event_registration",
     customAnswers: input.customAnswers,
     context: { attendanceType, dayAttendance: input.dayAttendance },
   });
+  const customAnswers = validatedForm.answers;
 
   const customOrganization =
     typeof input.customAnswers?.organization_name === "string" ? input.customAnswers.organization_name.trim() : "";
@@ -56,6 +57,9 @@ export async function prepareValidatedAttendeeRegistration(
     sourceType: options.sourceType,
     sourceRef: options.sourceRef,
     customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
+    formPlacementId: validatedForm.form?.placement?.id ?? null,
+    formDefinition: validatedForm.form,
+    formAnswers: customAnswers,
     referredByCode: options.referredByCode,
     invite: options.invite,
     consents: input.consents,

@@ -1,11 +1,17 @@
 import { prepareAuditLog } from "../audit";
-import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { AdminFormCreateInput, AdminFormUpdateInput } from "../../../../assets/shared/schemas/admin-forms";
 import { prepareFieldReconciliation } from "./field-reconciliation";
-import { formChangedError, isFormMutationConflict, prepareFormMutationGuard } from "./mutation-guard";
+import {
+  formChangedError,
+  isFormDeletionEvidenceConflict,
+  isFormMutationConflict,
+  prepareFormDeletionGuard,
+  prepareFormMutationGuard,
+} from "./mutation-guard";
+import { defaultFormAudience, prepareFormPlacement } from "./placements";
 
 type FormScope = { type: "global"; ref: null } | { type: "event"; ref: string; eventSlug: string };
 
@@ -13,6 +19,10 @@ interface ManagedFormIdentity {
   id: string;
   key: string;
   updated_at: string;
+}
+
+interface CreatedManagedFormIdentity extends ManagedFormIdentity {
+  placementId: string;
 }
 
 export type ManagedFormRemovalAction = "archived" | "deleted";
@@ -23,7 +33,7 @@ export async function createManagedForm(
   actorId: string,
   scope: FormScope,
   input: AdminFormCreateInput,
-): Promise<ManagedFormIdentity> {
+): Promise<CreatedManagedFormIdentity> {
   const id = uuid();
   const now = nowIso();
   const auditAction = scope.type === "event" ? "event_form_created" : "global_form_created";
@@ -33,6 +43,18 @@ export async function createManagedForm(
     purpose: input.purpose,
   };
   const fieldStatements = await prepareFieldReconciliation(db, id, input.fields, now);
+  const placement = prepareFormPlacement(
+    db,
+    id,
+    {
+      ownerGroupId: null,
+      contextType: scope.type === "event" ? "event" : "installation",
+      contextRef: scope.ref,
+      audience: defaultFormAudience(input.purpose),
+      active: input.status === "active",
+    },
+    now,
+  );
 
   await db.batch([
     db
@@ -54,10 +76,11 @@ export async function createManagedForm(
         now,
       ),
     ...fieldStatements,
+    placement.statement,
     prepareAuditLog(db, "admin", actorId, auditAction, "form", id, auditDetails, now),
   ]);
 
-  return { id, key: input.key, updated_at: now };
+  return { id, key: input.key, updated_at: now, placementId: placement.id };
 }
 
 /** Atomically updates metadata, reconciles stable fields, and audits the aggregate change. */
@@ -88,6 +111,13 @@ export async function updateManagedForm(
           form.id,
         ),
     );
+    if (input.status && input.status !== "active") {
+      statements.push(
+        db
+          .prepare("UPDATE form_placements SET active = 0, updated_at = ? WHERE form_id = ? AND active = 1")
+          .bind(now, form.id),
+      );
+    }
   }
 
   if (input.fields !== undefined) {
@@ -123,17 +153,27 @@ export async function removeManagedForm(
   actorId: string,
   form: ManagedFormIdentity,
 ): Promise<ManagedFormRemovalAction> {
-  const submissionCount = await first<{ total: number }>(
-    db,
-    "SELECT COUNT(*) AS total FROM form_submissions WHERE form_id = ?",
-    [form.id],
-  );
   const now = nowIso();
-  if (Number(submissionCount?.total ?? 0) > 0) {
+  try {
+    await db.batch([
+      prepareFormMutationGuard(db, form.id, form.updated_at, now),
+      prepareFormDeletionGuard(db, form.id),
+      db.prepare("DELETE FROM form_group_grants WHERE form_id = ?").bind(form.id),
+      db.prepare("DELETE FROM form_placements WHERE form_id = ?").bind(form.id),
+      db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
+      db.prepare("DELETE FROM forms WHERE id = ?").bind(form.id),
+      prepareAuditLog(db, "admin", actorId, "form_deleted", "form", form.id, { key: form.key }, now),
+    ]);
+    return "deleted";
+  } catch (error) {
+    if (isFormMutationConflict(error)) throw formChangedError();
+    if (!isFormDeletionEvidenceConflict(error)) throw error;
+
     try {
       await db.batch([
         prepareFormMutationGuard(db, form.id, form.updated_at, now),
         db.prepare("UPDATE forms SET status = 'archived' WHERE id = ?").bind(form.id),
+        db.prepare("UPDATE form_placements SET active = 0, updated_at = ? WHERE form_id = ?").bind(now, form.id),
         prepareAuditLog(db, "admin", actorId, "form_archived", "form", form.id, { key: form.key }, now),
       ]);
     } catch (error) {
@@ -142,17 +182,4 @@ export async function removeManagedForm(
     }
     return "archived";
   }
-
-  try {
-    await db.batch([
-      prepareFormMutationGuard(db, form.id, form.updated_at, now),
-      db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
-      db.prepare("DELETE FROM forms WHERE id = ?").bind(form.id),
-      prepareAuditLog(db, "admin", actorId, "form_deleted", "form", form.id, { key: form.key }, now),
-    ]);
-  } catch (error) {
-    if (isFormMutationConflict(error)) throw formChangedError();
-    throw error;
-  }
-  return "deleted";
 }

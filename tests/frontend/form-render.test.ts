@@ -5,6 +5,8 @@ import { renderCustomFields, readCustomFieldValues } from "../../assets/ts/share
 import { findFieldErrorTarget } from "../../assets/ts/shared/form/validation-map";
 import { installLiveValidation } from "../../assets/ts/shared/form/validation";
 
+const option = (value: string) => ({ value, label: value, active: true });
+
 describe("frontend field rendering", () => {
   it("renders display text for terms and serializes accepted consent values", () => {
     const host = document.createElement("div");
@@ -42,7 +44,7 @@ describe("frontend field rendering", () => {
         fieldType: "multi_select",
         required: false,
         sortOrder: 1,
-        options: ["PKI", "PQC"],
+        options: [option("PKI"), option("PQC")],
         validation: { uiWidget: "tags", allowCustom: true },
       },
       {
@@ -51,7 +53,7 @@ describe("frontend field rendering", () => {
         fieldType: "multi_select",
         required: false,
         sortOrder: 2,
-        options: ["Vegan", "Halal"],
+        options: [option("Vegan"), option("Halal")],
         validation: { uiWidget: "checkboxes" },
       },
       {
@@ -116,7 +118,7 @@ describe("frontend field rendering", () => {
         fieldType: "multi_select",
         required: false,
         sortOrder: 1,
-        options: ["Vegetarian"],
+        options: [option("Vegetarian")],
         validation: { showWhen: { dayAttendanceIn: ["in_person"] } },
       },
     ]);

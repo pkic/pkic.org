@@ -1,13 +1,16 @@
 import { all, first } from "../../db/queries";
+import { AppError } from "../../errors";
 import { parseJsonSafe } from "../../utils/json";
 import type { DatabaseLike } from "../../types";
 import type {
   FormFieldDefinition,
+  FormPlacement,
   FormFieldType,
   FormPurpose,
   FormStatus,
 } from "../../../../assets/shared/schemas/forms";
 import { parseFormFieldOptions, parseFormFieldRules } from "../../../../assets/shared/schemas/form-field-rules";
+import { defaultFormAudience, findActiveFormPlacement } from "./placements";
 
 export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
 
@@ -40,7 +43,8 @@ export interface FormFieldRow {
   options_json: string | null;
   validation_json: string | null;
   sort_order: number;
-  updated_at: string;
+  created_at: string;
+  updated_at: string | null;
   archived_at: string | null;
 }
 
@@ -57,12 +61,14 @@ export interface ActiveFormDefinition {
   purpose: FormPurpose;
   title: string;
   description: string | null;
+  formUpdatedAt: string;
+  placement: FormPlacement | null;
   fields: FormFieldDefinition[];
 }
 
 const FORM_COLUMNS = "id, key, scope_type, scope_ref, purpose, status, title, description";
 const FORM_FIELD_COLUMNS =
-  "id, key, label, field_type, required, options_json, validation_json, sort_order, updated_at, archived_at";
+  "id, key, label, field_type, required, options_json, validation_json, sort_order, created_at, updated_at, archived_at";
 
 async function loadFormFieldRows(db: DatabaseLike, formId: string, includeArchived = false): Promise<FormFieldRow[]> {
   return all<FormFieldRow>(
@@ -85,7 +91,7 @@ export function mapManagedFormFields(fields: FormFieldRow[]) {
     options: parseFormFieldOptions(parseJsonSafe<unknown>(entry.options_json, null)),
     validation: parseFormFieldRules(parseJsonSafe<unknown>(entry.validation_json, null)),
     sortOrder: entry.sort_order,
-    updatedAt: entry.updated_at,
+    updatedAt: entry.updated_at ?? entry.created_at,
     archivedAt: entry.archived_at,
   }));
 }
@@ -103,7 +109,57 @@ export async function getManagedFormWithFields(
   return { form, fields: await loadFormFieldRows(db, form.id, true) };
 }
 
-async function findActiveForm(db: DatabaseLike, eventId: string, purpose: FormPurpose): Promise<FormRow | null> {
+async function findPlacedEventForm(
+  db: DatabaseLike,
+  eventId: string,
+  purpose: FormPurpose,
+  key?: string,
+): Promise<{ form: FormRow & { updated_at: string }; placement: FormPlacement } | null> {
+  const rows = await all<
+    FormRow & {
+      updated_at: string;
+      placement_id: string;
+    }
+  >(
+    db,
+    `SELECT ${FORM_COLUMNS.split(", ")
+      .map((column) => `f.${column}`)
+      .join(", ")},
+            f.updated_at, fp.id AS placement_id
+     FROM form_placements fp
+     JOIN forms f ON f.id = fp.form_id
+     WHERE fp.context_type = 'event'
+       AND fp.context_ref = ?
+       AND fp.active = 1
+       AND f.status = 'active'
+       AND f.purpose = ?
+       ${purpose === "event_registration" || purpose === "proposal_submission" ? "AND fp.audience = ?" : ""}
+       ${key ? "AND f.key = ?" : ""}
+       AND (fp.opens_at IS NULL OR unixepoch(fp.opens_at) <= unixepoch())
+       AND (fp.closes_at IS NULL OR unixepoch(fp.closes_at) > unixepoch())
+     ORDER BY fp.created_at ASC, fp.id ASC
+     LIMIT 2`,
+    [
+      eventId,
+      purpose,
+      ...(purpose === "event_registration" || purpose === "proposal_submission" ? [defaultFormAudience(purpose)] : []),
+      ...(key ? [key] : []),
+    ],
+  );
+  if (rows.length > 1) {
+    throw new AppError(503, "FORM_PLACEMENT_AMBIGUOUS", "Multiple active forms are configured for this event flow");
+  }
+  const row = rows[0];
+  if (!row) return null;
+  const placement = await findActiveFormPlacement(db, row.id, { placementId: row.placement_id });
+  return placement ? { form: row, placement } : null;
+}
+
+async function findActiveForm(
+  db: DatabaseLike,
+  eventId: string,
+  purpose: FormPurpose,
+): Promise<{ form: FormRow & { updated_at: string }; placement: FormPlacement | null } | null> {
   const event = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id = ?", [eventId]);
   if (event) {
     const settings = parseJsonSafe<EventSettings>(event.settings_json, {});
@@ -112,23 +168,28 @@ async function findActiveForm(db: DatabaseLike, eventId: string, purpose: FormPu
       return null;
     }
     if (typeof linkedKey === "string" && linkedKey) {
-      const linked = await first<FormRow>(
+      const placed = await findPlacedEventForm(db, eventId, purpose, linkedKey);
+      if (placed) return placed;
+      const linked = await first<FormRow & { updated_at: string }>(
         db,
-        `SELECT ${FORM_COLUMNS}
+        `SELECT ${FORM_COLUMNS}, updated_at
          FROM forms
          WHERE status = 'active' AND purpose = ? AND key = ?
          LIMIT 1`,
         [purpose, linkedKey],
       );
       if (linked) {
-        return linked;
+        return { form: linked, placement: null };
       }
     }
   }
 
-  const eventScoped = await first<FormRow>(
+  const placed = await findPlacedEventForm(db, eventId, purpose);
+  if (placed) return placed;
+
+  const eventScoped = await first<FormRow & { updated_at: string }>(
     db,
-    `SELECT ${FORM_COLUMNS}
+    `SELECT ${FORM_COLUMNS}, updated_at
      FROM forms
      WHERE status = 'active' AND purpose = ? AND scope_type = 'event' AND scope_ref = ?
      ORDER BY updated_at DESC
@@ -136,32 +197,43 @@ async function findActiveForm(db: DatabaseLike, eventId: string, purpose: FormPu
     [purpose, eventId],
   );
   if (eventScoped) {
-    return eventScoped;
+    return { form: eventScoped, placement: null };
   }
 
-  return first<FormRow>(
+  const globalForm = await first<FormRow & { updated_at: string }>(
     db,
-    `SELECT ${FORM_COLUMNS}
+    `SELECT ${FORM_COLUMNS}, updated_at
      FROM forms
      WHERE status = 'active' AND purpose = ? AND scope_type = 'global'
      ORDER BY updated_at DESC
      LIMIT 1`,
     [purpose],
   );
+  if (!globalForm) return null;
+  const placement = await findActiveFormPlacement(db, globalForm.id, {
+    contextType: "installation",
+    contextRef: null,
+  });
+  return { form: globalForm, placement };
 }
 
-async function loadFormDefinition(db: DatabaseLike, form: FormRow | null): Promise<ActiveFormDefinition | null> {
-  if (!form) return null;
-  const fields = await loadFormFieldRows(db, form.id);
+async function loadFormDefinition(
+  db: DatabaseLike,
+  resolved: { form: FormRow & { updated_at: string }; placement: FormPlacement | null } | null,
+): Promise<ActiveFormDefinition | null> {
+  if (!resolved) return null;
+  const fields = await loadFormFieldRows(db, resolved.form.id);
 
   return {
-    id: form.id,
-    key: form.key,
-    scopeType: form.scope_type,
-    scopeRef: form.scope_ref,
-    purpose: form.purpose,
-    title: form.title,
-    description: form.description,
+    id: resolved.form.id,
+    key: resolved.form.key,
+    scopeType: resolved.form.scope_type,
+    scopeRef: resolved.form.scope_ref,
+    purpose: resolved.form.purpose,
+    title: resolved.form.title,
+    description: resolved.form.description,
+    formUpdatedAt: resolved.form.updated_at,
+    placement: resolved.placement,
     fields: mapManagedFormFields(fields),
   };
 }
@@ -180,10 +252,18 @@ export async function getActiveFormByPurpose(
  * to an event, so the `findActiveForm` event-scoping logic above doesn't apply.
  */
 export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {
-  const form = await first<FormRow>(
+  const form = await first<FormRow & { updated_at: string }>(
     db,
-    `SELECT ${FORM_COLUMNS} FROM forms WHERE status = 'active' AND scope_type = 'global' AND key = ? LIMIT 1`,
+    `SELECT ${FORM_COLUMNS}, updated_at
+     FROM forms
+     WHERE status = 'active' AND scope_type = 'global' AND key = ?
+     LIMIT 1`,
     [key],
   );
-  return loadFormDefinition(db, form);
+  if (!form) return null;
+  const placement = await findActiveFormPlacement(db, form.id, {
+    contextType: "installation",
+    contextRef: null,
+  });
+  return loadFormDefinition(db, { form, placement });
 }

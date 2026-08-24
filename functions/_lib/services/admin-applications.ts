@@ -25,8 +25,14 @@ import {
   listApplicationConcerns,
   type MemberApplicationRow,
 } from "./membership/applications/queries";
-import { getGlobalFormByKey } from "./forms";
-import { validateCustomAnswersAgainstForm } from "./forms";
+import {
+  getGlobalFormByKey,
+  formSubmissionContextChangedError,
+  isFormSubmissionContextConflict,
+  prepareCreateFormSubmission,
+  prepareUpdateFormSubmission,
+  validateCustomAnswersAgainstForm,
+} from "./forms";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import {
   getOrganizationDomainClaim,
@@ -343,45 +349,27 @@ export async function updateAdminApplication(
         customAnswers: mergedAnswers,
         errorStatus: 422,
       });
-      const fieldIds = new Map(form.fields.map((field) => [field.key, field.id]));
       let formSubmissionId = application.form_submission_id;
       if (!formSubmissionId) {
-        formSubmissionId = uuid();
-        foreignKeyPrerequisites.push(
-          db
-            .prepare(
-              `INSERT INTO form_submissions (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
-               VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
-            )
-            .bind(formSubmissionId, form.id, applicationId, now),
+        const submission = prepareCreateFormSubmission(
+          db,
+          form,
+          { submittedByUserId: null, contextType: "membership", contextRef: applicationId },
+          normalizedAnswers,
+          now,
         );
+        formSubmissionId = submission.id;
+        foreignKeyPrerequisites.push(...submission.statements);
         setClauses.push("form_submission_id = ?");
         values.push(formSubmissionId);
-      }
-
-      for (const key of EDITABLE_ANSWER_KEYS) {
-        if (input.answers[key] === undefined) continue;
-        const fieldId = fieldIds.get(key);
-        if (!fieldId) throw new AppError(422, "UNKNOWN_FORM_FIELD", `Unknown form field '${key}'`);
-        const value = normalizedAnswers[key];
-        if (value === undefined) {
-          dependentStatements.push(
-            db
-              .prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_id = ?")
-              .bind(formSubmissionId, fieldId),
-          );
-        } else {
-          dependentStatements.push(
-            db
-              .prepare(
-                `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?)
-                 ON CONFLICT(submission_id, field_id) WHERE field_id IS NOT NULL
-                 DO UPDATE SET field_key = excluded.field_key, data_json = excluded.data_json`,
-              )
-              .bind(uuid(), formSubmissionId, fieldId, key, JSON.stringify(value), now),
-          );
-        }
+      } else {
+        const answerMutations = Object.fromEntries(
+          EDITABLE_ANSWER_KEYS.filter((key) => input.answers?.[key] !== undefined).map((key) => [
+            key,
+            normalizedAnswers[key],
+          ]),
+        );
+        dependentStatements.push(...prepareUpdateFormSubmission(db, form, formSubmissionId, answerMutations, now));
       }
     }
   }
@@ -437,6 +425,9 @@ export async function updateAdminApplication(
       ...dependentStatements,
     ]);
   } catch (error) {
+    if (isFormSubmissionContextConflict(error)) {
+      throw formSubmissionContextChangedError();
+    }
     if (isAuditOneChangeGuardFailure(error)) {
       throw new AppError(409, "APPLICATION_CHANGED", "Application changed while this edit was being prepared");
     }

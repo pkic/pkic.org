@@ -10,7 +10,13 @@
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { AppError } from "../../../errors";
 import { prepareAuditLog } from "../../audit";
-import { getGlobalFormByKey, validateCustomAnswersAgainstForm, type CustomAnswerValue } from "../../forms";
+import {
+  formSubmissionContextChangedError,
+  getGlobalFormByKey,
+  isFormSubmissionContextConflict,
+  prepareCreateFormSubmission,
+  validateCustomAnswersAgainstForm,
+} from "../../forms";
 import { randomToken, sha256Hex } from "../../../utils/crypto";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
@@ -53,6 +59,9 @@ async function translateDomainClaimConflict(
   applicationId: string,
   error: unknown,
 ): Promise<never> {
+  if (isFormSubmissionContextConflict(error)) {
+    throw formSubmissionContextChangedError();
+  }
   if (domain) {
     const claim = await getOrganizationDomainClaim(db, domain);
     if (claim && claim.applicationId !== applicationId) {
@@ -60,26 +69,6 @@ async function translateDomainClaimConflict(
     }
   }
   throw error;
-}
-
-function buildAnswerStatements(
-  db: DatabaseLike,
-  submissionId: string,
-  answers: Record<string, CustomAnswerValue>,
-  fields: ReadonlyArray<{ id: string; key: string }>,
-  createdAt: string,
-): StatementLike[] {
-  const fieldIds = new Map(fields.map((field) => [field.key, field.id]));
-  return Object.entries(answers).map(([key, value]) => {
-    const fieldId = fieldIds.get(key);
-    if (!fieldId) throw new AppError(422, "UNKNOWN_FORM_FIELD", `Unknown form field '${key}'`);
-    return db
-      .prepare(
-        `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(uuid(), submissionId, fieldId, key, JSON.stringify(value), createdAt);
-  });
 }
 
 export async function createMemberApplication(
@@ -97,8 +86,14 @@ export async function createMemberApplication(
   });
 
   const id = uuid();
-  const formSubmissionId = uuid();
   const now = nowIso();
+  const formSubmission = prepareCreateFormSubmission(
+    db,
+    form,
+    { submittedByUserId: null, contextType: "membership", contextRef: id },
+    answers,
+    now,
+  );
   const manageToken = randomToken(24);
   const manageTokenHash = await sha256Hex(manageToken);
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
@@ -106,14 +101,7 @@ export async function createMemberApplication(
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
   const statements: StatementLike[] = [
-    db
-      .prepare(
-        `INSERT INTO form_submissions
-           (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
-         VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
-      )
-      .bind(formSubmissionId, form.id, id, now),
-    ...buildAnswerStatements(db, formSubmissionId, answers, form.fields, now),
+    ...formSubmission.statements,
     db
       .prepare(
         `INSERT INTO member_applications
@@ -129,7 +117,7 @@ export async function createMemberApplication(
         isIndividual ? null : (input.organizationName ?? null),
         organizationDomain,
         input.membershipCategory,
-        formSubmissionId,
+        formSubmission.id,
         now,
         manageTokenHash,
         now,

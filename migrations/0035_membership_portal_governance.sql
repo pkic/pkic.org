@@ -1496,11 +1496,92 @@ CREATE TABLE form_placements (
 );
 
 CREATE UNIQUE INDEX uq_form_placements_context
-  ON form_placements(form_id, context_type, COALESCE(context_ref, ''), COALESCE(owner_group_id, ''));
+  ON form_placements(
+    form_id,
+    context_type,
+    COALESCE(context_ref, ''),
+    COALESCE(owner_group_id, ''),
+    audience
+  );
 CREATE INDEX idx_form_placements_owner_active
   ON form_placements(owner_group_id, active, opens_at, closes_at, id);
 CREATE INDEX idx_form_placements_context_active
   ON form_placements(context_type, context_ref, active, id);
+
+-- Domain aggregates keep their existing JSON answer projections, but record
+-- the exact response set selected for new writes. Historical rows remain NULL;
+-- placement attribution is never guessed or backfilled.
+ALTER TABLE registrations
+  ADD COLUMN form_placement_id TEXT REFERENCES form_placements(id);
+ALTER TABLE session_proposals
+  ADD COLUMN form_placement_id TEXT REFERENCES form_placements(id);
+
+CREATE INDEX idx_registrations_form_placement
+  ON registrations(form_placement_id, created_at, id);
+CREATE INDEX idx_session_proposals_form_placement
+  ON session_proposals(form_placement_id, submitted_at, id);
+
+-- One canonical projection identifies registration/proposal evidence belonging
+-- to a form. Exact placement attribution wins; legacy NULL attribution is
+-- inferred only from the pre-existing form scope and is never written back.
+CREATE VIEW form_domain_response_evidence AS
+SELECT attributed.form_id,
+       'registration' AS source_type,
+       r.id AS source_id,
+       r.form_placement_id AS placement_id,
+       r.custom_answers_json AS answers_json
+FROM registrations r
+JOIN form_placements attributed ON attributed.id = r.form_placement_id
+UNION ALL
+SELECT f.id AS form_id,
+       'registration' AS source_type,
+       r.id AS source_id,
+       NULL AS placement_id,
+       r.custom_answers_json AS answers_json
+FROM registrations r
+JOIN forms f
+  ON f.purpose = 'event_registration'
+ AND (
+   f.scope_type = 'global'
+   OR (f.scope_type = 'event' AND f.scope_ref = r.event_id)
+   OR EXISTS (
+     SELECT 1 FROM form_placements fp
+     WHERE fp.form_id = f.id
+       AND fp.context_type = 'event'
+       AND fp.context_ref = r.event_id
+   )
+ )
+WHERE r.form_placement_id IS NULL
+  AND r.custom_answers_json IS NOT NULL
+UNION ALL
+SELECT attributed.form_id,
+       'proposal' AS source_type,
+       sp.id AS source_id,
+       sp.form_placement_id AS placement_id,
+       sp.details_json AS answers_json
+FROM session_proposals sp
+JOIN form_placements attributed ON attributed.id = sp.form_placement_id
+UNION ALL
+SELECT f.id AS form_id,
+       'proposal' AS source_type,
+       sp.id AS source_id,
+       NULL AS placement_id,
+       sp.details_json AS answers_json
+FROM session_proposals sp
+JOIN forms f
+  ON f.purpose = 'proposal_submission'
+ AND (
+   f.scope_type = 'global'
+   OR (f.scope_type = 'event' AND f.scope_ref = sp.event_id)
+   OR EXISTS (
+     SELECT 1 FROM form_placements fp
+     WHERE fp.form_id = f.id
+       AND fp.context_type = 'event'
+       AND fp.context_ref = sp.event_id
+   )
+ )
+WHERE sp.form_placement_id IS NULL
+  AND sp.details_json IS NOT NULL;
 
 CREATE TRIGGER trg_form_placements_validate_context_insert
 BEFORE INSERT ON form_placements
@@ -1553,12 +1634,65 @@ SET field_id = (
 WHERE field_id IS NULL;
 
 CREATE INDEX idx_form_submissions_placement_status
-  ON form_submissions(placement_id, status, submitted_at, id);
+  ON form_submissions(form_id, placement_id, status, submitted_at, id);
+CREATE UNIQUE INDEX uq_form_submissions_domain_context
+  ON form_submissions(form_id, context_type, context_ref)
+  WHERE context_ref IS NOT NULL
+    AND context_type IN ('registration', 'proposal', 'membership');
 CREATE INDEX idx_form_answers_field
   ON form_submission_answers(field_id, submission_id);
 CREATE UNIQUE INDEX uq_form_answers_submission_field
   ON form_submission_answers(submission_id, field_id)
   WHERE field_id IS NOT NULL;
+
+-- New submission commands insert one short-lived guard in the same D1 batch
+-- as the submission or answer mutation. This closes the validation-versus-edit
+-- race without reclassifying legacy submissions or breaking older writers.
+CREATE TABLE form_submission_guards (
+  id                       TEXT NOT NULL PRIMARY KEY,
+  form_id                  TEXT NOT NULL,
+  placement_id             TEXT NOT NULL,
+  submission_id            TEXT,
+  expected_form_updated_at TEXT NOT NULL,
+  expected_placement_updated_at TEXT NOT NULL,
+  FOREIGN KEY(form_id) REFERENCES forms(id),
+  FOREIGN KEY(placement_id) REFERENCES form_placements(id),
+  FOREIGN KEY(submission_id) REFERENCES form_submissions(id)
+);
+
+CREATE TRIGGER trg_form_submission_guards_validate
+BEFORE INSERT ON form_submission_guards
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM form_placements fp
+    JOIN forms f ON f.id = fp.form_id
+    WHERE fp.id = NEW.placement_id
+      AND fp.form_id = NEW.form_id
+      AND fp.active = 1
+      AND f.status = 'active'
+      AND f.updated_at = NEW.expected_form_updated_at
+      AND fp.updated_at = NEW.expected_placement_updated_at
+      AND (
+        NEW.submission_id IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM form_submissions fs
+          WHERE fs.id = NEW.submission_id
+            AND fs.form_id = NEW.form_id
+            AND (fs.placement_id IS NULL OR fs.placement_id = NEW.placement_id)
+        )
+      )
+      AND (fp.opens_at IS NULL OR unixepoch(fp.opens_at) <= unixepoch())
+      AND (fp.closes_at IS NULL OR unixepoch(fp.closes_at) > unixepoch())
+  ) THEN RAISE(ABORT, 'FORM_SUBMISSION_CONTEXT_CHANGED') END;
+END;
+
+CREATE TRIGGER trg_form_submission_guards_release
+AFTER INSERT ON form_submission_guards
+BEGIN
+  DELETE FROM form_submission_guards WHERE id = NEW.id;
+END;
 
 CREATE TRIGGER trg_form_answers_require_field_insert
 BEFORE INSERT ON form_submission_answers
@@ -1632,6 +1766,32 @@ AFTER INSERT ON form_mutation_guards
 BEGIN
   UPDATE forms SET updated_at = NEW.new_updated_at WHERE id = NEW.form_id;
   DELETE FROM form_mutation_guards WHERE id = NEW.id;
+END;
+
+-- Physical deletion is allowed only when every durable response projection is
+-- empty. The guard runs inside the deletion batch so a concurrent registration,
+-- proposal, or normalized submission cannot race the eligibility check.
+CREATE TABLE form_deletion_guards (
+  id      TEXT NOT NULL PRIMARY KEY,
+  form_id TEXT NOT NULL,
+  FOREIGN KEY(form_id) REFERENCES forms(id)
+);
+
+CREATE TRIGGER trg_form_deletion_guard_validate
+BEFORE INSERT ON form_deletion_guards
+WHEN EXISTS (SELECT 1 FROM form_submissions fs WHERE fs.form_id = NEW.form_id)
+  OR EXISTS (
+    SELECT 1 FROM form_domain_response_evidence evidence
+    WHERE evidence.form_id = NEW.form_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'FORM_HAS_RESPONSE_EVIDENCE');
+END;
+
+CREATE TRIGGER trg_form_deletion_guard_release
+AFTER INSERT ON form_deletion_guards
+BEGIN
+  DELETE FROM form_deletion_guards WHERE id = NEW.id;
 END;
 
 -- ── Portal-managed membership application form ───────────────────────

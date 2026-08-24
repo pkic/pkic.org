@@ -713,6 +713,46 @@ describe("admin forms endpoints", () => {
       contextRef: proposalId,
       answers: { audience: "Operators" },
     });
+
+    const registrationFieldPatch = await callAdmin("/api/v1/admin/forms/linked-registration-form", {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: [
+          {
+            key: "topics",
+            label: "Topics",
+            fieldType: "multi_select",
+            required: false,
+            sortOrder: 20,
+            options: ["PKI", "PQC"],
+          },
+        ],
+      }),
+    });
+    expect(registrationFieldPatch.status, await registrationFieldPatch.clone().text()).toBe(200);
+    const registrationFieldPayload = (await registrationFieldPatch.json()) as {
+      fields: Array<{ key: string; archivedAt: string | null }>;
+    };
+    expect(registrationFieldPayload.fields.find((field) => field.key === "food")?.archivedAt).toBeTruthy();
+
+    const proposalFieldPatch = await callAdmin("/api/v1/admin/forms/linked-proposal-form", {
+      method: "PATCH",
+      body: JSON.stringify({ fields: [] }),
+    });
+    expect(proposalFieldPatch.status, await proposalFieldPatch.clone().text()).toBe(200);
+    const proposalFieldPayload = (await proposalFieldPatch.json()) as {
+      fields: Array<{ key: string; archivedAt: string | null }>;
+    };
+    expect(proposalFieldPayload.fields.find((field) => field.key === "audience")?.archivedAt).toBeTruthy();
+
+    const deleteRegistrationForm = await callAdmin("/api/v1/admin/forms/linked-registration-form", {
+      method: "DELETE",
+    });
+    expect(deleteRegistrationForm.status).toBe(200);
+    await expect(deleteRegistrationForm.json()).resolves.toMatchObject({ action: "archived" });
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM forms WHERE key = 'linked-registration-form'"),
+    ).toEqual([{ status: "archived" }]);
   });
 
   it("replaces fields on patch and archives submitted forms on delete", async () => {

@@ -20,6 +20,11 @@ export interface ValidationContext {
   dayAttendance?: DayAttendanceSelection[];
 }
 
+export interface ValidatedCustomAnswers {
+  answers: Record<string, CustomAnswerValue>;
+  form: ActiveFormDefinition | null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -264,6 +269,32 @@ export function validateCustomAnswersAgainstForm(
   return normalized;
 }
 
+export async function validateCustomAnswersForSubmission(
+  db: DatabaseLike,
+  payload: {
+    eventId: string;
+    purpose: FormPurpose;
+    customAnswers?: Record<string, unknown>;
+    context?: ValidationContext;
+  },
+): Promise<ValidatedCustomAnswers> {
+  const form = await getActiveFormByPurpose(db, payload.eventId, payload.purpose);
+
+  if (!form) {
+    if (Object.keys(payload.customAnswers ?? {}).length > 0) {
+      throw new AppError(400, "VALIDATION_ERROR", "Custom answers are not configured for this form", {
+        fieldErrors: { customAnswers: ["No active form configured for this event flow"] },
+      });
+    }
+    return { answers: {}, form: null };
+  }
+
+  return {
+    answers: validateCustomAnswersAgainstForm(form, payload),
+    form,
+  };
+}
+
 export async function validateCustomAnswersByPurpose(
   db: DatabaseLike,
   payload: {
@@ -273,16 +304,5 @@ export async function validateCustomAnswersByPurpose(
     context?: ValidationContext;
   },
 ): Promise<Record<string, CustomAnswerValue>> {
-  const form = await getActiveFormByPurpose(db, payload.eventId, payload.purpose);
-
-  if (!form) {
-    if (Object.keys(payload.customAnswers ?? {}).length > 0) {
-      throw new AppError(400, "VALIDATION_ERROR", "Custom answers are not configured for this form", {
-        fieldErrors: { customAnswers: ["No active form configured for this event flow"] },
-      });
-    }
-    return {};
-  }
-
-  return validateCustomAnswersAgainstForm(form, payload);
+  return (await validateCustomAnswersForSubmission(db, payload)).answers;
 }

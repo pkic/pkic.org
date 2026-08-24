@@ -75,6 +75,28 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     VALUES
       ('decision-1', 'proposal-1', 'admin-1', 'accepted', 'Accepted before upgrade', 1, 1, '2025-01-02');
 
+    INSERT INTO forms
+      (id, key, scope_type, scope_ref, purpose, status, title, created_at, updated_at)
+    VALUES
+      ('form-upgrade', 'upgrade-survey', 'global', NULL, 'survey', 'active',
+       'Upgrade survey', '2025-01-01', '2025-01-01');
+
+    INSERT INTO form_fields
+      (id, form_id, key, label, field_type, required, sort_order, created_at)
+    VALUES
+      ('field-upgrade', 'form-upgrade', 'old_key', 'Old label', 'text', 0, 10, '2025-01-01');
+
+    INSERT INTO form_submissions
+      (id, form_id, context_type, status, submitted_at)
+    VALUES
+      ('submission-upgrade', 'form-upgrade', 'survey', 'submitted', '2025-01-02');
+
+    INSERT INTO form_submission_answers
+      (id, submission_id, field_key, data_json, created_at)
+    VALUES
+      ('answer-mapped', 'submission-upgrade', 'old_key', '"Mapped"', '2025-01-02'),
+      ('answer-unmapped', 'submission-upgrade', 'removed_legacy_key', '"Unmapped"', '2025-01-02');
+
     INSERT INTO event_permissions
       (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
     VALUES
@@ -179,6 +201,41 @@ describe("consolidated pending migration upgrade", () => {
     ]);
     expect(db.prepare("SELECT id, organization_id FROM members").all()).toEqual([
       { id: "member-1", organization_id: "org-1" },
+    ]);
+    expect(
+      db.prepare("SELECT id, form_placement_id FROM registrations WHERE id = 'registration-upgrade'").get(),
+    ).toEqual({ id: "registration-upgrade", form_placement_id: null });
+    expect(db.prepare("SELECT id, form_placement_id FROM session_proposals WHERE id = 'proposal-1'").get()).toEqual({
+      id: "proposal-1",
+      form_placement_id: null,
+    });
+    expect(
+      db
+        .prepare(
+          `SELECT id, field_id, field_key
+           FROM form_submission_answers
+           WHERE submission_id = 'submission-upgrade'
+           ORDER BY id`,
+        )
+        .all(),
+    ).toEqual([
+      { id: "answer-mapped", field_id: "field-upgrade", field_key: "old_key" },
+      { id: "answer-unmapped", field_id: null, field_key: "removed_legacy_key" },
+    ]);
+    db.prepare("UPDATE form_fields SET key = 'new_key' WHERE id = 'field-upgrade'").run();
+    expect(
+      db
+        .prepare(
+          `SELECT a.id, COALESCE(ff.key, a.field_key) AS rendered_key
+           FROM form_submission_answers a
+           LEFT JOIN form_fields ff ON ff.id = a.field_id
+           WHERE a.submission_id = 'submission-upgrade'
+           ORDER BY a.id`,
+        )
+        .all(),
+    ).toEqual([
+      { id: "answer-mapped", rendered_key: "new_key" },
+      { id: "answer-unmapped", rendered_key: "removed_legacy_key" },
     ]);
     expect(db.prepare("SELECT id, dedupe_key FROM calendar_rsvp_events ORDER BY id").all()).toEqual([
       { id: "rsvp-json-key", dedupe_key: '["google","registration-upgrade","message-1"]' },

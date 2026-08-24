@@ -27,6 +27,7 @@ import { recordProposalDecision } from "./proposal-decisions";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
+import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "./forms";
 
 export interface ProposalRecord {
   id: string;
@@ -37,6 +38,7 @@ export interface ProposalRecord {
   title: string;
   abstract: string;
   details_json: string | null;
+  form_placement_id: string | null;
   referral_code: string | null;
   manage_link_secret: string;
   review_round: number;
@@ -47,7 +49,7 @@ export interface ProposalRecord {
 }
 
 export const PROPOSAL_COLUMNS = `id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-  details_json, referral_code, manage_link_secret, review_round, submitted_at, updated_at, withdrawn_at,
+  details_json, form_placement_id, referral_code, manage_link_secret, review_round, submitted_at, updated_at, withdrawn_at,
   presentation_deadline`;
 
 export interface ProposalListRecord extends ProposalRecord {
@@ -73,6 +75,7 @@ export async function buildCreateProposal(
     title: string;
     abstract: string;
     detailsJson?: string | null;
+    formPlacementId?: string | null;
     referredByCode?: string | null;
     signingSecret?: string;
   },
@@ -89,6 +92,7 @@ export async function buildCreateProposal(
     title: payload.title,
     abstract: payload.abstract,
     details_json: payload.detailsJson ?? null,
+    form_placement_id: payload.formPlacementId ?? null,
     referral_code: payload.referredByCode ?? null,
     manage_link_secret: manageLinkSecret,
     review_round: 1,
@@ -102,8 +106,8 @@ export async function buildCreateProposal(
       .prepare(
         `INSERT INTO session_proposals (
       id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-      details_json, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      details_json, form_placement_id, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         proposal.id,
@@ -114,6 +118,7 @@ export async function buildCreateProposal(
         proposal.title,
         proposal.abstract,
         proposal.details_json,
+        proposal.form_placement_id,
         proposal.referral_code,
         proposal.manage_link_secret,
         proposal.submitted_at,
@@ -239,6 +244,9 @@ export async function updateProposalForVerifiedOwner(
     title?: string;
     abstract?: string;
     detailsJson?: string | null;
+    formRevisionGuard?: StatementLike | null;
+    formPlacementId?: string | null;
+    formSubmissionStatements?: StatementLike[];
   },
 ): Promise<ProposalRecord> {
   if (!isProposalSelfServiceEditableStatus(proposal.status)) {
@@ -316,6 +324,7 @@ export async function updateProposalForVerifiedOwner(
     title: payload.title ?? proposal.title,
     abstract: payload.abstract ?? proposal.abstract,
     detailsJson: payload.detailsJson !== undefined ? payload.detailsJson : proposal.details_json,
+    formPlacementId: payload.detailsJson !== undefined ? (payload.formPlacementId ?? null) : proposal.form_placement_id,
     status: proposal.status === "needs-work" ? "resubmitted" : proposal.status,
     reviewRound: proposal.status === "needs-work" ? proposal.review_round + 1 : proposal.review_round,
   };
@@ -330,6 +339,7 @@ export async function updateProposalForVerifiedOwner(
       parseJsonSafe<Record<string, unknown> | null>(next.detailsJson, null),
     ],
     ["status", proposal.status, next.status],
+    ["formPlacementId", proposal.form_placement_id, next.formPlacementId],
     ["reviewRound", proposal.review_round, next.reviewRound],
   ] as const) {
     if (JSON.stringify(from) !== JSON.stringify(to)) changes[key] = { from, to };
@@ -340,10 +350,14 @@ export async function updateProposalForVerifiedOwner(
   let updateResults;
   try {
     updateResults = await db.batch([
+      ...(payload.detailsJson !== undefined && payload.formRevisionGuard && !payload.formSubmissionStatements
+        ? [payload.formRevisionGuard]
+        : []),
       db
         .prepare(
           `UPDATE session_proposals
-         SET proposal_type = ?, title = ?, abstract = ?, details_json = ?, status = ?, review_round = ?, updated_at = ?
+         SET proposal_type = ?, title = ?, abstract = ?, details_json = ?, form_placement_id = ?,
+             status = ?, review_round = ?, updated_at = ?
          WHERE id = ? AND proposal_type = ? AND title = ? AND abstract = ? AND details_json IS ?
            AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL
            AND (? = 0 OR EXISTS (
@@ -356,6 +370,7 @@ export async function updateProposalForVerifiedOwner(
           next.title,
           next.abstract,
           next.detailsJson,
+          next.formPlacementId,
           next.status,
           next.reviewRound,
           now,
@@ -371,6 +386,7 @@ export async function updateProposalForVerifiedOwner(
           proposal.id,
           proposal.review_round,
         ),
+      ...(payload.formSubmissionStatements ?? []),
       prepareAuditLogAfterOneChange(
         db,
         "user",
@@ -402,6 +418,9 @@ export async function updateProposalForVerifiedOwner(
       db.prepare(`SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ?`).bind(proposal.id),
     ]);
   } catch (error) {
+    if (isFormSubmissionContextConflict(error)) {
+      throw formSubmissionContextChangedError();
+    }
     if (isAuditOneChangeGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was processed");
     }

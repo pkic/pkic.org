@@ -4,7 +4,11 @@ export type { EventFormsResponse, RequiredTerm } from "../../shared/schemas/form
 export type { ProposalManageResponse } from "../../shared/schemas/proposal-management";
 export type { RegistrationManageReadResponse as RegistrationManageResponse } from "../../shared/schemas/registration";
 
-export type FormField = Omit<FormFieldDefinition, "id"> & { id?: FormFieldDefinition["id"] };
+export type FormField = Omit<FormFieldDefinition, "id" | "updatedAt" | "archivedAt"> & {
+  id?: FormFieldDefinition["id"];
+  updatedAt?: FormFieldDefinition["updatedAt"];
+  archivedAt?: FormFieldDefinition["archivedAt"];
+};
 
 export interface FormDefinition {
   id: string;

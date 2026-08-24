@@ -8,8 +8,10 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { getEventBySlug } from "../events";
 import { getFormByKey } from "./form-definition";
+import { findFormPlacement } from "../forms";
 import type { DatabaseLike } from "../../types";
 import type { FormRow, FormSubmissionFilters } from "./types";
+import type { FormPlacement } from "../../../../assets/shared/schemas/forms";
 
 interface SqlFragment {
   sql: string;
@@ -34,6 +36,7 @@ export interface MergedSubmissionRow {
 
 export interface FormSubmissionPopulation {
   form: FormRow;
+  placement: FormPlacement | null;
   cte: string;
   bindings: unknown[];
 }
@@ -60,8 +63,22 @@ function submitterSortSql(firstName: string, lastName: string, email: string): s
   return `LOWER(COALESCE(NULLIF(TRIM(COALESCE(${firstName},'') || ' ' || COALESCE(${lastName},'')), ''), ${email}, ''))`;
 }
 
+function domainPlacementFilter(
+  column: string,
+  placementId: string | null,
+  includeLegacyUnplaced: boolean,
+): SqlFragment {
+  if (!placementId) return { sql: `${column} IS NULL`, bindings: [] };
+  return {
+    sql: includeLegacyUnplaced ? `(${column} = ? OR ${column} IS NULL)` : `${column} = ?`,
+    bindings: [placementId],
+  };
+}
+
 function nativeSubmissionBranch(params: {
   formId: string;
+  placementId: string | null;
+  includeLegacyUnplaced: boolean;
   purpose: string;
   eventId: string | null;
   status?: string;
@@ -105,6 +122,17 @@ function nativeSubmissionBranch(params: {
   ];
   const search = optionalSearch(params.q, searchExpressions);
   const submitter = submitterSortSql("u.first_name", "u.last_name", "u.email");
+  const responseSet = params.placementId
+    ? {
+        sql: params.includeLegacyUnplaced
+          ? "fs.form_id = ? AND (fs.placement_id = ? OR fs.placement_id IS NULL)"
+          : "fs.form_id = ? AND fs.placement_id = ?",
+        bindings: [params.formId, params.placementId],
+      }
+    : { sql: "fs.form_id = ? AND fs.placement_id IS NULL", bindings: [params.formId] };
+  const submissionSource = params.placementId
+    ? "form_submissions fs INDEXED BY idx_form_submissions_placement_status"
+    : "form_submissions fs";
 
   return {
     sql: `SELECT
@@ -122,21 +150,29 @@ function nativeSubmissionBranch(params: {
        u.organization_name AS user_organization,
        NULL AS answers_json,
        ${submitter} AS submitter
-     FROM form_submissions fs
+     FROM ${submissionSource}
      ${contextJoin}
      LEFT JOIN users u ON u.id = ${canonicalUserId}
-     WHERE fs.form_id = ?
+     WHERE ${responseSet.sql}
      ${status.sql}
      ${attendance.sql}
      ${eventScope.sql}
      ${search.sql}`,
-    bindings: [params.formId, ...status.bindings, ...attendance.bindings, ...eventScope.bindings, ...search.bindings],
+    bindings: [
+      ...responseSet.bindings,
+      ...status.bindings,
+      ...attendance.bindings,
+      ...eventScope.bindings,
+      ...search.bindings,
+    ],
   };
 }
 
 function legacyRegistrationBranch(params: {
   eventId: string;
   formId: string;
+  placementId: string | null;
+  includeLegacyUnplaced: boolean;
   status?: string;
   attendanceType?: string;
   q?: string;
@@ -151,6 +187,7 @@ function legacyRegistrationBranch(params: {
     "r.status",
   ]);
   const submitter = submitterSortSql("u.first_name", "u.last_name", "u.email");
+  const responseSet = domainPlacementFilter("r.form_placement_id", params.placementId, params.includeLegacyUnplaced);
 
   return {
     sql: `SELECT
@@ -171,6 +208,7 @@ function legacyRegistrationBranch(params: {
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
      WHERE r.event_id = ?
+       AND ${responseSet.sql}
        AND r.custom_answers_json IS NOT NULL
        ${status.sql}
        ${attendance.sql}
@@ -179,11 +217,25 @@ function legacyRegistrationBranch(params: {
          SELECT 1 FROM form_submissions fs2
          WHERE fs2.form_id = ? AND fs2.context_type = 'registration' AND fs2.context_ref = r.id
        )`,
-    bindings: [params.eventId, ...status.bindings, ...attendance.bindings, ...search.bindings, params.formId],
+    bindings: [
+      params.eventId,
+      ...responseSet.bindings,
+      ...status.bindings,
+      ...attendance.bindings,
+      ...search.bindings,
+      params.formId,
+    ],
   };
 }
 
-function legacyProposalBranch(params: { eventId: string; formId: string; status?: string; q?: string }): SqlFragment {
+function legacyProposalBranch(params: {
+  eventId: string;
+  formId: string;
+  placementId: string | null;
+  includeLegacyUnplaced: boolean;
+  status?: string;
+  q?: string;
+}): SqlFragment {
   const status = optionalEquality("sp.status", params.status);
   const search = optionalSearch(params.q, [
     "u.email",
@@ -194,6 +246,7 @@ function legacyProposalBranch(params: { eventId: string; formId: string; status?
     "sp.title",
   ]);
   const submitter = submitterSortSql("u.first_name", "u.last_name", "u.email");
+  const responseSet = domainPlacementFilter("sp.form_placement_id", params.placementId, params.includeLegacyUnplaced);
 
   return {
     sql: `SELECT
@@ -214,6 +267,7 @@ function legacyProposalBranch(params: { eventId: string; formId: string; status?
      FROM session_proposals sp
      LEFT JOIN users u ON u.id = sp.proposer_user_id
      WHERE sp.event_id = ?
+       AND ${responseSet.sql}
        AND sp.details_json IS NOT NULL
        ${status.sql}
        ${search.sql}
@@ -221,12 +275,14 @@ function legacyProposalBranch(params: { eventId: string; formId: string; status?
          SELECT 1 FROM form_submissions fs2
          WHERE fs2.form_id = ? AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
        )`,
-    bindings: [params.eventId, ...status.bindings, ...search.bindings, params.formId],
+    bindings: [params.eventId, ...responseSet.bindings, ...status.bindings, ...search.bindings, params.formId],
   };
 }
 
 function buildMergedSubmissionsQuery(params: {
   formId: string;
+  placementId: string | null;
+  includeLegacyUnplaced: boolean;
   status?: string;
   attendanceType?: string;
   q?: string;
@@ -237,6 +293,8 @@ function buildMergedSubmissionsQuery(params: {
   const branches = [
     nativeSubmissionBranch({
       formId: params.formId,
+      placementId: params.placementId,
+      includeLegacyUnplaced: params.includeLegacyUnplaced,
       purpose: params.purpose,
       eventId: params.scopeNativeRowsToEvent ? params.eventId : null,
       status: params.status,
@@ -250,6 +308,8 @@ function buildMergedSubmissionsQuery(params: {
       legacyRegistrationBranch({
         eventId: params.eventId,
         formId: params.formId,
+        placementId: params.placementId,
+        includeLegacyUnplaced: params.includeLegacyUnplaced,
         status: params.status,
         attendanceType: params.attendanceType,
         q: params.q,
@@ -260,6 +320,8 @@ function buildMergedSubmissionsQuery(params: {
       legacyProposalBranch({
         eventId: params.eventId,
         formId: params.formId,
+        placementId: params.placementId,
+        includeLegacyUnplaced: params.includeLegacyUnplaced,
         status: params.status,
         q: params.q,
       }),
@@ -278,14 +340,30 @@ export async function resolveFormSubmissionPopulation(
 ): Promise<FormSubmissionPopulation> {
   const form = await getFormByKey(db, params.formKey);
   const requestedEvent = params.eventSlug ? await getEventBySlug(db, params.eventSlug) : null;
-  if (requestedEvent && form.scope_type === "event" && form.scope_ref !== requestedEvent.id) {
+  const placement = await findFormPlacement(db, form.id, {
+    ...(params.placementId ? { placementId: params.placementId } : {}),
+    ...(!params.placementId && requestedEvent ? { contextType: "event" as const, contextRef: requestedEvent.id } : {}),
+  });
+  if (params.placementId && !placement) {
+    throw new AppError(404, "FORM_PLACEMENT_NOT_FOUND", "The requested form response set was not found");
+  }
+  if (
+    requestedEvent &&
+    ((placement && (placement.contextType !== "event" || placement.contextRef !== requestedEvent.id)) ||
+      (!placement && form.scope_type === "event" && form.scope_ref !== requestedEvent.id))
+  ) {
     throw new AppError(400, "FORM_EVENT_SCOPE_MISMATCH", "The form does not belong to the requested event");
   }
-  const eventId = requestedEvent?.id ?? (form.scope_type === "event" ? form.scope_ref : null);
+  const eventId =
+    requestedEvent?.id ??
+    (placement?.contextType === "event" ? placement.contextRef : form.scope_type === "event" ? form.scope_ref : null);
   return {
     form,
+    placement,
     ...buildMergedSubmissionsQuery({
       formId: form.id,
+      placementId: placement?.id ?? null,
+      includeLegacyUnplaced: Boolean(placement && !params.placementId),
       status: params.status,
       attendanceType: params.attendanceType,
       q: params.q,

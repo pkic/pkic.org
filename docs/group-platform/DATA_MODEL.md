@@ -406,7 +406,8 @@ an option is retired.
 
     id
     form_id -> forms.id
-    owner_group_id -> groups.id, nullable only for installation placements
+    owner_group_id -> groups.id; installation and transitional event placements
+                     may remain null until event ownership migration completes
     context_type
     context_ref
     audience
@@ -427,10 +428,36 @@ The same definition may have many placements.
 
     field_id -> form_fields.id, nullable only for legacy rows
 
+### Existing event-domain answer projections
+
+    registrations.form_placement_id -> form_placements.id, nullable for legacy rows
+    session_proposals.form_placement_id -> form_placements.id, nullable for legacy rows
+
 Existing answers are backfilled through submission form plus field key where
 unambiguous. New writes require field_id through an insert trigger and the
 shared submission service. The legacy field key remains a historical snapshot
 and compatibility fallback.
+
+New registration, proposal, and membership writes atomically maintain one
+normalized form submission per form and domain aggregate. Their existing JSON
+columns remain compatibility projections, not a second form engine. A partial
+unique index enforces the one-response invariant for domain contexts. The
+shared replacement command updates answers by stable field ID, preserves
+archived-field history, and lets current labels and keys change without losing
+historical values.
+
+Historical normalized submissions, registrations, and proposals are not
+assigned to a guessed placement. A null placement therefore means legacy
+attribution is unknown, not that the first current placement owns the response.
+Explicit placement queries exclude those rows; the sole-placement compatibility
+view may include them read-only until a source-backed attribution is available.
+
+Every placement-backed write validates the form ID, placement, availability,
+status, and exact form and placement revisions inside the same atomic D1 batch
+as the durable command. Registration and proposal JSON projections and their
+normalized submissions reuse this command rather than implementing a second
+concurrency policy. Legacy definitions without a placement keep a deliberate
+compatibility path without fabricated attribution.
 
 ## Mailing lists
 
@@ -486,7 +513,9 @@ organizational ballot. One submission never changes two organizations.
 - Group deletion is normally archival. A group with owned resources or children
   cannot be physically removed.
 - Deleting a dependent draft resource cascades only where no legal or historical
-  evidence exists.
+  evidence exists. Form deletion rechecks normalized submissions plus event
+  registration and proposal answer projections inside the same D1 batch; any
+  response evidence converts the operation to archival.
 - User anonymization preserves legally required attribution through the existing
   retention boundary.
 - Every new foreign key has a deliberate restrict, cascade, or set-null policy

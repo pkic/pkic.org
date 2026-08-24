@@ -389,4 +389,42 @@ describe("form-submission read-model population", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "FORM_EVENT_SCOPE_MISMATCH" } });
   });
+
+  it("keeps unattributed legacy submissions scoped to their own form when a sole placement is inferred", async () => {
+    const formId = await insertForm("placed-population", "event_registration", "food");
+    const unrelatedFormId = await insertForm("unrelated-population", "event_registration", "food");
+    const placementId = crypto.randomUUID();
+    const placedSubmissionId = crypto.randomUUID();
+    const legacySubmissionId = crypto.randomUUID();
+    const unrelatedSubmissionId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO form_placements
+           (id, form_id, owner_group_id, context_type, context_ref, audience, active,
+            opens_at, closes_at, created_at, updated_at)
+         VALUES (?, ?, NULL, 'installation', NULL, 'attendee', 1,
+                 NULL, NULL, datetime('now'), datetime('now'))`,
+      ).bind(placementId, formId),
+      env.DB.prepare(
+        `INSERT INTO form_submissions
+           (id, form_id, placement_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+         VALUES (?, ?, ?, NULL, 'survey', NULL, 'submitted', datetime('now'))`,
+      ).bind(placedSubmissionId, formId, placementId),
+      env.DB.prepare(
+        `INSERT INTO form_submissions
+           (id, form_id, placement_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+         VALUES (?, ?, NULL, NULL, 'survey', NULL, 'submitted', datetime('now'))`,
+      ).bind(legacySubmissionId, formId),
+      env.DB.prepare(
+        `INSERT INTO form_submissions
+           (id, form_id, placement_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+         VALUES (?, ?, NULL, NULL, 'survey', NULL, 'submitted', datetime('now'))`,
+      ).bind(unrelatedSubmissionId, unrelatedFormId),
+    ]);
+
+    const population = await resolveFormSubmissionPopulation(env.DB, { formKey: "placed-population" });
+    const query = selectFromSubmissionPopulation(population, "SELECT id FROM merged ORDER BY id ASC");
+    const rows = await queryAll<{ id: string }>(env.DB, query.sql, query.bindings);
+    expect(rows.map((row) => row.id)).toEqual([legacySubmissionId, placedSubmissionId].sort());
+  });
 });

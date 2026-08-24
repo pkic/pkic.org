@@ -20,6 +20,13 @@ import {
   isEventParticipantSourceConflict,
 } from "./event-participant-source-revision";
 import { prepareBadgeRenderJob } from "./badge-render-job-statements";
+import {
+  formSubmissionContextChangedError,
+  isFormSubmissionContextConflict,
+  prepareReplaceContextFormSubmission,
+  type ActiveFormDefinition,
+  type CustomAnswerValue,
+} from "./forms";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -29,10 +36,13 @@ export interface ProposalSubmissionInput {
   appBaseUrl: string;
   signingSecret: string;
   referralCodeLength: number;
-  proposalDetails: Record<string, unknown>;
+  proposalDetails: Record<string, CustomAnswerValue>;
   acceptedInvite?: InviteRecord | null;
   ip: string | null;
   userAgent: string | null;
+  formRevisionGuard?: StatementLike | null;
+  formPlacementId?: string | null;
+  formDefinition?: ActiveFormDefinition | null;
 }
 
 export interface ProposalSubmissionResult {
@@ -68,7 +78,7 @@ export async function submitProposal(
   db: DatabaseLike,
   input: ProposalSubmissionInput,
 ): Promise<ProposalSubmissionResult> {
-  const statements: StatementLike[] = [];
+  const statements: StatementLike[] = input.formRevisionGuard && !input.formDefinition ? [input.formRevisionGuard] : [];
   const proposerWrite = await buildFindOrCreateUserStatement(db, profileWrite(input.body.proposer));
   if (proposerWrite.statement) statements.push(proposerWrite.statement);
   const proposer = proposerWrite.user;
@@ -80,10 +90,25 @@ export async function submitProposal(
     title: input.body.proposal.title,
     abstract: input.body.proposal.abstract,
     detailsJson: Object.keys(input.proposalDetails).length > 0 ? JSON.stringify(input.proposalDetails) : null,
+    formPlacementId: input.formDefinition?.placement?.id ?? input.formPlacementId ?? null,
     referredByCode: input.body.referralCode,
     signingSecret: input.signingSecret,
   });
   statements.push(...created.statements);
+  if (input.formDefinition) {
+    const formSubmission = await prepareReplaceContextFormSubmission(
+      db,
+      input.formDefinition,
+      {
+        submittedByUserId: proposer.id,
+        contextType: "proposal",
+        contextRef: created.proposal.id,
+      },
+      input.proposalDetails,
+      created.proposal.submitted_at,
+    );
+    statements.push(...formSubmission.statements);
+  }
 
   const proposalContext = { event_id: input.event.id, status: created.proposal.status };
   const proposerSpeaker = await buildAddProposalSpeaker(db, {
@@ -207,6 +232,7 @@ export async function submitProposal(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
     throw error;
