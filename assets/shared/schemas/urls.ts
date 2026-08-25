@@ -17,6 +17,20 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function isHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.length > 0 &&
+      parsed.username.length === 0 &&
+      parsed.password.length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Canonical absolute-link contract. Userinfo and non-HTTP schemes are never accepted. */
 export const httpUrlSchema = z.string().trim().url().max(MAX_URL_LENGTH).refine(isHttpUrl, "Must be an HTTP(S) URL");
 
@@ -27,6 +41,14 @@ export const httpCapabilityUrlSchema = z
   .url()
   .max(MAX_CAPABILITY_URL_LENGTH)
   .refine(isHttpUrl, "Must be an HTTP(S) URL");
+
+/** Confidential external capabilities must use authenticated transport. */
+export const httpsCapabilityUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .max(MAX_CAPABILITY_URL_LENGTH)
+  .refine(isHttpsUrl, "Must be an HTTPS URL");
 
 /** Same-origin path; rejects scheme-relative and backslash-normalized URLs. */
 export const sameOriginPathSchema = z

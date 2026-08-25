@@ -76,7 +76,10 @@ export async function inviteOccurrenceGuest(
   occurrenceId: string,
   input: GuestInviteInput,
 ) {
-  const { context } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  const { context, series } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  if (series.guestPolicy === "none") {
+    throw new AppError(409, "EVENT_GUESTS_DISABLED", "Guest invitations are disabled for this event");
+  }
   if (input.expiresAt <= nowIso()) {
     throw new AppError(422, "EVENT_GUEST_EXPIRY_INVALID", "Guest access must expire in the future");
   }
@@ -107,8 +110,8 @@ export async function inviteOccurrenceGuest(
             .prepare(
               `INSERT INTO event_occurrence_guests
                  (id, series_id, occurrence_id, user_id, normalized_email, name, affiliation,
-                  expires_at, invited_by_user_id, revoked_at, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+                  expires_at, revoked_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
             )
             .bind(
               id,
@@ -119,7 +122,6 @@ export async function inviteOccurrenceGuest(
               input.name,
               input.affiliation ?? null,
               input.expiresAt,
-              actor.id,
               now,
               now,
             ),

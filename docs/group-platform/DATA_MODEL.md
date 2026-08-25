@@ -358,6 +358,10 @@ deterministic calendar pagination.
 Occurrence generation is idempotent under a unique series and start-time
 boundary.
 
+External provider destinations are HTTPS-only capabilities. Their operational
+copy is encrypted at rest and audit details record only that configuration
+changed, never the destination itself.
+
 ### event_occurrence_guests
 
 External identity and invitation state. An invitation is occurrence-scoped by
@@ -371,13 +375,14 @@ default; an explicit null occurrence_id makes it series-wide:
     name
     affiliation
     expires_at
-    invited_by_user_id -> users.id
     revoked_at
     created_at
 
 The email is an invitation destination, not proof of an existing user identity.
 A verified account may claim an invitation through the existing identity
-boundary.
+boundary. The atomic group-scoped audit entry is the canonical inviter
+attribution for both user-backed and service identities; the guest row does not
+duplicate that polymorphic actor relationship.
 
 ### event_occurrence_access_tokens
 
@@ -385,6 +390,14 @@ Opaque hashed capabilities bind one occurrence to exactly one authenticated
 user or invited guest. GET renders the landing page without mutating state.
 The intentional POST records first and latest use and may be repeated until the
 token expires or is revoked, so a participant who is disconnected can rejoin.
+
+The `current_event_occurrence_subject_eligibility` D1 view is the canonical
+write-time and use-time policy projection for both authenticated users and
+guests. It combines occurrence state, registration or group eligibility,
+resource grants, guest scope, current guest policy, revocation, and expiry.
+Both token insertion and intentional join guards query this same view, so a
+policy change or revocation takes effect on the next use and a racing token
+cannot later revive when a guest is reinvited.
 
 ### event_occurrence_join_confirmations
 

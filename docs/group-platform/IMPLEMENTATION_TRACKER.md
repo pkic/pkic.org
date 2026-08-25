@@ -178,18 +178,20 @@ Status: In progress
       meeting provider.
 - [ ] Cover link scanners, forwarding, expiry, revocation, guest identity,
       membership loss, terms changes, repeated joins, and attendance counts.
-      Evidence so far: event-series-platform.test.ts passes 9 focused tests.
+      Evidence so far: event-series-platform.test.ts passes 14 focused tests.
       The entry
-      path encrypts provider URLs at rest, exposes them only after an intentional
-      POST, derives identity and affiliation from server state, and atomically
-      rechecks token, occurrence, eligibility, guest, and current-term state in
-      the same D1 batch as the join record. Coverage includes scanner-safe GET,
-      expiry, revocation races, guest and member identity tampering, membership
-      loss, terms changes and races, repeated joins, and attendance counts.
+      path accepts only HTTPS provider destinations, encrypts them at rest,
+      never copies them into audit details, exposes them only after an
+      intentional POST, derives identity and affiliation from server state,
+      and atomically rechecks token, occurrence, canonical subject eligibility,
+      current guest policy, and current-term state in the same D1 batch as the
+      join record. Coverage includes scanner-safe GET, expiry, token-issuance
+      and join revocation races, guest and member identity tampering, membership
+      loss, policy changes, terms changes and races, repeated joins, attendance
+      counts, and service-issued guest attribution through the canonical audit.
       Forwarding a user-bound capability remains open because public registered
-      attendees do not yet share the member-session eligibility model. All 37
-      migrations, including 224 statements in migration 0035, replay on a fresh
-      local D1 database. ESLint, formatting, SQL projection, dependency
+      attendees do not yet share the member-session eligibility model. All
+      migrations replay on a fresh local D1 database. ESLint, formatting, SQL projection, dependency
       architecture, duplication, and max-lines gates pass for this round.
       Legacy meeting-calendar retirement and UI integration remain incomplete.
 
@@ -323,7 +325,7 @@ Status: In progress
           leadership is revoked between preflight and batch execution.
           Recurrence materialization inserts up to the bounded limit with one
           `json_each` set operation in the same transaction, replacing partial
-          50-statement batches. The focused event suites pass 14 tests and the
+          50-statement batches. The focused event suites pass 19 tests and the
           consolidated migration upgrade suite passes two tests.
   - [ ] Apply vote grants after the atomic generic voting cutover.
         Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
@@ -447,26 +449,38 @@ Status: Pending
       preserves unattributed historical event-form projections.
 - [x] Run migration tests against empty databases.
 - [ ] Run representative and group authorization security tests.
-- [ ] Run join-token, terms, guest, and attendance security tests.
+- [x] Run join-token, terms, guest, and attendance security tests.
+      Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
+      replacement, user and guest identity binding, membership loss, expiry,
+      guest-policy changes, revocation races at issue and use time, HTTPS-only
+      destinations, audit redaction, repeated joins, and verified attendance.
+      Both user and guest predicates on the canonical eligibility view have
+      explicit D1 query-plan assertions proving indexed subject lookups.
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
-      Current evidence: the gate was rerun after the generic self-participation
-      slice and
-      stops at the known, deliberately unsynchronized leadership/voting
-      type-contract cutover. The complete backend run reaches 1,662 passing,
-      261 failing, and one skipped test; the failures use removed legacy group,
-      meeting, leadership, and vote schema rather than the completed forms
-      paths. The complete frontend run now reaches 150 passing and three known
-      vote-fixture failures; the new focused group-participation and pagination
-      selection passes 11 tests. Do not mark this complete until that migration is authorized and
-      all repository-wide gates pass from the final schema.
+      Current evidence: the gate was rerun after the meeting-access security
+      slice and stops only at the known, deliberately unsynchronized
+      leadership/voting type-contract cutover. Independent ESLint, SQL
+      projection, dependency architecture, API-contract, zero-duplication,
+      formatting, max-lines, and filename gates pass. Earlier complete backend
+      and frontend runs remain recorded above. Do not mark this complete until
+      the leadership/voting migration is authorized and every repository-wide
+      gate passes from the final schema.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
 - [ ] Run a final security diff review and resolve validated findings.
+      Evidence so far: Codex Security scan
+      `7f6a9db1-1349-49f6-8ac0-cd9437915ee8` reviewed the complete delegated
+      event-management diff and validated three low-severity findings. This
+      round fixes plaintext provider URLs in audit details, guest-policy bypass
+      on token use, and stale guest-token resurrection; it also enforces the
+      policy at invitation time and restricts provider destinations to HTTPS.
+      A fresh final diff review remains required after the full architecture is
+      implemented.
 - [ ] Audit every requirement in ARCHITECTURE.md against current evidence.
 
 ## 12. Pull-request handoff

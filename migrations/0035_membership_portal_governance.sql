@@ -3903,14 +3903,12 @@ CREATE TABLE event_occurrence_guests (
   name               TEXT NOT NULL,
   affiliation        TEXT,
   expires_at         TEXT NOT NULL,
-  invited_by_user_id TEXT NOT NULL,
   revoked_at         TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL,
   FOREIGN KEY(series_id) REFERENCES event_series(id),
   FOREIGN KEY(occurrence_id, series_id) REFERENCES event_occurrences(id, series_id),
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(invited_by_user_id) REFERENCES users(id)
+  FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
 CREATE INDEX idx_event_occurrence_guests_occurrence
@@ -3923,6 +3921,67 @@ CREATE UNIQUE INDEX uq_event_occurrence_guest_email
 CREATE UNIQUE INDEX uq_event_series_guest_email
   ON event_occurrence_guests(series_id, normalized_email)
   WHERE occurrence_id IS NULL;
+
+-- One canonical SQL read model defines whether a meeting subject may enter an
+-- occurrence now. Token issuance and token consumption both use it so policy,
+-- membership, registration, guest scope, revocation, and expiry cannot drift
+-- between separate database guards.
+CREATE VIEW current_event_occurrence_subject_eligibility AS
+SELECT occurrence.id AS occurrence_id, event.id AS event_id,
+       active_user.id AS user_id, NULL AS guest_id
+  FROM event_occurrences occurrence
+  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN events event ON event.id = series.event_id
+  JOIN users active_user ON active_user.active = 1
+ WHERE occurrence.status = 'scheduled'
+   AND (
+     (
+       event.registration_mode IN ('required', 'public')
+       AND EXISTS (
+         SELECT 1 FROM registrations registration
+          WHERE registration.event_id = event.id
+            AND registration.user_id = active_user.id
+            AND registration.status = 'registered'
+       )
+     )
+     OR (
+       event.registration_mode NOT IN ('required', 'public')
+       AND (
+         COALESCE(json_extract(event.settings_json, '$.memberEligibility'), 'owner_group') = 'public'
+         OR EXISTS (
+           SELECT 1 FROM group_memberships membership
+            WHERE membership.user_id = active_user.id
+              AND membership.left_at IS NULL
+              AND (
+                membership.group_id = event.owner_group_id
+                OR (
+                  json_extract(event.settings_json, '$.memberEligibility') = 'shared_groups'
+                  AND EXISTS (
+                    SELECT 1 FROM event_group_grants grant_row
+                     WHERE grant_row.event_id = event.id
+                       AND grant_row.group_id = membership.group_id
+                       AND grant_row.capability = 'attend'
+                  )
+                )
+              )
+         )
+       )
+     )
+   )
+UNION ALL
+SELECT occurrence.id AS occurrence_id, event.id AS event_id,
+       NULL AS user_id, guest.id AS guest_id
+  FROM event_occurrences occurrence
+  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN events event ON event.id = series.event_id
+  JOIN event_occurrence_guests guest
+    ON guest.series_id = occurrence.series_id
+   AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
+ WHERE occurrence.status = 'scheduled'
+   AND guest.revoked_at IS NULL
+   AND unixepoch(guest.expires_at) > unixepoch()
+   AND COALESCE(json_extract(event.settings_json, '$.guestPolicy'), 'none')
+       IN ('occurrence_invitation', 'public_registration', 'invitation_only');
 
 -- Tokens are opaque, single-purpose capabilities. GET may render the landing
 -- page but cannot consume a token or record attendance; only the intentional
@@ -3948,18 +4007,16 @@ CREATE TABLE event_occurrence_access_tokens (
 CREATE INDEX idx_event_occurrence_access_subject
   ON event_occurrence_access_tokens(occurrence_id, user_id, guest_id, expires_at);
 
-CREATE TRIGGER trg_event_occurrence_access_guest_context
+CREATE TRIGGER trg_event_occurrence_access_subject_context
 BEFORE INSERT ON event_occurrence_access_tokens
-WHEN NEW.guest_id IS NOT NULL AND NOT EXISTS (
-  SELECT 1
-    FROM event_occurrence_guests guest
-    JOIN event_occurrences occurrence ON occurrence.id = NEW.occurrence_id
-   WHERE guest.id = NEW.guest_id
-     AND guest.series_id = occurrence.series_id
-     AND (guest.occurrence_id IS NULL OR guest.occurrence_id = NEW.occurrence_id)
+WHEN NOT EXISTS (
+  SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
+   WHERE eligible.occurrence_id = NEW.occurrence_id
+     AND eligible.user_id IS NEW.user_id
+     AND eligible.guest_id IS NEW.guest_id
 )
 BEGIN
-  SELECT RAISE(ABORT, 'event access guest context invalid');
+  SELECT RAISE(ABORT, 'EVENT_OCCURRENCE_ACCESS_CONTEXT_CHANGED');
 END;
 
 -- Meeting access does not require an event registration, while the deployed
@@ -4043,56 +4100,12 @@ WHEN NOT EXISTS (
      AND token.revoked_at IS NULL
      AND unixepoch(token.expires_at) > unixepoch()
      AND occurrence.status = 'scheduled'
-     AND (
-       (
-         NEW.user_id IS NOT NULL
-         AND EXISTS (SELECT 1 FROM users active_user WHERE active_user.id = NEW.user_id AND active_user.active = 1)
-         AND (
-           (
-             event.registration_mode IN ('required', 'public')
-             AND EXISTS (
-               SELECT 1 FROM registrations registration
-                WHERE registration.event_id = event.id
-                  AND registration.user_id = NEW.user_id
-                  AND registration.status = 'registered'
-             )
-           )
-           OR (
-             event.registration_mode NOT IN ('required', 'public')
-             AND (
-               COALESCE(json_extract(event.settings_json, '$.memberEligibility'), 'owner_group') = 'public'
-               OR EXISTS (
-                 SELECT 1 FROM group_memberships membership
-                  WHERE membership.user_id = NEW.user_id
-                    AND membership.left_at IS NULL
-                    AND (
-                      membership.group_id = event.owner_group_id
-                      OR (
-                        json_extract(event.settings_json, '$.memberEligibility') = 'shared_groups'
-                        AND EXISTS (
-                          SELECT 1 FROM event_group_grants grant_row
-                           WHERE grant_row.event_id = event.id
-                             AND grant_row.group_id = membership.group_id
-                             AND grant_row.capability = 'attend'
-                        )
-                      )
-                    )
-               )
-             )
-           )
-         )
-       )
-       OR (
-         NEW.guest_id IS NOT NULL
-         AND EXISTS (
-           SELECT 1 FROM event_occurrence_guests guest
-            WHERE guest.id = NEW.guest_id
-              AND guest.series_id = series.id
-              AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
-              AND guest.revoked_at IS NULL
-              AND unixepoch(guest.expires_at) > unixepoch()
-         )
-       )
+     AND EXISTS (
+       SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
+        WHERE eligible.occurrence_id = NEW.occurrence_id
+          AND eligible.event_id = NEW.event_id
+          AND eligible.user_id IS NEW.user_id
+          AND eligible.guest_id IS NEW.guest_id
      )
      AND NOT EXISTS (
        SELECT 1 FROM event_terms required_term

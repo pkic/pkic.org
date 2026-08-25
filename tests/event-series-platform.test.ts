@@ -12,8 +12,10 @@ import {
   materializeSeriesOccurrences,
   revokeOccurrenceGuest,
   updateGroupEventSeries,
+  updateSeriesOccurrence,
   verifyOccurrenceAttendance,
 } from "../functions/_lib/services/event-series";
+import { eventOccurrenceUpdateSchema } from "../assets/shared/schemas/event-series";
 import { joinGroup } from "../functions/_lib/services/groups";
 import type { AuthAdmin, DatabaseLike, D1StatementResult, StatementLike } from "../functions/_lib/types";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
@@ -169,6 +171,72 @@ describe("group-owned event series", () => {
     expect(calendar).not.toContain("secret-room");
   });
 
+  it("accepts only HTTPS provider destinations and never copies them into audit details", async () => {
+    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "javascript:alert(1)" }).success).toBe(false);
+    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "data:text/html,unsafe" }).success).toBe(false);
+    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "http://meet.example.test/room" }).success).toBe(
+      false,
+    );
+    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "https://meet.example.test/room" }).success).toBe(
+      true,
+    );
+
+    const { admin, series, occurrence } = await createMeetingFixture();
+    const originalCiphertext = await env.DB.prepare(
+      "SELECT provider_join_url_ciphertext FROM event_occurrences WHERE id = ?",
+    )
+      .bind(occurrence.id)
+      .first<string>("provider_join_url_ciphertext");
+    await expect(
+      updateSeriesOccurrence(
+        env.DB,
+        admin,
+        GROUP_ID,
+        series.id,
+        occurrence.id,
+        { providerJoinUrl: "http://meet.example.test/unsafe-room" },
+        ENCRYPTION_SECRET,
+      ),
+    ).rejects.toThrow();
+    expect(
+      await env.DB.prepare("SELECT provider_join_url_ciphertext FROM event_occurrences WHERE id = ?")
+        .bind(occurrence.id)
+        .first<string>("provider_join_url_ciphertext"),
+    ).toBe(originalCiphertext);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_occurrence_updated' AND entity_id = ?",
+      )
+        .bind(occurrence.id)
+        .first<number>("total"),
+    ).toBe(0);
+
+    const replacementUrl = "https://meet.example.test/rotated-secret-room";
+    await updateSeriesOccurrence(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      occurrence.id,
+      { locationOverride: "Updated room", providerJoinUrl: replacementUrl },
+      ENCRYPTION_SECRET,
+    );
+    const audit = await env.DB.prepare(
+      `SELECT details_json FROM audit_log
+        WHERE action = 'event_occurrence_updated' AND entity_id = ?
+        ORDER BY created_at DESC, id DESC LIMIT 1`,
+    )
+      .bind(occurrence.id)
+      .first<{ details_json: string }>();
+    expect(audit).not.toBeNull();
+    expect(audit?.details_json).not.toContain(replacementUrl);
+    expect(JSON.parse(audit?.details_json ?? "{}")).toEqual({
+      locationOverride: { from: null, to: "Updated room" },
+      providerJoinUrlChanged: { from: null, to: true },
+      providerConfigured: { from: null, to: true },
+    });
+  });
+
   it("does not consume scanner GETs, reuses current terms, and records each intentional join", async () => {
     const { admin, userId, series, occurrence } = await createMeetingFixture();
     const termId = crypto.randomUUID();
@@ -285,6 +353,171 @@ describe("group-owned event series", () => {
     await expect(getMeetingJoinLanding(env.DB, access.token)).rejects.toMatchObject({
       code: "MEETING_ACCESS_NOT_FOUND",
     });
+  });
+
+  it("attributes service-issued invitations through the canonical audit record", async () => {
+    const { series, occurrence } = await createMeetingFixture();
+    const service: AuthAdmin = {
+      identityType: "service",
+      id: "meeting-invitation-service",
+      email: "meeting-invitation-service@internal.invalid",
+      role: "admin",
+    };
+    const guest = await inviteOccurrenceGuest(env.DB, service, GROUP_ID, series.id, occurrence.id, {
+      email: `service-guest-${crypto.randomUUID()}@example.test`,
+      name: "Service Guest",
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    expect(guest.name).toBe("Service Guest");
+    expect(
+      await env.DB.prepare(
+        `SELECT actor_id FROM audit_log
+          WHERE action = 'event_guest_invited' AND entity_id = ? AND scope_type = 'group' AND scope_id = ?`,
+      )
+        .bind(guest.id, GROUP_ID)
+        .first("actor_id"),
+    ).toBe(service.id);
+  });
+
+  it("makes the current guest policy authoritative for invitation, issuance, and use", async () => {
+    const { admin, userId, series, occurrence } = await createMeetingFixture();
+    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `policy-guest-${crypto.randomUUID()}@example.test`,
+      name: "Policy Guest",
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      guestId: guest.id,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    expect((await getMeetingJoinLanding(env.DB, access.token)).name).toBe("Policy Guest");
+    const plan = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN
+       SELECT 1 FROM current_event_occurrence_subject_eligibility
+        WHERE occurrence_id = ? AND user_id IS NULL AND guest_id = ? LIMIT 1`,
+    )
+      .bind(occurrence.id, guest.id)
+      .all<{ detail: string }>();
+    const planText = plan.results.map((row) => row.detail).join("\n");
+    expect(planText).toContain("SEARCH occurrence");
+    expect(planText).toContain("SEARCH guest");
+    expect(planText).not.toContain("SCAN guest");
+    const userPlan = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN
+       SELECT 1 FROM current_event_occurrence_subject_eligibility
+        WHERE occurrence_id = ? AND user_id = ? AND guest_id IS NULL LIMIT 1`,
+    )
+      .bind(occurrence.id, userId)
+      .all<{ detail: string }>();
+    const userPlanText = userPlan.results.map((row) => row.detail).join("\n");
+    expect(userPlanText).toContain("SEARCH occurrence");
+    expect(userPlanText).toContain("SEARCH active_user");
+    expect(userPlanText).not.toContain("SCAN active_user");
+
+    await updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
+      policy: {
+        registrationPolicy: "no_registration",
+        memberEligibility: "owner_group",
+        guestPolicy: "none",
+      },
+    });
+    await expect(getMeetingJoinLanding(env.DB, access.token)).rejects.toMatchObject({
+      code: "MEETING_GUEST_ACCESS_REVOKED",
+    });
+    await expect(
+      inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+        email: `blocked-guest-${crypto.randomUUID()}@example.test`,
+        name: "Blocked Guest",
+        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_GUESTS_DISABLED" });
+    await expect(
+      issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+        guestId: guest.id,
+        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_GUESTS_DISABLED" });
+  });
+
+  it("atomically rejects guest policy changes before intentional join", async () => {
+    const { admin, series, occurrence } = await createMeetingFixture();
+    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `policy-race-${crypto.randomUUID()}@example.test`,
+      name: "Policy Race Guest",
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      guestId: guest.id,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const landing = await getMeetingJoinLanding(env.DB, access.token);
+    const racingDb = mutateBeforeNextBatch(() =>
+      env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+        .bind(JSON.stringify({ memberEligibility: "owner_group", guestPolicy: "none" }), series.eventId)
+        .run(),
+    );
+    await expect(
+      confirmMeetingJoin(
+        racingDb,
+        access.token,
+        {
+          name: landing.name,
+          affiliation: landing.affiliation,
+          acceptedTerms: [],
+          intentionalJoin: true,
+        },
+        { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
+      ),
+    ).rejects.toMatchObject({ code: "MEETING_ACCESS_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM event_occurrence_join_confirmations WHERE occurrence_id = ?", [
+        occurrence.id,
+      ]),
+    ).toEqual([]);
+  });
+
+  it("atomically rejects token issuance after guest revocation without leaving a capability", async () => {
+    const { admin, series, occurrence } = await createMeetingFixture();
+    const email = `issuance-race-${crypto.randomUUID()}@example.test`;
+    const expiresAt = new Date(Date.now() + 10_800_000).toISOString();
+    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email,
+      name: "Issuance Race Guest",
+      expiresAt,
+    });
+    const racingDb = mutateBeforeNextBatch(() =>
+      revokeOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, guest.id),
+    );
+    await expect(
+      issueOccurrenceAccessToken(racingDb, admin, GROUP_ID, series.id, occurrence.id, {
+        guestId: guest.id,
+        expiresAt,
+      }),
+    ).rejects.toMatchObject({ code: "MEETING_ACCESS_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrence_access_tokens WHERE guest_id = ?")
+        .bind(guest.id)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_occurrence_access_issued' AND entity_id = ?",
+      )
+        .bind(occurrence.id)
+        .first<number>("total"),
+    ).toBe(0);
+
+    const reactivated = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email,
+      name: "Issuance Race Guest",
+      expiresAt,
+    });
+    expect(reactivated.id).toBe(guest.id);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrence_access_tokens WHERE guest_id = ?")
+        .bind(guest.id)
+        .first<number>("total"),
+    ).toBe(0);
   });
 
   it("rejects expired meeting capabilities without recording a join", async () => {

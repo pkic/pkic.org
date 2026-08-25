@@ -11,6 +11,7 @@ import {
 import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { httpsCapabilityUrlSchema } from "./urls";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
@@ -27,6 +28,7 @@ export const EVENT_REGISTRATION_POLICIES = [
 export const eventRegistrationPolicySchema = z.enum(EVENT_REGISTRATION_POLICIES);
 export const EVENT_GUEST_POLICIES = ["none", "occurrence_invitation", "public_registration"] as const;
 export const eventGuestPolicySchema = z.enum(EVENT_GUEST_POLICIES);
+export type EventGuestPolicy = z.infer<typeof eventGuestPolicySchema>;
 
 export const eventProfilePolicySchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
@@ -142,7 +144,7 @@ const eventOccurrenceInputSchema = z.object({
   startsAt: z.iso.datetime(),
   endsAt: z.iso.datetime(),
   locationOverride: trimmedString(0, 500).nullable().optional(),
-  providerJoinUrl: z.url().nullable().optional(),
+  providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
 export const eventOccurrenceCreateSchema = eventOccurrenceInputSchema.refine((value) => value.endsAt > value.startsAt, {
   message: "Occurrence must end after it starts",
@@ -217,7 +219,7 @@ export const meetingJoinLandingSchema = z.object({
 export const meetingJoinResponseSchema = z.object({
   confirmationId: databaseIdSchema,
   confirmedAt: z.string(),
-  redirectUrl: z.url(),
+  redirectUrl: httpsCapabilityUrlSchema,
 });
 
 export const ATTENDANCE_VERIFICATION_SOURCES = ["microsoft_graph", "cloudflare_meet", "manual"] as const;

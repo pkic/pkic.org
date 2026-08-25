@@ -189,6 +189,12 @@ export async function updateSeriesOccurrence(
     : input.providerJoinUrl === null
       ? null
       : undefined;
+  const auditChanges = { ...input };
+  delete auditChanges.providerJoinUrl;
+  const auditDetails =
+    input.providerJoinUrl === undefined
+      ? auditChanges
+      : { ...auditChanges, providerJoinUrlChanged: true, providerConfigured: input.providerJoinUrl !== null };
   const now = nowIso();
   try {
     await commitEventResourceManagementBatch(db, actor, current.context, "manage", [
@@ -219,7 +225,7 @@ export async function updateSeriesOccurrence(
         "event_occurrence_updated",
         "event_occurrence",
         occurrenceId,
-        input,
+        auditDetails,
       ),
       db
         .prepare(
