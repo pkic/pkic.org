@@ -1,6 +1,6 @@
 import type { Group } from "../../../../assets/shared/schemas/groups";
 import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
-import type { DatabaseLike, Env } from "../../../_lib/types";
+import type { AuthAdmin, DatabaseLike, Env } from "../../../_lib/types";
 import { AppError } from "../../../_lib/errors";
 import { getPortalGroupContext } from "../../../_lib/services/groups";
 import type { GroupResourceViewer } from "../../../_lib/services/resource-grants";
@@ -8,6 +8,13 @@ import type { GroupResourceViewer } from "../../../_lib/services/resource-grants
 export interface GroupResourceContext {
   group: Group;
   viewer: GroupResourceViewer;
+}
+
+export function requireGroupManagementActor(viewer: GroupResourceViewer): AuthAdmin {
+  if (!viewer.admin) {
+    throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
+  }
+  return viewer.admin;
 }
 
 export async function requireGroupResourceContext(

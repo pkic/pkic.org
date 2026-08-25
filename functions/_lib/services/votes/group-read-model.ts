@@ -8,7 +8,7 @@ import {
 import type { VoteGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
 import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { all } from "../../db/queries";
+import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -16,15 +16,18 @@ import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import {
   buildAccessibleGroupResourceIdsCte,
+  buildLiveAccessibleGroupResourceIdsCte,
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
   isResourceGrantCapability,
-  resolveGroupResourceContextAccess,
+  type GroupResourceContextAccess,
   type GroupResourceViewer,
+  type LiveGroupResourceContextAccess,
 } from "../resource-grants";
+import { activeGroupMembershipAuthorizationEvidence } from "../groups/access";
+import { groupManagementAuthorizationEvidence } from "../groups/governance";
 import {
   closedVoteResult,
-  getVoteRowOrThrow,
   toVoteSummary,
   voteRowProjection,
   type VoteFullResult,
@@ -35,6 +38,8 @@ import { hydrateVotesForUser } from "./portal";
 
 interface GroupVoteRow extends VoteRow {
   granted_capabilities: string | null;
+  member_access: number;
+  manager_access: number;
 }
 
 function grantedCapabilities(row: GroupVoteRow): VoteGroupCapability[] {
@@ -58,23 +63,24 @@ function effectiveVoteCapabilities(
   });
 }
 
-function mapGroupVote(row: GroupVoteRow, groupId: string, access: { member: boolean; manager: boolean }): GroupVote {
+function rowAccess(row: GroupVoteRow): GroupResourceContextAccess {
+  return { member: row.member_access === 1, manager: row.manager_access === 1 };
+}
+
+function mapGroupVote(row: GroupVoteRow, groupId: string): GroupVote {
   return groupVoteSchema.parse({
     ...toVoteSummary(row),
-    capabilities: effectiveVoteCapabilities(row, groupId, access, grantedCapabilities(row)),
+    capabilities: effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row)),
   });
 }
 
-async function loadVoteGrants(db: DatabaseLike, voteId: string, groupId: string): Promise<VoteGroupCapability[]> {
-  const definition = getResourceGrantDefinition("vote");
-  const rows = await all<{ capability: string }>(
-    db,
-    "SELECT capability FROM vote_group_grants WHERE vote_id = ? AND group_id = ? ORDER BY capability",
-    [voteId, groupId],
-  );
-  return rows
-    .map((row) => row.capability)
-    .filter((capability): capability is VoteGroupCapability => isResourceGrantCapability(definition, capability));
+function liveGroupVoteAccess(viewer: GroupResourceViewer, groupId: string): LiveGroupResourceContextAccess {
+  return {
+    memberEvidence: activeGroupMembershipAuthorizationEvidence(viewer.userId, groupId),
+    managerEvidence: viewer.admin
+      ? groupManagementAuthorizationEvidence(viewer.admin, [groupId])
+      : { sql: "SELECT 1 WHERE 0", bindings: [] },
+  };
 }
 
 async function resolveGroupVote(
@@ -83,21 +89,40 @@ async function resolveGroupVote(
   groupId: string,
   voteId: string,
 ): Promise<{ row: VoteRow; capabilities: VoteGroupCapability[] }> {
-  const [row, access] = await Promise.all([
-    getVoteRowOrThrow(db, voteId),
-    resolveGroupResourceContextAccess(db, viewer, groupId),
-  ]);
-  const capabilities = effectiveVoteCapabilities(row, groupId, access, await loadVoteGrants(db, row.id, groupId));
+  const accessibleVotes = buildLiveAccessibleGroupResourceIdsCte(
+    "vote",
+    groupId,
+    liveGroupVoteAccess(viewer, groupId),
+    "view",
+  );
+  const row = await first<GroupVoteRow>(
+    db,
+    `WITH ${accessibleVotes.sql}
+     SELECT ${voteRowProjection("vote")}, GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
+            group_access.member_access, group_access.manager_access
+       FROM accessible_resource accessible
+       JOIN votes vote ON vote.id = accessible.resource_id
+       CROSS JOIN group_access
+       LEFT JOIN vote_group_grants grant_row ON grant_row.vote_id = vote.id AND grant_row.group_id = ?
+      WHERE vote.id = ?
+      GROUP BY vote.id`,
+    [...accessibleVotes.bindings, groupId, voteId],
+  );
+  if (!row) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
+  const capabilities = effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row));
   if (!capabilities.includes("view")) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   return { row, capabilities };
 }
 
 export function buildGroupVotesPageQuery(
   groupId: string,
-  access: { member: boolean; manager: boolean },
+  access: GroupResourceContextAccess | LiveGroupResourceContextAccess,
   query: GroupVotesListQuery,
 ) {
-  const accessibleVotes = buildAccessibleGroupResourceIdsCte("vote", groupId, access, "view");
+  const live = "memberEvidence" in access;
+  const accessibleVotes = live
+    ? buildLiveAccessibleGroupResourceIdsCte("vote", groupId, access, "view")
+    : buildAccessibleGroupResourceIdsCte("vote", groupId, access, "view");
   const conditions: string[] = [];
   const bindings: unknown[] = [...accessibleVotes.bindings, groupId];
   if (query.status?.length) {
@@ -121,9 +146,12 @@ export function buildGroupVotesPageQuery(
   }
   return {
     sql: `WITH ${accessibleVotes.sql}
-      SELECT ${voteRowProjection("vote")}, GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities
+      SELECT ${voteRowProjection("vote")}, GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
+             ${live ? "group_access.member_access" : access.member ? "1" : "0"} AS member_access,
+             ${live ? "group_access.manager_access" : access.manager ? "1" : "0"} AS manager_access
         FROM accessible_resource accessible
         JOIN votes vote ON vote.id = accessible.resource_id
+        ${live ? "CROSS JOIN group_access" : ""}
         LEFT JOIN vote_group_grants grant_row ON grant_row.vote_id = vote.id AND grant_row.group_id = ?
         ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}
         GROUP BY vote.id`,
@@ -150,10 +178,11 @@ export async function listGroupVotes(
   groupId: string,
   query: GroupVotesListQuery,
 ): Promise<{ votes: GroupVote[]; total: number }> {
-  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
-  if (!access.member && !access.manager) return { votes: [], total: 0 };
-  const page = await queryPage<GroupVoteRow>(db, buildGroupVotesPageQuery(groupId, access, query));
-  return { votes: page.rows.map((row) => mapGroupVote(row, groupId, access)), total: page.total };
+  const page = await queryPage<GroupVoteRow>(
+    db,
+    buildGroupVotesPageQuery(groupId, liveGroupVoteAccess(viewer, groupId), query),
+  );
+  return { votes: page.rows.map((row) => mapGroupVote(row, groupId)), total: page.total };
 }
 
 export async function getGroupVoteDetail(

@@ -366,30 +366,47 @@ Status: In progress
           definition and no longer treat leadership-only `manage` as member
           view, participation, or result access. Mounted tests prove owner and
           shared-group ballots, result separation, and manager/member isolation;
-          the portal reuses its existing ballot and result components against
-          the nested endpoints.
-    - [ ] Apply `manage` to canonical vote creation, update, raw-ballot,
-          proposal, and lifecycle routes.
-        Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
-        and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
-        broader focused form/grant regression selection passes 20 tests. Four
-        resource-specific grant tables retain real resource and group foreign
-        keys; one shared service provides idempotent audited creation, exact
-        revocation, D1-side search/filter/sort/pagination, and participant versus
-        effective-leadership evaluation. Mounted group routes use the same exact
-        domain contracts. The tests cover capability implication, escalation,
-        immediate revocation, inherited and local-only governance, idempotency,
-        owner immutability, validation, orphan prevention, context-bound member
-        access, atomic Google Groups desired-state removal, placement-owner
-        immutability, group-scoped form discovery and mutation, D1-side answer
-        search, immediate revocation, and prevention of generic form endpoints
-        bypassing registration, proposal, or application workflows.
-        Group-event sharing tests additionally prove context-bound discovery,
-        shared flexible links, participant/manager separation, revocation,
-        indexed owner/grantee and occurrence-attendance query plans, and atomic
-        attendance-management reauthorization. Authenticated group registration
-        also proves strict identity binding, registration-policy enforcement,
-        and the atomic D1 authorization guard.
+          list, detail, and result queries now evaluate live membership or
+          management evidence in the same D1 statement that reads protected
+          vote data. Inactive owner groups no longer confer access through
+          retained membership rows. The portal reuses its existing ballot and
+          result components against the nested endpoints.
+    - [x] Apply `manage` to canonical vote creation, settings, visibility, and
+          raw-ballot routes.
+          Evidence: selected-group creation derives the owner from the path and
+          strips any caller-supplied owner override. Update, visibility, and
+          identifiable-ballot routes require management through that exact
+          owner or explicitly managed grantee group. The same exact-context
+          evidence is rechecked inside each protected D1 mutation batch, so
+          unrelated management authority cannot satisfy a stale or mismatched
+          route preflight. Identifiable ballot page and count reads execute in
+          the same D1 batch as their live exact-context guard. Global
+          compatibility routes reuse the same domain
+          create/update/visibility/ballot schemas without duplicating their
+          contracts. Mounted and direct-service tests cover path-owned creation,
+          wrong-context denial, explicit manage sharing, member denial, and
+          raw-ballot isolation.
+    - [ ] Apply `manage` to canonical vote proposal and lifecycle routes.
+          Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
+          and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
+          broader focused form/grant regression selection passes 20 tests. Four
+          resource-specific grant tables retain real resource and group foreign
+          keys; one shared service provides idempotent audited creation, exact
+          revocation, D1-side search/filter/sort/pagination, and participant versus
+          effective-leadership evaluation. Mounted group routes use the same exact
+          domain contracts. The tests cover capability implication, escalation,
+          immediate revocation, inherited and local-only governance, idempotency,
+          owner immutability, validation, orphan prevention, context-bound member
+          access, atomic Google Groups desired-state removal, placement-owner
+          immutability, group-scoped form discovery and mutation, D1-side answer
+          search, immediate revocation, and prevention of generic form endpoints
+          bypassing registration, proposal, or application workflows.
+          Group-event sharing tests additionally prove context-bound discovery,
+          shared flexible links, participant/manager separation, revocation,
+          indexed owner/grantee and occurrence-attendance query plans, and atomic
+          attendance-management reauthorization. Authenticated group registration
+          also proves strict identity binding, registration-policy enforcement,
+          and the atomic D1 authorization guard.
 
 ## 9. Group-scoped REST API
 
@@ -412,8 +429,11 @@ Status: In progress
       reads, and fresh-D1 schema use.
 - [x] Add the nested vote discovery route.
 - [x] Add nested vote detail, ballot, and result routes.
-- [ ] Add nested vote creation, update, raw-ballot, proposal, lifecycle, and
-      stats routes.
+- [x] Add nested vote creation, settings, visibility, and raw-ballot routes.
+      Evidence: request bodies extend canonical domain contracts, ownership is
+      path-derived, and every resource mutation binds both preflight and atomic
+      authorization to the selected group.
+- [ ] Add nested vote proposal, lifecycle, and stats routes.
 - [ ] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.

@@ -3,7 +3,7 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
-import { queryPage } from "../../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults, queryPage } from "../../db/pagination";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
@@ -177,6 +177,7 @@ export async function updateVoteSettings(
   admin: AuthAdmin,
   voteId: string,
   input: UpdateVoteInput,
+  throughGroupId?: string,
 ): Promise<VoteSummary> {
   const existing = await getVoteRowOrThrow(db, voteId);
   if (existing.status === "closed") {
@@ -190,7 +191,7 @@ export async function updateVoteSettings(
   const now = nowIso();
   try {
     await db.batch([
-      await prepareVoteManagementAuthorizationGuard(db, admin, existing.id),
+      await prepareVoteManagementAuthorizationGuard(db, admin, existing.id, throughGroupId),
       db
         .prepare(
           `UPDATE votes SET
@@ -245,12 +246,13 @@ export async function updateVoteVisibility(
   admin: AuthAdmin,
   voteId: string,
   input: { visibility?: VoteVisibility; publicDetailLevel?: PublicDetailLevel },
+  throughGroupId?: string,
 ): Promise<VoteSummary> {
   const existing = await getVoteRowOrThrow(db, voteId);
   const now = nowIso();
   try {
     await db.batch([
-      await prepareVoteManagementAuthorizationGuard(db, admin, existing.id),
+      await prepareVoteManagementAuthorizationGuard(db, admin, existing.id, throughGroupId),
       db
         .prepare(
           `UPDATE votes
@@ -361,6 +363,16 @@ export interface AdminBallotRow {
   updatedAt: string;
 }
 
+interface AdminBallotDbRow {
+  id: string;
+  user_id: string;
+  member_id: string | null;
+  choice: string;
+  round: number;
+  submitted_at: string;
+  updated_at: string;
+}
+
 const ADMIN_BALLOT_SORT_COLUMNS = {
   submittedAt: "b.submitted_at",
   round: "b.round",
@@ -369,10 +381,12 @@ const ADMIN_BALLOT_SORT_COLUMNS = {
   memberId: "b.member_id",
 } as const satisfies Record<(typeof ADMIN_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
 
-export async function listBallotsForAdmin(
+export async function listBallotsForManager(
   db: DatabaseLike,
+  actor: AuthAdmin,
   voteId: string,
   query: AdminVoteBallotsListQuery,
+  throughGroupId?: string,
 ): Promise<{ ballots: AdminBallotRow[]; page: PageInfo }> {
   await getVoteRowOrThrow(db, voteId);
   const conditions = ["b.vote_id = ?"];
@@ -393,22 +407,29 @@ export async function listBallotsForAdmin(
     "b.round ASC, b.submitted_at ASC",
     "b.id ASC",
   );
-  const { rows, total } = await queryPage<{
-    id: string;
-    user_id: string;
-    member_id: string | null;
-    choice: string;
-    round: number;
-    submitted_at: string;
-    updated_at: string;
-  }>(db, {
+  const pageQuery = {
     sql: `SELECT b.id, b.user_id, b.member_id, b.choice, b.round, b.submitted_at, b.updated_at
               FROM vote_ballots b ${where}`,
     bindings,
     orderBy,
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+  let rows: AdminBallotDbRow[];
+  let total: number;
+  try {
+    const [guardResult, pageResult, countResult] = await db.batch([
+      await prepareVoteManagementAuthorizationGuard(db, actor, voteId, throughGroupId),
+      ...buildOffsetPageStatements(db, pageQuery),
+    ]);
+    void guardResult;
+    ({ rows, total } = decodeOffsetPageResults<AdminBallotDbRow>(pageResult, countResult));
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before the ballot read");
+    }
+    throw error;
+  }
   const ballots = rows.map((r) => ({
     id: r.id,
     userId: r.user_id,

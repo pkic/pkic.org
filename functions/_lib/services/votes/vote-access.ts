@@ -3,7 +3,11 @@
 import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
-import { groupManagementAuthorizationEvidence, groupPermissionAuthorizationEvidence } from "../groups/governance";
+import {
+  groupManagementAuthorizationEvidence,
+  groupManagementCandidateAuthorizationEvidence,
+  groupPermissionAuthorizationEvidence,
+} from "../groups/governance";
 import { getResourceGrantDefinition, memberResourceGrantCapabilitiesFor } from "../resource-grants/definitions";
 
 const VOTE_GRANTS = getResourceGrantDefinition("vote");
@@ -30,7 +34,14 @@ export function voteGroupCapabilityPredicate(
   capabilities: readonly string[],
 ): string {
   return `(
-    ${groupIdExpression} = ${voteAlias}.owner_group_id
+    (
+      ${groupIdExpression} = ${voteAlias}.owner_group_id
+      AND EXISTS (
+        SELECT 1 FROM groups active_owner_group
+         WHERE active_owner_group.id = ${voteAlias}.owner_group_id
+           AND active_owner_group.active = 1
+      )
+    )
     OR EXISTS (
       SELECT 1
       FROM vote_group_grants vote_grant
@@ -56,44 +67,59 @@ export function voteResultGroupPredicate(voteAlias: string, groupIdExpression: s
 
 interface VoteManagementContext {
   ownerGroupId: string;
-  managerGroupIds: string[];
 }
 
 async function resolveVoteManagementContext(db: DatabaseLike, voteId: string): Promise<VoteManagementContext | null> {
   const vote = await first<{ owner_group_id: string }>(db, "SELECT owner_group_id FROM votes WHERE id = ?", [voteId]);
   if (!vote) return null;
-  const grants = await db
-    .prepare("SELECT group_id FROM vote_group_grants WHERE vote_id = ? AND capability = 'manage'")
-    .bind(voteId)
-    .all<{ group_id: string }>();
-  return { ownerGroupId: vote.owner_group_id, managerGroupIds: grants.results.map((row) => row.group_id) };
+  return { ownerGroupId: vote.owner_group_id };
 }
 
 function managementEvidence(actor: AuthAdmin, voteId: string, context: VoteManagementContext): AuthorizationEvidence {
   const ownerVotePermission = groupPermissionAuthorizationEvidence(actor, [context.ownerGroupId], "votes:manage");
   const ownerManagement = groupManagementAuthorizationEvidence(actor, [context.ownerGroupId]);
-  const grantedManagement = groupManagementAuthorizationEvidence(actor, context.managerGroupIds);
+  const grantedManagement = groupManagementCandidateAuthorizationEvidence(actor, "active_grant.group_id");
   return {
     sql: `SELECT 1
           WHERE EXISTS (${ownerVotePermission.sql})
              OR EXISTS (${ownerManagement.sql})
-             OR (
-               EXISTS (${grantedManagement.sql})
-               AND EXISTS (
-                 SELECT 1
+             OR EXISTS (
+               SELECT 1
                  FROM vote_group_grants active_grant
-                 WHERE active_grant.vote_id = ?
-                   AND active_grant.capability = 'manage'
-                   AND active_grant.group_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-               )
+                WHERE active_grant.vote_id = ?
+                  AND active_grant.capability = 'manage'
+                  AND EXISTS (${grantedManagement.sql})
              )`,
-    bindings: [
-      ...ownerVotePermission.bindings,
-      ...ownerManagement.bindings,
-      ...grantedManagement.bindings,
-      voteId,
-      JSON.stringify(context.managerGroupIds),
-    ],
+    bindings: [...ownerVotePermission.bindings, ...ownerManagement.bindings, voteId, ...grantedManagement.bindings],
+  };
+}
+
+function exactManagementEvidence(
+  actor: AuthAdmin,
+  voteId: string,
+  context: VoteManagementContext,
+  throughGroupId: string,
+): AuthorizationEvidence {
+  const groupManagement = groupManagementAuthorizationEvidence(actor, [throughGroupId]);
+  if (context.ownerGroupId === throughGroupId) {
+    const votePermission = groupPermissionAuthorizationEvidence(actor, [throughGroupId], "votes:manage");
+    return {
+      sql: `SELECT 1
+              FROM votes managed_vote
+             WHERE managed_vote.id = ?
+               AND managed_vote.owner_group_id = ?
+               AND (EXISTS (${votePermission.sql}) OR EXISTS (${groupManagement.sql}))`,
+      bindings: [voteId, throughGroupId, ...votePermission.bindings, ...groupManagement.bindings],
+    };
+  }
+  return {
+    sql: `SELECT 1
+            FROM vote_group_grants active_grant
+           WHERE active_grant.vote_id = ?
+             AND active_grant.group_id = ?
+             AND active_grant.capability = 'manage'
+             AND EXISTS (${groupManagement.sql})`,
+    bindings: [voteId, throughGroupId, ...groupManagement.bindings],
   };
 }
 
@@ -101,17 +127,22 @@ export async function voteManagementAuthorizationEvidence(
   db: DatabaseLike,
   actor: AuthAdmin,
   voteId: string,
+  throughGroupId?: string,
 ): Promise<AuthorizationEvidence | null> {
   const context = await resolveVoteManagementContext(db, voteId);
-  return context ? managementEvidence(actor, voteId, context) : null;
+  if (!context) return null;
+  return throughGroupId
+    ? exactManagementEvidence(actor, voteId, context, throughGroupId)
+    : managementEvidence(actor, voteId, context);
 }
 
 export async function hasVoteManagementAuthorization(
   db: DatabaseLike,
   actor: AuthAdmin,
   voteId: string,
+  throughGroupId?: string,
 ): Promise<boolean> {
-  const evidence = await voteManagementAuthorizationEvidence(db, actor, voteId);
+  const evidence = await voteManagementAuthorizationEvidence(db, actor, voteId, throughGroupId);
   if (!evidence) return false;
   return (
     (await first<{ authorized: number }>(db, `SELECT 1 AS authorized WHERE EXISTS (${evidence.sql})`, [
@@ -124,7 +155,8 @@ export async function prepareVoteManagementAuthorizationGuard(
   db: DatabaseLike,
   actor: AuthAdmin,
   voteId: string,
+  throughGroupId?: string,
 ): Promise<StatementLike> {
-  const evidence = await voteManagementAuthorizationEvidence(db, actor, voteId);
+  const evidence = await voteManagementAuthorizationEvidence(db, actor, voteId, throughGroupId);
   return prepareAuthorizationGuard(db, evidence ?? { sql: "SELECT 1 WHERE 0", bindings: [] });
 }

@@ -1,30 +1,30 @@
 import { z } from "zod";
-import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
 import { groupIdSchema } from "./groups";
+import {
+  RAW_VOTE_BALLOT_SORT_COLUMNS,
+  rawVoteBallotSchema,
+  rawVoteBallotsListQuerySchema,
+  rawVoteBallotsListResponseSchema,
+  voteCandidateInputSchema,
+  voteCreateInputSchema,
+  voteMutationResponseSchema,
+  voteUpdateInputSchema,
+  voteVisibilityUpdateInputSchema,
+} from "./vote-management";
 import {
   VOTE_PROPOSALS_LIST_SORT_COLUMNS,
   candidateSummarySchema,
   proposalIdParamsSchema,
   proposalDetailResponseSchema,
   proposalSummarySchema,
-  publicDetailLevelSchema,
   voteIdParamsSchema,
   voteProposalStatusSchema,
-  voteElectorateModeSchema,
   voteStatusSchema,
   voteSummaryFieldsSchema,
-  voteTypeSchema,
-  voteVisibilitySchema,
-  thresholdTypeSchema,
 } from "./votes";
 
-export const adminCandidateInputSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  bio: z.string().trim().max(5000).optional(),
-  userId: databaseIdSchema.nullable().optional(),
-});
+export const adminCandidateInputSchema = voteCandidateInputSchema;
 
 export const ADMIN_VOTES_SORT_COLUMNS = [
   "title",
@@ -44,8 +44,8 @@ export const adminVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
   candidates: z.array(candidateSummarySchema).nullable(),
 });
-/** Mutation responses return the vote row summary; candidates are a detail projection. */
-export const adminVoteMutationResponseSchema = z.object({ vote: z.object(voteSummaryFieldsSchema) });
+/** Backward-compatible route names backed by the canonical management contracts. */
+export const adminVoteMutationResponseSchema = voteMutationResponseSchema;
 export const adminVoteResponseSchema = z.object({ vote: adminVoteSchema });
 
 export type VoteCandidateSummary = z.infer<typeof candidateSummarySchema>;
@@ -66,18 +66,7 @@ export const adminVotesListRouteSchema = {
   },
 };
 
-export const adminVoteCreateSchema = z.object({
-  title: z.string().trim().min(1).max(300),
-  description: z.string().trim().max(10000).optional(),
-  voteType: voteTypeSchema,
-  ownerGroupId: groupIdSchema,
-  electorateMode: voteElectorateModeSchema,
-  thresholdType: thresholdTypeSchema,
-  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
-  opensAt: z.iso.datetime({ offset: true }).optional(),
-  closesAt: z.iso.datetime({ offset: true }),
-  candidates: z.array(adminCandidateInputSchema).max(50).optional(),
-});
+export const adminVoteCreateSchema = voteCreateInputSchema;
 
 export const adminVoteCreateRouteSchema = {
   tags: ["Admin Votes"],
@@ -94,12 +83,7 @@ export const adminVoteCreateRouteSchema = {
   },
 };
 
-export const adminVoteUpdateSchema = z.object({
-  title: z.string().trim().min(1).max(300).optional(),
-  description: z.string().trim().max(10000).nullable().optional(),
-  opensAt: z.iso.datetime({ offset: true }).optional(),
-  closesAt: z.iso.datetime({ offset: true }).optional(),
-});
+export const adminVoteUpdateSchema = voteUpdateInputSchema;
 
 export const adminVoteUpdateRouteSchema = {
   tags: ["Admin Votes"],
@@ -118,10 +102,7 @@ export const adminVoteUpdateRouteSchema = {
   },
 };
 
-export const adminVoteVisibilityUpdateSchema = z.object({
-  visibility: voteVisibilitySchema.optional(),
-  publicDetailLevel: publicDetailLevelSchema.optional(),
-});
+export const adminVoteVisibilityUpdateSchema = voteVisibilityUpdateInputSchema;
 
 export const adminVoteVisibilityUpdateRouteSchema = {
   tags: ["Admin Votes"],
@@ -145,32 +126,22 @@ export const adminVoteProposalApproveResponseSchema = z.object({
 });
 export const adminVoteProposalRejectResponseSchema = z.object({ proposal: proposalSummarySchema });
 
-export const adminBallotSchema = z.object({
-  id: databaseIdSchema,
-  userId: databaseIdSchema,
-  memberId: databaseIdSchema.nullable(),
-  choice: z.string(),
-  round: z.number(),
-  submittedAt: z.string(),
-  updatedAt: z.string(),
-});
+export const adminBallotSchema = rawVoteBallotSchema;
 
 export type AdminVoteBallot = z.infer<typeof adminBallotSchema>;
 export type AdminVoteProposalSummary = z.infer<typeof proposalSummarySchema>;
 
-export const ADMIN_VOTE_BALLOT_SORT_COLUMNS = ["submittedAt", "round", "choice", "userId", "memberId"] as const;
-
-export const adminVoteBallotsListQuerySchema = listQuerySchema(ADMIN_VOTE_BALLOT_SORT_COLUMNS).extend({
-  round: z.coerce.number().int().min(1).optional(),
-});
+export const ADMIN_VOTE_BALLOT_SORT_COLUMNS = RAW_VOTE_BALLOT_SORT_COLUMNS;
+export const adminVoteBallotsListQuerySchema = rawVoteBallotsListQuerySchema;
 export type AdminVoteBallotsListQuery = z.infer<typeof adminVoteBallotsListQuerySchema>;
 
-export const adminVoteBallotsListResponseSchema = paginatedResponseSchema("ballots", adminBallotSchema);
+export const adminVoteBallotsListResponseSchema = rawVoteBallotsListResponseSchema;
 export type AdminVoteBallotsListResponse = z.infer<typeof adminVoteBallotsListResponseSchema>;
 
 export const adminVoteBallotsRouteSchema = {
   tags: ["Admin Votes"],
-  summary: "Full ballot breakdown (staff only)",
+  summary: "Full ballot breakdown for authorized vote managers",
+  description: "This audited management surface may be used before or after voting closes.",
   request: { params: voteIdParamsSchema, query: adminVoteBallotsListQuerySchema },
   responses: {
     "200": {

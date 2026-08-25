@@ -50,6 +50,10 @@ import { GroupVotesList } from "./[groupId]/votes/index";
 import { GroupVoteGet } from "./[groupId]/votes/[voteId]/index";
 import { GroupVoteBallotsPost } from "./[groupId]/votes/[voteId]/ballots";
 import { GroupVoteResultsGet } from "./[groupId]/votes/[voteId]/results";
+import { GroupVoteCreate } from "./[groupId]/votes/create";
+import { GroupVoteSettingsPatch } from "./[groupId]/votes/[voteId]/settings";
+import { GroupVoteVisibilityPatch } from "./[groupId]/votes/[voteId]/visibility";
+import { GroupVoteBallotAuditGet } from "./[groupId]/votes/[voteId]/ballot-audit";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -82,7 +86,11 @@ openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissio
 openapi.get("/:groupId/events", GroupEventsList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.get("/:groupId/votes", GroupVotesList);
+openapi.post("/:groupId/votes", GroupVoteCreate);
 openapi.get("/:groupId/votes/:voteId", GroupVoteGet);
+openapi.patch("/:groupId/votes/:voteId", GroupVoteSettingsPatch);
+openapi.patch("/:groupId/votes/:voteId/visibility", GroupVoteVisibilityPatch);
+openapi.get("/:groupId/votes/:voteId/ballots", GroupVoteBallotAuditGet);
 openapi.post("/:groupId/votes/:voteId/ballots", GroupVoteBallotsPost);
 openapi.get("/:groupId/votes/:voteId/results", GroupVoteResultsGet);
 openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);

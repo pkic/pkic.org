@@ -7,7 +7,12 @@ import {
   groupVoteResultsResponseSchema,
   groupVotesListResponseSchema,
 } from "../assets/shared/schemas/group-votes";
+import {
+  groupVoteBallotsAuditResponseSchema,
+  groupVoteMutationResponseSchema,
+} from "../assets/shared/schemas/group-vote-management";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { activeGroupMembershipAuthorizationEvidence } from "../functions/_lib/services/groups/access";
 import {
   approveVoteProposal,
   buildGroupVotesPageQuery,
@@ -18,6 +23,7 @@ import {
   getVoteProposalDetailForMember,
   getVoteResultsForMember,
   listMyVoteHistory,
+  listBallotsForManager,
   listVisibleVotesForMember,
   listVoteProposals,
   rejectVoteProposal,
@@ -25,6 +31,7 @@ import {
   submitVoteProposal,
   tallyElectionRound,
   updateVoteVisibility,
+  updateVoteSettings,
 } from "../functions/_lib/services/votes";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch, gateNextRun } from "./helpers/d1-batch-gate";
@@ -125,6 +132,156 @@ describe("canonical group voting", () => {
         })
       ).status,
     ).toBe(403);
+  });
+
+  it("uses the selected group as the immutable vote-management boundary", async () => {
+    const leaderId = await insertUser(env.DB, "selected-group-vote-manager@example.test");
+    await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    await assignGroupRole(leaderId, TEST_GROUPS.cm);
+    const leader = {
+      identityType: "user" as const,
+      id: leaderId,
+      email: "selected-group-vote-manager@example.test",
+      role: "user",
+    };
+    const leaderToken = await createAdminSession(env.DB, leaderId, `selected-vote-manager-${crypto.randomUUID()}`);
+    const createdResponse = await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Selected-group managed vote",
+        voteType: "motion",
+        ownerGroupId: TEST_GROUPS.cm,
+        electorateMode: "per_member",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    });
+    expect(createdResponse.status, await createdResponse.clone().text()).toBe(200);
+    const created = groupVoteMutationResponseSchema.parse(await createdResponse.json()).vote;
+    expect(created.ownerGroupId).toBe(TEST_GROUPS.pqc);
+
+    await expect(
+      updateVoteSettings(env.DB, leader, created.id, { title: "Wrong context" }, TEST_GROUPS.cm),
+    ).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED");
+    expect(
+      (
+        await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${created.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ title: "Still wrong context" }),
+        })
+      ).status,
+    ).toBe(403);
+
+    await env.DB.prepare(
+      "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
+    )
+      .bind(created.id, TEST_GROUPS.cm)
+      .run();
+    const updatedResponse = await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${created.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "Managed through explicit sharing" }),
+    });
+    expect(updatedResponse.status, await updatedResponse.clone().text()).toBe(200);
+    expect(groupVoteMutationResponseSchema.parse(await updatedResponse.json()).vote.title).toBe(
+      "Managed through explicit sharing",
+    );
+
+    const participant = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.cm, participant.userId, [participant.memberId]);
+    const memberToken = await createMemberSession(
+      env.DB,
+      participant.userId,
+      `selected-vote-member-${crypto.randomUUID()}`,
+    );
+    expect(
+      (
+        await call(memberToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${created.id}/visibility`, {
+          method: "PATCH",
+          body: JSON.stringify({ visibility: "public" }),
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it("keeps identifiable ballots behind exact selected-group management", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Audited group vote" });
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    await submitBallot(
+      env.DB,
+      await resolveAuthMember(env.DB, capacity.userId),
+      vote.id,
+      capacity.memberId,
+      "in_favor",
+      null,
+    );
+
+    const response = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/ballots?limit=1`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(groupVoteBallotsAuditResponseSchema.parse(await response.json())).toMatchObject({
+      ballots: [{ userId: capacity.userId, memberId: capacity.memberId, choice: "in_favor" }],
+      page: { total: 1, hasMore: false },
+    });
+    expect((await call(adminToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/ballots`)).status).toBe(403);
+
+    const managerId = await insertUser(env.DB, "revoked-ballot-auditor@example.test");
+    await assignGroupRole(managerId, TEST_GROUPS.cm);
+    const manager = {
+      identityType: "user" as const,
+      id: managerId,
+      email: "revoked-ballot-auditor@example.test",
+      role: "user",
+    };
+    await env.DB.prepare(
+      "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
+    )
+      .bind(vote.id, TEST_GROUPS.cm)
+      .run();
+    const gate = gateNextBatch(env.DB);
+    const pending = listBallotsForManager(gate.db, manager, vote.id, { limit: 20, offset: 0 }, TEST_GROUPS.cm);
+    await gate.reached;
+    await env.DB.prepare("DELETE FROM vote_group_grants WHERE vote_id = ? AND group_id = ? AND capability = 'manage'")
+      .bind(vote.id, TEST_GROUPS.cm)
+      .run();
+    gate.release();
+    await expect(pending).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
+    );
+  });
+
+  it("correlates a live manage grant with authority over that same grantee group", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Correlated management vote" });
+    const managerId = await insertUser(env.DB, "correlated-vote-manager@example.test");
+    await assignGroupRole(managerId, TEST_GROUPS.cm);
+    const actor = {
+      identityType: "user" as const,
+      id: managerId,
+      email: "correlated-vote-manager@example.test",
+      role: "user",
+    };
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
+      ).bind(vote.id, TEST_GROUPS.cm),
+      env.DB.prepare(
+        "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
+      ).bind(vote.id, TEST_GROUPS.allMembers),
+    ]);
+
+    const gate = gateNextBatch(env.DB);
+    const pending = updateVoteVisibility(gate.db, actor, vote.id, { visibility: "public" });
+    await gate.reached;
+    await env.DB.prepare("DELETE FROM vote_group_grants WHERE vote_id = ? AND group_id = ? AND capability = 'manage'")
+      .bind(vote.id, TEST_GROUPS.cm)
+      .run();
+    gate.release();
+
+    await expect(pending).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
+    );
+    expect(await queryAll(env.DB, "SELECT visibility FROM votes WHERE id = ?", vote.id)).toEqual([
+      { visibility: "private" },
+    ]);
   });
 
   it("rechecks vote creation permission inside the D1 batch", async () => {
@@ -237,6 +394,29 @@ describe("canonical group voting", () => {
     gate.release();
     await expect(pending).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "VOTE_CHANGED");
     expect(await queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).toHaveLength(0);
+  });
+
+  it("does not let retained membership rows confer vote access through an inactive owner group", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Inactive owner vote" });
+    const member = await resolveAuthMember(env.DB, capacity.userId);
+
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    expect((await listVisibleVotesForMember(env.DB, member, { limit: 20, offset: 0 })).votes).toHaveLength(0);
+    await expect(submitBallot(env.DB, member, vote.id, capacity.memberId, "in_favor", null)).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "MEMBER_BALLOT_NOT_AUTHORIZED",
+    );
+
+    await env.DB.prepare("UPDATE groups SET active = 1 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const gate = gateNextRun(env.DB);
+    const pending = submitBallot(gate.db, member, vote.id, capacity.memberId, "in_favor", null);
+    await gate.reached;
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    gate.release();
+    await expect(pending).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "VOTE_CHANGED");
+    expect(await queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).toHaveLength(0);
+    await env.DB.prepare("UPDATE groups SET active = 1 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
   });
 
   it("stores and updates exactly one ballot per person across multiple represented Members", async () => {
@@ -535,7 +715,14 @@ describe("canonical group voting", () => {
 
   it("uses indexed plans for group-scoped discovery and Member ballot replacement", async () => {
     const groupVotes = buildOffsetPageSql(
-      buildGroupVotesPageQuery(TEST_GROUPS.pqc, { member: true, manager: false }, { limit: 20, offset: 0 }),
+      buildGroupVotesPageQuery(
+        TEST_GROUPS.pqc,
+        {
+          memberEvidence: activeGroupMembershipAuthorizationEvidence(admin.id, TEST_GROUPS.pqc),
+          managerEvidence: { sql: "SELECT 1 WHERE 0", bindings: [] },
+        },
+        { limit: 20, offset: 0 },
+      ),
     );
     const groupVotesPlan = await queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${groupVotes.pageSql}`, [
       ...groupVotes.bindings,
