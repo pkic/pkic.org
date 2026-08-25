@@ -129,6 +129,51 @@ describe("group capacity membership", () => {
     expect(eligible.some((capacity) => capacity.memberId === individualMemberId)).toBe(false);
   });
 
+  it("makes concurrent joins state- and audit-idempotent", async () => {
+    const admin = await insertActor("concurrent-join-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Concurrent Join Group",
+      eligibilityMode: "open",
+    });
+    const userId = await insertUser(env.DB, "concurrent-join@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Concurrent Join Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    const options = {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true } as const,
+      source: "self_service" as const,
+      allowManaged: false,
+    };
+
+    const [firstJoin, secondJoin] = await Promise.all([
+      joinGroup(env.DB, group.id, options),
+      joinGroup(env.DB, group.id, options),
+    ]);
+    expect(firstJoin.memberships).toHaveLength(1);
+    expect(secondJoin.memberships).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+        [group.id, userId],
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT id FROM audit_log
+          WHERE action = 'group_joined' AND entity_id = ? AND scope_type = 'group' AND scope_id = ?`,
+        [group.id, group.id],
+      ),
+    ).toHaveLength(1);
+  });
+
   it("requires explicit child membership, ends descendants only after the last parent capacity, and never restores them silently", async () => {
     const admin = await insertActor("hierarchy-admin@example.test", "admin");
     const parent = await createGroup(env.DB, admin, {
@@ -219,6 +264,41 @@ describe("group capacity membership", () => {
 });
 
 describe("group leadership inheritance", () => {
+  it("rejects direct and recursive hierarchy cycles without recording a mutation", async () => {
+    const admin = await insertActor("cycle-admin@example.test", "admin");
+    const root = await createGroup(env.DB, admin, { typeKey: "working_group", name: "Cycle Root" });
+    const child = await createGroup(env.DB, admin, {
+      typeKey: "committee",
+      parentGroupId: root.id,
+      name: "Cycle Child",
+    });
+    const grandchild = await createGroup(env.DB, admin, {
+      typeKey: "committee",
+      parentGroupId: child.id,
+      name: "Cycle Grandchild",
+    });
+
+    await expect(updateGroup(env.DB, admin, root.id, { parentGroupId: root.id })).rejects.toMatchObject({
+      code: "GROUP_HIERARCHY_CYCLE",
+    });
+    await expect(updateGroup(env.DB, admin, root.id, { parentGroupId: grandchild.id })).rejects.toMatchObject({
+      code: "GROUP_HIERARCHY_CYCLE",
+    });
+    expect(
+      await queryAll<{ parent_group_id: string | null }>(env.DB, "SELECT parent_group_id FROM groups WHERE id = ?", [
+        root.id,
+      ]),
+    ).toEqual([{ parent_group_id: null }]);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT id FROM audit_log
+          WHERE action = 'group_updated' AND entity_id = ? AND scope_type = 'group' AND scope_id = ?`,
+        [root.id, root.id],
+      ),
+    ).toHaveLength(0);
+  });
+
   it("inherits management by default and requires safe local leadership before severing inheritance", async () => {
     const globalAdmin = await insertActor("governance-admin@example.test", "admin");
     const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Governance Parent" });

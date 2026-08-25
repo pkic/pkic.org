@@ -1,6 +1,6 @@
 # Group Platform Implementation Tracker
 
-Updated: 2026-08-24
+Updated: 2026-08-25
 
 Branch: agent/group-centered-portal-architecture-20260824
 
@@ -65,7 +65,7 @@ Status: In progress
 
 ## 2. Group membership and governance
 
-Status: In progress
+Status: Complete
 
 - [x] Implement group creation and update with parent-cycle prevention.
 - [x] Implement explicit join using all eligible organizations by default.
@@ -79,11 +79,16 @@ Status: In progress
 - [x] Extend inherited leadership with local roles by default.
 - [x] Implement safely authorized local-only governance.
 - [x] Make roster, hierarchy, and management queries set-based and paginated.
-- [ ] Cover multiple capacities, parent loss, alternative capacity, cycles,
+- [x] Cover multiple capacities, parent loss, alternative capacity, cycles,
       inherited management, local-only management, and concurrent joins.
-      Evidence: group-platform.test.ts covers every listed behavior except direct
-      cycle and concurrent-join races; the focused group and representation run is
-      15/15 passing.
+      Evidence: group-platform.test.ts now covers every listed behavior in eight
+      focused cases. Direct self-parenting and recursive cycles fail with the
+      canonical GROUP_HIERARCHY_CYCLE response and roll back their audit rows.
+      Concurrent join commands retain one active capacity and one group-joined
+      audit record: each operation preallocates candidate membership IDs and the
+      shared conditional-audit helper records the mutation only when at least
+      one of those exact rows committed. No read-before-write race or duplicate
+      compatibility table is introduced.
 
 ## 3. Organization representatives
 
