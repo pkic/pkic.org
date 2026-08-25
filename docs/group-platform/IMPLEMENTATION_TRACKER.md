@@ -61,7 +61,15 @@ Status: In progress
       fallback without rebuilding members or organizations. Existing
       registrations and proposals remain intact with deliberately unattributed
       NULL placement IDs rather than a guessed backfill.
-- [ ] Prove importers target only the final schema.
+- [x] Prove importers target only the final schema.
+      Evidence: the member importer now composes the canonical active-capacity
+      CTE and writes groups/group_memberships only. Every valid represented
+      Member capacity is retained; an active organizational capacity suppresses
+      individual participation consistently with runtime joins. Bare roster
+      users remain visible for reconciliation but receive no unattributed group
+      membership. The synthetic fresh-D1 execution and rerun-idempotency suite
+      passes all three cases and explicitly rejects generated references to the
+      legacy working_groups and working_group_members tables.
 
 ## 2. Group membership and governance
 

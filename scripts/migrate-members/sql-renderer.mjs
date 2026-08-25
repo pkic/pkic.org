@@ -6,6 +6,7 @@
  * the orchestrator collects everything itself into one statement list.
  */
 import { randomUUID } from "node:crypto";
+import { activeUserCapacitiesCte } from "../../functions/_lib/services/membership/capacity-query.ts";
 import { normalizeEmail, convertHugoShortcodes } from "./parsers.mjs";
 import { normalizeOrgName } from "./reconciliation.mjs";
 import { normalizeLinks, serializeLinks } from "../../assets/shared/schemas/links.ts";
@@ -350,29 +351,22 @@ WHERE e.slug = ${sqlString(alias.slug)}
   ];
 }
 
-export function buildWorkingGroupMemberStatement(wgSlug, email) {
-  const wgIdExpr = `(SELECT id FROM working_groups WHERE slug = ${sqlString(wgSlug)})`;
-  const userIdExpr = `(SELECT id FROM users WHERE normalized_email = ${sqlString(email)})`;
-  // Best-effort member_id (PR #1 review blocker 2): the same deterministic
-  // representative-then-individual resolution used at read time
-  // (representative-lookup.ts's deterministicRepresentativeJoinSql),
-  // computed once here at import time instead. Many WG-roster emails have
-  // no resolvable membership at all (bare/unattributed roster rows, see
-  // roster-users.mjs's own header note) — this correctly yields NULL for
-  // those, same as a staff-driven admin add with no unambiguous context.
-  const memberIdExpr = `COALESCE(
-    (SELECT r2.member_id FROM organization_representatives r2 WHERE r2.user_id = ${userIdExpr} AND r2.left_at IS NULL ORDER BY r2.joined_at ASC LIMIT 1),
-    (SELECT id FROM members WHERE user_id = ${userIdExpr})
-  )`;
-  return `
-INSERT INTO working_group_members (id, working_group_id, user_id, member_id, joined_at, left_at)
-SELECT ${sqlString(randomUUID())}, ${wgIdExpr}, ${userIdExpr}, ${memberIdExpr}, datetime('now'), NULL
-WHERE ${userIdExpr} IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM working_group_members wgm
-    WHERE wgm.working_group_id = ${wgIdExpr}
-      AND wgm.user_id = ${userIdExpr}
-      AND wgm.left_at IS NULL
+export function buildGroupMembershipStatement(groupSlug, email) {
+  const capacitiesCte = activeUserCapacitiesCte(
+    `SELECT id FROM users WHERE normalized_email = ${sqlString(email)} AND active = 1`,
   );
+  return `
+${capacitiesCte}
+INSERT OR IGNORE INTO group_memberships
+  (id, group_id, user_id, member_id, source, created_by_user_id,
+   joined_at, left_at, created_at, updated_at)
+SELECT lower(hex(randomblob(16))), group_row.id, capacity.user_id,
+       capacity.member_id, 'migration', NULL,
+       datetime('now'), NULL, datetime('now'), datetime('now')
+  FROM active_user_capacities capacity
+  JOIN groups group_row
+    ON group_row.slug = ${sqlString(groupSlug)}
+   AND group_row.type_key = 'working_group'
+   AND group_row.active = 1;
 `;
 }
