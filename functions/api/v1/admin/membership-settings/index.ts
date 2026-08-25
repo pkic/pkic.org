@@ -21,7 +21,6 @@ function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
     ecEmailRecipients: row.ec_email_recipients,
     ccApplicantEmails: row.cc_applicant_emails,
     autoReminderOnHolds: row.auto_reminder_on_holds === 1,
-    forumVoteMinEndorsers: row.forum_vote_min_endorsers,
     updatedAt: row.updated_at,
   };
 }

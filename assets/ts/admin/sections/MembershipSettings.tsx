@@ -48,7 +48,6 @@ export function MembershipSettings() {
           ecEmailRecipients: settings.ecEmailRecipients,
           ccApplicantEmails: settings.ccApplicantEmails,
           autoReminderOnHolds: settings.autoReminderOnHolds,
-          forumVoteMinEndorsers: settings.forumVoteMinEndorsers,
         }),
       });
       setSettings(updated);
@@ -101,18 +100,6 @@ export function MembershipSettings() {
               value={settings.onHoldResponseDeadlineDays}
               onInput={(e) =>
                 setSettings({ ...settings, onHoldResponseDeadlineDays: Number((e.target as HTMLInputElement).value) })
-              }
-            />
-          </div>
-          <div class="col-sm-6">
-            <label class="form-label small fw-semibold">Forum vote min endorsers</label>
-            <input
-              type="number"
-              min={0}
-              class="form-control form-control-sm"
-              value={settings.forumVoteMinEndorsers}
-              onInput={(e) =>
-                setSettings({ ...settings, forumVoteMinEndorsers: Number((e.target as HTMLInputElement).value) })
               }
             />
           </div>

@@ -130,7 +130,11 @@ describe("Membership workflow settings", () => {
       .bind(staffId)
       .run();
     await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at) VALUES (?, ?, 'role-wg_chair', ?, datetime('now'))`,
+      `INSERT INTO user_roles
+         (id, user_id, role_id, context_type, context_id, single_holder_per_context,
+          granted_by_user_id, created_at)
+       VALUES (?, ?, 'role-group_lead', 'group', '20000000-0000-4000-8000-000000000001', 0,
+               ?, datetime('now'))`,
     )
       .bind(crypto.randomUUID(), staffId, adminId)
       .run();

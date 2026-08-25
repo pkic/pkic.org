@@ -8,7 +8,6 @@ export const membershipSettingsSchema = z.object({
   ecEmailRecipients: z.string().trim().min(1).max(320),
   ccApplicantEmails: z.string().trim().min(1).max(320),
   autoReminderOnHolds: z.boolean(),
-  forumVoteMinEndorsers: z.number().int().min(0).max(50),
   updatedAt: z.string(),
 });
 
