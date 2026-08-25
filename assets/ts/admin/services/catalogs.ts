@@ -9,7 +9,6 @@ import {
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
 import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
-import { workingGroupsListResponseSchema, type AdminWorkingGroupSummary } from "../../../shared/schemas/working-groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
 import type { ServerCatalog } from "../../shared/server-catalog";
 import { api } from "../api";
@@ -20,23 +19,6 @@ import { api } from "../api";
  * first 200 rows and treating that page as a complete data set.
  */
 export type AdminCatalog<Item, Response> = ServerCatalog<Item, Response>;
-
-export const adminWorkingGroupCatalog: AdminCatalog<
-  AdminWorkingGroupSummary,
-  z.infer<typeof workingGroupsListResponseSchema>
-> = {
-  endpoint: "/api/v1/admin/working-groups",
-  responseSchema: workingGroupsListResponseSchema,
-  resolveItems: (response) => response.workingGroups,
-  resolvePage: (response) => response.page,
-  itemKey: (item) => item.id,
-  itemLabel: (item) => `${item.name}${item.active ? "" : " (inactive)"}`,
-  sort: "name",
-};
-
-export function activeAdminWorkingGroupCatalog(): typeof adminWorkingGroupCatalog {
-  return { ...adminWorkingGroupCatalog, params: { active: "true" } };
-}
 
 export const adminGroupCatalog: AdminCatalog<Group, z.infer<typeof groupsListResponseSchema>> = {
   endpoint: "/api/v1/groups",
@@ -50,6 +32,10 @@ export const adminGroupCatalog: AdminCatalog<Group, z.infer<typeof groupsListRes
 
 export function activeAdminGroupCatalog(): typeof adminGroupCatalog {
   return { ...adminGroupCatalog, params: { active: "true" } };
+}
+
+export function activeAdminWorkingGroupCatalog(): typeof adminGroupCatalog {
+  return { ...adminGroupCatalog, params: { active: "true", typeKey: "working_group" } };
 }
 
 export function adminEventFormCatalog(

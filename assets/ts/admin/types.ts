@@ -68,12 +68,6 @@ import type {
   VoteCandidateSummary as CanonicalVoteCandidateSummary,
 } from "../../shared/schemas/votes-admin";
 import type {
-  AdminIcsFile as CanonicalAdminIcsFile,
-  AdminMeetingSeries as CanonicalAdminMeetingSeries,
-  MeetingResendResult as CanonicalMeetingResendResult,
-} from "../../shared/schemas/meeting-calendar";
-import type { PageInfo as CanonicalPageInfo } from "../../shared/schemas/pagination";
-import type {
   AdminEventStatsResponse as CanonicalEventStatsResponse,
   AdminStatsResponse as CanonicalStatsResponse,
   DonationPeriod as CanonicalDonationPeriod,
@@ -82,11 +76,6 @@ import type {
   AdminJobsRunResponse as CanonicalAdminJobsRunResponse,
   AdminReminderPreviewRow as CanonicalAdminReminderPreviewRow,
 } from "../../shared/schemas/admin-jobs";
-import type {
-  AdminWorkingGroupDetail as CanonicalAdminWorkingGroupDetail,
-  AdminWorkingGroupMember as CanonicalAdminWorkingGroupMember,
-  AdminWorkingGroupSummary as CanonicalAdminWorkingGroupSummary,
-} from "../../shared/schemas/working-groups";
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
 import type { z } from "zod";
 
@@ -131,25 +120,6 @@ export type RoleAssignment = CanonicalRoleAssignment;
 
 /** GET/POST/PATCH /api/v1/admin/leadership-positions — Board / Executive Council roster (consolidated migration 0035). */
 export type LeadershipPosition = CanonicalLeadershipPosition;
-
-export interface WorkingGroupSummary {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  active: boolean;
-}
-
-export interface WorkingGroupDetail extends WorkingGroupSummary {
-  mailingListEmail: string | null;
-  members: Array<{ name: string; organizationName: string | null }>;
-}
-
-// ── Admin working-group CRUD (unfiltered by active, full roster w/ user ids) ──
-
-export type AdminWorkingGroupSummary = CanonicalAdminWorkingGroupSummary;
-export type AdminWorkingGroupMember = CanonicalAdminWorkingGroupMember;
-export type AdminWorkingGroupDetail = CanonicalAdminWorkingGroupDetail;
 
 export type ProposalSummary = CanonicalAdminEventProposalSummary;
 
@@ -239,12 +209,3 @@ export type AdminVoteSummary = CanonicalAdminVoteSummary;
 export type AdminVoteBallot = CanonicalAdminVoteBallot;
 
 export type AdminVoteProposalSummary = CanonicalAdminVoteProposalSummary;
-
-// ── Meeting Calendar ──────────────────────────────────────
-
-export type AdminIcsFile = CanonicalAdminIcsFile;
-
-export type AdminMeetingSeries = CanonicalAdminMeetingSeries;
-
-export type MeetingResendResult = CanonicalMeetingResendResult;
-export type MeetingSeriesPageInfo = CanonicalPageInfo;

@@ -1,8 +1,8 @@
-import { adminEventCatalog, adminWorkingGroupCatalog } from "../../services/catalogs";
+import { adminEventCatalog, adminGroupCatalog } from "../../services/catalogs";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 
 export interface PickedContext {
-  contextType: "event" | "working_group" | null;
+  contextType: "event" | "group" | null;
   contextId: string | null;
 }
 
@@ -24,13 +24,13 @@ export function ContextPicker({
           value={value.contextType ?? ""}
           disabled={disabled}
           onChange={(e) => {
-            const contextType = (e.target as HTMLSelectElement).value as "" | "event" | "working_group";
+            const contextType = (e.target as HTMLSelectElement).value as "" | "event" | "group";
             onChange({ contextType: contextType || null, contextId: null });
           }}
         >
           <option value="">Global (no context)</option>
           <option value="event">Event</option>
-          <option value="working_group">Working group</option>
+          <option value="group">Group</option>
         </select>
         {value.contextType === "event" && (
           <div class="flex-grow-1">
@@ -44,14 +44,14 @@ export function ContextPicker({
             />
           </div>
         )}
-        {value.contextType === "working_group" && (
+        {value.contextType === "group" && (
           <div class="flex-grow-1">
             <ServerSearchSelect
-              catalog={adminWorkingGroupCatalog}
-              label="Working group"
+              catalog={adminGroupCatalog}
+              label="Group"
               value={value.contextId}
               disabled={disabled}
-              placeholder="Select working group…"
+              placeholder="Select group…"
               onChange={(group) => onChange({ ...value, contextId: group?.id ?? null })}
             />
           </div>

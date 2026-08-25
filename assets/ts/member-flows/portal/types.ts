@@ -18,8 +18,6 @@ import type {
   myOrganizationProfileSchema,
   myOrganizationSponsorshipSchema,
 } from "../../../shared/schemas/me";
-import type { myMeetingSeriesIcsFileSchema, myMeetingSeriesSchema } from "../../../shared/schemas/meeting-calendar";
-import type { PageInfo } from "../../../shared/schemas/pagination";
 import type {
   voteTypeSchema,
   candidateSummarySchema,
@@ -44,10 +42,6 @@ export type MyApplicationDetail = z.infer<typeof myApplicationDetailSchema>;
 export type MyOrganizationReview = z.infer<typeof myOrganizationReviewSchema>;
 export type MyOrganizationProfile = z.infer<typeof myOrganizationProfileSchema>;
 export type MyOrganizationSponsorship = z.infer<typeof myOrganizationSponsorshipSchema>;
-
-export type MyMeetingSeriesIcsFile = z.infer<typeof myMeetingSeriesIcsFileSchema>;
-export type MyMeetingSeries = z.infer<typeof myMeetingSeriesSchema>;
-export type MyMeetingSeriesPageInfo = PageInfo;
 
 export type VoteType = z.infer<typeof voteTypeSchema>;
 export type VoteCandidate = z.infer<typeof candidateSummarySchema>;

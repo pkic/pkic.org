@@ -10,7 +10,6 @@ const MEMBER_NAV_ITEMS: PortalNavItem[] = [
   { path: "/profile", section: "profile", label: "My Profile" },
   { path: "/organization", section: "organization", label: "My Organization" },
   { path: "/groups", section: "groups", label: "Groups" },
-  { path: "/calendar", section: "calendar", label: "Calendar" },
   { path: "/votes", section: "votes", label: "Votes" },
   { path: "/application", section: "application", label: "My Application" },
   { path: "/account", section: "account", label: "Account Settings" },
@@ -22,7 +21,10 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   label: "Management",
 };
 
-export const PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS = { "/working-groups": "/groups" } as const;
+export const PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS = {
+  "/working-groups": "/groups",
+  "/calendar": "/groups",
+} as const;
 const CAPACITY_ROUTE_PATHS = new Set([
   ...MEMBER_NAV_ITEMS.map((item) => item.path),
   ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
@@ -45,9 +47,11 @@ export function portalDefaultPath(session: PortalSession | null): string {
 export function portalCapacityFallbackPath(session: PortalSession | null, location: string): string | null {
   const isManagementRoute =
     location === MANAGEMENT_NAV_ITEM.path || location.startsWith(`${MANAGEMENT_NAV_ITEM.path}/`);
-  if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute) return null;
+  const isMemberGroupRoute = location.startsWith("/groups/");
+  if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute && !isMemberGroupRoute) return null;
   if (portalNavigationItems(session).some((item) => item.path === location)) return null;
   if (isManagementRoute && session?.admin) return null;
+  if (isMemberGroupRoute && session?.member) return null;
   return portalDefaultPath(session);
 }
 

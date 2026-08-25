@@ -7,7 +7,7 @@ import { portalSession, profile } from "../state";
 import { MyProfile } from "../sections/MyProfile";
 import { MyOrganization } from "../sections/MyOrganization";
 import { Groups } from "../sections/Groups";
-import { Calendar } from "../sections/Calendar";
+import { GroupMeetings } from "../sections/GroupMeetings";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
@@ -103,6 +103,16 @@ export function PortalShell() {
           )}
           {hasMemberCapacity && (
             <Route
+              path="/groups/:groupId/meetings"
+              component={({ params }: { params: { groupId: string } }) => (
+                <SectionWrapper title="Group meetings">
+                  <GroupMeetings groupId={params.groupId} />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity && (
+            <Route
               path="/groups"
               component={() => (
                 <SectionWrapper title="Groups">
@@ -115,16 +125,6 @@ export function PortalShell() {
             Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
               <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
             ))}
-          {hasMemberCapacity && (
-            <Route
-              path="/calendar"
-              component={() => (
-                <SectionWrapper title="Calendar">
-                  <Calendar />
-                </SectionWrapper>
-              )}
-            />
-          )}
           {hasMemberCapacity && (
             <Route
               path="/votes"

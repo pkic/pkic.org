@@ -134,6 +134,11 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
         )}
 
         <div class="d-flex flex-wrap gap-2">
+          {group.memberships.length > 0 && (
+            <a href={`#/groups/${encodeURIComponent(group.id)}/meetings`} class="btn btn-sm btn-outline-secondary">
+              Meetings and calendar
+            </a>
+          )}
           {available.length > 0 && (
             <button
               type="button"

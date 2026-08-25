@@ -28,8 +28,11 @@ describe("portal capability-derived navigation", () => {
     expect(labels).not.toContain("Management");
   });
 
-  it("keeps one explicit compatibility redirect for the former member group route", () => {
-    expect(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).toEqual({ "/working-groups": "/groups" });
+  it("redirects superseded member group and uploaded-calendar routes to groups", () => {
+    expect(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).toEqual({
+      "/working-groups": "/groups",
+      "/calendar": "/groups",
+    });
   });
 
   it("shows both navigation capacities to one dual-capacity identity", () => {
@@ -43,6 +46,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalDefaultPath(staffOnly)).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
     expect(portalCapacityFallbackPath(staffOnly, "/management/group-id/overview")).toBeNull();
   });
@@ -50,6 +54,11 @@ describe("portal capability-derived navigation", () => {
   it("moves a selected-group management route after live staff-capacity loss", () => {
     const memberOnly = portalSessionFixture({ member: true });
     expect(portalCapacityFallbackPath(memberOnly, "/management/group-id/overview")).toBe("/profile");
+  });
+
+  it("keeps a selected-group meeting route for a current member", () => {
+    const memberOnly = portalSessionFixture({ member: true });
+    expect(portalCapacityFallbackPath(memberOnly, "/groups/group-id/meetings")).toBeNull();
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {

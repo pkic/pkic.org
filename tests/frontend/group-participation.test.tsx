@@ -206,6 +206,10 @@ describe("generic group participation card", () => {
       }),
     );
 
+    expect(container.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")).toBe(
+      "#/groups/10000000-0000-4000-8000-000000000001/meetings",
+    );
+
     void act(() => (container.querySelector("button.btn-outline-primary") as HTMLButtonElement).click());
     await settle();
     expect(requests[0]).toEqual({
