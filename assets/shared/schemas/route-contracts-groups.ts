@@ -113,7 +113,7 @@ export const groupJoinRouteSchema = {
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
     "403": jsonErrorResponse("No selected capacity is eligible for this group."),
-    "409": jsonErrorResponse("Parent membership or current representation is missing."),
+    "409": jsonErrorResponse("Group eligibility or capacity changed before commit."),
   },
 };
 
@@ -162,6 +162,7 @@ export const groupMemberAddRouteSchema = {
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
     "403": jsonErrorResponse("The caller may not manage this group or the target is ineligible."),
+    "409": jsonErrorResponse("Group eligibility or capacity changed before commit."),
   },
 };
 

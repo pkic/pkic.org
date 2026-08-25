@@ -483,6 +483,8 @@ Status: Pending
       exact grantee-group access through `idx_events_owner_profile` and
       `idx_event_group_grants_group`; organization-contact authorization proves
       indexed representative and contextual-role lookups without a table scan;
+      write-time group-join eligibility proves indexed parent membership and
+      category-rule lookups without a table scan or temporary B-tree;
       the broader group architecture selection passes 43 tests.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
@@ -499,6 +501,13 @@ Status: Pending
       are also covered. The focused platform and mounted endpoint selection
       passes 13 tests.
 - [ ] Run group authorization security tests.
+      Current evidence: group joining reuses the canonical capacity, category,
+      parent-membership, and IPR predicates before and inside the D1 batch.
+      Race tests deactivate the group and revoke category eligibility after
+      preflight; both roll back every selected capacity, audit entry, and
+      mailing-list reconciliation. A mounted API-key test also proves service
+      identities are not written into user foreign keys. Group-management,
+      leadership, leave, and category-rule mutation races remain open.
 - [x] Run join-token, terms, guest, and attendance security tests.
       Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
       replacement, user and guest identity binding, membership loss, expiry,

@@ -11,8 +11,9 @@ import {
   restoreOrganizationRepresentative,
 } from "../functions/_lib/services/organization-representations";
 import { prepareVerifyPrimaryEmailStatement } from "../functions/_lib/services/email-verification";
-import type { AuthAdmin, D1StatementResult, DatabaseLike, StatementLike } from "../functions/_lib/types";
+import type { AuthAdmin } from "../functions/_lib/types";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   REPRESENTATIVE_ROLE_IDS,
   addRepresentative,
@@ -37,19 +38,6 @@ async function insertAdmin(email: string): Promise<AuthAdmin> {
   const id = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
   return { identityType: "user", id, email, role: "admin" };
-}
-
-function mutateBeforeNextBatch(mutation: () => Promise<unknown>): DatabaseLike {
-  let pending = mutation;
-  return {
-    prepare: (sql: string) => env.DB.prepare(sql) as unknown as StatementLike,
-    batch: async (statements: StatementLike[]): Promise<D1StatementResult[]> => {
-      const runMutation = pending;
-      pending = async () => undefined;
-      await runMutation();
-      return (await env.DB.batch(statements as D1PreparedStatement[])) as unknown as D1StatementResult[];
-    },
-  };
 }
 
 beforeEach(async () => {
@@ -337,7 +325,7 @@ describe("organization-contact association lifecycle", () => {
     await addRepresentative(env.DB, memberId, contactUserId);
     await assignRepresentativeRole(env.DB, memberId, contactUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
     const targetUserId = await insertUser(env.DB, "target@revoked-contact.example");
-    const racingDb = mutateBeforeNextBatch(() =>
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(
         `UPDATE user_roles
             SET revoked_at = datetime('now')
@@ -376,7 +364,7 @@ describe("organization-contact association lifecycle", () => {
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     const targetUserId = await insertUser(env.DB, "target@revoked-staff.example");
     await addRepresentative(env.DB, memberId, targetUserId);
-    const racingDb = mutateBeforeNextBatch(() =>
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(admin.id).run(),
     );
 

@@ -1,20 +1,24 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupJoinSchema } from "../assets/shared/schemas/groups";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { AuthAdmin, Env } from "../functions/_lib/types";
 import {
   assignLocalGroupLeadership,
   canManageGroup,
   createGroup,
   getVisibleGroup,
+  groupJoinEligibilityEvidence,
   joinGroup,
   leaveGroup,
   listEligibleGroupCapacities,
   listGroups,
+  replaceGroupCategoryRules,
   revokeLocalGroupLeadership,
   updateGroup,
 } from "../functions/_lib/services/groups";
 import { queryAll } from "./helpers/context";
+import { callApi } from "./helpers/app";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   addRepresentative,
   insertIndividualMember,
@@ -172,6 +176,164 @@ describe("group capacity membership", () => {
         [group.id, group.id],
       ),
     ).toHaveLength(1);
+  });
+
+  it("rolls back a join when the group becomes inactive before commit", async () => {
+    const admin = await insertActor("inactive-race-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Inactive Join Race Group",
+      eligibilityMode: "open",
+    });
+    const userId = await insertUser(env.DB, "inactive-race@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Inactive Race Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE groups SET active = 0, updated_at = datetime('now') WHERE id = ?").bind(group.id).run(),
+    );
+
+    await expect(
+      joinGroup(racingDb, group.id, {
+        actorUserId: userId,
+        targetUserId: userId,
+        selection: { mode: "all_eligible", confirmed: true },
+        source: "self_service",
+        allowManaged: false,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_JOIN_CONTEXT_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ?", [group.id, userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_joined' AND entity_id = ?", group.id),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back every selected capacity when a category rule changes before commit", async () => {
+    const admin = await insertActor("category-race-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Category Join Race Group",
+      eligibilityMode: "category",
+    });
+    await replaceGroupCategoryRules(env.DB, admin, group.id, {
+      rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+    });
+    const userId = await insertUser(env.DB, "category-race@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Category Race Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE group_membership_category_rules
+            SET permits_join = 0, updated_at = datetime('now')
+          WHERE group_id = ? AND membership_category_code = 'A'`,
+      )
+        .bind(group.id)
+        .run(),
+    );
+
+    await expect(
+      joinGroup(racingDb, group.id, {
+        actorUserId: userId,
+        targetUserId: userId,
+        selection: { mode: "all_eligible", confirmed: true },
+        source: "self_service",
+        allowManaged: false,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_JOIN_CONTEXT_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ?", [group.id, userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_joined' AND entity_id = ?", group.id),
+    ).toHaveLength(0);
+  });
+
+  it("uses bounded indexes for write-time group-join eligibility", async () => {
+    const admin = await insertActor("join-plan-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Join Plan Parent",
+      eligibilityMode: "open",
+    });
+    const child = await createGroup(env.DB, admin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Join Plan Child",
+      eligibilityMode: "category",
+    });
+    await replaceGroupCategoryRules(env.DB, admin, child.id, {
+      rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+    });
+    const userId = await insertUser(env.DB, "join-plan@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Join Plan Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    await joinGroup(env.DB, parent.id, {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const evidence = groupJoinEligibilityEvidence(child.id, userId, [memberId], { allowManaged: false });
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${evidence.sql}`)
+      .bind(...evidence.bindings)
+      .all<{ detail: string }>();
+    const details = plan.results.map((row) => row.detail).join("\n");
+
+    expect(details).toMatch(
+      /SEARCH parent_membership USING COVERING INDEX idx_group_memberships_(?:user|group)_active/,
+    );
+    expect(details).toMatch(/SEARCH rule USING INDEX sqlite_autoindex_group_membership_category_rules_1/);
+    expect(details).not.toMatch(/SCAN (?:group_memberships|group_membership_category_rules)\b/);
+    expect(details).not.toMatch(/USE TEMP B-TREE/);
+  });
+
+  it("keeps service identities out of membership foreign keys on the mounted management route", async () => {
+    const admin = await insertActor("service-join-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Service Managed Join Group",
+      eligibilityMode: "managed",
+    });
+    const userId = await insertUser(env.DB, "service-managed-member@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Service Managed Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    const apiKey = "group-platform-service-key";
+    const response = await callApi(
+      { ...env, ADMIN_API_KEY: apiKey } as Env,
+      `/api/v1/groups/${group.id}/memberships/${userId}`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+        body: JSON.stringify({ capacitySelection: { mode: "all_eligible", confirmed: true } }),
+      },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      await queryAll<{ created_by_user_id: string | null }>(
+        env.DB,
+        "SELECT created_by_user_id FROM group_memberships WHERE group_id = ? AND user_id = ?",
+        [group.id, userId],
+      ),
+    ).toEqual([{ created_by_user_id: null }]);
   });
 
   it("requires explicit child membership, ends descendants only after the last parent capacity, and never restores them silently", async () => {

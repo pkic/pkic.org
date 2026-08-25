@@ -5,6 +5,7 @@ import type {
   GroupMembershipSource,
 } from "../../../../assets/shared/schemas/groups";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -12,7 +13,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLogWhen, prepareScopedAuditLog } from "../audit";
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
-import { selectGroupCapacities } from "./capacities";
+import { prepareGroupJoinEligibilityGuard, selectGroupCapacities } from "./capacities";
 import { getGroup, listActiveGroupMembershipsForUser } from "./read-model";
 
 async function requireGroupIdentity(db: DatabaseLike, idOrSlug: string): Promise<{ id: string; slug: string }> {
@@ -44,6 +45,7 @@ async function mutationResponse(
 
 export interface JoinGroupOptions {
   actorUserId: string;
+  actorDatabaseUserId?: string | null;
   targetUserId: string;
   selection: GroupCapacitySelection;
   source: GroupMembershipSource;
@@ -62,28 +64,37 @@ export async function joinGroup(
   });
   const at = nowIso();
   const plannedMemberships = capacities.map((capacity) => ({ id: uuid(), capacity }));
-  const statements: StatementLike[] = plannedMemberships.map(({ id, capacity }) =>
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO group_memberships
+  const statements: StatementLike[] = [
+    prepareGroupJoinEligibilityGuard(
+      db,
+      group.id,
+      options.targetUserId,
+      capacities.map((capacity) => capacity.memberId),
+      { allowManaged: options.allowManaged },
+    ),
+    ...plannedMemberships.map(({ id, capacity }) =>
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO group_memberships
            (id, group_id, user_id, member_id, source, created_by_user_id,
             joined_at, left_at, created_at, updated_at)
          SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?
           WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1)`,
-      )
-      .bind(
-        id,
-        group.id,
-        options.targetUserId,
-        capacity.memberId,
-        options.source,
-        options.actorUserId,
-        at,
-        at,
-        at,
-        options.targetUserId,
-      ),
-  );
+        )
+        .bind(
+          id,
+          group.id,
+          options.targetUserId,
+          capacity.memberId,
+          options.source,
+          options.actorDatabaseUserId === undefined ? options.actorUserId : options.actorDatabaseUserId,
+          at,
+          at,
+          at,
+          options.targetUserId,
+        ),
+    ),
+  ];
   const insertedMembershipFilter = buildD1JsonMembershipFilter(
     "id",
     plannedMemberships.map((membership) => membership.id),
@@ -109,7 +120,18 @@ export async function joinGroup(
     }),
     prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
   );
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "GROUP_JOIN_CONTEXT_CHANGED",
+        "Group eligibility changed while the membership was being saved; reload and retry",
+      );
+    }
+    throw error;
+  }
   return mutationResponse(db, group.id, options.targetUserId, []);
 }
 

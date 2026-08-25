@@ -35,6 +35,7 @@ export const GroupMemberAdd = openApiRoute(groupMemberAddRouteSchema, async (c: 
   return json(
     await joinGroup(db, group.id, {
       actorUserId: admin.id,
+      actorDatabaseUserId: admin.identityType === "user" ? admin.id : null,
       targetUserId: data.params.userId,
       selection: data.body.capacitySelection,
       source: "staff",
