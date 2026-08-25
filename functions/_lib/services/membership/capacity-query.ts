@@ -36,3 +36,28 @@ export function activeUserCapacitiesCte(inputSql = "VALUES (?)"): string {
 
 export const ACTIVE_USER_CAPACITIES_CTE = activeUserCapacitiesCte();
 export const ALL_ACTIVE_USER_CAPACITIES_CTE = activeUserCapacitiesCte("SELECT id FROM users WHERE active = 1");
+
+/**
+ * Canonical correlated predicate for group self-service eligibility. The
+ * aliases are trusted source constants, never request input.
+ */
+export function eligibleGroupCapacityPredicate(groupAlias: string, ruleAlias: string, allowManagedSql = "0"): string {
+  return `(
+    ${groupAlias}.eligibility_mode = 'open'
+    OR (${groupAlias}.eligibility_mode = 'category' AND ${ruleAlias}.permits_join = 1)
+    OR (${groupAlias}.eligibility_mode = 'managed' AND ${allowManagedSql} = 1)
+  )`;
+}
+
+/** A child may be joined only while the same person participates in its parent. */
+export function activeParentGroupMembershipPredicate(groupAlias: string, userBindingSql = "?"): string {
+  return `(
+    ${groupAlias}.parent_group_id IS NULL
+    OR EXISTS (
+      SELECT 1 FROM group_memberships parent_membership
+      WHERE parent_membership.group_id = ${groupAlias}.parent_group_id
+        AND parent_membership.user_id = ${userBindingSql}
+        AND parent_membership.left_at IS NULL
+    )
+  )`;
+}

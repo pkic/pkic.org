@@ -27,6 +27,7 @@ export const MEMBERSHIP_CATEGORIES = [
   "H8",
 ] as const;
 export const membershipCategorySchema = z.enum(MEMBERSHIP_CATEGORIES);
+export type MembershipCategory = z.infer<typeof membershipCategorySchema>;
 
 /** Individual (org-less) membership categories — "NULL for individual categories H5/H6/H7" rule. */
 export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set<string>(["H5", "H6", "H7"]);

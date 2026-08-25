@@ -6,3 +6,4 @@ export * from "./governance";
 export * from "./management";
 export * from "./membership";
 export * from "./read-model";
+export * from "./self-participation";

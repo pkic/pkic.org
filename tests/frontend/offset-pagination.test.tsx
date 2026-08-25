@@ -153,22 +153,22 @@ describe("canonical offset pagination", () => {
         const url = requestUrl(input);
         requests.push(url);
         return jsonResponse({
-          workingGroups: [{ id: url.searchParams.get("offset") ?? "0" }],
+          groups: [{ id: url.searchParams.get("offset") ?? "0" }],
           page: pageFor(url, 60),
         });
       }),
     );
     const responseSchema = z.object({
-      workingGroups: z.array(z.object({ id: z.string() })),
+      groups: z.array(z.object({ id: z.string() })),
       page: pageInfoSchema,
     });
 
     function Harness() {
       const listing = useApiPage(
-        "/api/v1/me/working-groups",
-        { view: "joined", q: "alpha" },
+        "/api/v1/me/groups",
+        { view: "joined", typeKey: "working_group", q: "alpha" },
         responseSchema,
-        (data) => data.workingGroups,
+        (data) => data.groups,
         25,
       );
       return <>{listing.pagerProps && <Pager {...listing.pagerProps} />}</>;
@@ -177,6 +177,7 @@ describe("canonical offset pagination", () => {
     const container = mount(<Harness />);
     await settle();
     expect(requests.at(-1)?.searchParams.get("view")).toBe("joined");
+    expect(requests.at(-1)?.searchParams.get("typeKey")).toBe("working_group");
     expect(requests.at(-1)?.searchParams.get("q")).toBe("alpha");
     void act(() => nextButton(container).click());
     await settle();

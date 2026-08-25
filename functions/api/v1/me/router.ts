@@ -17,6 +17,7 @@ import { MeVotesGet } from "./votes";
 import applications_Router from "./applications/router";
 import calendar_Router from "./calendar/router";
 import workingGroups_Router from "./working-groups/router";
+import groups_Router from "./groups/router";
 import type { RequestDbContext } from "../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -42,5 +43,6 @@ openapi.get("/votes", MeVotesGet);
 openapi.route("/applications", applications_Router);
 openapi.route("/calendar", calendar_Router);
 openapi.route("/working-groups", workingGroups_Router);
+openapi.route("/groups", groups_Router);
 
 export default openapi;

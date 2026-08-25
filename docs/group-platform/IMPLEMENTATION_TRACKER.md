@@ -352,6 +352,16 @@ Status: In progress
       and attendance-verification routes; scanner-safe join inspection and
       confirmation remain intentionally token-scoped under /api/v1/meetings.
 - [x] Keep routes thin and SQL-free.
+- [x] Add one generic `/api/v1/me/groups` self-participation read model.
+      Evidence: the shared contract composes the canonical group list filters,
+      sorting, and offset page schema; the service evaluates visibility,
+      catalog/joined state, category capacity, and structural-parent eligibility
+      in D1. A bounded page is enriched with two set-based queries for active
+      memberships and every eligible Member capacity, holding the complete read
+      to four D1 statements regardless of page size. Mounted tests cover
+      authentication, backend search/filter/sort/pagination, multi-organization
+      capacity, inactive joined groups, person-level parent eligibility, schema
+      validation, and indexed membership lookup.
 - [x] Reuse shared list query and page response contracts for implemented
       canonical group listings.
 - [x] Run filters, search, sort, aggregation, and pagination in D1 for
@@ -363,13 +373,22 @@ Status: In progress
 
 ## 10. Unified portal and admin retirement
 
-Status: Pending
+Status: In progress
 
 - [ ] Make portal authentication identity-based.
 - [ ] Gate member actions separately from staff management permissions.
 - [ ] Add selected-group context and capability-derived navigation.
 - [ ] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.
+- [x] Move the working-group self-service view onto the generic group and
+      group-membership contracts.
+      Evidence: the portal now consumes `/api/v1/me/groups` with a group-type
+      filter and uses the canonical join/leave commands. One focused card
+      supports all eligible affiliations by default, explicit subsets, adding
+      another represented organization later, removing one capacity, and
+      leaving all. Component tests cover each request shape; no client-side
+      eligibility, search, sorting, or pagination logic was introduced. The
+      legacy endpoint remains mounted temporarily for unmigrated voting callers.
 - [ ] Move group, leadership, meetings, forms, votes, mailing lists, stats, and
       audit management into the portal.
 - [ ] Move remaining global management views into the portal.
@@ -389,6 +408,9 @@ Status: Pending
 - [x] Run SQL projection lint and architecture lint after backend boundaries move.
 - [x] Run duplication checks and fix new duplication rather than suppress it.
 - [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
+      Current evidence: the self-participation catalog asserts use of
+      `idx_group_memberships_user_active` for page and count predicates; the
+      broader group architecture selection passes 43 tests.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and
@@ -399,12 +421,15 @@ Status: Pending
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
-      Current evidence: the gate was rerun after the reusable-forms slice and
+      Current evidence: the gate was rerun after the generic self-participation
+      slice and
       stops at the known, deliberately unsynchronized leadership/voting
       type-contract cutover. The complete backend run reaches 1,662 passing,
       261 failing, and one skipped test; the failures use removed legacy group,
       meeting, leadership, and vote schema rather than the completed forms
-      paths. Do not mark this complete until that migration is authorized and
+      paths. The complete frontend run now reaches 150 passing and three known
+      vote-fixture failures; the new focused group-participation and pagination
+      selection passes 11 tests. Do not mark this complete until that migration is authorized and
       all repository-wide gates pass from the final schema.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
