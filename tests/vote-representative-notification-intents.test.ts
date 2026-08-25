@@ -2,9 +2,11 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import { runVotesDueWork } from "../functions/_lib/services/votes-scheduled-jobs";
+import { transitionManagedVote } from "../functions/_lib/services/votes";
 import { addRepresentative, insertUser } from "./helpers/membership";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 import {
   TEST_GROUPS,
   createCanonicalVote,
@@ -149,5 +151,51 @@ describe("durable vote representative notifications", () => {
       ),
     ).toHaveLength(1);
     expect((await runVotesDueWork(env.DB, env, 0)).representativeNoticesQueued).toBe(1);
+  });
+
+  it("cancels queued representative notices when an open vote is cancelled", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin);
+    expect((await runVotesDueWork(env.DB, env, 0)).representativeNoticesQueued).toBe(1);
+
+    await transitionManagedVote(
+      env.DB,
+      admin,
+      vote.id,
+      { transition: "cancel", reason: "The vote is no longer required" },
+      TEST_GROUPS.pqc,
+    );
+    expect(
+      await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM email_outbox WHERE idempotency_key LIKE 'member-vote-representative-notify:%'",
+      ),
+    ).toEqual([{ status: "cancelled" }]);
+  });
+
+  it("does not queue a representative notice after concurrent cancellation retracts its intent", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin);
+    const gate = gateNextBatch(env.DB);
+    const pendingQueue = runVotesDueWork(gate.db, env, 0);
+    await gate.reached;
+    await transitionManagedVote(
+      env.DB,
+      admin,
+      vote.id,
+      { transition: "cancel", reason: "Cancelled before notices were queued" },
+      TEST_GROUPS.pqc,
+    );
+    gate.release();
+
+    expect((await pendingQueue).representativeNoticesQueued).toBe(0);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM email_outbox WHERE idempotency_key LIKE 'member-vote-representative-notify:%'",
+      ),
+    ).toHaveLength(0);
   });
 });

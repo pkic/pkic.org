@@ -107,11 +107,19 @@ function ElectionResult({ result, candidates }: { result: ElectionResultData; ca
 }
 
 function VoteResult({ vote }: { vote: PublicVote }) {
+  if (vote.status === "cancelled") {
+    return (
+      <p class="text-muted mt-3">
+        This vote was cancelled{vote.cancellationReason ? `: ${vote.cancellationReason}` : "."}
+      </p>
+    );
+  }
   if (vote.status !== "closed") {
     return (
       <p class="text-muted mt-3">
-        Voting {vote.status === "open" ? "closes" : "opens"} {formatDate(vote.closesAt)}. Results will be published here
-        once voting closes.
+        Voting {vote.status === "open" ? "closes" : "opens"}{" "}
+        {formatDate(vote.status === "open" ? vote.closesAt : vote.opensAt)}. Results will be published here once voting
+        closes.
       </p>
     );
   }

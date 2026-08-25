@@ -54,6 +54,10 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
           </span>
         </p>
 
+        {vote.status === "cancelled" && vote.cancellationReason && (
+          <p class="alert alert-secondary py-2 small">Cancellation reason: {vote.cancellationReason}</p>
+        )}
+
         {vote.candidates && vote.candidates.length > 0 && (
           <div class="mb-3">
             <div class="small fw-semibold mb-1">Candidates</div>

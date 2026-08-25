@@ -75,11 +75,12 @@ describe("selected-group vote participation", () => {
               ],
               result: null,
               capabilities: ["view", "participate", "view_results"],
+              availableTransitions: [],
             },
           });
         }
         return Response.json({
-          votes: [{ ...vote, capabilities: ["view", "participate", "view_results"] }],
+          votes: [{ ...vote, capabilities: ["view", "participate", "view_results"], availableTransitions: [] }],
           page: { limit: 50, offset: 0, total: 1, hasMore: false },
         });
       }),
@@ -105,6 +106,162 @@ describe("selected-group vote participation", () => {
       path: `/api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}/ballots`,
       method: "POST",
       body: { choice: "in_favor", memberId: "c0000000-0000-4000-8000-000000000001" },
+    });
+  });
+
+  it("closes a managed vote through the selected group and reloads its state", async () => {
+    const requests: Array<{ path: string; method: string; body?: unknown }> = [];
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        requests.push({
+          path: url.pathname,
+          method,
+          ...(typeof init.body === "string" ? { body: JSON.parse(init.body) } : {}),
+        });
+        const vote = voteSummary();
+        if (method === "POST") return Response.json({ vote: { ...vote, status: "closed" }, outcome: "closed" });
+        if (url.pathname.endsWith(`/${VOTE_ID}`)) {
+          return Response.json({
+            vote: {
+              ...vote,
+              candidates: null,
+              canCastBallot: false,
+              hasCastBallot: false,
+              memberBallots: [],
+              result: null,
+              capabilities: ["view", "manage"],
+              availableTransitions: ["close", "cancel"],
+            },
+          });
+        }
+        return Response.json({
+          votes: [{ ...vote, capabilities: ["view", "manage"], availableTransitions: ["close", "cancel"] }],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GroupVotes groupId={GROUP_ID} />, container));
+    await settle();
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Details",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Close current round",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+
+    expect(requests).toContainEqual({
+      path: `/api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}/transitions`,
+      method: "POST",
+      body: { transition: "close" },
+    });
+    expect(requests.filter((request) => request.path.endsWith(`/${VOTE_ID}`) && request.method === "GET")).toHaveLength(
+      2,
+    );
+  });
+
+  it("requires and submits a reason when cancelling a managed vote", async () => {
+    const requests: Array<{ path: string; method: string; body?: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        requests.push({
+          path: url.pathname,
+          method,
+          ...(typeof init.body === "string" ? { body: JSON.parse(init.body) } : {}),
+        });
+        const vote = voteSummary();
+        if (method === "POST") {
+          return Response.json({
+            vote: { ...vote, status: "cancelled", cancellationReason: "No quorum" },
+            outcome: "cancelled",
+          });
+        }
+        if (url.pathname.endsWith(`/${VOTE_ID}`)) {
+          return Response.json({
+            vote: {
+              ...vote,
+              candidates: null,
+              canCastBallot: false,
+              hasCastBallot: false,
+              memberBallots: [],
+              result: null,
+              capabilities: ["view", "manage"],
+              availableTransitions: ["cancel"],
+            },
+          });
+        }
+        return Response.json({
+          votes: [{ ...vote, capabilities: ["view", "manage"], availableTransitions: ["cancel"] }],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GroupVotes groupId={GROUP_ID} />, container));
+    await settle();
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Details",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Cancel vote",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    const reason = container.querySelector("textarea") as HTMLTextAreaElement;
+    await act(() => {
+      reason.value = "No quorum";
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Confirm cancellation",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+
+    expect(requests).toContainEqual({
+      path: `/api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}/transitions`,
+      method: "POST",
+      body: { transition: "cancel", reason: "No quorum" },
     });
   });
 });

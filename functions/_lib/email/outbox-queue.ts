@@ -69,11 +69,25 @@ const BULK_EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
       NULL,
       json_extract(value, '$.idempotencyKey')
     FROM json_each(?)
-    WHERE json_extract(value, '$.requiredInviteId') IS NULL
-       OR EXISTS (
-         SELECT 1 FROM invites
-         WHERE invites.id = json_extract(value, '$.requiredInviteId')
-       )
+    WHERE (
+      json_extract(value, '$.requiredInviteId') IS NULL
+      OR EXISTS (
+        SELECT 1 FROM invites
+        WHERE invites.id = json_extract(value, '$.requiredInviteId')
+      )
+    )
+    AND (
+      json_extract(value, '$.requiredVoteId') IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM vote_representative_notification_intents vote_intent
+        WHERE vote_intent.vote_id = json_extract(value, '$.requiredVoteId')
+          AND vote_intent.round = json_extract(value, '$.requiredVoteRound')
+          AND vote_intent.member_id = json_extract(value, '$.requiredVoteMemberId')
+          AND vote_intent.representative_user_id = json_extract(value, '$.requiredVoteRepresentativeUserId')
+          AND vote_intent.queued_outbox_id IS NULL
+      )
+    )
     ${EMAIL_OUTBOX_CONFLICT_SQL}`;
 
 function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt: string): unknown[] {
@@ -164,6 +178,13 @@ export interface BulkEmailQueueRow {
   messageType: EmailMessageType;
   /** Only insert this outbox row if the same D1 batch inserted this invite. */
   requiredInviteId?: string;
+  /** Only insert while this immutable vote-notification obligation still exists. */
+  requiredVoteNotification?: {
+    voteId: string;
+    round: number;
+    memberId: string;
+    representativeUserId: string;
+  };
 }
 
 export interface PreparedBulkEmailQueueRow {
@@ -188,6 +209,10 @@ interface SerializedBulkEmailQueueRow {
   sendAfter: string;
   queuedAt: string;
   requiredInviteId: string | null;
+  requiredVoteId: string | null;
+  requiredVoteRound: number | null;
+  requiredVoteMemberId: string | null;
+  requiredVoteRepresentativeUserId: string | null;
   idempotencyKey: string | null;
 }
 
@@ -205,6 +230,10 @@ function serializeBulkEmailQueueRow(row: BulkEmailQueueRow, queuedAt: string): S
     sendAfter: queuedAt,
     queuedAt,
     requiredInviteId: row.requiredInviteId ?? null,
+    requiredVoteId: row.requiredVoteNotification?.voteId ?? null,
+    requiredVoteRound: row.requiredVoteNotification?.round ?? null,
+    requiredVoteMemberId: row.requiredVoteNotification?.memberId ?? null,
+    requiredVoteRepresentativeUserId: row.requiredVoteNotification?.representativeUserId ?? null,
     idempotencyKey: row.idempotencyKey ?? null,
   };
 }

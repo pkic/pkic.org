@@ -18,4 +18,5 @@ export * from "./group-read-model";
 export * from "./group-proposal-read-model";
 export * from "./group-proposal-participation";
 export * from "./group-proposal-decisions";
+export * from "./manual-transitions";
 export * from "./proposals";

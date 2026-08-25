@@ -47,7 +47,20 @@ export const voteVisibilityUpdateInputSchema = z.object({
   publicDetailLevel: publicDetailLevelSchema.optional(),
 });
 
+export const VOTE_LIFECYCLE_TRANSITIONS = ["open", "close", "cancel"] as const;
+export const voteLifecycleTransitionNameSchema = z.enum(VOTE_LIFECYCLE_TRANSITIONS);
+export const voteLifecycleTransitionSchema = z.discriminatedUnion("transition", [
+  z.object({ transition: z.literal("open") }),
+  z.object({ transition: z.literal("close") }),
+  z.object({ transition: z.literal("cancel"), reason: z.string().trim().min(1).max(1000) }),
+]);
+export type VoteLifecycleTransition = z.infer<typeof voteLifecycleTransitionSchema>;
+export const voteLifecycleOutcomeSchema = z.enum(["opened", "closed", "round_advanced", "cancelled"]);
+
 export const voteMutationResponseSchema = z.object({ vote: z.object(voteSummaryFieldsSchema) });
+export const voteLifecycleTransitionResponseSchema = voteMutationResponseSchema.extend({
+  outcome: voteLifecycleOutcomeSchema,
+});
 
 export const rawVoteBallotSchema = z.object({
   id: databaseIdSchema,

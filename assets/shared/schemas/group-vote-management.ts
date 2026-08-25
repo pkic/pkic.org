@@ -5,6 +5,8 @@ import {
   rawVoteBallotsListQuerySchema,
   rawVoteBallotsListResponseSchema,
   selectedGroupVoteCreateInputSchema,
+  voteLifecycleTransitionResponseSchema,
+  voteLifecycleTransitionSchema,
   voteMutationResponseSchema,
   voteUpdateInputSchema,
   voteVisibilityUpdateInputSchema,
@@ -69,10 +71,32 @@ export const groupVoteBallotsAuditRouteSchema = {
   },
 };
 
+export const groupVoteLifecycleTransitionRouteSchema = {
+  tags: ["Group Vote Management"],
+  summary: "Apply an explicit lifecycle transition through the selected group",
+  description:
+    "Transitions use the canonical vote state machine, exact-group management authorization, and atomic D1 guards.",
+  request: {
+    params: groupVoteParamsSchema,
+    body: { content: { "application/json": { schema: voteLifecycleTransitionSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Vote lifecycle transition applied.",
+      content: { "application/json": { schema: voteLifecycleTransitionResponseSchema } },
+    },
+    "403": jsonErrorResponse("The selected group does not provide vote-management access."),
+    "409": jsonErrorResponse("Vote state or management access changed."),
+    "422": jsonErrorResponse("The requested transition is not valid from the current state."),
+  },
+};
+
 export {
   rawVoteBallotsListQuerySchema as groupVoteBallotsAuditQuerySchema,
   rawVoteBallotsListResponseSchema as groupVoteBallotsAuditResponseSchema,
   selectedGroupVoteCreateInputSchema as groupVoteCreateInputSchema,
+  voteLifecycleTransitionResponseSchema as groupVoteLifecycleTransitionResponseSchema,
+  voteLifecycleTransitionSchema as groupVoteLifecycleTransitionSchema,
   voteMutationResponseSchema as groupVoteMutationResponseSchema,
   voteUpdateInputSchema as groupVoteUpdateInputSchema,
   voteVisibilityUpdateInputSchema as groupVoteVisibilityUpdateInputSchema,

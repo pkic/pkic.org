@@ -9,6 +9,7 @@ import {
 } from "../assets/shared/schemas/group-votes";
 import {
   groupVoteBallotsAuditResponseSchema,
+  groupVoteLifecycleTransitionResponseSchema,
   groupVoteMutationResponseSchema,
 } from "../assets/shared/schemas/group-vote-management";
 import {
@@ -39,6 +40,7 @@ import {
   submitBallot,
   submitVoteProposal,
   tallyElectionRound,
+  transitionManagedVote,
   updateVoteVisibility,
   updateVoteSettings,
 } from "../functions/_lib/services/votes";
@@ -893,16 +895,173 @@ describe("canonical group voting", () => {
       `/api/v1/groups/${TEST_GROUPS.pqc}/votes?q=Selected&sort=title&limit=1`,
     );
     expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
-    expect(groupVotesListResponseSchema.parse(await participantResponse.json())).toMatchObject({
-      votes: [{ id: vote.id, capabilities: expect.arrayContaining(["view", "participate", "view_results"]) }],
+    const participant = groupVotesListResponseSchema.parse(await participantResponse.json());
+    expect(participant).toMatchObject({
+      votes: [{ id: vote.id, capabilities: expect.arrayContaining(["view", "participate"]) }],
       page: { total: 1, hasMore: false },
     });
+    expect(participant.votes[0].capabilities).not.toContain("view_results");
 
     const managerResponse = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes?limit=1`);
     expect(managerResponse.status, await managerResponse.clone().text()).toBe(200);
     const manager = groupVotesListResponseSchema.parse(await managerResponse.json());
     expect(manager.votes[0]).toMatchObject({ id: vote.id, capabilities: expect.arrayContaining(["view", "manage"]) });
     expect(manager.votes[0].capabilities).not.toContain("participate");
+  });
+
+  it("opens and cancels a vote through an exact group while retracting stale actions", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `lifecycle-member-${crypto.randomUUID()}`);
+    const vote = await createCanonicalVote(env.DB, admin, {
+      title: "Managed lifecycle vote",
+      opensAt: new Date(Date.now() + 60_000).toISOString(),
+      closesAt: new Date(Date.now() + 120_000).toISOString(),
+    });
+
+    const scheduledManagerDetail = groupVoteDetailResponseSchema.parse(
+      await (await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`)).json(),
+    ).vote;
+    expect(scheduledManagerDetail).toMatchObject({
+      status: "scheduled",
+      availableTransitions: ["open", "cancel"],
+    });
+    const scheduledMemberDetail = groupVoteDetailResponseSchema.parse(
+      await (await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`)).json(),
+    ).vote;
+    expect(scheduledMemberDetail.capabilities).not.toContain("participate");
+    expect(scheduledMemberDetail.availableTransitions).toEqual([]);
+
+    expect(
+      (
+        await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/transitions`, {
+          method: "POST",
+          body: JSON.stringify({ transition: "open" }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call(adminToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/transitions`, {
+          method: "POST",
+          body: JSON.stringify({ transition: "open" }),
+        })
+      ).status,
+    ).toBe(403);
+
+    const openResponse = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/transitions`, {
+      method: "POST",
+      body: JSON.stringify({ transition: "open" }),
+    });
+    expect(openResponse.status, await openResponse.clone().text()).toBe(200);
+    expect(groupVoteLifecycleTransitionResponseSchema.parse(await openResponse.json())).toMatchObject({
+      outcome: "opened",
+      vote: { id: vote.id, status: "open" },
+    });
+    const openMemberDetail = groupVoteDetailResponseSchema.parse(
+      await (await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`)).json(),
+    ).vote;
+    expect(openMemberDetail.capabilities).toContain("participate");
+    expect(openMemberDetail.capabilities).not.toContain("view_results");
+
+    const cancelResponse = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/transitions`, {
+      method: "POST",
+      body: JSON.stringify({ transition: "cancel", reason: "The question was withdrawn" }),
+    });
+    expect(cancelResponse.status, await cancelResponse.clone().text()).toBe(200);
+    expect(groupVoteLifecycleTransitionResponseSchema.parse(await cancelResponse.json())).toMatchObject({
+      outcome: "cancelled",
+      vote: { id: vote.id, status: "cancelled", cancellationReason: "The question was withdrawn" },
+    });
+    const cancelledMemberDetail = groupVoteDetailResponseSchema.parse(
+      await (await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`)).json(),
+    ).vote;
+    expect(cancelledMemberDetail.capabilities).toEqual(["view"]);
+    expect(cancelledMemberDetail.availableTransitions).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT vote_id FROM vote_representative_notification_intents WHERE vote_id = ?", vote.id),
+    ).toHaveLength(0);
+  });
+
+  it("closes and tallies an open vote through the selected group", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `manual-close-${crypto.randomUUID()}`);
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Manual close vote" });
+    await submitBallot(
+      env.DB,
+      await resolveAuthMember(env.DB, capacity.userId),
+      vote.id,
+      capacity.memberId,
+      "in_favor",
+      null,
+      TEST_GROUPS.pqc,
+    );
+
+    const closeResponse = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/transitions`, {
+      method: "POST",
+      body: JSON.stringify({ transition: "close" }),
+    });
+    expect(closeResponse.status, await closeResponse.clone().text()).toBe(200);
+    expect(groupVoteLifecycleTransitionResponseSchema.parse(await closeResponse.json())).toMatchObject({
+      outcome: "closed",
+      vote: { id: vote.id, status: "closed" },
+    });
+    const detail = groupVoteDetailResponseSchema.parse(
+      await (await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`)).json(),
+    ).vote;
+    expect(detail.capabilities).toContain("view_results");
+    expect(detail.capabilities).not.toContain("participate");
+    expect(detail.result).toMatchObject({ outcome: "passed", totalBallots: 1 });
+    expect(
+      await queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? AND action LIKE 'vote_%' ORDER BY created_at, id",
+        vote.id,
+      ),
+    ).toEqual(expect.arrayContaining([{ action: "vote_close_requested" }, { action: "vote_closed_manually" }]));
+  });
+
+  it("releases a manual close claim when finalization fails", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Recoverable manual close" });
+    await env.DB.prepare(
+      `CREATE TRIGGER test_reject_manual_vote_close_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'vote_closed_manually'
+       BEGIN SELECT RAISE(ABORT, 'manual close audit rejected by test'); END`,
+    ).run();
+
+    await expect(
+      transitionManagedVote(env.DB, admin, vote.id, { transition: "close" }, TEST_GROUPS.pqc),
+    ).rejects.toThrow("manual close audit rejected by test");
+    expect(
+      await queryAll(env.DB, "SELECT status, transition_processing_token FROM votes WHERE id = ?", vote.id),
+    ).toEqual([{ status: "open", transition_processing_token: null }]);
+    await env.DB.prepare("DROP TRIGGER test_reject_manual_vote_close_audit").run();
+  });
+
+  it("atomically rejects a managed lifecycle transition after leadership revocation", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, {
+      opensAt: new Date(Date.now() + 60_000).toISOString(),
+      closesAt: new Date(Date.now() + 120_000).toISOString(),
+    });
+    const leaderId = await insertUser(env.DB, "transition-leader@example.test");
+    const roleId = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    const leader = {
+      identityType: "user" as const,
+      id: leaderId,
+      email: "transition-leader@example.test",
+      role: "user",
+    };
+    const gate = gateNextBatch(env.DB);
+    const pending = transitionManagedVote(gate.db, leader, vote.id, { transition: "open" }, TEST_GROUPS.pqc);
+    await gate.reached;
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleId).run();
+    gate.release();
+    await expect(pending).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
+    );
+    expect(await queryAll(env.DB, "SELECT status FROM votes WHERE id = ?", vote.id)).toEqual([{ status: "scheduled" }]);
   });
 
   it("binds vote detail, ballots, and results to the selected group", async () => {

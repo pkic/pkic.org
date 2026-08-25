@@ -74,6 +74,12 @@ export async function runVotesDueWork(
       closesAt: recipient.closesAt,
       voteUrl: `/portal/votes/${recipient.voteId}`,
     },
+    requiredVoteNotification: {
+      voteId: recipient.voteId,
+      round: recipient.round,
+      memberId: recipient.memberId,
+      representativeUserId: recipient.representativeUserId,
+    },
   }));
   const deliveries: PreparedVoteNotificationDelivery[] = preparedRecipients.map(
     ({ recipient, operationKey, outboxId }) => ({

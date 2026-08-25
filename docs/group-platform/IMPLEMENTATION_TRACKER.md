@@ -415,8 +415,25 @@ Status: In progress
           invalid contracts, wrong-context access, withdrawals, endorsement
           conversion, manager decisions, authorization races, and indexed D1
           query plans.
-    - [ ] Apply `manage` to canonical vote lifecycle routes and retract stale
+    - [x] Apply `manage` to canonical vote lifecycle routes and retract stale
           list/detail capabilities when lifecycle state changes.
+          Evidence: one explicit transition resource applies scheduled-to-open,
+          open-to-close or next-election-round, and scheduled/open-to-cancel
+          through the existing tally engine. Exact selected-group management is
+          checked before execution and again inside every D1 write phase;
+          compare-and-set revisions and expiring close claims prevent ballots,
+          scheduled jobs, and managers from racing the tally. A failed manual
+          close releases its exact claim so it cannot strand an otherwise open
+          vote. Member `participate` and `view_results` capabilities are now
+          projected from both live access and current lifecycle/time state,
+          while managers receive explicit available transitions. Cancellation
+          persists its reason, removes undelivered notification intents, and
+          cancels queued notices. The bulk outbox insert also requires the
+          immutable intent to still exist, making concurrent cancellation and
+          queueing safe in either serialization order. Focused lifecycle,
+          scheduled-job, and notification tests pass 48 cases; all migrations
+          replay on isolated D1 and the production-shaped consolidated upgrade
+          fixture passes both cases.
           Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
           and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
           broader focused form/grant regression selection passes 20 tests. Four
@@ -467,7 +484,11 @@ Status: In progress
       Evidence: `/api/v1/groups/:groupId/vote-proposals` and its detail,
       endorsement, withdrawal, approval, and rejection subresources are mounted
       with shared request/response schemas and thin handlers.
-- [ ] Add nested vote lifecycle and stats routes.
+- [x] Add the nested vote lifecycle transition route.
+      Evidence: `POST /api/v1/groups/:groupId/votes/:voteId/transitions`
+      accepts the shared discriminated transition contract and returns the
+      canonical vote mutation response plus its applied outcome.
+- [ ] Add nested vote statistics routes.
 - [ ] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.

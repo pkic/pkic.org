@@ -73,7 +73,11 @@ export function VoteDetails({
           <p class="text-muted small mb-0">Results are not available through this group.</p>
         ))}
 
-      {vote.status === "cancelled" && <p class="text-muted small mb-0">This vote was cancelled.</p>}
+      {vote.status === "cancelled" && (
+        <p class="text-muted small mb-0">
+          This vote was cancelled{vote.cancellationReason ? `: ${vote.cancellationReason}` : "."}
+        </p>
+      )}
     </div>
   );
 }

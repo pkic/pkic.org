@@ -8,6 +8,7 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
 import { VoteDetails } from "../Votes/VoteCard";
+import { GroupVoteLifecycleActions } from "./GroupVoteLifecycleActions";
 import { ResourceCapabilities } from "./ResourceCapabilities";
 
 export function GroupVotes({ groupId }: { groupId: string }) {
@@ -89,6 +90,7 @@ export function GroupVotes({ groupId }: { groupId: string }) {
             if (detail.data?.vote.id !== vote.id) return null;
             return (
               <div class="p-3 bg-body-tertiary">
+                <GroupVoteLifecycleActions groupId={groupId} vote={detail.data.vote} onChanged={reloadSelectedVote} />
                 <VoteDetails
                   vote={detail.data.vote}
                   ballotEndpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(vote.id)}/ballots`}

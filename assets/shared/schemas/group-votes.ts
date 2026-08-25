@@ -13,10 +13,12 @@ import {
   voteSummaryFieldsSchema,
   voteTypeSchema,
 } from "./votes";
+import { voteLifecycleTransitionNameSchema } from "./vote-management";
 
 const voteCapabilitiesSchema = z
   .array(voteGroupGrantSchemas.capabilitySchema)
   .max(voteGroupGrantSchemas.capabilities.length);
+export const availableVoteTransitionsSchema = z.array(voteLifecycleTransitionNameSchema).max(3).default([]);
 
 export const groupVotesListQuerySchema = portalVotesListQuerySchema.extend({ type: voteTypeSchema.optional() });
 export type GroupVotesListQuery = z.infer<typeof groupVotesListQuerySchema>;
@@ -24,12 +26,16 @@ export type GroupVotesListQuery = z.infer<typeof groupVotesListQuerySchema>;
 export const groupVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
   capabilities: voteCapabilitiesSchema,
+  availableTransitions: availableVoteTransitionsSchema,
 });
 export type GroupVote = z.infer<typeof groupVoteSchema>;
 export const groupVotesListResponseSchema = paginatedResponseSchema("votes", groupVoteSchema);
 
 export const groupVoteParamsSchema = groupReferenceParamsSchema.extend({ voteId: databaseIdSchema });
-export const groupVoteDetailSchema = portalVoteSchema.extend({ capabilities: voteCapabilitiesSchema });
+export const groupVoteDetailSchema = portalVoteSchema.extend({
+  capabilities: voteCapabilitiesSchema,
+  availableTransitions: availableVoteTransitionsSchema,
+});
 export type GroupVoteDetail = z.infer<typeof groupVoteDetailSchema>;
 export const groupVoteDetailResponseSchema = z.object({ vote: groupVoteDetailSchema });
 

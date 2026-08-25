@@ -63,14 +63,51 @@ function effectiveVoteCapabilities(
   });
 }
 
+function contextualVoteCapabilities(
+  row: VoteRow,
+  capabilities: VoteGroupCapability[],
+  nowMs: number,
+): VoteGroupCapability[] {
+  const votingOpen =
+    row.status === "open" &&
+    Date.parse(row.opens_at) <= nowMs &&
+    Date.parse(row.closes_at) > nowMs &&
+    row.transition_processing_token === null;
+  return capabilities.filter(
+    (capability) =>
+      (capability !== "participate" || votingOpen) && (capability !== "view_results" || row.status === "closed"),
+  );
+}
+
+function availableVoteTransitions(
+  row: VoteRow,
+  capabilities: readonly VoteGroupCapability[],
+  nowMs: number,
+): GroupVote["availableTransitions"] {
+  if (!capabilities.includes("manage")) return [];
+  const leaseAvailable =
+    row.transition_processing_token === null ||
+    (row.transition_lease_expires_at !== null && Date.parse(row.transition_lease_expires_at) <= nowMs);
+  if (row.status === "scheduled") {
+    return Date.parse(row.closes_at) > nowMs ? ["open", "cancel"] : ["cancel"];
+  }
+  return row.status === "open" && leaseAvailable ? ["close", "cancel"] : [];
+}
+
 function rowAccess(row: GroupVoteRow): GroupResourceContextAccess {
   return { member: row.member_access === 1, manager: row.manager_access === 1 };
 }
 
-function mapGroupVote(row: GroupVoteRow, groupId: string): GroupVote {
+function mapGroupVote(row: GroupVoteRow, groupId: string, nowMs: number): GroupVote {
+  const capabilities = contextualVoteCapabilities(
+    row,
+    effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row)),
+    nowMs,
+  );
   return groupVoteSchema.parse({
     ...toVoteSummary(row),
-    capabilities: effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row)),
+    capabilities,
+    availableTransitions: availableVoteTransitions(row, capabilities, nowMs),
   });
 }
 
@@ -109,7 +146,11 @@ async function resolveGroupVote(
     [...accessibleVotes.bindings, groupId, voteId],
   );
   if (!row) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
-  const capabilities = effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row));
+  const capabilities = contextualVoteCapabilities(
+    row,
+    effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row)),
+    Date.now(),
+  );
   if (!capabilities.includes("view")) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   return { row, capabilities };
 }
@@ -182,7 +223,8 @@ export async function listGroupVotes(
     db,
     buildGroupVotesPageQuery(groupId, liveGroupVoteAccess(viewer, groupId), query),
   );
-  return { votes: page.rows.map((row) => mapGroupVote(row, groupId)), total: page.total };
+  const nowMs = Date.now();
+  return { votes: page.rows.map((row) => mapGroupVote(row, groupId, nowMs)), total: page.total };
 }
 
 export async function getGroupVoteDetail(
@@ -195,7 +237,12 @@ export async function getGroupVoteDetail(
   const [hydrated] = await hydrateVotesForUser(db, [row], viewer.userId, groupId);
   const result: VoteResult =
     row.status === "closed" && capabilities.includes("view_results") ? closedVoteResult(row) : null;
-  return groupVoteDetailSchema.parse({ ...hydrated, result, capabilities });
+  return groupVoteDetailSchema.parse({
+    ...hydrated,
+    result,
+    capabilities,
+    availableTransitions: availableVoteTransitions(row, capabilities, Date.now()),
+  });
 }
 
 export async function getGroupVoteResults(

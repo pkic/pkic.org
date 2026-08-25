@@ -120,6 +120,7 @@ export const voteSummaryFieldsSchema = {
   closesAt: z.string(),
   currentRound: z.number(),
   status: voteStatusSchema,
+  cancellationReason: z.string().nullable().default(null),
   visibility: voteVisibilitySchema,
   publicDetailLevel: publicDetailLevelSchema,
   createdAt: z.string(),

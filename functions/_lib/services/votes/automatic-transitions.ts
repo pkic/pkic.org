@@ -26,6 +26,20 @@ export type ClaimedVote = VoteRow & {
 
 export type CloseOutcome = "closed" | "round-advanced" | "stale";
 
+export interface VoteCloseTransitionContext {
+  actorType: "system" | "admin";
+  actorId: string | null;
+  mode: "automatically" | "manually";
+  authorizationGuard?: StatementLike;
+  finalClosesAt?: string;
+}
+
+const AUTOMATIC_CLOSE_CONTEXT: VoteCloseTransitionContext = {
+  actorType: "system",
+  actorId: null,
+  mode: "automatically",
+};
+
 const MAX_ELECTION_CANDIDATES = 50;
 
 export async function openDueVote(db: DatabaseLike, vote: VoteRow, now: string): Promise<boolean> {
@@ -99,16 +113,34 @@ export async function claimDueVote(db: DatabaseLike, vote: VoteRow, now: string)
   };
 }
 
+/** Releases only the exact transition claim held by this caller. */
+export async function releaseClaimedVote(db: DatabaseLike, vote: ClaimedVote, now: string): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE votes
+       SET transition_processing_token = NULL, transition_lease_expires_at = NULL,
+           transition_revision = transition_revision + 1, updated_at = ?
+       WHERE id = ?
+         AND status = 'open'
+         AND current_round = ?
+         AND transition_revision = ?
+         AND transition_processing_token = ?`,
+    )
+    .bind(now, vote.id, vote.current_round, vote.transition_revision, vote.transition_processing_token)
+    .run();
+}
+
 function prepareFinalizeVoteStatement(
   db: DatabaseLike,
   vote: ClaimedVote,
   resultJson: string,
   now: string,
+  finalClosesAt: string,
 ): StatementLike {
   return db
     .prepare(
       `UPDATE votes
-       SET status = 'closed', result_json = ?,
+       SET status = 'closed', result_json = ?, closes_at = ?,
            transition_revision = transition_revision + 1,
            transition_processing_token = NULL, transition_lease_expires_at = NULL,
            updated_at = ?
@@ -121,6 +153,7 @@ function prepareFinalizeVoteStatement(
     )
     .bind(
       resultJson,
+      finalClosesAt,
       now,
       vote.id,
       vote.current_round,
@@ -130,7 +163,12 @@ function prepareFinalizeVoteStatement(
     );
 }
 
-async function finalizeMotionOrConsultation(db: DatabaseLike, vote: ClaimedVote, now: string): Promise<CloseOutcome> {
+async function finalizeMotionOrConsultation(
+  db: DatabaseLike,
+  vote: ClaimedVote,
+  now: string,
+  context: VoteCloseTransitionContext,
+): Promise<CloseOutcome> {
   const counts = await first<MotionCountsRow>(db, VOTE_MOTION_TALLY_QUERY, [vote.id, vote.current_round]);
   const result = computeMotionResultFromCounts(vote.threshold_type as "simple_majority" | "supermajority", {
     in_favor: Number(counts?.in_favor ?? 0),
@@ -140,12 +178,13 @@ async function finalizeMotionOrConsultation(db: DatabaseLike, vote: ClaimedVote,
 
   try {
     await db.batch([
-      prepareFinalizeVoteStatement(db, vote, stringifyJson(result), now),
+      ...(context.authorizationGuard ? [context.authorizationGuard] : []),
+      prepareFinalizeVoteStatement(db, vote, stringifyJson(result), now, context.finalClosesAt ?? vote.closes_at),
       prepareAuditLogAfterOneChange(
         db,
-        "system",
-        null,
-        "vote_closed_automatically",
+        context.actorType,
+        context.actorId,
+        `vote_closed_${context.mode}`,
         "vote",
         vote.id,
         { round: vote.current_round, result },
@@ -159,7 +198,12 @@ async function finalizeMotionOrConsultation(db: DatabaseLike, vote: ClaimedVote,
   }
 }
 
-async function advanceOrFinalizeElection(db: DatabaseLike, vote: ClaimedVote, now: string): Promise<CloseOutcome> {
+async function advanceOrFinalizeElection(
+  db: DatabaseLike,
+  vote: ClaimedVote,
+  now: string,
+  context: VoteCloseTransitionContext,
+): Promise<CloseOutcome> {
   const standing = await all<CandidateRow>(db, VOTE_STANDING_CANDIDATES_QUERY, [vote.id, MAX_ELECTION_CANDIDATES + 1]);
   if (standing.length > MAX_ELECTION_CANDIDATES) {
     throw new Error(`Vote ${vote.id} exceeds the maximum of ${MAX_ELECTION_CANDIDATES} standing candidates`);
@@ -179,12 +223,13 @@ async function advanceOrFinalizeElection(db: DatabaseLike, vote: ClaimedVote, no
     const result = { rounds, winnerCandidateId };
     try {
       await db.batch([
-        prepareFinalizeVoteStatement(db, vote, stringifyJson(result), now),
+        ...(context.authorizationGuard ? [context.authorizationGuard] : []),
+        prepareFinalizeVoteStatement(db, vote, stringifyJson(result), now, context.finalClosesAt ?? vote.closes_at),
         prepareAuditLogAfterOneChange(
           db,
-          "system",
-          null,
-          "vote_closed_automatically",
+          context.actorType,
+          context.actorId,
+          `vote_closed_${context.mode}`,
           "vote",
           vote.id,
           { round: vote.current_round, winnerCandidateId },
@@ -243,9 +288,9 @@ async function advanceOrFinalizeElection(db: DatabaseLike, vote: ClaimedVote, no
       ),
     prepareAuditLogAfterOneChange(
       db,
-      "system",
-      null,
-      "vote_round_advanced_automatically",
+      context.actorType,
+      context.actorId,
+      `vote_round_advanced_${context.mode}`,
       "vote",
       vote.id,
       {
@@ -260,7 +305,7 @@ async function advanceOrFinalizeElection(db: DatabaseLike, vote: ClaimedVote, no
   );
 
   try {
-    await db.batch(statements);
+    await db.batch([...(context.authorizationGuard ? [context.authorizationGuard] : []), ...statements]);
     return "round-advanced";
   } catch (error) {
     if (isAuditOneChangeGuardFailure(error)) return "stale";
@@ -268,8 +313,13 @@ async function advanceOrFinalizeElection(db: DatabaseLike, vote: ClaimedVote, no
   }
 }
 
-export function closeClaimedVote(db: DatabaseLike, vote: ClaimedVote, now: string): Promise<CloseOutcome> {
+export function closeClaimedVote(
+  db: DatabaseLike,
+  vote: ClaimedVote,
+  now: string,
+  context: VoteCloseTransitionContext = AUTOMATIC_CLOSE_CONTEXT,
+): Promise<CloseOutcome> {
   return vote.vote_type === "election"
-    ? advanceOrFinalizeElection(db, vote, now)
-    : finalizeMotionOrConsultation(db, vote, now);
+    ? advanceOrFinalizeElection(db, vote, now, context)
+    : finalizeMotionOrConsultation(db, vote, now, context);
 }

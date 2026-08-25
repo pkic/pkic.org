@@ -4491,6 +4491,7 @@ CREATE TABLE votes (
   transition_lease_expires_at TEXT,
   status                TEXT NOT NULL,
   -- allowed: scheduled | open | closed | cancelled
+  cancellation_reason   TEXT,
   result_json           TEXT,
   visibility             TEXT NOT NULL DEFAULT 'private',
   -- allowed: private | public

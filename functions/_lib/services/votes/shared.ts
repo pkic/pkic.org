@@ -61,6 +61,7 @@ export interface VoteRow {
   transition_processing_token: string | null;
   transition_lease_expires_at: string | null;
   status: VoteStatus;
+  cancellation_reason: string | null;
   result_json: string | null;
   visibility: VoteVisibility;
   public_detail_level: PublicDetailLevel;
@@ -76,7 +77,8 @@ export function voteRowProjection(alias: "votes" | "vote"): string {
     ${alias}.electorate_mode, ${alias}.created_by_user_id, ${alias}.proposed_by_user_id,
     ${alias}.eligible_categories, ${alias}.threshold_type, ${alias}.opens_at, ${alias}.closes_at,
     ${alias}.current_round, ${alias}.transition_revision, ${alias}.transition_processing_token,
-    ${alias}.transition_lease_expires_at, ${alias}.status, ${alias}.result_json, ${alias}.visibility,
+    ${alias}.transition_lease_expires_at, ${alias}.status, ${alias}.cancellation_reason,
+    ${alias}.result_json, ${alias}.visibility,
     ${alias}.public_detail_level, ${alias}.created_at, ${alias}.updated_at`;
 }
 
@@ -157,6 +159,7 @@ export interface VoteSummary {
   closesAt: string;
   currentRound: number;
   status: VoteStatus;
+  cancellationReason: string | null;
   visibility: VoteVisibility;
   publicDetailLevel: PublicDetailLevel;
   createdAt: string;
@@ -179,6 +182,7 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
     closesAt: row.closes_at,
     currentRound: row.current_round,
     status: row.status,
+    cancellationReason: row.cancellation_reason,
     visibility: row.visibility,
     publicDetailLevel: row.public_detail_level,
     createdAt: row.created_at,
