@@ -8,11 +8,8 @@ import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
-
-const ROLE_LABELS = {
-  "role-group_lead": "Lead",
-  "role-group_deputy_lead": "Deputy lead",
-} as const;
+import { GroupLeadershipAssignmentForm } from "./GroupLeadershipAssignmentForm";
+import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
 
 export function GroupLeadership({ groupId }: { groupId: string }) {
   const leadership = useData(
@@ -24,7 +21,8 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
 
   async function revoke(assignment: GroupLeadershipAssignment): Promise<void> {
     if (assignment.inherited) return;
-    if (!confirm(`Remove ${assignment.userName} as ${ROLE_LABELS[assignment.roleId].toLowerCase()}?`)) return;
+    if (!confirm(`Remove ${assignment.userName} as ${GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId].toLowerCase()}?`))
+      return;
     setRevokingId(assignment.userRoleId);
     setMutationError(null);
     try {
@@ -73,7 +71,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
                   {assignment.userName} <span class="text-muted fw-normal">({assignment.email})</span>
                 </div>
                 <div class="small text-muted">
-                  {ROLE_LABELS[assignment.roleId]}
+                  {GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId]}
                   {assignment.inherited ? ` · inherited from ${assignment.sourceGroup.name}` : " · local"}
                   {assignment.expiresAt ? ` · expires ${fmt(assignment.expiresAt)}` : ""}
                 </div>
@@ -91,6 +89,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
             </div>
           ))}
         </div>
+        <GroupLeadershipAssignmentForm groupId={groupId} onAssigned={leadership.reload} />
       </div>
     </div>
   );

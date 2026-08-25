@@ -3,7 +3,7 @@ import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTabl
 import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import { PERMISSIONS } from "../../permissions";
-import { UserPicker, type PickedUser } from "./UserPicker";
+import { UserPicker, type PickedUser } from "../../../components/UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 import {
   accessGrantCreateResponseSchema,

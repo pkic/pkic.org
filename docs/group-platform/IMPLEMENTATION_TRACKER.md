@@ -489,6 +489,14 @@ Status: In progress
       was used.
 - [ ] Move group, leadership, meetings, forms, votes, mailing lists, stats, and
       audit management into the portal.
+      Current evidence: the selected-group portal owns group settings,
+      capacity-aware participant add/remove, local leadership assign/revoke,
+      effective inherited-leadership display, and meeting-series list/create.
+      The unreleased duplicate group-leadership panel has been removed from
+      the admin application; dated Board and Executive Council positions remain
+      there because they are global records rather than group governance.
+      Forms, votes, mailing lists, statistics, audit, complete meeting lifecycle,
+      resource sharing, and capability-derived navigation remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.
@@ -563,14 +571,13 @@ Status: Pending
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
-      Current evidence: the gate was rerun after the generic leadership
-      cutover and stops only at the known, deliberately unsynchronized voting
-      type-contract cutover. Independent ESLint, SQL
-      projection, dependency architecture, API-contract, zero-duplication,
-      formatting, max-lines, and filename gates pass. Earlier complete backend
-      and frontend runs remain recorded above. Do not mark this complete until
-      the voting migration is complete and every repository-wide gate passes
-      from the final schema.
+      Current evidence: the complete gate passes at the current architecture
+      checkpoint: 1,925 backend tests pass with one skipped, 176 frontend tests
+      pass, and 79 tooling tests pass. Type checks, ESLint, SQL projection,
+      dependency architecture, API-contract, zero-duplication, formatting,
+      frontend/Hugo builds, max-lines, and filename gates also pass. Keep this
+      item open until the final architecture state passes the same complete
+      gate.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.

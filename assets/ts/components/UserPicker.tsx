@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api } from "../../api";
-import type { AdminUser } from "../../types";
-import { usersListResponseSchema } from "../../../../shared/schemas/admin-users";
-import { createLatestRequestGate } from "../../../hooks/useServerCollection";
+import { usersListResponseSchema, type AdminUserListItem } from "../../shared/schemas/admin-users";
+import { createLatestRequestGate } from "../hooks/useServerCollection";
+import { getJson } from "../shared/api-client";
 
 export interface PickedUser {
   id: string;
   email: string;
 }
 
-/** Debounced email/name search against GET /api/v1/admin/users, for picking a user to grant/assign against. */
+/** Debounced, bounded server search for selecting an existing user. */
 export function UserPicker({
   value,
   onChange,
@@ -22,13 +21,14 @@ export function UserPicker({
   placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<AdminUser[]>([]);
+  const [results, setResults] = useState<AdminUserListItem[]>([]);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const requestGate = useRef<ReturnType<typeof createLatestRequestGate> | null>(null);
   requestGate.current ??= createLatestRequestGate();
 
-  function cancelPendingSearch() {
+  function cancelPendingSearch(): void {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -38,8 +38,9 @@ export function UserPicker({
 
   useEffect(() => cancelPendingSearch, []);
 
-  function handleInput(next: string) {
+  function handleInput(next: string): void {
     setQuery(next);
+    setError(null);
     if (value) onChange(null);
     cancelPendingSearch();
     const term = next.trim();
@@ -52,20 +53,24 @@ export function UserPicker({
       timerRef.current = null;
       const request = requestGate.current!.start();
       try {
-        const data = await api(`/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`, usersListResponseSchema, {
-          signal: request.signal,
-        });
+        const data = await getJson(
+          `/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`,
+          usersListResponseSchema,
+          { signal: request.signal },
+        );
         if (!request.isCurrent()) return;
         setResults(data.users);
         setOpen(true);
       } catch {
         if (!request.isCurrent()) return;
         setResults([]);
+        setOpen(false);
+        setError("Could not search users.");
       }
     }, 250);
   }
 
-  function pick(user: AdminUser) {
+  function pick(user: AdminUserListItem): void {
     cancelPendingSearch();
     onChange({ id: user.id, email: user.email });
     setQuery(user.email);
@@ -80,7 +85,7 @@ export function UserPicker({
         type="text"
         placeholder={placeholder}
         value={value ? value.email : query}
-        onInput={(e) => handleInput((e.target as HTMLInputElement).value)}
+        onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         disabled={disabled}
@@ -92,7 +97,7 @@ export function UserPicker({
               key={user.id}
               type="button"
               class="list-group-item list-group-item-action py-1 px-2 small text-start"
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => pick(user)}
             >
               <div class="fw-semibold">{user.email}</div>
@@ -102,6 +107,11 @@ export function UserPicker({
               </div>
             </button>
           ))}
+        </div>
+      )}
+      {error && (
+        <div class="small text-danger mt-1" role="alert">
+          {error}
         </div>
       )}
     </div>

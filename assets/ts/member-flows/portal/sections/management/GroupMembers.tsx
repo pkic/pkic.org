@@ -9,6 +9,7 @@ import { Pager } from "../../../../components/Pager";
 import { Spinner } from "../../../../components/Spinner";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { ApiClientError, deleteJson } from "../../../../shared/api-client";
+import { GroupMemberAddForm } from "./GroupMemberAddForm";
 
 function capacityLabel(membership: GroupMembership): string {
   if (membership.memberType === "organization") return membership.organizationName ?? "Organization";
@@ -56,6 +57,12 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
           Each row is one person participating through one Member. A person representing multiple organizations may
           therefore appear more than once.
         </p>
+        <GroupMemberAddForm
+          groupId={groupId}
+          onAdded={async () => {
+            await Promise.all([page.reload(), onChanged()]);
+          }}
+        />
         <form
           class="d-flex gap-2 portal-management-search"
           role="search"

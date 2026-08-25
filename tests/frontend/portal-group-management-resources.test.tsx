@@ -3,6 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
+import { GroupLeadershipAssignmentForm } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
 
@@ -27,6 +28,47 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+async function pickUser(container: HTMLElement, email: string): Promise<void> {
+  const input = container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
+  input.value = email;
+  void act(() => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 275)));
+  const option = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+    button.textContent?.includes(email),
+  );
+  expect(option).toBeDefined();
+  void act(() => option!.click());
+}
+
+function usersPage(id: string, email: string) {
+  return {
+    users: [
+      {
+        id,
+        email,
+        first_name: "Selected",
+        last_name: "Person",
+        organization_name: "Example Member",
+        role: "user",
+        active: 1,
+        created_at: "2026-08-01T00:00:00.000Z",
+        member_id: null,
+        member_category: null,
+        member_status: null,
+        member_organization_id: null,
+        member_organization_name: null,
+        links: [],
+        membership: null,
+        type: "contact_only",
+        eventParticipationCount: 0,
+      },
+    ],
+    page: { limit: 8, offset: 0, total: 1, hasMore: false },
+  };
 }
 
 afterEach(() => {
@@ -203,6 +245,56 @@ describe("portal group management resources", () => {
     expect(onChanged).toHaveBeenCalledOnce();
   });
 
+  it("adds a person through every eligible Member capacity using the canonical group command", async () => {
+    const userId = "40000000-0000-4000-8000-000000000009";
+    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ url, method, body });
+        if (url.pathname === "/api/v1/admin/users") return json(usersPage(userId, "selected@example.test"));
+        if (method === "POST") {
+          return json({
+            group: {
+              id: GROUP_ID,
+              slug: "architecture",
+              name: "Architecture Committee",
+              type: { key: "committee", singularLabel: "Committee", pluralLabel: "Committees" },
+            },
+            memberships: [],
+            endedMembershipIds: [],
+          });
+        }
+        return json({ memberships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const onChanged = vi.fn(async () => {});
+    const container = mount(<GroupMembers groupId={GROUP_ID} onChanged={onChanged} />);
+    await settle();
+    await pickUser(container, "selected@example.test");
+
+    const add = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Add to group",
+    )!;
+    await act(async () => add.click());
+    await settle();
+    await settle();
+
+    expect(
+      requests.find(
+        ({ url, method }) => method === "POST" && url.pathname === `/api/v1/groups/${GROUP_ID}/memberships/${userId}`,
+      )?.body,
+    ).toEqual({ capacitySelection: { mode: "all_eligible", confirmed: true } });
+    expect(onChanged).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("Group participation added.");
+  });
+
   it("distinguishes inherited leadership and removes only local assignments", async () => {
     const requests: Array<{ url: URL; method: string }> = [];
     vi.stubGlobal(
@@ -277,5 +369,100 @@ describe("portal group management resources", () => {
           method === "DELETE" && url.pathname === `/api/v1/groups/${GROUP_ID}/leadership/${USER_ROLE_ID}`,
       ),
     ).toBe(true);
+  });
+
+  it("assigns local leadership with an optional expiry through the canonical group route", async () => {
+    const userId = "40000000-0000-4000-8000-000000000009";
+    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
+    const leadership = {
+      group: {
+        id: GROUP_ID,
+        slug: "architecture",
+        name: "Architecture Committee",
+        type: { key: "committee", singularLabel: "Committee", pluralLabel: "Committees" },
+      },
+      governanceInheritanceMode: "inherited",
+      assignments: [],
+    } as const;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ url, method, body });
+        if (url.pathname === "/api/v1/admin/users") return json(usersPage(userId, "leader@example.test"));
+        return json(leadership);
+      }),
+    );
+    const container = mount(<GroupLeadership groupId={GROUP_ID} />);
+    await settle();
+    await pickUser(container, "leader@example.test");
+
+    const role = container.querySelector<HTMLSelectElement>("#managed-group-leadership-role")!;
+    role.value = "role-group_deputy_lead";
+    void act(() => {
+      role.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const expiry = container.querySelector<HTMLInputElement>("#managed-group-leadership-expiry")!;
+    expiry.value = "2026-10-01T12:30";
+    void act(() => {
+      expiry.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const add = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Add",
+    )!;
+    await act(async () => add.click());
+    await settle();
+
+    const request = requests.find(
+      ({ url, method }) => method === "POST" && url.pathname === `/api/v1/groups/${GROUP_ID}/leadership`,
+    );
+    expect(request?.body).toMatchObject({
+      userId,
+      roleId: "role-group_deputy_lead",
+    });
+    expect((request?.body as { expiresAt: string }).expiresAt).toBe(new Date("2026-10-01T12:30").toISOString());
+    expect(container.textContent).toContain("Leadership assignment added.");
+  });
+
+  it("keeps a rejected leadership assignment visible and does not report success", async () => {
+    const userId = "40000000-0000-4000-8000-000000000009";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/admin/users") return json(usersPage(userId, "leader@example.test"));
+        if ((init.method ?? "GET") === "POST") {
+          return new Response(
+            JSON.stringify({ error: { code: "GROUP_AUTHORIZATION_CHANGED", message: "Management access changed." } }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          );
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+    const onAssigned = vi.fn(async () => {});
+    const container = mount(<GroupLeadershipAssignmentForm groupId={GROUP_ID} onAssigned={onAssigned} />);
+    await pickUser(container, "leader@example.test");
+
+    const add = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Add",
+    )!;
+    await act(async () => add.click());
+    await settle();
+
+    expect(container.textContent).toContain("Management access changed.");
+    expect(container.textContent).not.toContain("Leadership assignment added.");
+    expect(onAssigned).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')?.value).toBe(
+      "leader@example.test",
+    );
   });
 });

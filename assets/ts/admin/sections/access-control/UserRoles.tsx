@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { UserRoleAssignment } from "../../types";
-import { UserPicker, type PickedUser } from "./UserPicker";
+import { UserPicker, type PickedUser } from "../../../components/UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 import { adminRoleCatalog } from "../../services/catalogs";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";

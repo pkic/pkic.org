@@ -2,11 +2,11 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../assets/ts/admin/api";
-import { UserPicker } from "../../assets/ts/admin/sections/access-control/UserPicker";
-import type { AdminUser } from "../../assets/ts/admin/types";
+import { UserPicker } from "../../assets/ts/components/UserPicker";
+import { getJson } from "../../assets/ts/shared/api-client";
+import type { AdminUserListItem } from "../../assets/shared/schemas/admin-users";
 
-vi.mock("../../assets/ts/admin/api", () => ({ api: vi.fn() }));
+vi.mock("../../assets/ts/shared/api-client", () => ({ getJson: vi.fn() }));
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -28,7 +28,7 @@ function flush(): Promise<void> {
   return Promise.resolve();
 }
 
-function user(id: string, email: string): AdminUser {
+function user(id: string, email: string): AdminUserListItem {
   return {
     id,
     email,
@@ -82,9 +82,9 @@ describe("UserPicker request ordering", () => {
 
   it("ignores an older successful response after a newer search result", async () => {
     vi.useFakeTimers();
-    const oldRequest = deferred<{ users: AdminUser[] }>();
-    const newRequest = deferred<{ users: AdminUser[] }>();
-    vi.mocked(api)
+    const oldRequest = deferred<{ users: AdminUserListItem[] }>();
+    const newRequest = deferred<{ users: AdminUserListItem[] }>();
+    vi.mocked(getJson)
       .mockImplementationOnce(() => oldRequest.promise)
       .mockImplementationOnce(() => newRequest.promise);
     const { container, input } = await mountPicker();
@@ -108,9 +108,9 @@ describe("UserPicker request ordering", () => {
 
   it("does not clear a newer result when an older search fails", async () => {
     vi.useFakeTimers();
-    const oldRequest = deferred<{ users: AdminUser[] }>();
-    const newRequest = deferred<{ users: AdminUser[] }>();
-    vi.mocked(api)
+    const oldRequest = deferred<{ users: AdminUserListItem[] }>();
+    const newRequest = deferred<{ users: AdminUserListItem[] }>();
+    vi.mocked(getJson)
       .mockImplementationOnce(() => oldRequest.promise)
       .mockImplementationOnce(() => newRequest.promise);
     const { container, input } = await mountPicker();
@@ -130,16 +130,29 @@ describe("UserPicker request ordering", () => {
     expect(container.textContent).toContain("new@example.test");
   });
 
+  it("reports a current search failure", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockRejectedValueOnce(new Error("search unavailable"));
+    const { container, input } = await mountPicker();
+
+    await search(input, "missing");
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not search users.");
+  });
+
   it("aborts an in-flight search when unmounted", async () => {
     vi.useFakeTimers();
-    const request = deferred<{ users: AdminUser[] }>();
-    vi.mocked(api).mockImplementationOnce((_path, _schema, options) => {
+    const request = deferred<{ users: AdminUserListItem[] }>();
+    vi.mocked(getJson).mockImplementationOnce((_path, _schema, options) => {
       expect(options?.signal).toBeInstanceOf(AbortSignal);
       return request.promise;
     });
     const { container, input } = await mountPicker();
     await search(input, "old");
-    const signal = vi.mocked(api).mock.calls[0][2]?.signal;
+    const signal = vi.mocked(getJson).mock.calls[0][2]?.signal;
 
     await act(() => render(null, container));
     expect(signal?.aborted).toBe(true);

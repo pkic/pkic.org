@@ -6,7 +6,7 @@ import { useApiPage } from "../../../hooks/useApiPage";
 import { api, apiCommand } from "../../api";
 import { toast } from "../../ui";
 import type { LeadershipPosition } from "../../types";
-import { UserPicker, type PickedUser } from "./UserPicker";
+import { UserPicker, type PickedUser } from "../../../components/UserPicker";
 import {
   leadershipAffiliationsResponseSchema,
   leadershipPositionResponseSchema,
