@@ -21,17 +21,13 @@ import {
 } from "../assets/shared/schemas/admin-sponsorships";
 import { logoUploadResponseSchema } from "../assets/shared/schemas/images";
 import {
-  consortiumIcsFileParamsSchema,
-  consortiumMeetingIcsUpdateRouteSchema,
-  consortiumMeetingIdParamsSchema,
-  consortiumMeetingUpdateRouteSchema,
-  meetingIcsFileParamsSchema,
-  meetingIcsFileUpdateSchema,
-  meetingSeriesUpdateSchema,
-  meetingSeriesWithMeetingIdParamsSchema,
-  wgMeetingIcsUpdateRouteSchema,
-  wgMeetingUpdateRouteSchema,
-} from "../assets/shared/schemas/meeting-calendar";
+  eventSeriesCreateSchema,
+  eventSeriesParamsSchema,
+  eventSeriesUpdateRouteSchema,
+  eventSeriesUpdateSchema,
+  groupMeetingSeriesCreateRouteSchema,
+  groupMeetingSeriesParamsSchema,
+} from "../assets/shared/schemas/event-series";
 import {
   authenticationResponseSchema,
   passkeyAuthenticateCompleteBaseResponseSchema,
@@ -240,28 +236,17 @@ describe("canonical shared schema composition", () => {
     ).toBe(false);
   });
 
-  it("builds both meeting update surfaces from the same body and response contracts", () => {
-    const wgSeriesBody = wgMeetingUpdateRouteSchema.request.body.content["application/json"].schema;
-    const consortiumSeriesBody = consortiumMeetingUpdateRouteSchema.request.body.content["application/json"].schema;
-    expect(wgSeriesBody).toBe(meetingSeriesUpdateSchema);
-    expect(consortiumSeriesBody).toBe(meetingSeriesUpdateSchema);
-    expect(wgMeetingUpdateRouteSchema.request.params).toBe(meetingSeriesWithMeetingIdParamsSchema);
-    expect(consortiumMeetingUpdateRouteSchema.request.params).toBe(consortiumMeetingIdParamsSchema);
-    expect(wgMeetingUpdateRouteSchema.responses["200"].content["application/json"].schema).toBe(
-      consortiumMeetingUpdateRouteSchema.responses["200"].content["application/json"].schema,
+  it("builds canonical group meeting routes from shared event-series contracts", () => {
+    expect(groupMeetingSeriesCreateRouteSchema.request.params).toBe(groupMeetingSeriesParamsSchema);
+    expect(groupMeetingSeriesCreateRouteSchema.request.body.content["application/json"].schema).toBe(
+      eventSeriesCreateSchema,
     );
-
-    const wgIcsBody = wgMeetingIcsUpdateRouteSchema.request.body.content["application/json"].schema;
-    const consortiumIcsBody = consortiumMeetingIcsUpdateRouteSchema.request.body.content["application/json"].schema;
-    expect(wgIcsBody).toBe(meetingIcsFileUpdateSchema);
-    expect(consortiumIcsBody).toBe(meetingIcsFileUpdateSchema);
-    expect(wgMeetingIcsUpdateRouteSchema.request.params).toBe(meetingIcsFileParamsSchema);
-    expect(consortiumMeetingIcsUpdateRouteSchema.request.params).toBe(consortiumIcsFileParamsSchema);
-    expect(meetingSeriesUpdateSchema.parse({ name: "Weekly call", active: true })).toEqual({
-      name: "Weekly call",
+    expect(eventSeriesUpdateRouteSchema.request.params).toBe(eventSeriesParamsSchema);
+    expect(eventSeriesUpdateRouteSchema.request.body.content["application/json"].schema).toBe(eventSeriesUpdateSchema);
+    expect(eventSeriesUpdateSchema.parse({ eventName: "Weekly call", active: true })).toEqual({
+      eventName: "Weekly call",
       active: true,
     });
-    expect(meetingIcsFileUpdateSchema.safeParse({ label: "", active: true }).success).toBe(false);
   });
 
   it("uses one WebAuthn credential envelope for registration and authentication", () => {

@@ -278,21 +278,17 @@ describe("permission_grants (Access grants)", () => {
     void eventBId;
   });
 
-  it("a WG chair grant scoped to one working group does not grant write access to another", () => {
-    // No working-group-scoped admin endpoint exists yet (working group
-    // self-service/management not yet built), so this
-    // exercises the same hasPermission() function real endpoints call,
-    // directly — see functions/_lib/auth/permissions.ts.
+  it("a group lead grant scoped to one group does not grant write access to another", () => {
     const actor: AuthAdmin = {
       identityType: "user",
       id: "wg-chair-user",
       email: "chair@example.test",
       role: "user",
-      grants: [{ permission: "working-groups:write", contextType: "working_group", contextId: "wg-pqc" }],
+      grants: [{ permission: "groups:write", contextType: "group", contextId: "group-pqc" }],
     };
 
-    expect(hasPermission(actor, "working-groups:write", { type: "working_group", id: "wg-pqc" })).toBe(true);
-    expect(hasPermission(actor, "working-groups:write", { type: "working_group", id: "wg-cbom" })).toBe(false);
+    expect(hasPermission(actor, "groups:write", { type: "group", id: "group-pqc" })).toBe(true);
+    expect(hasPermission(actor, "groups:write", { type: "group", id: "group-cbom" })).toBe(false);
   });
 
   it("caps even a global admin by delegated OAuth scopes when the token is scope-restricted", () => {

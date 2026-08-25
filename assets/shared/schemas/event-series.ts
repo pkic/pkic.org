@@ -101,10 +101,12 @@ export const eventSeriesCreateSchema = z.object({
   location: trimmedString(0, 500).nullable().optional(),
   providerType: eventProviderTypeSchema.nullable().optional(),
 });
-export const eventSeriesUpdateSchema = eventSeriesCreateSchema
-  .omit({ eventSlug: true })
-  .partial()
-  .extend({ active: z.boolean().optional() });
+export const eventSeriesUpdateSchema = eventSeriesCreateSchema.omit({ eventSlug: true }).partial().extend({
+  // `partial()` preserves Zod defaults. A PATCH that omitted profileKey
+  // must not silently reset a board meeting or workshop to `meeting`.
+  profileKey: eventProfileKeySchema.optional(),
+  active: z.boolean().optional(),
+});
 
 export const eventSeriesMaterializeSchema = z.object({
   through: z.iso.datetime(),

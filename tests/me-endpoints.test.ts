@@ -2,8 +2,7 @@
  * me-endpoints.test.ts
  *
  * member self-service: profile get/update, organization
- * visibility, application history, votes stub, and working group
- * join/leave (including the CA category-A constraint).
+ * visibility, application history, votes history, and authentication.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -17,7 +16,6 @@ import { seedMemberApplication } from "./helpers/member-applications";
 import {
   myApplicationsListResponseSchema,
   myOrganizationVisibilityUpdateResponseSchema,
-  myWorkingGroupsListResponseSchema,
 } from "../assets/shared/schemas/me";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
@@ -33,17 +31,6 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
-}
-
-async function seedWorkingGroup(slug: string, mailingListEmail: string | null = null): Promise<string> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, ?, 1, datetime('now'), datetime('now'))`,
-  )
-    .bind(id, slug.toUpperCase(), slug, mailingListEmail)
-    .run();
-  return id;
 }
 
 const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
@@ -311,100 +298,9 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(body.page).toEqual({ limit: 50, offset: 0, total: 0, hasMore: false });
   });
 
-  it("joins and leaves a working group, toggling google_groups_sync_queue", async () => {
-    await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
-    const userId = await insertActiveMember("wg-join@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "wg-join-token");
-
-    const joinResponse = await call(token, "/api/v1/me/working-groups/pqc", { method: "POST" });
-    expect(joinResponse.status).toBe(200);
-
-    const listResponse = await call(token, "/api/v1/me/working-groups?view=joined");
-    const listBody = (await listResponse.json()) as {
-      workingGroups: Array<{ slug: string; joinedAt: string | null }>;
-      page: { total: number };
-    };
-    expect(listBody.workingGroups).toHaveLength(1);
-    expect(listBody.workingGroups[0].slug).toBe("pqc");
-    expect(listBody.workingGroups[0].joinedAt).toEqual(expect.any(String));
-    expect(listBody.page.total).toBe(1);
-
-    const addQueueRows = await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue WHERE action = 'add_to_list'");
-    expect(addQueueRows).toHaveLength(1);
-
-    const leaveResponse = await call(token, "/api/v1/me/working-groups/pqc", { method: "DELETE" });
-    expect(leaveResponse.status).toBe(200);
-
-    const listAfterLeave = await call(token, "/api/v1/me/working-groups?view=joined");
-    const listAfterLeaveBody = (await listAfterLeave.json()) as { workingGroups: unknown[]; page: { total: number } };
-    expect(listAfterLeaveBody.workingGroups).toHaveLength(0);
-    expect(listAfterLeaveBody.page.total).toBe(0);
-
-    const removeQueueRows = await queryAll(
-      env.DB,
-      "SELECT id FROM google_groups_sync_queue WHERE action = 'remove_from_list'",
-    );
-    expect(removeQueueRows).toHaveLength(1);
-  });
-
-  it("enforces the CA working group constraint for non-category-A members", async () => {
-    await seedWorkingGroup("ca", "ca@lists.pkic.org");
-    const userId = await insertActiveMember("wg-ca-denied@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "wg-ca-denied-token");
-
-    const response = await call(token, "/api/v1/me/working-groups/ca", { method: "POST" });
-    expect(response.status).toBe(403);
-  });
-
-  it("selects the eligible working-group catalog in the backend", async () => {
-    await seedWorkingGroup("ca", "ca@lists.pkic.org");
-    await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
-    const categoryFUserId = await insertActiveMember("wg-catalog-f@example.test", "F");
-    const categoryAUserId = await insertActiveMember("wg-catalog-a@example.test", "A");
-
-    const categoryFBody = myWorkingGroupsListResponseSchema.parse(
-      await (
-        await call(
-          await createMemberSession(env.DB, categoryFUserId, "wg-catalog-f-token"),
-          "/api/v1/me/working-groups?view=catalog",
-        )
-      ).json(),
-    );
-    expect(categoryFBody.workingGroups.map((group) => group.slug)).toEqual(["pqc"]);
-
-    const categoryABody = myWorkingGroupsListResponseSchema.parse(
-      await (
-        await call(
-          await createMemberSession(env.DB, categoryAUserId, "wg-catalog-a-token"),
-          "/api/v1/me/working-groups?view=catalog",
-        )
-      ).json(),
-    );
-    expect(categoryABody.workingGroups.map((group) => group.slug).sort()).toEqual(["ca", "pqc"]);
-  });
-
-  it("rejects direct joins to inactive working groups", async () => {
-    const workingGroupId = await seedWorkingGroup("inactive", null);
-    await env.DB.prepare("UPDATE working_groups SET active = 0 WHERE id = ?").bind(workingGroupId).run();
-    const userId = await insertActiveMember("wg-inactive@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "wg-inactive-token");
-
-    const response = await call(token, "/api/v1/me/working-groups/inactive", { method: "POST" });
-    expect(response.status).toBe(409);
-  });
-
-  it("allows category A members into the CA working group", async () => {
-    await seedWorkingGroup("ca", "ca@lists.pkic.org");
-    const userId = await insertActiveMember("wg-ca-allowed@example.test", "A");
-    const token = await createMemberSession(env.DB, userId, "wg-ca-allowed-token");
-
-    const response = await call(token, "/api/v1/me/working-groups/ca", { method: "POST" });
-    expect(response.status).toBe(200);
-  });
-
   it("rejects unauthenticated access to every /me endpoint", async () => {
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/me/working-groups"),
+      new Request("https://app.test/api/v1/me/groups"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );

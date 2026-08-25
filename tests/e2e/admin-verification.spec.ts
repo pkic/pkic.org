@@ -299,7 +299,7 @@ test.describe("Admin browser-verification pass", () => {
     await expect(panel.getByText(ADMIN_EMAIL).first()).toBeVisible();
 
     // Add the same admin user to the roster (a distinct code path from
-    // chair assignment — a plain working_group_members row).
+    // leadership assignment — a plain group_memberships row).
     const memberForm = panel.locator("form").filter({ has: page.getByText("Add member") });
     const memberPicker = memberForm.getByPlaceholder("Search by email or name…");
     await memberPicker.fill(ADMIN_EMAIL);
