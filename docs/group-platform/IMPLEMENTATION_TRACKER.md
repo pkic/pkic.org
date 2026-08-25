@@ -89,7 +89,7 @@ Status: In progress
 - [x] Make roster, hierarchy, and management queries set-based and paginated.
 - [x] Reject stale group configuration and category-rule replacement batches
       before they can overwrite newer state.
-- [ ] Revalidate group-management authorization inside the same D1 batch as
+- [x] Revalidate group-management authorization inside the same D1 batch as
       group configuration, category-rule, and leadership mutations.
 - [x] Cover multiple capacities, parent loss, alternative capacity, cycles,
       inherited management, local-only management, and concurrent joins.
@@ -104,8 +104,16 @@ Status: In progress
       replacement share one integer aggregate revision on groups; stale writes
       return GROUP_CHANGED and roll back the attempted state, audit, and derived
       enrollment changes. Mounted routes preserve and enforce the same revision
-      contract for both commands. The focused group-platform suite passes 16
-      tests.
+      contract for both commands. One canonical SQL authorization-evidence
+      evaluator now covers global, exact-context, recursively inherited,
+      OAuth-scope-restricted, active-user, and trusted service identities for
+      both preflight and transient write guards. Group configuration,
+      category-rule, and leadership race tests revoke access between preflight
+      and batch execution and prove that state and audit rows roll back. Query
+      plans use the bounded user-role and direct-grant indexes without table
+      scans or temporary B-trees. Detaching a child requires global management,
+      and service leadership writes keep the non-user identity out of users(id)
+      foreign keys. The focused group-platform suite passes 20 tests.
 
 ## 3. Organization representatives
 

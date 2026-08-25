@@ -7,6 +7,7 @@ import {
   canManageGroup,
   createGroup,
   getVisibleGroup,
+  groupManagementAuthorizationEvidence,
   groupJoinEligibilityEvidence,
   joinGroup,
   leaveGroup,
@@ -632,6 +633,163 @@ describe("group leadership inheritance", () => {
     await expect(revokeLocalGroupLeadership(env.DB, localLeader, child.id, assignment!.id)).rejects.toMatchObject({
       code: "GROUP_LOCAL_LEADERSHIP_REQUIRED",
     });
+  });
+
+  it("uses one bounded evidence query for global, exact, inherited, scope-restricted, and active-user access", async () => {
+    const globalAdmin = await insertActor("evidence-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Evidence Parent" });
+    const child = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Evidence Child",
+    });
+    const other = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Evidence Other" });
+    const exactManager = await insertActor("exact-manager@example.test");
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, created_at)
+       VALUES (?, ?, 'groups:write', 'group', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), exactManager.id, parent.id)
+      .run();
+    expect(await canManageGroup(env.DB, exactManager, parent.id)).toBe(true);
+    expect(await canManageGroup(env.DB, exactManager, child.id)).toBe(false);
+    expect(await canManageGroup(env.DB, exactManager, other.id)).toBe(false);
+
+    const inheritedManager = await insertActor("inherited-manager@example.test");
+    await grantGroupLeadership(parent.id, inheritedManager.id);
+    expect(await canManageGroup(env.DB, inheritedManager, child.id)).toBe(true);
+    expect(await canManageGroup(env.DB, { ...inheritedManager, scopeRestricted: true, scopes: [] }, child.id)).toBe(
+      false,
+    );
+
+    const evidence = groupManagementAuthorizationEvidence(inheritedManager, [child.id]);
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${evidence.sql}`)
+      .bind(...evidence.bindings)
+      .all<{ detail: string }>();
+    const details = plan.results.map((row) => row.detail).join("\n");
+    expect(details).toMatch(/SEARCH active_actor USING INDEX sqlite_autoindex_users_1/);
+    expect(details).toMatch(/SEARCH actor_role USING INDEX idx_user_roles_user/);
+    expect(details).toMatch(/SEARCH direct_grant USING INDEX idx_permission_grants_user/);
+    expect(details).not.toMatch(/SCAN (?:users|user_roles|permission_grants|groups)\b/);
+    expect(details).not.toMatch(/USE TEMP B-TREE/);
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inheritedManager.id).run();
+    expect(await canManageGroup(env.DB, inheritedManager, child.id)).toBe(false);
+    expect(
+      await canManageGroup(
+        env.DB,
+        { identityType: "service", id: "api-key", email: "api-key", role: "admin", scopes: ["groups:write"] },
+        child.id,
+      ),
+    ).toBe(true);
+  });
+
+  it("re-evaluates inherited management inside group and leadership mutation batches", async () => {
+    const globalAdmin = await insertActor("guard-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Guard Parent" });
+    const child = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Guard Child",
+    });
+    const parentLeader = await insertActor("guard-parent-leader@example.test");
+    const leadershipId = await grantGroupLeadership(parent.id, parentLeader.id);
+    const revokeManagement = () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(leadershipId).run();
+
+    await expect(
+      updateGroup(mutateBeforeNextBatch(env.DB, revokeManagement), parentLeader, child.id, {
+        description: "Must not commit",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_CHANGED" });
+    expect(
+      await queryAll<{ description: string | null }>(env.DB, "SELECT description FROM groups WHERE id = ?", [child.id]),
+    ).toEqual([{ description: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_updated' AND entity_id = ?", [child.id]),
+    ).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = NULL WHERE id = ?").bind(leadershipId).run();
+    await expect(
+      replaceGroupCategoryRules(mutateBeforeNextBatch(env.DB, revokeManagement), parentLeader, child.id, {
+        rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT membership_category_code FROM group_membership_category_rules WHERE group_id = ?",
+        [child.id],
+      ),
+    ).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = NULL WHERE id = ?").bind(leadershipId).run();
+    const candidate = await insertActor("guard-candidate@example.test");
+    await expect(
+      assignLocalGroupLeadership(mutateBeforeNextBatch(env.DB, revokeManagement), parentLeader, child.id, {
+        userId: candidate.id,
+        roleId: "role-group_lead",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM user_roles WHERE context_type = 'group' AND context_id = ? AND user_id = ?",
+        [child.id, candidate.id],
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("keeps service identities out of leadership attribution foreign keys", async () => {
+    const globalAdmin = await insertActor("service-leadership-admin@example.test", "admin");
+    const group = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Service Leadership Group",
+    });
+    const candidate = await insertActor("service-leadership-candidate@example.test");
+    const serviceActor: AuthAdmin = {
+      identityType: "service",
+      id: "api-key",
+      email: "api-key",
+      role: "admin",
+      scopes: ["groups:write"],
+    };
+
+    await assignLocalGroupLeadership(env.DB, serviceActor, group.id, {
+      userId: candidate.id,
+      roleId: "role-group_lead",
+    });
+    expect(
+      await queryAll<{ granted_by_user_id: string | null }>(
+        env.DB,
+        "SELECT granted_by_user_id FROM user_roles WHERE context_type = 'group' AND context_id = ? AND user_id = ?",
+        [group.id, candidate.id],
+      ),
+    ).toEqual([{ granted_by_user_id: null }]);
+  });
+
+  it("requires global management before detaching a child from its parent", async () => {
+    const globalAdmin = await insertActor("detach-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Detach Parent" });
+    const child = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Detach Child",
+    });
+    const parentLeader = await insertActor("detach-parent-leader@example.test");
+    await grantGroupLeadership(parent.id, parentLeader.id);
+
+    await expect(updateGroup(env.DB, parentLeader, child.id, { parentGroupId: null })).rejects.toMatchObject({
+      status: 403,
+      code: "GROUP_CREATE_REQUIRED",
+    });
+    await updateGroup(env.DB, globalAdmin, child.id, { parentGroupId: null });
+    expect(
+      await queryAll<{ parent_group_id: string | null }>(env.DB, "SELECT parent_group_id FROM groups WHERE id = ?", [
+        child.id,
+      ]),
+    ).toEqual([{ parent_group_id: null }]);
   });
 });
 

@@ -7,6 +7,11 @@ import type {
   GroupUpdateInput,
 } from "../../../../assets/shared/schemas/groups";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
+import {
+  isAuthorizationGuardFailure,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
 import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -17,7 +22,12 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForGroupStatements } from "./automatic-enrollment-group";
-import { canEnableLocalOnlyGovernance, requireGroupManagement } from "./governance";
+import {
+  canEnableLocalOnlyGovernance,
+  prepareGroupManagementAuthorizationGuard,
+  requireGlobalGroupManagement,
+  requireGroupManagement,
+} from "./governance";
 import { getGroup } from "./read-model";
 
 interface GroupTypeRow {
@@ -127,6 +137,9 @@ async function requireParent(db: DatabaseLike, parentGroupId: string): Promise<v
 }
 
 function translateGroupWriteError(error: unknown): never {
+  if (isAuthorizationGuardFailure(error)) {
+    throw new AppError(409, "GROUP_MANAGEMENT_CHANGED", "Group management permission changed before commit");
+  }
   if (isAuditChangeGuardFailure(error)) {
     throw new AppError(409, "GROUP_CHANGED", "The group changed before this update committed");
   }
@@ -159,8 +172,8 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
   if (input.parentGroupId) {
     await requireParent(db, input.parentGroupId);
     await requireGroupManagement(db, actor, input.parentGroupId);
-  } else if (!hasGlobalGroupWrite(actor)) {
-    throw new AppError(403, "GROUP_CREATE_REQUIRED", "Global group management permission is required");
+  } else {
+    await requireGlobalGroupManagement(db, actor);
   }
   const governanceMode = input.governanceInheritanceMode ?? type.default_governance_inheritance_mode;
   if (input.parentGroupId && governanceMode === "local_only") {
@@ -175,6 +188,12 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
   const slug = input.slug ?? (await availableSlug(db, input.name));
   try {
     await db.batch([
+      prepareGroupManagementAuthorizationGuard(
+        db,
+        actor,
+        input.parentGroupId ? [input.parentGroupId] : [],
+        input.parentGroupId ? "effective" : "global",
+      ),
       db
         .prepare(
           `INSERT INTO groups
@@ -214,12 +233,16 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
   return created;
 }
 
-function hasGlobalGroupWrite(actor: AuthAdmin): boolean {
-  if (actor.scopeRestricted && actor.scopes?.includes("groups:write") !== true) return false;
-  if (actor.role === "admin") return true;
-  return (actor.grants ?? []).some(
-    (grant) => grant.permission === "groups:write" && grant.contextType === null && grant.contextId === null,
-  );
+function activeLocalLeadershipEvidence(groupId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM user_roles
+           WHERE context_type = 'group' AND context_id = ?
+             AND role_id IN ('role-group_lead', 'role-group_deputy_lead')
+             AND revoked_at IS NULL
+             AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+           LIMIT 1`,
+    bindings: [groupId],
+  };
 }
 
 async function assertLocalOnlyTransition(db: DatabaseLike, actor: AuthAdmin, groupId: string): Promise<void> {
@@ -260,9 +283,13 @@ export async function updateGroup(
   if (!existing) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, actor, existing.id);
   if (patch.typeKey) await requireActiveGroupType(db, patch.typeKey);
-  if (patch.parentGroupId) {
-    await requireParent(db, patch.parentGroupId);
-    await requireGroupManagement(db, actor, patch.parentGroupId);
+  if (patch.parentGroupId !== undefined && patch.parentGroupId !== existing.parentGroup?.id) {
+    if (patch.parentGroupId) {
+      await requireParent(db, patch.parentGroupId);
+      await requireGroupManagement(db, actor, patch.parentGroupId);
+    } else {
+      await requireGlobalGroupManagement(db, actor);
+    }
   }
   if (patch.governanceInheritanceMode === "local_only" && existing.governanceInheritanceMode !== "local_only") {
     await assertLocalOnlyTransition(db, actor, existing.id);
@@ -295,6 +322,23 @@ export async function updateGroup(
   setters.push("revision = revision + 1");
   try {
     const statements: StatementLike[] = [
+      prepareGroupManagementAuthorizationGuard(db, actor, [existing.id]),
+      ...(changes.parentGroupId !== undefined && changes.parentGroupId !== existing.parentGroup?.id
+        ? [
+            prepareGroupManagementAuthorizationGuard(
+              db,
+              actor,
+              changes.parentGroupId ? [changes.parentGroupId] : [],
+              changes.parentGroupId ? "effective" : "global",
+            ),
+          ]
+        : []),
+      ...(changes.governanceInheritanceMode === "local_only" && existing.governanceInheritanceMode !== "local_only"
+        ? [
+            prepareGroupManagementAuthorizationGuard(db, actor, [existing.id], "inherited_or_global"),
+            prepareAuthorizationGuard(db, activeLocalLeadershipEvidence(existing.id)),
+          ]
+        : []),
       db
         .prepare(`UPDATE groups SET ${setters.join(", ")} WHERE id = ? AND revision = ?`)
         .bind(...bindings, existing.id, expectedRevision),
@@ -337,6 +381,7 @@ export async function replaceGroupCategoryRules(
   await requireGroupManagement(db, actor, group.id);
   const at = nowIso();
   const statements: StatementLike[] = [
+    prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
     db
       .prepare(
         `UPDATE groups
