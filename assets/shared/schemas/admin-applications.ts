@@ -90,7 +90,7 @@ export const adminApplicationEcDecisionSchema = z.object({
 export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
-  requestedWorkingGroups: z.array(groupLabelSchema),
+  requestedWorkingGroups: z.array(groupLabelSchema.pick({ slug: true, name: true })),
   events: z.array(adminApplicationEventSchema),
   communications: z.array(adminApplicationCommunicationSchema),
   concerns: z.array(adminApplicationConcernSchema),
