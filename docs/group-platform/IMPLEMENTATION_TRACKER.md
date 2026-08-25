@@ -428,10 +428,15 @@ Status: In progress
       routes, and fragment-only magic-link parsing. Real local browser tests
       cover staff-only, member-only, and dual-capacity magic-link login, token
       removal, sign-out, cross-identity fail-closed behavior, live membership
-      loss while staff access remains, and keyboard activation without console
-      errors. A complete Codex Security diff review covered all 21 changed
-      production files; its four findings were fixed in the same round and
-      retained as regressions.
+      loss while staff access remains, desktop and 390x844 rendering, drawer
+      overlay behavior, backdrop and Escape dismissal, focus restoration, and
+      keyboard activation without console errors. The responsive pass found
+      and fixed both a horizontal mobile-root layout and a drawer header hidden
+      beneath the site navigation. Route policy, navigation chrome, and route
+      composition now have separate focused modules, with eight shared-fixture
+      frontend regressions. A complete Codex Security diff review covered all
+      21 changed production files; its four findings were fixed in the same
+      round and retained as regressions.
 - [ ] Add selected-group context and capability-derived navigation.
 - [ ] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.
@@ -508,9 +513,10 @@ Status: Pending
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Current evidence: the identity phase has real-browser desktop rendering,
-      keyboard activation, error-free staff/member/dual-capacity login and
-      logout, cross-identity rejection, and live-capacity-loss coverage. The
-      complete role/persona and responsive-state matrix remains pending.
+      390x844 rendering, accessible drawer and keyboard behavior, error-free
+      staff/member/dual-capacity login and logout, cross-identity rejection,
+      and live-capacity-loss coverage. Empty, loading, pagination, and the
+      remaining role/persona matrix are still pending.
 - [ ] Run a final security diff review and resolve validated findings.
       Evidence so far: Codex Security scan
       `7f6a9db1-1349-49f6-8ac0-cd9437915ee8` reviewed the complete delegated
