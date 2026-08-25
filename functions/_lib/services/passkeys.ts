@@ -18,16 +18,15 @@ import { AppError } from "../errors";
 import { all, first } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import { findEligibleStaffUserById } from "../auth/admin";
-import { findEligibleMemberById } from "../auth/member";
-import { prepareSessionRow } from "../auth/session-engine";
-import { resolveMemberSessionTtlHours } from "../auth/session-policy";
-import { AUTH_SCOPES } from "../auth/scopes";
-import { createUserBackedAuthAdmin } from "../auth/admin-identity";
+import {
+  prepareIdentityCapacitySessions,
+  resolveIdentityCapacities,
+  type PreparedIdentityCapacitySessions,
+} from "../auth/identity-capacities";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
-import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 import {
   issuePasskeyChallengeToken,
   passkeyChallengeAlreadyUsedError,
@@ -47,7 +46,6 @@ import {
 type RegistrationResponseInput = z.infer<typeof registrationResponseSchema>;
 type AuthenticationResponseInput = z.infer<typeof authenticationResponseSchema>;
 
-const PASSKEY_SESSION_TTL_HOURS = 8;
 const PASSKEY_CREDENTIAL_COLUMNS =
   "id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at";
 
@@ -304,24 +302,7 @@ export async function beginPasskeyAuthentication(
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
 
-interface PasskeyAdminSession {
-  admin: UserBackedAuthAdmin;
-  sessionId: string;
-  expiresAt: string;
-}
-
-interface PasskeyMemberSession {
-  member: AuthMember;
-  sessionId: string;
-  expiresAt: string;
-}
-
-export interface PasskeyAuthenticationResult {
-  admin?: PasskeyAdminSession;
-  member?: PasskeyMemberSession;
-  /** Earliest capacity expiry, retained for existing login clients. */
-  expiresAt: string;
-}
+export type PasskeyAuthenticationResult = PreparedIdentityCapacitySessions;
 
 export async function completePasskeyAuthentication(
   db: DatabaseLike,
@@ -384,15 +365,11 @@ export async function completePasskeyAuthentication(
     );
   }
 
-  // Resolve both live capacities independently. Staff and member permissions
-  // remain separate, but the same users.id identity may validly hold both.
-  const [staffUser, member] = await Promise.all([
-    findEligibleStaffUserById(db, credentialRow.user_id),
-    findEligibleMemberById(db, credentialRow.user_id),
-  ]);
-  if (!staffUser && !member) {
+  const resolved = await resolveIdentityCapacities(db, credentialRow.user_id);
+  if (!resolved) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
+  const sessions = await prepareIdentityCapacitySessions(db, resolved, env.MEMBER_SESSION_TTL_HOURS);
 
   const lastUsedAt = nowIso();
   const challenge = toPasskeyChallengeUse(claims);
@@ -442,66 +419,17 @@ export async function completePasskeyAuthentication(
     }
   };
 
-  const adminSession = staffUser
-    ? await prepareSessionRow(
-        db,
-        { table: "sessions", subjectColumn: "user_id" },
-        staffUser.id,
-        PASSKEY_SESSION_TTL_HOURS,
-      )
-    : null;
-  const memberSession = member
-    ? await prepareSessionRow(
-        db,
-        { table: "sessions", subjectColumn: "user_id" },
-        member.userId,
-        resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
-      )
-    : null;
-  const expiresAt = [adminSession?.expiresAt, memberSession?.expiresAt]
-    .filter((value): value is string => Boolean(value))
-    .sort()[0];
-  if (!expiresAt) {
-    throw new AppError(500, "SESSION_ISSUANCE_FAILED", "No eligible session capacity was prepared");
-  }
-
   await persistAuthentication({
-    actorType: staffUser ? "admin" : "member",
+    actorType: sessions.admin ? "admin" : "member",
     actorId: credentialRow.user_id,
-    auditSessionId: (adminSession ?? memberSession)!.sessionId,
-    expiresAt,
-    capacities: [...(staffUser ? (["admin"] as const) : []), ...(member ? (["member"] as const) : [])],
-    sessionStatements: [adminSession?.statement, memberSession?.statement].filter(
+    auditSessionId: (sessions.admin ?? sessions.member)!.sessionId,
+    expiresAt: sessions.expiresAt,
+    capacities: [...(sessions.admin ? (["admin"] as const) : []), ...(sessions.member ? (["member"] as const) : [])],
+    sessionStatements: [sessions.admin?.statement, sessions.member?.statement].filter(
       (statement): statement is StatementLike => Boolean(statement),
     ),
   });
-
-  return {
-    expiresAt,
-    ...(staffUser && adminSession
-      ? {
-          admin: {
-            admin: createUserBackedAuthAdmin({
-              id: staffUser.id,
-              email: staffUser.email,
-              role: staffUser.role,
-              scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
-            }),
-            sessionId: adminSession.sessionId,
-            expiresAt: adminSession.expiresAt,
-          },
-        }
-      : {}),
-    ...(member && memberSession
-      ? {
-          member: {
-            member: { ...member, sessionId: memberSession.sessionId, expiresAt: memberSession.expiresAt },
-            sessionId: memberSession.sessionId,
-            expiresAt: memberSession.expiresAt,
-          },
-        }
-      : {}),
-  };
+  return sessions;
 }
 
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {

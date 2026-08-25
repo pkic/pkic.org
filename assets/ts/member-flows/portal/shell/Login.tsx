@@ -1,10 +1,6 @@
 /**
- * Member portal login screen — magic link + passkey.
- * Mirrors admin/shell/Login.tsx's structure; the passkey ceremony code is
- * near-identical (a small duplicated helper, same precedent as ui.ts's
- * header comment) but posts to the member magic-link endpoints and expects
- * a `{member}` capacity in authenticate/complete. A dual-capacity identity
- * may receive `{admin, member}` together; this portal only requires member.
+ * Identity-based portal login screen — one magic link or passkey ceremony
+ * establishes every currently eligible staff/member capacity.
  */
 import { useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
@@ -16,16 +12,12 @@ import { emailFromSubmitEvent } from "../../../shared/form/helpers";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 
 async function requestMagicLink(email: string): Promise<void> {
-  await postJson("/api/v1/auth/member/request-link", { email }, successResponseSchema);
+  await postJson("/api/v1/auth/portal/request-link", { email }, successResponseSchema);
   // Always show success to prevent email enumeration (mirrors admin Login).
 }
 
 async function signInWithPasskey(): Promise<void> {
-  const result = await authenticateWithPasskey();
-  if (!result.member) {
-    // Succeeded, but the passkey belonged to a staff account, not a member.
-    throw new Error("This passkey isn't registered to a member account.");
-  }
+  await authenticateWithPasskey();
 }
 
 export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }) {
@@ -56,7 +48,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
     <div class="d-flex justify-content-center py-5">
       <div class="card shadow-sm content-width-sm">
         <div class="card-body p-4">
-          <h2 class="h4 mb-3">Member Portal</h2>
+          <h2 class="h4 mb-3">PKI Consortium Portal</h2>
 
           {passkeysSupported && !magicLink.sent && (
             <>
@@ -77,7 +69,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
           <p class="text-muted">Enter your email to receive a sign-in link.</p>
           {magicLink.sent ? (
             <div class="alert alert-success mt-3">
-              ✓ If this address belongs to an active member, you'll receive a sign-in link shortly.
+              ✓ If this address has portal access, you'll receive a sign-in link shortly.
             </div>
           ) : (
             <form

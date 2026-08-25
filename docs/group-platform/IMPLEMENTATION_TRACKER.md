@@ -404,14 +404,26 @@ Status: In progress
 
 Status: In progress
 
-- [ ] Make portal authentication identity-based.
-      Passkey authentication now resolves staff and member eligibility
-      independently and atomically establishes both session capacities for a
-      dual-capacity identity. Staff-only and member-only clients retain their
-      existing response/cookie contracts. The neutral portal magic-link,
-      session-status, and logout routes are still required before this item is
-      complete.
-- [ ] Gate member actions separately from staff management permissions.
+- [x] Make portal authentication identity-based.
+      The neutral `/api/v1/auth/portal/*` flow uses one purpose-bound magic
+      link, resolves staff and member eligibility independently, and atomically
+      establishes every current capacity. Passkeys follow the same model.
+      Staff-only and member-only clients retain their existing cookie/token
+      contracts during migration; mixed-identity cookies fail closed.
+- [x] Gate member actions separately from staff management permissions.
+      Portal session status exposes live capacities, the shell derives its
+      navigation from them, and staff-only identities never probe or receive
+      access to `/api/v1/me/*`. Those endpoints continue to require a live
+      member session; loss of membership removes only that capacity rather
+      than locking an otherwise eligible staff identity out.
+      Evidence: the expanded mounted authentication matrix covers neutral
+      portal magic links, passkeys, purpose isolation, live staff/member
+      eligibility, cross-identity rejection and recovery, bearer and cookie
+      logout, concurrent link consumption, and atomic D1 rollback. The
+      capability-derived frontend test covers staff-only, member-only, and
+      dual-capacity navigation and fragment-only magic-link parsing. A complete
+      Codex Security diff review covered all 21 changed production files; its
+      four findings were fixed in the same round and retained as regressions.
 - [ ] Add selected-group context and capability-derived navigation.
 - [ ] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.

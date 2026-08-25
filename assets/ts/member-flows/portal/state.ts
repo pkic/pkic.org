@@ -1,13 +1,15 @@
 /**
- * Portal SPA global signals — mirrors admin/state.ts's shape, scoped to the
- * member session instead of the admin session.
+ * Portal SPA global signals. Authentication belongs to one identity with
+ * independently optional staff/member capacities; member profile state is
+ * loaded only when the backend returns member capacity.
  */
 import { signal, computed } from "@preact/signals";
-import type { MyProfile } from "./types";
+import type { MyProfile, PortalSession } from "./types";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
 export const authStatus = signal<AuthStatus>("loading");
+export const portalSession = signal<PortalSession | null>(null);
 export const profile = signal<MyProfile | null>(null);
 export const isAuthed = computed(() => authStatus.value === "authenticated");
 
@@ -16,11 +18,20 @@ export function setAuthChecking(): void {
 }
 
 export function saveProfile(next: MyProfile): void {
-  authStatus.value = "authenticated";
   profile.value = next;
+}
+
+export function clearMemberProfile(): void {
+  profile.value = null;
+}
+
+export function savePortalSession(next: PortalSession): void {
+  portalSession.value = next;
+  authStatus.value = "authenticated";
 }
 
 export function clearAuth(): void {
   authStatus.value = "anonymous";
+  portalSession.value = null;
   profile.value = null;
 }

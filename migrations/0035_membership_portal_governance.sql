@@ -3015,6 +3015,16 @@ If you did not request this link, you can safely ignore this email.',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
+    lower(hex(randomblob(16))), 'portal_magic_link', 1,
+    'Your PKI Consortium portal sign-in link',
+    'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
+
+[Sign in]({{magicLinkUrl}})
+
+If you did not request this link, you can safely ignore this email.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  ),
+  (
     lower(hex(randomblob(16))), 'existing-member-claim', 1,
     'Claim your PKI Consortium member account',
     'Hi {{memberName}},

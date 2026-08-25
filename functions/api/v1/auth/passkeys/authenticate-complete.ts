@@ -36,18 +36,28 @@ export const PasskeyAuthenticateComplete = openApiRoute(
       body: passkeyAuthenticateCompleteResponseSchema.parse({
         success: true,
         expiresAt: verified.expiresAt,
-        ...(verified.admin ? { admin: publicAuthAdmin(verified.admin.admin) } : {}),
-        ...(verified.member ? { member: verified.member.member } : {}),
+        ...(verified.admin ? { admin: publicAuthAdmin(verified.admin.value) } : {}),
+        ...(verified.member ? { member: verified.member.value } : {}),
       }),
       ...(verified.admin
         ? {
             admin: {
-              ...verified.admin,
+              admin: verified.admin.value,
+              sessionId: verified.admin.sessionId,
+              expiresAt: verified.admin.expiresAt,
               state: db.getBookmark?.(),
             },
           }
         : {}),
-      ...(verified.member ? { member: verified.member } : {}),
+      ...(verified.member
+        ? {
+            member: {
+              member: verified.member.value,
+              sessionId: verified.member.sessionId,
+              expiresAt: verified.member.expiresAt,
+            },
+          }
+        : {}),
     });
   },
 );

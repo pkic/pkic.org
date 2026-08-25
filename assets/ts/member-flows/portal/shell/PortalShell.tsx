@@ -7,10 +7,10 @@
  * UI phase that builds them.
  */
 import { type ComponentChildren } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Router, Route, Switch, Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
-import { profile, clearAuth } from "../state";
+import { portalSession, profile, clearAuth } from "../state";
 import { MyProfile } from "../sections/MyProfile";
 import { MyOrganization } from "../sections/MyOrganization";
 import { WorkingGroups } from "../sections/WorkingGroups";
@@ -21,6 +21,7 @@ import { AccountSettings } from "../sections/AccountSettings";
 import { postJson } from "../../../shared/api-client";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { MenuIcon } from "../../../components/MenuIcon";
+import type { PortalSession } from "../types";
 
 interface NavItem {
   path: string;
@@ -28,7 +29,7 @@ interface NavItem {
   label: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const MEMBER_NAV_ITEMS: NavItem[] = [
   { path: "/profile", sec: "profile", label: "My Profile" },
   { path: "/organization", sec: "organization", label: "My Organization" },
   { path: "/working-groups", sec: "working-groups", label: "Working Groups" },
@@ -37,6 +38,13 @@ const NAV_ITEMS: NavItem[] = [
   { path: "/application", sec: "application", label: "My Application" },
   { path: "/account", sec: "account", label: "Account Settings" },
 ];
+
+export function portalNavigationItems(session: PortalSession | null): NavItem[] {
+  return [
+    ...(session?.member ? MEMBER_NAV_ITEMS : []),
+    ...(session?.admin ? [{ path: "/management", sec: "management", label: "Management" }] : []),
+  ];
+}
 
 function closeSidebar(): void {
   document.getElementById("portal-sidebar")?.classList.remove("open");
@@ -60,20 +68,23 @@ function activeSectionFor(location: string): string {
 
 function Sidebar() {
   const [location] = useHashLocation();
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const activeSec = activeSectionFor(location);
   const displayName =
     profile.value?.preferredName ||
     [profile.value?.firstName, profile.value?.lastName].filter(Boolean).join(" ").trim() ||
     profile.value?.email ||
+    portalSession.value?.identity.email ||
     "";
 
   return (
     <aside id="portal-sidebar" class="p-2">
       <div class="px-2 py-3 mb-1">
-        <div class="portal-brand">Member Portal</div>
+        <div class="portal-brand">PKI Consortium Portal</div>
         <div id="portal-sb-user">{displayName}</div>
       </div>
-      {NAV_ITEMS.map((item) => (
+      {portalNavigationItems(portalSession.value).map((item) => (
         <Link
           key={item.sec}
           href={item.path}
@@ -84,18 +95,25 @@ function Sidebar() {
         </Link>
       ))}
       <div class="portal-sidebar-footer px-1 pt-3">
+        {signOutError && <div class="alert alert-danger small">{signOutError}</div>}
         <button
           class="btn btn-sm btn-outline-secondary w-100"
+          disabled={signingOut}
           onClick={async () => {
+            setSignOutError(null);
+            setSigningOut(true);
             try {
-              await postJson("/api/v1/auth/member/logout", {}, successResponseSchema);
-            } finally {
+              await postJson("/api/v1/auth/portal/logout", {}, successResponseSchema);
               clearAuth();
               window.location.assign("/portal/");
+            } catch {
+              setSignOutError("Sign out failed. Your session is still active; please try again.");
+            } finally {
+              setSigningOut(false);
             }
           }}
         >
-          Sign out
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </div>
     </aside>
@@ -120,7 +138,7 @@ function Topbar() {
       >
         <MenuIcon />
       </button>
-      <span class="portal-brand">Member Portal</span>
+      <span class="portal-brand">PKI Consortium Portal</span>
     </div>
   );
 }
@@ -135,6 +153,9 @@ function SectionWrapper({ title, children }: { title: string; children: Componen
 }
 
 export function PortalShell() {
+  const hasMemberCapacity = Boolean(portalSession.value?.member);
+  const hasAdminCapacity = Boolean(portalSession.value?.admin);
+  const defaultPath = hasMemberCapacity ? "/profile" : "/management";
   return (
     <Router hook={useHashLocation}>
       <div id="portal-root">
@@ -143,65 +164,92 @@ export function PortalShell() {
         <Sidebar />
         <main id="portal-main">
           <Switch>
-            <Route
-              path="/profile"
-              component={() => (
-                <SectionWrapper title="My Profile">
-                  <MyProfile />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/organization"
-              component={() => (
-                <SectionWrapper title="My Organization">
-                  <MyOrganization />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/working-groups"
-              component={() => (
-                <SectionWrapper title="Working Groups">
-                  <WorkingGroups />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/calendar"
-              component={() => (
-                <SectionWrapper title="Calendar">
-                  <Calendar />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/votes"
-              component={() => (
-                <SectionWrapper title="Votes">
-                  <Votes />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/application"
-              component={() => (
-                <SectionWrapper title="My Application">
-                  <MyApplications />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/account"
-              component={() => (
-                <SectionWrapper title="Account Settings">
-                  <AccountSettings />
-                </SectionWrapper>
-              )}
-            />
+            {hasAdminCapacity && (
+              <Route
+                path="/management"
+                component={() => (
+                  <SectionWrapper title="Management">
+                    <div class="alert alert-info">
+                      Your management access is active. Group-scoped management views will appear here as they move into
+                      the unified portal.
+                    </div>
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/profile"
+                component={() => (
+                  <SectionWrapper title="My Profile">
+                    <MyProfile />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/organization"
+                component={() => (
+                  <SectionWrapper title="My Organization">
+                    <MyOrganization />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/working-groups"
+                component={() => (
+                  <SectionWrapper title="Working Groups">
+                    <WorkingGroups />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/calendar"
+                component={() => (
+                  <SectionWrapper title="Calendar">
+                    <Calendar />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/votes"
+                component={() => (
+                  <SectionWrapper title="Votes">
+                    <Votes />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/application"
+                component={() => (
+                  <SectionWrapper title="My Application">
+                    <MyApplications />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasMemberCapacity && (
+              <Route
+                path="/account"
+                component={() => (
+                  <SectionWrapper title="Account Settings">
+                    <AccountSettings />
+                  </SectionWrapper>
+                )}
+              />
+            )}
             <Route path="/">
               {() => {
-                window.location.hash = "#/profile";
+                window.location.hash = `#${defaultPath}`;
                 return null;
               }}
             </Route>

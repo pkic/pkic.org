@@ -3,10 +3,10 @@ import { requestDb, type AdminContext } from "../db/context";
 import { jsonNoStore } from "../http";
 import { enforceEmailTriggerRateLimits, enforceRateLimit } from "../rate-limit";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
-import type { AuthMember, DatabaseLike, UserBackedAuthAdmin } from "../types";
-import { serializeAdminSessionCookie, signAdminSessionToken } from "./admin";
+import type { AuthMember, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../types";
+import { serializeAdminSessionCookie, serializeExpiredAdminSessionCookie, signAdminSessionToken } from "./admin";
 import { publicAuthAdmin } from "./admin-identity";
-import { serializeMemberSessionCookie, signMemberSessionToken } from "./member";
+import { serializeExpiredMemberSessionCookie, serializeMemberSessionCookie, signMemberSessionToken } from "./member";
 import { adminSessionEstablishedResponseSchema } from "../../../assets/shared/schemas/admin-auth";
 
 export interface MagicLinkRequestHttpContext {
@@ -193,22 +193,56 @@ interface SessionVerificationResult {
 
 export interface SessionLogoutPolicy {
   readCookie(request: Request): string | null;
+  /** Optional persona-aware reader for auth surfaces that also accept bearer sessions. */
+  readToken?(request: Request): string | null;
   verify(secret: string, token: string): Promise<SessionVerificationResult>;
   revoke(db: DatabaseLike, sessionId: string): Promise<void>;
+  prepareRevoke?(db: DatabaseLike, sessionId: string): StatementLike;
   serializeExpiredCookie(request: Request): string;
 }
 
-/** Revokes a valid cookie-backed session when possible and clears the persona cookie unconditionally. */
+/** Revokes one valid persona session when possible and clears its browser cookie unconditionally. */
 export async function logoutSession(c: AdminContext, policy: SessionLogoutPolicy): Promise<Response> {
-  const token = policy.readCookie(c.req.raw);
-  if (token) {
-    const verified = await policy.verify(requireInternalSecret(c.env), token);
-    if (verified.ok && verified.claims) {
-      await policy.revoke(requestDb(c), verified.claims.sid);
+  return logoutSessions(c, [policy]);
+}
+
+/** Revokes every presented identity capacity and clears every corresponding browser cookie. */
+export async function logoutSessions(c: AdminContext, policies: readonly SessionLogoutPolicy[]): Promise<Response> {
+  const sessions = policies.map((policy) => ({
+    policy,
+    token: policy.readToken?.(c.req.raw) ?? policy.readCookie(c.req.raw),
+  }));
+  const secret = sessions.some((session) => session.token) ? requireInternalSecret(c.env) : null;
+  const db = requestDb(c);
+  const verifiedSessions: Array<{ policy: SessionLogoutPolicy; sessionId: string }> = [];
+  for (const { policy, token } of sessions) {
+    if (token && secret) {
+      const verified = await policy.verify(secret, token);
+      if (verified.ok && verified.claims) {
+        verifiedSessions.push({ policy, sessionId: verified.claims.sid });
+      }
+    }
+  }
+  const prepared = verifiedSessions.map(({ policy, sessionId }) => policy.prepareRevoke?.(db, sessionId));
+  if (prepared.length > 0 && prepared.every((statement): statement is StatementLike => Boolean(statement))) {
+    await db.batch(prepared);
+  } else {
+    for (const { policy, sessionId } of verifiedSessions) {
+      await policy.revoke(db, sessionId);
     }
   }
 
   const response = jsonNoStore({ success: true });
-  response.headers.append("Set-Cookie", policy.serializeExpiredCookie(c.req.raw));
+  for (const policy of policies) {
+    response.headers.append("Set-Cookie", policy.serializeExpiredCookie(c.req.raw));
+  }
+  return response;
+}
+
+/** Clears both browser capacities after a fail-closed identity mismatch. */
+export function clearIdentitySessionCookies(response: Response, request: Request): Response {
+  response.headers.set("cache-control", "no-store, max-age=0");
+  response.headers.append("Set-Cookie", serializeExpiredAdminSessionCookie(request));
+  response.headers.append("Set-Cookie", serializeExpiredMemberSessionCookie(request));
   return response;
 }

@@ -207,11 +207,16 @@ export async function revokeSessionRow(db: DatabaseLike, table: string, sessionI
   await run(db, `UPDATE ${table} SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?`, [nowIso(), sessionId]);
 }
 
+export function prepareRevokeSessionRow(db: DatabaseLike, table: string, sessionId: string): StatementLike {
+  return db.prepare(`UPDATE ${table} SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?`).bind(nowIso(), sessionId);
+}
+
 // ── Magic-link rows (`auth_magic_links` for admin/member, `sponsor_portal_magic_links`) ──
 
 export const AUTH_MAGIC_LINK_PURPOSES = {
   admin: "admin",
   member: "member",
+  portal: "portal",
   mcpOauth: "mcp_oauth",
 } as const;
 
