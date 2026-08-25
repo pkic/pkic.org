@@ -198,7 +198,7 @@ export function Forms({ slug }: { slug?: string }) {
               slug={slug}
               onSaved={(key) => {
                 setCreating(false);
-                tableActions.current?.reload();
+                void tableActions.current?.reload();
                 if (!slug) navigate(`/forms/${key}`);
               }}
               onCancel={() => setCreating(false)}

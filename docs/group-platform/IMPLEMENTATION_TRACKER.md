@@ -504,12 +504,18 @@ Status: In progress
       audit management into the portal.
       Current evidence: the selected-group portal owns group settings,
       capacity-aware participant add/remove, local leadership assign/revoke,
-      effective inherited-leadership display, and meeting-series list/create.
+      effective inherited-leadership display, meeting-series list/create,
+      capability-filtered event and form discovery, member mailing-list
+      preferences, and the group-scoped audit view. These collections share
+      the same schema-validated server search, sorting, counting, and pagination
+      controller as the existing admin lists; the portal never filters a fetched
+      page locally. Per-resource capabilities continue to come from the nested
+      API responses rather than frontend policy duplication.
       The unreleased duplicate group-leadership panel has been removed from
       the admin application; dated Board and Executive Council positions remain
       there because they are global records rather than group governance.
-      Forms, votes, mailing lists, statistics, audit, complete meeting lifecycle,
-      and resource sharing remain open.
+      Form authoring/response management, votes, mailing-list management,
+      statistics, complete meeting lifecycle, and resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.
@@ -589,7 +595,7 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,926 backend tests pass with one skipped, 181 frontend tests
+      checkpoint: 1,926 backend tests pass with one skipped, 183 frontend tests
       pass, and 79 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. Keep this

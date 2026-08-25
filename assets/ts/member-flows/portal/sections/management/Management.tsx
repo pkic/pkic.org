@@ -16,6 +16,10 @@ import { GroupSettingsForm } from "./GroupSettingsForm";
 import { GroupMembers } from "./GroupMembers";
 import { GroupLeadership } from "./GroupLeadership";
 import { GroupMeetings } from "./GroupMeetings";
+import { GroupAuditLog } from "./GroupAuditLog";
+import { GroupEvents } from "./GroupEvents";
+import { GroupForms } from "./GroupForms";
+import { GroupMailingLists } from "./GroupMailingLists";
 import { groupContextNavigation } from "./group-context-navigation";
 
 const OVERVIEW_VIEW = "overview";
@@ -117,7 +121,11 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
             <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />
           )}
           {view === "leadership" && canManage && <GroupLeadership key={group.id} groupId={group.id} />}
+          {view === "events" && <GroupEvents key={group.id} groupId={group.id} />}
           {view === "meetings" && <GroupMeetings key={group.id} groupId={group.id} canManage={canManage} />}
+          {view === "forms" && <GroupForms key={group.id} groupId={group.id} />}
+          {view === "mailing-lists" && <GroupMailingLists key={group.id} groupId={group.id} />}
+          {view === "audit" && canManage && <GroupAuditLog key={group.id} groupId={group.id} />}
           {!views.some((item) => item.key === view) && (
             <ErrorAlert error="This group section is not available to your current identity." />
           )}

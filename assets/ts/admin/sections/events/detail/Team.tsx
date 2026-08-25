@@ -48,11 +48,11 @@ export function Team({ slug }: { slug: string }) {
           }),
         }),
       successMessage: "Permission added",
-      afterSuccess: () => {
+      afterSuccess: async () => {
         setNewEmail("");
         setNewExpiresAt("");
         setAddStatus("");
-        tableRef.current?.reload();
+        await tableRef.current?.reload();
       },
       onError: setAddStatus,
     });

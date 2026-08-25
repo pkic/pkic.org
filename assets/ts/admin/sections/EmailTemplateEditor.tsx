@@ -195,7 +195,7 @@ export function TemplateEditor({
         },
       );
       toast(`Saved as draft v${result.version.version}`, "success");
-      historyRef.current?.reload();
+      await historyRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -210,7 +210,7 @@ export function TemplateEditor({
         body: JSON.stringify({ version }),
       });
       toast(`v${version} is now active`, "success");
-      historyRef.current?.reload();
+      await historyRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }

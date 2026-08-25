@@ -162,7 +162,7 @@ describe("portal selected-group management", () => {
     await settle();
 
     const tabs = [...container.querySelectorAll("nav a")].map((link) => link.textContent);
-    expect(tabs).toEqual(["Overview", "Meetings"]);
+    expect(tabs).toEqual(["Overview", "Events", "Meetings", "Forms", "Mailing lists"]);
     expect(container.textContent).not.toContain("Save group settings");
   });
 });

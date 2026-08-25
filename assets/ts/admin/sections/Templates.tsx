@@ -196,7 +196,7 @@ export function Templates() {
     return (
       <CreateTemplate
         onCreated={async (key) => {
-          tableRef.current?.reload();
+          await tableRef.current?.reload();
           await openEditor(key);
         }}
         onCancel={() => setView("list")}

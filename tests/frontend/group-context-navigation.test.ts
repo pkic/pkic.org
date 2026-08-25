@@ -3,13 +3,22 @@ import { groupContextNavigation } from "../../assets/ts/member-flows/portal/sect
 
 describe("selected-group capability navigation", () => {
   it("exposes collaboration without management controls to participants", () => {
-    expect(groupContextNavigation(["view", "participate"]).map((item) => item.key)).toEqual(["overview", "meetings"]);
+    expect(groupContextNavigation(["view", "participate"]).map((item) => item.key)).toEqual([
+      "overview",
+      "events",
+      "meetings",
+      "forms",
+      "mailing-lists",
+    ]);
   });
 
   it("exposes management views without manufacturing participation", () => {
     expect(groupContextNavigation(["view", "manage"]).map((item) => item.key)).toEqual([
       "overview",
+      "events",
       "meetings",
+      "forms",
+      "audit",
       "settings",
       "members",
       "leadership",

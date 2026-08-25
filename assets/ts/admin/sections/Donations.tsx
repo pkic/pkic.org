@@ -187,7 +187,7 @@ export function Donations({ subTab }: { subTab?: string }) {
         `Synced ${res.synced}${parts ? `: ${parts}` : "."}`,
         res.errors > 0 || res.failed > 0 ? "error" : "success",
       );
-      actionsRef.current?.reload();
+      await actionsRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

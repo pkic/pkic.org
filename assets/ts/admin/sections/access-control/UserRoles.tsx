@@ -40,7 +40,7 @@ export function UserRoles() {
       toast("Role assigned", "success");
       setContext({ contextType: null, contextId: null });
       setExpiresAt("");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
@@ -54,7 +54,7 @@ export function UserRoles() {
     try {
       await apiCommand(`/api/v1/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
       toast("Role revoked", "success");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }

@@ -172,7 +172,7 @@ export function EventList() {
 
   function handleCreated(slug: string) {
     setShowNewForm(false);
-    tableRef.current?.reload();
+    void tableRef.current?.reload();
     navigate(`/events/${encodeURIComponent(slug)}`);
   }
 

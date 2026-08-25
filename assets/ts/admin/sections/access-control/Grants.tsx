@@ -53,11 +53,11 @@ export function Grants() {
           }),
         }),
       successMessage: "Permission granted",
-      afterSuccess: () => {
+      afterSuccess: async () => {
         setUser(null);
         setContext({ contextType: null, contextId: null });
         setExpiresAt("");
-        tableRef.current?.reload();
+        await tableRef.current?.reload();
       },
     });
   }
