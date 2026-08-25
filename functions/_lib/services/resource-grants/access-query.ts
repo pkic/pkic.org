@@ -1,27 +1,26 @@
-import type { EventGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
 import {
   getResourceGrantDefinition,
   isManagerResourceCapability,
   isParticipantResourceCapability,
   visibleResourceGrantCapabilitiesForContext,
-  type GroupResourceContextAccess,
-} from "../resource-grants";
+  type ResourceGrantCapability,
+  type ResourceGrantKind,
+} from "./definitions";
+import type { GroupResourceContextAccess } from "./access";
 
-export interface AccessibleGroupEventIdsCte {
+export interface AccessibleGroupResourceIdsCte {
   sql: string;
   bindings: readonly unknown[];
 }
 
-/**
- * Builds the canonical D1 access boundary for events viewed through one group.
- * The returned SQL is a trusted CTE fragment; all contextual values remain bound.
- */
-export function buildAccessibleGroupEventIdsCte(
+/** Indexed D1 access boundary shared by every group-owned or group-shared resource list. */
+export function buildAccessibleGroupResourceIdsCte<K extends ResourceGrantKind>(
+  kind: K,
   groupId: string,
   access: GroupResourceContextAccess,
-  capability: EventGroupCapability = "view",
-): AccessibleGroupEventIdsCte {
-  const definition = getResourceGrantDefinition("event");
+  capability: ResourceGrantCapability<K>,
+): AccessibleGroupResourceIdsCte {
+  const definition = getResourceGrantDefinition(kind);
   const ownerAllowed = isParticipantResourceCapability(definition, capability)
     ? access.member
     : isManagerResourceCapability(definition, capability)
@@ -29,15 +28,15 @@ export function buildAccessibleGroupEventIdsCte(
       : access.member || access.manager;
   const visibleGrants = visibleResourceGrantCapabilitiesForContext(definition, capability, access);
   return {
-    sql: `accessible_event AS (
-      SELECT owned.id AS event_id
-        FROM events owned INDEXED BY idx_events_owner_profile
-       WHERE owned.owner_group_id = ? AND ? = 1
+    sql: `accessible_resource(resource_id) AS (
+      SELECT owned.id
+        FROM ${definition.resourceTable} owned INDEXED BY ${definition.ownerGroupIndex}
+       WHERE owned.${definition.ownerGroupColumn} = ? AND ? = 1
       ${
         visibleGrants.length > 0
           ? `UNION
-      SELECT shared.event_id
-        FROM event_group_grants shared INDEXED BY idx_event_group_grants_group
+      SELECT shared.${definition.grantResourceColumn}
+        FROM ${definition.grantTable} shared INDEXED BY ${definition.grantGroupIndex}
        WHERE shared.group_id = ?
          AND shared.capability IN (${visibleGrants.map(() => "?").join(", ")})`
           : ""

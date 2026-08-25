@@ -5,6 +5,7 @@ export const GROUP_CONTEXT_VIEWS = [
   { key: "events", label: "Events", capabilities: ["participate", "manage"] },
   { key: "meetings", label: "Meetings", capabilities: ["participate", "manage"] },
   { key: "forms", label: "Forms", capabilities: ["participate", "manage"] },
+  { key: "votes", label: "Votes", capabilities: ["participate", "manage"] },
   { key: "mailing-lists", label: "Mailing lists", capabilities: ["participate"] },
   { key: "audit", label: "Audit log", capabilities: ["manage"] },
   { key: "settings", label: "Settings", capabilities: ["manage"] },

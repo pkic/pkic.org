@@ -348,7 +348,18 @@ Status: In progress
           50-statement batches. The focused event suites pass 19 tests and the
           consolidated migration upgrade suite passes two tests.
   - [ ] Apply vote grants after the atomic generic voting cutover.
-        Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
+    - [x] Apply `view` implications to canonical group-scoped vote discovery.
+          Evidence: the nested vote route reuses the canonical vote summary and
+          list-query contracts, while one resource-kind-aware indexed CTE now
+          drives both event and vote discovery. D1 performs access filtering,
+          text search, status/type filtering, sorting, counting, and pagination.
+          Mounted participant and manager tests prove owner and explicitly
+          shared access without allowing management to imply participation;
+          EXPLAIN assertions prove owner and grantee index use for page and
+          count statements.
+    - [ ] Apply `participate`, `view_results`, and `manage` to canonical vote
+          detail, ballot, result, proposal, and lifecycle routes.
+        Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
         and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
         broader focused form/grant regression selection passes 20 tests. Four
         resource-specific grant tables retain real resource and group foreign
@@ -388,7 +399,9 @@ Status: In progress
       suite passes 5. Coverage includes inherited-source rendering, local
       assignment deletion, compatibility routing, canonical public directory
       reads, and fresh-D1 schema use.
-- [ ] Add nested votes and stats routes.
+- [x] Add the nested vote discovery route.
+- [ ] Add nested vote detail, ballot, result, proposal, lifecycle, and stats
+      routes.
 - [ ] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.
@@ -514,7 +527,9 @@ Status: In progress
       The unreleased duplicate group-leadership panel has been removed from
       the admin application; dated Board and Executive Council positions remain
       there because they are global records rather than group governance.
-      Form authoring/response management, votes, mailing-list management,
+      Group vote discovery now uses that same controller and renders effective
+      per-resource capabilities. Form authoring/response management, complete
+      vote lifecycle/ballot/proposal management, mailing-list management,
       statistics, complete meeting lifecycle, and resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.

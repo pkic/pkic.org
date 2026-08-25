@@ -6,6 +6,7 @@ import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/mana
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
+import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -123,6 +124,34 @@ describe("portal selected-group collections", () => {
             page,
           });
         }
+        if (url.pathname.endsWith("/votes")) {
+          return json({
+            votes: [
+              {
+                id: "b0000000-0000-4000-8000-000000000001",
+                slug: "architecture-motion",
+                title: "Architecture motion",
+                description: "Adopt the architecture.",
+                voteType: "motion",
+                ownerGroupId: GROUP_ID,
+                ownerGroupName: "Architecture Committee",
+                electorateMode: "per_member",
+                thresholdType: "simple_majority",
+                eligibleCategories: null,
+                opensAt: "2026-08-01T00:00:00.000Z",
+                closesAt: "2026-09-01T00:00:00.000Z",
+                currentRound: 1,
+                status: "open",
+                visibility: "private",
+                publicDetailLevel: "outcome_only",
+                createdAt: "2026-08-01T00:00:00.000Z",
+                updatedAt: "2026-08-01T00:00:00.000Z",
+                capabilities: ["view", "participate"],
+              },
+            ],
+            page,
+          });
+        }
         throw new Error(`Unexpected request: ${url.pathname}`);
       }),
     );
@@ -130,11 +159,13 @@ describe("portal selected-group collections", () => {
     const forms = mount(<GroupForms groupId={GROUP_ID} />);
     const events = mount(<GroupEvents groupId={GROUP_ID} />);
     const audit = mount(<GroupAuditLog groupId={GROUP_ID} />);
+    const votes = mount(<GroupVotes groupId={GROUP_ID} />);
     await settle();
 
     expect(forms.textContent).toContain("Architecture survey");
     expect(events.textContent).toContain("Architecture workshop");
     expect(audit.textContent).toContain("group_updated");
+    expect(votes.textContent).toContain("Architecture motion");
     expect(
       requests.map((url) => ({
         path: url.pathname,
@@ -146,6 +177,7 @@ describe("portal selected-group collections", () => {
         { path: `/api/v1/groups/${GROUP_ID}/forms`, limit: "50", sort: "title" },
         { path: `/api/v1/groups/${GROUP_ID}/events`, limit: "50", sort: "next_occurrence_at" },
         { path: `/api/v1/groups/${GROUP_ID}/audit-log`, limit: "50", sort: "-createdAt" },
+        { path: `/api/v1/groups/${GROUP_ID}/votes`, limit: "50", sort: "-closes_at" },
       ]),
     );
   });

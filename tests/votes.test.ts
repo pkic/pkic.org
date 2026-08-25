@@ -2,8 +2,11 @@ import { createExecutionContext, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../functions/router";
 import { isAppError } from "../functions/_lib/errors";
+import { groupVotesListResponseSchema } from "../assets/shared/schemas/group-votes";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
   approveVoteProposal,
+  buildGroupVotesPageQuery,
   closeDueVotes,
   computeMotionResult,
   createVoteDirect,
@@ -19,7 +22,7 @@ import {
   tallyElectionRound,
   updateVoteVisibility,
 } from "../functions/_lib/services/votes";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch, gateNextRun } from "./helpers/d1-batch-gate";
 import { queryAll } from "./helpers/context";
 import { addRepresentative, insertUser } from "./helpers/membership";
@@ -367,6 +370,29 @@ describe("canonical group voting", () => {
     expect(body.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
   });
 
+  it("lists one selected group's votes for participants and staff-only managers", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Selected group vote" });
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `group-votes-${crypto.randomUUID()}`);
+
+    const participantResponse = await call(
+      memberToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/votes?q=Selected&sort=title&limit=1`,
+    );
+    expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
+    expect(groupVotesListResponseSchema.parse(await participantResponse.json())).toMatchObject({
+      votes: [{ id: vote.id, capabilities: expect.arrayContaining(["view", "participate", "view_results"]) }],
+      page: { total: 1, hasMore: false },
+    });
+
+    const managerResponse = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes?limit=1`);
+    expect(managerResponse.status, await managerResponse.clone().text()).toBe(200);
+    const manager = groupVotesListResponseSchema.parse(await managerResponse.json());
+    expect(manager.votes[0]).toMatchObject({ id: vote.id, capabilities: expect.arrayContaining(["view", "manage"]) });
+    expect(manager.votes[0].capabilities).not.toContain("participate");
+  });
+
   it("records per-Member history and closes a motion from SQL aggregates", async () => {
     const capacity = await createOrganizationCapacity(env.DB);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
@@ -405,6 +431,16 @@ describe("canonical group voting", () => {
   });
 
   it("uses indexed plans for group-scoped discovery and Member ballot replacement", async () => {
+    const groupVotes = buildOffsetPageSql(
+      buildGroupVotesPageQuery(TEST_GROUPS.pqc, { member: true, manager: false }, { limit: 20, offset: 0 }),
+    );
+    const groupVotesPlan = await queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${groupVotes.pageSql}`, [
+      ...groupVotes.bindings,
+      20,
+      0,
+    ]);
+    expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_status/);
+    expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_group_grants_group/);
     const visibilityPlan = await queryAll<{ detail: string }>(
       env.DB,
       `EXPLAIN QUERY PLAN

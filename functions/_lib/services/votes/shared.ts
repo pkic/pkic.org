@@ -69,13 +69,18 @@ export interface VoteRow {
 }
 
 /** Canonical explicit projection for every query that hydrates a complete VoteRow. */
-export const VOTE_ROW_COLUMNS =
-  "id, slug, title, description, vote_type, owner_group_id, " +
-  "(SELECT name FROM groups owner_group WHERE owner_group.id = votes.owner_group_id) AS owner_group_name, " +
-  "electorate_mode, created_by_user_id, proposed_by_user_id, " +
-  "eligible_categories, threshold_type, opens_at, closes_at, current_round, transition_revision, " +
-  "transition_processing_token, transition_lease_expires_at, status, result_json, visibility, public_detail_level, " +
-  "created_at, updated_at";
+export function voteRowProjection(alias: "votes" | "vote"): string {
+  return `${alias}.id, ${alias}.slug, ${alias}.title, ${alias}.description, ${alias}.vote_type,
+    ${alias}.owner_group_id,
+    (SELECT name FROM groups owner_group WHERE owner_group.id = ${alias}.owner_group_id) AS owner_group_name,
+    ${alias}.electorate_mode, ${alias}.created_by_user_id, ${alias}.proposed_by_user_id,
+    ${alias}.eligible_categories, ${alias}.threshold_type, ${alias}.opens_at, ${alias}.closes_at,
+    ${alias}.current_round, ${alias}.transition_revision, ${alias}.transition_processing_token,
+    ${alias}.transition_lease_expires_at, ${alias}.status, ${alias}.result_json, ${alias}.visibility,
+    ${alias}.public_detail_level, ${alias}.created_at, ${alias}.updated_at`;
+}
+
+export const VOTE_ROW_COLUMNS = voteRowProjection("votes");
 
 export interface CandidateRow {
   id: string;

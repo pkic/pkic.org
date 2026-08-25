@@ -8,6 +8,7 @@ describe("selected-group capability navigation", () => {
       "events",
       "meetings",
       "forms",
+      "votes",
       "mailing-lists",
     ]);
   });
@@ -18,6 +19,7 @@ describe("selected-group capability navigation", () => {
       "events",
       "meetings",
       "forms",
+      "votes",
       "audit",
       "settings",
       "members",

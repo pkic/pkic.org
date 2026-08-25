@@ -14,4 +14,5 @@ export * from "./representative-notification-intents";
 export * from "./closing";
 export * from "./public";
 export * from "./portal";
+export * from "./group-read-model";
 export * from "./proposals";

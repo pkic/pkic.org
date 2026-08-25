@@ -46,6 +46,7 @@ import { GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
 import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
+import { GroupVotesList } from "./[groupId]/votes/index";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -77,6 +78,7 @@ openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCrea
 openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
 openapi.get("/:groupId/events", GroupEventsList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
+openapi.get("/:groupId/votes", GroupVotesList);
 openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
