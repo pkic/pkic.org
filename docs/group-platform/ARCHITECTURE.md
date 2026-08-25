@@ -163,6 +163,12 @@ submit implies view definition and subscribe implies view), but management
 never implies participation. This keeps staff access separate from the active
 membership required to submit, register, attend, vote, subscribe, or post.
 
+The group audit log is a derived management view, not a separately shareable
+resource. It contains only rows carrying that exact group scope and requires
+effective local or inherited group management. Global, entity-scoped, and
+group-scoped audit routes compose one filter/search/sort/page read model; the
+group route does not fetch a global result set and filter it in the portal.
+
 The transport grant shape and authorization evaluator are shared. Persistence
 must retain real foreign keys to the shared resource and grantee group. A
 generic resource-type plus resource-id table without referential integrity is

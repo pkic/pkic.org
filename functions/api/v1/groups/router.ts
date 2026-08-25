@@ -44,6 +44,7 @@ import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submis
 import { GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
 import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
+import { GroupAuditLogList } from "./[groupId]/audit-log";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -65,6 +66,7 @@ openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
+openapi.get("/:groupId/audit-log", GroupAuditLogList);
 openapi.get("/:groupId/forms", GroupFormsList);
 openapi.get("/:groupId/forms/:placementId", GroupFormDefinitionGet);
 openapi.patch("/:groupId/forms/:placementId", GroupFormPlacementUpdate);

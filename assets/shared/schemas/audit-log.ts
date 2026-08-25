@@ -2,7 +2,21 @@ import { z } from "zod";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const SCOPED_AUDIT_LOG_SORT_COLUMNS = ["createdAt", "action", "actor"] as const;
-export const scopedAuditLogListQuerySchema = listQuerySchema(SCOPED_AUDIT_LOG_SORT_COLUMNS);
+
+function optionalAuditFilterString(max: number) {
+  return z.string().trim().max(max).nullable().optional();
+}
+
+/** Exact audit filters shared by global, entity-scoped, and group-scoped lists. */
+export const auditLogFilterQueryShape = {
+  entityType: optionalAuditFilterString(200),
+  actorType: optionalAuditFilterString(200),
+  action: optionalAuditFilterString(200),
+  entityId: optionalAuditFilterString(200),
+};
+
+export const scopedAuditLogListQuerySchema =
+  listQuerySchema(SCOPED_AUDIT_LOG_SORT_COLUMNS).extend(auditLogFilterQueryShape);
 export type ScopedAuditLogListQuery = z.infer<typeof scopedAuditLogListQuerySchema>;
 
 /** Canonical transport shape shared by global and entity-scoped audit lists. */

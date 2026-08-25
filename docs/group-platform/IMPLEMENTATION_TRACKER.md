@@ -315,7 +315,19 @@ Status: In progress
 
 - [x] Add canonical /api/v1/groups routes.
 - [x] Add nested members and leadership routes.
-- [ ] Add nested votes, stats, and audit routes.
+- [ ] Add nested votes and stats routes.
+- [ ] Define the group-statistics metric contract, including whether activity
+      and engagement are occurrence-, person-, capacity-, or Member-based,
+      before exposing a misleading aggregate.
+- [x] Add the nested group audit-log route.
+      Evidence: the route requires effective local or inherited group
+      management and reads exact scope_type/group scope_id rows only. Global,
+      proposal, registration, and group audit lists now reuse one filter
+      shape, search projection, D1 count/page builder, serializer, and sort
+      resolver. The mounted 15-test audit selection covers exact filters,
+      search, sorting, pagination, scope isolation, anonymous and unrelated
+      manager denial, inherited governance, local-only governance, and
+      EXPLAIN-confirmed idx_audit_log_scope use for page and count queries.
 - [x] Add nested form definition, submission, response, response-statistics,
       and placement-management routes.
 - [x] Add nested group event discovery and detail routes.
@@ -327,10 +339,10 @@ Status: In progress
       and attendance-verification routes; scanner-safe join inspection and
       confirmation remain intentionally token-scoped under /api/v1/meetings.
 - [x] Keep routes thin and SQL-free.
-- [x] Reuse shared list query and page response contracts for implemented group
-      and membership listings.
+- [x] Reuse shared list query and page response contracts for implemented
+      canonical group listings.
 - [x] Run filters, search, sort, aggregation, and pagination in D1 for
-      implemented group and membership listings.
+      implemented canonical group listings.
 - [x] Add deterministic tie-break sorting for implemented listings.
 - [ ] Add mounted Hono/Chanfana tests for validation and middleware.
 - [ ] Remove temporary working-group endpoint compatibility before completion

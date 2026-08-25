@@ -1,5 +1,6 @@
 /** OpenAPI route contracts for the canonical group boundary. */
 import { jsonErrorResponse } from "./api-common";
+import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import {
   groupCategoryRulesReplaceSchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
@@ -225,5 +226,21 @@ export const groupLeadershipRevokeRouteSchema = {
   responses: {
     "200": { description: "Leadership revoked." },
     "409": jsonErrorResponse("Local-only governance requires local leadership."),
+  },
+};
+
+export const groupAuditLogListRouteSchema = {
+  tags: ["Groups", "Audit log"],
+  summary: "List audit entries scoped to one group",
+  description: "Exact filters, search, sorting, counting, and pagination are executed in D1.",
+  request: { params: groupReferenceParamsSchema, query: scopedAuditLogListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded group audit page.",
+      content: { "application/json": { schema: scopedAuditLogResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated management identity is required."),
+    "403": jsonErrorResponse("Effective group management permission is required."),
+    "404": jsonErrorResponse("Group not found."),
   },
 };
