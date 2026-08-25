@@ -11,6 +11,7 @@ import { Calendar } from "../sections/Calendar";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
+import { Management } from "../sections/management/Management";
 import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
 import {
@@ -62,13 +63,20 @@ export function PortalShell() {
         <Switch>
           {hasAdminCapacity && (
             <Route
+              path="/management/:groupId/:view?"
+              component={({ params }: { params: { groupId: string; view?: string } }) => (
+                <SectionWrapper title="Management">
+                  <Management groupId={params.groupId} view={params.view} />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasAdminCapacity && (
+            <Route
               path="/management"
               component={() => (
                 <SectionWrapper title="Management">
-                  <div class="alert alert-info">
-                    Your management access is active. Group-scoped management views will appear here as they move into
-                    the unified portal.
-                  </div>
+                  <Management />
                 </SectionWrapper>
               )}
             />

@@ -832,7 +832,10 @@ describe("group route contracts", () => {
       parentGroupId: parent.id,
       name: "Route Child",
     });
-    await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Route Unrelated" });
+    const unrelatedGroup = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Route Unrelated",
+    });
     const parentLeader = await insertActor("manageable-route-leader@example.test");
     await grantGroupLeadership(parent.id, parentLeader.id);
 
@@ -847,6 +850,16 @@ describe("group route contracts", () => {
     const firstPage = groupsListResponseSchema.parse(await response.json());
     expect(firstPage.groups.map((group) => group.id)).toEqual([child.id]);
     expect(firstPage.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const managedDetail = await callApi(env as Env, `/api/v1/groups/${child.id}?manageable=true`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(managedDetail.status).toBe(200);
+
+    const unrelated = await callApi(env as Env, `/api/v1/groups/${unrelatedGroup.id}?manageable=true`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(unrelated.status).toBe(403);
   });
 
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {

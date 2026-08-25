@@ -8,10 +8,10 @@ import {
 } from "../../../shared/schemas/admin-email-templates";
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
-import type { PageInfo } from "../../../shared/schemas/pagination";
 import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
 import { workingGroupsListResponseSchema, type AdminWorkingGroupSummary } from "../../../shared/schemas/working-groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
+import type { ServerCatalog } from "../../shared/server-catalog";
 import { api } from "../api";
 
 /**
@@ -19,16 +19,7 @@ import { api } from "../api";
  * uses the same q/sort/limit/offset transport instead of loading an arbitrary
  * first 200 rows and treating that page as a complete data set.
  */
-export interface AdminCatalog<Item, Response> {
-  endpoint: string;
-  responseSchema: z.ZodType<Response>;
-  resolveItems: (response: Response) => Item[];
-  resolvePage: (response: Response) => PageInfo;
-  itemKey: (item: Item) => string;
-  itemLabel: (item: Item) => string;
-  params?: Record<string, string>;
-  sort: string;
-}
+export type AdminCatalog<Item, Response> = ServerCatalog<Item, Response>;
 
 export const adminWorkingGroupCatalog: AdminCatalog<
   AdminWorkingGroupSummary,

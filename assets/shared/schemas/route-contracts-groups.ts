@@ -3,6 +3,7 @@ import { jsonErrorResponse } from "./api-common";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import {
   groupCategoryRulesReplaceSchema,
+  groupGetQuerySchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
   groupAutomaticEnrollmentPreferenceSchema,
   groupCreateSchema,
@@ -55,9 +56,11 @@ export const groupsListRouteSchema = {
 export const groupGetRouteSchema = {
   tags: ["Groups"],
   summary: "Get one group",
-  request: { params: groupReferenceParamsSchema },
+  request: { params: groupReferenceParamsSchema, query: groupGetQuerySchema },
   responses: {
     "200": { description: "Group detail.", content: { "application/json": { schema: groupResponseSchema } } },
+    "401": jsonErrorResponse("An authenticated management identity is required for a manageable lookup."),
+    "403": jsonErrorResponse("The caller lacks effective management permission."),
     "404": jsonErrorResponse("Group not found or not visible."),
   },
 };

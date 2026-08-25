@@ -13,10 +13,19 @@ interface ProfileLinksInputProps {
   max?: number;
   value?: string[];
   onChange?: (links: string[]) => void;
+  helpText?: string;
+  inputAriaLabel?: string;
 }
 
 export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
-  { fieldName, max = MAX_LINKS, value, onChange }: ProfileLinksInputProps,
+  {
+    fieldName,
+    max = MAX_LINKS,
+    value,
+    onChange,
+    helpText = "Add professional profile links that demonstrate your expertise, such as LinkedIn, GitHub, ORCID, research publications, or any page that shows your work.",
+    inputAriaLabel = "Profile URL",
+  }: ProfileLinksInputProps,
   ref: Ref<ProfileLinksHandle>,
 ) {
   const [internalLinks, setInternalLinks] = useState<string[]>([]);
@@ -87,10 +96,7 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
 
   return (
     <>
-      <p class="form-text mt-0 mb-2">
-        Add professional profile links that demonstrate your expertise, such as LinkedIn, GitHub, ORCID, research
-        publications, or any page that shows your work.
-      </p>
+      <p class="form-text mt-0 mb-2">{helpText}</p>
 
       <div class="profile-links-pills" aria-label="Added profile links">
         {links.map((url, i) => {
@@ -120,7 +126,7 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
             type="url"
             class="form-control form-control-sm profile-links-input"
             placeholder="https://"
-            aria-label="Profile URL"
+            aria-label={inputAriaLabel}
             value={inputValue}
             onInput={(e) => setInputValue((e.target as HTMLInputElement).value)}
             onKeyDown={handleKeyDown}

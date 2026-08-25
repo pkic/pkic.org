@@ -216,6 +216,7 @@ export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend(
 });
 export type GroupsListQuery = z.infer<typeof groupsListQuerySchema>;
 export const groupsListResponseSchema = paginatedResponseSchema("groups", groupSchema);
+export const groupGetQuerySchema = groupsListQuerySchema.pick({ manageable: true });
 
 export const GROUP_MEMBERSHIP_SORT_COLUMNS = [
   "user_name",

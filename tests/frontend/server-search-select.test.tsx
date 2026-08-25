@@ -6,15 +6,15 @@ import { useState } from "preact/hooks";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { paginatedResponseSchema } from "../../assets/shared/schemas/pagination";
-import { ServerSearchSelect } from "../../assets/ts/admin/components/ServerSearchSelect";
-import type { AdminCatalog } from "../../assets/ts/admin/services/catalogs";
+import { ServerSearchSelect } from "../../assets/ts/components/ServerSearchSelect";
+import type { ServerCatalog } from "../../assets/ts/shared/server-catalog";
 
 const itemSchema = z.object({ id: z.string(), name: z.string() });
 const responseSchema = paginatedResponseSchema("items", itemSchema);
 type Item = z.infer<typeof itemSchema>;
 type CatalogResponse = z.infer<typeof responseSchema>;
 
-const catalog: AdminCatalog<Item, CatalogResponse> = {
+const catalog: ServerCatalog<Item, CatalogResponse> = {
   endpoint: "/api/items",
   responseSchema,
   resolveItems: (response) => response.items,

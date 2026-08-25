@@ -44,6 +44,12 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
+    expect(portalCapacityFallbackPath(staffOnly, "/management/group-id/overview")).toBeNull();
+  });
+
+  it("moves a selected-group management route after live staff-capacity loss", () => {
+    const memberOnly = portalSessionFixture({ member: true });
+    expect(portalCapacityFallbackPath(memberOnly, "/management/group-id/overview")).toBe("/profile");
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {

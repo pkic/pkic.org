@@ -133,6 +133,14 @@ $portal-green: #198754;
   margin-bottom: 1.25rem;
 }
 
+.portal-management-picker {
+  max-width: 640px;
+}
+
+.portal-management-context dl > div {
+  min-width: 80px;
+}
+
 #portal-toast-area {
   position: fixed;
   bottom: 1.25rem;

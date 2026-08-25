@@ -43,8 +43,11 @@ export function portalDefaultPath(session: PortalSession | null): string {
  * a capacity the identity just lost moves to the remaining valid home.
  */
 export function portalCapacityFallbackPath(session: PortalSession | null, location: string): string | null {
-  if (!CAPACITY_ROUTE_PATHS.has(location)) return null;
+  const isManagementRoute =
+    location === MANAGEMENT_NAV_ITEM.path || location.startsWith(`${MANAGEMENT_NAV_ITEM.path}/`);
+  if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute) return null;
   if (portalNavigationItems(session).some((item) => item.path === location)) return null;
+  if (isManagementRoute && session?.admin) return null;
   return portalDefaultPath(session);
 }
 
