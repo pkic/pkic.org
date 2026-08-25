@@ -20,6 +20,7 @@ import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
+import type { VerifiedRegistrationIdentityContext } from "./types";
 
 type RegistrationCreateInput = z.infer<typeof registrationCreateSchema>;
 
@@ -35,30 +36,44 @@ export interface PublicRegistrationSubmissionResult {
   backgroundTasks: Promise<unknown>[];
 }
 
-/** Complete public registration use case; the HTTP adapter only supplies validated input and request metadata. */
-export async function submitPublicRegistration(
+export interface EventRegistrationSubmissionMetadata {
+  eventSlug: string;
+  eventBasePath: string | null;
+  clientIp: string | null;
+  userAgent: string | null;
+  appBaseUrl: string;
+  signingSecret: string;
+  config: PublicRegistrationSubmissionConfig;
+  verifiedIdentity?: VerifiedRegistrationIdentityContext;
+}
+
+function requireRegistrationPolicy(
+  registrationMode: string,
+  access: { invited: boolean; authorizedByGroup: boolean },
+): void {
+  if (registrationMode === "no_registration") {
+    throw new AppError(403, "EVENT_REGISTRATION_DISABLED", "This event does not use registration");
+  }
+  if (registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open") return;
+  if (
+    (registrationMode === "optional" ||
+      registrationMode === "required" ||
+      registrationMode === "invitation_only" ||
+      registrationMode === "invite_only") &&
+    (access.invited || access.authorizedByGroup)
+  ) {
+    return;
+  }
+  throw new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration requires an invitation or group access");
+}
+
+/** Canonical registration use case shared by public and authenticated group adapters. */
+export async function submitEventRegistration(
   db: DatabaseLike,
   env: Env,
   body: RegistrationCreateInput,
-  metadata: {
-    eventSlug: string;
-    eventBasePath: string | null;
-    clientIp: string | null;
-    userAgent: string | null;
-    appBaseUrl: string;
-    signingSecret: string;
-    config: PublicRegistrationSubmissionConfig;
-  },
+  metadata: EventRegistrationSubmissionMetadata,
 ): Promise<PublicRegistrationSubmissionResult> {
-  const mxResult = await checkEmailDomainMx(body.email);
-  if (!mxResult.hasMxRecords) {
-    throw new AppError(
-      422,
-      "EMAIL_DOMAIN_INVALID",
-      "The email domain does not appear to accept mail. Please check the address and try again.",
-    );
-  }
-
   const event = await getEventBySlug(db, metadata.eventSlug);
   await updateEventBasePath(db, event.id, metadata.eventBasePath);
 
@@ -67,6 +82,21 @@ export async function submitPublicRegistration(
     invite = await findInviteByToken(db, body.inviteToken, metadata.signingSecret, body.inviteId);
     if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
+    }
+  }
+  requireRegistrationPolicy(event.registration_mode, {
+    invited: Boolean(invite),
+    authorizedByGroup: Boolean(metadata.verifiedIdentity?.registrationGroupId),
+  });
+
+  if (!metadata.verifiedIdentity) {
+    const mxResult = await checkEmailDomainMx(body.email);
+    if (!mxResult.hasMxRecords) {
+      throw new AppError(
+        422,
+        "EMAIL_DOMAIN_INVALID",
+        "The email domain does not appear to accept mail. Please check the address and try again.",
+      );
     }
   }
 
@@ -85,6 +115,7 @@ export async function submitPublicRegistration(
     signingSecret: metadata.signingSecret,
     confirmationTtlHours: metadata.config.confirmationLinkTtlHours,
     referralCodeLength: metadata.config.referralCodeLength,
+    verifiedIdentity: metadata.verifiedIdentity,
   });
   const { user, referralCode } = prepared;
   const registration = prepared.registration;
@@ -211,3 +242,6 @@ export async function submitPublicRegistration(
     ],
   };
 }
+
+/** Public adapter name retained for the existing public route. */
+export const submitPublicRegistration = submitEventRegistration;

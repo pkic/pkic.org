@@ -5,12 +5,17 @@ import type {
   GroupsListQuery,
 } from "../../../../assets/shared/schemas/groups";
 import { GROUP_MEMBERSHIP_SORT_COLUMNS, GROUP_SORT_COLUMNS } from "../../../../assets/shared/schemas/groups";
-import { queryPage } from "../../db/pagination";
+import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
+import {
+  ACTIVE_USER_CAPACITIES_CTE,
+  activeParentGroupMembershipPredicate,
+  eligibleGroupCapacityPredicate,
+} from "../membership/capacity-query";
 
 interface GroupRow {
   id: string;
@@ -125,6 +130,7 @@ const GROUP_SORT_EXPRESSIONS = {
 export interface GroupListAccess {
   userId?: string;
   canReadAll?: boolean;
+  participationView?: "catalog" | "joined";
 }
 
 interface GroupVisibilityFilter {
@@ -182,11 +188,42 @@ function buildGroupVisibilityFilter(access: GroupListAccess): GroupVisibilityFil
   };
 }
 
-export async function listGroups(
-  db: DatabaseLike,
+function buildGroupParticipationFilter(access: GroupListAccess): GroupVisibilityFilter | null {
+  if (!access.participationView) return null;
+  if (!access.userId) throw new Error("A participation view requires a userId");
+  const joinedSql = `EXISTS (
+    SELECT 1 FROM group_memberships own_membership
+    WHERE own_membership.group_id = g.id
+      AND own_membership.user_id = ?
+      AND own_membership.left_at IS NULL
+  )`;
+  if (access.participationView === "joined") return { sql: joinedSql, bindings: [access.userId] };
+  return {
+    sql: `(
+      ${joinedSql}
+      OR (
+        g.active = 1
+        AND EXISTS (
+          ${ACTIVE_USER_CAPACITIES_CTE}
+          SELECT 1
+          FROM active_user_capacities capacity
+          LEFT JOIN group_membership_category_rules rule
+            ON rule.group_id = g.id
+           AND rule.membership_category_code = capacity.membership_category
+          WHERE ${eligibleGroupCapacityPredicate("g", "rule")}
+          LIMIT 1
+        )
+        AND ${activeParentGroupMembershipPredicate("g", "?")}
+      )
+    )`,
+    bindings: [access.userId, access.userId, access.userId],
+  };
+}
+
+export function buildGroupsPageQuery(
   query: GroupsListQuery,
   access: GroupListAccess = { canReadAll: true },
-): Promise<{ groups: Group[]; total: number }> {
+): OffsetPageQuery {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["g.name", "g.slug", "g.description"]) : null;
   const conditions: string[] = [];
   const bindings: unknown[] = [];
@@ -194,6 +231,11 @@ export async function listGroups(
   if (visibility) {
     conditions.push(visibility.sql);
     bindings.push(...visibility.bindings);
+  }
+  const participation = buildGroupParticipationFilter(access);
+  if (participation) {
+    conditions.push(participation.sql);
+    bindings.push(...participation.bindings);
   }
   if (search) {
     conditions.push(search.sql);
@@ -224,7 +266,7 @@ export async function listGroups(
     bindings.push(query.visibility);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const { rows, total } = await queryPage<GroupRow>(db, {
+  return {
     source: {
       selectSql: GROUP_SELECT,
       fromSql: `${GROUP_FROM} ${where}`,
@@ -234,7 +276,15 @@ export async function listGroups(
     orderBy: resolveMappedOrderBy(query.sort, GROUP_SORT_EXPRESSIONS, GROUP_SORT_EXPRESSIONS.name, "g.id ASC"),
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listGroups(
+  db: DatabaseLike,
+  query: GroupsListQuery,
+  access: GroupListAccess = { canReadAll: true },
+): Promise<{ groups: Group[]; total: number }> {
+  const { rows, total } = await queryPage<GroupRow>(db, buildGroupsPageQuery(query, access));
   return { groups: rows.map(mapGroup), total };
 }
 
@@ -378,4 +428,31 @@ export async function listActiveGroupMembershipsForUser(
     [groupId, userId],
   );
   return rows.map(mapMembership);
+}
+
+export async function listActiveGroupMembershipsForGroupsForUser(
+  db: DatabaseLike,
+  groupIds: readonly string[],
+  userId: string,
+): Promise<Map<string, GroupMembership[]>> {
+  const byGroup = new Map<string, GroupMembership[]>();
+  if (groupIds.length === 0) return byGroup;
+  const rows = await all<MembershipRow>(
+    db,
+    `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+            u.first_name, u.last_name, u.email, o.name AS organization_name,
+            mca.category_code AS membership_category, gm.source,
+            gm.created_by_user_id, gm.joined_at, gm.left_at
+       ${MEMBERSHIP_FROM}
+       JOIN json_each(?) requested_group ON requested_group.value = gm.group_id
+      WHERE gm.user_id = ? AND gm.left_at IS NULL
+      ORDER BY gm.group_id, LOWER(COALESCE(o.name, '')), gm.member_id, gm.id`,
+    [JSON.stringify(groupIds), userId],
+  );
+  for (const row of rows) {
+    const memberships = byGroup.get(row.group_id) ?? [];
+    memberships.push(mapMembership(row));
+    byGroup.set(row.group_id, memberships);
+  }
+  return byGroup;
 }

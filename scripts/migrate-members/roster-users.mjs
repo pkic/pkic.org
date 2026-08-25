@@ -1,11 +1,11 @@
 /**
  * Step 3 / Step 3b: bare `users` rows for roster emails not attributable
- * to any YAML organization, and the `working_group_members` rows sourced
+ * to any YAML organization, and the canonical `group_memberships` rows sourced
  * from the six per-WG roster CSVs. Pure with respect to its inputs — all
  * shared mutable state lives on the `ctx` object build-migration.mjs
  * passes in.
  */
-import { buildWorkingGroupMemberStatement } from "./sql-renderer.mjs";
+import { buildGroupMembershipStatement } from "./sql-renderer.mjs";
 
 function wgSlugsForEmail(wgRosters, email) {
   return Object.entries(wgRosters)
@@ -31,9 +31,9 @@ export function processBareRosterUsers(ctx, { pkicRoster, wgRosters }) {
   // list but stayed on a WG list, or the exports were taken at slightly
   // different times). This only covers "CSV roster emails not
   // attributable to any YAML organization" sourced from pkic.csv, which
-  // would silently drop these people's WG membership entirely (can only
-  // attach working_group_members to a user row that already exists). We
-  // create a bare user for them too, flagged separately in the report.
+  // would silently drop these people from the reconciliation report. We
+  // create a bare user for them too, but do not manufacture group membership
+  // without a valid Member capacity; staff must first resolve their affiliation.
   for (const roster of Object.values(wgRosters)) {
     for (const [email] of roster.entries()) {
       if (ctx.claimedEmails.has(email) || ctx.createdUserEmails.has(email)) continue;
@@ -48,7 +48,7 @@ export function processWorkingGroupMemberships(ctx, { wgRosters }) {
     for (const [email] of roster.entries()) {
       if (!ctx.createdUserEmails.has(email)) continue; // not a user we created (shouldn't happen, defensive)
       ctx.report.workingGroupCounts[wgSlug] += 1;
-      ctx.statements.push(buildWorkingGroupMemberStatement(wgSlug, email));
+      ctx.statements.push(buildGroupMembershipStatement(wgSlug, email));
     }
   }
 }

@@ -117,7 +117,7 @@ export function buildMigration({
     }
   }
 
-  // ── Step 3 / 3b: bare roster users + working_group_members ─────────────
+  // ── Step 3 / 3b: bare roster users + canonical group memberships ──────
   processBareRosterUsers(ctx, { pkicRoster, wgRosters });
   processWorkingGroupMemberships(ctx, { wgRosters });
 

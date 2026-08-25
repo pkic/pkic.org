@@ -10,7 +10,7 @@ import type {
   FormStatus,
 } from "../../../../assets/shared/schemas/forms";
 import { parseFormFieldOptions, parseFormFieldRules } from "../../../../assets/shared/schemas/form-field-rules";
-import { defaultFormAudience, findActiveFormPlacement } from "./placements";
+import { defaultFormAudience, findActiveFormPlacement, findFormPlacement } from "./placements";
 
 export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
 
@@ -59,6 +59,7 @@ export interface ActiveFormDefinition {
   scopeType: string;
   scopeRef: string | null;
   purpose: FormPurpose;
+  status: FormStatus;
   title: string;
   description: string | null;
   formUpdatedAt: string;
@@ -230,12 +231,41 @@ async function loadFormDefinition(
     scopeType: resolved.form.scope_type,
     scopeRef: resolved.form.scope_ref,
     purpose: resolved.form.purpose,
+    status: resolved.form.status,
     title: resolved.form.title,
     description: resolved.form.description,
     formUpdatedAt: resolved.form.updated_at,
     placement: resolved.placement,
     fields: mapManagedFormFields(fields),
   };
+}
+
+/** Resolves one placement without inferring ownership from its reusable definition. */
+export async function getFormDefinitionByPlacement(
+  db: DatabaseLike,
+  placementId: string,
+  options: { acceptingResponses?: boolean } = {},
+): Promise<ActiveFormDefinition | null> {
+  const row = await first<FormRow & { updated_at: string; placement_id: string }>(
+    db,
+    `SELECT ${FORM_COLUMNS.split(", ")
+      .map((column) => `f.${column}`)
+      .join(", ")},
+            f.updated_at, fp.id AS placement_id
+       FROM form_placements fp
+       JOIN forms f ON f.id = fp.form_id
+      WHERE fp.id = ?
+        ${options.acceptingResponses ? "AND f.status = 'active' AND fp.active = 1" : ""}
+        ${options.acceptingResponses ? "AND (fp.opens_at IS NULL OR unixepoch(fp.opens_at) <= unixepoch())" : ""}
+        ${options.acceptingResponses ? "AND (fp.closes_at IS NULL OR unixepoch(fp.closes_at) > unixepoch())" : ""}
+      LIMIT 1`,
+    [placementId],
+  );
+  if (!row) return null;
+  const placement = options.acceptingResponses
+    ? await findActiveFormPlacement(db, row.id, { placementId: row.placement_id })
+    : await findFormPlacement(db, row.id, { placementId: row.placement_id });
+  return loadFormDefinition(db, placement ? { form: row, placement } : null);
 }
 
 export async function getActiveFormByPurpose(

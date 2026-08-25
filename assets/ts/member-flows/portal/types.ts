@@ -17,10 +17,7 @@ import type {
   myOrganizationReviewSchema,
   myOrganizationProfileSchema,
   myOrganizationSponsorshipSchema,
-  myWorkingGroupSummarySchema,
-  myWorkingGroupsListResponseSchema,
 } from "../../../shared/schemas/me";
-import type { workingGroupSummarySchema } from "../../../shared/schemas/members-directory";
 import type { myMeetingSeriesIcsFileSchema, myMeetingSeriesSchema } from "../../../shared/schemas/meeting-calendar";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import type {
@@ -33,11 +30,13 @@ import type {
   electionRoundTallySchema,
   electionVoteResultSchema,
 } from "../../../shared/schemas/votes";
+import type { portalSessionResponseSchema } from "../../../shared/schemas/portal-auth";
 
 export type OrganizationRepresentative = z.infer<typeof myOrganizationRepresentativeSchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type MyProfileUpdateInput = z.infer<typeof myProfileUpdateSchema>;
 export type NotificationPreferences = z.infer<typeof myNotificationPreferencesSchema>;
+export type PortalSession = z.infer<typeof portalSessionResponseSchema>;
 
 export type MyApplicationSummary = z.infer<typeof myApplicationSummarySchema>;
 export type MyApplicationTimelineEntry = z.infer<typeof myApplicationTimelineEntrySchema>;
@@ -46,10 +45,6 @@ export type MyApplicationDetail = z.infer<typeof myApplicationDetailSchema>;
 export type MyOrganizationReview = z.infer<typeof myOrganizationReviewSchema>;
 export type MyOrganizationProfile = z.infer<typeof myOrganizationProfileSchema>;
 export type MyOrganizationSponsorship = z.infer<typeof myOrganizationSponsorshipSchema>;
-
-export type WorkingGroupSummary = z.infer<typeof workingGroupSummarySchema>;
-export type MyWorkingGroupMembership = z.infer<typeof myWorkingGroupSummarySchema>;
-export type MyWorkingGroupsResponse = z.infer<typeof myWorkingGroupsListResponseSchema>;
 
 export type MyMeetingSeriesIcsFile = z.infer<typeof myMeetingSeriesIcsFileSchema>;
 export type MyMeetingSeries = z.infer<typeof myMeetingSeriesSchema>;

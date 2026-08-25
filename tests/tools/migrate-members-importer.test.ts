@@ -16,7 +16,7 @@
  *   5. Assert no missing-column/table errors, and spot-check the rows that
  *      landed match the final schema (organization_domain_claims,
  *      member_category_assignments, organization_representatives,
- *      role-primary_contact) — the exact shapes 0033-era intermediate
+ *      role-primary_contact, groups, group_memberships) — the exact shapes 0033-era intermediate
  *      columns (social_*, organizations.membership_category,
  *      primary_contact_user_id) no longer exist to write to.
  */
@@ -269,14 +269,32 @@ sponsor:
 
     const alice = ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"];
     const carol = ["carol@acme.example", "Carol", "x", "x", "x", "x", "2023", "01", "16", "10", "00", "00"];
-    writeFixtureRosters(csvDir, [alice, carol], new Map([["ca", [alice]]]));
+    const unresolved = [
+      "unresolved@example.test",
+      "Unresolved",
+      "x",
+      "x",
+      "x",
+      "x",
+      "2023",
+      "01",
+      "17",
+      "10",
+      "00",
+      "00",
+    ];
+    writeFixtureRosters(csvDir, [alice, carol], new Map([["ca", [alice, unresolved]]]));
 
-    const { sql } = buildMigration({
+    const { sql, report } = buildMigration({
       uploadLogos: false,
       membersDir,
       csvDir,
       sponsorsYamlPath,
     });
+    expect(report.wgOnlyRosterUsers).toContainEqual({ email: "unresolved@example.test", workingGroups: ["ca"] });
+    expect(sql).toContain("INSERT OR IGNORE INTO group_memberships");
+    expect(sql).not.toMatch(/\bworking_group_members\b/);
+    expect(sql).not.toMatch(/\bworking_groups\b/);
     const sqlFile = path.join(fixtureRoot, "import.sql");
     fs.writeFileSync(sqlFile, sql, "utf8");
 
@@ -308,9 +326,9 @@ sponsor:
           persistTo,
           "SELECT id, sponsor_type, organization_id, event_id, tier FROM sponsorships ORDER BY id",
         ),
-        workingGroupMembers: queryD1(
+        groupMemberships: queryD1(
           persistTo,
-          "SELECT id, working_group_id, user_id FROM working_group_members ORDER BY id",
+          "SELECT id, group_id, user_id, member_id, source FROM group_memberships ORDER BY id",
         ),
       };
     }
@@ -326,7 +344,20 @@ sponsor:
     expect(first.representatives).toHaveLength(2);
     expect(first.roles.length).toBeGreaterThanOrEqual(2); // primary + secondary contact
     expect(first.sponsorships).toHaveLength(2); // consortium + event
-    expect(first.workingGroupMembers).toHaveLength(1);
+    expect(first.groupMemberships).toHaveLength(1);
+    expect(first.groupMemberships[0]).toMatchObject({ source: "migration" });
+    expect(first.groupMemberships[0]!.member_id).toBe(first.representatives[0]!.member_id);
+    expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'unresolved@example.test'")).toHaveLength(
+      1,
+    );
+    expect(
+      queryD1(
+        persistTo,
+        `SELECT gm.id FROM group_memberships gm
+          JOIN users u ON u.id = gm.user_id
+         WHERE u.normalized_email = 'unresolved@example.test'`,
+      ),
+    ).toEqual([]);
 
     runImport();
     const second = snapshot();

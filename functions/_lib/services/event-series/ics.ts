@@ -1,7 +1,7 @@
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { getGroup } from "../groups";
-import { getGroupEventSeries } from "./series";
+import type { GroupResourceViewer } from "../resource-grants";
+import { getAccessibleGroupEventSeries } from "./series";
 
 interface CalendarOccurrenceRow {
   id: string;
@@ -10,6 +10,11 @@ interface CalendarOccurrenceRow {
   status: "scheduled" | "cancelled" | "completed";
   location: string | null;
   updated_at: string;
+}
+
+interface CalendarGroupContext {
+  id: string;
+  slug: string;
 }
 
 function escapeIcs(value: string): string {
@@ -36,14 +41,12 @@ function fold(line: string): string {
 
 export async function generateGroupSeriesIcs(
   db: DatabaseLike,
-  groupIdOrSlug: string,
+  viewer: GroupResourceViewer,
+  throughGroup: CalendarGroupContext,
   seriesId: string,
   baseUrl: string,
 ): Promise<string> {
-  const [series, group] = await Promise.all([
-    getGroupEventSeries(db, groupIdOrSlug, seriesId),
-    getGroup(db, groupIdOrSlug),
-  ]);
+  const series = await getAccessibleGroupEventSeries(db, viewer, throughGroup.id, seriesId);
   const occurrences = await all<CalendarOccurrenceRow>(
     db,
     `SELECT occurrence.id, occurrence.starts_at, occurrence.ends_at, occurrence.status,
@@ -56,7 +59,7 @@ export async function generateGroupSeriesIcs(
       LIMIT 500`,
     [seriesId],
   );
-  const portalUrl = `${baseUrl.replace(/\/$/, "")}/portal/groups/${group?.slug ?? groupIdOrSlug}/meetings`;
+  const portalUrl = `${baseUrl.replace(/\/$/, "")}/portal/groups/${throughGroup.slug}/meetings`;
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",

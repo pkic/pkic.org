@@ -1,21 +1,26 @@
 import type { GroupCapacitySelection } from "../../../../assets/shared/schemas/groups";
+import type { MembershipCategory } from "../../../../assets/shared/schemas/membership-categories";
 import { AppError } from "../../errors";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { ACTIVE_USER_CAPACITIES_CTE } from "../membership/capacity-query";
+import {
+  ACTIVE_USER_CAPACITIES_CTE,
+  activeParentGroupMembershipPredicate,
+  eligibleGroupCapacityPredicate,
+} from "../membership/capacity-query";
 
 export interface EligibleGroupCapacity {
   memberId: string;
   memberType: "individual" | "organization";
   organizationName: string | null;
-  membershipCategory: string;
+  membershipCategory: MembershipCategory;
 }
 
 interface CapacityRow {
   member_id: string;
   member_type: "individual" | "organization";
   organization_name: string | null;
-  membership_category: string;
+  membership_category: MembershipCategory;
 }
 
 /**
@@ -39,9 +44,7 @@ export async function listEligibleGroupCapacities(
      LEFT JOIN group_membership_category_rules rule
        ON rule.group_id = g.id
       AND rule.membership_category_code = capacity.membership_category
-     WHERE g.eligibility_mode = 'open'
-        OR (g.eligibility_mode = 'category' AND rule.permits_join = 1)
-        OR (g.eligibility_mode = 'managed' AND ? = 1)
+     WHERE ${eligibleGroupCapacityPredicate("g", "rule", "?")}
      ORDER BY capacity.organization_name COLLATE NOCASE, capacity.member_id`,
     [userId, groupId, options.allowManaged ? 1 : 0],
   );
@@ -51,6 +54,49 @@ export async function listEligibleGroupCapacities(
     organizationName: row.organization_name,
     membershipCategory: row.membership_category,
   }));
+}
+
+export async function listEligibleGroupCapacitiesForGroups(
+  db: DatabaseLike,
+  groupIds: readonly string[],
+  userId: string,
+  options: { allowManaged: boolean; requireParentMembership: boolean },
+): Promise<Map<string, EligibleGroupCapacity[]>> {
+  const byGroup = new Map<string, EligibleGroupCapacity[]>();
+  if (groupIds.length === 0) return byGroup;
+  const parentPredicate = options.requireParentMembership ? activeParentGroupMembershipPredicate("g", "?") : "1 = 1";
+  const rows = await all<CapacityRow & { group_id: string }>(
+    db,
+    `${ACTIVE_USER_CAPACITIES_CTE}
+     SELECT g.id AS group_id, capacity.member_id, capacity.member_type,
+            capacity.organization_name, capacity.membership_category
+       FROM json_each(?) requested_group
+       JOIN groups g ON g.id = requested_group.value AND g.active = 1
+       CROSS JOIN active_user_capacities capacity
+       LEFT JOIN group_membership_category_rules rule
+         ON rule.group_id = g.id
+        AND rule.membership_category_code = capacity.membership_category
+      WHERE ${eligibleGroupCapacityPredicate("g", "rule", "?")}
+        AND ${parentPredicate}
+      ORDER BY g.id, capacity.organization_name COLLATE NOCASE, capacity.member_id`,
+    [
+      userId,
+      JSON.stringify(groupIds),
+      options.allowManaged ? 1 : 0,
+      ...(options.requireParentMembership ? [userId] : []),
+    ],
+  );
+  for (const row of rows) {
+    const capacities = byGroup.get(row.group_id) ?? [];
+    capacities.push({
+      memberId: row.member_id,
+      memberType: row.member_type,
+      organizationName: row.organization_name,
+      membershipCategory: row.membership_category,
+    });
+    byGroup.set(row.group_id, capacities);
+  }
+  return byGroup;
 }
 
 export async function selectGroupCapacities(

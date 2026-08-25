@@ -35,9 +35,10 @@
  *     key a users row on" reasoning below.
  *   - upserts a bare `users` row (no organization) for any roster email
  *     that can't be attributed to any YAML organization at all (Step 3)
- *   - upserts `working_group_members` rows for every user created above,
- *     from the six per-WG roster CSVs, not the YAML `workingGroups:` field
- *     (Step 3b)
+ *   - upserts canonical `group_memberships` rows for every valid active Member
+ *     capacity held by a roster user, from the six per-WG roster CSVs rather
+ *     than the YAML `workingGroups:` field (Step 3b); bare users remain in the
+ *     reconciliation report but are not given unattributed group membership
  *   - by default, also uploads every logo/photo found under
  *     `assets/images/members/<slug>/` to R2 (pass `--skip-logos` to opt out)
  *   - rewrites Hugo shortcodes (`{{< youtube ID >}}`, `{{< vimeo ID >}}`,

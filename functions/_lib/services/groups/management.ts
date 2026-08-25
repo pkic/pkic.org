@@ -131,7 +131,10 @@ function translateGroupWriteError(error: unknown): never {
   if (message.includes("UNIQUE constraint failed: groups.slug")) {
     throw new AppError(409, "GROUP_SLUG_EXISTS", "A group with this slug already exists");
   }
-  if (message.includes("group hierarchy cycle")) {
+  if (
+    message.includes("group hierarchy cycle") ||
+    message.includes("parent_group_id IS NULL OR parent_group_id <> id")
+  ) {
     throw new AppError(409, "GROUP_HIERARCHY_CYCLE", "A group cannot contain itself through its parent hierarchy");
   }
   if (

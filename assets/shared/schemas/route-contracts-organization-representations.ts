@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { apiErrorPayloadSchema, normalizedEmailSchema, successResponseSchema } from "./api-common";
+import { jsonErrorResponse, normalizedEmailSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import {
   organizationRepresentativesListQuerySchema,
@@ -10,11 +10,6 @@ import {
   representativeRestoreSchema,
   representationDomainAssessmentSchema,
 } from "./organization-representation";
-
-const jsonError = (description: string) => ({
-  description,
-  content: { "application/json": { schema: apiErrorPayloadSchema } },
-});
 
 export const organizationRepresentativeCollectionParamsSchema = z.object({ organizationId: databaseIdSchema });
 export const organizationRepresentativeParamsSchema = organizationRepresentativeCollectionParamsSchema.extend({
@@ -34,7 +29,7 @@ export const organizationRepresentativesListRouteSchema = {
       description: "A bounded representative page.",
       content: { "application/json": { schema: organizationRepresentativesListResponseSchema } },
     },
-    "403": jsonError("An organization contact or authorized staff member is required."),
+    "403": jsonErrorResponse("An organization contact or authorized staff member is required."),
   },
 };
 
@@ -51,8 +46,8 @@ export const organizationRepresentativeAssociateRouteSchema = {
       description: "Representative associated.",
       content: { "application/json": { schema: representativeMutationResponseSchema } },
     },
-    "403": jsonError("An organization contact or authorized staff member is required."),
-    "409": jsonError("The association is active or blocked."),
+    "403": jsonErrorResponse("An organization contact or authorized staff member is required."),
+    "409": jsonErrorResponse("The association is active or blocked."),
   },
 };
 
@@ -68,7 +63,7 @@ export const organizationRepresentativeBlockRouteSchema = {
       description: "Representative blocked.",
       content: { "application/json": { schema: successResponseSchema } },
     },
-    "409": jsonError("Already inactive or blocked."),
+    "409": jsonErrorResponse("Already inactive or blocked."),
   },
 };
 
@@ -84,7 +79,7 @@ export const organizationRepresentativeRestoreRouteSchema = {
       description: "Representative restored.",
       content: { "application/json": { schema: successResponseSchema } },
     },
-    "409": jsonError("Not currently blocked."),
+    "409": jsonErrorResponse("Not currently blocked."),
   },
 };
 

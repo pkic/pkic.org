@@ -24,7 +24,7 @@ import { AppError } from "../errors";
 import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import type { AuthMember, EligibleMembership, DatabaseLike, Env } from "../types";
+import type { AuthMember, EligibleMembership, DatabaseLike, Env, StatementLike } from "../types";
 import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
 import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
 import { nowIso } from "../utils/time";
@@ -40,6 +40,7 @@ import {
   fetchSessionRow,
   assertSessionActive,
   revokeSessionRow,
+  prepareRevokeSessionRow,
   insertMagicLinkRow,
   fetchMagicLinkRowByToken,
   validateAndConsumeMagicLinkRow,
@@ -382,4 +383,8 @@ export async function verifyMemberMagicLink(
 
 export async function revokeMemberSession(db: DatabaseLike, sessionId: string): Promise<void> {
   await revokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
+}
+
+export function prepareRevokeMemberSession(db: DatabaseLike, sessionId: string): StatementLike {
+  return prepareRevokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
 }

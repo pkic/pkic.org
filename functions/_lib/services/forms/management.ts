@@ -158,7 +158,12 @@ export async function removeManagedForm(
     await db.batch([
       prepareFormMutationGuard(db, form.id, form.updated_at, now),
       prepareFormDeletionGuard(db, form.id),
-      db.prepare("DELETE FROM form_group_grants WHERE form_id = ?").bind(form.id),
+      db
+        .prepare(
+          `DELETE FROM form_placement_group_grants
+            WHERE placement_id IN (SELECT id FROM form_placements WHERE form_id = ?)`,
+        )
+        .bind(form.id),
       db.prepare("DELETE FROM form_placements WHERE form_id = ?").bind(form.id),
       db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
       db.prepare("DELETE FROM forms WHERE id = ?").bind(form.id),

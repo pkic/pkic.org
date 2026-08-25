@@ -9,7 +9,7 @@ import {
   buildRepresentativeRoleGrantStatement,
   buildUpsertUserStatement,
   buildIndividualMemberAggregateStatements,
-  buildWorkingGroupMemberStatement,
+  buildGroupMembershipStatement,
   buildLinksJson,
   buildEventSponsorshipStatements,
   buildNonMemberEventSponsorshipStatements,
@@ -104,10 +104,10 @@ describe("buildOrganizationRepresentativeStatement / buildRepresentativeRoleGran
   it("targets organization_representatives with the given visibility flag", () => {
     const shown = buildOrganizationRepresentativeStatement("acme corp", "alice@acme.example", true);
     expect(shown).toContain("INSERT OR IGNORE INTO organization_representatives");
-    expect(shown).toMatch(/SELECT [^,]+, m\.id, u\.id, 1,/);
+    expect(shown).toMatch(/SELECT [^,]+, m\.id, u\.id, 'migration', 1,/);
 
     const hidden = buildOrganizationRepresentativeStatement("acme corp", "bare@acme.example", false);
-    expect(hidden).toMatch(/SELECT [^,]+, m\.id, u\.id, 0,/);
+    expect(hidden).toMatch(/SELECT [^,]+, m\.id, u\.id, 'migration', 0,/);
   });
 
   it("grants a role scoped to context_type='organization'", () => {
@@ -166,12 +166,14 @@ describe("buildIndividualMemberAggregateStatements", () => {
   });
 });
 
-describe("buildWorkingGroupMemberStatement", () => {
-  it("guards against duplicating an already-active membership", () => {
-    const statement = buildWorkingGroupMemberStatement("ca", "alice@acme.example");
-    expect(statement).toContain("INSERT INTO working_group_members");
-    expect(statement).toContain("NOT EXISTS");
-    expect(statement).toContain("wgm.left_at IS NULL");
+describe("buildGroupMembershipStatement", () => {
+  it("uses the canonical capacity projection and final group schema", () => {
+    const statement = buildGroupMembershipStatement("ca", "alice@acme.example");
+    expect(statement).toContain("active_user_capacities");
+    expect(statement).toContain("INSERT OR IGNORE INTO group_memberships");
+    expect(statement).toContain("JOIN groups group_row");
+    expect(statement).toContain("'migration'");
+    expect(statement).not.toMatch(/\bworking_group_members\b|\bworking_groups\b/);
   });
 });
 

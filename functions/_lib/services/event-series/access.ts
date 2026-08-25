@@ -12,11 +12,11 @@ import { hmacSha256Hex, randomToken, sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog } from "../audit";
-import { requireGroupManagement } from "../groups/governance";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { commitEventResourceManagementBatch } from "./management";
 import { openProviderJoinUrl } from "./provider-url";
 import { toEventOccurrence, type EventOccurrenceRow } from "./record";
-import { getSeriesOccurrence } from "./occurrences";
+import { getManagedSeriesOccurrence } from "./occurrences";
 
 type AccessIssueInput = z.infer<typeof eventAccessTokenIssueSchema>;
 type JoinConfirmInput = z.infer<typeof meetingJoinConfirmSchema>;
@@ -36,10 +36,6 @@ interface AccessContextRow extends EventOccurrenceRow {
   user_affiliation: string | null;
   guest_name: string | null;
   guest_affiliation: string | null;
-  guest_occurrence_id: string | null;
-  guest_series_id: string | null;
-  guest_expires_at: string | null;
-  guest_revoked_at: string | null;
 }
 
 interface TermRow {
@@ -82,12 +78,28 @@ const ACCESS_CONTEXT_SELECT = `token.id AS token_id, token.user_id AS token_user
       WHERE representative.user_id = user.id AND representative.left_at IS NULL),
     user.organization_name
   ) AS user_affiliation,
-  guest.name AS guest_name, guest.affiliation AS guest_affiliation,
-  guest.occurrence_id AS guest_occurrence_id, guest.series_id AS guest_series_id,
-  guest.expires_at AS guest_expires_at, guest.revoked_at AS guest_revoked_at`;
+  guest.name AS guest_name, guest.affiliation AS guest_affiliation`;
+
+async function isCurrentSubjectEligible(
+  db: DatabaseLike,
+  occurrenceId: string,
+  userId: string | null,
+  guestId: string | null,
+): Promise<boolean> {
+  return Boolean(
+    await first<{ eligible: number }>(
+      db,
+      `SELECT 1 AS eligible FROM current_event_occurrence_subject_eligibility
+        WHERE occurrence_id = ? AND user_id IS ? AND guest_id IS ? LIMIT 1`,
+      [occurrenceId, userId, guestId],
+    ),
+  );
+}
 
 async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userId: string): Promise<void> {
+  if (await isCurrentSubjectEligible(db, row.id, userId, null)) return;
   if (row.user_active !== 1) throw new AppError(403, "MEETING_ACCESS_REVOKED", "The user is no longer active");
+  if (row.status !== "scheduled") throw new AppError(409, "MEETING_NOT_JOINABLE", "This occurrence is not scheduled");
   if (row.registration_policy === "required" || row.registration_policy === "public") {
     const registration = await first<{ id: string }>(
       db,
@@ -95,10 +107,12 @@ async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userI
       [row.event_id, userId],
     );
     if (!registration) throw new AppError(403, "MEETING_REGISTRATION_REQUIRED", "An active registration is required");
-    return;
+    throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting eligibility changed; reload before joining");
   }
   const settings = parseJsonSafe<{ memberEligibility?: string }>(row.settings_json, {});
-  if (settings.memberEligibility === "public") return;
+  if (settings.memberEligibility === "public") {
+    throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting eligibility changed; reload before joining");
+  }
   const membership = await first<{ id: string }>(
     db,
     `SELECT membership.id
@@ -110,7 +124,7 @@ async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userI
             ? = 'shared_groups' AND EXISTS (
               SELECT 1 FROM event_group_grants grant_row
                WHERE grant_row.event_id = ? AND grant_row.group_id = membership.group_id
-                 AND grant_row.capability = 'participate'
+                 AND grant_row.capability = 'attend'
             )
           )
         )
@@ -118,6 +132,7 @@ async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userI
     [userId, row.owner_group_id, settings.memberEligibility, row.event_id],
   );
   if (!membership) throw new AppError(403, "MEETING_GROUP_MEMBERSHIP_REQUIRED", "Active group membership is required");
+  throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting eligibility changed; reload before joining");
 }
 
 async function loadAccessContext(db: DatabaseLike, rawToken: string): Promise<AccessContextRow> {
@@ -140,14 +155,7 @@ async function loadAccessContext(db: DatabaseLike, rawToken: string): Promise<Ac
   if (row.status !== "scheduled") throw new AppError(409, "MEETING_NOT_JOINABLE", "This occurrence is not scheduled");
   if (row.token_user_id) {
     await assertUserMayEnter(db, row, row.token_user_id);
-  } else if (
-    !row.token_guest_id ||
-    row.guest_revoked_at ||
-    !row.guest_expires_at ||
-    row.guest_expires_at <= now ||
-    row.guest_series_id !== row.series_id ||
-    (row.guest_occurrence_id !== null && row.guest_occurrence_id !== row.id)
-  ) {
+  } else if (!row.token_guest_id || !(await isCurrentSubjectEligible(db, row.id, null, row.token_guest_id))) {
     throw new AppError(403, "MEETING_GUEST_ACCESS_REVOKED", "Guest access is no longer valid");
   }
   return row;
@@ -161,8 +169,13 @@ export async function issueOccurrenceAccessToken(
   occurrenceId: string,
   input: AccessIssueInput,
 ) {
-  const { series, occurrence } = await getSeriesOccurrence(db, groupIdOrSlug, seriesId, occurrenceId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  const { context, occurrence, series } = await getManagedSeriesOccurrence(
+    db,
+    actor,
+    groupIdOrSlug,
+    seriesId,
+    occurrenceId,
+  );
   const now = nowIso();
   if (input.expiresAt <= now || input.expiresAt > new Date(Date.parse(occurrence.endsAt) + 86_400_000).toISOString()) {
     throw new AppError(
@@ -189,40 +202,53 @@ export async function issueOccurrenceAccessToken(
     if (!context) throw new AppError(404, "EVENT_OCCURRENCE_NOT_FOUND", "Meeting occurrence not found");
     await assertUserMayEnter(db, context, input.userId);
   } else {
-    const guest = await first<{ id: string }>(
-      db,
-      `SELECT id FROM event_occurrence_guests
-        WHERE id = ? AND series_id = ? AND (occurrence_id IS NULL OR occurrence_id = ?)
-          AND revoked_at IS NULL AND expires_at > ?`,
-      [input.guestId, seriesId, occurrenceId, now],
-    );
-    if (!guest) throw new AppError(404, "EVENT_GUEST_NOT_FOUND", "Active guest invitation not found");
+    if (series.guestPolicy === "none") {
+      throw new AppError(409, "EVENT_GUESTS_DISABLED", "Guest access is disabled for this event");
+    }
+    if (!(await isCurrentSubjectEligible(db, occurrenceId, null, input.guestId ?? null))) {
+      throw new AppError(404, "EVENT_GUEST_NOT_FOUND", "Active guest invitation not found");
+    }
   }
   const token = randomToken(32);
   const id = uuid();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO event_occurrence_access_tokens
-           (id, occurrence_id, user_id, guest_id, token_hash, expires_at,
-            first_used_at, last_used_at, use_count, revoked_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?)`,
-      )
-      .bind(
-        id,
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          `INSERT INTO event_occurrence_access_tokens
+             (id, occurrence_id, user_id, guest_id, token_hash, expires_at,
+              first_used_at, last_used_at, use_count, revoked_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?)`,
+        )
+        .bind(
+          id,
+          occurrenceId,
+          input.userId ?? null,
+          input.guestId ?? null,
+          await sha256Hex(token),
+          input.expiresAt,
+          now,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_occurrence_access_issued",
+        "event_occurrence",
         occurrenceId,
-        input.userId ?? null,
-        input.guestId ?? null,
-        await sha256Hex(token),
-        input.expiresAt,
-        now,
+        { userId: input.userId, guestId: input.guestId, expiresAt: input.expiresAt },
       ),
-    prepareAuditLog(db, "admin", actor.id, "event_occurrence_access_issued", "event_occurrence", occurrenceId, {
-      userId: input.userId,
-      guestId: input.guestId,
-      expiresAt: input.expiresAt,
-    }),
-  ]);
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("EVENT_OCCURRENCE_ACCESS_CONTEXT_CHANGED")) {
+      throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access changed while it was being issued");
+    }
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access changed while it was being issued");
+    }
+    throw error;
+  }
   return { token, joinPath: `/api/v1/meetings/join/${token}`, expiresAt: input.expiresAt };
 }
 
@@ -266,6 +292,19 @@ export async function confirmMeetingJoin(
   options: { encryptionSecret: string; evidenceSecret: string; ip: string | null; userAgent: string | null },
 ) {
   const row = await loadAccessContext(db, token);
+  const authoritativeName = row.token_user_id ? row.user_name : row.guest_name;
+  const authoritativeAffiliation = row.token_user_id ? row.user_affiliation : row.guest_affiliation;
+  if (
+    !authoritativeName ||
+    input.name !== authoritativeName ||
+    (input.affiliation || null) !== (authoritativeAffiliation || null)
+  ) {
+    throw new AppError(
+      409,
+      "MEETING_IDENTITY_CHANGED",
+      "The meeting identity or affiliation changed; reload before joining",
+    );
+  }
   if (!row.provider_join_url_ciphertext) {
     throw new AppError(409, "MEETING_PROVIDER_NOT_CONFIGURED", "This occurrence has no meeting-provider destination");
   }
@@ -303,40 +342,54 @@ export async function confirmMeetingJoin(
       )
       .bind(uuid(), row.event_id, row.token_user_id, row.token_guest_id, termId, now, ipHash, userAgentHash),
   );
-  await db.batch([
-    ...acceptanceStatements,
-    existing
-      ? db
-          .prepare(
-            `UPDATE event_occurrence_join_confirmations SET name_snapshot = ?, affiliation_snapshot = ?,
-               join_count = join_count + 1, confirmed_at = ?, updated_at = ? WHERE id = ?`,
-          )
-          .bind(input.name, input.affiliation, now, now, confirmationId)
-      : db
-          .prepare(
-            `INSERT INTO event_occurrence_join_confirmations
-               (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
-                join_count, confirmed_at, attendance_verified_at, attendance_verification_source,
-                created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, NULL, NULL, ?, ?)`,
-          )
-          .bind(
-            confirmationId,
-            row.id,
-            row.token_user_id,
-            row.token_guest_id,
-            input.name,
-            input.affiliation,
-            now,
-            now,
-            now,
-          ),
-    db
-      .prepare(
-        `UPDATE event_occurrence_access_tokens SET first_used_at = COALESCE(first_used_at, ?),
-           last_used_at = ?, use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL`,
-      )
-      .bind(now, now, row.token_id),
-  ]);
+  try {
+    await db.batch([
+      ...acceptanceStatements,
+      db
+        .prepare(
+          `INSERT INTO event_occurrence_join_guards
+             (id, token_id, occurrence_id, event_id, user_id, guest_id)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(uuid(), row.token_id, row.id, row.event_id, row.token_user_id, row.token_guest_id),
+      existing
+        ? db
+            .prepare(
+              `UPDATE event_occurrence_join_confirmations SET name_snapshot = ?, affiliation_snapshot = ?,
+                 join_count = join_count + 1, confirmed_at = ?, updated_at = ? WHERE id = ?`,
+            )
+            .bind(authoritativeName, authoritativeAffiliation, now, now, confirmationId)
+        : db
+            .prepare(
+              `INSERT INTO event_occurrence_join_confirmations
+                 (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+                  join_count, confirmed_at, attendance_verified_at, attendance_verification_source,
+                  created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 1, ?, NULL, NULL, ?, ?)`,
+            )
+            .bind(
+              confirmationId,
+              row.id,
+              row.token_user_id,
+              row.token_guest_id,
+              authoritativeName,
+              authoritativeAffiliation,
+              now,
+              now,
+              now,
+            ),
+      db
+        .prepare(
+          `UPDATE event_occurrence_access_tokens SET first_used_at = COALESCE(first_used_at, ?),
+             last_used_at = ?, use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL`,
+        )
+        .bind(now, now, row.token_id),
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("MEETING_JOIN_CONTEXT_CHANGED")) {
+      throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access changed; reload before joining");
+    }
+    throw error;
+  }
   return meetingJoinResponseSchema.parse({ confirmationId, confirmedAt: now, redirectUrl });
 }

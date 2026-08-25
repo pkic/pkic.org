@@ -1605,20 +1605,20 @@ BEGIN
   SELECT RAISE(ABORT, 'form placement context is invalid');
 END;
 
-CREATE TABLE form_group_grants (
-  form_id   TEXT NOT NULL,
-  group_id  TEXT NOT NULL,
-  capability TEXT NOT NULL,
+CREATE TABLE form_placement_group_grants (
+  placement_id TEXT NOT NULL,
+  group_id     TEXT NOT NULL,
+  capability   TEXT NOT NULL,
   created_by_user_id TEXT,
   created_at TEXT NOT NULL,
-  PRIMARY KEY (form_id, group_id, capability),
-  FOREIGN KEY(form_id) REFERENCES forms(id),
+  PRIMARY KEY (placement_id, group_id, capability),
+  FOREIGN KEY(placement_id) REFERENCES form_placements(id),
   FOREIGN KEY(group_id) REFERENCES groups(id),
   FOREIGN KEY(created_by_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_form_group_grants_group
-  ON form_group_grants(group_id, capability, form_id);
+CREATE INDEX idx_form_placement_group_grants_group
+  ON form_placement_group_grants(group_id, capability, placement_id);
 
 ALTER TABLE form_submissions ADD COLUMN placement_id TEXT REFERENCES form_placements(id);
 ALTER TABLE form_submission_answers ADD COLUMN field_id TEXT REFERENCES form_fields(id);
@@ -3015,6 +3015,16 @@ If you did not request this link, you can safely ignore this email.',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
+    lower(hex(randomblob(16))), 'portal_magic_link', 1,
+    'Your PKI Consortium portal sign-in link',
+    'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
+
+[Sign in]({{magicLinkUrl}})
+
+If you did not request this link, you can safely ignore this email.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  ),
+  (
     lower(hex(randomblob(16))), 'existing-member-claim', 1,
     'Claim your PKI Consortium member account',
     'Hi {{memberName}},
@@ -3417,6 +3427,21 @@ CREATE UNIQUE INDEX uq_mailing_lists_primary_discussion
   ON mailing_lists(group_id)
   WHERE is_primary_discussion = 1 AND active = 1;
 
+CREATE TABLE mailing_list_group_grants (
+  mailing_list_id TEXT NOT NULL,
+  group_id        TEXT NOT NULL,
+  capability      TEXT NOT NULL,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (mailing_list_id, group_id, capability),
+  FOREIGN KEY(mailing_list_id) REFERENCES mailing_lists(id),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_mailing_list_group_grants_group
+  ON mailing_list_group_grants(group_id, capability, mailing_list_id);
+
 -- Absence means inherit the list default. An explicit row is a durable user
 -- choice and survives group/category eligibility loss and later re-entry.
 CREATE TABLE mailing_list_subscription_preferences (
@@ -3770,6 +3795,74 @@ CREATE TABLE event_group_grants (
 CREATE INDEX idx_event_group_grants_group
   ON event_group_grants(group_id, capability, event_id);
 
+ALTER TABLE registrations
+  ADD COLUMN registration_group_id TEXT REFERENCES groups(id);
+
+CREATE INDEX idx_registrations_group_event
+  ON registrations(registration_group_id, event_id, status, created_at, id);
+
+CREATE TRIGGER trg_group_registration_context_insert
+BEFORE INSERT ON registrations
+WHEN NEW.registration_group_id IS NOT NULL
+  AND NEW.status <> 'cancelled'
+  AND NOT EXISTS (
+    SELECT 1
+      FROM events event
+      JOIN groups registration_group
+        ON registration_group.id = NEW.registration_group_id
+       AND registration_group.active = 1
+      JOIN group_memberships membership
+        ON membership.group_id = registration_group.id
+       AND membership.user_id = NEW.user_id
+       AND membership.left_at IS NULL
+     WHERE event.id = NEW.event_id
+       AND event.registration_mode <> 'no_registration'
+       AND (
+         event.owner_group_id = registration_group.id
+         OR EXISTS (
+           SELECT 1
+             FROM event_group_grants grant_row
+            WHERE grant_row.event_id = event.id
+              AND grant_row.group_id = registration_group.id
+              AND grant_row.capability = 'register'
+         )
+       )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_REGISTRATION_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_group_registration_context_update
+BEFORE UPDATE OF event_id, user_id, status, registration_group_id ON registrations
+WHEN NEW.registration_group_id IS NOT NULL
+  AND NEW.status <> 'cancelled'
+  AND NOT EXISTS (
+    SELECT 1
+      FROM events event
+      JOIN groups registration_group
+        ON registration_group.id = NEW.registration_group_id
+       AND registration_group.active = 1
+      JOIN group_memberships membership
+        ON membership.group_id = registration_group.id
+       AND membership.user_id = NEW.user_id
+       AND membership.left_at IS NULL
+     WHERE event.id = NEW.event_id
+       AND event.registration_mode <> 'no_registration'
+       AND (
+         event.owner_group_id = registration_group.id
+         OR EXISTS (
+           SELECT 1
+             FROM event_group_grants grant_row
+            WHERE grant_row.event_id = event.id
+              AND grant_row.group_id = registration_group.id
+              AND grant_row.capability = 'register'
+         )
+       )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_REGISTRATION_CONTEXT_CHANGED');
+END;
+
 CREATE TABLE event_series (
   id                 TEXT NOT NULL PRIMARY KEY,
   event_id           TEXT NOT NULL UNIQUE,
@@ -3820,14 +3913,12 @@ CREATE TABLE event_occurrence_guests (
   name               TEXT NOT NULL,
   affiliation        TEXT,
   expires_at         TEXT NOT NULL,
-  invited_by_user_id TEXT NOT NULL,
   revoked_at         TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL,
   FOREIGN KEY(series_id) REFERENCES event_series(id),
   FOREIGN KEY(occurrence_id, series_id) REFERENCES event_occurrences(id, series_id),
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(invited_by_user_id) REFERENCES users(id)
+  FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
 CREATE INDEX idx_event_occurrence_guests_occurrence
@@ -3840,6 +3931,67 @@ CREATE UNIQUE INDEX uq_event_occurrence_guest_email
 CREATE UNIQUE INDEX uq_event_series_guest_email
   ON event_occurrence_guests(series_id, normalized_email)
   WHERE occurrence_id IS NULL;
+
+-- One canonical SQL read model defines whether a meeting subject may enter an
+-- occurrence now. Token issuance and token consumption both use it so policy,
+-- membership, registration, guest scope, revocation, and expiry cannot drift
+-- between separate database guards.
+CREATE VIEW current_event_occurrence_subject_eligibility AS
+SELECT occurrence.id AS occurrence_id, event.id AS event_id,
+       active_user.id AS user_id, NULL AS guest_id
+  FROM event_occurrences occurrence
+  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN events event ON event.id = series.event_id
+  JOIN users active_user ON active_user.active = 1
+ WHERE occurrence.status = 'scheduled'
+   AND (
+     (
+       event.registration_mode IN ('required', 'public')
+       AND EXISTS (
+         SELECT 1 FROM registrations registration
+          WHERE registration.event_id = event.id
+            AND registration.user_id = active_user.id
+            AND registration.status = 'registered'
+       )
+     )
+     OR (
+       event.registration_mode NOT IN ('required', 'public')
+       AND (
+         COALESCE(json_extract(event.settings_json, '$.memberEligibility'), 'owner_group') = 'public'
+         OR EXISTS (
+           SELECT 1 FROM group_memberships membership
+            WHERE membership.user_id = active_user.id
+              AND membership.left_at IS NULL
+              AND (
+                membership.group_id = event.owner_group_id
+                OR (
+                  json_extract(event.settings_json, '$.memberEligibility') = 'shared_groups'
+                  AND EXISTS (
+                    SELECT 1 FROM event_group_grants grant_row
+                     WHERE grant_row.event_id = event.id
+                       AND grant_row.group_id = membership.group_id
+                       AND grant_row.capability = 'attend'
+                  )
+                )
+              )
+         )
+       )
+     )
+   )
+UNION ALL
+SELECT occurrence.id AS occurrence_id, event.id AS event_id,
+       NULL AS user_id, guest.id AS guest_id
+  FROM event_occurrences occurrence
+  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN events event ON event.id = series.event_id
+  JOIN event_occurrence_guests guest
+    ON guest.series_id = occurrence.series_id
+   AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
+ WHERE occurrence.status = 'scheduled'
+   AND guest.revoked_at IS NULL
+   AND unixepoch(guest.expires_at) > unixepoch()
+   AND COALESCE(json_extract(event.settings_json, '$.guestPolicy'), 'none')
+       IN ('occurrence_invitation', 'public_registration', 'invitation_only');
 
 -- Tokens are opaque, single-purpose capabilities. GET may render the landing
 -- page but cannot consume a token or record attendance; only the intentional
@@ -3865,18 +4017,16 @@ CREATE TABLE event_occurrence_access_tokens (
 CREATE INDEX idx_event_occurrence_access_subject
   ON event_occurrence_access_tokens(occurrence_id, user_id, guest_id, expires_at);
 
-CREATE TRIGGER trg_event_occurrence_access_guest_context
+CREATE TRIGGER trg_event_occurrence_access_subject_context
 BEFORE INSERT ON event_occurrence_access_tokens
-WHEN NEW.guest_id IS NOT NULL AND NOT EXISTS (
-  SELECT 1
-    FROM event_occurrence_guests guest
-    JOIN event_occurrences occurrence ON occurrence.id = NEW.occurrence_id
-   WHERE guest.id = NEW.guest_id
-     AND guest.series_id = occurrence.series_id
-     AND (guest.occurrence_id IS NULL OR guest.occurrence_id = NEW.occurrence_id)
+WHEN NOT EXISTS (
+  SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
+   WHERE eligible.occurrence_id = NEW.occurrence_id
+     AND eligible.user_id IS NEW.user_id
+     AND eligible.guest_id IS NEW.guest_id
 )
 BEGIN
-  SELECT RAISE(ABORT, 'event access guest context invalid');
+  SELECT RAISE(ABORT, 'EVENT_OCCURRENCE_ACCESS_CONTEXT_CHANGED');
 END;
 
 -- Meeting access does not require an event registration, while the deployed
@@ -3926,6 +4076,74 @@ BEGIN
   SELECT RAISE(ABORT, 'event access term context invalid');
 END;
 
+-- The join landing is an advisory read. Membership, registration, guest,
+-- token, occurrence, and current-term state can all change before the
+-- intentional POST. Revalidate every condition inside the same D1 batch as
+-- the confirmation so revoked access can never leave attendance evidence.
+CREATE TABLE event_occurrence_join_guards (
+  id            TEXT NOT NULL PRIMARY KEY,
+  token_id      TEXT NOT NULL,
+  occurrence_id TEXT NOT NULL,
+  event_id      TEXT NOT NULL,
+  user_id       TEXT,
+  guest_id      TEXT,
+  FOREIGN KEY(token_id) REFERENCES event_occurrence_access_tokens(id),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
+  FOREIGN KEY(event_id) REFERENCES events(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id)
+);
+
+CREATE TRIGGER trg_event_occurrence_join_guard_validate
+BEFORE INSERT ON event_occurrence_join_guards
+WHEN NOT EXISTS (
+  SELECT 1
+    FROM event_occurrence_access_tokens token
+    JOIN event_occurrences occurrence ON occurrence.id = token.occurrence_id
+    JOIN event_series series ON series.id = occurrence.series_id
+    JOIN events event ON event.id = series.event_id
+   WHERE token.id = NEW.token_id
+     AND token.occurrence_id = NEW.occurrence_id
+     AND event.id = NEW.event_id
+     AND token.user_id IS NEW.user_id
+     AND token.guest_id IS NEW.guest_id
+     AND token.revoked_at IS NULL
+     AND unixepoch(token.expires_at) > unixepoch()
+     AND occurrence.status = 'scheduled'
+     AND EXISTS (
+       SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
+        WHERE eligible.occurrence_id = NEW.occurrence_id
+          AND eligible.event_id = NEW.event_id
+          AND eligible.user_id IS NEW.user_id
+          AND eligible.guest_id IS NEW.guest_id
+     )
+     AND NOT EXISTS (
+       SELECT 1 FROM event_terms required_term
+        WHERE required_term.event_id = event.id
+          AND required_term.audience_type = 'attendee'
+          AND required_term.active = 1
+          AND required_term.required = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM event_access_term_acceptances acceptance
+             WHERE acceptance.event_id = event.id
+               AND acceptance.event_term_id = required_term.id
+               AND (
+                 (NEW.user_id IS NOT NULL AND acceptance.user_id = NEW.user_id)
+                 OR (NEW.guest_id IS NOT NULL AND acceptance.guest_id = NEW.guest_id)
+               )
+          )
+     )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'MEETING_JOIN_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_event_occurrence_join_guard_release
+AFTER INSERT ON event_occurrence_join_guards
+BEGIN
+  DELETE FROM event_occurrence_join_guards WHERE id = NEW.id;
+END;
+
 CREATE TABLE event_occurrence_join_confirmations (
   id                          TEXT NOT NULL PRIMARY KEY,
   occurrence_id               TEXT NOT NULL,
@@ -3953,6 +4171,125 @@ CREATE UNIQUE INDEX uq_event_occurrence_join_guest
   WHERE guest_id IS NOT NULL;
 CREATE INDEX idx_event_occurrence_attendance
   ON event_occurrence_join_confirmations(occurrence_id, attendance_verified_at, confirmed_at, id);
+
+-- Event management may be delegated to another group's effective leadership.
+-- This short-lived row rechecks both the exact event capability and the
+-- actor's current group-management authority in the same D1 batch as the
+-- protected mutation, closing grant and leadership revocation races.
+CREATE TABLE event_resource_management_guards (
+  id                TEXT NOT NULL PRIMARY KEY,
+  event_id          TEXT NOT NULL REFERENCES events(id),
+  group_id          TEXT NOT NULL REFERENCES groups(id),
+  required_capability TEXT NOT NULL,
+  actor_user_id     TEXT REFERENCES users(id),
+  trusted_service   INTEGER NOT NULL DEFAULT 0 CHECK (trusted_service IN (0, 1)),
+  created_at        TEXT NOT NULL,
+  CHECK (
+    (actor_user_id IS NOT NULL AND trusted_service = 0)
+    OR (actor_user_id IS NULL AND trusted_service = 1)
+  )
+);
+
+CREATE TRIGGER trg_event_resource_management_guard_validate
+BEFORE INSERT ON event_resource_management_guards
+WHEN NEW.required_capability NOT IN ('manage', 'manage_attendance')
+OR NOT EXISTS (
+  SELECT 1
+    FROM events event
+    JOIN groups target_group ON target_group.id = NEW.group_id AND target_group.active = 1
+   WHERE event.id = NEW.event_id
+     AND (
+       event.owner_group_id = target_group.id
+       OR EXISTS (
+         SELECT 1 FROM event_group_grants grant_row
+         WHERE grant_row.event_id = event.id
+            AND grant_row.group_id = target_group.id
+            AND (
+              (NEW.required_capability = 'manage' AND grant_row.capability = 'manage')
+              OR (
+                NEW.required_capability = 'manage_attendance'
+                AND grant_row.capability IN ('manage_attendance', 'manage')
+              )
+            )
+       )
+     )
+     AND (
+       NEW.trusted_service = 1
+       OR EXISTS (
+         SELECT 1 FROM users active_actor
+          WHERE active_actor.id = NEW.actor_user_id
+            AND active_actor.active = 1
+       )
+     )
+     AND (
+       NEW.trusted_service = 1
+       OR EXISTS (
+         SELECT 1 FROM users actor_user
+          WHERE actor_user.id = NEW.actor_user_id
+            AND actor_user.active = 1
+            AND actor_user.role = 'admin'
+       )
+       OR EXISTS (
+         SELECT 1
+           FROM user_roles actor_role
+           JOIN role_permissions role_permission ON role_permission.role_id = actor_role.role_id
+          WHERE actor_role.user_id = NEW.actor_user_id
+            AND role_permission.permission = 'groups:write'
+            AND actor_role.revoked_at IS NULL
+            AND (actor_role.expires_at IS NULL OR actor_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            AND (
+              (actor_role.context_type IS NULL AND actor_role.context_id IS NULL)
+              OR (actor_role.context_type = 'group' AND actor_role.context_id = target_group.id)
+            )
+       )
+       OR EXISTS (
+         SELECT 1 FROM permission_grants direct_grant
+          WHERE direct_grant.user_id = NEW.actor_user_id
+            AND direct_grant.permission = 'groups:write'
+            AND direct_grant.revoked_at IS NULL
+            AND (direct_grant.expires_at IS NULL OR direct_grant.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            AND (
+              (direct_grant.context_type IS NULL AND direct_grant.context_id IS NULL)
+              OR (direct_grant.context_type = 'group' AND direct_grant.context_id = target_group.id)
+            )
+       )
+       OR EXISTS (
+         WITH RECURSIVE effective_lineage(id, depth, continue_up) AS (
+           SELECT target_group.id, 0,
+                  CASE WHEN target_group.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+           UNION ALL
+           SELECT parent.id, lineage.depth + 1,
+                  CASE WHEN parent.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+             FROM effective_lineage lineage
+             JOIN groups child ON child.id = lineage.id
+             JOIN groups parent ON parent.id = child.parent_group_id
+            WHERE lineage.continue_up = 1
+         )
+         SELECT 1
+           FROM effective_lineage lineage
+           JOIN user_roles inherited_role
+             ON inherited_role.context_type = 'group'
+            AND inherited_role.context_id = lineage.id
+            AND inherited_role.user_id = NEW.actor_user_id
+            AND inherited_role.role_id IN ('role-group_lead', 'role-group_deputy_lead')
+            AND inherited_role.revoked_at IS NULL
+            AND (inherited_role.expires_at IS NULL OR inherited_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+           JOIN role_permissions inherited_permission
+             ON inherited_permission.role_id = inherited_role.role_id
+            AND inherited_permission.permission = 'groups:write'
+          LIMIT 1
+       )
+     )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_event_resource_management_guard_release
+AFTER INSERT ON event_resource_management_guards
+BEGIN
+  DELETE FROM event_resource_management_guards WHERE id = NEW.id;
+END;
 
 -- Seed portal-managed meeting aggregates, not uploaded files. Recurrence is
 -- intentionally empty until staff confirms each real schedule.

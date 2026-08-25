@@ -31,6 +31,20 @@ import { GroupMeetingGuestRevoke } from "./[groupId]/meetings/series/[seriesId]/
 import { GroupMeetingAccessIssue } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/access";
 import { GroupMeetingAttendanceList } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/index";
 import { GroupMeetingAttendanceVerify } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/[confirmationId]";
+import {
+  eventGrantRoutes,
+  formPlacementGrantRoutes,
+  mailingListGrantRoutes,
+  voteGrantRoutes,
+} from "./resource-grant-handlers";
+import { GroupFormsList } from "./[groupId]/forms/index";
+import { GroupFormDefinitionGet, GroupFormPlacementUpdate } from "./[groupId]/forms/[placementId]";
+import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]/forms/[placementId]/submissions";
+import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
+import { GroupEventsList } from "./[groupId]/events/index";
+import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
+import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
+import { GroupAuditLogList } from "./[groupId]/audit-log";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -52,6 +66,16 @@ openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
+openapi.get("/:groupId/audit-log", GroupAuditLogList);
+openapi.get("/:groupId/forms", GroupFormsList);
+openapi.get("/:groupId/forms/:placementId", GroupFormDefinitionGet);
+openapi.patch("/:groupId/forms/:placementId", GroupFormPlacementUpdate);
+openapi.get("/:groupId/forms/:placementId/submissions", GroupFormSubmissionsList);
+openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCreate);
+openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
+openapi.get("/:groupId/events", GroupEventsList);
+openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
+openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);
@@ -72,5 +96,17 @@ openapi.put(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/attendance/:confirmationId",
   GroupMeetingAttendanceVerify,
 );
+openapi.get("/:groupId/forms/:placementId/grants", formPlacementGrantRoutes.list);
+openapi.post("/:groupId/forms/:placementId/grants", formPlacementGrantRoutes.create);
+openapi.delete("/:groupId/forms/:placementId/grants/:granteeGroupId/:capability", formPlacementGrantRoutes.revoke);
+openapi.get("/:groupId/events/:eventId/grants", eventGrantRoutes.list);
+openapi.post("/:groupId/events/:eventId/grants", eventGrantRoutes.create);
+openapi.delete("/:groupId/events/:eventId/grants/:granteeGroupId/:capability", eventGrantRoutes.revoke);
+openapi.get("/:groupId/votes/:voteId/grants", voteGrantRoutes.list);
+openapi.post("/:groupId/votes/:voteId/grants", voteGrantRoutes.create);
+openapi.delete("/:groupId/votes/:voteId/grants/:granteeGroupId/:capability", voteGrantRoutes.revoke);
+openapi.get("/:groupId/mailing-lists/:listId/grants", mailingListGrantRoutes.list);
+openapi.post("/:groupId/mailing-lists/:listId/grants", mailingListGrantRoutes.create);
+openapi.delete("/:groupId/mailing-lists/:listId/grants/:granteeGroupId/:capability", mailingListGrantRoutes.revoke);
 
 export default openapi;

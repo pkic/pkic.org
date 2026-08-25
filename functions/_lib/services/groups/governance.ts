@@ -103,15 +103,31 @@ export async function listEffectiveGroupLeadership(
   };
 }
 
-export async function canManageGroup(db: DatabaseLike, actor: AuthAdmin, groupId: string): Promise<boolean> {
-  if (hasPermission(actor, "groups:write", { type: "group", id: groupId })) return true;
+export async function canManageAnyGroup(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIds: readonly string[],
+): Promise<boolean> {
+  const targets = [...new Set(groupIds)];
+  if (targets.length === 0) return false;
+  if (targets.some((groupId) => hasPermission(actor, "groups:write", { type: "group", id: groupId }))) return true;
   if (actor.scopeRestricted && actor.scopes?.includes("groups:write") !== true) return false;
-
+  const placeholders = targets.map(() => "?").join(", ");
   const inherited = await first<{ authorized: number }>(
     db,
-    `${EFFECTIVE_LINEAGE_CTE}
+    `WITH RECURSIVE effective_target_lineage(target_id, id, continue_up) AS (
+       SELECT g.id, g.id, CASE WHEN g.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+       FROM groups g WHERE g.id IN (${placeholders})
+       UNION ALL
+       SELECT lineage.target_id, parent.id,
+              CASE WHEN parent.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+       FROM effective_target_lineage lineage
+       JOIN groups child ON child.id = lineage.id
+       JOIN groups parent ON parent.id = child.parent_group_id
+       WHERE lineage.continue_up = 1
+     )
      SELECT 1 AS authorized
-       FROM effective_lineage lineage
+       FROM effective_target_lineage lineage
        JOIN user_roles ur
          ON ur.context_type = 'group' AND ur.context_id = lineage.id
         AND ur.user_id = ?
@@ -120,9 +136,13 @@ export async function canManageGroup(db: DatabaseLike, actor: AuthAdmin, groupId
         AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        JOIN role_permissions rp ON rp.role_id = ur.role_id AND rp.permission = 'groups:write'
       LIMIT 1`,
-    [groupId, actor.id],
+    [...targets, actor.id],
   );
   return inherited !== null;
+}
+
+export async function canManageGroup(db: DatabaseLike, actor: AuthAdmin, groupId: string): Promise<boolean> {
+  return canManageAnyGroup(db, actor, [groupId]);
 }
 
 export async function requireGroupManagement(db: DatabaseLike, actor: AuthAdmin, groupId: string): Promise<void> {

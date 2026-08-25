@@ -26,7 +26,7 @@ async function verifyMagicLink(token: string): Promise<void> {
  */
 async function signInWithPasskey(): Promise<void> {
   const result = await authenticateWithPasskey();
-  if (!("admin" in result)) throw new Error("This passkey isn't registered to a staff account.");
+  if (!result.admin) throw new Error("This passkey isn't registered to a staff account.");
   saveAuth(result.admin.email ?? null);
   history.replaceState({}, "", "/admin/");
 }

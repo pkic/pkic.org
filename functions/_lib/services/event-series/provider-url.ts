@@ -1,3 +1,4 @@
+import { httpsCapabilityUrlSchema } from "../../../../assets/shared/schemas/urls";
 import { AppError } from "../../errors";
 
 const encoder = new TextEncoder();
@@ -25,11 +26,12 @@ async function encryptionKey(secret: string): Promise<CryptoKey> {
 }
 
 export async function sealProviderJoinUrl(url: string, secret: string): Promise<string> {
+  const validatedUrl = httpsCapabilityUrlSchema.parse(url);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     await encryptionKey(secret),
-    encoder.encode(url),
+    encoder.encode(validatedUrl),
   );
   return `v1.${base64Url(iv)}.${base64Url(new Uint8Array(ciphertext))}`;
 }
@@ -45,8 +47,7 @@ export async function openProviderJoinUrl(value: string, secret: string): Promis
       await encryptionKey(secret),
       fromBase64Url(ciphertext),
     );
-    const url = decoder.decode(plaintext);
-    return new URL(url).toString();
+    return httpsCapabilityUrlSchema.parse(decoder.decode(plaintext));
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(500, "MEETING_PROVIDER_URL_INVALID", "Stored meeting-provider URL cannot be decrypted");

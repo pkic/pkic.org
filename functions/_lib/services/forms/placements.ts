@@ -12,7 +12,12 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import {
+  isAuditOneChangeGuardFailure,
+  prepareAuditLog,
+  prepareAuditLogAfterOneChange,
+  type AuditScope,
+} from "../audit";
 
 export interface FormPlacementRow {
   id: string;
@@ -155,6 +160,7 @@ export async function updateManagedFormPlacement(
   formId: string,
   placementId: string,
   input: FormPlacementUpdateInput,
+  auditScope: AuditScope | null = null,
 ): Promise<FormPlacement> {
   const currentRow = await getFormPlacementRow(db, formId, placementId);
   if (!currentRow) throw new AppError(404, "FORM_PLACEMENT_NOT_FOUND", "Form placement not found");
@@ -202,6 +208,7 @@ export async function updateManagedFormPlacement(
         placementId,
         input,
         now,
+        auditScope,
       ),
     ]);
   } catch (error) {

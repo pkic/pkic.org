@@ -14,6 +14,14 @@ export const apiErrorPayloadSchema = z.object({
 });
 export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 
+/** Canonical OpenAPI response entry for the shared JSON error envelope. */
+export function jsonErrorResponse(description: string) {
+  return {
+    description,
+    content: { "application/json": { schema: apiErrorPayloadSchema } },
+  };
+}
+
 /** Structured validation details understood by shared browser form helpers. */
 export const apiValidationErrorDetailsSchema = z.object({
   formErrors: z.array(z.string()).optional(),

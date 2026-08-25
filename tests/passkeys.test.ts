@@ -73,6 +73,11 @@ async function insertActiveMemberUser(email: string): Promise<string> {
   return userId;
 }
 
+async function addActiveIndividualMembership(userId: string): Promise<void> {
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
+  await env.DB.batch(statements);
+}
+
 interface BeginResponse {
   options: { challenge: string; rp?: { id?: string } };
   challengeToken: string;
@@ -272,8 +277,8 @@ describe("passkeys (WebAuthn)", () => {
     expect(completeResponse.status).toBe(200);
     const body = passkeyAuthenticateCompleteResponseSchema.parse(await completeResponse.json());
     expect(body.success).toBe(true);
-    expect("admin" in body).toBe(true);
-    if (!("admin" in body)) throw new Error("Expected an admin passkey session");
+    expect(body.admin).toBeDefined();
+    if (!body.admin) throw new Error("Expected an admin passkey session");
     expect(body.admin.id).toBe(userId);
     expect(body.admin).not.toHaveProperty("identityType");
     expect(body.admin).not.toHaveProperty("sessionId");
@@ -301,6 +306,54 @@ describe("passkeys (WebAuthn)", () => {
       body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
     });
     expect(replayResponse.status).toBe(400);
+  });
+
+  it("atomically establishes both independent capacities for a staff member identity", async () => {
+    await addActiveIndividualMembership(userId);
+    const { authenticator } = await registerPasskey();
+    const sessionsBefore = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
+      userId,
+    );
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+
+    const response = await call("/api/v1/auth/passkeys/authenticate/complete", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = passkeyAuthenticateCompleteResponseSchema.parse(await response.json());
+    expect(body.admin?.id).toBe(userId);
+    expect(body.member?.userId).toBe(userId);
+    const cookies = response.headers.get("set-cookie") ?? "";
+    expect(cookies).toContain("pkic_admin_session=");
+    expect(cookies).toContain("pkic_member_session=");
+
+    const sessionsAfter = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
+      userId,
+    );
+    expect(sessionsAfter[0].total - sessionsBefore[0].total).toBe(2);
+    await expect(
+      queryAll<{ details_json: string }>(
+        env.DB,
+        "SELECT details_json FROM audit_log WHERE action = 'passkey_authenticated' AND actor_id = ?",
+        userId,
+      ),
+    ).resolves.toEqual([
+      {
+        details_json: expect.stringContaining('"to":["admin","member"]'),
+      },
+    ]);
   });
 
   it("allows a signed assertion to create only one session when the same request completes concurrently", async () => {

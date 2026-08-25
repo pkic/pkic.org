@@ -10,7 +10,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareScopedAuditLog } from "../audit";
+import { prepareAuditLogWhen, prepareScopedAuditLog } from "../audit";
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { selectGroupCapacities } from "./capacities";
 import { getGroup, listActiveGroupMembershipsForUser } from "./read-model";
@@ -61,7 +61,8 @@ export async function joinGroup(
     allowManaged: options.allowManaged,
   });
   const at = nowIso();
-  const statements: StatementLike[] = capacities.map((capacity) =>
+  const plannedMemberships = capacities.map((capacity) => ({ id: uuid(), capacity }));
+  const statements: StatementLike[] = plannedMemberships.map(({ id, capacity }) =>
     db
       .prepare(
         `INSERT OR IGNORE INTO group_memberships
@@ -71,7 +72,7 @@ export async function joinGroup(
           WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1)`,
       )
       .bind(
-        uuid(),
+        id,
         group.id,
         options.targetUserId,
         capacity.memberId,
@@ -83,22 +84,30 @@ export async function joinGroup(
         options.targetUserId,
       ),
   );
+  const insertedMembershipFilter = buildD1JsonMembershipFilter(
+    "id",
+    plannedMemberships.map((membership) => membership.id),
+  );
   statements.push(
-    prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
-    prepareScopedAuditLog(
-      db,
-      { type: "group", id: group.id },
-      options.source === "self_service" ? "member" : "admin",
-      options.actorUserId,
-      "group_joined",
-      "group",
-      group.id,
-      {
+    // Candidate IDs are operation-local. A concurrent/no-op command therefore
+    // cannot satisfy this predicate with the winning command's membership.
+    prepareAuditLogWhen(db, {
+      actorType: options.source === "self_service" ? "member" : "admin",
+      actorId: options.actorUserId,
+      action: "group_joined",
+      entityType: "group",
+      entityId: group.id,
+      details: {
         targetUserId: options.targetUserId,
-        memberIds: capacities.map((capacity) => capacity.memberId),
+        requestedMemberIds: capacities.map((capacity) => capacity.memberId),
         source: options.source,
       },
-    ),
+      conditionSql: `SELECT 1 FROM group_memberships WHERE ${insertedMembershipFilter.sql}`,
+      conditionBindings: insertedMembershipFilter.bindings,
+      createdAt: at,
+      scope: { type: "group", id: group.id },
+    }),
+    prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
   );
   await db.batch(statements);
   return mutationResponse(db, group.id, options.targetUserId, []);

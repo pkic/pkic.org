@@ -2,6 +2,7 @@ import {
   eventOccurrenceGuestSchema,
   eventOccurrenceSchema,
   eventSeriesSchema,
+  type EventGuestPolicy,
   type EventSeries,
 } from "../../../../assets/shared/schemas/event-series";
 import { parseJsonSafe } from "../../utils/json";
@@ -42,10 +43,16 @@ export const EVENT_SERIES_SELECT = `SELECT series.id, series.event_id, event.own
 export const EVENT_SERIES_FROM = `FROM event_series series
   JOIN events event ON event.id = series.event_id`;
 
+export function eventGuestPolicyFromSettings(settingsJson: string): EventGuestPolicy {
+  const raw = parseJsonSafe<Record<string, unknown>>(settingsJson, {}).guestPolicy;
+  if (raw === "invitation_only") return "occurrence_invitation";
+  if (raw === "occurrence_invitation" || raw === "public_registration") return raw;
+  return "none";
+}
+
 export function toEventSeries(row: EventSeriesRow): EventSeries {
   const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   const rawEligibility = settings.memberEligibility;
-  const rawGuestPolicy = settings.guestPolicy;
   return eventSeriesSchema.parse({
     id: row.id,
     eventId: row.event_id,
@@ -55,7 +62,7 @@ export function toEventSeries(row: EventSeriesRow): EventSeries {
     profileKey: row.profile_key,
     registrationPolicy: row.registration_policy,
     memberEligibility: rawEligibility === "group" ? "owner_group" : rawEligibility,
-    guestPolicy: rawGuestPolicy === "invitation_only" ? "occurrence_invitation" : rawGuestPolicy,
+    guestPolicy: eventGuestPolicyFromSettings(row.settings_json),
     startsAt: row.starts_at,
     recurrenceRule: row.recurrence_rule,
     timezone: row.timezone,

@@ -5,7 +5,7 @@ import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import { constantTimeEqual, sha256Hex } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
-import type { AuthAdmin, DatabaseLike, Env, UserBackedAuthAdmin } from "../types";
+import type { AuthAdmin, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
 import { createServiceAuthAdmin, createUserBackedAuthAdmin, requireUserBackedAuthAdmin } from "./admin-identity";
 import {
   AUTH_MAGIC_LINK_PURPOSES,
@@ -19,6 +19,7 @@ import {
   prepareSessionRow,
   assertSessionActive,
   revokeSessionRow,
+  prepareRevokeSessionRow,
   prepareMagicLinkRow,
   validateAndConsumeMagicLinkRow,
   validateMagicLinkRow,
@@ -63,7 +64,7 @@ const STAFF_ACCESS_CONDITION = `(
   )
 )`;
 
-interface AdminUserRow {
+export interface EligibleStaffUser {
   id: string;
   email: string;
   role: string;
@@ -252,6 +253,10 @@ export async function revokeAdminSession(db: DatabaseLike, sessionId: string): P
   await revokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
 }
 
+export function prepareRevokeAdminSession(db: DatabaseLike, sessionId: string): StatementLike {
+  return prepareRevokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
+}
+
 /**
  * True if `userId` is currently eligible to hold a session at all — the same
  * STAFF_ACCESS_CONDITION gate `requestAdminMagicLink`/`verifyAdminMagicLink`
@@ -261,8 +266,8 @@ export async function revokeAdminSession(db: DatabaseLike, sessionId: string): P
  * itself requires an already-authenticated, already-eligible actor — see
  * register/begin's use of requireAdminFromRequest).
  */
-export async function findEligibleStaffUserById(db: DatabaseLike, userId: string): Promise<AdminUserRow | null> {
-  return first<AdminUserRow>(
+export async function findEligibleStaffUserById(db: DatabaseLike, userId: string): Promise<EligibleStaffUser | null> {
+  return first<EligibleStaffUser>(
     db,
     `SELECT id, email, role, active FROM users u WHERE u.id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [userId],
@@ -311,7 +316,7 @@ export async function getCurrentUserBackedAdmin(
  */
 export async function issueAdminSession(
   db: DatabaseLike,
-  user: Pick<AdminUserRow, "id" | "email" | "role">,
+  user: Pick<EligibleStaffUser, "id" | "email" | "role">,
   sessionTtlHours: number,
 ): Promise<{ admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string }> {
   const { sessionId, expiresAt } = await insertSessionRow(db, SESSIONS_TABLE, user.id, sessionTtlHours);
@@ -392,7 +397,7 @@ export async function prepareAdminMagicLink(
   statement: import("../types").StatementLike | null;
 }> {
   const email = normalizeEmail(payload.email);
-  const admin = await first<AdminUserRow>(
+  const admin = await first<EligibleStaffUser>(
     db,
     `SELECT id, email, role, active FROM users u WHERE normalized_email = ? AND active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [email],

@@ -1,31 +1,51 @@
 /**
- * Member portal root — gates on member-session auth state, same shape as
- * admin/App.tsx. Session probing reuses GET /api/v1/me itself (a 401 means
- * anonymous, 200 means authenticated) since there's no dedicated member
- * "am I logged in" endpoint, matching the previous single-screen portal's
- * approach.
+ * Portal root — gates on identity authentication, then loads member profile
+ * data only when the session advertises member capacity. Staff-only users can
+ * therefore enter the portal without being granted member-only API access.
  */
 import { useEffect, useState } from "preact/hooks";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
-import { authStatus, isAuthed, setAuthChecking, saveProfile, clearAuth } from "./state";
+import {
+  authStatus,
+  isAuthed,
+  setAuthChecking,
+  savePortalSession,
+  saveProfile,
+  clearMemberProfile,
+  clearAuth,
+} from "./state";
 import { Login } from "./shell/Login";
 import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
-import { memberAuthVerifyResponseSchema } from "../../../shared/schemas/member-auth";
 import { myProfileSchema } from "../../../shared/schemas/me";
+import {
+  portalSessionEstablishedResponseSchema,
+  portalSessionResponseSchema,
+} from "../../../shared/schemas/portal-auth";
 
 async function verifyMagicLink(token: string): Promise<void> {
-  await postJson("/api/v1/auth/member/verify-link", { token }, memberAuthVerifyResponseSchema);
+  const session = await postJson("/api/v1/auth/portal/verify-link", { token }, portalSessionEstablishedResponseSchema);
+  savePortalSession(session);
+}
+
+export function portalMagicLinkToken(hash: string): string | null {
+  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+  return new URLSearchParams(query).get("token");
 }
 
 export function App() {
-  const [verifying, setVerifying] = useState(() => Boolean(new URLSearchParams(window.location.search).get("token")));
+  const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
-  async function loadProfile(): Promise<boolean> {
+  async function loadPortalSession(): Promise<boolean> {
     try {
-      const data = await getJson("/api/v1/me", myProfileSchema);
-      saveProfile(data);
+      const session = await getJson("/api/v1/auth/portal/session", portalSessionResponseSchema);
+      savePortalSession(session);
+      if (session.member) {
+        saveProfile(await getJson("/api/v1/me", myProfileSchema));
+      } else {
+        clearMemberProfile();
+      }
       return true;
     } catch {
       clearAuth();
@@ -38,11 +58,11 @@ export function App() {
 
     async function run(): Promise<void> {
       setAuthChecking();
-      const token = new URLSearchParams(window.location.search).get("token");
+      const token = portalMagicLinkToken(window.location.hash);
       if (token) {
+        history.replaceState({}, "", "/portal/");
         try {
           await verifyMagicLink(token);
-          history.replaceState({}, "", "/portal/");
         } catch (err) {
           if (!cancelled) {
             setVerifyError(
@@ -55,7 +75,7 @@ export function App() {
         }
         if (!cancelled) setVerifying(false);
       }
-      if (!cancelled) await loadProfile();
+      if (!cancelled) await loadPortalSession();
     }
 
     void run();
@@ -81,7 +101,7 @@ export function App() {
       )}
       <Login
         onSignedIn={async () => {
-          await loadProfile();
+          await loadPortalSession();
         }}
       />
     </>

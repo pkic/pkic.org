@@ -7,6 +7,7 @@ import { getRequiredTerms } from "./events";
 import { validateCustomAnswersForSubmission } from "./forms";
 import type { InviteRecord } from "./invites";
 import { prepareRegistrationSubmission } from "./registration-submission";
+import type { VerifiedRegistrationIdentityContext } from "./registrations";
 
 export async function prepareValidatedAttendeeRegistration(
   db: DatabaseLike,
@@ -23,6 +24,7 @@ export async function prepareValidatedAttendeeRegistration(
     pendingConfirmationDeadlineHours: number;
     confirmationTtlHours: number;
     referralCodeLength: number;
+    verifiedIdentity?: VerifiedRegistrationIdentityContext;
   },
 ) {
   const attendanceType = input.attendanceType ?? deriveEventAttendanceType(input.dayAttendance);
@@ -69,6 +71,7 @@ export async function prepareValidatedAttendeeRegistration(
     signingSecret: options.signingSecret,
     confirmationTtlHours: options.confirmationTtlHours,
     referralCodeLength: options.referralCodeLength,
+    verifiedIdentity: options.verifiedIdentity,
   });
   return { prepared, requiredTerms };
 }

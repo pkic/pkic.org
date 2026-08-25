@@ -15,9 +15,21 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
-import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { buildAccessibleGroupEventIdsCte } from "../events/access-query";
 import { getGroup } from "../groups";
 import { requireGroupManagement } from "../groups/governance";
+import {
+  canViewerAccessGroupResource,
+  resolveGroupResourceContextAccess,
+  type GroupResourceContextAccess,
+  type GroupResourceViewer,
+} from "../resource-grants";
+import {
+  commitEventResourceManagementBatch,
+  requireEventResourceManagementContext,
+  type EventResourceManagementContext,
+} from "./management";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
 
 type EventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
@@ -29,15 +41,14 @@ const SORT_EXPRESSIONS = {
   created_at: "series.created_at",
 } satisfies Record<(typeof EVENT_SERIES_SORT_COLUMNS)[number], string>;
 
-export async function listGroupEventSeries(
-  db: DatabaseLike,
-  groupIdOrSlug: string,
+export function buildGroupEventSeriesPageQuery(
+  groupId: string,
+  access: GroupResourceContextAccess,
   query: z.infer<typeof eventSeriesListQuerySchema>,
-): Promise<{ series: EventSeries[]; total: number }> {
-  const group = await getGroup(db, groupIdOrSlug);
-  if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
-  const conditions = ["event.owner_group_id = ?"];
-  const bindings: unknown[] = [group.id];
+) {
+  const accessibleEvents = buildAccessibleGroupEventIdsCte(groupId, access);
+  const conditions = ["event.owner_group_id IS NOT NULL"];
+  const bindings: unknown[] = [...accessibleEvents.bindings];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["event.name", "event.slug", "series.location"]) : null;
   if (search) {
     conditions.push(search.sql);
@@ -45,25 +56,43 @@ export async function listGroupEventSeries(
   }
   if (query.active !== undefined) {
     conditions.push("series.active = ?");
-    bindings.push(query.active === "true" ? 1 : 0);
+    bindings.push(query.active ? 1 : 0);
   }
   if (query.profileKey) {
     conditions.push("event.profile_key = ?");
     bindings.push(query.profileKey);
   }
-  const where = `WHERE ${conditions.join(" AND ")}`;
-  const { rows, total } = await queryPage<EventSeriesRow>(db, {
-    source: {
-      selectSql: EVENT_SERIES_SELECT,
-      fromSql: `${EVENT_SERIES_FROM} ${where}`,
-      countFromSql: `${EVENT_SERIES_FROM} ${where}`,
-      bindings,
-    },
+  return {
+    sql: `WITH ${accessibleEvents.sql}
+      ${EVENT_SERIES_SELECT}
+      FROM accessible_event accessible
+      JOIN events event ON event.id = accessible.event_id
+      JOIN event_series series ON series.event_id = event.id
+      WHERE ${conditions.join(" AND ")}`,
+    bindings,
     orderBy: resolveMappedOrderBy(query.sort, SORT_EXPRESSIONS, SORT_EXPRESSIONS.next_occurrence_at, "series.id ASC"),
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listGroupEventSeries(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  query: z.infer<typeof eventSeriesListQuerySchema>,
+): Promise<{ series: EventSeries[]; total: number }> {
+  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
+  if (!access.member && !access.manager) return { series: [], total: 0 };
+  const { rows, total } = await queryPage<EventSeriesRow>(db, buildGroupEventSeriesPageQuery(groupId, access, query));
   return { series: rows.map(toEventSeries), total };
+}
+
+async function getEventSeriesById(db: DatabaseLike, seriesId: string): Promise<EventSeries | null> {
+  const row = await first<EventSeriesRow>(db, `${EVENT_SERIES_SELECT} ${EVENT_SERIES_FROM} WHERE series.id = ?`, [
+    seriesId,
+  ]);
+  return row ? toEventSeries(row) : null;
 }
 
 export async function getGroupEventSeries(
@@ -73,13 +102,36 @@ export async function getGroupEventSeries(
 ): Promise<EventSeries> {
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
-  const row = await first<EventSeriesRow>(
-    db,
-    `${EVENT_SERIES_SELECT} ${EVENT_SERIES_FROM} WHERE series.id = ? AND event.owner_group_id = ?`,
-    [seriesId, group.id],
-  );
-  if (!row) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found in this group");
-  return toEventSeries(row);
+  const series = await getEventSeriesById(db, seriesId);
+  if (!series || series.ownerGroupId !== group.id) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found in this group");
+  }
+  return series;
+}
+
+export async function getAccessibleGroupEventSeries(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  throughGroupId: string,
+  seriesId: string,
+): Promise<EventSeries> {
+  const series = await getEventSeriesById(db, seriesId);
+  if (!series || !(await canViewerAccessGroupResource(db, viewer, throughGroupId, "event", series.eventId, "view"))) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
+  }
+  return series;
+}
+
+export async function getManagedGroupEventSeries(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  seriesId: string,
+): Promise<{ series: EventSeries; context: EventResourceManagementContext }> {
+  const series = await getEventSeriesById(db, seriesId);
+  if (!series) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+  const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, series.eventId, "manage");
+  return { series, context };
 }
 
 function normalizedSlug(value: string): string {
@@ -171,8 +223,7 @@ export async function updateGroupEventSeries(
   seriesId: string,
   input: EventSeriesUpdateInput,
 ): Promise<EventSeries> {
-  const existing = await getGroupEventSeries(db, groupIdOrSlug, seriesId);
-  await requireGroupManagement(db, actor, existing.ownerGroupId);
+  const { series: existing, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
   const scheduleChanged =
     input.startsAt !== undefined ||
     input.recurrenceRule !== undefined ||
@@ -206,45 +257,74 @@ export async function updateGroupEventSeries(
         }
       : currentPolicy,
   );
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE events SET name = COALESCE(?, name), profile_key = COALESCE(?, profile_key),
-           registration_mode = COALESCE(?, registration_mode), settings_json = ?,
-           timezone = COALESCE(?, timezone), updated_at = ? WHERE id = ?`,
-      )
-      .bind(
-        input.eventName ?? null,
-        input.profileKey ?? null,
-        input.policy?.registrationPolicy ?? null,
-        settings,
-        input.timezone ?? null,
-        now,
-        existing.eventId,
-      ),
-    db
-      .prepare(
-        `UPDATE event_series SET starts_at = COALESCE(?, starts_at),
-           recurrence_rule = COALESCE(?, recurrence_rule), timezone = COALESCE(?, timezone),
-           duration_minutes = COALESCE(?, duration_minutes),
-           location = CASE WHEN ? = 1 THEN ? ELSE location END,
-           provider_type = CASE WHEN ? = 1 THEN ? ELSE provider_type END,
-           active = COALESCE(?, active), updated_at = ? WHERE id = ?`,
-      )
-      .bind(
-        input.startsAt ?? null,
-        input.recurrenceRule ?? null,
-        input.timezone ?? null,
-        input.durationMinutes ?? null,
-        input.location !== undefined ? 1 : 0,
-        input.location ?? null,
-        input.providerType !== undefined ? 1 : 0,
-        input.providerType ?? null,
-        input.active === undefined ? null : input.active ? 1 : 0,
-        now,
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          `UPDATE events SET name = COALESCE(?, name), profile_key = COALESCE(?, profile_key),
+             registration_mode = COALESCE(?, registration_mode), settings_json = ?,
+             timezone = COALESCE(?, timezone), updated_at = ? WHERE id = ?`,
+        )
+        .bind(
+          input.eventName ?? null,
+          input.profileKey ?? null,
+          input.policy?.registrationPolicy ?? null,
+          settings,
+          input.timezone ?? null,
+          now,
+          existing.eventId,
+        ),
+      db
+        .prepare(
+          `UPDATE event_series SET starts_at = COALESCE(?, starts_at),
+             recurrence_rule = COALESCE(?, recurrence_rule), timezone = COALESCE(?, timezone),
+             duration_minutes = COALESCE(?, duration_minutes),
+             location = CASE WHEN ? = 1 THEN ? ELSE location END,
+             provider_type = CASE WHEN ? = 1 THEN ? ELSE provider_type END,
+             active = COALESCE(?, active), updated_at = ?
+           WHERE id = ?
+             AND (? = 0 OR NOT EXISTS (SELECT 1 FROM event_occurrences WHERE series_id = ?))`,
+        )
+        .bind(
+          input.startsAt ?? null,
+          input.recurrenceRule ?? null,
+          input.timezone ?? null,
+          input.durationMinutes ?? null,
+          input.location !== undefined ? 1 : 0,
+          input.location ?? null,
+          input.providerType !== undefined ? 1 : 0,
+          input.providerType ?? null,
+          input.active === undefined ? null : input.active ? 1 : 0,
+          now,
+          seriesId,
+          scheduleChanged ? 1 : 0,
+          seriesId,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_series_updated",
+        "event_series",
         seriesId,
+        input,
       ),
-    prepareAuditLogAfterOneChange(db, "admin", actor.id, "event_series_updated", "event_series", seriesId, input),
-  ]);
-  return getGroupEventSeries(db, existing.ownerGroupId, seriesId);
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      if (scheduleChanged) {
+        throw new AppError(
+          409,
+          "EVENT_SERIES_SCHEDULE_MATERIALIZED",
+          "The recurring schedule cannot be changed after occurrences are materialized",
+        );
+      }
+      throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while the update was being saved");
+    }
+    throw error;
+  }
+  const updated = await getEventSeriesById(db, seriesId);
+  if (!updated) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+  return updated;
 }

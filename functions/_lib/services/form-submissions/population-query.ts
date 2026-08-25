@@ -7,11 +7,11 @@
 import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { getEventBySlug } from "../events";
-import { getFormByKey } from "./form-definition";
-import { findFormPlacement } from "../forms";
+import { findFormPlacement } from "../forms/placements";
 import type { DatabaseLike } from "../../types";
 import type { FormRow, FormSubmissionFilters } from "./types";
 import type { FormPlacement } from "../../../../assets/shared/schemas/forms";
+import { getFormByKey } from "./form-definition";
 
 interface SqlFragment {
   sql: string;
@@ -57,6 +57,21 @@ function optionalSearch(query: string | undefined, expressions: readonly string[
   if (!query) return { sql: "", bindings: [] };
   const search = buildD1TextSearchFilter(query, expressions);
   return { sql: `AND ${search.sql}`, bindings: search.bindings };
+}
+
+function optionalNativeSubmissionSearch(query: string | undefined, expressions: readonly string[]): SqlFragment {
+  if (!query) return { sql: "", bindings: [] };
+  const submission = buildD1TextSearchFilter(query, expressions);
+  const answer = buildD1TextSearchFilter(query, ["answer_search.data_json"]);
+  return {
+    sql: `AND (${submission.sql} OR EXISTS (
+      SELECT 1
+        FROM form_submission_answers answer_search
+       WHERE answer_search.submission_id = fs.id
+         AND ${answer.sql}
+    ))`,
+    bindings: [...submission.bindings, ...answer.bindings],
+  };
 }
 
 function submitterSortSql(firstName: string, lastName: string, email: string): string {
@@ -120,7 +135,7 @@ function nativeSubmissionBranch(params: {
     canonicalStatus,
     ...(isProposal ? ["source_proposal.title"] : []),
   ];
-  const search = optionalSearch(params.q, searchExpressions);
+  const search = optionalNativeSubmissionSearch(params.q, searchExpressions);
   const submitter = submitterSortSql("u.first_name", "u.last_name", "u.email");
   const responseSet = params.placementId
     ? {
@@ -185,6 +200,7 @@ function legacyRegistrationBranch(params: {
     "u.last_name",
     "u.organization_name",
     "r.status",
+    "r.custom_answers_json",
   ]);
   const submitter = submitterSortSql("u.first_name", "u.last_name", "u.email");
   const responseSet = domainPlacementFilter("r.form_placement_id", params.placementId, params.includeLegacyUnplaced);
@@ -244,6 +260,7 @@ function legacyProposalBranch(params: {
     "u.organization_name",
     "sp.status",
     "sp.title",
+    "sp.details_json",
   ]);
   const submitter = submitterSortSql("u.first_name", "u.last_name", "u.email");
   const responseSet = domainPlacementFilter("sp.form_placement_id", params.placementId, params.includeLegacyUnplaced);
