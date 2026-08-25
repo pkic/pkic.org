@@ -11,7 +11,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLogWhen, prepareScopedAuditLog } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLogAfterExpectedChanges } from "../audit";
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { prepareGroupJoinEligibilityGuard, selectGroupCapacities } from "./capacities";
 import { getGroup, listActiveGroupMembershipsForUser } from "./read-model";
@@ -170,26 +170,38 @@ export async function leaveGroup(
   if (active.length === 0) return mutationResponse(db, group.id, options.targetUserId, []);
 
   const at = nowIso();
-  await db.batch([
-    db
-      .prepare(`UPDATE group_memberships SET left_at = ?, updated_at = ? WHERE ${conditions.join(" AND ")}`)
-      .bind(at, at, ...bindings),
-    prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
-    prepareScopedAuditLog(
-      db,
-      { type: "group", id: group.id },
-      options.actorType,
-      options.actorUserId,
-      "group_left",
-      "group",
-      group.id,
-      {
-        targetUserId: options.targetUserId,
-        membershipIds: active.map((membership) => membership.id),
-        memberIds: active.map((membership) => membership.member_id),
-      },
-    ),
-  ]);
+  try {
+    await db.batch([
+      db
+        .prepare(`UPDATE group_memberships SET left_at = ?, updated_at = ? WHERE ${conditions.join(" AND ")}`)
+        .bind(at, at, ...bindings),
+      prepareScopedAuditLogAfterExpectedChanges(
+        db,
+        active.length,
+        { type: "group", id: group.id },
+        options.actorType,
+        options.actorUserId,
+        "group_left",
+        "group",
+        group.id,
+        {
+          targetUserId: options.targetUserId,
+          membershipIds: active.map((membership) => membership.id),
+          memberIds: active.map((membership) => membership.member_id),
+        },
+      ),
+      prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
+    ]);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "GROUP_MEMBERSHIP_CHANGED",
+        "Group membership changed while the leave was being saved; reload and retry",
+      );
+    }
+    throw error;
+  }
   return mutationResponse(
     db,
     group.id,

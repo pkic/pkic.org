@@ -129,6 +129,7 @@ export const groupLeaveRouteSchema = {
       description: "Remaining and ended capacities.",
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
+    "409": jsonErrorResponse("Group membership changed before the leave committed."),
   },
 };
 
@@ -176,6 +177,7 @@ export const groupMembershipEndRouteSchema = {
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
     "404": jsonErrorResponse("Membership capacity not found."),
+    "409": jsonErrorResponse("Group membership changed before the command committed."),
   },
 };
 

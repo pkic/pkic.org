@@ -99,6 +99,9 @@ describe("group capacity membership", () => {
       selection: { mode: "all" },
       actorType: "member",
     });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_left' AND entity_id = ?", group.id),
+    ).toHaveLength(1);
     const subset = await joinGroup(env.DB, group.id, {
       actorUserId: userId,
       targetUserId: userId,
@@ -210,6 +213,65 @@ describe("group capacity membership", () => {
     ).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_joined' AND entity_id = ?", group.id),
+    ).toHaveLength(0);
+  });
+
+  it("rejects a stale multi-capacity leave without ending the remaining capacity or auditing success", async () => {
+    const admin = await insertActor("leave-race-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Leave Race Group",
+      eligibilityMode: "open",
+    });
+    const userId = await insertUser(env.DB, "leave-race@example.test");
+    const memberAId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Leave Race Organization A"),
+      "A",
+    );
+    const memberBId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Leave Race Organization B"),
+      "B",
+    );
+    await addRepresentative(env.DB, memberAId, userId);
+    await addRepresentative(env.DB, memberBId, userId);
+    await joinGroup(env.DB, group.id, {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE group_memberships
+            SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 second'),
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 second')
+          WHERE group_id = ? AND user_id = ? AND member_id = ? AND left_at IS NULL`,
+      )
+        .bind(group.id, userId, memberAId)
+        .run(),
+    );
+
+    await expect(
+      leaveGroup(racingDb, group.id, {
+        actorUserId: userId,
+        targetUserId: userId,
+        selection: { mode: "all" },
+        actorType: "member",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_MEMBERSHIP_CHANGED" });
+
+    expect(
+      await queryAll<{ member_id: string }>(
+        env.DB,
+        "SELECT member_id FROM group_memberships WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+        [group.id, userId],
+      ),
+    ).toEqual([{ member_id: memberBId }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_left' AND entity_id = ?", group.id),
     ).toHaveLength(0);
   });
 

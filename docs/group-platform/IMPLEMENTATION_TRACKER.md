@@ -506,8 +506,11 @@ Status: Pending
       Race tests deactivate the group and revoke category eligibility after
       preflight; both roll back every selected capacity, audit entry, and
       mailing-list reconciliation. A mounted API-key test also proves service
-      identities are not written into user foreign keys. Group-management,
-      leadership, leave, and category-rule mutation races remain open.
+      identities are not written into user foreign keys. Leave/end commands
+      require the exact preflight capacity count at commit time; a stale
+      multi-capacity leave rolls back its remaining update, audit, and mailing
+      reconciliation with a bounded conflict. Group-management, leadership,
+      and category-rule mutation races remain open.
 - [x] Run join-token, terms, guest, and attendance security tests.
       Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
       replacement, user and guest identity binding, membership loss, expiry,
