@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SelfGroup } from "../../assets/shared/schemas/group-participation";
 import { GroupParticipationCard } from "../../assets/ts/member-flows/portal/sections/GroupParticipationCard";
+import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
 
 const mounted: HTMLElement[] = [];
 
@@ -56,6 +57,14 @@ function mountCard(value: SelfGroup, onChanged = vi.fn(async () => {})): HTMLEle
   return container;
 }
 
+function mountGroups(): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  void act(() => render(<Groups />, container));
+  return container;
+}
+
 function mutationResponse() {
   return new Response(
     JSON.stringify({
@@ -87,6 +96,42 @@ afterEach(() => {
 });
 
 describe("generic group participation card", () => {
+  it("loads every configured group type without a working-group filter", async () => {
+    let request: URL | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        request = new URL(String(input), location.origin);
+        return new Response(
+          JSON.stringify({
+            groups: [
+              group({
+                type: { key: "committee", singularLabel: "Committee", pluralLabel: "Committees" },
+                parentGroup: {
+                  id: "10000000-0000-4000-8000-000000000002",
+                  slug: "parent-group",
+                  name: "Parent Group",
+                  type: { key: "working_group", singularLabel: "Working group", pluralLabel: "Working groups" },
+                },
+              }),
+            ],
+            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    const container = mountGroups();
+    await settle();
+
+    expect(request?.pathname).toBe("/api/v1/me/groups");
+    expect(request?.searchParams.get("view")).toBe("catalog");
+    expect(request?.searchParams.has("typeKey")).toBe(false);
+    expect(container.textContent).toContain("Committee");
+    expect(container.textContent).toContain("Part of Parent Group");
+  });
+
   it("selects every represented organization by default", async () => {
     const requests: Array<{ url: string; init: RequestInit }> = [];
     vi.stubGlobal(

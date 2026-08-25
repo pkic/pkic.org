@@ -1,4 +1,4 @@
-/** Working-group context over the generic group self-participation model. */
+/** Generic self-service participation view shared by every configured group type. */
 import type { z } from "zod";
 import { selfGroupsListResponseSchema } from "../../../../shared/schemas/group-participation";
 import { ErrorAlert } from "../../../components/ErrorAlert";
@@ -10,10 +10,10 @@ import { GroupParticipationCard } from "./GroupParticipationCard";
 
 type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
 
-export function WorkingGroups() {
+export function Groups() {
   const catalog = useApiPage<SelfGroupsPage>(
     "/api/v1/me/groups",
-    { view: "catalog", typeKey: "working_group" },
+    { view: "catalog" },
     selfGroupsListResponseSchema,
     (data) => data.groups,
   );
@@ -21,21 +21,19 @@ export function WorkingGroups() {
 
   if (catalog.error) {
     return (
-      <ErrorAlert
-        error={catalog.error instanceof ApiClientError ? catalog.error.message : "Could not load working groups."}
-      />
+      <ErrorAlert error={catalog.error instanceof ApiClientError ? catalog.error.message : "Could not load groups."} />
     );
   }
   if (!catalog.data) return <Spinner />;
   if (groups.length === 0 && !catalog.data.page.hasMore) {
-    return <p class="text-muted">No working groups are available right now.</p>;
+    return <p class="text-muted">No groups are available right now.</p>;
   }
 
   return (
     <div class="d-flex flex-column gap-3 content-width-schedule">
       <p class="text-muted small">
-        Join or leave working groups using the Member affiliations you currently represent. All eligible affiliations
-        are selected by default; clear one to join for an explicit subset.
+        Join or leave groups using the Member affiliations you currently represent. All eligible affiliations are
+        selected by default; clear one to join for an explicit subset.
       </p>
       {groups.map((group) => (
         <GroupParticipationCard key={group.id} group={group} onChanged={catalog.reload} />

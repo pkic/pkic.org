@@ -9,7 +9,7 @@ export interface PortalNavItem {
 const MEMBER_NAV_ITEMS: PortalNavItem[] = [
   { path: "/profile", section: "profile", label: "My Profile" },
   { path: "/organization", section: "organization", label: "My Organization" },
-  { path: "/working-groups", section: "working-groups", label: "Working Groups" },
+  { path: "/groups", section: "groups", label: "Groups" },
   { path: "/calendar", section: "calendar", label: "Calendar" },
   { path: "/votes", section: "votes", label: "Votes" },
   { path: "/application", section: "application", label: "My Application" },
@@ -22,7 +22,12 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   label: "Management",
 };
 
-const CAPACITY_ROUTE_PATHS = new Set([...MEMBER_NAV_ITEMS.map((item) => item.path), MANAGEMENT_NAV_ITEM.path]);
+export const PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS = { "/working-groups": "/groups" } as const;
+const CAPACITY_ROUTE_PATHS = new Set([
+  ...MEMBER_NAV_ITEMS.map((item) => item.path),
+  ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
+  MANAGEMENT_NAV_ITEM.path,
+]);
 
 export function portalNavigationItems(session: PortalSession | null): PortalNavItem[] {
   return [...(session?.member ? MEMBER_NAV_ITEMS : []), ...(session?.admin ? [MANAGEMENT_NAV_ITEM] : [])];

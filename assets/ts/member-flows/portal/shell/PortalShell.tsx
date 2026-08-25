@@ -1,11 +1,4 @@
-/**
- * Member portal nav shell (Member Portal Navigation Structure).
- * Mirrors the admin SPA's shell shape (Topbar + Sidebar + hash
- * router) at a much smaller scale — seven top-level sections, three of
- * which are functional in this phase (My Profile, My Application, Account
- * Settings); the rest render a "coming soon" placeholder naming the future
- * UI phase that builds them.
- */
+/** Capability-derived portal shell shared by member and management identities. */
 import { type ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import { Router, Route, Switch } from "wouter";
@@ -13,14 +6,18 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { portalSession, profile } from "../state";
 import { MyProfile } from "../sections/MyProfile";
 import { MyOrganization } from "../sections/MyOrganization";
-import { WorkingGroups } from "../sections/WorkingGroups";
+import { Groups } from "../sections/Groups";
 import { Calendar } from "../sections/Calendar";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
 import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
-import { portalCapacityFallbackPath, portalDefaultPath } from "./portal-navigation";
+import {
+  PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
+  portalCapacityFallbackPath,
+  portalDefaultPath,
+} from "./portal-navigation";
 
 function SectionWrapper({ title, children }: { title: string; children: ComponentChildren }) {
   return (
@@ -41,6 +38,12 @@ function PortalRouteFallback({ session }: { session: PortalSession | null }) {
 
   if (fallbackPath) return null;
   return <div class="p-4 text-muted fst-italic">Section not found.</div>;
+}
+
+function PortalRouteRedirect({ to }: { to: string }) {
+  const [, navigate] = useHashLocation();
+  useEffect(() => navigate(to), [navigate, to]);
+  return null;
 }
 
 export function PortalShell() {
@@ -92,14 +95,18 @@ export function PortalShell() {
           )}
           {hasMemberCapacity && (
             <Route
-              path="/working-groups"
+              path="/groups"
               component={() => (
-                <SectionWrapper title="Working Groups">
-                  <WorkingGroups />
+                <SectionWrapper title="Groups">
+                  <Groups />
                 </SectionWrapper>
               )}
             />
           )}
+          {hasMemberCapacity &&
+            Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
+              <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
+            ))}
           {hasMemberCapacity && (
             <Route
               path="/calendar"

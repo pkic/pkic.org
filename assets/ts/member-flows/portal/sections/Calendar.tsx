@@ -1,9 +1,9 @@
 /**
  * Calendar — ICS download + time-slot preference per subscribed meeting
  * series. Series list is scoped server-side to the
- * consortium series (everyone) plus the series for any working group the
- * member currently belongs to (`listMyMeetingSeries`) — there's nothing to
- * join/leave here, that's the Working Groups tab's job.
+ * consortium series (everyone) plus the series for any group the member
+ * currently belongs to (`listMyMeetingSeries`) — there's nothing to
+ * join/leave here, that's the Groups section's job.
  */
 import { useState } from "preact/hooks";
 import { getJson, patchJson, ApiClientError } from "../../../shared/api-client";
@@ -104,16 +104,14 @@ export function Calendar() {
   if (listing.error) return <ErrorAlert error={listing.error.message} />;
   if (listing.loading && !series) return <Spinner />;
   if (!series || series.length === 0) {
-    return (
-      <p class="text-muted">No meeting series are available yet. Join a working group to see its calendar here.</p>
-    );
+    return <p class="text-muted">No meeting series are available yet. Join a group to see its calendar here.</p>;
   }
 
   return (
     <div class="d-flex flex-column gap-3 content-width-schedule">
       <p class="text-muted small">
         Choose a time slot for each meeting series, or download any variant directly. Series you're not subscribed to
-        (e.g. from a working group you haven't joined) won't appear here.
+        (e.g. from a group you haven't joined) won't appear here.
       </p>
       {series.map((s) => (
         <MeetingSeriesCard key={s.id} series={s} onChanged={listing.reload} />

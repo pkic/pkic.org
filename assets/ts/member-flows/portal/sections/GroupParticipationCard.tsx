@@ -68,8 +68,10 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
         <div>
           <div class="d-flex align-items-center gap-2">
             <span class="fw-semibold">{group.name}</span>
+            <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
             {group.memberships.length > 0 && <span class="badge text-bg-success">Joined</span>}
           </div>
+          {group.parentGroup && <p class="text-muted small mb-0 mt-1">Part of {group.parentGroup.name}</p>}
           {group.description && <p class="text-muted small mb-0 mt-1">{group.description}</p>}
         </div>
 

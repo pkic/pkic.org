@@ -449,15 +449,23 @@ Status: In progress
 - [ ] Add selected-group context and capability-derived navigation.
 - [ ] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.
-- [x] Move the working-group self-service view onto the generic group and
-      group-membership contracts.
-      Evidence: the portal now consumes `/api/v1/me/groups` with a group-type
-      filter and uses the canonical join/leave commands. One focused card
-      supports all eligible affiliations by default, explicit subsets, adding
-      another represented organization later, removing one capacity, and
-      leaving all. Component tests cover each request shape; no client-side
-      eligibility, search, sorting, or pagination logic was introduced. The
-      legacy endpoint remains mounted temporarily for unmigrated voting callers.
+- [x] Move self-service participation onto the generic group and
+      group-membership contracts without a working-group-only UI context.
+      Evidence: the portal consumes `/api/v1/me/groups` without a type filter
+      and uses the canonical join/leave commands. One Groups view and focused
+      card support every configured group type, display type and structural
+      parent context, select all eligible affiliations by default, accept an
+      explicit subset, add another represented organization later, remove one
+      capacity, and leave all. The former `/working-groups` portal URL redirects
+      to `/groups`; the navigation and component no longer preserve a parallel
+      working-group concept. Component tests cover every request shape and
+      prove the catalog omits the type filter; no client-side eligibility,
+      search, sorting, or pagination logic was introduced. The legacy backend
+      endpoint remains mounted temporarily only for unmigrated voting callers.
+      An authenticated local browser run with synthetic data verified Community,
+      Working Group, and Committee cards in the same view, Committee parent
+      context, and the legacy hash-route redirect; no preview or production data
+      was used.
 - [ ] Move group, leadership, meetings, forms, votes, mailing lists, stats, and
       audit management into the portal.
 - [ ] Move remaining global management views into the portal.

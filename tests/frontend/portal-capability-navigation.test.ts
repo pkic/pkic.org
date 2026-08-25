@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { portalMagicLinkToken } from "../../assets/ts/member-flows/portal/App";
 import {
+  PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,
   portalDefaultPath,
   portalNavigationItems,
@@ -22,7 +23,13 @@ describe("portal capability-derived navigation", () => {
   it("shows member actions but no management entry to a member-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
+    expect(labels).toContain("Groups");
+    expect(labels).not.toContain("Working Groups");
     expect(labels).not.toContain("Management");
+  });
+
+  it("keeps one explicit compatibility redirect for the former member group route", () => {
+    expect(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).toEqual({ "/working-groups": "/groups" });
   });
 
   it("shows both navigation capacities to one dual-capacity identity", () => {
@@ -35,6 +42,7 @@ describe("portal capability-derived navigation", () => {
     const staffOnly = portalSessionFixture({ admin: true });
     expect(portalDefaultPath(staffOnly)).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
   });
 
