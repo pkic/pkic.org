@@ -41,6 +41,12 @@ function trustedAuthorizationEvidence(): AuthorizationEvidence {
   return { sql: "SELECT 1", bindings: [] };
 }
 
+interface RequestedGroupsEvidence {
+  sql: string;
+  bindings: readonly unknown[];
+  knownIds?: readonly string[];
+}
+
 /**
  * Canonical group-management policy as executable SQL evidence. The same
  * evidence is used for request preflight and for a transient guard inside the
@@ -48,11 +54,10 @@ function trustedAuthorizationEvidence(): AuthorizationEvidence {
  */
 function groupAuthorizationEvidence(
   actor: AuthAdmin,
-  groupIds: readonly string[],
+  requestedGroups: RequestedGroupsEvidence,
   permission: string,
   mode: GroupManagementAuthorizationMode,
 ): AuthorizationEvidence {
-  const targets = [...new Set(groupIds)];
   if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
     return deniedAuthorizationEvidence();
   }
@@ -64,15 +69,21 @@ function groupAuthorizationEvidence(
     );
   if (!isUserBackedAuthAdmin(actor)) {
     if (hasGlobalSnapshot) return trustedAuthorizationEvidence();
-    if (
-      mode === "effective" &&
-      targets.some((groupId) =>
-        (actor.grants ?? []).some(
-          (grant) => grant.permission === permission && grant.contextType === "group" && grant.contextId === groupId,
-        ),
-      )
-    ) {
-      return trustedAuthorizationEvidence();
+    if (mode === "effective") {
+      const contextualIds = (actor.grants ?? [])
+        .filter((grant) => grant.permission === permission && grant.contextType === "group" && grant.contextId)
+        .map((grant) => grant.contextId as string);
+      if (requestedGroups.knownIds?.some((groupId) => contextualIds.includes(groupId))) {
+        return trustedAuthorizationEvidence();
+      }
+      if (contextualIds.length > 0) {
+        return {
+          sql: `WITH requested_groups(id) AS (${requestedGroups.sql})
+                SELECT 1 FROM requested_groups
+                 WHERE id IN (${contextualIds.map(() => "?").join(", ")})`,
+          bindings: [...requestedGroups.bindings, ...contextualIds],
+        };
+      }
     }
     return deniedAuthorizationEvidence();
   }
@@ -102,7 +113,7 @@ function groupAuthorizationEvidence(
   return {
     sql: `WITH RECURSIVE
             requested_groups(id) AS (
-              SELECT CAST(value AS TEXT) FROM json_each(?)
+              ${requestedGroups.sql}
             ),
             effective_lineage(target_id, id, depth, continue_up) AS (
               SELECT target.id, target_group.id, 0,
@@ -149,7 +160,16 @@ function groupAuthorizationEvidence(
                )
              )
            LIMIT 1`,
-    bindings: [JSON.stringify(targets), actor.id, permission, permission],
+    bindings: [...requestedGroups.bindings, actor.id, permission, permission],
+  };
+}
+
+function fixedRequestedGroups(groupIds: readonly string[]): RequestedGroupsEvidence {
+  const targets = [...new Set(groupIds)];
+  return {
+    sql: "SELECT CAST(value AS TEXT) FROM json_each(?)",
+    bindings: [JSON.stringify(targets)],
+    knownIds: targets,
   };
 }
 
@@ -159,7 +179,7 @@ export function groupPermissionAuthorizationEvidence(
   permission: string,
   mode: GroupManagementAuthorizationMode = "effective",
 ): AuthorizationEvidence {
-  return groupAuthorizationEvidence(actor, groupIds, permission, mode);
+  return groupAuthorizationEvidence(actor, fixedRequestedGroups(groupIds), permission, mode);
 }
 
 export function groupManagementAuthorizationEvidence(
@@ -167,7 +187,23 @@ export function groupManagementAuthorizationEvidence(
   groupIds: readonly string[],
   mode: GroupManagementAuthorizationMode = "effective",
 ): AuthorizationEvidence {
-  return groupAuthorizationEvidence(actor, groupIds, "groups:write", mode);
+  return groupAuthorizationEvidence(actor, fixedRequestedGroups(groupIds), "groups:write", mode);
+}
+
+/**
+ * Applies the same canonical authorization policy to a group row in a D1 list
+ * query. The expression is internal SQL (normally `g.id`), never request data.
+ */
+export function groupManagementCandidateAuthorizationEvidence(
+  actor: AuthAdmin,
+  groupIdExpression = "g.id",
+): AuthorizationEvidence {
+  return groupAuthorizationEvidence(
+    actor,
+    { sql: `SELECT ${groupIdExpression}`, bindings: [] },
+    "groups:write",
+    "effective",
+  );
 }
 
 export function prepareGroupManagementAuthorizationGuard(

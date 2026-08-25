@@ -40,13 +40,15 @@ export const groupTypesListRouteSchema = {
 export const groupsListRouteSchema = {
   tags: ["Groups"],
   summary: "List groups visible to the caller",
-  description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
+  description:
+    "Search, filtering, sorting, counting, pagination, and the optional manageable projection are executed in D1.",
   request: { query: groupsListQuerySchema },
   responses: {
     "200": {
       description: "A bounded group page.",
       content: { "application/json": { schema: groupsListResponseSchema } },
     },
+    "401": jsonErrorResponse("An authenticated management identity is required for the manageable projection."),
   },
 };
 

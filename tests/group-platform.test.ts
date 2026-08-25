@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { groupJoinSchema } from "../assets/shared/schemas/groups";
+import { groupJoinSchema, groupsListResponseSchema } from "../assets/shared/schemas/groups";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import {
   assignLocalGroupLeadership,
@@ -8,6 +8,7 @@ import {
   createGroup,
   getVisibleGroup,
   groupManagementAuthorizationEvidence,
+  groupManagementCandidateAuthorizationEvidence,
   groupJoinEligibilityEvidence,
   joinGroup,
   leaveGroup,
@@ -19,14 +20,9 @@ import {
 } from "../functions/_lib/services/groups";
 import { queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
-import {
-  addRepresentative,
-  insertIndividualMember,
-  insertOrganization,
-  insertUser,
-  seedOrganizationAggregate,
-} from "./helpers/membership";
+import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 async function insertActor(email: string, role = "user"): Promise<AuthAdmin> {
@@ -113,18 +109,14 @@ describe("group capacity membership", () => {
     expect(subset.memberships.map((membership) => membership.memberId)).toEqual([memberBId]);
   });
 
-  it("never offers individual IPR capacity while an organization representation is active", async () => {
+  it("offers only organization IPR capacity while an organization representation is active", async () => {
     const admin = await insertActor("individual-rule-admin@example.test", "admin");
     const group = await createGroup(env.DB, admin, {
       typeKey: "working_group",
       name: "IPR Capacity Test Group",
       eligibilityMode: "open",
     });
-    const { userId, memberId: individualMemberId } = await insertIndividualMember(
-      env.DB,
-      "H6",
-      "individual-and-org@example.test",
-    );
+    const userId = await insertUser(env.DB, "organization-only-capacity@example.test");
     const organizationMemberId = await seedOrganizationAggregate(
       env.DB,
       await insertOrganization(env.DB, "IPR Organization"),
@@ -134,7 +126,7 @@ describe("group capacity membership", () => {
 
     const eligible = await listEligibleGroupCapacities(env.DB, group.id, userId, { allowManaged: false });
     expect(eligible.map((capacity) => capacity.memberId)).toEqual([organizationMemberId]);
-    expect(eligible.some((capacity) => capacity.memberId === individualMemberId)).toBe(false);
+    expect(eligible.every((capacity) => capacity.memberType === "organization")).toBe(true);
   });
 
   it("makes concurrent joins state- and audit-idempotent", async () => {
@@ -685,6 +677,44 @@ describe("group leadership inheritance", () => {
     ).toBe(true);
   });
 
+  it("filters manageable group pages in D1 with the canonical effective-management policy", async () => {
+    const globalAdmin = await insertActor("manageable-list-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Managed Parent" });
+    const child = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Managed Child",
+    });
+    const localOnly = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Local Only Child",
+    });
+    const unrelated = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Unrelated Group",
+    });
+    const parentLeader = await insertActor("manageable-list-leader@example.test");
+    await grantGroupLeadership(parent.id, parentLeader.id);
+    const localLeader = await insertActor("manageable-list-local-leader@example.test");
+    await assignLocalGroupLeadership(env.DB, globalAdmin, localOnly.id, {
+      userId: localLeader.id,
+      roleId: "role-group_lead",
+    });
+    await updateGroup(env.DB, globalAdmin, localOnly.id, { governanceInheritanceMode: "local_only" });
+
+    const result = await listGroups(
+      env.DB,
+      { manageable: true, active: true, sort: "name", limit: 25, offset: 0 },
+      { requiredAuthorization: groupManagementCandidateAuthorizationEvidence(parentLeader) },
+    );
+
+    expect(result.groups.map((group) => group.id)).toEqual([child.id, parent.id]);
+    expect(result.total).toBe(2);
+    expect(result.groups.some((group) => group.id === localOnly.id)).toBe(false);
+    expect(result.groups.some((group) => group.id === unrelated.id)).toBe(false);
+  });
+
   it("re-evaluates inherited management inside group and leadership mutation batches", async () => {
     const globalAdmin = await insertActor("guard-admin@example.test", "admin");
     const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Guard Parent" });
@@ -794,6 +824,31 @@ describe("group leadership inheritance", () => {
 });
 
 describe("group route contracts", () => {
+  it("requires management authentication and returns only effectively manageable groups", async () => {
+    const globalAdmin = await insertActor("manageable-route-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Route Parent" });
+    const child = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Route Child",
+    });
+    await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Route Unrelated" });
+    const parentLeader = await insertActor("manageable-route-leader@example.test");
+    await grantGroupLeadership(parent.id, parentLeader.id);
+
+    const unauthenticated = await callApi(env as Env, "/api/v1/groups?manageable=true");
+    expect(unauthenticated.status).toBe(401);
+
+    const token = await createAdminSession(env.DB, parentLeader.id, "manageable-route-token");
+    const response = await callApi(env as Env, "/api/v1/groups?manageable=true&active=true&sort=name&limit=1", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const firstPage = groupsListResponseSchema.parse(await response.json());
+    expect(firstPage.groups.map((group) => group.id)).toEqual([child.id]);
+    expect(firstPage.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
+  });
+
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {
     const admin = await insertActor("mounted-revision-admin@example.test", "admin");
     const group = await createGroup(env.DB, admin, {

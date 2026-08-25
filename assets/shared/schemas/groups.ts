@@ -205,6 +205,8 @@ export type GroupLeadershipListResponse = z.infer<typeof groupLeadershipListResp
 
 export const GROUP_SORT_COLUMNS = ["name", "slug", "type", "participant_count", "created_at"] as const;
 export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend({
+  /** Restricts the page to groups the authenticated management identity may update. */
+  manageable: booleanQueryFlagSchema.optional(),
   active: booleanQueryFlagSchema.optional(),
   typeKey: groupTypeKeySchema.optional(),
   parentGroupId: groupIdSchema.nullable().optional(),

@@ -1,9 +1,10 @@
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { createGroup, listGroups } from "../../../_lib/services/groups";
+import { createGroup, groupManagementCandidateAuthorizationEvidence, listGroups } from "../../../_lib/services/groups";
 import {
   groupCreateRouteSchema,
   groupsListRouteSchema,
@@ -14,10 +15,17 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 export const GroupsList = openApiRoute(groupsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const viewer = await resolveOptionalGroupViewer(db, c.req.raw, c.env);
-  const query = viewer.canReadAll ? data.query : { ...data.query, active: true };
+  if (data.query.manageable && viewer.kind !== "admin") {
+    throw new AppError(401, "MANAGEMENT_AUTH_REQUIRED", "An authenticated management identity is required");
+  }
+  const query = viewer.canReadAll || data.query.manageable ? data.query : { ...data.query, active: true };
   const { groups, total } = await listGroups(db, query, {
     userId: viewer.userId,
     canReadAll: viewer.canReadAll,
+    requiredAuthorization:
+      data.query.manageable && viewer.kind === "admin"
+        ? groupManagementCandidateAuthorizationEvidence(viewer.admin)
+        : undefined,
   });
   return json(
     groupsListResponseSchema.parse({

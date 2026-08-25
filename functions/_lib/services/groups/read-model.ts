@@ -7,6 +7,7 @@ import type {
 import { GROUP_MEMBERSHIP_SORT_COLUMNS, GROUP_SORT_COLUMNS } from "../../../../assets/shared/schemas/groups";
 import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
@@ -135,6 +136,8 @@ export interface GroupListAccess {
   userId?: string;
   canReadAll?: boolean;
   participationView?: "catalog" | "joined";
+  /** Additional trusted SQL authorization applied before counting and paging. */
+  requiredAuthorization?: AuthorizationEvidence;
 }
 
 interface GroupVisibilityFilter {
@@ -231,7 +234,10 @@ export function buildGroupsPageQuery(
   const search = query.q ? buildD1TextSearchFilter(query.q, ["g.name", "g.slug", "g.description"]) : null;
   const conditions: string[] = [];
   const bindings: unknown[] = [];
-  const visibility = buildGroupVisibilityFilter(access);
+  // A management projection is already a stronger visibility boundary. Do
+  // not also require participation/read visibility: an exact write grant must
+  // be able to discover the group it authorizes.
+  const visibility = access.requiredAuthorization ? null : buildGroupVisibilityFilter(access);
   if (visibility) {
     conditions.push(visibility.sql);
     bindings.push(...visibility.bindings);
@@ -240,6 +246,10 @@ export function buildGroupsPageQuery(
   if (participation) {
     conditions.push(participation.sql);
     bindings.push(...participation.bindings);
+  }
+  if (access.requiredAuthorization) {
+    conditions.push(`EXISTS (${access.requiredAuthorization.sql})`);
+    bindings.push(...access.requiredAuthorization.bindings);
   }
   if (search) {
     conditions.push(search.sql);
