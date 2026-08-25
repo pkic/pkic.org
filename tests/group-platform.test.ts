@@ -1,6 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { groupJoinSchema, groupsListResponseSchema } from "../assets/shared/schemas/groups";
+import {
+  groupJoinSchema,
+  groupPortalContextResponseSchema,
+  groupsListResponseSchema,
+} from "../assets/shared/schemas/groups";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import {
   assignLocalGroupLeadership,
@@ -20,7 +24,7 @@ import {
 } from "../functions/_lib/services/groups";
 import { queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -946,6 +950,77 @@ describe("group route contracts", () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(unrelated.status).toBe(403);
+  });
+
+  it("projects selected-group navigation capabilities from live participation and governance", async () => {
+    const globalAdmin = await insertActor("context-route-admin@example.test", "admin");
+    const parent = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Context Route Parent",
+    });
+    const child = await createGroup(env.DB, globalAdmin, {
+      typeKey: "committee",
+      parentGroupId: parent.id,
+      name: "Context Route Child",
+      visibility: "participants",
+      eligibilityMode: "open",
+    });
+    const parentLeader = await insertActor("context-route-leader@example.test");
+    await grantGroupLeadership(parent.id, parentLeader.id);
+
+    const leaderToken = await createAdminSession(env.DB, parentLeader.id, "context-route-leader-token");
+    const leaderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+      headers: { authorization: `Bearer ${leaderToken}` },
+    });
+    expect(leaderResponse.status, await leaderResponse.clone().text()).toBe(200);
+    expect(groupPortalContextResponseSchema.parse(await leaderResponse.json()).capabilities).toEqual([
+      "view",
+      "manage",
+    ]);
+
+    const participantUserId = await insertUser(env.DB, "context-route-participant@example.test");
+    const participantMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Context Route Participant"),
+      "A",
+    );
+    await addRepresentative(env.DB, participantMemberId, participantUserId);
+    await joinGroup(env.DB, parent.id, {
+      actorUserId: participantUserId,
+      targetUserId: participantUserId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    await joinGroup(env.DB, child.id, {
+      actorUserId: participantUserId,
+      targetUserId: participantUserId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const participantToken = await createMemberSession(env.DB, participantUserId, "context-route-participant-token");
+    const participantResponse = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+      headers: { authorization: `Bearer ${participantToken}` },
+    });
+    expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
+    expect(groupPortalContextResponseSchema.parse(await participantResponse.json()).capabilities).toEqual([
+      "view",
+      "participate",
+    ]);
+
+    const outsiderUserId = await insertUser(env.DB, "context-route-outsider@example.test");
+    const outsiderMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Context Route Outsider"),
+      "B",
+    );
+    await addRepresentative(env.DB, outsiderMemberId, outsiderUserId);
+    const outsiderToken = await createMemberSession(env.DB, outsiderUserId, "context-route-outsider-token");
+    const outsiderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+      headers: { authorization: `Bearer ${outsiderToken}` },
+    });
+    expect(outsiderResponse.status).toBe(404);
   });
 
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {

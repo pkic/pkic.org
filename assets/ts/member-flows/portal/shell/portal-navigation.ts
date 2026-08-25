@@ -47,15 +47,16 @@ export function portalDefaultPath(session: PortalSession | null): string {
 export function portalCapacityFallbackPath(session: PortalSession | null, location: string): string | null {
   const isManagementRoute =
     location === MANAGEMENT_NAV_ITEM.path || location.startsWith(`${MANAGEMENT_NAV_ITEM.path}/`);
-  const isMemberGroupRoute = location.startsWith("/groups/");
-  if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute && !isMemberGroupRoute) return null;
+  const isSelectedGroupRoute = location.startsWith("/groups/");
+  if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute && !isSelectedGroupRoute) return null;
   if (portalNavigationItems(session).some((item) => item.path === location)) return null;
   if (isManagementRoute && session?.admin) return null;
-  if (isMemberGroupRoute && session?.member) return null;
+  if (isSelectedGroupRoute && (session?.member || session?.admin)) return null;
   return portalDefaultPath(session);
 }
 
-export function portalActiveSection(location: string): string {
+export function portalActiveSection(location: string, session?: PortalSession | null): string {
+  if (location.startsWith("/groups/") && !session?.member && session?.admin) return "management";
   const top = location.replace(/^\//, "").split("/")[0];
   return top || "profile";
 }

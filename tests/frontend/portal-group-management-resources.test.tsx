@@ -125,7 +125,7 @@ describe("portal group management resources", () => {
         });
       }),
     );
-    const container = mount(<GroupMeetings groupId={GROUP_ID} />);
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
 
     expect(container.textContent).toContain("No matching active meeting series");

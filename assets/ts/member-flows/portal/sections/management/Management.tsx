@@ -1,7 +1,11 @@
 import { useCallback } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
-import { groupResponseSchema, type Group } from "../../../../../shared/schemas/groups";
+import {
+  groupPortalContextResponseSchema,
+  type Group,
+  type GroupPortalCapability,
+} from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Spinner } from "../../../../components/Spinner";
@@ -12,14 +16,9 @@ import { GroupSettingsForm } from "./GroupSettingsForm";
 import { GroupMembers } from "./GroupMembers";
 import { GroupLeadership } from "./GroupLeadership";
 import { GroupMeetings } from "./GroupMeetings";
+import { groupContextNavigation } from "./group-context-navigation";
 
 const OVERVIEW_VIEW = "overview";
-const MANAGEMENT_VIEWS = [
-  { key: OVERVIEW_VIEW, label: "Overview and settings" },
-  { key: "members", label: "Members" },
-  { key: "leadership", label: "Leadership" },
-  { key: "meetings", label: "Meetings" },
-] as const;
 
 function GroupContextHeader({ group }: { group: Group }) {
   return (
@@ -56,32 +55,37 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
   const [, navigate] = useHashLocation();
   const selectGroup = useCallback(
     (group: Group | null) => {
-      navigate(group ? `/management/${encodeURIComponent(group.id)}/${OVERVIEW_VIEW}` : "/management");
+      navigate(group ? `/groups/${encodeURIComponent(group.id)}/${OVERVIEW_VIEW}` : "/management");
     },
     [navigate],
   );
   const detail = useData(
     () =>
       groupId
-        ? getJson(`/api/v1/groups/${encodeURIComponent(groupId)}?manageable=true`, groupResponseSchema)
+        ? getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/context`, groupPortalContextResponseSchema)
         : Promise.resolve(null),
     [groupId],
   );
   const group = detail.data?.group;
+  const capabilities = detail.data?.capabilities ?? ([] as GroupPortalCapability[]);
+  const views = groupContextNavigation(capabilities);
+  const canManage = capabilities.includes("manage");
 
   return (
     <div class="d-flex flex-column gap-3">
-      <div class="portal-management-picker">
-        <ServerSearchSelect
-          catalog={managedGroupCatalog}
-          label="Managed group"
-          value={groupId ?? null}
-          selectedLabel={group?.name}
-          allowEmpty={false}
-          autoSelectFirst={!groupId}
-          onChange={selectGroup}
-        />
-      </div>
+      {(!groupId || canManage) && (
+        <div class="portal-management-picker">
+          <ServerSearchSelect
+            catalog={managedGroupCatalog}
+            label="Managed group"
+            value={groupId ?? null}
+            selectedLabel={group?.name}
+            allowEmpty={false}
+            autoSelectFirst={!groupId}
+            onChange={selectGroup}
+          />
+        </div>
+      )}
 
       {!groupId && <p class="text-muted mb-0">Select a group to manage its resources and participation.</p>}
       {groupId && detail.loading && <Spinner />}
@@ -89,23 +93,33 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
       {group && (
         <>
           <GroupContextHeader group={group} />
-          <nav class="nav nav-tabs" aria-label={`${group.name} management`}>
-            {MANAGEMENT_VIEWS.map((item) => (
+          <nav class="nav nav-tabs" aria-label={`${group.name} sections`}>
+            {views.map((item) => (
               <Link
                 key={item.key}
-                href={`/management/${encodeURIComponent(group.id)}/${item.key}`}
+                href={`/groups/${encodeURIComponent(group.id)}/${item.key}`}
                 class={`nav-link${view === item.key ? " active" : ""}`}
               >
                 {item.label}
               </Link>
             ))}
           </nav>
-          {view === OVERVIEW_VIEW && <GroupSettingsForm group={group} onUpdated={detail.reload} />}
-          {view === "members" && <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />}
-          {view === "leadership" && <GroupLeadership key={group.id} groupId={group.id} />}
-          {view === "meetings" && <GroupMeetings key={group.id} groupId={group.id} />}
-          {!MANAGEMENT_VIEWS.some((item) => item.key === view) && (
-            <ErrorAlert error="This group-management section does not exist." />
+          {view === OVERVIEW_VIEW && (
+            <div class="card border-0 shadow-sm">
+              <div class="card-header bg-white fw-semibold">About this group</div>
+              <div class="card-body">
+                <p class="mb-0">{group.description || "No group description has been provided."}</p>
+              </div>
+            </div>
+          )}
+          {view === "settings" && canManage && <GroupSettingsForm group={group} onUpdated={detail.reload} />}
+          {view === "members" && canManage && (
+            <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />
+          )}
+          {view === "leadership" && canManage && <GroupLeadership key={group.id} groupId={group.id} />}
+          {view === "meetings" && <GroupMeetings key={group.id} groupId={group.id} canManage={canManage} />}
+          {!views.some((item) => item.key === view) && (
+            <ErrorAlert error="This group section is not available to your current identity." />
           )}
         </>
       )}

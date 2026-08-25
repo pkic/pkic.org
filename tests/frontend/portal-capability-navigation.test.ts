@@ -5,6 +5,7 @@ import {
   portalCapacityFallbackPath,
   portalDefaultPath,
   portalNavigationItems,
+  portalActiveSection,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
 
@@ -41,12 +42,12 @@ describe("portal capability-derived navigation", () => {
     expect(labels).toContain("Management");
   });
 
-  it("moves a stale member route to management after live member-capacity loss", () => {
+  it("keeps shared selected-group routes after member-capacity loss", () => {
     const staffOnly = portalSessionFixture({ admin: true });
     expect(portalDefaultPath(staffOnly)).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
-    expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBeNull();
     expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
     expect(portalCapacityFallbackPath(staffOnly, "/management/group-id/overview")).toBeNull();
   });
@@ -59,6 +60,12 @@ describe("portal capability-derived navigation", () => {
   it("keeps a selected-group meeting route for a current member", () => {
     const memberOnly = portalSessionFixture({ member: true });
     expect(portalCapacityFallbackPath(memberOnly, "/groups/group-id/meetings")).toBeNull();
+  });
+
+  it("keeps selected-group routes for staff and highlights their management entry", () => {
+    const staffOnly = portalSessionFixture({ admin: true });
+    expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/overview")).toBeNull();
+    expect(portalActiveSection("/groups/group-id/overview", staffOnly)).toBe("management");
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {

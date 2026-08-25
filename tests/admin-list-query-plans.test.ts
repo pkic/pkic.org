@@ -20,7 +20,7 @@ async function explainOffsetPage(query: OffsetPageQuery) {
   ]);
   expect(pagePlan.results.length).toBeGreaterThan(0);
   expect(countPlan.results.length).toBeGreaterThan(0);
-  return { pageSql, countSql, bindings, countBindings };
+  return { pageSql, countSql, bindings, countBindings, pagePlan, countPlan };
 }
 
 function occurrences(value: string, pattern: RegExp): number {
@@ -92,7 +92,7 @@ describe("admin list D1 query plans", () => {
   });
 
   it("counts canonical groups without participation, child, or leadership projections", async () => {
-    const { pageSql, countSql, bindings, countBindings } = await explainOffsetPage(
+    const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(
       buildGroupsPageQuery({
         active: true,
         q: "cryptography",
@@ -107,5 +107,8 @@ describe("admin list D1 query plans", () => {
     expect(countSql).not.toMatch(/group_memberships|membership_capacity_count|participant_count|child_count/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings);
+    const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
+    expect(projectionPlan).toContain("idx_group_memberships_group_active");
+    expect(projectionPlan).toContain("idx_groups_parent_active");
   });
 });

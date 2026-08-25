@@ -67,7 +67,7 @@ export function PortalNavigationShell({ children, displayName, session }: Portal
           <Link
             key={item.section}
             href={item.path}
-            class={`portal-sidebar-link${item.section === portalActiveSection(location) ? " active" : ""}`}
+            class={`portal-sidebar-link${item.section === portalActiveSection(location, session) ? " active" : ""}`}
             onClick={closeNavigation}
           >
             {item.label}

@@ -16,6 +16,7 @@ import {
   groupMembershipParamsSchema,
   groupMembershipsListQuerySchema,
   groupMembershipsListResponseSchema,
+  groupPortalContextResponseSchema,
   groupReferenceParamsSchema,
   groupResponseSchema,
   groupTypesListQuerySchema,
@@ -62,6 +63,22 @@ export const groupGetRouteSchema = {
     "401": jsonErrorResponse("An authenticated management identity is required for a manageable lookup."),
     "403": jsonErrorResponse("The caller lacks effective management permission."),
     "404": jsonErrorResponse("Group not found or not visible."),
+  },
+};
+
+export const groupPortalContextRouteSchema = {
+  tags: ["Groups"],
+  summary: "Resolve one selected-group portal context",
+  description:
+    "Returns live view, participation, and management capabilities for the authenticated portal identity. The browser derives selected-group navigation from this projection.",
+  request: { params: groupReferenceParamsSchema },
+  responses: {
+    "200": {
+      description: "Selected group and the caller's effective portal capabilities.",
+      content: { "application/json": { schema: groupPortalContextResponseSchema } },
+    },
+    "401": jsonErrorResponse("Portal authentication is required."),
+    "404": jsonErrorResponse("Group not found or unavailable to this identity."),
   },
 };
 

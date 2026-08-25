@@ -76,6 +76,15 @@ export const groupSchema = z.object({
 });
 export type Group = z.infer<typeof groupSchema>;
 
+export const GROUP_PORTAL_CAPABILITIES = ["view", "participate", "manage"] as const;
+export const groupPortalCapabilitySchema = z.enum(GROUP_PORTAL_CAPABILITIES);
+export type GroupPortalCapability = z.infer<typeof groupPortalCapabilitySchema>;
+export const groupPortalContextResponseSchema = z.object({
+  group: groupSchema,
+  capabilities: z.array(groupPortalCapabilitySchema),
+});
+export type GroupPortalContextResponse = z.infer<typeof groupPortalContextResponseSchema>;
+
 const groupPolicyInputShape = {
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema.optional(),
   eligibilityMode: groupEligibilityModeSchema.optional(),

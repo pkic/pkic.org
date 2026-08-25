@@ -279,7 +279,8 @@ Canonical group routes use the following shape:
 
     /api/v1/groups
     /api/v1/groups/:groupId
-    /api/v1/groups/:groupId/members
+    /api/v1/groups/:groupId/context
+    /api/v1/groups/:groupId/memberships
     /api/v1/groups/:groupId/leadership
     /api/v1/groups/:groupId/events
     /api/v1/groups/:groupId/forms

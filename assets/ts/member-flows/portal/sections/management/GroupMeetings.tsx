@@ -216,14 +216,16 @@ function CreateMeetingSeries({ groupId, onCreated }: { groupId: string; onCreate
   );
 }
 
-export function GroupMeetings({ groupId }: { groupId: string }) {
+export function GroupMeetings({ groupId, canManage }: { groupId: string; canManage: boolean }) {
   const [listRevision, setListRevision] = useState(0);
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Meetings</div>
       <div class="card-body d-flex flex-column gap-3">
         <GroupMeetingSeriesList key={`${groupId}-${listRevision}`} groupId={groupId} />
-        <CreateMeetingSeries groupId={groupId} onCreated={async () => setListRevision((revision) => revision + 1)} />
+        {canManage && (
+          <CreateMeetingSeries groupId={groupId} onCreated={async () => setListRevision((revision) => revision + 1)} />
+        )}
       </div>
     </div>
   );

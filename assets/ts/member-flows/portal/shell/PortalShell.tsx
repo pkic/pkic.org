@@ -7,7 +7,6 @@ import { portalSession, profile } from "../state";
 import { MyProfile } from "../sections/MyProfile";
 import { MyOrganization } from "../sections/MyOrganization";
 import { Groups } from "../sections/Groups";
-import { GroupMeetings } from "../sections/GroupMeetings";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
@@ -61,13 +60,23 @@ export function PortalShell() {
     <Router hook={useHashLocation}>
       <PortalNavigationShell session={portalSession.value} displayName={displayName}>
         <Switch>
+          {(hasAdminCapacity || hasMemberCapacity) && (
+            <Route
+              path="/groups/:groupId/:view?"
+              component={({ params }: { params: { groupId: string; view?: string } }) => (
+                <SectionWrapper title="Group">
+                  <Management groupId={params.groupId} view={params.view} />
+                </SectionWrapper>
+              )}
+            />
+          )}
           {hasAdminCapacity && (
             <Route
               path="/management/:groupId/:view?"
               component={({ params }: { params: { groupId: string; view?: string } }) => (
-                <SectionWrapper title="Management">
-                  <Management groupId={params.groupId} view={params.view} />
-                </SectionWrapper>
+                <PortalRouteRedirect
+                  to={`/groups/${encodeURIComponent(params.groupId)}/${encodeURIComponent(params.view ?? "overview")}`}
+                />
               )}
             />
           )}
@@ -97,16 +106,6 @@ export function PortalShell() {
               component={() => (
                 <SectionWrapper title="My Organization">
                   <MyOrganization />
-                </SectionWrapper>
-              )}
-            />
-          )}
-          {hasMemberCapacity && (
-            <Route
-              path="/groups/:groupId/meetings"
-              component={({ params }: { params: { groupId: string } }) => (
-                <SectionWrapper title="Group meetings">
-                  <GroupMeetings groupId={params.groupId} />
                 </SectionWrapper>
               )}
             />

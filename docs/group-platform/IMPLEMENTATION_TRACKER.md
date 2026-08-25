@@ -467,9 +467,22 @@ Status: In progress
       frontend regressions. A complete Codex Security diff review covered all
       21 changed production files; its four findings were fixed in the same
       round and retained as regressions.
-- [ ] Add selected-group context and capability-derived navigation.
-- [ ] Reuse views across working group, task force, board, executive council,
+- [x] Add selected-group context and capability-derived navigation.
+      Evidence: `/api/v1/groups/:groupId/context` resolves one portal identity
+      and returns its live `view`, `participate`, and `manage` capabilities from
+      canonical membership and inherited-governance services. The shared portal
+      route filters its sections from that response: participants receive
+      collaboration views without settings or governance controls, while a
+      staff-only manager can use the same selected-group route without gaining
+      participation. The legacy selected-management URL redirects to the
+      canonical group URL. Mounted tests cover an inherited leader, participant,
+      and unauthorized outsider; focused frontend tests cover read-only,
+      participant, manager, and staff-only navigation.
+- [x] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.
+      Evidence: selected-group routing and capability filtering use only the
+      generic group contract and configured type labels. No route, component,
+      or navigation branch selects behavior from a group type key.
 - [x] Move self-service participation onto the generic group and
       group-membership contracts without a working-group-only UI context.
       Evidence: the portal consumes `/api/v1/me/groups` without a type filter
@@ -496,7 +509,7 @@ Status: In progress
       the admin application; dated Board and Executive Council positions remain
       there because they are global records rather than group governance.
       Forms, votes, mailing lists, statistics, audit, complete meeting lifecycle,
-      resource sharing, and capability-derived navigation remain open.
+      and resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.
@@ -531,6 +544,10 @@ Status: Pending
       indexed representative and contextual-role lookups without a table scan;
       write-time group-join eligibility proves indexed parent membership and
       category-rule lookups without a table scan or temporary B-tree;
+      the canonical group projection now uses indexed per-group capacity,
+      participant, and child counts instead of materializing aggregate tables
+      for every selected-group detail request, while its page-count statement
+      omits those projections entirely;
       the broader group architecture selection passes 43 tests.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
@@ -572,7 +589,7 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,925 backend tests pass with one skipped, 176 frontend tests
+      checkpoint: 1,926 backend tests pass with one skipped, 181 frontend tests
       pass, and 79 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. Keep this

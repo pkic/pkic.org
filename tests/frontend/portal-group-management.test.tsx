@@ -16,7 +16,7 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("wouter/use-hash-location", () => ({
-  useHashLocation: () => ["/management/10000000-0000-4000-8000-000000000001/overview", navigate],
+  useHashLocation: () => ["/groups/10000000-0000-4000-8000-000000000001/settings", navigate],
 }));
 
 function group(revision = 0) {
@@ -75,7 +75,7 @@ afterEach(() => {
 });
 
 describe("portal selected-group management", () => {
-  it("loads and updates only through canonical manageable group routes", async () => {
+  it("loads one server-derived group context and updates through the canonical group route", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     let revision = 0;
     vi.stubGlobal(
@@ -96,6 +96,9 @@ describe("portal selected-group management", () => {
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "GET") {
           return json({ group: group(revision) });
         }
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/context` && method === "GET") {
+          return json({ group: group(revision), capabilities: ["view", "manage"] });
+        }
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "PATCH") {
           revision += 1;
           return json({ group: group(revision) });
@@ -104,7 +107,7 @@ describe("portal selected-group management", () => {
       }),
     );
 
-    await act(() => render(<Management groupId={GROUP_ID} view="overview" />, container));
+    await act(() => render(<Management groupId={GROUP_ID} view="settings" />, container));
     await settle();
 
     expect(container.textContent).toContain("Architecture Committee");
@@ -114,11 +117,10 @@ describe("portal selected-group management", () => {
     expect(
       requests.some(({ url }) => url.pathname === "/api/v1/groups" && url.searchParams.get("manageable") === "true"),
     ).toBe(true);
-    expect(
-      requests.some(
-        ({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}` && url.searchParams.get("manageable") === "true",
-      ),
-    ).toBe(true);
+    expect(requests.some(({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}/context`)).toBe(true);
+    expect(requests.some(({ url }) => url.searchParams.has("manageable") && url.pathname.includes(GROUP_ID))).toBe(
+      false,
+    );
 
     const name = container.querySelector<HTMLInputElement>("#managed-group-name")!;
     name.value = "Architecture and Design Committee";
@@ -139,5 +141,28 @@ describe("portal selected-group management", () => {
       links: ["https://github.com/pkic"],
     });
     expect(container.textContent).toContain("Group settings updated.");
+  });
+
+  it("shows only sections backed by the selected identity's live capabilities", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/context`) {
+          return json({ group: group(), capabilities: ["view", "participate"] });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    await act(() => render(<Management groupId={GROUP_ID} view="overview" />, container));
+    await settle();
+
+    const tabs = [...container.querySelectorAll("nav a")].map((link) => link.textContent);
+    expect(tabs).toEqual(["Overview", "Meetings"]);
+    expect(container.textContent).not.toContain("Save group settings");
   });
 });

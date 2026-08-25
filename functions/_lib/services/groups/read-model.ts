@@ -60,27 +60,18 @@ const GROUP_SELECT = `SELECT
   g.description, g.links_json, g.visibility, g.governance_inheritance_mode,
   g.eligibility_mode, g.automatic_enrollment_mode,
   g.allow_automatic_opt_out, g.public_leadership, g.min_endorsers_for_ballot, g.active, g.revision,
-  COALESCE(capacities.capacity_count, 0) AS membership_capacity_count,
-  COALESCE(capacities.participant_count, 0) AS participant_count,
-  COALESCE(children.child_count, 0) AS child_count,
+  (SELECT COUNT(*) FROM group_memberships capacity
+    WHERE capacity.group_id = g.id AND capacity.left_at IS NULL) AS membership_capacity_count,
+  (SELECT COUNT(DISTINCT participant.user_id) FROM group_memberships participant
+    WHERE participant.group_id = g.id AND participant.left_at IS NULL) AS participant_count,
+  (SELECT COUNT(*) FROM groups child
+    WHERE child.parent_group_id = g.id AND child.active = 1) AS child_count,
   g.created_at, g.updated_at`;
 
 const GROUP_FROM = `FROM groups g
   JOIN group_types gt ON gt.key = g.type_key
   LEFT JOIN groups parent ON parent.id = g.parent_group_id
-  LEFT JOIN group_types parent_type ON parent_type.key = parent.type_key
-  LEFT JOIN (
-    SELECT group_id, COUNT(*) AS capacity_count, COUNT(DISTINCT user_id) AS participant_count
-    FROM group_memberships
-    WHERE left_at IS NULL
-    GROUP BY group_id
-  ) capacities ON capacities.group_id = g.id
-  LEFT JOIN (
-    SELECT parent_group_id, COUNT(*) AS child_count
-    FROM groups
-    WHERE parent_group_id IS NOT NULL AND active = 1
-    GROUP BY parent_group_id
-  ) children ON children.parent_group_id = g.id`;
+  LEFT JOIN group_types parent_type ON parent_type.key = parent.type_key`;
 
 function mapGroup(row: GroupRow): Group {
   return {
