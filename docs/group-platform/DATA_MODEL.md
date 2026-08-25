@@ -225,11 +225,13 @@ same transaction as the relationship mutation. The notice never asks the
 recipient to accept the relationship and cannot become the authorization
 source.
 
-Free, personal, disposable, unclaimed, or ambiguous domain classification is
-a warning aid, not an authorization source. The controlled domain policy is
-shared by browser and Worker code. Without an exact claimed organization
-domain or explicit organization-contact/staff association, no representative
-row is created.
+An exact verified claimed custom-domain match is a strong representation
+signal and may establish the relationship automatically. Free, personal,
+disposable, unclaimed, or ambiguous domains instead trigger a warning; they
+are not an authorization source. The controlled domain policy is shared by
+browser and Worker code. Without an exact claimed organization domain or
+explicit organization-contact/staff association, no representative row is
+created.
 
 ## Resource ownership and sharing
 

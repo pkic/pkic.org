@@ -38,12 +38,26 @@ const MEMBER_NAV_ITEMS: NavItem[] = [
   { path: "/application", sec: "application", label: "My Application" },
   { path: "/account", sec: "account", label: "Account Settings" },
 ];
+const MANAGEMENT_NAV_ITEM: NavItem = { path: "/management", sec: "management", label: "Management" };
+const CAPACITY_ROUTE_PATHS = new Set([...MEMBER_NAV_ITEMS.map((item) => item.path), MANAGEMENT_NAV_ITEM.path]);
 
 export function portalNavigationItems(session: PortalSession | null): NavItem[] {
-  return [
-    ...(session?.member ? MEMBER_NAV_ITEMS : []),
-    ...(session?.admin ? [{ path: "/management", sec: "management", label: "Management" }] : []),
-  ];
+  return [...(session?.member ? MEMBER_NAV_ITEMS : []), ...(session?.admin ? [MANAGEMENT_NAV_ITEM] : [])];
+}
+
+export function portalDefaultPath(session: PortalSession | null): string {
+  return session?.member ? "/profile" : "/management";
+}
+
+/**
+ * Reconciles a previously valid capacity route after live authorization
+ * changes. Unknown URLs remain a real not-found state; only a route owned by
+ * a capacity the identity just lost moves to the remaining valid home.
+ */
+export function portalCapacityFallbackPath(session: PortalSession | null, location: string): string | null {
+  if (!CAPACITY_ROUTE_PATHS.has(location)) return null;
+  if (portalNavigationItems(session).some((item) => item.path === location)) return null;
+  return portalDefaultPath(session);
 }
 
 function closeSidebar(): void {
@@ -152,10 +166,22 @@ function SectionWrapper({ title, children }: { title: string; children: Componen
   );
 }
 
+function PortalRouteFallback({ session }: { session: PortalSession | null }) {
+  const [location, navigate] = useHashLocation();
+  const fallbackPath = portalCapacityFallbackPath(session, location);
+
+  useEffect(() => {
+    if (fallbackPath) navigate(fallbackPath);
+  }, [fallbackPath, navigate]);
+
+  if (fallbackPath) return null;
+  return <div class="p-4 text-muted fst-italic">Section not found.</div>;
+}
+
 export function PortalShell() {
   const hasMemberCapacity = Boolean(portalSession.value?.member);
   const hasAdminCapacity = Boolean(portalSession.value?.admin);
-  const defaultPath = hasMemberCapacity ? "/profile" : "/management";
+  const defaultPath = portalDefaultPath(portalSession.value);
   return (
     <Router hook={useHashLocation}>
       <div id="portal-root">
@@ -253,7 +279,7 @@ export function PortalShell() {
                 return null;
               }}
             </Route>
-            <Route component={() => <div class="p-4 text-muted fst-italic">Section not found.</div>} />
+            <Route component={() => <PortalRouteFallback session={portalSession.value} />} />
           </Switch>
         </main>
       </div>

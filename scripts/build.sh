@@ -90,5 +90,5 @@ while IFS= read -r entry; do
   [ -n "$path" ] && git submodule update --remote -- "$path"
 done < <(git config -f .gitmodules --name-only --get-regexp '^submodule\..*\.branch$')
 
-"${HUGO_BIN}" -e development --minify --cacheDir "$(pwd)/.cache"
-pnpm exec pagefind --site "public"
+HUGO_PARAMS_SKIPREMOTEFEEDS=true "${HUGO_BIN}" --configDir='' --baseURL=/ -e development --minify --cacheDir "$(pwd)/.cache"
+pnpm exec pagefind

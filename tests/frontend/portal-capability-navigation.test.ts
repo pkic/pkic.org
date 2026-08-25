@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { portalMagicLinkToken } from "../../assets/ts/member-flows/portal/App";
-import { portalNavigationItems } from "../../assets/ts/member-flows/portal/shell/PortalShell";
+import {
+  portalCapacityFallbackPath,
+  portalDefaultPath,
+  portalNavigationItems,
+} from "../../assets/ts/member-flows/portal/shell/PortalShell";
 import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 
 function portalSession(capacities: { admin?: boolean; member?: boolean }): PortalSession {
@@ -56,5 +60,16 @@ describe("portal capability-derived navigation", () => {
     const labels = portalNavigationItems(portalSession({ admin: true, member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
     expect(labels).toContain("Management");
+  });
+
+  it("moves a stale member route to management after live member-capacity loss", () => {
+    const staffOnly = portalSession({ admin: true });
+    expect(portalDefaultPath(staffOnly)).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
+  });
+
+  it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {
+    expect(portalCapacityFallbackPath(portalSession({ admin: true }), "/not-a-portal-route")).toBeNull();
   });
 });

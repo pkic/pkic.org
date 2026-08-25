@@ -121,8 +121,11 @@ Status: Complete
       organization-representation-endpoints.test.ts,
       organization-representatives.test.ts, magic-link-purpose.test.ts, and
       registration-email-change.test.ts pass 40 focused tests. D1 uniqueness makes
-      one domain claim authoritative; ambiguous lookup remains fail-closed. The
-      mounted API proves contact authorization and shared response contracts.
+      one exact verified custom-domain claim a strong automatic association
+      signal; free, personal, disposable, unclaimed, and ambiguous domains warn
+      and remain fail-closed. The mounted API proves contact-authorized explicit
+      association, persistent removal blocks, immediate capacity and role
+      revocation, restoration, and shared response contracts.
 
 ## 4. Conditional enrollment and mailing lists
 
@@ -421,9 +424,14 @@ Status: In progress
       eligibility, cross-identity rejection and recovery, bearer and cookie
       logout, concurrent link consumption, and atomic D1 rollback. The
       capability-derived frontend test covers staff-only, member-only, and
-      dual-capacity navigation and fragment-only magic-link parsing. A complete
-      Codex Security diff review covered all 21 changed production files; its
-      four findings were fixed in the same round and retained as regressions.
+      dual-capacity navigation, capacity-loss route reconciliation, unknown
+      routes, and fragment-only magic-link parsing. Real local browser tests
+      cover staff-only, member-only, and dual-capacity magic-link login, token
+      removal, sign-out, cross-identity fail-closed behavior, live membership
+      loss while staff access remains, and keyboard activation without console
+      errors. A complete Codex Security diff review covered all 21 changed
+      production files; its four findings were fixed in the same round and
+      retained as regressions.
 - [ ] Add selected-group context and capability-derived navigation.
 - [ ] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.
@@ -454,6 +462,15 @@ Status: Pending
 - [x] Run focused tests during every implementation round.
 - [x] Run SQL projection lint and architecture lint after backend boundaries move.
 - [x] Run duplication checks and fix new duplication rather than suppress it.
+- [x] Keep filesystem metadata out of generated site inputs and search indexes.
+      Evidence: Git ignores AppleDouble metadata, Hugo module mounts exclude it
+      from every source component, environment-specific config discovery is
+      disabled because the settings are now expressed through portable CLI and
+      environment configuration, and one shared pagefind.yml excludes generated
+      metadata HTML from both development and production indexing. Two
+      consecutive frontend/Hugo builds and a complete Vite/Cloudflare local
+      startup pass without parsing or indexing metadata. No
+      workstation path or cleanup script is committed.
 - [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
       Current evidence: the self-participation catalog asserts use of
       `idx_group_memberships_user_active` for page and count predicates; the
@@ -490,6 +507,10 @@ Status: Pending
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
+      Current evidence: the identity phase has real-browser desktop rendering,
+      keyboard activation, error-free staff/member/dual-capacity login and
+      logout, cross-identity rejection, and live-capacity-loss coverage. The
+      complete role/persona and responsive-state matrix remains pending.
 - [ ] Run a final security diff review and resolve validated findings.
       Evidence so far: Codex Security scan
       `7f6a9db1-1349-49f6-8ac0-cd9437915ee8` reviewed the complete delegated

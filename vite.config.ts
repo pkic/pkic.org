@@ -88,21 +88,25 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
     }
     for (const entry of branchEntries) {
       const name = entry.replace(/^submodule\./, "").replace(/\.branch$/, "");
-      const path = execFileSync(
-        "git",
-        ["config", "-f", ".gitmodules", "--get", `submodule.${name}.path`],
-        { cwd: projectRoot, encoding: "utf8" },
-      ).trim();
+      const path = execFileSync("git", ["config", "-f", ".gitmodules", "--get", `submodule.${name}.path`], {
+        cwd: projectRoot,
+        encoding: "utf8",
+      }).trim();
       if (path) {
         await run("git", ["submodule", "update", "--remote", "--", path]);
       }
     }
   }
 
-  const hugoArgs = ["--destination", "public"];
+  // The repository has no environment-specific Hugo configuration. Disable
+  // config-directory discovery so filesystem metadata beside config files can
+  // never be parsed as YAML on platforms that create AppleDouble sidecars.
+  const hugoArgs = ["--configDir=", "--destination", "public"];
   const appBaseUrl = process.env.APP_BASE_URL;
   if (appBaseUrl) {
     hugoArgs.push("--baseURL", appBaseUrl);
+  } else if (isDev) {
+    hugoArgs.push("--baseURL", "/");
   }
 
   // Only clean the destination dir for production builds — in dev the wipe
@@ -119,7 +123,7 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
   }
 
   await run("hugo", hugoArgs);
-  await run("pnpm", ["exec", "pagefind", "--site", "./public/"]);
+  await run("pnpm", ["exec", "pagefind"]);
 }
 
 function buildHugoSiteOnce(isDev: boolean): Promise<void> {
@@ -142,14 +146,13 @@ function isHugoSource(file: string): boolean {
   // Exclude Vite-built frontend artifacts. These are written by buildFrontendBundles()
   // which is called *inside* buildHugoSite(). Letting them trigger another rebuild
   // would create an infinite loop: build → write files → watch fires → build again.
-  if (
-    relativePath.startsWith(`static${sep}js${sep}built`) ||
-    relativePath === `data${sep}asset-manifest.json`
-  ) {
+  if (relativePath.startsWith(`static${sep}js${sep}built`) || relativePath === `data${sep}asset-manifest.json`) {
     return false;
   }
 
-  return hugoSourcePaths.some((sourcePath) => relativePath === sourcePath || relativePath.startsWith(`${sourcePath}${sep}`));
+  return hugoSourcePaths.some(
+    (sourcePath) => relativePath === sourcePath || relativePath.startsWith(`${sourcePath}${sep}`),
+  );
 }
 
 function hugoPlugin(): Plugin {
@@ -228,7 +231,8 @@ export default defineConfig(() => {
   // since ESM hoists imports above top-level statements.
   if (!process.env.CLOUDFLARE_ENV) {
     const branch = process.env.WORKERS_CI_BRANCH;
-    process.env.CLOUDFLARE_ENV = branch && branch.toLowerCase() === "main" ? "production" : branch ? "preview" : "local";
+    process.env.CLOUDFLARE_ENV =
+      branch && branch.toLowerCase() === "main" ? "production" : branch ? "preview" : "local";
   }
 
   // In CI preview builds, patch APP_BASE_URL in wrangler.jsonc to match the
@@ -236,7 +240,10 @@ export default defineConfig(() => {
   // deploy step also picks it up. Uses text replacement to preserve JSONC formatting.
   const ciBranch = process.env.WORKERS_CI_BRANCH;
   if (ciBranch && ciBranch.toLowerCase() !== "main") {
-    const sanitized = ciBranch.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const sanitized = ciBranch
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
     const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
     process.env.APP_BASE_URL = previewUrl;
     const configFile = resolve(projectRoot, "wrangler.jsonc");

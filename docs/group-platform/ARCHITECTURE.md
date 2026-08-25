@@ -116,15 +116,16 @@ Member-oriented operations use distinct Members:
 ## Organization representatives
 
 An exact match between a verified user email domain and a domain claimed by an
-active Member organization is sufficient evidence for ordinary representative
-status. Free, personal, disposable, and otherwise ambiguous email domains
-produce a warning and never establish representation automatically.
+active Member organization is strong evidence for ordinary representative
+status and establishes it automatically. Free, personal, disposable,
+unclaimed, and otherwise ambiguous email domains produce a warning and never
+establish representation automatically. An authorized primary or secondary
+organization contact may instead add the explicit association.
 
-Primary or secondary organization contacts may explicitly associate a user
-whose email domain does not establish the relationship. They may also remove a
-representative. Removal creates a persistent block until an authorized contact
-restores the relationship and immediately ends all active group capacities held
-for that organization. Historical participation and actions remain intact.
+Primary or secondary organization contacts may remove a representative.
+Removal creates a persistent block until an authorized contact restores the
+relationship and immediately ends all active group capacities held for that
+organization. Historical participation and actions remain intact.
 
 All active representatives have equal ordinary participation and contribution
 rights. Primary and secondary contacts additionally manage the organization and
