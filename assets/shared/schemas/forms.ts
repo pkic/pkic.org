@@ -2,6 +2,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
+import { addDuplicateStringIssues } from "./refinements";
 import { proposalTypeSchema } from "./proposal-management";
 import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
 import { groupIdSchema } from "./groups";
@@ -46,6 +47,60 @@ export const FORM_FIELD_TYPES = [
 ] as const;
 export const formFieldTypeSchema = z.enum(FORM_FIELD_TYPES);
 export type FormFieldType = z.infer<typeof formFieldTypeSchema>;
+
+/** Canonical form-authoring field input shared by every management context. */
+export const formFieldInputSchema = z.object({
+  id: databaseIdSchema.optional(),
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z][a-z0-9_]*$/),
+  label: z.string().trim().min(1).max(200),
+  fieldType: formFieldTypeSchema,
+  required: z.boolean().default(false),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+  options: formFieldOptionsSchema.optional(),
+  validation: formFieldRulesSchema.optional(),
+});
+
+function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> }, context: z.RefinementCtx): void {
+  addDuplicateStringIssues(value.fields ?? [], context, {
+    value: (field) => field.key,
+    path: (index) => ["fields", index, "key"],
+    label: "Field key",
+  });
+}
+
+/** Canonical editable form definition; placement ownership is supplied by the route context. */
+export const formDefinitionCreateSchema = z
+  .object({
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z][a-z0-9-]*$/),
+    purpose: formPurposeSchema,
+    title: z.string().trim().min(2).max(200),
+    description: z.string().trim().min(2).max(1000).optional(),
+    status: formStatusSchema.default("active"),
+    fields: z.array(formFieldInputSchema).max(50).default([]),
+  })
+  .superRefine(addDuplicateFormFieldIssues);
+
+export const formDefinitionUpdateSchema = z
+  .object({
+    title: z.string().trim().min(2).max(200).optional(),
+    description: z.string().trim().min(2).max(1000).nullable().optional(),
+    status: formStatusSchema.optional(),
+    fields: z.array(formFieldInputSchema).max(50).optional(),
+  })
+  .superRefine(addDuplicateFormFieldIssues);
+
+export type FormDefinitionCreateInput = z.infer<typeof formDefinitionCreateSchema>;
+export type FormDefinitionUpdateInput = z.infer<typeof formDefinitionUpdateSchema>;
 
 /** Canonical form-field read model shared by API responses and frontends. */
 export const formFieldDefinitionSchema = z.object({

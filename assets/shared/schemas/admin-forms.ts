@@ -6,13 +6,13 @@ import {
   searchableListQuerySchema,
   sortColumnSchema,
 } from "./pagination";
-import { successResponseSchema, trimmedString } from "./api-common";
+import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { addDuplicateStringIssues } from "./refinements";
-import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import {
+  formDefinitionCreateSchema,
+  formDefinitionUpdateSchema,
   formFieldDefinitionSchema,
-  formFieldTypeSchema,
+  formFieldInputSchema,
   formPlacementSchema,
   formPurposeSchema,
   formStatusSchema,
@@ -21,54 +21,10 @@ import {
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
 
-export const adminFormFieldInputSchema = z.object({
-  id: databaseIdSchema.optional(),
-  key: z
-    .string()
-    .trim()
-    .min(1)
-    .max(80)
-    .regex(/^[a-z][a-z0-9_]*$/),
-  label: trimmedString(1, 200),
-  fieldType: formFieldTypeSchema,
-  required: z.boolean().default(false),
-  sortOrder: z.number().int().min(0).max(9999).default(0),
-  options: formFieldOptionsSchema.optional(),
-  validation: formFieldRulesSchema.optional(),
-});
-
-function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> }, ctx: z.RefinementCtx): void {
-  addDuplicateStringIssues(value.fields ?? [], ctx, {
-    value: (field) => field.key,
-    path: (index) => ["fields", index, "key"],
-    label: "Field key",
-  });
-}
-
-export const adminFormCreateSchema = z
-  .object({
-    key: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .regex(/^[a-z][a-z0-9-]*$/),
-    purpose: formPurposeSchema,
-    title: trimmedString(2, 200),
-    description: trimmedString(2, 1000).optional(),
-    status: formStatusSchema.default("active"),
-    fields: z.array(adminFormFieldInputSchema).max(50).default([]),
-  })
-  .superRefine(addDuplicateFormFieldIssues);
-
-export const adminFormUpdateSchema = z
-  .object({
-    title: trimmedString(2, 200).optional(),
-    description: trimmedString(2, 1000).nullable().optional(),
-    status: formStatusSchema.optional(),
-    fields: z.array(adminFormFieldInputSchema).max(50).optional(),
-  })
-  .superRefine(addDuplicateFormFieldIssues);
+// Compatibility aliases while the legacy admin routes migrate to canonical form-domain names.
+export const adminFormFieldInputSchema = formFieldInputSchema;
+export const adminFormCreateSchema = formDefinitionCreateSchema;
+export const adminFormUpdateSchema = formDefinitionUpdateSchema;
 
 export type AdminFormCreateInput = z.infer<typeof adminFormCreateSchema>;
 export type AdminFormUpdateInput = z.infer<typeof adminFormUpdateSchema>;

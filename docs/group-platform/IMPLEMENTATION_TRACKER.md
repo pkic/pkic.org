@@ -622,8 +622,12 @@ Status: In progress
       and managers can use the same group-scoped proposal list with only the
       actions advertised by the backend. The duplicate admin Votes navigation
       and components are removed, while the old URL redirects to the portal.
-      Form authoring/response management, mailing-list management, statistics,
-      complete meeting lifecycle, and resource sharing remain open.
+      Group-owned survey and feedback definitions now use one shared authoring
+      schema with the legacy admin API and one atomic, live-authorized create or
+      update command. Definition ownership remains with the owning group even
+      when placement management is shared. The portal authoring/response UI,
+      mailing-list management, statistics, complete meeting lifecycle, and
+      resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.

@@ -1,8 +1,8 @@
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLog, type AuditScope } from "../audit";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { AdminFormCreateInput, AdminFormUpdateInput } from "../../../../assets/shared/schemas/admin-forms";
+import type { FormDefinitionCreateInput, FormDefinitionUpdateInput } from "../../../../assets/shared/schemas/forms";
 import { prepareFieldReconciliation } from "./field-reconciliation";
 import {
   formChangedError,
@@ -13,7 +13,16 @@ import {
 } from "./mutation-guard";
 import { defaultFormAudience, prepareFormPlacement } from "./placements";
 
-type FormScope = { type: "global"; ref: null } | { type: "event"; ref: string; eventSlug: string };
+type FormScope =
+  | { type: "global"; ref: null }
+  | { type: "event"; ref: string; eventSlug: string }
+  | { type: "group"; ref: string; groupId: string };
+
+interface ManagedFormMutationOptions {
+  authorizationGuards?: StatementLike[];
+  auditScope?: AuditScope;
+  auditAction?: string;
+}
 
 interface ManagedFormIdentity {
   id: string;
@@ -32,23 +41,34 @@ export async function createManagedForm(
   db: DatabaseLike,
   actorId: string,
   scope: FormScope,
-  input: AdminFormCreateInput,
+  input: FormDefinitionCreateInput,
+  options: ManagedFormMutationOptions = {},
 ): Promise<CreatedManagedFormIdentity> {
   const id = uuid();
   const now = nowIso();
-  const auditAction = scope.type === "event" ? "event_form_created" : "global_form_created";
+  const auditAction =
+    options.auditAction ??
+    (scope.type === "event"
+      ? "event_form_created"
+      : scope.type === "group"
+        ? "group_form_created"
+        : "global_form_created");
   const auditDetails = {
     ...(scope.type === "event" ? { eventSlug: scope.eventSlug } : {}),
+    ...(scope.type === "group" ? { groupId: scope.groupId } : {}),
     key: input.key,
     purpose: input.purpose,
   };
   const fieldStatements = await prepareFieldReconciliation(db, id, input.fields, now);
+  // `community` is the deployed SQLite value for a group-owned definition.
+  // Group identity and authorization remain normalized on the placement FK.
+  const persistedScopeType = scope.type === "group" ? "community" : scope.type;
   const placement = prepareFormPlacement(
     db,
     id,
     {
-      ownerGroupId: null,
-      contextType: scope.type === "event" ? "event" : "installation",
+      ownerGroupId: scope.type === "group" ? scope.groupId : null,
+      contextType: scope.type === "event" ? "event" : scope.type === "group" ? "group" : "installation",
       contextRef: scope.ref,
       audience: defaultFormAudience(input.purpose),
       active: input.status === "active",
@@ -57,6 +77,7 @@ export async function createManagedForm(
   );
 
   await db.batch([
+    ...(options.authorizationGuards ?? []),
     db
       .prepare(
         `INSERT INTO forms
@@ -66,7 +87,7 @@ export async function createManagedForm(
       .bind(
         id,
         input.key,
-        scope.type,
+        persistedScopeType,
         scope.ref,
         input.purpose,
         input.status,
@@ -77,7 +98,7 @@ export async function createManagedForm(
       ),
     ...fieldStatements,
     placement.statement,
-    prepareAuditLog(db, "admin", actorId, auditAction, "form", id, auditDetails, now),
+    prepareAuditLog(db, "admin", actorId, auditAction, "form", id, auditDetails, now, null, options.auditScope),
   ]);
 
   return { id, key: input.key, updated_at: now, placementId: placement.id };
@@ -88,10 +109,14 @@ export async function updateManagedForm(
   db: DatabaseLike,
   actorId: string,
   form: ManagedFormIdentity,
-  input: AdminFormUpdateInput,
+  input: FormDefinitionUpdateInput,
+  options: ManagedFormMutationOptions = {},
 ): Promise<void> {
   const now = nowIso();
-  const statements: StatementLike[] = [prepareFormMutationGuard(db, form.id, form.updated_at, now)];
+  const statements: StatementLike[] = [
+    ...(options.authorizationGuards ?? []),
+    prepareFormMutationGuard(db, form.id, form.updated_at, now),
+  ];
 
   if (input.title !== undefined || input.description !== undefined || input.status !== undefined) {
     statements.push(
@@ -129,11 +154,13 @@ export async function updateManagedForm(
       db,
       "admin",
       actorId,
-      "form_updated",
+      options.auditAction ?? "form_updated",
       "form",
       form.id,
       { key: form.key, fieldsReconciled: input.fields !== undefined },
       now,
+      null,
+      options.auditScope,
     ),
   );
   try {

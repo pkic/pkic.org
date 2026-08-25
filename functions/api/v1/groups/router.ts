@@ -38,8 +38,12 @@ import {
   mailingListGrantRoutes,
   voteGrantRoutes,
 } from "./resource-grant-handlers";
-import { GroupFormsList } from "./[groupId]/forms/index";
-import { GroupFormDefinitionGet, GroupFormPlacementUpdate } from "./[groupId]/forms/[placementId]";
+import { GroupFormCreate, GroupFormsList } from "./[groupId]/forms/index";
+import {
+  GroupFormDefinitionGet,
+  GroupFormDefinitionUpdate,
+  GroupFormPlacementUpdate,
+} from "./[groupId]/forms/[placementId]";
 import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]/forms/[placementId]/submissions";
 import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
 import { GroupEventsList } from "./[groupId]/events/index";
@@ -87,8 +91,10 @@ openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPref
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
 openapi.get("/:groupId/audit-log", GroupAuditLogList);
 openapi.get("/:groupId/forms", GroupFormsList);
+openapi.post("/:groupId/forms", GroupFormCreate);
 openapi.get("/:groupId/forms/:placementId", GroupFormDefinitionGet);
 openapi.patch("/:groupId/forms/:placementId", GroupFormPlacementUpdate);
+openapi.patch("/:groupId/forms/:placementId/definition", GroupFormDefinitionUpdate);
 openapi.get("/:groupId/forms/:placementId/submissions", GroupFormSubmissionsList);
 openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCreate);
 openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);

@@ -1,4 +1,4 @@
-import type { AdminFormUpdateInput } from "../../../../assets/shared/schemas/admin-forms";
+import type { FormDefinitionUpdateInput } from "../../../../assets/shared/schemas/forms";
 import { parseFormFieldOptions, type FormFieldOption } from "../../../../assets/shared/schemas/form-field-rules";
 import { AppError } from "../../errors";
 import { all } from "../../db/queries";
@@ -6,7 +6,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { stringifyJson } from "../../utils/json";
 import { uuid } from "../../utils/ids";
 
-type FieldInput = NonNullable<AdminFormUpdateInput["fields"]>[number];
+type FieldInput = NonNullable<FormDefinitionUpdateInput["fields"]>[number];
 
 interface ExistingField {
   id: string;
@@ -87,7 +87,7 @@ function fieldWriteStatement(
 export async function prepareFieldReconciliation(
   db: DatabaseLike,
   formId: string,
-  fields: NonNullable<AdminFormUpdateInput["fields"]>,
+  fields: NonNullable<FormDefinitionUpdateInput["fields"]>,
   now: string,
 ): Promise<StatementLike[]> {
   const existing = await all<ExistingField>(

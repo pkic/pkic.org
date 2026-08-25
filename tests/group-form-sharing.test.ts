@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   createManagedForm,
   createManagedFormPlacement,
+  createGroupFormDefinition,
   submitGroupFormResponse,
+  updateGroupFormDefinition,
   updateGroupFormPlacement,
 } from "../functions/_lib/services/forms";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
@@ -122,6 +124,129 @@ function authenticatedRequest(token: string, path: string, init: RequestInit = {
 beforeEach(resetDb);
 
 describe("group form sharing", () => {
+  it("lets effective group leadership create and edit an owned form without accepting owner overrides", async () => {
+    const fixture = await createFixture();
+    const leader = await userActor("owner-form-leader");
+    await env.DB.prepare(
+      `INSERT INTO user_roles
+         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
+       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), leader.id, fixture.owner.id)
+      .run();
+    const token = await createAdminSession(env.DB, leader.id, `owner-form-leader-${crypto.randomUUID()}`);
+    const key = `owned-survey-${crypto.randomUUID()}`;
+    const created = await authenticatedRequest(token, `/api/v1/groups/${fixture.owner.id}/forms`, {
+      method: "POST",
+      body: JSON.stringify({
+        key,
+        purpose: "survey",
+        title: "Architecture survey",
+        status: "active",
+        ownerGroupId: fixture.outsider.id,
+        fields: [{ key: "topic", label: "Topic", fieldType: "text", required: true, sortOrder: 0 }],
+      }),
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const createdBody = (await created.json()) as { placement: { id: string; ownerGroupId: string } };
+    expect(createdBody.placement.ownerGroupId).toBe(fixture.owner.id);
+    expect(
+      await queryAll<{ scope_type: string; scope_ref: string; owner_group_id: string }>(
+        env.DB,
+        `SELECT form.scope_type, form.scope_ref, placement.owner_group_id
+           FROM forms form
+           JOIN form_placements placement ON placement.form_id = form.id
+          WHERE form.key = ?`,
+        [key],
+      ),
+    ).toEqual([{ scope_type: "community", scope_ref: fixture.owner.id, owner_group_id: fixture.owner.id }]);
+
+    const updated = await authenticatedRequest(
+      token,
+      `/api/v1/groups/${fixture.owner.id}/forms/${createdBody.placement.id}/definition`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: "Updated architecture survey",
+          fields: [{ key: "priority", label: "Priority", fieldType: "number", required: false, sortOrder: 0 }],
+        }),
+      },
+    );
+    expect(updated.status, await updated.clone().text()).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      form: { key, title: "Updated architecture survey" },
+      placement: { ownerGroupId: fixture.owner.id },
+      fields: [{ key: "priority", fieldType: "number" }],
+    });
+  });
+
+  it("keeps a shared form definition owner-controlled even when the grantee may manage its placement", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "manage",
+    });
+
+    const response = await authenticatedRequest(
+      fixture.leaderToken,
+      `/api/v1/groups/${fixture.grantee.id}/forms/${fixture.placementId}/definition`,
+      { method: "PATCH", body: JSON.stringify({ title: "Unauthorized catalogue edit" }) },
+    );
+    expect(response.status).toBe(403);
+    expect((await response.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "FORM_DEFINITION_OWNER_REQUIRED" },
+    });
+  });
+
+  it("rolls back group form creation when leadership is revoked before commit", async () => {
+    const fixture = await createFixture();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE user_roles SET revoked_at = datetime('now')
+          WHERE user_id = ? AND role_id = 'role-group_lead' AND context_type = 'group' AND context_id = ?`,
+      )
+        .bind(fixture.leader.id, fixture.grantee.id)
+        .run(),
+    );
+    const key = `racing-form-${crypto.randomUUID()}`;
+    await expect(
+      createGroupFormDefinition(racingDb, fixture.leader, fixture.grantee.id, {
+        key,
+        purpose: "survey",
+        title: "Racing survey",
+        status: "active",
+        fields: [],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_FORM_AUTHORIZATION_CHANGED" });
+    expect(await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", [key])).toEqual([]);
+  });
+
+  it("rolls back definition edits when the owning placement changes before commit", async () => {
+    const fixture = await createFixture();
+    const key = `ownership-race-${crypto.randomUUID()}`;
+    const created = await createGroupFormDefinition(env.DB, fixture.admin, fixture.owner.id, {
+      key,
+      purpose: "survey",
+      title: "Ownership-bound survey",
+      status: "active",
+      fields: [],
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE form_placements SET owner_group_id = ? WHERE id = ?")
+        .bind(fixture.outsider.id, created.placement.id)
+        .run(),
+    );
+
+    await expect(
+      updateGroupFormDefinition(racingDb, fixture.admin, fixture.owner.id, created.placement.id, {
+        title: "Stale ownership edit",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_FORM_AUTHORIZATION_CHANGED" });
+    expect(await queryAll<{ title: string }>(env.DB, "SELECT title FROM forms WHERE key = ?", [key])).toEqual([
+      { title: "Ownership-bound survey" },
+    ]);
+  });
+
   it("uses a context-bound submit grant for discovery, definition, and atomic responses", async () => {
     const fixture = await createFixture();
     await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
