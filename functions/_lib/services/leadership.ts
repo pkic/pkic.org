@@ -1,9 +1,9 @@
 /**
  * Board of Directors / Executive Council leadership positions (consolidated
  * migration 0035) — admin CRUD plus the public roster read, and the PKIC forum
- * chair/vice-chair public read (resolved from role-forum_chair/
- * role-forum_vice_chair, consolidated migration 0035 — the same source the admin
- * Leadership tab's "Forum" card already manages via user_roles).
+ * chair/vice-chair public read. The public compatibility surface resolves the
+ * explicitly published All Members group's canonical lead/deputy-lead roles;
+ * there is no separate forum authorization model.
  *
  * Board/EC positions store the membership they explicitly represent. This
  * avoids assigning an arbitrary organization to people who concurrently
@@ -327,10 +327,8 @@ interface ForumChairRow {
 }
 
 /**
- * Public PKIC forum chair/vice-chair — same role-forum_chair/
- * role-forum_vice_chair query members-directory.ts's
- * getWorkingGroupChairsPublic runs for WG chairs, but global-context
- * (context_type IS NULL) instead of scoped to a working group.
+ * Public consortium chair/vice-chair compatibility response. Its source is
+ * the ordinary All Members group and publication is controlled on that group.
  */
 export async function getForumChairsPublic(
   db: DatabaseLike,
@@ -342,7 +340,12 @@ export async function getForumChairsPublic(
             COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json, ur.created_at
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     -- A forum chair/vice-chair can represent more than one organization at
+     JOIN groups leadership_group
+       ON leadership_group.id = ur.context_id
+      AND leadership_group.slug = 'all-members'
+      AND leadership_group.active = 1
+      AND leadership_group.public_leadership = 1
+     -- A group leader can represent more than one organization at
      -- once (consolidated migration 0035) — join to a single deterministic
      -- representative row (earliest joined_at) instead of fanning out one
      -- result row per represented organization.
@@ -350,12 +353,12 @@ ${deterministicRepresentativeJoinSql("u.id")}
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
-     WHERE ur.context_type IS NULL AND ur.context_id IS NULL
+     WHERE ur.context_type = 'group'
        AND ur.role_id IN (?, ?)
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      ORDER BY ur.created_at DESC`,
-    [SYSTEM_ROLE_IDS.forumChair, SYSTEM_ROLE_IDS.forumViceChair],
+    [SYSTEM_ROLE_IDS.groupLead, SYSTEM_ROLE_IDS.groupDeputyLead],
   );
 
   const toPublic = (row: ForumChairRow | undefined): ForumChairPublic | null => {
@@ -367,7 +370,7 @@ ${deterministicRepresentativeJoinSql("u.id")}
   };
 
   return {
-    chair: toPublic(rows.find((r) => r.role_id === SYSTEM_ROLE_IDS.forumChair)),
-    viceChair: toPublic(rows.find((r) => r.role_id === SYSTEM_ROLE_IDS.forumViceChair)),
+    chair: toPublic(rows.find((r) => r.role_id === SYSTEM_ROLE_IDS.groupLead)),
+    viceChair: toPublic(rows.find((r) => r.role_id === SYSTEM_ROLE_IDS.groupDeputyLead)),
   };
 }

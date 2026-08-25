@@ -2,7 +2,7 @@
  * Phase 1 §1.4 required test: contextTypeSchema accepts 'organization'
  * (assets/shared/schemas/access-control.ts) — added so representative-role
  * grants (context_type='organization') validate through the same contract
- * as event/working_group-scoped grants. contextTypeSchema itself is a
+ * as event/group-scoped grants. contextTypeSchema itself is a
  * private module const, exercised here through the two exported schemas
  * that embed it.
  */
@@ -38,10 +38,10 @@ describe("access-control contextTypeSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("still accepts the pre-existing 'event' and 'working_group' context types", () => {
-    for (const contextType of ["event", "working_group"]) {
+  it("accepts the canonical 'event' and 'group' context types", () => {
+    for (const contextType of ["event", "group"]) {
       const result = userRoleAssignSchema.safeParse({
-        roleId: "role-wg_chair",
+        roleId: "role-group_lead",
         contextType,
         contextId: crypto.randomUUID(),
       });
@@ -54,7 +54,7 @@ describe("access-control contextTypeSchema", () => {
     (schema) => {
       const common =
         schema === userRoleAssignSchema
-          ? { roleId: "role-wg_chair" }
+          ? { roleId: "role-group_lead" }
           : { userId: crypto.randomUUID(), permission: "membership:write" };
 
       expect(schema.safeParse({ ...common, contextType: "working_group" }).success).toBe(false);

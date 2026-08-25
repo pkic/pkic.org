@@ -9,9 +9,12 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
+import { addCoworker } from "../functions/_lib/services/member-organization";
+import type { AuthMember } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   insertUser,
   insertOrganization,
@@ -184,5 +187,40 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(response.status).toBe(401);
+  });
+
+  it("rolls back both user and representative creation when contact authority changes before commit", async () => {
+    const email = `racing-contact-${crypto.randomUUID()}@example.test`;
+    const { memberId, userId, organizationId } = await seedOrgWithContact(
+      `racing-primary-${crypto.randomUUID()}@example.test`,
+      "F",
+    );
+    const member: AuthMember = {
+      userId,
+      email: `racing-primary-${crypto.randomUUID()}@example.test`,
+      memberId,
+      organizationId,
+      membershipCategory: "F",
+      isEcMember: false,
+      activeMemberships: [{ memberId, organizationId, organizationName: null, membershipCategory: "F" }],
+    };
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE user_roles SET revoked_at = datetime('now')
+            WHERE user_id = ? AND role_id = ? AND context_type = 'organization' AND context_id = ?`,
+      )
+        .bind(userId, REPRESENTATIVE_ROLE_IDS.primaryContact, memberId)
+        .run(),
+    );
+
+    await expect(addCoworker(racingDb, member, { name: "Racing Coworker", email })).rejects.toMatchObject({
+      status: 409,
+      code: "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
+    });
+    expect(
+      await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM users WHERE normalized_email = ?", [
+        email,
+      ]),
+    ).toEqual([{ total: 0 }]);
   });
 });

@@ -48,7 +48,7 @@ export function Sponsorships() {
   const { selectedCompany, selectCompany, reload: reloadCompany } = company;
 
   function reloadAll() {
-    tableRef.current?.reload();
+    void tableRef.current?.reload();
     reloadCompany();
   }
 

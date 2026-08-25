@@ -8,7 +8,7 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requireVoteManagementAccess } from "../../../../../_lib/auth/vote-access";
-import { listBallotsForAdmin } from "../../../../../_lib/services/votes";
+import { listBallotsForManager } from "../../../../../_lib/services/votes";
 import { adminVoteBallotsRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
@@ -19,5 +19,5 @@ export const AdminVoteBallotsGet = openApiRoute(adminVoteBallotsRouteSchema, asy
 
   await requireVoteManagementAccess(db, admin, id);
 
-  return json(await listBallotsForAdmin(db, id, data.query));
+  return json(await listBallotsForManager(db, admin, id, data.query));
 });

@@ -3,6 +3,7 @@ import { jsonErrorResponse } from "./api-common";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import {
   groupCategoryRulesReplaceSchema,
+  groupGetQuerySchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
   groupAutomaticEnrollmentPreferenceSchema,
   groupCreateSchema,
@@ -15,6 +16,7 @@ import {
   groupMembershipParamsSchema,
   groupMembershipsListQuerySchema,
   groupMembershipsListResponseSchema,
+  groupPortalContextResponseSchema,
   groupReferenceParamsSchema,
   groupResponseSchema,
   groupTypesListQuerySchema,
@@ -40,23 +42,43 @@ export const groupTypesListRouteSchema = {
 export const groupsListRouteSchema = {
   tags: ["Groups"],
   summary: "List groups visible to the caller",
-  description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
+  description:
+    "Search, filtering, sorting, counting, pagination, and the optional manageable projection are executed in D1.",
   request: { query: groupsListQuerySchema },
   responses: {
     "200": {
       description: "A bounded group page.",
       content: { "application/json": { schema: groupsListResponseSchema } },
     },
+    "401": jsonErrorResponse("An authenticated management identity is required for the manageable projection."),
   },
 };
 
 export const groupGetRouteSchema = {
   tags: ["Groups"],
   summary: "Get one group",
-  request: { params: groupReferenceParamsSchema },
+  request: { params: groupReferenceParamsSchema, query: groupGetQuerySchema },
   responses: {
     "200": { description: "Group detail.", content: { "application/json": { schema: groupResponseSchema } } },
+    "401": jsonErrorResponse("An authenticated management identity is required for a manageable lookup."),
+    "403": jsonErrorResponse("The caller lacks effective management permission."),
     "404": jsonErrorResponse("Group not found or not visible."),
+  },
+};
+
+export const groupPortalContextRouteSchema = {
+  tags: ["Groups"],
+  summary: "Resolve one selected-group portal context",
+  description:
+    "Returns live view, participation, and management capabilities for the authenticated portal identity. The browser derives selected-group navigation from this projection.",
+  request: { params: groupReferenceParamsSchema },
+  responses: {
+    "200": {
+      description: "Selected group and the caller's effective portal capabilities.",
+      content: { "application/json": { schema: groupPortalContextResponseSchema } },
+    },
+    "401": jsonErrorResponse("Portal authentication is required."),
+    "404": jsonErrorResponse("Group not found or unavailable to this identity."),
   },
 };
 
@@ -74,6 +96,7 @@ export const groupCreateRouteSchema = {
 export const groupUpdateRouteSchema = {
   tags: ["Groups"],
   summary: "Update a group",
+  description: "Send expectedRevision from the group response to reject an edit based on stale state.",
   request: {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupUpdateSchema } } },
@@ -81,7 +104,7 @@ export const groupUpdateRouteSchema = {
   responses: {
     "200": { description: "Group updated.", content: { "application/json": { schema: groupResponseSchema } } },
     "403": jsonErrorResponse("The caller lacks effective management permission."),
-    "409": jsonErrorResponse("The update would create a cycle or unsafe local-only governance."),
+    "409": jsonErrorResponse("The group changed before commit, or the update would create an invalid hierarchy."),
   },
 };
 
@@ -113,7 +136,7 @@ export const groupJoinRouteSchema = {
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
     "403": jsonErrorResponse("No selected capacity is eligible for this group."),
-    "409": jsonErrorResponse("Parent membership or current representation is missing."),
+    "409": jsonErrorResponse("Group eligibility or capacity changed before commit."),
   },
 };
 
@@ -129,6 +152,7 @@ export const groupLeaveRouteSchema = {
       description: "Remaining and ended capacities.",
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
+    "409": jsonErrorResponse("Group membership changed before the leave committed."),
   },
 };
 
@@ -162,6 +186,7 @@ export const groupMemberAddRouteSchema = {
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
     "403": jsonErrorResponse("The caller may not manage this group or the target is ineligible."),
+    "409": jsonErrorResponse("Group eligibility or capacity changed before commit."),
   },
 };
 
@@ -175,6 +200,7 @@ export const groupMembershipEndRouteSchema = {
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
     "404": jsonErrorResponse("Membership capacity not found."),
+    "409": jsonErrorResponse("Group membership changed before the command committed."),
   },
 };
 
@@ -206,13 +232,18 @@ export const groupLeadershipAssignRouteSchema = {
 export const groupCategoryRulesReplaceRouteSchema = {
   tags: ["Groups"],
   summary: "Replace category eligibility and automatic-enrollment rules",
+  description: "Send expectedRevision from the group response to reject a replacement based on stale state.",
   request: {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupCategoryRulesReplaceSchema } } },
   },
   responses: {
-    "200": { description: "Rules replaced." },
+    "200": {
+      description: "Rules replaced and the updated aggregate revision returned.",
+      content: { "application/json": { schema: groupResponseSchema } },
+    },
     "403": jsonErrorResponse("Rule management is not authorized."),
+    "409": jsonErrorResponse("The group changed before the replacement committed."),
   },
 };
 

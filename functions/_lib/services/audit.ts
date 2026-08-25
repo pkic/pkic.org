@@ -154,11 +154,52 @@ export function prepareScopedAuditLog(
 /**
  * Builds an audit INSERT that also turns a lost compare-and-set into a real
  * SQL failure. `audit_log.action` is NOT NULL, so a preceding statement that
- * changed anything other than one row aborts the surrounding D1 batch and
+ * changed anything other than the caller's bounded expected count aborts the
+ * surrounding D1 batch and
  * rolls every statement back instead of allowing partial fallout to commit.
  * Keep this immediately after the guarded write because SQLite's `changes()`
  * reports the most recently executed statement.
  */
+export function prepareAuditLogAfterExpectedChanges(
+  db: DatabaseLike,
+  expectedChanges: number,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt = nowIso(),
+  scope: AuditScope | null = null,
+  idempotencyKey: string | null = null,
+): StatementLike {
+  if (!Number.isSafeInteger(expectedChanges) || expectedChanges < 1) {
+    throw new Error("Expected change count must be a positive safe integer");
+  }
+  return db
+    .prepare(
+      `INSERT INTO audit_log (
+        id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+        idempotency_key, scope_type, scope_id
+      ) VALUES (?, ?, ?, CASE WHEN changes() = ? THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+    )
+    .bind(
+      uuid(),
+      actorType,
+      actorId,
+      expectedChanges,
+      action,
+      entityType,
+      entityId,
+      serializeAuditDetails(details),
+      createdAt,
+      idempotencyKey,
+      scope?.type ?? null,
+      scope?.id ?? null,
+    );
+}
+
 export function prepareAuditLogAfterOneChange(
   db: DatabaseLike,
   actorType: string,
@@ -171,27 +212,19 @@ export function prepareAuditLogAfterOneChange(
   scope: AuditScope | null = null,
   idempotencyKey: string | null = null,
 ): StatementLike {
-  return db
-    .prepare(
-      `INSERT INTO audit_log (
-        id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
-        idempotency_key, scope_type, scope_id
-      ) VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
-    )
-    .bind(
-      uuid(),
-      actorType,
-      actorId,
-      action,
-      entityType,
-      entityId,
-      serializeAuditDetails(details),
-      createdAt,
-      idempotencyKey,
-      scope?.type ?? null,
-      scope?.id ?? null,
-    );
+  return prepareAuditLogAfterExpectedChanges(
+    db,
+    1,
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    details,
+    createdAt,
+    scope,
+    idempotencyKey,
+  );
 }
 
 /** Scoped compare-and-set audit variant; preserves the same `changes()` guard. */
@@ -221,15 +254,49 @@ export function prepareScopedAuditLogAfterOneChange(
   );
 }
 
-const AUDIT_ONE_CHANGE_GUARD_ERROR = "NOT NULL constraint failed: audit_log.action";
+/** Scoped compare-and-set audit for a bounded multi-row state transition. */
+export function prepareScopedAuditLogAfterExpectedChanges(
+  db: DatabaseLike,
+  expectedChanges: number,
+  scope: AuditScope,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt = nowIso(),
+  idempotencyKey: string | null = null,
+): StatementLike {
+  return prepareAuditLogAfterExpectedChanges(
+    db,
+    expectedChanges,
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    details,
+    createdAt,
+    scope,
+    idempotencyKey,
+  );
+}
+
+const AUDIT_CHANGE_GUARD_ERROR = "NOT NULL constraint failed: audit_log.action";
 
 /**
  * Classifies the deliberate constraint failure emitted by
  * `prepareAuditLogAfterOneChange`. Keep the D1/SQLite error-text coupling in
  * this module rather than duplicating it across every guarded command.
  */
+export function isAuditChangeGuardFailure(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(AUDIT_CHANGE_GUARD_ERROR);
+}
+
+/** Backward-compatible classifier name for existing one-row callers. */
 export function isAuditOneChangeGuardFailure(error: unknown): boolean {
-  return error instanceof Error && error.message.includes(AUDIT_ONE_CHANGE_GUARD_ERROR);
+  return isAuditChangeGuardFailure(error);
 }
 
 /**

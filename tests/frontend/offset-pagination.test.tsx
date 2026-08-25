@@ -145,7 +145,7 @@ describe("canonical offset pagination", () => {
     expect(requests.slice(requestsBeforeFilter)).toHaveLength(1);
   });
 
-  it("keeps portal working-group search server-side while paging the joined view", async () => {
+  it("keeps generic portal group search server-side while paging the joined view", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -166,7 +166,7 @@ describe("canonical offset pagination", () => {
     function Harness() {
       const listing = useApiPage(
         "/api/v1/me/groups",
-        { view: "joined", typeKey: "working_group", q: "alpha" },
+        { view: "joined", q: "alpha" },
         responseSchema,
         (data) => data.groups,
         25,
@@ -177,7 +177,7 @@ describe("canonical offset pagination", () => {
     const container = mount(<Harness />);
     await settle();
     expect(requests.at(-1)?.searchParams.get("view")).toBe("joined");
-    expect(requests.at(-1)?.searchParams.get("typeKey")).toBe("working_group");
+    expect(requests.at(-1)?.searchParams.has("typeKey")).toBe(false);
     expect(requests.at(-1)?.searchParams.get("q")).toBe("alpha");
     void act(() => nextButton(container).click());
     await settle();

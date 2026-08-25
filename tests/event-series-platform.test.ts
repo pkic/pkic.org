@@ -17,28 +17,16 @@ import {
 } from "../functions/_lib/services/event-series";
 import { eventOccurrenceUpdateSchema } from "../assets/shared/schemas/event-series";
 import { joinGroup } from "../functions/_lib/services/groups";
-import type { AuthAdmin, DatabaseLike, D1StatementResult, StatementLike } from "../functions/_lib/types";
+import type { AuthAdmin } from "../functions/_lib/types";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 const ENCRYPTION_SECRET = "test-meeting-encryption-secret-0000000000000000";
 const EVIDENCE_SECRET = "test-meeting-evidence-secret";
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
-
-function mutateBeforeNextBatch(mutation: () => Promise<unknown>): DatabaseLike {
-  let pending = mutation;
-  return {
-    prepare: (sql: string) => env.DB.prepare(sql) as unknown as StatementLike,
-    batch: async (statements: StatementLike[]): Promise<D1StatementResult[]> => {
-      const runMutation = pending;
-      pending = async () => undefined;
-      await runMutation();
-      return (await env.DB.batch(statements as D1PreparedStatement[])) as unknown as D1StatementResult[];
-    },
-  };
-}
 
 async function insertAdmin(): Promise<AuthAdmin> {
   const id = await insertUser(env.DB, `meeting-admin-${crypto.randomUUID()}@example.test`);
@@ -451,7 +439,7 @@ describe("group-owned event series", () => {
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
     });
     const landing = await getMeetingJoinLanding(env.DB, access.token);
-    const racingDb = mutateBeforeNextBatch(() =>
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
         .bind(JSON.stringify({ memberEligibility: "owner_group", guestPolicy: "none" }), series.eventId)
         .run(),
@@ -485,7 +473,7 @@ describe("group-owned event series", () => {
       name: "Issuance Race Guest",
       expiresAt,
     });
-    const racingDb = mutateBeforeNextBatch(() =>
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
       revokeOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, guest.id),
     );
     await expect(
@@ -584,7 +572,7 @@ describe("group-owned event series", () => {
     });
     const landing = await getMeetingJoinLanding(env.DB, access.token);
     const tokenHash = await sha256Hex(access.token);
-    const racingDb = mutateBeforeNextBatch(() =>
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE event_occurrence_access_tokens SET revoked_at = datetime('now') WHERE token_hash = ?")
         .bind(tokenHash)
         .run(),
@@ -617,7 +605,7 @@ describe("group-owned event series", () => {
     });
     const landing = await getMeetingJoinLanding(env.DB, access.token);
     expect(landing.terms).toEqual([]);
-    const racingDb = mutateBeforeNextBatch(() =>
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(
         `INSERT INTO event_terms
            (id, event_id, audience_type, term_key, version, required, display_text, active, created_at)

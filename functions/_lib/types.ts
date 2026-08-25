@@ -208,7 +208,7 @@ export type JsonArray = JsonValue[];
 
 /**
  * A single contextual permission — e.g. "events:manage" scoped to
- * one event's UUID, or "working-groups:write" scoped to one WG's UUID.
+ * one event's UUID, or "groups:write" scoped to one group's UUID.
  * `contextType`/`contextId` are both null for a global (unscoped) grant.
  */
 export interface PermissionGrant {

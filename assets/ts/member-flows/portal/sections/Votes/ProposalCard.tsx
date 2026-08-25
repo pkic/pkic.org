@@ -10,8 +10,8 @@ import {
   withdrawProposalResponseSchema,
 } from "../../../../../shared/schemas/votes";
 import type { VoteProposal } from "../../types";
-import { proposalStatusBadgeClass, isVotingCategory } from "./shared";
-import { ScopeBadge } from "./ScopeBadge";
+import { proposalStatusBadgeClass } from "./shared";
+import { GroupBadge } from "./GroupBadge";
 
 export function ProposalCard({ proposal, onChanged }: { proposal: VoteProposal; onChanged: () => Promise<void> }) {
   const [expanded, setExpanded] = useState(false);
@@ -90,7 +90,7 @@ export function ProposalCard({ proposal, onChanged }: { proposal: VoteProposal; 
               </span>
               <span class="badge text-bg-light border">{formatStageLabel(proposal.voteType)}</span>
               <span class="badge text-bg-light border">
-                <ScopeBadge scopeType={proposal.scopeType} scopeName={proposal.scopeName} />
+                <GroupBadge ownerGroupName={proposal.ownerGroupName} />
               </span>
               {isOpen && (
                 <span class="badge text-bg-secondary">
@@ -118,9 +118,7 @@ export function ProposalCard({ proposal, onChanged }: { proposal: VoteProposal; 
 
             {isOpen && (
               <div class="d-flex align-items-center gap-2 flex-wrap">
-                {!isVotingCategory() ? (
-                  <span class="text-muted small">Category H members can't endorse proposals.</span>
-                ) : endorserUserIds === null ? (
+                {endorserUserIds === null ? (
                   <Spinner />
                 ) : hasEndorsed ? (
                   <button

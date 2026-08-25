@@ -714,15 +714,15 @@ describe("Membership scheduled jobs", () => {
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual([]);
   });
 
-  it("keeps a max-working-group EC approval inside the documented D1 reserve", async () => {
+  it("keeps a max-group EC approval inside the documented D1 reserve", async () => {
     await updateMembershipSettings(env.DB, { ecReviewWindowDays: 7 }, null);
     const workingGroupSlugs = Array.from({ length: 20 }, (_, index) => `reserve-wg-${index}`);
     await env.DB.batch(
       workingGroupSlugs.map((slug) =>
         env.DB.prepare(
-          `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-             VALUES (?, ?, ?, NULL, ?, 1, datetime('now'), datetime('now'))`,
-        ).bind(crypto.randomUUID(), slug, slug, `${slug}@lists.example.test`),
+          `INSERT INTO groups (id, type_key, name, slug, visibility, active, created_at, updated_at)
+             VALUES (?, 'working_group', ?, ?, 'participants', 1, datetime('now'), datetime('now'))`,
+        ).bind(crypto.randomUUID(), slug, slug),
       ),
     );
     const formSubmissionId = await createApplicationFormSubmission({ working_groups: workingGroupSlugs });

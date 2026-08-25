@@ -324,7 +324,7 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
     try {
       await apiCommand(`/api/v1/admin/events/${slug}/invites/${id}/revoke`, { method: "POST", body: "{}" });
       toast("Invite revoked", "success");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }

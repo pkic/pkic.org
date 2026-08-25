@@ -12,11 +12,6 @@ import { groupIdSchema } from "./groups";
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
 
-/** @deprecated Temporary parser for legacy vote callers while they migrate to ownerGroupId. */
-export const VOTE_SCOPE_TYPES = ["forum", "working_group"] as const;
-/** @deprecated Use ownerGroupId. */
-export const voteScopeTypeSchema = z.enum(VOTE_SCOPE_TYPES);
-
 export const VOTE_ELECTORATE_MODES = ["per_member", "per_person"] as const;
 export const voteElectorateModeSchema = z.enum(VOTE_ELECTORATE_MODES);
 
@@ -125,6 +120,7 @@ export const voteSummaryFieldsSchema = {
   closesAt: z.string(),
   currentRound: z.number(),
   status: voteStatusSchema,
+  cancellationReason: z.string().nullable().default(null),
   visibility: voteVisibilitySchema,
   publicDetailLevel: publicDetailLevelSchema,
   createdAt: z.string(),
@@ -137,11 +133,18 @@ export const publicVoteSchema = z.object({
   result: voteResultSchema,
 });
 
+export const eligibleMemberBallotSchema = z.object({
+  memberId: databaseIdSchema,
+  organizationName: z.string(),
+  hasCastBallot: z.boolean(),
+});
+
 export const portalVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
   candidates: z.array(candidateSummarySchema).nullable(),
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
+  memberBallots: z.array(eligibleMemberBallotSchema).nullable(),
   result: voteResultSchema,
 });
 
@@ -302,6 +305,9 @@ export const proposalSummarySchema = z.object({
   ownerGroupId: groupIdSchema,
   ownerGroupName: z.string(),
   proposedByUserId: databaseIdSchema,
+  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable(),
+  proposedOpensAt: z.string().nullable(),
+  proposedClosesAt: z.string().nullable(),
   status: voteProposalStatusSchema,
   voteId: databaseIdSchema.nullable(),
   rejectionReason: z.string().nullable(),
@@ -311,15 +317,32 @@ export const proposalSummarySchema = z.object({
 });
 export type ProposalSummary = z.infer<typeof proposalSummarySchema>;
 
-export const submitProposalSchema = z.object({
+const voteProposalInputShape = {
   title: z.string().trim().min(1).max(300),
   description: z.string().trim().min(1).max(10000),
-  voteType: voteTypeSchema,
-  ownerGroupId: groupIdSchema,
+  voteType: voteTypeSchema.exclude(["election"]),
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
-});
+};
+
+function addVoteProposalWindowIssue(
+  value: { proposedOpensAt?: string | null; proposedClosesAt?: string | null },
+  context: z.RefinementCtx,
+): void {
+  if (value.proposedOpensAt && value.proposedClosesAt && value.proposedClosesAt <= value.proposedOpensAt) {
+    context.addIssue({
+      code: "custom",
+      path: ["proposedClosesAt"],
+      message: "Proposed closing time must be after the proposed opening time",
+    });
+  }
+}
+
+export const voteProposalFieldsSchema = z.object(voteProposalInputShape).superRefine(addVoteProposalWindowIssue);
+export const submitProposalSchema = z
+  .object({ ...voteProposalInputShape, ownerGroupId: groupIdSchema })
+  .superRefine(addVoteProposalWindowIssue);
 export const submitProposalResponseSchema = z.object({ proposal: proposalSummarySchema });
 
 export const submitProposalRouteSchema = {

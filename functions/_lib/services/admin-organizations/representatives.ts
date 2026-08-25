@@ -66,6 +66,18 @@ export async function addOrganizationRepresentative(
 
   const existingUser = await findUserByEmail(db, input.email);
   if (existingUser) {
+    const individualMembership = await first<{ id: string }>(
+      db,
+      "SELECT id FROM members WHERE user_id = ? AND member_type = 'individual' AND status = 'active'",
+      [existingUser.id],
+    );
+    if (individualMembership) {
+      throw new AppError(
+        409,
+        "INDIVIDUAL_CAPACITY_CONFLICT",
+        "End the individual membership before adding an organization representation",
+      );
+    }
     const alreadyRepresenting = await isActiveRepresentative(db, memberId, existingUser.id);
     if (alreadyRepresenting) {
       throw new AppError(409, "ALREADY_MEMBER", `${input.email} already represents this organization`);
@@ -269,6 +281,18 @@ export async function grantIndividualMembership(
 
   const existingMember = await first<{ id: string }>(db, "SELECT id FROM members WHERE user_id = ?", [userId]);
   if (existingMember) throw new AppError(409, "ALREADY_MEMBER", "This user already holds a membership");
+  const activeRepresentation = await first<{ id: string }>(
+    db,
+    "SELECT id FROM organization_representatives WHERE user_id = ? AND left_at IS NULL AND blocked_at IS NULL",
+    [userId],
+  );
+  if (activeRepresentation) {
+    throw new AppError(
+      409,
+      "ORGANIZATION_CAPACITY_CONFLICT",
+      "A user who represents an organization cannot also hold an individual membership",
+    );
+  }
 
   const now = nowIso();
   const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, membershipCategory, now);
@@ -394,12 +418,6 @@ export async function removeAdminMember(
         userId: representative.user_id,
         now,
       }),
-      buildRevokeRepresentativeRoleStatement(db, {
-        memberId: representative.member_id,
-        roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
-        userId: representative.user_id,
-        now,
-      }),
       db
         .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
         .bind(representative.member_id, representative.user_id),
@@ -415,7 +433,7 @@ export async function removeAdminMember(
         organizationId: orgRow?.organization_id ?? null,
       }),
     ];
-    // The three role-revoke statements above are scoped to this
+    // The two role-revoke statements above are scoped to this
     // representative's own user_id (0 rows affected if they didn't hold
     // that role) — safe as no-ops, avoiding a read to check which role (if
     // any) this rep held, and critically NOT clearing a role actually held

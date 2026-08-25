@@ -1,4 +1,5 @@
 /** Vote-proposal commands; read models and conversion planning live beside this file. */
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first, run } from "../../db/queries";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { AppError } from "../../errors";
@@ -8,6 +9,10 @@ import { stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import {
+  prepareEffectiveGroupPermissionAuthorizationGuard,
+  requireEffectiveGroupPermission,
+} from "../groups/governance";
+import {
   convertProposalToVote,
   convertProposalToVoteForMember,
   insertEndorsementAndMaybeConvert,
@@ -15,12 +20,14 @@ import {
   prepareProposalTransitionGuard,
 } from "./proposal-conversion";
 import { getProposalRowOrThrow, minEndorsersFor, toProposalSummary, type ProposalSummary } from "./proposal-read";
-import { assertVotingCategory, resolveScope, type VoteScopeType, type VoteSummary, type VoteType } from "./shared";
-import { ACTIVE_VOTER_MEMBERSHIP_SQL, activeVoterMembershipBindings } from "./voter-eligibility";
+import { resolveVoteOwnerGroup, type VoteSummary, type VoteType } from "./shared";
+import { ACTIVE_GROUP_VOTER_SQL, activeGroupVoterBindings } from "./voter-eligibility";
+import { requireSupportedVoteProposalType, validateVoteWindow } from "./configuration";
 
 export {
-  getProposalScopeForPermissionCheck,
+  getProposalGroupForPermissionCheck,
   getVoteProposalDetail,
+  getVoteProposalDetailForMember,
   listAllVoteProposalsForAdmin,
   listVoteProposals,
 } from "./proposal-read";
@@ -30,8 +37,7 @@ export interface SubmitProposalInput {
   title: string;
   description: string;
   voteType: VoteType;
-  scopeType: VoteScopeType;
-  scopeId?: string | null;
+  ownerGroupId: string;
   eligibleCategories?: string[] | null;
   proposedOpensAt?: string | null;
   proposedClosesAt?: string | null;
@@ -42,23 +48,24 @@ export async function submitVoteProposal(
   member: AuthMember,
   input: SubmitProposalInput,
 ): Promise<ProposalSummary> {
-  await assertVotingCategory(member);
-  const scopeId = await resolveScope(db, input.scopeType, input.scopeId);
-  if (input.scopeType === "working_group") {
-    const membership = await first<{ id: string }>(
-      db,
-      "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
-      [scopeId, member.userId],
-    );
-    if (!membership) {
-      throw new AppError(403, "NOT_A_WG_MEMBER", "Only members of this working group may propose a WG-level vote");
-    }
+  requireSupportedVoteProposalType(input.voteType);
+  if (input.proposedClosesAt) {
+    validateVoteWindow(input.proposedOpensAt ?? nowIso(), input.proposedClosesAt);
   }
-  if ((await minEndorsersFor(db, input.scopeType, scopeId)) <= 0) {
+  const ownerGroupId = await resolveVoteOwnerGroup(db, input.ownerGroupId);
+  const eligible = await first<{ authorized: number }>(
+    db,
+    `SELECT 1 AS authorized WHERE ${ACTIVE_GROUP_VOTER_SQL}`,
+    activeGroupVoterBindings(member.userId, ownerGroupId),
+  );
+  if (!eligible) {
+    throw new AppError(403, "NOT_AN_ELIGIBLE_GROUP_VOTER", "An active A-G capacity in the owning group is required");
+  }
+  if ((await minEndorsersFor(db, ownerGroupId)) <= 0) {
     throw new AppError(
       403,
       "ENDORSEMENT_PATH_DISABLED",
-      "This scope requires direct staff or chair creation; member proposals are disabled.",
+      "This group requires direct staff or leadership creation; member proposals are disabled.",
     );
   }
 
@@ -67,35 +74,23 @@ export async function submitVoteProposal(
   const inserted = await run(
     db,
     `INSERT INTO vote_proposals
-       (id, title, description, vote_type, scope_type, scope_id, proposed_by_user_id, eligible_categories,
+       (id, title, description, vote_type, owner_group_id, proposed_by_user_id, eligible_categories,
         proposed_opens_at, proposed_closes_at, status, vote_id, rejection_reason, created_at, updated_at)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open_for_endorsement', NULL, NULL, ?, ?
-     WHERE ${ACTIVE_VOTER_MEMBERSHIP_SQL}
-       AND (
-         ? <> 'working_group'
-         OR EXISTS (
-           SELECT 1
-           FROM working_group_members wgm
-           WHERE wgm.working_group_id = ? AND wgm.user_id = ? AND wgm.left_at IS NULL
-         )
-       )`,
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open_for_endorsement', NULL, NULL, ?, ?
+     WHERE ${ACTIVE_GROUP_VOTER_SQL}`,
     [
       id,
       input.title,
       input.description,
       input.voteType,
-      input.scopeType,
-      scopeId,
+      ownerGroupId,
       member.userId,
       input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
       input.proposedOpensAt ?? null,
       input.proposedClosesAt ?? null,
       now,
       now,
-      ...activeVoterMembershipBindings(member),
-      input.scopeType,
-      scopeId,
-      member.userId,
+      ...activeGroupVoterBindings(member.userId, ownerGroupId),
     ],
   );
   if (inserted.changes !== 1) {
@@ -109,23 +104,31 @@ export interface EndorseProposalResult {
   convertedVote: VoteSummary | null;
 }
 
+function requireProposalGroup(row: { owner_group_id: string }, throughGroupId?: string): string {
+  if (throughGroupId && row.owner_group_id !== throughGroupId) {
+    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Vote proposal not found through this group");
+  }
+  return throughGroupId ?? row.owner_group_id;
+}
+
 async function endorseVoteProposalOnce(
   db: DatabaseLike,
   member: AuthMember,
   proposalId: string,
+  throughGroupId?: string,
 ): Promise<EndorseProposalResult> {
-  await assertVotingCategory(member);
   const row = await getProposalRowOrThrow(db, proposalId);
+  requireProposalGroup(row, throughGroupId);
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "This proposal is not open for endorsement");
   }
-  if (row.scope_type === "working_group") {
-    const membership = await first<{ id: string }>(
-      db,
-      "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
-      [row.scope_id, member.userId],
-    );
-    if (!membership) throw new AppError(403, "NOT_A_WG_MEMBER", "Only members of this working group may endorse");
+  const eligible = await first<{ authorized: number }>(
+    db,
+    `SELECT 1 AS authorized WHERE ${ACTIVE_GROUP_VOTER_SQL}`,
+    activeGroupVoterBindings(member.userId, row.owner_group_id),
+  );
+  if (!eligible) {
+    throw new AppError(403, "NOT_AN_ELIGIBLE_GROUP_VOTER", "An active A-G capacity in the owning group is required");
   }
 
   const existing = await first<{ id: string }>(
@@ -144,7 +147,7 @@ async function endorseVoteProposalOnce(
       db,
       row,
       member,
-      await minEndorsersFor(db, row.scope_type, row.scope_id),
+      await minEndorsersFor(db, row.owner_group_id),
     );
   }
   return {
@@ -157,10 +160,11 @@ export async function endorseVoteProposal(
   db: DatabaseLike,
   member: AuthMember,
   proposalId: string,
+  throughGroupId?: string,
 ): Promise<EndorseProposalResult> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await endorseVoteProposalOnce(db, member, proposalId);
+      return await endorseVoteProposalOnce(db, member, proposalId, throughGroupId);
     } catch (error) {
       if (!isStaleProposalTransition(error) || attempt === 2) throw error;
     }
@@ -168,8 +172,14 @@ export async function endorseVoteProposal(
   throw new Error("Vote proposal endorsement could not be committed after concurrent changes");
 }
 
-async function withdrawEndorsementOnce(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
+async function withdrawEndorsementOnce(
+  db: DatabaseLike,
+  member: AuthMember,
+  proposalId: string,
+  throughGroupId?: string,
+): Promise<void> {
   const proposal = await getProposalRowOrThrow(db, proposalId);
+  requireProposalGroup(proposal, throughGroupId);
   if (proposal.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "Only an open proposal endorsement can be withdrawn");
   }
@@ -198,18 +208,29 @@ async function withdrawEndorsementOnce(db: DatabaseLike, member: AuthMember, pro
   ]);
 }
 
-export async function withdrawEndorsement(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
+export async function withdrawEndorsement(
+  db: DatabaseLike,
+  member: AuthMember,
+  proposalId: string,
+  throughGroupId?: string,
+): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await withdrawEndorsementOnce(db, member, proposalId);
+      return await withdrawEndorsementOnce(db, member, proposalId, throughGroupId);
     } catch (error) {
       if (!isStaleProposalTransition(error) || attempt === 2) throw error;
     }
   }
 }
 
-export async function withdrawVoteProposal(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
+export async function withdrawVoteProposal(
+  db: DatabaseLike,
+  member: AuthMember,
+  proposalId: string,
+  throughGroupId?: string,
+): Promise<void> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  requireProposalGroup(row, throughGroupId);
   if (row.proposed_by_user_id !== member.userId) {
     throw new AppError(403, "NOT_PROPOSER", "Only the proposer may withdraw this proposal");
   }
@@ -236,13 +257,16 @@ export async function approveVoteProposal(
   db: DatabaseLike,
   admin: AuthAdmin,
   proposalId: string,
+  throughGroupId?: string,
 ): Promise<ApproveProposalResult> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  const authorizationGroupId = requireProposalGroup(row, throughGroupId);
+  await requireEffectiveGroupPermission(db, admin, authorizationGroupId, "votes:manage");
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "This proposal is not open for endorsement");
   }
   return {
-    convertedVote: await convertProposalToVote(db, row, admin.id),
+    convertedVote: await convertProposalToVote(db, row, admin, authorizationGroupId),
     proposal: await toProposalSummary(db, await getProposalRowOrThrow(db, proposalId)),
   };
 }
@@ -260,8 +284,11 @@ export async function rejectVoteProposal(
   admin: AuthAdmin,
   proposalId: string,
   reason: string,
+  throughGroupId?: string,
 ): Promise<RejectProposalResult> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  const authorizationGroupId = requireProposalGroup(row, throughGroupId);
+  await requireEffectiveGroupPermission(db, admin, authorizationGroupId, "votes:manage");
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "This proposal is not open for endorsement");
   }
@@ -276,6 +303,7 @@ export async function rejectVoteProposal(
     : "";
   const now = nowIso();
   const statements: StatementLike[] = [
+    prepareEffectiveGroupPermissionAuthorizationGuard(db, admin, [authorizationGroupId], "votes:manage"),
     prepareProposalTransitionGuard(db, row),
     db
       .prepare("UPDATE vote_proposals SET status = 'rejected', rejection_reason = ?, updated_at = ? WHERE id = ?")
@@ -300,6 +328,9 @@ export async function rejectVoteProposal(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before commit");
+    }
     if (!isStaleProposalTransition(error)) throw error;
     throw new AppError(409, "PROPOSAL_NOT_REJECTABLE", "This proposal changed before it could be rejected");
   }

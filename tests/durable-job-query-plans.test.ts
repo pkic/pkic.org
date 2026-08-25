@@ -81,14 +81,14 @@ describe("durable external-effect due query plans", () => {
     );
   });
 
-  it("uses both working-group digest time-window indexes", async () => {
+  it("uses both canonical group-membership digest time-window indexes", async () => {
     const start = "2026-08-03T08:00:00.000Z";
     const end = "2026-08-10T08:00:00.000Z";
     const plan = await explain(WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY, [start, end, start, end]);
 
-    expect(plan).toContain("idx_wg_members_joined_window");
-    expect(plan).toContain("idx_wg_members_left_window");
-    expect(plan).not.toMatch(/(?:^|\n)SCAN wgm(?:$|\s)/);
+    expect(plan).toContain("idx_group_memberships_joined_window");
+    expect(plan).toContain("idx_group_memberships_left_window");
+    expect(plan).not.toMatch(/(?:^|\n)SCAN membership(?:$|\s)/);
   });
 
   it("uses the partial index for bounded unnotified consultation entries", async () => {

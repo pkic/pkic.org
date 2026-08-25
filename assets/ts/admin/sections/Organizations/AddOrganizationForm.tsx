@@ -9,7 +9,7 @@ import {
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   memberCreateResponseSchema,
 } from "../../../../shared/schemas/admin-members";
-import type { AdminWorkingGroupSummary } from "../../../../shared/schemas/working-groups";
+import type { Group } from "../../../../shared/schemas/groups";
 import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
 import { activeAdminWorkingGroupCatalog } from "../../services/catalogs";
 import { performAdminAction } from "../../actions";
@@ -39,7 +39,7 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
   const [membershipCategory, setMembershipCategory] = useState<string>("F");
   const [memberSince, setMemberSince] = useState(() => new Date().toISOString().slice(0, 10));
   const [representatives, setRepresentatives] = useState<RepresentativeDraft[]>([emptyRepresentative()]);
-  const [workingGroups, setWorkingGroups] = useState<AdminWorkingGroupSummary[]>([]);
+  const [workingGroups, setWorkingGroups] = useState<Group[]>([]);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 

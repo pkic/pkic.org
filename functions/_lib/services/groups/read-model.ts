@@ -7,6 +7,7 @@ import type {
 import { GROUP_MEMBERSHIP_SORT_COLUMNS, GROUP_SORT_COLUMNS } from "../../../../assets/shared/schemas/groups";
 import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
@@ -37,8 +38,10 @@ interface GroupRow {
   eligibility_mode: "open" | "category" | "managed";
   automatic_enrollment_mode: "none" | "category";
   allow_automatic_opt_out: number;
+  public_leadership: number;
   min_endorsers_for_ballot: number;
   active: number;
+  revision: number;
   membership_capacity_count: number;
   participant_count: number;
   child_count: number;
@@ -56,28 +59,19 @@ const GROUP_SELECT = `SELECT
   parent_type.plural_label AS parent_type_plural_label,
   g.description, g.links_json, g.visibility, g.governance_inheritance_mode,
   g.eligibility_mode, g.automatic_enrollment_mode,
-  g.allow_automatic_opt_out, g.min_endorsers_for_ballot, g.active,
-  COALESCE(capacities.capacity_count, 0) AS membership_capacity_count,
-  COALESCE(capacities.participant_count, 0) AS participant_count,
-  COALESCE(children.child_count, 0) AS child_count,
+  g.allow_automatic_opt_out, g.public_leadership, g.min_endorsers_for_ballot, g.active, g.revision,
+  (SELECT COUNT(*) FROM group_memberships capacity
+    WHERE capacity.group_id = g.id AND capacity.left_at IS NULL) AS membership_capacity_count,
+  (SELECT COUNT(DISTINCT participant.user_id) FROM group_memberships participant
+    WHERE participant.group_id = g.id AND participant.left_at IS NULL) AS participant_count,
+  (SELECT COUNT(*) FROM groups child
+    WHERE child.parent_group_id = g.id AND child.active = 1) AS child_count,
   g.created_at, g.updated_at`;
 
 const GROUP_FROM = `FROM groups g
   JOIN group_types gt ON gt.key = g.type_key
   LEFT JOIN groups parent ON parent.id = g.parent_group_id
-  LEFT JOIN group_types parent_type ON parent_type.key = parent.type_key
-  LEFT JOIN (
-    SELECT group_id, COUNT(*) AS capacity_count, COUNT(DISTINCT user_id) AS participant_count
-    FROM group_memberships
-    WHERE left_at IS NULL
-    GROUP BY group_id
-  ) capacities ON capacities.group_id = g.id
-  LEFT JOIN (
-    SELECT parent_group_id, COUNT(*) AS child_count
-    FROM groups
-    WHERE parent_group_id IS NOT NULL AND active = 1
-    GROUP BY parent_group_id
-  ) children ON children.parent_group_id = g.id`;
+  LEFT JOIN group_types parent_type ON parent_type.key = parent.type_key`;
 
 function mapGroup(row: GroupRow): Group {
   return {
@@ -109,8 +103,10 @@ function mapGroup(row: GroupRow): Group {
     eligibilityMode: row.eligibility_mode,
     automaticEnrollmentMode: row.automatic_enrollment_mode,
     allowAutomaticOptOut: row.allow_automatic_opt_out === 1,
+    publicLeadership: row.public_leadership === 1,
     minEndorsersForBallot: row.min_endorsers_for_ballot,
     active: row.active === 1,
+    revision: row.revision,
     membershipCapacityCount: row.membership_capacity_count,
     participantCount: row.participant_count,
     childCount: row.child_count,
@@ -131,6 +127,8 @@ export interface GroupListAccess {
   userId?: string;
   canReadAll?: boolean;
   participationView?: "catalog" | "joined";
+  /** Additional trusted SQL authorization applied before counting and paging. */
+  requiredAuthorization?: AuthorizationEvidence;
 }
 
 interface GroupVisibilityFilter {
@@ -227,7 +225,10 @@ export function buildGroupsPageQuery(
   const search = query.q ? buildD1TextSearchFilter(query.q, ["g.name", "g.slug", "g.description"]) : null;
   const conditions: string[] = [];
   const bindings: unknown[] = [];
-  const visibility = buildGroupVisibilityFilter(access);
+  // A management projection is already a stronger visibility boundary. Do
+  // not also require participation/read visibility: an exact write grant must
+  // be able to discover the group it authorizes.
+  const visibility = access.requiredAuthorization ? null : buildGroupVisibilityFilter(access);
   if (visibility) {
     conditions.push(visibility.sql);
     bindings.push(...visibility.bindings);
@@ -236,6 +237,10 @@ export function buildGroupsPageQuery(
   if (participation) {
     conditions.push(participation.sql);
     bindings.push(...participation.bindings);
+  }
+  if (access.requiredAuthorization) {
+    conditions.push(`EXISTS (${access.requiredAuthorization.sql})`);
+    bindings.push(...access.requiredAuthorization.bindings);
   }
   if (search) {
     conditions.push(search.sql);

@@ -161,6 +161,7 @@ export async function updateManagedFormPlacement(
   placementId: string,
   input: FormPlacementUpdateInput,
   auditScope: AuditScope | null = null,
+  authorizationGuards: readonly StatementLike[] = [],
 ): Promise<FormPlacement> {
   const currentRow = await getFormPlacementRow(db, formId, placementId);
   if (!currentRow) throw new AppError(404, "FORM_PLACEMENT_NOT_FOUND", "Form placement not found");
@@ -179,6 +180,7 @@ export async function updateManagedFormPlacement(
   const now = nowIso();
   try {
     await db.batch([
+      ...authorizationGuards,
       db
         .prepare(
           `UPDATE form_placements

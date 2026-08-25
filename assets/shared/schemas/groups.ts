@@ -7,6 +7,7 @@ import { membershipCategorySchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const groupIdSchema = databaseIdSchema;
+export const groupRevisionSchema = z.number().int().min(0);
 export const groupSlugSchema = z.string().trim().min(1).max(200).regex(slugPattern);
 export const groupReferenceSchema = z.union([groupIdSchema, groupSlugSchema]);
 export const groupTypeKeySchema = z
@@ -63,8 +64,10 @@ export const groupSchema = z.object({
   eligibilityMode: groupEligibilityModeSchema,
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema,
   allowAutomaticOptOut: z.boolean(),
+  publicLeadership: z.boolean(),
   minEndorsersForBallot: z.number().int().min(0),
   active: z.boolean(),
+  revision: groupRevisionSchema,
   membershipCapacityCount: z.number().int().min(0),
   participantCount: z.number().int().min(0),
   childCount: z.number().int().min(0),
@@ -73,11 +76,21 @@ export const groupSchema = z.object({
 });
 export type Group = z.infer<typeof groupSchema>;
 
+export const GROUP_PORTAL_CAPABILITIES = ["view", "participate", "manage"] as const;
+export const groupPortalCapabilitySchema = z.enum(GROUP_PORTAL_CAPABILITIES);
+export type GroupPortalCapability = z.infer<typeof groupPortalCapabilitySchema>;
+export const groupPortalContextResponseSchema = z.object({
+  group: groupSchema,
+  capabilities: z.array(groupPortalCapabilitySchema),
+});
+export type GroupPortalContextResponse = z.infer<typeof groupPortalContextResponseSchema>;
+
 const groupPolicyInputShape = {
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema.optional(),
   eligibilityMode: groupEligibilityModeSchema.optional(),
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema.optional(),
   allowAutomaticOptOut: z.boolean().optional(),
+  publicLeadership: z.boolean().optional(),
   minEndorsersForBallot: z.number().int().min(0).max(1000).optional(),
 };
 
@@ -94,6 +107,7 @@ export const groupCreateSchema = z.object({
 export type GroupCreateInput = z.infer<typeof groupCreateSchema>;
 
 export const groupUpdateSchema = z.object({
+  expectedRevision: groupRevisionSchema.optional(),
   typeKey: groupTypeKeySchema.optional(),
   parentGroupId: groupIdSchema.nullable().optional(),
   name: trimmedString(1, 200).optional(),
@@ -113,6 +127,7 @@ export const groupCategoryRuleSchema = z.object({
   automaticEnrollment: z.boolean(),
 });
 export const groupCategoryRulesReplaceSchema = z.object({
+  expectedRevision: groupRevisionSchema.optional(),
   rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })).max(100),
 });
 export type GroupCategoryRulesReplaceInput = z.infer<typeof groupCategoryRulesReplaceSchema>;
@@ -199,6 +214,8 @@ export type GroupLeadershipListResponse = z.infer<typeof groupLeadershipListResp
 
 export const GROUP_SORT_COLUMNS = ["name", "slug", "type", "participant_count", "created_at"] as const;
 export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend({
+  /** Restricts the page to groups the authenticated management identity may update. */
+  manageable: booleanQueryFlagSchema.optional(),
   active: booleanQueryFlagSchema.optional(),
   typeKey: groupTypeKeySchema.optional(),
   parentGroupId: groupIdSchema.nullable().optional(),
@@ -208,6 +225,7 @@ export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend(
 });
 export type GroupsListQuery = z.infer<typeof groupsListQuerySchema>;
 export const groupsListResponseSchema = paginatedResponseSchema("groups", groupSchema);
+export const groupGetQuerySchema = groupsListQuerySchema.pick({ manageable: true });
 
 export const GROUP_MEMBERSHIP_SORT_COLUMNS = [
   "user_name",

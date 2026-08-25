@@ -13,15 +13,12 @@ import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
 import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
-import { WorkingGroups } from "../sections/access-control/WorkingGroups";
 import { Leadership } from "../sections/access-control/Leadership";
 import { AccountSettings } from "../sections/AccountSettings";
 import { Organizations } from "../sections/Organizations";
 import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
 import { MailingLists } from "../sections/MailingLists";
 import { Sponsorships } from "../sections/Sponsorships";
-import { MeetingCalendar } from "../sections/MeetingCalendar";
-import { Votes } from "../sections/Votes";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
@@ -37,6 +34,13 @@ function SectionWrapper({ title, children }: { title: string; children: preact.C
       {children}
     </div>
   );
+}
+
+function PortalVotesRedirect() {
+  useEffect(() => {
+    window.location.assign("/portal/#/management");
+  }, []);
+  return <p>Vote management has moved to the group-centered portal.</p>;
 }
 
 export function AdminShell() {
@@ -251,22 +255,7 @@ export function AdminShell() {
                 </SectionWrapper>
               )}
             />
-            <Route
-              path="/meeting-calendar"
-              component={() => (
-                <SectionWrapper title="Meeting Calendar">
-                  <MeetingCalendar />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/votes"
-              component={() => (
-                <SectionWrapper title="Votes">
-                  <Votes />
-                </SectionWrapper>
-              )}
-            />
+            <Route path="/votes" component={PortalVotesRedirect} />
             <Route
               path="/membership"
               component={() => (
@@ -296,14 +285,6 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Access Control">
                   <AccessControl />
-                </SectionWrapper>
-              )}
-            />
-            <Route
-              path="/working-groups"
-              component={() => (
-                <SectionWrapper title="Working Groups">
-                  <WorkingGroups />
                 </SectionWrapper>
               )}
             />

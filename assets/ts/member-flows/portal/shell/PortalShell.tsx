@@ -1,147 +1,23 @@
-/**
- * Member portal nav shell (Member Portal Navigation Structure).
- * Mirrors the admin SPA's shell shape (Topbar + Sidebar + hash
- * router) at a much smaller scale — seven top-level sections, three of
- * which are functional in this phase (My Profile, My Application, Account
- * Settings); the rest render a "coming soon" placeholder naming the future
- * UI phase that builds them.
- */
+/** Capability-derived portal shell shared by member and management identities. */
 import { type ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
-import { Router, Route, Switch, Link } from "wouter";
+import { useEffect } from "preact/hooks";
+import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
-import { portalSession, profile, clearAuth } from "../state";
+import { portalSession, profile } from "../state";
 import { MyProfile } from "../sections/MyProfile";
 import { MyOrganization } from "../sections/MyOrganization";
-import { WorkingGroups } from "../sections/WorkingGroups";
-import { Calendar } from "../sections/Calendar";
+import { Groups } from "../sections/Groups";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
-import { postJson } from "../../../shared/api-client";
-import { successResponseSchema } from "../../../../shared/schemas/api-common";
-import { MenuIcon } from "../../../components/MenuIcon";
+import { Management } from "../sections/management/Management";
 import type { PortalSession } from "../types";
-
-interface NavItem {
-  path: string;
-  sec: string;
-  label: string;
-}
-
-const MEMBER_NAV_ITEMS: NavItem[] = [
-  { path: "/profile", sec: "profile", label: "My Profile" },
-  { path: "/organization", sec: "organization", label: "My Organization" },
-  { path: "/working-groups", sec: "working-groups", label: "Working Groups" },
-  { path: "/calendar", sec: "calendar", label: "Calendar" },
-  { path: "/votes", sec: "votes", label: "Votes" },
-  { path: "/application", sec: "application", label: "My Application" },
-  { path: "/account", sec: "account", label: "Account Settings" },
-];
-
-export function portalNavigationItems(session: PortalSession | null): NavItem[] {
-  return [
-    ...(session?.member ? MEMBER_NAV_ITEMS : []),
-    ...(session?.admin ? [{ path: "/management", sec: "management", label: "Management" }] : []),
-  ];
-}
-
-function closeSidebar(): void {
-  document.getElementById("portal-sidebar")?.classList.remove("open");
-  document.getElementById("portal-sidebar-backdrop")?.classList.remove("active");
-  document.getElementById("portal-sidebar-toggle")?.setAttribute("aria-expanded", "false");
-}
-
-function toggleSidebar(): void {
-  const sidebar = document.getElementById("portal-sidebar");
-  const backdrop = document.getElementById("portal-sidebar-backdrop");
-  const toggle = document.getElementById("portal-sidebar-toggle");
-  const isOpen = sidebar?.classList.toggle("open");
-  backdrop?.classList.toggle("active", Boolean(isOpen));
-  toggle?.setAttribute("aria-expanded", String(Boolean(isOpen)));
-}
-
-function activeSectionFor(location: string): string {
-  const top = location.replace(/^\//, "").split("/")[0];
-  return top || "profile";
-}
-
-function Sidebar() {
-  const [location] = useHashLocation();
-  const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
-  const activeSec = activeSectionFor(location);
-  const displayName =
-    profile.value?.preferredName ||
-    [profile.value?.firstName, profile.value?.lastName].filter(Boolean).join(" ").trim() ||
-    profile.value?.email ||
-    portalSession.value?.identity.email ||
-    "";
-
-  return (
-    <aside id="portal-sidebar" class="p-2">
-      <div class="px-2 py-3 mb-1">
-        <div class="portal-brand">PKI Consortium Portal</div>
-        <div id="portal-sb-user">{displayName}</div>
-      </div>
-      {portalNavigationItems(portalSession.value).map((item) => (
-        <Link
-          key={item.sec}
-          href={item.path}
-          class={`portal-sidebar-link${item.sec === activeSec ? " active" : ""}`}
-          onClick={closeSidebar}
-        >
-          {item.label}
-        </Link>
-      ))}
-      <div class="portal-sidebar-footer px-1 pt-3">
-        {signOutError && <div class="alert alert-danger small">{signOutError}</div>}
-        <button
-          class="btn btn-sm btn-outline-secondary w-100"
-          disabled={signingOut}
-          onClick={async () => {
-            setSignOutError(null);
-            setSigningOut(true);
-            try {
-              await postJson("/api/v1/auth/portal/logout", {}, successResponseSchema);
-              clearAuth();
-              window.location.assign("/portal/");
-            } catch {
-              setSignOutError("Sign out failed. Your session is still active; please try again.");
-            } finally {
-              setSigningOut(false);
-            }
-          }}
-        >
-          {signingOut ? "Signing out…" : "Sign out"}
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-function Topbar() {
-  useEffect(() => {
-    const backdrop = document.getElementById("portal-sidebar-backdrop");
-    backdrop?.addEventListener("click", closeSidebar);
-    return () => backdrop?.removeEventListener("click", closeSidebar);
-  }, []);
-
-  return (
-    <div id="portal-topbar">
-      <button
-        id="portal-sidebar-toggle"
-        aria-label="Toggle navigation"
-        aria-expanded="false"
-        aria-controls="portal-sidebar"
-        onClick={toggleSidebar}
-      >
-        <MenuIcon />
-      </button>
-      <span class="portal-brand">PKI Consortium Portal</span>
-    </div>
-  );
-}
+import { PortalNavigationShell } from "./PortalNavigationShell";
+import {
+  PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
+  portalCapacityFallbackPath,
+  portalDefaultPath,
+} from "./portal-navigation";
 
 function SectionWrapper({ title, children }: { title: string; children: ComponentChildren }) {
   return (
@@ -152,111 +28,141 @@ function SectionWrapper({ title, children }: { title: string; children: Componen
   );
 }
 
+function PortalRouteFallback({ session }: { session: PortalSession | null }) {
+  const [location, navigate] = useHashLocation();
+  const fallbackPath = portalCapacityFallbackPath(session, location);
+
+  useEffect(() => {
+    if (fallbackPath) navigate(fallbackPath);
+  }, [fallbackPath, navigate]);
+
+  if (fallbackPath) return null;
+  return <div class="p-4 text-muted fst-italic">Section not found.</div>;
+}
+
+function PortalRouteRedirect({ to }: { to: string }) {
+  const [, navigate] = useHashLocation();
+  useEffect(() => navigate(to), [navigate, to]);
+  return null;
+}
+
 export function PortalShell() {
   const hasMemberCapacity = Boolean(portalSession.value?.member);
   const hasAdminCapacity = Boolean(portalSession.value?.admin);
-  const defaultPath = hasMemberCapacity ? "/profile" : "/management";
+  const defaultPath = portalDefaultPath(portalSession.value);
+  const displayName =
+    profile.value?.preferredName ||
+    [profile.value?.firstName, profile.value?.lastName].filter(Boolean).join(" ").trim() ||
+    profile.value?.email ||
+    portalSession.value?.identity.email ||
+    "";
   return (
     <Router hook={useHashLocation}>
-      <div id="portal-root">
-        <Topbar />
-        <div id="portal-sidebar-backdrop" />
-        <Sidebar />
-        <main id="portal-main">
-          <Switch>
-            {hasAdminCapacity && (
-              <Route
-                path="/management"
-                component={() => (
-                  <SectionWrapper title="Management">
-                    <div class="alert alert-info">
-                      Your management access is active. Group-scoped management views will appear here as they move into
-                      the unified portal.
-                    </div>
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/profile"
-                component={() => (
-                  <SectionWrapper title="My Profile">
-                    <MyProfile />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/organization"
-                component={() => (
-                  <SectionWrapper title="My Organization">
-                    <MyOrganization />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/working-groups"
-                component={() => (
-                  <SectionWrapper title="Working Groups">
-                    <WorkingGroups />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/calendar"
-                component={() => (
-                  <SectionWrapper title="Calendar">
-                    <Calendar />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/votes"
-                component={() => (
-                  <SectionWrapper title="Votes">
-                    <Votes />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/application"
-                component={() => (
-                  <SectionWrapper title="My Application">
-                    <MyApplications />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity && (
-              <Route
-                path="/account"
-                component={() => (
-                  <SectionWrapper title="Account Settings">
-                    <AccountSettings />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            <Route path="/">
-              {() => {
-                window.location.hash = `#${defaultPath}`;
-                return null;
-              }}
-            </Route>
-            <Route component={() => <div class="p-4 text-muted fst-italic">Section not found.</div>} />
-          </Switch>
-        </main>
-      </div>
+      <PortalNavigationShell session={portalSession.value} displayName={displayName}>
+        <Switch>
+          {(hasAdminCapacity || hasMemberCapacity) && (
+            <Route
+              path="/groups/:groupId/:view?"
+              component={({ params }: { params: { groupId: string; view?: string } }) => (
+                <SectionWrapper title="Group">
+                  <Management groupId={params.groupId} view={params.view} />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasAdminCapacity && (
+            <Route
+              path="/management/:groupId/:view?"
+              component={({ params }: { params: { groupId: string; view?: string } }) => (
+                <PortalRouteRedirect
+                  to={`/groups/${encodeURIComponent(params.groupId)}/${encodeURIComponent(params.view ?? "overview")}`}
+                />
+              )}
+            />
+          )}
+          {hasAdminCapacity && (
+            <Route
+              path="/management"
+              component={() => (
+                <SectionWrapper title="Management">
+                  <Management />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity && (
+            <Route
+              path="/profile"
+              component={() => (
+                <SectionWrapper title="My Profile">
+                  <MyProfile />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity && (
+            <Route
+              path="/organization"
+              component={() => (
+                <SectionWrapper title="My Organization">
+                  <MyOrganization />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity && (
+            <Route
+              path="/groups"
+              component={() => (
+                <SectionWrapper title="Groups">
+                  <Groups />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity &&
+            Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
+              <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
+            ))}
+          {hasMemberCapacity && (
+            <Route
+              path="/votes"
+              component={() => (
+                <SectionWrapper title="Votes">
+                  <Votes />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity && (
+            <Route
+              path="/application"
+              component={() => (
+                <SectionWrapper title="My Application">
+                  <MyApplications />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {hasMemberCapacity && (
+            <Route
+              path="/account"
+              component={() => (
+                <SectionWrapper title="Account Settings">
+                  <AccountSettings />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          <Route path="/">
+            {() => {
+              window.location.hash = `#${defaultPath}`;
+              return null;
+            }}
+          </Route>
+          <Route component={() => <PortalRouteFallback session={portalSession.value} />} />
+        </Switch>
+      </PortalNavigationShell>
     </Router>
   );
 }

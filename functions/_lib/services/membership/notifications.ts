@@ -152,19 +152,3 @@ export function buildMailingListEnrolledEmail(params: {
     data: { memberName: params.memberName, lists: params.lists },
   };
 }
-
-export function buildWgCalendarInviteEmail(params: {
-  recipientEmail: string;
-  memberName: string;
-  workingGroupName: string;
-  attachments: EmailDraft["attachments"];
-}): EmailDraft {
-  return {
-    templateKey: "wg-calendar-invite",
-    recipientEmail: params.recipientEmail,
-    messageType: "transactional",
-    subject: `Calendar invite: ${params.workingGroupName}`,
-    data: { memberName: params.memberName, workingGroupName: params.workingGroupName },
-    attachments: params.attachments,
-  };
-}

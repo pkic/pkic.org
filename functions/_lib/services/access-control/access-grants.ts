@@ -15,7 +15,8 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { commitAccessControlMutation } from "./authorization";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 
 interface GrantRow {
@@ -124,25 +125,33 @@ export async function createAccessGrant(
   const contextType = input.contextType ?? null;
   const contextId = input.contextId ?? null;
   const expiresAt = input.expiresAt ?? null;
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO permission_grants
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [
+      { permission: "access:grant" },
+      ...(context ? [{ permission: input.permission, context }] : [{ permission: input.permission }]),
+    ],
+    [
+      db
+        .prepare(
+          `INSERT INTO permission_grants
            (id, user_id, permission, context_type, context_id, granted_by_user_id, expires_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(id, input.userId, input.permission, contextType, contextId, adminDatabaseUserId(actor), expiresAt, now),
-    prepareAuditLog(
-      db,
-      "admin",
-      actor.id,
-      "access_grant_created",
-      "permission_grant",
-      id,
-      { userId: input.userId, permission: input.permission, contextType, contextId, expiresAt },
-      now,
-    ),
-  ]);
+        )
+        .bind(id, input.userId, input.permission, contextType, contextId, adminDatabaseUserId(actor), expiresAt, now),
+      prepareAuditLog(
+        db,
+        "admin",
+        actor.id,
+        "access_grant_created",
+        "permission_grant",
+        id,
+        { userId: input.userId, permission: input.permission, contextType, contextId, expiresAt },
+        now,
+      ),
+    ],
+  );
 
   return accessGrantResponseSchema.parse({
     id,
@@ -166,17 +175,22 @@ export async function revokeAccessGrant(db: DatabaseLike, actor: AuthAdmin, gran
   if (!grant) throw new AppError(404, "NOT_FOUND", "Grant not found");
 
   const now = nowIso();
-  await db.batch([
-    db.prepare("UPDATE permission_grants SET revoked_at = ? WHERE id = ?").bind(now, grant.id),
-    prepareAuditLog(
-      db,
-      "admin",
-      actor.id,
-      "access_grant_revoked",
-      "permission_grant",
-      grant.id,
-      { userId: grant.user_id, permission: grant.permission },
-      now,
-    ),
-  ]);
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [{ permission: "access:revoke" }],
+    [
+      db.prepare("UPDATE permission_grants SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, grant.id),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actor.id,
+        "access_grant_revoked",
+        "permission_grant",
+        grant.id,
+        { userId: grant.user_id, permission: grant.permission },
+        now,
+      ),
+    ],
+  );
 }

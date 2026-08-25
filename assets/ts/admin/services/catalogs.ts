@@ -8,9 +8,9 @@ import {
 } from "../../../shared/schemas/admin-email-templates";
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
-import type { PageInfo } from "../../../shared/schemas/pagination";
-import { workingGroupsListResponseSchema, type AdminWorkingGroupSummary } from "../../../shared/schemas/working-groups";
+import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
+import type { ServerCatalog } from "../../shared/server-catalog";
 import { api } from "../api";
 
 /**
@@ -18,32 +18,24 @@ import { api } from "../api";
  * uses the same q/sort/limit/offset transport instead of loading an arbitrary
  * first 200 rows and treating that page as a complete data set.
  */
-export interface AdminCatalog<Item, Response> {
-  endpoint: string;
-  responseSchema: z.ZodType<Response>;
-  resolveItems: (response: Response) => Item[];
-  resolvePage: (response: Response) => PageInfo;
-  itemKey: (item: Item) => string;
-  itemLabel: (item: Item) => string;
-  params?: Record<string, string>;
-  sort: string;
-}
+export type AdminCatalog<Item, Response> = ServerCatalog<Item, Response>;
 
-export const adminWorkingGroupCatalog: AdminCatalog<
-  AdminWorkingGroupSummary,
-  z.infer<typeof workingGroupsListResponseSchema>
-> = {
-  endpoint: "/api/v1/admin/working-groups",
-  responseSchema: workingGroupsListResponseSchema,
-  resolveItems: (response) => response.workingGroups,
+export const adminGroupCatalog: AdminCatalog<Group, z.infer<typeof groupsListResponseSchema>> = {
+  endpoint: "/api/v1/groups",
+  responseSchema: groupsListResponseSchema,
+  resolveItems: (response) => response.groups,
   resolvePage: (response) => response.page,
   itemKey: (item) => item.id,
-  itemLabel: (item) => `${item.name}${item.active ? "" : " (inactive)"}`,
+  itemLabel: (item) => `${item.name} (${item.type.singularLabel})${item.active ? "" : " — inactive"}`,
   sort: "name",
 };
 
-export function activeAdminWorkingGroupCatalog(): typeof adminWorkingGroupCatalog {
-  return { ...adminWorkingGroupCatalog, params: { active: "true" } };
+export function activeAdminGroupCatalog(): typeof adminGroupCatalog {
+  return { ...adminGroupCatalog, params: { active: "true" } };
+}
+
+export function activeAdminWorkingGroupCatalog(): typeof adminGroupCatalog {
+  return { ...adminGroupCatalog, params: { active: "true", typeKey: "working_group" } };
 }
 
 export function adminEventFormCatalog(

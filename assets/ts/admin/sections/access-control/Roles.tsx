@@ -40,7 +40,7 @@ export function Roles() {
       setName("");
       setDescription("");
       setSelected(new Set());
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
@@ -53,7 +53,7 @@ export function Roles() {
     try {
       await apiCommand(`/api/v1/admin/roles/${role.id}`, { method: "DELETE" });
       toast("Role deleted", "success");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }

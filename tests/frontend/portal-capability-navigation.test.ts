@@ -1,38 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { portalMagicLinkToken } from "../../assets/ts/member-flows/portal/App";
-import { portalNavigationItems } from "../../assets/ts/member-flows/portal/shell/PortalShell";
-import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
-
-function portalSession(capacities: { admin?: boolean; member?: boolean }): PortalSession {
-  const identity = { id: "00000000-0000-4000-8000-000000000001", email: "person@example.test" };
-  return {
-    success: true,
-    identity,
-    ...(capacities.admin
-      ? {
-          admin: {
-            ...identity,
-            role: "admin",
-            scopes: [],
-            grants: [],
-            expiresAt: "2026-08-26T00:00:00.000Z",
-          },
-        }
-      : {}),
-    ...(capacities.member
-      ? {
-          member: {
-            userId: identity.id,
-            email: identity.email,
-            memberId: "00000000-0000-4000-8000-000000000002",
-            organizationId: null,
-            membershipCategory: "H5",
-            isEcMember: false,
-          },
-        }
-      : {}),
-  };
-}
+import {
+  PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
+  portalCapacityFallbackPath,
+  portalDefaultPath,
+  portalNavigationItems,
+  portalActiveSection,
+} from "../../assets/ts/member-flows/portal/shell/portal-navigation";
+import { portalSessionFixture } from "../helpers/portal-session";
 
 describe("portal capability-derived navigation", () => {
   it("reads magic-link credentials only from the URL fragment", () => {
@@ -41,20 +16,59 @@ describe("portal capability-derived navigation", () => {
   });
 
   it("shows management but no member actions to a staff-only identity", () => {
-    const labels = portalNavigationItems(portalSession({ admin: true })).map((item) => item.label);
+    const labels = portalNavigationItems(portalSessionFixture({ admin: true })).map((item) => item.label);
     expect(labels).toContain("Management");
     expect(labels).not.toContain("My Profile");
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {
-    const labels = portalNavigationItems(portalSession({ member: true })).map((item) => item.label);
+    const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
+    expect(labels).toContain("Groups");
+    expect(labels).not.toContain("Working Groups");
     expect(labels).not.toContain("Management");
   });
 
+  it("redirects superseded member group and uploaded-calendar routes to groups", () => {
+    expect(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).toEqual({
+      "/working-groups": "/groups",
+      "/calendar": "/groups",
+    });
+  });
+
   it("shows both navigation capacities to one dual-capacity identity", () => {
-    const labels = portalNavigationItems(portalSession({ admin: true, member: true })).map((item) => item.label);
+    const labels = portalNavigationItems(portalSessionFixture({ admin: true, member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
     expect(labels).toContain("Management");
+  });
+
+  it("keeps shared selected-group routes after member-capacity loss", () => {
+    const staffOnly = portalSessionFixture({ admin: true });
+    expect(portalDefaultPath(staffOnly)).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
+    expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBeNull();
+    expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
+    expect(portalCapacityFallbackPath(staffOnly, "/management/group-id/overview")).toBeNull();
+  });
+
+  it("moves a selected-group management route after live staff-capacity loss", () => {
+    const memberOnly = portalSessionFixture({ member: true });
+    expect(portalCapacityFallbackPath(memberOnly, "/management/group-id/overview")).toBe("/profile");
+  });
+
+  it("keeps a selected-group meeting route for a current member", () => {
+    const memberOnly = portalSessionFixture({ member: true });
+    expect(portalCapacityFallbackPath(memberOnly, "/groups/group-id/meetings")).toBeNull();
+  });
+
+  it("keeps selected-group routes for staff and highlights their management entry", () => {
+    const staffOnly = portalSessionFixture({ admin: true });
+    expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/overview")).toBeNull();
+    expect(portalActiveSection("/groups/group-id/overview", staffOnly)).toBe("management");
+  });
+
+  it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {
+    expect(portalCapacityFallbackPath(portalSessionFixture({ admin: true }), "/not-a-portal-route")).toBeNull();
   });
 });

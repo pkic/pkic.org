@@ -1,6 +1,6 @@
 /**
- * The three organization-representative singleton role IDs (primary
- * contact, secondary contact, voting delegate) — ordinary `roles`/
+ * The two organization-contact singleton role IDs (primary and secondary
+ * contact) — ordinary `roles`/
  * `user_roles` rows (consolidated migration 0035), not a bespoke role table. Kept in a
  * dependency-free shared module (only import is implicit — none) so it can
  * be consumed both by the backend service
@@ -12,7 +12,6 @@
 export const REPRESENTATIVE_ROLE_IDS = {
   primaryContact: "role-primary_contact",
   secondaryContact: "role-secondary_contact",
-  votingDelegate: "role-voting_delegate",
 } as const;
 
 export type RepresentativeRoleId = (typeof REPRESENTATIVE_ROLE_IDS)[keyof typeof REPRESENTATIVE_ROLE_IDS];

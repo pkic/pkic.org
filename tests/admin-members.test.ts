@@ -41,25 +41,34 @@ async function insertUser(email: string): Promise<string> {
   return id;
 }
 
-async function assignRole(userId: string, roleId: string, grantedBy: string): Promise<void> {
+async function assignRole(
+  userId: string,
+  roleId: string,
+  grantedBy: string,
+  context: { type: string; id: string } | null = null,
+): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
+    `INSERT INTO user_roles
+       (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
   )
-    .bind(crypto.randomUUID(), userId, roleId, grantedBy)
+    .bind(crypto.randomUUID(), userId, roleId, context?.type ?? null, context?.id ?? null, grantedBy)
     .run();
 }
 
 async function seedWorkingGroup(slug: string, name: string): Promise<void> {
+  const existing = await env.DB.prepare("SELECT id FROM groups WHERE slug = ?").bind(slug).first();
+  if (existing) return;
   await env.DB.prepare(
-    `INSERT INTO working_groups (id, name, slug, description, active, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO groups (id, type_key, name, slug, description, visibility, eligibility_mode, created_at, updated_at)
+     VALUES (?, 'working_group', ?, ?, NULL, 'public', 'open', datetime('now'), datetime('now'))`,
   )
     .bind(crypto.randomUUID(), name, slug)
     .run();
 }
 
 async function provisioningRowCounts(): Promise<Record<string, number>> {
-  const tables = ["organizations", "members", "users", "organization_representatives", "working_group_members"];
+  const tables = ["organizations", "members", "users", "organization_representatives", "group_memberships"];
   return Object.fromEntries(
     await Promise.all(
       tables.map(async (table) => {
@@ -174,7 +183,11 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
 
     const wgRows = await queryAll<{ slug: string }>(
       env.DB,
-      "SELECT wg.slug FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? ORDER BY wg.slug",
+      `SELECT g.slug
+         FROM group_memberships membership
+         JOIN groups g ON g.id = membership.group_id
+        WHERE membership.user_id = ? AND membership.left_at IS NULL AND g.type_key = 'working_group'
+        ORDER BY g.slug`,
       body.members[0].userId,
     );
     expect(wgRows.map(({ slug }) => slug)).toEqual(["future-wg", "pqc"]);
@@ -234,8 +247,8 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
       expect(response.status).toBe(403);
       await expect(response.json()).resolves.toEqual({
         error: {
-          code: "CA_CATEGORY_REQUIRED",
-          message: "Only category A members may join the CA working group",
+          code: "GROUP_CAPACITY_INELIGIBLE",
+          message: "The membership category is not eligible for CA Working Group",
           details: null,
         },
       });
@@ -259,10 +272,10 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     const body = (await response.json()) as { members: Array<{ userId: string }> };
     const rows = await queryAll<{ id: string }>(
       env.DB,
-      `SELECT wgm.id
-         FROM working_group_members wgm
-         JOIN working_groups wg ON wg.id = wgm.working_group_id
-        WHERE wgm.user_id = ? AND wg.slug = 'ca' AND wgm.left_at IS NULL`,
+      `SELECT membership.id
+         FROM group_memberships membership
+         JOIN groups g ON g.id = membership.group_id
+        WHERE membership.user_id = ? AND g.slug = 'ca' AND membership.left_at IS NULL`,
       body.members[0].userId,
     );
     expect(rows).toHaveLength(1);
@@ -376,9 +389,12 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(listResponse.status).toBe(200);
   });
 
-  it("a staff user holding an unrelated role (wg_chair) is denied membership:write", async () => {
+  it("a group lead is denied consortium-wide membership:write", async () => {
     const staffId = await insertUser("wg-chair-only@example.test");
-    await assignRole(staffId, "role-wg_chair", adminId);
+    await assignRole(staffId, "role-group_lead", adminId, {
+      type: "group",
+      id: "20000000-0000-4000-8000-000000000003",
+    });
     const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
 
     const response = await call(staffToken, "/api/v1/admin/members", {

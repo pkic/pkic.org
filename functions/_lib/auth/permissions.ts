@@ -6,8 +6,10 @@
  * can further restrict (never expand) those effective permissions.
  */
 import { all } from "../db/queries";
+import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../db/authorization-guard";
 import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../types";
+import type { AuthAdmin, DatabaseLike, PermissionGrant, StatementLike } from "../types";
+import { isUserBackedAuthAdmin } from "./admin-identity";
 import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
 import { PERMISSIONS, isPermission, type Permission } from "../../../assets/shared/schemas/permissions";
 
@@ -23,6 +25,11 @@ export { PERMISSIONS, isPermission, type Permission };
 export interface PermissionContext {
   type: string;
   id: string;
+}
+
+export interface PermissionRequirement {
+  permission: string;
+  context?: PermissionContext;
 }
 
 interface GrantRow {
@@ -103,6 +110,101 @@ export function requirePermission(actor: AuthAdmin, permission: string, context?
     const scope = context ? ` (context: ${context.type}:${context.id})` : "";
     throw new AppError(403, "PERMISSION_REQUIRED", `Missing required permission: ${permission}${scope}`);
   }
+}
+
+/**
+ * Canonical live-D1 evidence for one or more permissions. Request preflight
+ * uses `hasPermission`; protected mutation batches use this equivalent SQL so
+ * revocation between authentication and commit fails atomically.
+ */
+export function permissionsAuthorizationEvidence(
+  actor: AuthAdmin,
+  requirements: readonly PermissionRequirement[],
+): AuthorizationEvidence {
+  const unique = [
+    ...new Map(
+      requirements.map((requirement) => [
+        `${requirement.permission}\u0000${requirement.context?.type ?? ""}\u0000${requirement.context?.id ?? ""}`,
+        requirement,
+      ]),
+    ).values(),
+  ];
+  if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
+  if (unique.some(({ permission }) => actor.scopeRestricted && actor.scopes?.includes(permission) !== true)) {
+    return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  }
+  if (!isUserBackedAuthAdmin(actor)) {
+    return unique.every(({ permission, context }) => hasPermission(actor, permission, context))
+      ? { sql: "SELECT 1", bindings: [] }
+      : { sql: "SELECT 1 WHERE 0", bindings: [] };
+  }
+
+  return {
+    sql: `WITH required(permission, context_type, context_id) AS (
+            SELECT json_extract(value, '$.permission'),
+                   json_extract(value, '$.contextType'),
+                   json_extract(value, '$.contextId')
+              FROM json_each(?)
+          )
+          SELECT 1
+            FROM users actor
+           WHERE actor.id = ? AND actor.active = 1
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM required requirement
+                WHERE NOT (
+                  actor.role = 'admin'
+                  OR EXISTS (
+                    SELECT 1
+                      FROM user_roles role
+                      JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
+                     WHERE role.user_id = actor.id
+                       AND role_permission.permission = requirement.permission
+                       AND role.revoked_at IS NULL
+                       AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                       AND (
+                         (role.context_type IS NULL AND role.context_id IS NULL)
+                         OR (requirement.context_type IS NOT NULL
+                             AND role.context_type = requirement.context_type
+                             AND role.context_id = requirement.context_id)
+                       )
+                  )
+                  OR EXISTS (
+                    SELECT 1
+                      FROM permission_grants grant_row
+                     WHERE grant_row.user_id = actor.id
+                       AND grant_row.permission = requirement.permission
+                       AND grant_row.revoked_at IS NULL
+                       AND (grant_row.expires_at IS NULL OR grant_row.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                       AND (
+                         (grant_row.context_type IS NULL AND grant_row.context_id IS NULL)
+                         OR (requirement.context_type IS NOT NULL
+                             AND grant_row.context_type = requirement.context_type
+                             AND grant_row.context_id = requirement.context_id)
+                       )
+                  )
+                )
+             )
+           LIMIT 1`,
+    bindings: [
+      JSON.stringify(
+        unique.map(({ permission, context }) => ({
+          permission,
+          contextType: context?.type ?? null,
+          contextId: context?.id ?? null,
+        })),
+      ),
+      actor.id,
+    ],
+  };
+}
+
+export function preparePermissionsAuthorizationGuard(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  requirements: readonly PermissionRequirement[],
+): StatementLike {
+  return prepareAuthorizationGuard(db, permissionsAuthorizationEvidence(actor, requirements));
 }
 
 interface EmailRow {

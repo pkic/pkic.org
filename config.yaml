@@ -35,6 +35,11 @@ taxonomies:
   author: authors
 
 ignoreFiles:
+  # AppleDouble metadata is not site data. The module mounts below cover all
+  # Hugo components; these expressions also protect content, data, and i18n
+  # for Hugo versions that still apply ignoreFiles to those components.
+  - (^|/)\._[^/]*$
+  - (^|/)\.AppleDouble(/|$)
   - AGENTS\.md$
   - wg/pkimm/(extensions|integrations)/pkimm-model/
   - wg/pkimm/(extensions|integrations)/scripts/
@@ -159,15 +164,36 @@ markup:
 module:
   imports:
     - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
-  # ignoreFiles does not apply to static files, so filter macOS metadata here.
+
+  # Apply the filter at Hugo's unified-file-system boundary. Git ignores these
+  # files too, but Hugo must not parse or publish metadata present in a local
+  # checkout on filesystems that create AppleDouble sidecars.
   mounts:
-    - source: static
-      target: static
-      files:
+    - source: archetypes
+      target: archetypes
+      files: &siteFiles
         - "! ._*"
         - "! **/._*"
         - "! .AppleDouble/**"
         - "! **/.AppleDouble/**"
+    - source: assets
+      target: assets
+      files: *siteFiles
+    - source: content
+      target: content
+      files: *siteFiles
+    - source: data
+      target: data
+      files: *siteFiles
+    - source: i18n
+      target: i18n
+      files: *siteFiles
+    - source: layouts
+      target: layouts
+      files: *siteFiles
+    - source: static
+      target: static
+      files: *siteFiles
 
 outputFormats:
   rss:
@@ -248,8 +274,7 @@ caches:
         X-Frame-Options: DENY
         X-Content-Type-Options: nosniff
         Referrer-Policy: strict-origin-when-cross-origin
-        Content-Security-Policy:
-          default-src 'none'; form-action 'self'; base-uri 'self';
+        Content-Security-Policy: default-src 'none'; form-action 'self'; base-uri 'self';
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self';
           font-src 'self';
@@ -261,8 +286,7 @@ caches:
 
     - for: /questions.html
       values:
-        Content-Security-Policy:
-          default-src 'none'; form-action 'self'; base-uri 'self';
+        Content-Security-Policy: default-src 'none'; form-action 'self'; base-uri 'self';
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self';
           font-src 'self';

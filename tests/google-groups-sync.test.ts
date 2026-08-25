@@ -505,50 +505,6 @@ describe("Google Groups sync", () => {
     );
   });
 
-  it("commits a deterministic WG calendar intent alongside the enrollment intent", async () => {
-    const userId = await insertUser("gg-calendar-notification@example.test");
-    const workingGroupId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO working_groups
-         (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-       VALUES (?, 'Post-Quantum Cryptography Working Group', 'pqc', NULL, 'pqc@lists.pkic.org', 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(workingGroupId)
-      .run();
-    const seriesId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO meeting_series (id, name, scope_type, working_group_id, active, created_at, updated_at)
-       VALUES (?, 'PQC WG Meeting', 'working_group', ?, 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(seriesId, workingGroupId)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO meeting_ics_files (id, series_id, label, year, r2_key, active, created_at)
-       VALUES (?, ?, '09:00 CET', 2026, 'calendar/pqc-2026.ics', 1, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), seriesId)
-      .run();
-    const queueId = await enqueueGoogleGroupsSync(env.DB, {
-      userId,
-      googleGroupEmail: "pqc@lists.pkic.org",
-      action: "add_to_list",
-    });
-
-    stubGoogleFetch(200);
-    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10)).toMatchObject({
-      succeeded: 1,
-    });
-    const calendar = await queryAll<{ idempotency_key: string; payload_json: string }>(
-      env.DB,
-      "SELECT idempotency_key, payload_json FROM email_outbox WHERE idempotency_key = ?",
-      `google-groups:calendar:${queueId}`,
-    );
-    expect(calendar).toHaveLength(1);
-    expect(JSON.parse(calendar[0].payload_json)).toMatchObject({
-      workingGroupName: "Post-Quantum Cryptography Working Group",
-    });
-  });
-
   it("PR #1 review §9.1: a transient Directory API failure schedules a backoff retry instead of dead-lettering immediately", async () => {
     const userId = await insertUser("gg-retry@example.test");
     const queueId = await enqueueGoogleGroupsSync(env.DB, {

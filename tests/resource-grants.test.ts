@@ -19,6 +19,7 @@ import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -253,6 +254,59 @@ describe("shared resource grant management", () => {
       [fixture.formPlacementId, fixture.eventId, fixture.voteId, fixture.mailingListId],
     );
     expect(owners.every((row) => row.owner_group_id === fixture.owner.id)).toBe(true);
+  });
+
+  it("rolls back grant creation when owner-group management is revoked before commit", async () => {
+    const fixture = await createFixture();
+    const manager = await addGroupLeader(fixture.owner.id, "grant-race-lead");
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ? AND context_id = ?")
+        .bind(manager.id, fixture.owner.id)
+        .run(),
+    );
+
+    await expect(
+      grantResourceToGroup(racingDb, manager, fixture.owner.id, "formPlacement", fixture.formPlacementId, {
+        granteeGroupId: fixture.grantee.id,
+        capability: "submit",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "RESOURCE_GRANT_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT placement_id FROM form_placement_group_grants WHERE placement_id = ? AND group_id = ?",
+        [fixture.formPlacementId, fixture.grantee.id],
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back grant revocation when owner-group management is revoked before commit", async () => {
+    const fixture = await createFixture();
+    const admin = await insertActor("grant-race-admin", "admin");
+    await grantResourceToGroup(env.DB, admin, fixture.owner.id, "event", fixture.eventId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "register",
+    });
+    const manager = await addGroupLeader(fixture.owner.id, "revoke-race-lead");
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ? AND context_id = ?")
+        .bind(manager.id, fixture.owner.id)
+        .run(),
+    );
+
+    await expect(
+      revokeResourceGroupGrant(racingDb, manager, fixture.owner.id, "event", fixture.eventId, {
+        granteeGroupId: fixture.grantee.id,
+        capability: "register",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "RESOURCE_GRANT_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT event_id FROM event_group_grants WHERE event_id = ? AND group_id = ? AND capability = 'register'",
+        [fixture.eventId, fixture.grantee.id],
+      ),
+    ).toHaveLength(1);
   });
 
   it("validates and serves the shared list/create/revoke contract through the mounted router", async () => {

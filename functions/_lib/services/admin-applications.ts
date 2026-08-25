@@ -153,8 +153,9 @@ export async function getAdminApplicationDetail(
       ? all<{ slug: string; name: string }>(
           db,
           `SELECT slug, name
-             FROM working_groups
-            WHERE slug IN (SELECT value FROM json_each(?))`,
+             FROM groups
+            WHERE type_key = 'working_group'
+              AND slug IN (SELECT value FROM json_each(?))`,
           [JSON.stringify(requestedSlugs)],
         )
       : Promise.resolve([]),

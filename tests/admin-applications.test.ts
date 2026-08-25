@@ -52,11 +52,18 @@ async function insertUser(email: string): Promise<string> {
   return id;
 }
 
-async function assignRole(userId: string, roleId: string, grantedBy: string): Promise<void> {
+async function assignRole(
+  userId: string,
+  roleId: string,
+  grantedBy: string,
+  context: { type: string; id: string } | null = null,
+): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
+    `INSERT INTO user_roles
+       (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
   )
-    .bind(crypto.randomUUID(), userId, roleId, grantedBy)
+    .bind(crypto.randomUUID(), userId, roleId, context?.type ?? null, context?.id ?? null, grantedBy)
     .run();
 }
 
@@ -202,23 +209,16 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   });
 
   it("resolves only the requested working-group labels in the backend", async () => {
-    await env.DB.prepare(
-      `INSERT INTO working_groups
-         (id, name, slug, description, mailing_list_email, min_endorsers_for_ballot, active, created_at, updated_at)
-       VALUES (?, 'Post-Quantum Cryptography Working Group', 'pqc', NULL, NULL, 0, 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID())
-      .run();
     const formSubmissionId = await createApplicationFormSubmission({
       working_groups: ["pqc", "retired-group", "pqc"],
     });
     const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
     const response = await call(adminToken, `/api/v1/admin/applications/${id}`);
-    expect(response.status).toBe(200);
     const body = (await response.json()) as {
       requestedWorkingGroups: Array<{ slug: string; name: string }>;
     };
+    expect(response.status, JSON.stringify(body)).toBe(200);
     expect(body.requestedWorkingGroups).toEqual([
       { slug: "pqc", name: "Post-Quantum Cryptography Working Group" },
       { slug: "retired-group", name: "retired-group" },
@@ -348,10 +348,13 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     expect(response.status).toBe(404);
   });
 
-  it("a staff user holding an unrelated role (wg_chair) is denied membership:write (403)", async () => {
+  it("a group lead is denied consortium-wide membership:write (403)", async () => {
     const { id } = await createApplication();
     const staffId = await insertUser("wg-chair-only@example.test");
-    await assignRole(staffId, "role-wg_chair", adminId);
+    await assignRole(staffId, "role-group_lead", adminId, {
+      type: "group",
+      id: "20000000-0000-4000-8000-000000000003",
+    });
     const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
 
     const response = await call(staffToken, `/api/v1/admin/applications/${id}`, {

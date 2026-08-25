@@ -43,7 +43,7 @@ export function Organizations() {
             <AddOrganizationForm
               onCreated={() => {
                 setShowAddForm(false);
-                tableRef.current?.reload();
+                void tableRef.current?.reload();
               }}
               onCancel={() => setShowAddForm(false)}
             />

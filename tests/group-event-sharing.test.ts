@@ -16,9 +16,10 @@ import { replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
-import type { D1StatementResult, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -35,19 +36,6 @@ interface Fixture {
   memberToken: string;
   leader: UserBackedAuthAdmin;
   leaderToken: string;
-}
-
-function mutateBeforeNextBatch(mutation: () => Promise<unknown>): DatabaseLike {
-  let pending = mutation;
-  return {
-    prepare: (sql: string) => env.DB.prepare(sql) as unknown as StatementLike,
-    batch: async (statements: StatementLike[]): Promise<D1StatementResult[]> => {
-      const runMutation = pending;
-      pending = async () => undefined;
-      await runMutation();
-      return (await env.DB.batch(statements as D1PreparedStatement[])) as unknown as D1StatementResult[];
-    },
-  };
 }
 
 async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
@@ -566,7 +554,7 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "manage",
     });
-    const racingGrantDb = mutateBeforeNextBatch(() =>
+    const racingGrantDb = mutateBeforeNextBatch(env.DB, () =>
       revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
         granteeGroupId: fixture.granteeId,
         capability: "manage",
@@ -588,7 +576,7 @@ describe("group event sharing", () => {
     const occurrenceCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrences WHERE series_id = ?")
       .bind(fixture.seriesId)
       .first<number>("total");
-    const racingMaterializeDb = mutateBeforeNextBatch(() =>
+    const racingMaterializeDb = mutateBeforeNextBatch(env.DB, () =>
       revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
         granteeGroupId: fixture.granteeId,
         capability: "manage",
@@ -610,7 +598,7 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "manage",
     });
-    const racingLeadershipDb = mutateBeforeNextBatch(() =>
+    const racingLeadershipDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ? AND context_id = ?")
         .bind(fixture.leader.id, fixture.granteeId)
         .run(),

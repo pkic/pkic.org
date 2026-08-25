@@ -1,6 +1,6 @@
 /**
  * Phase 1 §1.4 required tests, part 3: representative-role grants
- * (role-primary_contact/role-secondary_contact/role-voting_delegate,
+ * (role-primary_contact/role-secondary_contact,
  * consolidated migration 0035) — singleton-per-organization uniqueness, that a
  * non-singleton context-scoped role is unaffected by the same index, and
  * the service-layer invariant that replaces the dropped composite FK.
@@ -82,25 +82,22 @@ describe("representative role grants — singleton per organization", () => {
     ).rejects.toThrow();
   });
 
-  it("enforces singleton independently per role — primary, secondary, and voting delegate can each have their own concurrent active holder", async () => {
+  it("enforces singleton independently per role — primary and secondary contacts can have concurrent holders", async () => {
     const orgId = await insertOrganization(env.DB);
     const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
     const primaryUser = await insertUser(env.DB);
     const secondaryUser = await insertUser(env.DB);
-    const delegateUser = await insertUser(env.DB);
-    for (const userId of [primaryUser, secondaryUser, delegateUser]) {
+    for (const userId of [primaryUser, secondaryUser]) {
       await addRepresentative(env.DB, memberId, userId);
     }
 
     await assignRepresentativeRole(env.DB, memberId, primaryUser, REPRESENTATIVE_ROLE_IDS.primaryContact);
     await assignRepresentativeRole(env.DB, memberId, secondaryUser, REPRESENTATIVE_ROLE_IDS.secondaryContact);
-    await assignRepresentativeRole(env.DB, memberId, delegateUser, REPRESENTATIVE_ROLE_IDS.votingDelegate);
 
     const holders = await resolveRepresentativeRoleHolders(env.DB, memberId);
     expect(holders).toEqual({
       primaryContactUserId: primaryUser,
       secondaryContactUserId: secondaryUser,
-      votingDelegateUserId: delegateUser,
     });
   });
 
@@ -108,59 +105,59 @@ describe("representative role grants — singleton per organization", () => {
     const orgId = await insertOrganization(env.DB);
     const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
     const primaryUser = await insertUser(env.DB);
-    const delegateUser = await insertUser(env.DB);
+    const secondaryUser = await insertUser(env.DB);
     await addRepresentative(env.DB, memberId, primaryUser);
-    await addRepresentative(env.DB, memberId, delegateUser);
+    await addRepresentative(env.DB, memberId, secondaryUser);
     await assignRepresentativeRole(env.DB, memberId, primaryUser, REPRESENTATIVE_ROLE_IDS.primaryContact);
-    await assignRepresentativeRole(env.DB, memberId, delegateUser, REPRESENTATIVE_ROLE_IDS.votingDelegate);
+    await assignRepresentativeRole(env.DB, memberId, secondaryUser, REPRESENTATIVE_ROLE_IDS.secondaryContact);
     await env.DB.prepare(
       `UPDATE user_roles
        SET expires_at = datetime('now', '+1 hour')
        WHERE context_type = 'organization' AND context_id = ? AND role_id = ?`,
     )
-      .bind(memberId, REPRESENTATIVE_ROLE_IDS.votingDelegate)
+      .bind(memberId, REPRESENTATIVE_ROLE_IDS.secondaryContact)
       .run();
 
     await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
       primaryContactUserId: primaryUser,
-      votingDelegateUserId: delegateUser,
+      secondaryContactUserId: secondaryUser,
     });
 
-    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(delegateUser).run();
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(secondaryUser).run();
     await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
       primaryContactUserId: primaryUser,
-      votingDelegateUserId: null,
+      secondaryContactUserId: null,
     });
 
-    await env.DB.prepare("UPDATE users SET active = 1 WHERE id = ?").bind(delegateUser).run();
+    await env.DB.prepare("UPDATE users SET active = 1 WHERE id = ?").bind(secondaryUser).run();
     await env.DB.prepare(
       `UPDATE user_roles
        SET expires_at = datetime('now', '-1 minute')
        WHERE context_type = 'organization' AND context_id = ? AND role_id = ?`,
     )
-      .bind(memberId, REPRESENTATIVE_ROLE_IDS.votingDelegate)
+      .bind(memberId, REPRESENTATIVE_ROLE_IDS.secondaryContact)
       .run();
     await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
       primaryContactUserId: primaryUser,
-      votingDelegateUserId: null,
+      secondaryContactUserId: null,
     });
 
     await env.DB.prepare(
       "UPDATE user_roles SET expires_at = NULL WHERE context_type = 'organization' AND context_id = ? AND role_id = ?",
     )
-      .bind(memberId, REPRESENTATIVE_ROLE_IDS.votingDelegate)
+      .bind(memberId, REPRESENTATIVE_ROLE_IDS.secondaryContact)
       .run();
     await env.DB.prepare(
       "UPDATE organization_representatives SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
     )
-      .bind(memberId, delegateUser)
+      .bind(memberId, secondaryUser)
       .run();
     await expect(
-      resolveRepresentativeRoleHolder(env.DB, memberId, REPRESENTATIVE_ROLE_IDS.votingDelegate),
+      resolveRepresentativeRoleHolder(env.DB, memberId, REPRESENTATIVE_ROLE_IDS.secondaryContact),
     ).resolves.toBe(null);
     await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
       primaryContactUserId: primaryUser,
-      votingDelegateUserId: null,
+      secondaryContactUserId: null,
     });
   });
 
@@ -222,7 +219,7 @@ describe("representative role grants — service-layer invariant (replaces the d
       await buildAssignRepresentativeRoleStatements(env.DB, {
         memberId,
         userId,
-        roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
+        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
       });
     } catch (err) {
       caught = err;

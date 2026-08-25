@@ -23,6 +23,7 @@ export const OrganizationRepresentativesList = openApiRoute(
     await requireOrganizationRepresentativeManagement(db, {
       memberId,
       actorUserId: actor.userId,
+      databaseUserId: actor.databaseUserId,
       staffAuthorized: actor.staffAuthorized,
     });
     return json(

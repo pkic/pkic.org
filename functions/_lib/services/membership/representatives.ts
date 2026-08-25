@@ -10,6 +10,7 @@ import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import type { z } from "zod";
 import { organizationRepresentationSourceSchema } from "../../../../assets/shared/schemas/organization-representation";
 
@@ -70,6 +71,7 @@ export async function buildAddRepresentativeStatement(
     source: OrganizationRepresentationSource;
     showOnOrgProfile?: boolean;
     now?: string;
+    condition?: AuthorizationEvidence;
   },
 ): Promise<{ representativeId: string; statement: StatementLike }> {
   const now = input.now ?? nowIso();
@@ -91,6 +93,7 @@ export async function buildAddRepresentativeStatement(
     throw new AppError(409, "ALREADY_MEMBER", "This user already represents the organization");
   }
   if (existing) {
+    const conditionSql = input.condition ? ` AND EXISTS (${input.condition.sql})` : "";
     return {
       representativeId: existing.id,
       statement: db
@@ -98,28 +101,49 @@ export async function buildAddRepresentativeStatement(
           `UPDATE organization_representatives
               SET source = ?, show_on_org_profile = ?, joined_at = ?, left_at = NULL,
                   blocked_at = NULL, blocked_by_user_id = NULL, updated_at = ?
-            WHERE id = ? AND left_at IS NOT NULL AND blocked_at IS NULL`,
+            WHERE id = ? AND left_at IS NOT NULL AND blocked_at IS NULL${conditionSql}`,
         )
-        .bind(input.source, input.showOnOrgProfile === false ? 0 : 1, now, now, existing.id),
+        .bind(
+          input.source,
+          input.showOnOrgProfile === false ? 0 : 1,
+          now,
+          now,
+          existing.id,
+          ...(input.condition?.bindings ?? []),
+        ),
     };
   }
   const representativeId = uuid();
-  const statement = db
-    .prepare(
-      `INSERT INTO organization_representatives
-         (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-    )
-    .bind(
-      representativeId,
-      input.memberId,
-      input.userId,
-      input.source,
-      input.showOnOrgProfile === false ? 0 : 1,
-      now,
-      now,
-      now,
-    );
+  const values = [
+    representativeId,
+    input.memberId,
+    input.userId,
+    input.source,
+    input.showOnOrgProfile === false ? 0 : 1,
+    now,
+    now,
+    now,
+  ];
+  const statement = input.condition
+    ? db
+        .prepare(
+          `INSERT INTO organization_representatives
+             (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, NULL, ?, ?
+            WHERE EXISTS (${input.condition.sql})
+              AND NOT EXISTS (
+                SELECT 1 FROM organization_representatives existing
+                 WHERE existing.member_id = ? AND existing.user_id = ?
+              )`,
+        )
+        .bind(...values, ...input.condition.bindings, input.memberId, input.userId)
+    : db
+        .prepare(
+          `INSERT INTO organization_representatives
+             (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        )
+        .bind(...values);
   return { representativeId, statement };
 }
 

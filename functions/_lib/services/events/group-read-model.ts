@@ -15,12 +15,12 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import {
   effectiveResourceCapabilitiesForContext,
+  buildAccessibleGroupResourceIdsCte,
   getResourceGrantDefinition,
   isResourceGrantCapability,
   resolveGroupResourceContextAccess,
   type GroupResourceViewer,
 } from "../resource-grants";
-import { buildAccessibleGroupEventIdsCte } from "./access-query";
 
 interface GroupEventRow {
   event_id: string;
@@ -99,7 +99,7 @@ export function buildGroupEventsPageQuery(
   access: { member: boolean; manager: boolean },
   query: GroupEventsListQuery,
 ) {
-  const accessibleEvents = buildAccessibleGroupEventIdsCte(groupId, access);
+  const accessibleEvents = buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const conditions = ["event.owner_group_id IS NOT NULL"];
   const bindings: unknown[] = [...accessibleEvents.bindings, groupId];
   if (query.profileKey) {
@@ -131,8 +131,8 @@ export function buildGroupEventsPageQuery(
     sql: `WITH ${NEXT_OCCURRENCE_CTE},
       ${accessibleEvents.sql}
       ${EVENT_SELECT}
-      FROM accessible_event accessible
-      JOIN events event ON event.id = accessible.event_id
+      FROM accessible_resource accessible
+      JOIN events event ON event.id = accessible.resource_id
       LEFT JOIN event_series series ON series.event_id = event.id
       LEFT JOIN next_occurrence ON next_occurrence.series_id = series.id
       LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?

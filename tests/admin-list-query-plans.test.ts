@@ -4,8 +4,8 @@ import { MAX_PAGE_LIMIT } from "../assets/shared/schemas/pagination";
 import { buildOffsetPageSql, type OffsetPageQuery } from "../functions/_lib/db/pagination";
 import { buildAdminOrganizationsPageQuery } from "../functions/_lib/services/admin-organizations/queries";
 import { buildAdminUsersPageQuery } from "../functions/_lib/services/admin-users-list";
-import { buildAdminWorkingGroupsPageQuery } from "../functions/_lib/services/admin-working-groups/read-model";
 import { buildAdminEventsPageQuery, buildAdminEventStatsQuery } from "../functions/_lib/services/events/admin-list";
+import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
 import { resetDb } from "./helpers/reset-db";
 
 async function explainOffsetPage(query: OffsetPageQuery) {
@@ -20,7 +20,7 @@ async function explainOffsetPage(query: OffsetPageQuery) {
   ]);
   expect(pagePlan.results.length).toBeGreaterThan(0);
   expect(countPlan.results.length).toBeGreaterThan(0);
-  return { pageSql, countSql, bindings, countBindings };
+  return { pageSql, countSql, bindings, countBindings, pagePlan, countPlan };
 }
 
 function occurrences(value: string, pattern: RegExp): number {
@@ -91,21 +91,24 @@ describe("admin list D1 query plans", () => {
     expect(countBindings).toEqual(bindings);
   });
 
-  it("counts working groups without member or leadership projections", async () => {
-    const { pageSql, countSql, bindings, countBindings } = await explainOffsetPage(
-      buildAdminWorkingGroupsPageQuery({
-        active: "true",
+  it("counts canonical groups without participation, child, or leadership projections", async () => {
+    const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(
+      buildGroupsPageQuery({
+        active: true,
         q: "cryptography",
-        sort: "-member_count",
+        sort: "-participant_count",
         limit: 15,
         offset: 30,
       }),
     );
 
-    expect(pageSql).toMatch(/working_group_members|user_roles|member_count|chair/i);
-    expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM working_groups wg/i);
-    expect(countSql).not.toMatch(/working_group_members|user_roles|ROW_NUMBER|member_count|chair/i);
+    expect(pageSql).toMatch(/group_memberships|membership_capacity_count|participant_count|child_count/i);
+    expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM groups g/i);
+    expect(countSql).not.toMatch(/group_memberships|membership_capacity_count|participant_count|child_count/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings);
+    const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
+    expect(projectionPlan).toContain("idx_group_memberships_group_active");
+    expect(projectionPlan).toContain("idx_groups_parent_active");
   });
 });

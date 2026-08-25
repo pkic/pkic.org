@@ -1,7 +1,7 @@
 /**
  * Votes — ballot casting, results viewing, proposal submission/endorsement.
  * Two tabs: "Votes" (every vote visible to the
- * caller, per `listVisibleVotesForMember` — public + every forum vote +
+ * caller, per `listVisibleVotesForMember` — public + group-owned/shared votes +
  * every WG vote for a WG the member belongs to) and "Proposals" (the
  * CA/Browser-Forum-style endorsement path). No shell or
  * backend changes needed — both endpoint groups were already fully live

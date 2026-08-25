@@ -9,9 +9,14 @@ import { adminEventFormCatalog } from "../../../services/catalogs";
 import { fmt, toast } from "../../../ui";
 import type { AdminAttendanceOption, AdminEventFormSummary } from "../../../types";
 import { FormEditor, type AdminFormDetail } from "./FormEditor";
-import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "./FormResponses";
+import {
+  FormResponseStats,
+  FormSubmissionsTable,
+  type ServerFieldStat,
+} from "../../../../components/forms/FormResponseViews";
 import {
   adminFormSubmissionStatsResponseSchema,
+  adminFormSubmissionsResponseSchema,
   adminFormDeleteResponseSchema,
   adminFormDetailResponseSchema,
   adminFormsListResponseSchema,
@@ -153,7 +158,12 @@ function FormDetailPanel({
         />
         {tab === "statistics" && <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />}
         {tab === "responses" && (
-          <FormSubmissionsTable fields={detail.fields} endpoint={submissionEndpoint} params={submissionParams} />
+          <FormSubmissionsTable
+            fields={detail.fields}
+            endpoint={submissionEndpoint}
+            responseSchema={adminFormSubmissionsResponseSchema}
+            params={submissionParams}
+          />
         )}
         {tab === "edit" && (
           <FormEditor
@@ -198,7 +208,7 @@ export function Forms({ slug }: { slug?: string }) {
               slug={slug}
               onSaved={(key) => {
                 setCreating(false);
-                tableActions.current?.reload();
+                void tableActions.current?.reload();
                 if (!slug) navigate(`/forms/${key}`);
               }}
               onCancel={() => setCreating(false)}

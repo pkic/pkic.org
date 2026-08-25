@@ -1181,8 +1181,10 @@ CREATE TABLE groups (
   eligibility_mode            TEXT NOT NULL DEFAULT 'open',
   automatic_enrollment_mode   TEXT NOT NULL DEFAULT 'none',
   allow_automatic_opt_out     INTEGER NOT NULL DEFAULT 1 CHECK (allow_automatic_opt_out IN (0, 1)),
+  public_leadership           INTEGER NOT NULL DEFAULT 0 CHECK (public_leadership IN (0, 1)),
   min_endorsers_for_ballot    INTEGER NOT NULL DEFAULT 0,
   active                      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  revision                    INTEGER NOT NULL DEFAULT 0,
   created_at                  TEXT NOT NULL,
   updated_at                  TEXT NOT NULL,
   FOREIGN KEY(type_key) REFERENCES group_types(key),
@@ -1196,6 +1198,30 @@ CREATE INDEX idx_groups_type_active
   ON groups(type_key, active, name, id);
 CREATE INDEX idx_groups_visibility_active
   ON groups(visibility, active, name, id);
+
+-- Public Board and Executive Council rosters are historical position records,
+-- not authorization assignments. Keep their free-text title, explicit Member
+-- affiliation, and service dates separate from group lead/deputy permissions.
+-- The body vocabulary is validated by the shared API schema and tests so it
+-- can evolve without rebuilding this D1 table.
+CREATE TABLE leadership_positions (
+  id         TEXT NOT NULL PRIMARY KEY,
+  body       TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  member_id  TEXT,
+  title      TEXT NOT NULL,
+  starts_at  TEXT NOT NULL,
+  ends_at    TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id)
+);
+
+CREATE INDEX idx_leadership_positions_body_dates
+  ON leadership_positions(body, ends_at, starts_at DESC, id);
+CREATE INDEX idx_leadership_positions_user
+  ON leadership_positions(user_id, body, starts_at DESC, id);
 
 -- D1 cannot defer recursive hierarchy validation to application code because
 -- other writers may exist. Reject direct and indirect cycles at the database
@@ -1427,32 +1453,32 @@ CREATE INDEX idx_group_auto_opt_outs_user
 INSERT OR IGNORE INTO groups
   (id, type_key, parent_group_id, name, slug, description, visibility,
    governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
-   allow_automatic_opt_out, min_endorsers_for_ballot, active, created_at, updated_at)
+   allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot, active, created_at, updated_at)
 VALUES
   ('20000000-0000-4000-8000-000000000001', 'community', NULL, 'All Members', 'all-members',
    'The default communication and coordination group for active consortium members.',
-   'authenticated', 'inherited', 'category', 'category', 1, 0, 1, datetime('now'), datetime('now')),
+   'authenticated', 'inherited', 'category', 'category', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000002', 'board', NULL, 'Executive Council', 'executive-council',
    'The consortium governing group.',
-   'participants', 'inherited', 'managed', 'none', 0, 0, 1, datetime('now'), datetime('now')),
+   'participants', 'inherited', 'managed', 'none', 0, 0, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000003', 'working_group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000004', 'working_group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000005', 'working_group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000006', 'working_group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000007', 'working_group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   'public', 'inherited', 'category', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'category', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000008', 'working_group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now'));
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
   (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
@@ -1977,6 +2003,62 @@ BEGIN
   SELECT RAISE(ABORT, 'organization representative requires an organization membership');
 END;
 
+-- A person acts either as an individual Member or through one or more
+-- organizations, never both. Service checks provide useful errors; these
+-- triggers close the concurrent-writer race at the D1 boundary without a
+-- restrictive table CHECK or rebuild.
+CREATE TRIGGER trg_organization_representatives_reject_individual_insert
+BEFORE INSERT ON organization_representatives
+WHEN NEW.left_at IS NULL
+ AND EXISTS (
+   SELECT 1 FROM members individual
+    WHERE individual.user_id = NEW.user_id
+      AND individual.member_type = 'individual'
+      AND individual.status = 'active'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
+CREATE TRIGGER trg_organization_representatives_reject_individual_update
+BEFORE UPDATE OF user_id, left_at, blocked_at ON organization_representatives
+WHEN NEW.left_at IS NULL AND NEW.blocked_at IS NULL
+ AND EXISTS (
+   SELECT 1 FROM members individual
+    WHERE individual.user_id = NEW.user_id
+      AND individual.member_type = 'individual'
+      AND individual.status = 'active'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
+CREATE TRIGGER trg_members_reject_representative_capacity_insert
+BEFORE INSERT ON members
+WHEN NEW.member_type = 'individual' AND NEW.status = 'active'
+ AND EXISTS (
+   SELECT 1 FROM organization_representatives representative
+    WHERE representative.user_id = NEW.user_id
+      AND representative.left_at IS NULL
+      AND representative.blocked_at IS NULL
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
+CREATE TRIGGER trg_members_reject_representative_capacity_update
+BEFORE UPDATE OF user_id, member_type, status ON members
+WHEN NEW.member_type = 'individual' AND NEW.status = 'active'
+ AND EXISTS (
+   SELECT 1 FROM organization_representatives representative
+    WHERE representative.user_id = NEW.user_id
+      AND representative.left_at IS NULL
+      AND representative.blocked_at IS NULL
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
 -- Closing or blocking a representation immediately removes every active
 -- group capacity held for that Member. Historical memberships and actions
 -- remain intact.
@@ -2274,6 +2356,30 @@ WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
 BEGIN
   SELECT RAISE(ABORT, 'PERMISSION_GRANT_CONTEXT_INVALID');
+END;
+
+-- State-changing services use one shared transient guard to re-evaluate their
+-- canonical authorization or eligibility SELECT inside the same D1 batch as
+-- the protected writes. The evidence query stays in the owning TypeScript
+-- domain module, so database atomicity does not create a second copy of group,
+-- representative, or resource policy in migration triggers.
+CREATE TABLE authorization_guards (
+  id         TEXT NOT NULL PRIMARY KEY,
+  authorized INTEGER NOT NULL CHECK (authorized IN (0, 1)),
+  created_at TEXT NOT NULL
+);
+
+CREATE TRIGGER trg_authorization_guard_validate
+BEFORE INSERT ON authorization_guards
+WHEN NEW.authorized <> 1
+BEGIN
+  SELECT RAISE(ABORT, 'AUTHORIZATION_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_authorization_guard_release
+AFTER INSERT ON authorization_guards
+BEGIN
+  DELETE FROM authorization_guards WHERE id = NEW.id;
 END;
 
 -- Retain authorization history rather than deleting its parent and leaving
@@ -4385,6 +4491,7 @@ CREATE TABLE votes (
   transition_lease_expires_at TEXT,
   status                TEXT NOT NULL,
   -- allowed: scheduled | open | closed | cancelled
+  cancellation_reason   TEXT,
   result_json           TEXT,
   visibility             TEXT NOT NULL DEFAULT 'private',
   -- allowed: private | public
@@ -4521,7 +4628,7 @@ CREATE TABLE vote_proposals (
 CREATE INDEX idx_vote_proposals_group_status
   ON vote_proposals(owner_group_id, status, created_at, id);
 
--- Supports both the bounded portal list (status + scope, ordered by
+-- Supports both the bounded portal list (status + owning group, ordered by
 -- created_at) and the bounded admin list (status alone, ordered by
 -- created_at) via a shared leading (status) column.
 CREATE INDEX idx_vote_proposals_status_scope_created_at

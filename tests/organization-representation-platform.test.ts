@@ -5,6 +5,7 @@ import {
   assessRepresentationDomain,
   associateOrganizationRepresentative,
   blockOrganizationRepresentative,
+  organizationRepresentativeManagementEvidence,
   prepareVerifiedDomainAssociationStatements,
   reconcileVerifiedDomainRepresentations,
   restoreOrganizationRepresentative,
@@ -12,6 +13,7 @@ import {
 import { prepareVerifyPrimaryEmailStatement } from "../functions/_lib/services/email-verification";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   REPRESENTATIVE_ROLE_IDS,
   addRepresentative,
@@ -141,6 +143,43 @@ describe("organization representation domain evidence", () => {
     expect(representative).toEqual({ member_id: memberId, source: "verified_domain" });
   });
 
+  it("keeps email verification successful when the optional domain claim disappears before commit", async () => {
+    const email = `confirmed-${crypto.randomUUID()}@claim-race.example`;
+    const userId = await insertUser(env.DB, email);
+    const organizationId = await insertOrganization(env.DB, "Claim Race Org");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await claimDomain(organizationId, "claim-race.example");
+    const at = new Date().toISOString();
+    const associationStatements = await prepareVerifiedDomainAssociationStatements(env.DB, {
+      userId,
+      normalizedEmail: email,
+      at,
+    });
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain = ?").bind("claim-race.example").run();
+
+    await env.DB.batch([
+      prepareVerifyPrimaryEmailStatement(env.DB, {
+        userId,
+        normalizedEmail: email,
+        method: "registration_confirmation",
+        verifiedAt: at,
+      }),
+      ...associationStatements,
+    ]);
+
+    expect(
+      await queryAll<{ email_verified_at: string | null }>(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [
+        userId,
+      ]),
+    ).toEqual([{ email_verified_at: at }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_representatives WHERE user_id = ?", [userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_representative_domain_reconciled'"),
+    ).toHaveLength(0);
+  });
+
   it("reconciles the same verified domain concurrently without duplicate or failed relationships", async () => {
     const email = "race@verified-race.example";
     const userId = await insertUser(env.DB, email);
@@ -168,9 +207,58 @@ describe("organization representation domain evidence", () => {
       ),
     ).toHaveLength(1);
   });
+
+  it("returns no association when a verified domain claim is revoked before the reconciliation batch", async () => {
+    const email = `reconcile-${crypto.randomUUID()}@revoked-claim.example`;
+    const userId = await insertUser(env.DB, email);
+    const organizationId = await insertOrganization(env.DB, "Revoked Claim Org");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await claimDomain(organizationId, "revoked-claim.example");
+    await env.DB.prepare(
+      `UPDATE users
+            SET email_verified_at = datetime('now'), email_verification_method = 'magic_link'
+          WHERE id = ?`,
+    )
+      .bind(userId)
+      .run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain = ?").bind("revoked-claim.example").run(),
+    );
+
+    await expect(reconcileVerifiedDomainRepresentations(racingDb, userId)).resolves.toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_representatives WHERE user_id = ?", [userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_representative_domain_reconciled'"),
+    ).toHaveLength(0);
+  });
 });
 
 describe("organization-contact association lifecycle", () => {
+  it("uses bounded indexes for organization-contact authorization evidence", async () => {
+    const organizationId = await insertOrganization(env.DB, "Authorization Plan Org");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const contactUserId = await insertUser(env.DB, "contact@authorization-plan.example");
+    await addRepresentative(env.DB, memberId, contactUserId);
+    await assignRepresentativeRole(env.DB, memberId, contactUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    const evidence = organizationRepresentativeManagementEvidence({
+      memberId,
+      actorUserId: contactUserId,
+      staffAuthorized: false,
+    });
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${evidence.sql}`)
+      .bind(...evidence.bindings)
+      .all<{ detail: string }>();
+    const details = plan.results.map((row) => row.detail).join("\n");
+
+    expect(details).toMatch(
+      /SEARCH representative USING INDEX (?:sqlite_autoindex_organization_representatives_2|idx_organization_representatives_member_active)/,
+    );
+    expect(details).toMatch(/SEARCH role USING INDEX idx_user_roles_context/);
+    expect(details).not.toMatch(/SCAN (representative|role)\b/);
+  });
+
   it("allows immediate explicit association, makes removal persistent, and never restores ended group capacity", async () => {
     const admin = await insertAdmin("representation-admin@example.test");
     const organizationId = await insertOrganization(env.DB, "Representation Lifecycle Org");
@@ -291,6 +379,83 @@ describe("organization-contact association lifecycle", () => {
         { memberId, userId: targetUserId, showOnOrganizationProfile: false },
       ),
     ).rejects.toMatchObject({ code: "ORGANIZATION_CONTACT_REQUIRED" });
+  });
+
+  it("rolls back association when contact authority is revoked before the batch commits", async () => {
+    const organizationId = await insertOrganization(env.DB, "Revoked Contact Org");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const contactUserId = await insertUser(env.DB, "contact@revoked-contact.example");
+    await addRepresentative(env.DB, memberId, contactUserId);
+    await assignRepresentativeRole(env.DB, memberId, contactUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    const targetUserId = await insertUser(env.DB, "target@revoked-contact.example");
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE user_roles
+            SET revoked_at = datetime('now')
+          WHERE user_id = ? AND context_type = 'organization' AND context_id = ?
+            AND role_id = ? AND revoked_at IS NULL`,
+      )
+        .bind(contactUserId, memberId, REPRESENTATIVE_ROLE_IDS.primaryContact)
+        .run(),
+    );
+
+    await expect(
+      associateOrganizationRepresentative(
+        racingDb,
+        { userId: contactUserId, actorType: "member", staffAuthorized: false },
+        { memberId, userId: targetUserId, showOnOrganizationProfile: false },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED" });
+
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ?", [
+        memberId,
+        targetUserId,
+      ]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_representative_associated'"),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_user_id = ?", targetUserId),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back representative removal when staff authority is revoked before commit", async () => {
+    const admin = await insertAdmin("revoked-staff@example.test");
+    const organizationId = await insertOrganization(env.DB, "Revoked Staff Org");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const targetUserId = await insertUser(env.DB, "target@revoked-staff.example");
+    await addRepresentative(env.DB, memberId, targetUserId);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(admin.id).run(),
+    );
+
+    await expect(
+      blockOrganizationRepresentative(
+        racingDb,
+        {
+          userId: admin.id,
+          databaseUserId: admin.id,
+          actorType: "admin",
+          staffAuthorized: true,
+        },
+        { memberId, userId: targetUserId, reason: "Authority changed" },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED" });
+
+    const [representative] = await queryAll<{ left_at: string | null; blocked_at: string | null }>(
+      env.DB,
+      "SELECT left_at, blocked_at FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+      [memberId, targetUserId],
+    );
+    expect(representative).toEqual({ left_at: null, blocked_at: null });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_representative_blocked'"),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_user_id = ?", targetUserId),
+    ).toHaveLength(0);
   });
 
   it("turns a concurrent same-organization association race into one durable relationship and a bounded conflict", async () => {

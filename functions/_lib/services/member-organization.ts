@@ -4,10 +4,11 @@
  * Deliberately self-contained rather than reusing
  * `admin-organizations.ts`'s representative logic — the caller-eligibility
  * check here is the self-service rule: only the org's own primary or
- * secondary contact may enroll a coworker or manage contact/delegate
+ * secondary contact may enroll a coworker or manage contact
  * designations, never an arbitrary representative.
  */
 import { first, run } from "../db/queries";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
@@ -15,12 +16,8 @@ import { AppError } from "../errors";
 import type { AddedCoworker } from "../../../assets/shared/schemas/me";
 import { buildFindOrCreateUserStatement } from "./users";
 import { isActiveRepresentative, buildAddRepresentativeStatement } from "./membership/representatives";
-import {
-  REPRESENTATIVE_ROLE_IDS,
-  resolveRepresentativeRoleHolders,
-  buildAssignRepresentativeRoleStatements,
-  buildRevokeRepresentativeRoleStatement,
-} from "./membership/representative-roles";
+import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
+import { prepareOrganizationRepresentativeManagementGuard } from "./organization-representations/authorization";
 import type { AuthMember, DatabaseLike } from "../types";
 
 async function requireOrgContact(db: DatabaseLike, member: AuthMember): Promise<void> {
@@ -82,8 +79,27 @@ export async function addCoworker(
     source: "organization_contact",
     now,
   });
-  const statements = userStatement ? [userStatement, representativeStatement] : [representativeStatement];
-  await db.batch(statements);
+  const statements = [
+    prepareOrganizationRepresentativeManagementGuard(db, {
+      memberId: member.memberId,
+      actorUserId: member.userId,
+      staffAuthorized: false,
+    }),
+    ...(userStatement ? [userStatement] : []),
+    representativeStatement,
+  ];
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
+        "Representative-management access changed while the coworker was being saved",
+      );
+    }
+    throw error;
+  }
 
   return {
     representativeId,
@@ -146,55 +162,4 @@ export async function nominateSecondaryContact(
     [uuid(), member.memberId, nomineeUserId, member.userId, now],
   );
   return { pendingSecondaryContactUserId: nomineeUserId };
-}
-
-/**
- * Sets an organization's standing forum-vote delegate (role-voting_delegate,
- * a singleton user_roles grant — consolidated migration 0035). Takes effect immediately,
- * unlike the secondary-contact nomination above (no staff-confirmation
- * step): "the primary or secondary contact can change the voting delegate
- * at any time." A NULL delegate falls back to the primary contact at
- * ballot-cast time (resolved live by votes/ballots.ts's
- * resolveVotingDelegateUserId, never snapshotted) — this is also what makes
- * the "delegate change mid-vote" rule work for free: a ballot already cast
- * by the outgoing delegate is keyed to the organization, not the user, so
- * it stands regardless of a later change.
- */
-export async function setVotingDelegate(
-  db: DatabaseLike,
-  member: AuthMember,
-  delegateUserId: string | null,
-): Promise<{ votingDelegateUserId: string | null }> {
-  await requireOrgContact(db, member);
-
-  const now = nowIso();
-  if (delegateUserId === null) {
-    await db.batch([
-      buildRevokeRepresentativeRoleStatement(db, {
-        memberId: member.memberId,
-        roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
-        now,
-      }),
-    ]);
-    return { votingDelegateUserId: null };
-  }
-
-  const isEligible = await isActiveRepresentative(db, member.memberId, delegateUserId);
-  if (!isEligible) {
-    throw new AppError(
-      422,
-      "NOT_ELIGIBLE",
-      "The voting delegate must be an active representative of your organization",
-    );
-  }
-
-  const statements = await buildAssignRepresentativeRoleStatements(db, {
-    memberId: member.memberId,
-    userId: delegateUserId,
-    roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
-    grantedByUserId: member.userId,
-    now,
-  });
-  await db.batch(statements);
-  return { votingDelegateUserId: delegateUserId };
 }

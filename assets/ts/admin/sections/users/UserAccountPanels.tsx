@@ -22,7 +22,7 @@ export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: stri
       });
       toast("Email added", "success");
       setNewEmail("");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (error) {
       toast((error as Error).message, "error");
     } finally {
@@ -35,7 +35,7 @@ export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: stri
     try {
       await apiCommand(`/api/v1/admin/users/${userId}/emails/${emailId}`, { method: "DELETE" });
       toast("Email removed", "success");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (error) {
       toast((error as Error).message, "error");
     }

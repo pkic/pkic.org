@@ -16,7 +16,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
-import { buildAccessibleGroupEventIdsCte } from "../events/access-query";
+import { buildAccessibleGroupResourceIdsCte } from "../resource-grants";
 import { getGroup } from "../groups";
 import { requireGroupManagement } from "../groups/governance";
 import {
@@ -46,7 +46,7 @@ export function buildGroupEventSeriesPageQuery(
   access: GroupResourceContextAccess,
   query: z.infer<typeof eventSeriesListQuerySchema>,
 ) {
-  const accessibleEvents = buildAccessibleGroupEventIdsCte(groupId, access);
+  const accessibleEvents = buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const conditions = ["event.owner_group_id IS NOT NULL"];
   const bindings: unknown[] = [...accessibleEvents.bindings];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["event.name", "event.slug", "series.location"]) : null;
@@ -65,8 +65,8 @@ export function buildGroupEventSeriesPageQuery(
   return {
     sql: `WITH ${accessibleEvents.sql}
       ${EVENT_SERIES_SELECT}
-      FROM accessible_event accessible
-      JOIN events event ON event.id = accessible.event_id
+      FROM accessible_resource accessible
+      JOIN events event ON event.id = accessible.resource_id
       JOIN event_series series ON series.event_id = event.id
       WHERE ${conditions.join(" AND ")}`,
     bindings,

@@ -19,7 +19,6 @@ export interface MembershipSettingsRow {
   ec_email_recipients: string;
   cc_applicant_emails: string;
   auto_reminder_on_holds: number;
-  forum_vote_min_endorsers: number;
   updated_at: string;
   updated_by_user_id: string | null;
 }
@@ -27,7 +26,7 @@ export interface MembershipSettingsRow {
 const MEMBERSHIP_SETTINGS_COLUMNS =
   "id, consultation_window_days, ec_review_window_days, on_hold_response_deadline_days, " +
   "consultation_email_recipients, ec_email_recipients, cc_applicant_emails, auto_reminder_on_holds, " +
-  "forum_vote_min_endorsers, updated_at, updated_by_user_id";
+  "updated_at, updated_by_user_id";
 
 export async function getMembershipSettings(db: DatabaseLike): Promise<MembershipSettingsRow> {
   const row = await first<MembershipSettingsRow>(
@@ -52,7 +51,6 @@ export interface MembershipSettingsUpdateInput {
   ecEmailRecipients?: string;
   ccApplicantEmails?: string;
   autoReminderOnHolds?: boolean;
-  forumVoteMinEndorsers?: number;
 }
 
 export async function updateMembershipSettings(
@@ -74,7 +72,6 @@ export async function updateMembershipSettings(
     cc_applicant_emails: updates.ccApplicantEmails ?? current.cc_applicant_emails,
     auto_reminder_on_holds:
       updates.autoReminderOnHolds === undefined ? current.auto_reminder_on_holds : updates.autoReminderOnHolds ? 1 : 0,
-    forum_vote_min_endorsers: updates.forumVoteMinEndorsers ?? current.forum_vote_min_endorsers,
     updated_at: now,
     updated_by_user_id: actorUserId,
   };
@@ -84,7 +81,7 @@ export async function updateMembershipSettings(
       `UPDATE membership_settings
        SET consultation_window_days = ?, ec_review_window_days = ?, on_hold_response_deadline_days = ?,
            consultation_email_recipients = ?, ec_email_recipients = ?, cc_applicant_emails = ?,
-           auto_reminder_on_holds = ?, forum_vote_min_endorsers = ?, updated_at = ?, updated_by_user_id = ?
+           auto_reminder_on_holds = ?, updated_at = ?, updated_by_user_id = ?
        WHERE id = 'default'`,
     )
     .bind(
@@ -95,7 +92,6 @@ export async function updateMembershipSettings(
       next.ec_email_recipients,
       next.cc_applicant_emails,
       next.auto_reminder_on_holds,
-      next.forum_vote_min_endorsers,
       now,
       actorUserId,
     );

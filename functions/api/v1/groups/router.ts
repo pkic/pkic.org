@@ -3,6 +3,7 @@ import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../_lib/db/context";
 import { GroupsCreate, GroupsList } from "./index";
 import { GroupGet, GroupUpdate } from "./[groupId]";
+import { GroupPortalContextGet } from "./[groupId]/context";
 import { GroupTypesList } from "./types";
 import { GroupJoin } from "./[groupId]/join";
 import { GroupLeave } from "./[groupId]/leave";
@@ -37,14 +38,35 @@ import {
   mailingListGrantRoutes,
   voteGrantRoutes,
 } from "./resource-grant-handlers";
-import { GroupFormsList } from "./[groupId]/forms/index";
-import { GroupFormDefinitionGet, GroupFormPlacementUpdate } from "./[groupId]/forms/[placementId]";
+import { GroupFormCreate, GroupFormsList } from "./[groupId]/forms/index";
+import {
+  GroupFormDefinitionGet,
+  GroupFormDefinitionUpdate,
+  GroupFormPlacementUpdate,
+} from "./[groupId]/forms/[placementId]";
 import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]/forms/[placementId]/submissions";
 import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
 import { GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
 import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
+import { GroupVotesList } from "./[groupId]/votes/index";
+import { GroupVoteGet } from "./[groupId]/votes/[voteId]/index";
+import { GroupVoteBallotsPost } from "./[groupId]/votes/[voteId]/ballots";
+import { GroupVoteResultsGet } from "./[groupId]/votes/[voteId]/results";
+import { GroupVoteCreate } from "./[groupId]/votes/create";
+import { GroupVoteSettingsPatch } from "./[groupId]/votes/[voteId]/settings";
+import { GroupVoteVisibilityPatch } from "./[groupId]/votes/[voteId]/visibility";
+import { GroupVoteBallotAuditGet } from "./[groupId]/votes/[voteId]/ballot-audit";
+import { GroupVoteTransitionPost } from "./[groupId]/votes/[voteId]/transitions";
+import { GroupVoteProposalCreate, GroupVoteProposalsList } from "./[groupId]/vote-proposals/index";
+import { GroupVoteProposalDelete, GroupVoteProposalGet } from "./[groupId]/vote-proposals/[proposalId]/index";
+import {
+  GroupVoteProposalEndorseDelete,
+  GroupVoteProposalEndorsePost,
+} from "./[groupId]/vote-proposals/[proposalId]/endorsement";
+import { GroupVoteProposalApprovePost } from "./[groupId]/vote-proposals/[proposalId]/approve";
+import { GroupVoteProposalRejectPost } from "./[groupId]/vote-proposals/[proposalId]/reject";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -53,6 +75,7 @@ openapi.get("/types", GroupTypesList);
 openapi.get("/", GroupsList);
 openapi.post("/", GroupsCreate);
 openapi.get("/:groupId", GroupGet);
+openapi.get("/:groupId/context", GroupPortalContextGet);
 openapi.patch("/:groupId", GroupUpdate);
 openapi.post("/:groupId/join", GroupJoin);
 openapi.post("/:groupId/leave", GroupLeave);
@@ -68,13 +91,32 @@ openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPref
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
 openapi.get("/:groupId/audit-log", GroupAuditLogList);
 openapi.get("/:groupId/forms", GroupFormsList);
+openapi.post("/:groupId/forms", GroupFormCreate);
 openapi.get("/:groupId/forms/:placementId", GroupFormDefinitionGet);
 openapi.patch("/:groupId/forms/:placementId", GroupFormPlacementUpdate);
+openapi.patch("/:groupId/forms/:placementId/definition", GroupFormDefinitionUpdate);
 openapi.get("/:groupId/forms/:placementId/submissions", GroupFormSubmissionsList);
 openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCreate);
 openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
 openapi.get("/:groupId/events", GroupEventsList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
+openapi.get("/:groupId/votes", GroupVotesList);
+openapi.post("/:groupId/votes", GroupVoteCreate);
+openapi.get("/:groupId/votes/:voteId", GroupVoteGet);
+openapi.patch("/:groupId/votes/:voteId", GroupVoteSettingsPatch);
+openapi.patch("/:groupId/votes/:voteId/visibility", GroupVoteVisibilityPatch);
+openapi.get("/:groupId/votes/:voteId/ballots", GroupVoteBallotAuditGet);
+openapi.post("/:groupId/votes/:voteId/ballots", GroupVoteBallotsPost);
+openapi.get("/:groupId/votes/:voteId/results", GroupVoteResultsGet);
+openapi.post("/:groupId/votes/:voteId/transitions", GroupVoteTransitionPost);
+openapi.get("/:groupId/vote-proposals", GroupVoteProposalsList);
+openapi.post("/:groupId/vote-proposals", GroupVoteProposalCreate);
+openapi.get("/:groupId/vote-proposals/:proposalId", GroupVoteProposalGet);
+openapi.delete("/:groupId/vote-proposals/:proposalId", GroupVoteProposalDelete);
+openapi.post("/:groupId/vote-proposals/:proposalId/endorsement", GroupVoteProposalEndorsePost);
+openapi.delete("/:groupId/vote-proposals/:proposalId/endorsement", GroupVoteProposalEndorseDelete);
+openapi.post("/:groupId/vote-proposals/:proposalId/approve", GroupVoteProposalApprovePost);
+openapi.post("/:groupId/vote-proposals/:proposalId/reject", GroupVoteProposalRejectPost);
 openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);

@@ -1,5 +1,3 @@
-import { profile as profileSignal } from "../../state";
-import { VOTING_CATEGORIES } from "../../../../../shared/schemas/membership-categories";
 import type { PortalVote, ElectionVoteResult, MotionVoteResult } from "../../types";
 
 export const MOTION_CHOICES: { value: "in_favor" | "opposed" | "abstain"; label: string }[] = [
@@ -7,11 +5,6 @@ export const MOTION_CHOICES: { value: "in_favor" | "opposed" | "abstain"; label:
   { value: "opposed", label: "Opposed" },
   { value: "abstain", label: "Abstain" },
 ];
-
-export function isVotingCategory(): boolean {
-  const category = profileSignal.value?.membershipCategory;
-  return Boolean(category && VOTING_CATEGORIES.has(category));
-}
 
 export function voteStatusBadgeClass(status: string): string {
   switch (status) {

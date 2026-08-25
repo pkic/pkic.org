@@ -9,7 +9,6 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
-import { getWorkingGroupBySlugOrId } from "../working-groups";
 import {
   toVoteSummary,
   getCandidates,
@@ -26,7 +25,7 @@ import type { z } from "zod";
 export type PublicVoteListParams = PublicVotesListQuery;
 export type PublicVoteSummary = z.infer<typeof publicVoteSchema>;
 
-function publicResultForDetailLevel(row: VoteRow): VoteResult {
+export function publicResultForDetailLevel(row: VoteRow): VoteResult {
   if (row.status !== "closed" || !row.result_json) return null;
   const full = parseJsonSafe<Record<string, unknown>>(row.result_json, {});
   if (row.public_detail_level === "outcome_only") {
@@ -69,14 +68,9 @@ export async function listPublicVotes(
     conditions.push("vote_type = ?");
     args.push(params.type);
   }
-  if (params.scope) {
-    conditions.push("scope_type = ?");
-    args.push(params.scope);
-  }
-  if (params.wg) {
-    const wg = await getWorkingGroupBySlugOrId(db, params.wg);
-    conditions.push("scope_id = ?");
-    args.push(wg?.id ?? "__none__");
+  if (params.ownerGroupId) {
+    conditions.push("owner_group_id = ?");
+    args.push(params.ownerGroupId);
   }
   if (params.status && params.status.length > 0) {
     const statusFilter = buildD1JsonMembershipFilter("status", params.status);
@@ -92,7 +86,7 @@ export async function listPublicVotes(
     args.push(params.to);
   }
   if (params.q) {
-    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type", "scope_type"]);
+    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type"]);
     conditions.push(search.sql);
     args.push(...search.bindings);
   }

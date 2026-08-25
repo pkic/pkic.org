@@ -1,8 +1,9 @@
 import type { GroupCapacitySelection } from "../../../../assets/shared/schemas/groups";
 import type { MembershipCategory } from "../../../../assets/shared/schemas/membership-categories";
+import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import { all, first } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import {
   ACTIVE_USER_CAPACITIES_CTE,
   activeParentGroupMembershipPredicate,
@@ -21,6 +22,50 @@ interface CapacityRow {
   member_type: "individual" | "organization";
   organization_name: string | null;
   membership_category: MembershipCategory;
+}
+
+export function groupJoinEligibilityEvidence(
+  groupId: string,
+  userId: string,
+  memberIds: readonly string[],
+  options: { allowManaged: boolean },
+): AuthorizationEvidence {
+  const requestedMemberIds = [...new Set(memberIds)];
+  if (requestedMemberIds.length === 0) return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  return {
+    sql: `${ACTIVE_USER_CAPACITIES_CTE}
+          SELECT 1
+            FROM groups g
+           WHERE g.id = ? AND g.active = 1
+             AND ${activeParentGroupMembershipPredicate("g", "?")}
+             AND (
+               SELECT COUNT(*)
+                 FROM active_user_capacities capacity
+                 JOIN json_each(?) requested ON requested.value = capacity.member_id
+                 LEFT JOIN group_membership_category_rules rule
+                   ON rule.group_id = g.id
+                  AND rule.membership_category_code = capacity.membership_category
+                WHERE ${eligibleGroupCapacityPredicate("g", "rule", "?")}
+             ) = ?`,
+    bindings: [
+      userId,
+      groupId,
+      userId,
+      JSON.stringify(requestedMemberIds),
+      options.allowManaged ? 1 : 0,
+      requestedMemberIds.length,
+    ],
+  };
+}
+
+export function prepareGroupJoinEligibilityGuard(
+  db: DatabaseLike,
+  groupId: string,
+  userId: string,
+  memberIds: readonly string[],
+  options: { allowManaged: boolean },
+): StatementLike {
+  return prepareAuthorizationGuard(db, groupJoinEligibilityEvidence(groupId, userId, memberIds, options));
 }
 
 /**
@@ -45,8 +90,9 @@ export async function listEligibleGroupCapacities(
        ON rule.group_id = g.id
       AND rule.membership_category_code = capacity.membership_category
      WHERE ${eligibleGroupCapacityPredicate("g", "rule", "?")}
+       AND ${activeParentGroupMembershipPredicate("g", "?")}
      ORDER BY capacity.organization_name COLLATE NOCASE, capacity.member_id`,
-    [userId, groupId, options.allowManaged ? 1 : 0],
+    [userId, groupId, options.allowManaged ? 1 : 0, userId],
   );
   return rows.map((row) => ({
     memberId: row.member_id,
@@ -108,9 +154,22 @@ export async function selectGroupCapacities(
 ): Promise<EligibleGroupCapacity[]> {
   const eligible = await listEligibleGroupCapacities(db, groupId, userId, options);
   if (eligible.length === 0) {
-    const group = await first<{ active: number }>(db, "SELECT active FROM groups WHERE id = ?", [groupId]);
+    const group = await first<{ active: number; parent_eligible: number }>(
+      db,
+      `SELECT g.active,
+              CASE WHEN ${activeParentGroupMembershipPredicate("g", "?")} THEN 1 ELSE 0 END AS parent_eligible
+         FROM groups g WHERE g.id = ?`,
+      [userId, groupId],
+    );
     if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
     if (group.active !== 1) throw new AppError(409, "GROUP_INACTIVE", "This group is not accepting participants");
+    if (group.parent_eligible !== 1) {
+      throw new AppError(
+        403,
+        "GROUP_PARENT_MEMBERSHIP_REQUIRED",
+        "Active parent group membership is required before joining this group",
+      );
+    }
     throw new AppError(403, "GROUP_CAPACITY_REQUIRED", "No eligible Member capacity is available for this group");
   }
   if (selection.mode === "all_eligible") return eligible;

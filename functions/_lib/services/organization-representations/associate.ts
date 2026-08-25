@@ -1,10 +1,14 @@
 import type { OrganizationRepresentative } from "../../../../assets/shared/schemas/organization-representation";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { prepareScopedAuditLog } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildAddRepresentativeStatement } from "../membership/representatives";
-import { requireOrganizationRepresentativeManagement } from "./authorization";
+import {
+  prepareOrganizationRepresentativeManagementGuard,
+  requireOrganizationRepresentativeManagement,
+} from "./authorization";
 import { isConcurrentRepresentationConflict } from "./conflicts";
 import { loadRepresentationNotificationContext, prepareRepresentationNotification } from "./notifications";
 import type { RepresentativeManagerActor } from "./types";
@@ -18,6 +22,7 @@ export async function associateOrganizationRepresentative(
   await requireOrganizationRepresentativeManagement(db, {
     memberId: input.memberId,
     actorUserId: actor.userId,
+    databaseUserId: actor.databaseUserId,
     staffAuthorized: actor.staffAuthorized,
   });
   const notification = await loadRepresentationNotificationContext(db, input.memberId, input.userId, true);
@@ -32,8 +37,14 @@ export async function associateOrganizationRepresentative(
   });
   try {
     await db.batch([
+      prepareOrganizationRepresentativeManagementGuard(db, {
+        memberId: input.memberId,
+        actorUserId: actor.userId,
+        databaseUserId: actor.databaseUserId,
+        staffAuthorized: actor.staffAuthorized,
+      }),
       statement,
-      prepareScopedAuditLog(
+      prepareScopedAuditLogAfterOneChange(
         db,
         { type: "organization", id: input.memberId },
         actor.actorType,
@@ -54,7 +65,14 @@ export async function associateOrganizationRepresentative(
       ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at),
     ]);
   } catch (error) {
-    if (isConcurrentRepresentationConflict(error)) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
+        "Representative-management access changed while the update was being saved",
+      );
+    }
+    if (isConcurrentRepresentationConflict(error) || isAuditOneChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "ORGANIZATION_REPRESENTATION_CONFLICT",

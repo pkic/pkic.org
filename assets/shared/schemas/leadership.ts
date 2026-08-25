@@ -186,11 +186,27 @@ export const forumChairsPublicResponseSchema = z.object({
 });
 export type ForumChairsPublicResponse = z.infer<typeof forumChairsPublicResponseSchema>;
 
+export const consortiumChairsPublicResponseSchema = forumChairsPublicResponseSchema;
+export type ConsortiumChairsPublicResponse = ForumChairsPublicResponse;
+
+export const consortiumChairsPublicRouteSchema = {
+  tags: ["Leadership"],
+  summary: "Public consortium chair / vice chair",
+  description:
+    "Resolved from the published leadership of the configured All Members group, using the same source as group administration.",
+  responses: {
+    "200": {
+      description: "Current consortium chair and vice chair, if assigned.",
+      content: { "application/json": { schema: consortiumChairsPublicResponseSchema } },
+    },
+  },
+};
+
 export const forumChairsPublicRouteSchema = {
   tags: ["Leadership"],
-  summary: "Public PKIC forum chair / vice chair",
+  summary: "Deprecated compatibility alias for consortium chairs",
   description:
-    "Resolved from role-forum_chair/role-forum_vice_chair (consolidated migration 0035), same source as the admin Leadership tab.",
+    "Use /api/v1/leadership/consortium-chairs. This alias is retained for compatibility with unreleased branch clients.",
   responses: {
     "200": {
       description: "Current forum chair and vice chair, if assigned.",

@@ -135,7 +135,7 @@ export const membersCreateRouteSchema = {
   tags: ["Membership"],
   summary: "Create a member (or finish a migration gap) — Interim Admin Tool",
   description:
-    "Interim Admin Tool — creates active organizations/users/members(/working_group_members) rows immediately. No email is sent.",
+    "Interim Admin Tool — creates active organizations, users, Members, and selected group memberships immediately. No email is sent.",
   request: {
     body: { content: { "application/json": { schema: memberCreateSchema } }, required: true },
   },

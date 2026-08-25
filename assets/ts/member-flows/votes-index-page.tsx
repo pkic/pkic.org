@@ -28,7 +28,6 @@ const PAGE_SIZE = 20;
 
 type PublicVote = PublicVotesListResponse["votes"][number];
 type VoteType = PublicVote["voteType"];
-type VoteScopeType = PublicVote["scopeType"];
 
 interface VoteSection {
   votes: PublicVote[];
@@ -59,10 +58,6 @@ function statusBadgeClass(status: string): string {
   }
 }
 
-function scopeLabel(scopeType: VoteScopeType): string {
-  return scopeType === "forum" ? "Forum" : "Working Group";
-}
-
 export function buildVotesSectionUrl(apiBase: string, section: SectionKey, offset: number): string {
   const status = SECTION_STATUS_FILTER[section];
   return `${apiBase}/votes?status=${status}&limit=${PAGE_SIZE}&offset=${offset}&sort=closes_at`;
@@ -90,7 +85,7 @@ function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }
           {vote.status.charAt(0).toUpperCase() + vote.status.slice(1)}
         </span>
         <span class="badge text-bg-light border">{VOTE_TYPE_LABELS[vote.voteType]}</span>
-        <span class="badge text-bg-light border">{scopeLabel(vote.scopeType)}</span>
+        <span class="badge text-bg-light border">{vote.ownerGroupName}</span>
       </div>
       <div class="member-card-name">{vote.title}</div>
       {vote.description && (

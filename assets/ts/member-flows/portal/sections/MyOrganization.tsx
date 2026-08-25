@@ -1,6 +1,6 @@
 /**
  * My Organization — content editor + moderation status + logo upload +
- * voting delegate + secondary-contact nomination + sponsorship view.
+ * secondary-contact nomination + sponsorship view.
  * GET /api/v1/me/organization is available to any
  * org-tied member (read-only for non-contacts); submitting a content
  * change or logo is restricted to the primary/secondary contact
@@ -28,7 +28,6 @@ import {
   myOrganizationProfileSchema,
   myOrganizationSponsorshipSchema,
   myOrganizationContentChangeResponseSchema,
-  myVotingDelegateUpdateResponseSchema,
   mySecondaryContactNominateResponseSchema,
   myOrganizationLogoUploadResponseSchema,
 } from "../../../../shared/schemas/me";
@@ -381,56 +380,6 @@ function ReviewHistoryCard() {
   );
 }
 
-function VotingDelegateSection({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
-  const reps = profileSignal.value?.organizationRepresentatives ?? [];
-  const [value, setValue] = useState(org.votingDelegateUserId ?? "");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => setValue(org.votingDelegateUserId ?? ""), [org.votingDelegateUserId]);
-
-  async function handleChange(next: string): Promise<void> {
-    setValue(next);
-    setSaving(true);
-    try {
-      await patchJson(
-        "/api/v1/me/organization/voting-delegate",
-        { userId: next || null },
-        myVotingDelegateUpdateResponseSchema,
-      );
-      toast("Voting delegate updated", "success");
-      await reload();
-    } catch (e) {
-      setValue(org.votingDelegateUserId ?? "");
-      toast(e instanceof ApiClientError ? e.message : "Could not update voting delegate.", "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const current = reps.find((r) => r.userId === org.votingDelegateUserId);
-
-  return (
-    <div>
-      <h3 class="h6">Forum vote delegate</h3>
-      <p class="text-muted small">
-        The member who casts your organization's ballot in forum votes. Defaults to the primary contact if unset.
-      </p>
-      {org.isOrgContact ? (
-        <RepresentativeSelect
-          className="portal-category-select"
-          value={value}
-          disabled={saving}
-          emptyLabel="Primary contact (default)"
-          representatives={reps}
-          onChange={(e) => void handleChange((e.target as HTMLSelectElement).value)}
-        />
-      ) : (
-        <p class="mb-0">{current ? (current.name ?? current.email) : "Primary contact (default)"}</p>
-      )}
-    </div>
-  );
-}
-
 function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
   const reps = (profileSignal.value?.organizationRepresentatives ?? []).filter((r) => !r.isPrimaryContact);
   const [value, setValue] = useState(org.pendingSecondaryContactUserId ?? "");
@@ -463,8 +412,7 @@ function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; 
     <div>
       <h3 class="h6">Secondary contact</h3>
       <p class="text-muted small">
-        A second representative who can manage the organization profile and forum vote delegate. Nominations are held
-        until confirmed by staff.
+        A second representative who can manage the organization profile. Nominations are held until confirmed by staff.
       </p>
       {org.isPrimaryContact ? (
         <RepresentativeSelect
@@ -518,7 +466,6 @@ function GovernanceCard({ org, reload }: { org: MyOrganizationProfile; reload: (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Governance</div>
       <div class="card-body d-flex flex-column gap-4">
-        <VotingDelegateSection org={org} reload={reload} />
         <SecondaryContactSection org={org} reload={reload} />
       </div>
     </div>

@@ -8,8 +8,8 @@
     "node": "^22 || ^24 || >=26"
   },
   "scripts": {
-    "dev": "CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
-    "dev:hugo": "hugo serve",
+    "dev": "HUGO_PARAMS_SKIPREMOTEFEEDS=true CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
+    "dev:hugo": "HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo serve --configDir='' --baseURL=/",
     "build": "vite build",
     "build:preview": "CLOUDFLARE_ENV=preview vite build",
     "build:production": "CLOUDFLARE_ENV=production vite build",
@@ -29,7 +29,7 @@
     "test:watch": "vitest",
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check:filenames": "node scripts/check-filename-collisions.mjs",
-    "generate:public": "node scripts/build-frontend.mjs --dev && hugo -e development --cleanDestinationDir",
+    "generate:public": "node scripts/build-frontend.mjs --dev && HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo --configDir='' --baseURL=/ -e development",
     "lint": "eslint . --max-warnings 0",
     "lint:sql": "node scripts/check-sql-projections.mjs",
     "lint:architecture": "depcruise functions assets/shared assets/ts assets/js scripts static/scripts --config .dependency-cruiser.cjs",

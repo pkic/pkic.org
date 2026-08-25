@@ -23,8 +23,10 @@ export interface ResourceGrantDefinition<K extends ResourceGrantKind = ResourceG
   kind: K;
   resourceTable: string;
   ownerGroupColumn: string;
+  ownerGroupIndex: string;
   grantTable: string;
   grantResourceColumn: string;
+  grantGroupIndex: string;
   auditEntityType: string;
   capabilities: readonly ResourceGrantCapability<K>[];
   grantingCapabilities: Readonly<Record<ResourceGrantCapability<K>, readonly ResourceGrantCapability<K>[]>>;
@@ -37,8 +39,10 @@ const DEFINITIONS: { [K in ResourceGrantKind]: ResourceGrantDefinition<K> } = {
     kind: "formPlacement",
     resourceTable: "form_placements",
     ownerGroupColumn: "owner_group_id",
+    ownerGroupIndex: "idx_form_placements_owner_active",
     grantTable: "form_placement_group_grants",
     grantResourceColumn: "placement_id",
+    grantGroupIndex: "idx_form_placement_group_grants_group",
     auditEntityType: "form_placement",
     capabilities: FORM_GROUP_CAPABILITIES,
     grantingCapabilities: {
@@ -54,8 +58,10 @@ const DEFINITIONS: { [K in ResourceGrantKind]: ResourceGrantDefinition<K> } = {
     kind: "event",
     resourceTable: "events",
     ownerGroupColumn: "owner_group_id",
+    ownerGroupIndex: "idx_events_owner_profile",
     grantTable: "event_group_grants",
     grantResourceColumn: "event_id",
+    grantGroupIndex: "idx_event_group_grants_group",
     auditEntityType: "event",
     capabilities: EVENT_GROUP_CAPABILITIES,
     grantingCapabilities: {
@@ -72,8 +78,10 @@ const DEFINITIONS: { [K in ResourceGrantKind]: ResourceGrantDefinition<K> } = {
     kind: "vote",
     resourceTable: "votes",
     ownerGroupColumn: "owner_group_id",
+    ownerGroupIndex: "idx_votes_group_status",
     grantTable: "vote_group_grants",
     grantResourceColumn: "vote_id",
+    grantGroupIndex: "idx_vote_group_grants_group",
     auditEntityType: "vote",
     capabilities: VOTE_GROUP_CAPABILITIES,
     grantingCapabilities: {
@@ -89,8 +97,10 @@ const DEFINITIONS: { [K in ResourceGrantKind]: ResourceGrantDefinition<K> } = {
     kind: "mailingList",
     resourceTable: "mailing_lists",
     ownerGroupColumn: "group_id",
+    ownerGroupIndex: "idx_mailing_lists_group_active",
     grantTable: "mailing_list_group_grants",
     grantResourceColumn: "mailing_list_id",
+    grantGroupIndex: "idx_mailing_list_group_grants_group",
     auditEntityType: "mailing_list",
     capabilities: MAILING_LIST_GROUP_CAPABILITIES,
     grantingCapabilities: {

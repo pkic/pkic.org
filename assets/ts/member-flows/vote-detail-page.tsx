@@ -107,11 +107,19 @@ function ElectionResult({ result, candidates }: { result: ElectionResultData; ca
 }
 
 function VoteResult({ vote }: { vote: PublicVote }) {
+  if (vote.status === "cancelled") {
+    return (
+      <p class="text-muted mt-3">
+        This vote was cancelled{vote.cancellationReason ? `: ${vote.cancellationReason}` : "."}
+      </p>
+    );
+  }
   if (vote.status !== "closed") {
     return (
       <p class="text-muted mt-3">
-        Voting {vote.status === "open" ? "closes" : "opens"} {formatDate(vote.closesAt)}. Results will be published here
-        once voting closes.
+        Voting {vote.status === "open" ? "closes" : "opens"}{" "}
+        {formatDate(vote.status === "open" ? vote.closesAt : vote.opensAt)}. Results will be published here once voting
+        closes.
       </p>
     );
   }
@@ -129,7 +137,10 @@ function VoteDetailView({ vote, indexHref }: { vote: PublicVote; indexHref: stri
     <div class="container py-4">
       <div class="d-flex gap-2 mb-2">
         <span class="badge text-bg-light border">{VOTE_TYPE_LABELS[vote.voteType]}</span>
-        <span class="badge text-bg-light border">{vote.scopeType === "forum" ? "Forum" : "Working Group"}</span>
+        <span class="badge text-bg-light border">{vote.ownerGroupName}</span>
+        <span class="badge text-bg-light border">
+          {vote.electorateMode === "per_member" ? "Per Member" : "Per person"}
+        </span>
       </div>
       <h1 class="h3">{vote.title}</h1>
       {vote.description && <p class="lead">{vote.description}</p>}

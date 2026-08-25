@@ -24,8 +24,8 @@ export const PortalVoteProposalsPost = openApiRoute(submitProposalRouteSchema, a
 
 export const PortalVoteProposalsGet = openApiRoute(listProposalsRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  await requireMemberFromRequest(db, c.req.raw, c.env);
-  const { proposals, total } = await listVoteProposals(db, data.query);
+  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
+  const { proposals, total } = await listVoteProposals(db, member.userId, data.query);
   return json(
     listProposalsResponseSchema.parse({
       proposals,

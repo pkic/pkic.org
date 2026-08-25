@@ -3,11 +3,11 @@
  *
  * workflow half: member content submission ->
  * moderation queue -> staff approve/reject, plus secondary contact
- * nomination -> staff confirmation, plus voting delegate self-service. The
+ * nomination -> staff confirmation. The
  * data-bearing columns/admin profile-edit surface these build on were
  * pulled forward in consolidated migration 0035 (see admin-organizations.test.ts); this
- * file covers what's new. Primary/secondary contact and voting delegate are
- * role-primary_contact/role-secondary_contact/role-voting_delegate grants
+ * file covers what's new. Primary and secondary contacts are
+ * role-primary_contact/role-secondary_contact grants
  * (user_roles, consolidated migration 0035) — see functions/_lib/services/membership/
  * representative-roles.ts — not columns on `organizations`.
  */
@@ -1146,99 +1146,5 @@ describe("Secondary contact nomination & confirmation", () => {
       memberId,
     );
     expect(Number(nominationRows[0].total)).toBe(0);
-  });
-});
-
-describe("Voting delegate + GET /api/v1/me/organization profile", () => {
-  beforeEach(async () => {
-    await resetDb();
-    await seedEventAndAdmin(env.DB);
-  });
-
-  it("GET /api/v1/me/organization defaults votingDelegateUserId to null and reflects it after being set", async () => {
-    const { organizationId, userId } = await seedOrgWithContact("delegate-primary@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "delegate-get-token");
-
-    const before = await call(token, "/api/v1/me/organization");
-    expect(before.status).toBe(200);
-    const beforeBody = (await before.json()) as { votingDelegateUserId: string | null };
-    expect(beforeBody.votingDelegateUserId).toBeNull();
-
-    const delegateUserId = await addRepresentative(organizationId, "delegate-rep@example.test");
-    const setResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
-      method: "PATCH",
-      body: JSON.stringify({ userId: delegateUserId }),
-    });
-    expect(setResponse.status).toBe(200);
-
-    const after = await call(token, "/api/v1/me/organization");
-    const afterBody = (await after.json()) as { votingDelegateUserId: string | null };
-    expect(afterBody.votingDelegateUserId).toBe(delegateUserId);
-  });
-
-  it("lets the secondary contact set and clear the voting delegate (role-voting_delegate grant)", async () => {
-    const { organizationId, memberId } = await seedOrgWithContact("delegate-primary2@example.test", "F");
-    const secondaryUserId = await addRepresentative(organizationId, "delegate-secondary@example.test");
-    await assignRepresentativeRole(env.DB, memberId, secondaryUserId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
-    const delegateUserId = await addRepresentative(organizationId, "delegate-target@example.test");
-    const token = await createMemberSession(env.DB, secondaryUserId, "delegate-set-token");
-
-    const setResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
-      method: "PATCH",
-      body: JSON.stringify({ userId: delegateUserId }),
-    });
-    expect(setResponse.status).toBe(200);
-
-    const setRows = await queryAll<{ user_id: string }>(
-      env.DB,
-      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-voting_delegate' AND revoked_at IS NULL`,
-      memberId,
-    );
-    expect(setRows[0].user_id).toBe(delegateUserId);
-
-    const clearResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
-      method: "PATCH",
-      body: JSON.stringify({ userId: null }),
-    });
-    expect(clearResponse.status).toBe(200);
-
-    const clearedRows = await queryAll<{ total: number }>(
-      env.DB,
-      `SELECT COUNT(*) AS total FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-voting_delegate' AND revoked_at IS NULL`,
-      memberId,
-    );
-    expect(Number(clearedRows[0].total)).toBe(0);
-  });
-
-  it("rejects a non-contact representative's voting-delegate update with 403", async () => {
-    const { organizationId } = await seedOrgWithContact("delegate-primary3@example.test", "F");
-    const nonContactUserId = await addRepresentative(organizationId, "delegate-non-contact@example.test");
-    const token = await createMemberSession(env.DB, nonContactUserId, "delegate-non-contact-token");
-
-    const response = await call(token, "/api/v1/me/organization/voting-delegate", {
-      method: "PATCH",
-      body: JSON.stringify({ userId: nonContactUserId }),
-    });
-    expect(response.status).toBe(403);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("NOT_ORG_CONTACT");
-  });
-
-  it("rejects a voting delegate who isn't an active representative of the same org with 422", async () => {
-    const { userId: primaryUserId } = await seedOrgWithContact("delegate-primary4@example.test", "F");
-    const outsiderUserId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(outsiderUserId, "delegate-outsider@example.test", "delegate-outsider@example.test")
-      .run();
-    const token = await createMemberSession(env.DB, primaryUserId, "delegate-outsider-token");
-
-    const response = await call(token, "/api/v1/me/organization/voting-delegate", {
-      method: "PATCH",
-      body: JSON.stringify({ userId: outsiderUserId }),
-    });
-    expect(response.status).toBe(422);
   });
 });

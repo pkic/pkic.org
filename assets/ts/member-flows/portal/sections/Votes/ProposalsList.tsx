@@ -4,7 +4,6 @@ import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { useApiPage } from "../../../../hooks/useApiPage";
-import { isVotingCategory } from "./shared";
 import { ProposalForm } from "./ProposalForm";
 import { ProposalCard } from "./ProposalCard";
 
@@ -25,7 +24,7 @@ export function ProposalsList() {
 
   return (
     <div class="d-flex flex-column gap-3 content-width-reading">
-      {isVotingCategory() && <ProposalForm onCreated={proposalsPage.reload} />}
+      <ProposalForm onCreated={proposalsPage.reload} />
       {proposals.length === 0 ? (
         <p class="text-muted">No proposals are currently open for endorsement.</p>
       ) : (

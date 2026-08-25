@@ -7,6 +7,8 @@ import {
 } from "./admin-forms";
 import { jsonErrorResponse, successResponseSchema } from "./api-common";
 import {
+  formDefinitionCreateSchema,
+  formDefinitionUpdateSchema,
   formFieldDefinitionSchema,
   formPlacementPolicyUpdateSchema,
   formPlacementSchema,
@@ -52,6 +54,16 @@ export const groupFormsListResponseSchema = paginatedResponseSchema("forms", gro
 export const groupFormDefinitionResponseSchema = groupFormPlacementSummarySchema.extend({
   fields: z.array(formFieldDefinitionSchema),
 });
+
+export const groupFormDefinitionCreateSchema = formDefinitionCreateSchema.safeExtend({
+  purpose: z.enum(["survey", "feedback"]),
+});
+export const groupFormDefinitionUpdateSchema = formDefinitionUpdateSchema;
+export type GroupFormDefinitionCreateInput = z.infer<typeof groupFormDefinitionCreateSchema>;
+export type GroupFormDefinitionUpdateInput = z.infer<typeof groupFormDefinitionUpdateSchema>;
+export const groupFormDefinitionMutationResponseSchema = successResponseSchema.extend(
+  groupFormDefinitionResponseSchema.shape,
+);
 
 const groupFormParamsSchema = groupReferenceParamsSchema.extend({ placementId: databaseIdSchema });
 
@@ -110,6 +122,26 @@ export const groupFormsListRouteSchema = {
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
     "404": jsonErrorResponse("Group not found or not visible."),
+  },
+};
+
+export const groupFormCreateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Create a group survey or feedback form",
+  description:
+    "Creates one reusable form definition and its group-owned response placement in a single authorized D1 command.",
+  request: {
+    params: groupReferenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupFormDefinitionCreateSchema } } },
+  },
+  responses: {
+    "201": {
+      description: "Created group form definition and placement.",
+      content: { "application/json": { schema: groupFormDefinitionMutationResponseSchema } },
+    },
+    "403": jsonErrorResponse("Effective group management permission is required."),
+    "404": jsonErrorResponse("Group not found or not visible."),
+    "409": jsonErrorResponse("A form with this key already exists or management authority changed."),
   },
 };
 
@@ -192,5 +224,25 @@ export const groupFormPlacementUpdateRouteSchema = {
     "403": jsonErrorResponse("Effective form-management capability is required."),
     "404": jsonErrorResponse("The form is not available through this group."),
     "409": jsonErrorResponse("The placement changed concurrently."),
+  },
+};
+
+export const groupFormDefinitionUpdateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Update an owned group form definition",
+  description:
+    "Updates editable metadata and fields only when this group owns both the definition and placement; shared placements remain owner-controlled.",
+  request: {
+    params: groupFormParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupFormDefinitionUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Updated group form definition and placement projection.",
+      content: { "application/json": { schema: groupFormDefinitionMutationResponseSchema } },
+    },
+    "403": jsonErrorResponse("Effective management of the owning group and form placement is required."),
+    "404": jsonErrorResponse("The owned form is not available through this group."),
+    "409": jsonErrorResponse("The definition or management authority changed concurrently."),
   },
 };

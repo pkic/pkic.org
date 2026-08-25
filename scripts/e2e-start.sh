@@ -4,7 +4,9 @@
 # Playwright calls this as webServer and waits for port 8788 to be reachable.
 set -e
 
-STATE_DIR=$(mktemp -d)
+STATE_ROOT="${E2E_STATE_ROOT:-${TMPDIR:-/tmp}}"
+mkdir -p "$STATE_ROOT"
+STATE_DIR=$(mktemp -d "${STATE_ROOT%/}/pkic-e2e.XXXXXX")
 INTERCEPT_URL_FILE="${E2E_SENDGRID_URL_FILE:-test-results/e2e-sendgrid-url}"
 E2E_ENV_FILE="$STATE_DIR/.e2e.vars"
 E2E_PORT="${E2E_PORT:-8788}"
@@ -29,7 +31,7 @@ rm -rf dist/ .wrangler/deploy/config.json
 
 # ── 1. Build static site ────────────────────────────────────────────────────
 node scripts/build-frontend.mjs --dev
-hugo -e development --cleanDestinationDir
+HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo --configDir='' --baseURL=/ -e development
 
 # ── 2. Seed a fresh database ────────────────────────────────────────────────
 printf 'y\n' | pnpm exec wrangler d1 migrations apply pkic-db-local --env local --local --persist-to="$STATE_DIR"

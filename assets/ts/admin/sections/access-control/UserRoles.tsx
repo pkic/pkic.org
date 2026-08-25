@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { UserRoleAssignment } from "../../types";
-import { UserPicker, type PickedUser } from "./UserPicker";
+import { UserPicker, type PickedUser } from "../../../components/UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 import { adminRoleCatalog } from "../../services/catalogs";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";
@@ -40,7 +40,7 @@ export function UserRoles() {
       toast("Role assigned", "success");
       setContext({ contextType: null, contextId: null });
       setExpiresAt("");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
@@ -54,7 +54,7 @@ export function UserRoles() {
     try {
       await apiCommand(`/api/v1/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
       toast("Role revoked", "success");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }

@@ -63,7 +63,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         body: "{}",
       });
       toast("Waitlist promotions run", "success");
-      tableRef.current?.reload();
+      await tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }

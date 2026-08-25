@@ -101,8 +101,9 @@ describe("publicVoteGetResponseSchema", () => {
           slug: "closed-motion",
           title: "Closed Motion",
           voteType: "motion",
-          scopeType: "forum",
-          scopeId: null,
+          ownerGroupId: "00000000-0000-4000-8000-000000000010",
+          ownerGroupName: "All Members",
+          electorateMode: "per_member",
           thresholdType: "simple_majority",
           candidates: null,
           result: MOTION_RESULT,
@@ -118,8 +119,9 @@ describe("publicVoteGetResponseSchema", () => {
           slug: "closed-election",
           title: "Closed Election",
           voteType: "election",
-          scopeType: "working_group",
-          scopeId: "00000000-0000-4000-8000-000000000003",
+          ownerGroupId: "00000000-0000-4000-8000-000000000003",
+          ownerGroupName: "Example Working Group",
+          electorateMode: "per_person",
           thresholdType: "successive_elimination",
           candidates: [
             {

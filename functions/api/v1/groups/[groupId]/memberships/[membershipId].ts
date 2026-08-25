@@ -12,5 +12,5 @@ export const GroupMembershipEnd = openApiRoute(groupMembershipEndRouteSchema, as
   const group = await getGroup(db, data.params.groupId);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, admin, group.id);
-  return json(await endGroupMembership(db, group.id, data.params.membershipId, admin.id));
+  return json(await endGroupMembership(db, group.id, data.params.membershipId, admin));
 });

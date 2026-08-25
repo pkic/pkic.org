@@ -337,7 +337,6 @@ export const myOrganizationProfileSchema = z
     isOrgContact: z.boolean(),
     isPrimaryContact: z.boolean(),
     pendingSecondaryContactUserId: databaseIdSchema.nullable(),
-    votingDelegateUserId: databaseIdSchema.nullable(),
     pendingReview: myOrganizationReviewSchema.nullable(),
   })
   .extend(organizationProfileContentFieldsSchema.shape);
@@ -450,29 +449,6 @@ export const mySecondaryContactNominateRouteSchema = {
     "422": {
       description: "Nominee is not an active member of the same organization, or is already the primary contact.",
     },
-  },
-};
-
-export const myVotingDelegateUpdateSchema = z.object({
-  userId: databaseIdSchema.nullable(),
-});
-export const myVotingDelegateUpdateResponseSchema = z.object({ votingDelegateUserId: databaseIdSchema.nullable() });
-
-export const myVotingDelegateUpdateRouteSchema = {
-  tags: ["Me"],
-  summary: "Set my organization's standing forum-vote delegate",
-  description:
-    "Only the org's primary or secondary contact may call this. Takes effect immediately (no staff confirmation). Pass userId: null to clear the override and fall back to the primary contact.",
-  request: {
-    body: { content: { "application/json": { schema: myVotingDelegateUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Voting delegate updated.",
-      content: { "application/json": { schema: myVotingDelegateUpdateResponseSchema } },
-    },
-    "403": { description: "Caller is not an org contact, or has no organization." },
-    "422": { description: "Nominee is not an active member of the same organization." },
   },
 };
 

@@ -13,6 +13,7 @@ export const mailingListPreferenceSchema = z.enum(["subscribed", "unsubscribed"]
 export const mailingListPreferenceMutationSchema = z.object({
   preference: z.enum(["subscribed", "unsubscribed", "inherit"]),
 });
+export type MailingListPreferenceMutationInput = z.infer<typeof mailingListPreferenceMutationSchema>;
 
 export const mailingListSchema = z.object({
   id: databaseIdSchema,
@@ -70,6 +71,7 @@ export const effectiveMailingListSubscriptionSchema = z.object({
   preference: mailingListPreferenceSchema.nullable(),
   effectiveSubscribed: z.boolean(),
 });
+export type EffectiveMailingListSubscription = z.infer<typeof effectiveMailingListSubscriptionSchema>;
 export const effectiveMailingListSubscriptionsResponseSchema = paginatedResponseSchema(
   "subscriptions",
   effectiveMailingListSubscriptionSchema,
