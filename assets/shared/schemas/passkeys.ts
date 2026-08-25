@@ -74,10 +74,14 @@ export type PasskeySummary = z.infer<typeof passkeySummarySchema>;
 export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySummarySchema) });
 
 export const passkeyAuthenticateCompleteBaseResponseSchema = successResponseSchema.extend({ expiresAt: z.string() });
-export const passkeyAuthenticateCompleteResponseSchema = z.union([
-  passkeyAuthenticateCompleteBaseResponseSchema.extend({ admin: publicAuthAdminSchema }),
-  passkeyAuthenticateCompleteBaseResponseSchema.extend({ member: authMemberSchema }),
-]);
+export const passkeyAuthenticateCompleteResponseSchema = passkeyAuthenticateCompleteBaseResponseSchema
+  .extend({
+    admin: publicAuthAdminSchema.optional(),
+    member: authMemberSchema.optional(),
+  })
+  .refine((value) => value.admin !== undefined || value.member !== undefined, {
+    message: "At least one authenticated capacity is required",
+  });
 
 export const passkeyRegisterBeginRouteSchema = {
   tags: ["Passkeys"],
@@ -123,7 +127,8 @@ export const passkeyAuthenticateBeginRouteSchema = {
 export const passkeyAuthenticateCompleteRouteSchema = {
   tags: ["Passkeys"],
   summary: "Complete passkey authentication",
-  description: "Verifies the assertion and creates a session, same as magic-link verification.",
+  description:
+    "Verifies the assertion and creates every currently eligible staff/member session capacity for the identity.",
   request: {
     body: { content: { "application/json": { schema: passkeyAuthenticateCompleteSchema } }, required: true },
   },

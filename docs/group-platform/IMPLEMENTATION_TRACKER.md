@@ -405,6 +405,12 @@ Status: In progress
 Status: In progress
 
 - [ ] Make portal authentication identity-based.
+      Passkey authentication now resolves staff and member eligibility
+      independently and atomically establishes both session capacities for a
+      dual-capacity identity. Staff-only and member-only clients retain their
+      existing response/cookie contracts. The neutral portal magic-link,
+      session-status, and logout routes are still required before this item is
+      complete.
 - [ ] Gate member actions separately from staff management permissions.
 - [ ] Add selected-group context and capability-derived navigation.
 - [ ] Reuse views across working group, task force, board, executive council,

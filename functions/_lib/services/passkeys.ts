@@ -304,9 +304,24 @@ export async function beginPasskeyAuthentication(
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
 
-export type PasskeyAuthenticationResult =
-  | { kind: "admin"; admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string }
-  | { kind: "member"; member: AuthMember; sessionId: string; expiresAt: string };
+interface PasskeyAdminSession {
+  admin: UserBackedAuthAdmin;
+  sessionId: string;
+  expiresAt: string;
+}
+
+interface PasskeyMemberSession {
+  member: AuthMember;
+  sessionId: string;
+  expiresAt: string;
+}
+
+export interface PasskeyAuthenticationResult {
+  admin?: PasskeyAdminSession;
+  member?: PasskeyMemberSession;
+  /** Earliest capacity expiry, retained for existing login clients. */
+  expiresAt: string;
+}
 
 export async function completePasskeyAuthentication(
   db: DatabaseLike,
@@ -369,12 +384,12 @@ export async function completePasskeyAuthentication(
     );
   }
 
-  // A passkey's owner may be eligible via either the staff path or the
-  // member path (never both — see functions/_lib/auth/member.ts's header
-  // comment on the two being distinct populations) — try staff first since
-  // that was this feature's original, still-larger population.
-  const staffUser = await findEligibleStaffUserById(db, credentialRow.user_id);
-  const member = staffUser ? null : await findEligibleMemberById(db, credentialRow.user_id);
+  // Resolve both live capacities independently. Staff and member permissions
+  // remain separate, but the same users.id identity may validly hold both.
+  const [staffUser, member] = await Promise.all([
+    findEligibleStaffUserById(db, credentialRow.user_id),
+    findEligibleMemberById(db, credentialRow.user_id),
+  ]);
   if (!staffUser && !member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
@@ -384,10 +399,10 @@ export async function completePasskeyAuthentication(
   const persistAuthentication = async (input: {
     actorType: "admin" | "member";
     actorId: string;
-    entityType: "admin_session" | "member_session";
-    sessionId: string;
+    auditSessionId: string;
     expiresAt: string;
-    sessionStatement: StatementLike;
+    capacities: Array<"admin" | "member">;
+    sessionStatements: StatementLike[];
   }) => {
     try {
       await db.batch([
@@ -404,12 +419,12 @@ export async function completePasskeyAuthentication(
           input.actorType,
           input.actorId,
           "passkey_authenticated",
-          input.entityType,
-          input.sessionId,
-          { expiresAt: input.expiresAt },
+          "identity_session",
+          input.auditSessionId,
+          { capacities: input.capacities, expiresAt: input.expiresAt },
           lastUsedAt,
         ),
-        input.sessionStatement,
+        ...input.sessionStatements,
         prepareExpiredPasskeyChallengeCleanup(db, lastUsedAt),
       ]);
     } catch (error) {
@@ -427,46 +442,66 @@ export async function completePasskeyAuthentication(
     }
   };
 
-  if (staffUser) {
-    const session = await prepareSessionRow(
-      db,
-      { table: "sessions", subjectColumn: "user_id" },
-      staffUser.id,
-      PASSKEY_SESSION_TTL_HOURS,
-    );
-    const admin = createUserBackedAuthAdmin({
-      id: staffUser.id,
-      email: staffUser.email,
-      role: staffUser.role,
-      scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
-    });
-    await persistAuthentication({
-      actorType: "admin",
-      actorId: admin.id,
-      entityType: "admin_session",
-      sessionId: session.sessionId,
-      expiresAt: session.expiresAt,
-      sessionStatement: session.statement,
-    });
-    return { kind: "admin", admin, sessionId: session.sessionId, expiresAt: session.expiresAt };
+  const adminSession = staffUser
+    ? await prepareSessionRow(
+        db,
+        { table: "sessions", subjectColumn: "user_id" },
+        staffUser.id,
+        PASSKEY_SESSION_TTL_HOURS,
+      )
+    : null;
+  const memberSession = member
+    ? await prepareSessionRow(
+        db,
+        { table: "sessions", subjectColumn: "user_id" },
+        member.userId,
+        resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
+      )
+    : null;
+  const expiresAt = [adminSession?.expiresAt, memberSession?.expiresAt]
+    .filter((value): value is string => Boolean(value))
+    .sort()[0];
+  if (!expiresAt) {
+    throw new AppError(500, "SESSION_ISSUANCE_FAILED", "No eligible session capacity was prepared");
   }
 
-  const session = await prepareSessionRow(
-    db,
-    { table: "sessions", subjectColumn: "user_id" },
-    member!.userId,
-    resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
-  );
-  const authenticatedMember = { ...member!, sessionId: session.sessionId, expiresAt: session.expiresAt };
   await persistAuthentication({
-    actorType: "member",
-    actorId: member!.userId,
-    entityType: "member_session",
-    sessionId: session.sessionId,
-    expiresAt: session.expiresAt,
-    sessionStatement: session.statement,
+    actorType: staffUser ? "admin" : "member",
+    actorId: credentialRow.user_id,
+    auditSessionId: (adminSession ?? memberSession)!.sessionId,
+    expiresAt,
+    capacities: [...(staffUser ? (["admin"] as const) : []), ...(member ? (["member"] as const) : [])],
+    sessionStatements: [adminSession?.statement, memberSession?.statement].filter(
+      (statement): statement is StatementLike => Boolean(statement),
+    ),
   });
-  return { kind: "member", member: authenticatedMember, sessionId: session.sessionId, expiresAt: session.expiresAt };
+
+  return {
+    expiresAt,
+    ...(staffUser && adminSession
+      ? {
+          admin: {
+            admin: createUserBackedAuthAdmin({
+              id: staffUser.id,
+              email: staffUser.email,
+              role: staffUser.role,
+              scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
+            }),
+            sessionId: adminSession.sessionId,
+            expiresAt: adminSession.expiresAt,
+          },
+        }
+      : {}),
+    ...(member && memberSession
+      ? {
+          member: {
+            member: { ...member, sessionId: memberSession.sessionId, expiresAt: memberSession.expiresAt },
+            sessionId: memberSession.sessionId,
+            expiresAt: memberSession.expiresAt,
+          },
+        }
+      : {}),
+  };
 }
 
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {

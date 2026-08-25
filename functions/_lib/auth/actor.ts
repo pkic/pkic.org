@@ -8,8 +8,9 @@
  * Tries a user-backed admin session first (cookie name `pkic_admin_session`),
  * then the member session (`pkic_member_session`). Synthetic admin transports
  * such as the shared API key cannot own passkeys and fail closed.
- * The two sessions use distinct cookies/JWT `typ` claims, so at most one
- * normally resolves for a given browser. A generic 401 is thrown only if neither
+ * The two sessions use distinct cookies/JWT `typ` claims and may coexist for
+ * a dual-capacity identity. This helper intentionally selects the staff actor
+ * for shared operations; capacity-aware portal code must resolve both. A generic 401 is thrown only if neither
  * does, rather than surfacing whichever specific error came first, since
  * this endpoint is reachable from both the admin and member portal
  * frontends and neither error is more "correct" than the other from the

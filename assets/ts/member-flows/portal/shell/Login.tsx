@@ -3,9 +3,8 @@
  * Mirrors admin/shell/Login.tsx's structure; the passkey ceremony code is
  * near-identical (a small duplicated helper, same precedent as ui.ts's
  * header comment) but posts to the member magic-link endpoints and expects
- * a `{member}` response from authenticate/complete rather than `{admin}` —
- * see functions/api/v1/auth/passkeys/authenticate-complete.ts's
- * kind-discriminated response, generalized in this same phase.
+ * a `{member}` capacity in authenticate/complete. A dual-capacity identity
+ * may receive `{admin, member}` together; this portal only requires member.
  */
 import { useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
@@ -23,7 +22,7 @@ async function requestMagicLink(email: string): Promise<void> {
 
 async function signInWithPasskey(): Promise<void> {
   const result = await authenticateWithPasskey();
-  if (!("member" in result)) {
+  if (!result.member) {
     // Succeeded, but the passkey belonged to a staff account, not a member.
     throw new Error("This passkey isn't registered to a member account.");
   }

@@ -90,6 +90,65 @@ export function createSessionEstablishedResponse(body: unknown, serializedCookie
   return response;
 }
 
+interface AdminSessionResponseInput {
+  admin: UserBackedAuthAdmin;
+  sessionId: string;
+  expiresAt: string;
+  state?: string | null;
+}
+
+interface MemberSessionResponseInput {
+  member: AuthMember;
+  sessionId: string;
+  expiresAt: string;
+}
+
+/**
+ * Signs and sets every session capacity established for one identity. Admin
+ * and member sessions deliberately remain separate token types so existing
+ * permission boundaries keep failing closed; a portal login may set both
+ * cookies when the same user currently holds both capacities.
+ */
+export async function createIdentitySessionEstablishedResponse(options: {
+  secret: string;
+  request: Request;
+  body: unknown;
+  admin?: AdminSessionResponseInput;
+  member?: MemberSessionResponseInput;
+}): Promise<Response> {
+  if (!options.admin && !options.member) {
+    throw new Error("At least one identity session is required");
+  }
+
+  const [adminToken, memberToken] = await Promise.all([
+    options.admin
+      ? signAdminSessionToken(options.secret, {
+          admin: options.admin.admin,
+          sessionId: options.admin.sessionId,
+          expiresAt: options.admin.expiresAt,
+          state: options.admin.state,
+        })
+      : null,
+    options.member
+      ? signMemberSessionToken(options.secret, {
+          userId: options.member.member.userId,
+          sessionId: options.member.sessionId,
+          expiresAt: options.member.expiresAt,
+          activeMemberId: options.member.member.memberId,
+        })
+      : null,
+  ]);
+
+  const response = jsonNoStore(options.body);
+  if (adminToken) {
+    response.headers.append("Set-Cookie", serializeAdminSessionCookie(adminToken, options.request));
+  }
+  if (memberToken) {
+    response.headers.append("Set-Cookie", serializeMemberSessionCookie(memberToken, options.request));
+  }
+  return response;
+}
+
 /** Canonical admin-session claims/cookie adapter shared by magic-link and passkey authentication. */
 export async function createAdminSessionEstablishedResponse(options: {
   secret: string;
@@ -99,20 +158,16 @@ export async function createAdminSessionEstablishedResponse(options: {
   expiresAt: string;
   state?: string | null;
 }): Promise<Response> {
-  const token = await signAdminSessionToken(options.secret, {
-    admin: options.admin,
-    sessionId: options.sessionId,
-    expiresAt: options.expiresAt,
-    state: options.state,
-  });
-  return createSessionEstablishedResponse(
-    adminSessionEstablishedResponseSchema.parse({
+  return createIdentitySessionEstablishedResponse({
+    secret: options.secret,
+    request: options.request,
+    body: adminSessionEstablishedResponseSchema.parse({
       success: true,
       expiresAt: options.expiresAt,
       admin: publicAuthAdmin(options.admin),
     }),
-    serializeAdminSessionCookie(token, options.request),
-  );
+    admin: options,
+  });
 }
 
 /** Canonical member-session claims/cookie adapter shared by magic-link and passkey authentication. */
@@ -123,16 +178,12 @@ export async function createMemberSessionEstablishedResponse(options: {
   sessionId: string;
   expiresAt: string;
 }): Promise<Response> {
-  const token = await signMemberSessionToken(options.secret, {
-    userId: options.member.userId,
-    sessionId: options.sessionId,
-    expiresAt: options.expiresAt,
-    activeMemberId: options.member.memberId,
+  return createIdentitySessionEstablishedResponse({
+    secret: options.secret,
+    request: options.request,
+    body: { success: true, expiresAt: options.expiresAt, member: options.member },
+    member: options,
   });
-  return createSessionEstablishedResponse(
-    { success: true, expiresAt: options.expiresAt, member: options.member },
-    serializeMemberSessionCookie(token, options.request),
-  );
 }
 
 interface SessionVerificationResult {
