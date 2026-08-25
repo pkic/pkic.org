@@ -357,8 +357,19 @@ Status: In progress
           shared access without allowing management to imply participation;
           EXPLAIN assertions prove owner and grantee index use for page and
           count statements.
-    - [ ] Apply `participate`, `view_results`, and `manage` to canonical vote
-          detail, ballot, result, proposal, and lifecycle routes.
+    - [x] Apply `participate` and `view_results` to canonical vote detail,
+          ballot, and result routes.
+          Evidence: all three routes bind access to the selected group. Ballot
+          eligibility and the final UPSERT constrain the same exact group, so
+          access revocation cannot fall through to another membership context.
+          The shared member predicates are derived from the canonical grant
+          definition and no longer treat leadership-only `manage` as member
+          view, participation, or result access. Mounted tests prove owner and
+          shared-group ballots, result separation, and manager/member isolation;
+          the portal reuses its existing ballot and result components against
+          the nested endpoints.
+    - [ ] Apply `manage` to canonical vote creation, update, raw-ballot,
+          proposal, and lifecycle routes.
         Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
         and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
         broader focused form/grant regression selection passes 20 tests. Four
@@ -400,8 +411,9 @@ Status: In progress
       assignment deletion, compatibility routing, canonical public directory
       reads, and fresh-D1 schema use.
 - [x] Add the nested vote discovery route.
-- [ ] Add nested vote detail, ballot, result, proposal, lifecycle, and stats
-      routes.
+- [x] Add nested vote detail, ballot, and result routes.
+- [ ] Add nested vote creation, update, raw-ballot, proposal, lifecycle, and
+      stats routes.
 - [ ] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.
@@ -528,9 +540,11 @@ Status: In progress
       the admin application; dated Board and Executive Council positions remain
       there because they are global records rather than group governance.
       Group vote discovery now uses that same controller and renders effective
-      per-resource capabilities. Form authoring/response management, complete
-      vote lifecycle/ballot/proposal management, mailing-list management,
-      statistics, complete meeting lifecycle, and resource sharing remain open.
+      per-resource capabilities. Its detail view reuses the existing ballot and
+      result components while the nested API binds participation to the
+      selected group. Form authoring/response management, vote creation and
+      lifecycle/proposal management, mailing-list management, statistics,
+      complete meeting lifecycle, and resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.

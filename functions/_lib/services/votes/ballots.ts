@@ -1,15 +1,19 @@
 /** Ballot eligibility and atomic create-or-update submission. */
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { MOTION_CHOICES, eligibleCategoriesOf, getVoteRowOrThrow, type BallotChoice, type VoteRow } from "./shared";
-import { voteParticipationGroupPredicate } from "./vote-access";
+import { exactVoteGroupMembership, voteParticipationGroupPredicate } from "./vote-access";
 
 interface EligibleCapacity {
   memberId: string;
   membershipCategory: string;
+}
+
+interface BallotActor {
+  userId: string;
 }
 
 async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: string): Promise<void> {
@@ -39,12 +43,14 @@ function categoryAllowed(vote: VoteRow, category: string): boolean {
 async function resolvePerMemberCapacity(
   db: DatabaseLike,
   vote: VoteRow,
-  member: AuthMember,
+  member: BallotActor,
   requestedMemberId: string | null | undefined,
+  throughGroupId?: string,
 ): Promise<EligibleCapacity> {
   if (!requestedMemberId) {
     throw new AppError(422, "MEMBER_ID_REQUIRED", "Select the represented Member whose ballot you are submitting");
   }
+  const context = exactVoteGroupMembership(throughGroupId);
   const capacity = await first<{ member_id: string; category_code: string }>(
     db,
     `SELECT membership.member_id, category.category_code
@@ -60,12 +66,13 @@ async function resolvePerMemberCapacity(
      JOIN users representative_user ON representative_user.id = membership.user_id AND representative_user.active = 1
      WHERE current_vote.id = ?
        AND ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
+       ${context.sql}
        AND membership.member_id = ?
        AND membership.left_at IS NULL
        AND represented_member.status = 'active'
        AND represented_member.organization_id IS NOT NULL
      LIMIT 1`,
-    [member.userId, vote.id, requestedMemberId],
+    [member.userId, vote.id, ...context.bindings, requestedMemberId],
   );
   if (!capacity) {
     throw new AppError(403, "MEMBER_BALLOT_NOT_AUTHORIZED", "You cannot submit a ballot for this Member in this group");
@@ -79,10 +86,12 @@ async function resolvePerMemberCapacity(
 async function resolvePerPersonCapacity(
   db: DatabaseLike,
   vote: VoteRow,
-  member: AuthMember,
+  member: BallotActor,
+  throughGroupId?: string,
 ): Promise<EligibleCapacity> {
   const restriction = eligibleCategoriesOf(vote);
   const restrictionJson = restriction ? JSON.stringify(restriction) : null;
+  const context = exactVoteGroupMembership(throughGroupId);
   const capacity = await first<{ member_id: string; category_code: string }>(
     db,
     `SELECT membership.member_id, category.category_code
@@ -93,6 +102,7 @@ async function resolvePerPersonCapacity(
      JOIN users participant ON participant.id = membership.user_id AND participant.active = 1
      WHERE current_vote.id = ?
        AND ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
+       ${context.sql}
        AND membership.left_at IS NULL
        AND represented_member.status = 'active'
        AND category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
@@ -101,7 +111,7 @@ async function resolvePerPersonCapacity(
        ))
      ORDER BY membership.joined_at ASC, membership.id ASC
      LIMIT 1`,
-    [member.userId, vote.id, restrictionJson, restrictionJson],
+    [member.userId, vote.id, ...context.bindings, restrictionJson, restrictionJson],
   );
   if (!capacity) {
     throw new AppError(403, "PERSON_BALLOT_NOT_AUTHORIZED", "You are not eligible to vote through this group");
@@ -112,12 +122,14 @@ async function resolvePerPersonCapacity(
 function preparePerMemberBallotUpsert(
   db: DatabaseLike,
   vote: VoteRow,
-  member: AuthMember,
+  member: BallotActor,
   capacity: EligibleCapacity,
   choice: string,
   ipHash: string | null,
   now: string,
+  throughGroupId?: string,
 ): StatementLike {
+  const context = exactVoteGroupMembership(throughGroupId);
   return db
     .prepare(
       `INSERT INTO vote_ballots
@@ -147,6 +159,7 @@ function preparePerMemberBallotUpsert(
             AND representative_user.active = 1
            WHERE ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
              AND membership.user_id = ?
+             ${context.sql}
              AND membership.member_id = ?
              AND membership.left_at IS NULL
              AND represented_member.status = 'active'
@@ -180,6 +193,7 @@ function preparePerMemberBallotUpsert(
       now,
       now,
       member.userId,
+      ...context.bindings,
       capacity.memberId,
       capacity.membershipCategory,
     );
@@ -188,11 +202,13 @@ function preparePerMemberBallotUpsert(
 function preparePerPersonBallotUpsert(
   db: DatabaseLike,
   vote: VoteRow,
-  member: AuthMember,
+  member: BallotActor,
   choice: string,
   ipHash: string | null,
   now: string,
+  throughGroupId?: string,
 ): StatementLike {
+  const context = exactVoteGroupMembership(throughGroupId);
   return db
     .prepare(
       `INSERT INTO vote_ballots
@@ -215,6 +231,7 @@ function preparePerPersonBallotUpsert(
            JOIN users participant ON participant.id = membership.user_id AND participant.active = 1
            WHERE ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
              AND membership.user_id = ?
+             ${context.sql}
              AND membership.left_at IS NULL
              AND represented_member.status = 'active'
              AND category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
@@ -244,26 +261,28 @@ function preparePerPersonBallotUpsert(
       now,
       now,
       member.userId,
+      ...context.bindings,
     );
 }
 
 export async function submitBallot(
   db: DatabaseLike,
-  member: AuthMember,
+  member: BallotActor,
   voteIdOrSlug: string,
   requestedMemberId: string | null | undefined,
   choice: string,
   ipHash: string | null,
+  throughGroupId?: string,
 ): Promise<void> {
   const vote = await getVoteRowOrThrow(db, voteIdOrSlug);
   let capacity: EligibleCapacity | null = null;
   if (vote.electorate_mode === "per_member") {
-    capacity = await resolvePerMemberCapacity(db, vote, member, requestedMemberId);
+    capacity = await resolvePerMemberCapacity(db, vote, member, requestedMemberId, throughGroupId);
   } else {
     if (requestedMemberId != null) {
       throw new AppError(422, "MEMBER_ID_NOT_ALLOWED", "Per-person votes do not accept a Member selection");
     }
-    await resolvePerPersonCapacity(db, vote, member);
+    await resolvePerPersonCapacity(db, vote, member, throughGroupId);
   }
 
   const now = nowIso();
@@ -272,8 +291,8 @@ export async function submitBallot(
 
   const statement =
     vote.electorate_mode === "per_member"
-      ? preparePerMemberBallotUpsert(db, vote, member, capacity!, choice, ipHash, now)
-      : preparePerPersonBallotUpsert(db, vote, member, choice, ipHash, now);
+      ? preparePerMemberBallotUpsert(db, vote, member, capacity!, choice, ipHash, now, throughGroupId)
+      : preparePerPersonBallotUpsert(db, vote, member, choice, ipHash, now, throughGroupId);
 
   const result = await statement.run();
   if (result.meta?.changes !== 1) {

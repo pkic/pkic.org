@@ -4,10 +4,21 @@ import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/
 import { first } from "../../db/queries";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { groupManagementAuthorizationEvidence, groupPermissionAuthorizationEvidence } from "../groups/governance";
+import { getResourceGrantDefinition, memberResourceGrantCapabilitiesFor } from "../resource-grants/definitions";
 
-export const VOTE_VIEW_GRANT_CAPABILITIES = ["view", "participate", "view_results", "manage"] as const;
-export const VOTE_PARTICIPATION_GRANT_CAPABILITIES = ["participate", "manage"] as const;
-export const VOTE_RESULT_GRANT_CAPABILITIES = ["view_results", "manage"] as const;
+const VOTE_GRANTS = getResourceGrantDefinition("vote");
+
+// Member-facing predicates intentionally exclude leadership-only `manage`.
+// Capability implication remains defined once in the resource definition.
+export const VOTE_VIEW_GRANT_CAPABILITIES = memberResourceGrantCapabilitiesFor(VOTE_GRANTS, "view");
+export const VOTE_PARTICIPATION_GRANT_CAPABILITIES = memberResourceGrantCapabilitiesFor(VOTE_GRANTS, "participate");
+export const VOTE_RESULT_GRANT_CAPABILITIES = memberResourceGrantCapabilitiesFor(VOTE_GRANTS, "view_results");
+
+export function exactVoteGroupMembership(throughGroupId?: string): { sql: string; bindings: readonly unknown[] } {
+  return throughGroupId
+    ? { sql: "AND membership.group_id = ?", bindings: [throughGroupId] }
+    : { sql: "", bindings: [] };
+}
 
 function quoted(values: readonly string[]): string {
   return values.map((value) => `'${value}'`).join(", ");

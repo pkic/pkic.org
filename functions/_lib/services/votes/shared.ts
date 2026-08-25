@@ -186,6 +186,13 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
   };
 }
 
+export function closedVoteResult(row: VoteRow): VoteFullResult {
+  if (row.status !== "closed") {
+    throw new AppError(409, "VOTE_NOT_CLOSED", "Results are hidden until the vote closes");
+  }
+  return parseJsonSafe<Record<string, unknown>>(row.result_json, {}) as unknown as VoteFullResult;
+}
+
 export async function getCandidates(db: DatabaseLike, voteId: string): Promise<CandidateSummary[]> {
   const rows = await all<CandidateRow>(
     db,

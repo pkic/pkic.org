@@ -2,7 +2,11 @@ import { createExecutionContext, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../functions/router";
 import { isAppError } from "../functions/_lib/errors";
-import { groupVotesListResponseSchema } from "../assets/shared/schemas/group-votes";
+import {
+  groupVoteDetailResponseSchema,
+  groupVoteResultsResponseSchema,
+  groupVotesListResponseSchema,
+} from "../assets/shared/schemas/group-votes";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
   approveVoteProposal,
@@ -391,6 +395,105 @@ describe("canonical group voting", () => {
     const manager = groupVotesListResponseSchema.parse(await managerResponse.json());
     expect(manager.votes[0]).toMatchObject({ id: vote.id, capabilities: expect.arrayContaining(["view", "manage"]) });
     expect(manager.votes[0].capabilities).not.toContain("participate");
+  });
+
+  it("binds vote detail, ballots, and results to the selected group", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Context-bound vote" });
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    await joinVotingGroup(env.DB, TEST_GROUPS.cm, capacity.userId, [capacity.memberId]);
+    await env.DB.prepare(
+      "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'view', datetime('now'))",
+    )
+      .bind(vote.id, TEST_GROUPS.cm)
+      .run();
+    const token = await createMemberSession(env.DB, capacity.userId, `group-vote-detail-${crypto.randomUUID()}`);
+
+    const detailResponse = await call(token, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}`);
+    expect(detailResponse.status, await detailResponse.clone().text()).toBe(200);
+    expect(groupVoteDetailResponseSchema.parse(await detailResponse.json()).vote).toMatchObject({
+      id: vote.id,
+      capabilities: ["view"],
+      canCastBallot: false,
+    });
+    expect(
+      (
+        await call(token, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/ballots`, {
+          method: "POST",
+          body: JSON.stringify({ memberId: capacity.memberId, choice: "in_favor" }),
+        })
+      ).status,
+    ).toBe(403);
+
+    expect(
+      (
+        await call(token, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/ballots`, {
+          method: "POST",
+          body: JSON.stringify({ memberId: capacity.memberId, choice: "in_favor" }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(await queryAll(env.DB, "SELECT choice FROM vote_ballots WHERE vote_id = ?", vote.id)).toEqual([
+      { choice: "in_favor" },
+    ]);
+
+    const result = {
+      thresholdType: "simple_majority",
+      counts: { in_favor: 1, opposed: 0, abstain: 0 },
+      totalBallots: 1,
+      outcome: "passed",
+    };
+    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+      .bind(JSON.stringify(result), vote.id)
+      .run();
+    expect((await call(token, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/results`)).status).toBe(404);
+    await env.DB.prepare(
+      "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'view_results', datetime('now'))",
+    )
+      .bind(vote.id, TEST_GROUPS.cm)
+      .run();
+    const resultsResponse = await call(token, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/results`);
+    expect(resultsResponse.status, await resultsResponse.clone().text()).toBe(200);
+    expect(groupVoteResultsResponseSchema.parse(await resultsResponse.json()).result).toEqual(result);
+  });
+
+  it("does not turn a leadership-only manage grant into member vote access", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Managed without participation" });
+    const result = {
+      thresholdType: "simple_majority",
+      counts: { in_favor: 0, opposed: 0, abstain: 0 },
+      totalBallots: 0,
+      outcome: "failed",
+    };
+    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+      .bind(JSON.stringify(result), vote.id)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
+    )
+      .bind(vote.id, TEST_GROUPS.cm)
+      .run();
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.cm, capacity.userId, [capacity.memberId]);
+    const member = await resolveAuthMember(env.DB, capacity.userId);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `manage-only-member-${crypto.randomUUID()}`);
+    expect((await listVisibleVotesForMember(env.DB, member, { limit: 20, offset: 0 })).votes).toHaveLength(0);
+    expect((await call(memberToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}`)).status).toBe(404);
+    await expect(getVoteResultsForMember(env.DB, member, vote.id)).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.status === 404,
+    );
+
+    const leaderId = await insertUser(env.DB, "shared-vote-manager@example.test");
+    await assignGroupRole(leaderId, TEST_GROUPS.cm);
+    const leaderToken = await createAdminSession(env.DB, leaderId, `shared-vote-manager-${crypto.randomUUID()}`);
+    const detailResponse = await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}`);
+    expect(detailResponse.status, await detailResponse.clone().text()).toBe(200);
+    const managedVote = groupVoteDetailResponseSchema.parse(await detailResponse.json()).vote;
+    expect(managedVote.capabilities).toEqual(expect.arrayContaining(["view", "view_results", "manage"]));
+    expect(managedVote.capabilities).not.toContain("participate");
+    expect(managedVote.canCastBallot).toBe(false);
+    const resultsResponse = await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/results`);
+    expect(groupVoteResultsResponseSchema.parse(await resultsResponse.json()).result).toEqual(result);
   });
 
   it("records per-Member history and closes a motion from SQL aggregates", async () => {

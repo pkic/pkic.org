@@ -9,11 +9,13 @@ export function BallotForm({
   vote,
   memberId,
   hasCastBallot = false,
+  endpoint,
   onCast,
 }: {
   vote: PortalVote;
   memberId?: string;
   hasCastBallot?: boolean;
+  endpoint?: string;
   onCast: () => Promise<void>;
 }) {
   const [choice, setChoice] = useState<string>("");
@@ -23,7 +25,7 @@ export function BallotForm({
     setSubmitting(true);
     try {
       await postJson(
-        `/api/v1/portal/votes/${vote.id}/ballots`,
+        endpoint ?? `/api/v1/portal/votes/${vote.id}/ballots`,
         { choice: selected, ...(memberId ? { memberId } : {}) },
         submitBallotResponseSchema,
       );

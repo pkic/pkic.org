@@ -1,15 +1,19 @@
 import {
+  groupVoteDetailSchema,
   groupVoteSchema,
+  type GroupVoteDetail,
   type GroupVote,
   type GroupVotesListQuery,
 } from "../../../../assets/shared/schemas/group-votes";
 import type { VoteGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
 import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import { AppError } from "../../errors";
 import {
   buildAccessibleGroupResourceIdsCte,
   effectiveResourceCapabilitiesForContext,
@@ -18,7 +22,16 @@ import {
   resolveGroupResourceContextAccess,
   type GroupResourceViewer,
 } from "../resource-grants";
-import { toVoteSummary, voteRowProjection, type VoteRow } from "./shared";
+import {
+  closedVoteResult,
+  getVoteRowOrThrow,
+  toVoteSummary,
+  voteRowProjection,
+  type VoteFullResult,
+  type VoteResult,
+  type VoteRow,
+} from "./shared";
+import { hydrateVotesForUser } from "./portal";
 
 interface GroupVoteRow extends VoteRow {
   granted_capabilities: string | null;
@@ -31,16 +44,52 @@ function grantedCapabilities(row: GroupVoteRow): VoteGroupCapability[] {
   );
 }
 
+function effectiveVoteCapabilities(
+  row: VoteRow,
+  groupId: string,
+  access: { member: boolean; manager: boolean },
+  grants: readonly VoteGroupCapability[],
+): VoteGroupCapability[] {
+  return effectiveResourceCapabilitiesForContext(getResourceGrantDefinition("vote"), {
+    owner: row.owner_group_id === groupId,
+    member: access.member,
+    manager: access.manager,
+    grantedCapabilities: grants,
+  });
+}
+
 function mapGroupVote(row: GroupVoteRow, groupId: string, access: { member: boolean; manager: boolean }): GroupVote {
   return groupVoteSchema.parse({
     ...toVoteSummary(row),
-    capabilities: effectiveResourceCapabilitiesForContext(getResourceGrantDefinition("vote"), {
-      owner: row.owner_group_id === groupId,
-      member: access.member,
-      manager: access.manager,
-      grantedCapabilities: grantedCapabilities(row),
-    }),
+    capabilities: effectiveVoteCapabilities(row, groupId, access, grantedCapabilities(row)),
   });
+}
+
+async function loadVoteGrants(db: DatabaseLike, voteId: string, groupId: string): Promise<VoteGroupCapability[]> {
+  const definition = getResourceGrantDefinition("vote");
+  const rows = await all<{ capability: string }>(
+    db,
+    "SELECT capability FROM vote_group_grants WHERE vote_id = ? AND group_id = ? ORDER BY capability",
+    [voteId, groupId],
+  );
+  return rows
+    .map((row) => row.capability)
+    .filter((capability): capability is VoteGroupCapability => isResourceGrantCapability(definition, capability));
+}
+
+async function resolveGroupVote(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  voteId: string,
+): Promise<{ row: VoteRow; capabilities: VoteGroupCapability[] }> {
+  const [row, access] = await Promise.all([
+    getVoteRowOrThrow(db, voteId),
+    resolveGroupResourceContextAccess(db, viewer, groupId),
+  ]);
+  const capabilities = effectiveVoteCapabilities(row, groupId, access, await loadVoteGrants(db, row.id, groupId));
+  if (!capabilities.includes("view")) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
+  return { row, capabilities };
 }
 
 export function buildGroupVotesPageQuery(
@@ -105,4 +154,28 @@ export async function listGroupVotes(
   if (!access.member && !access.manager) return { votes: [], total: 0 };
   const page = await queryPage<GroupVoteRow>(db, buildGroupVotesPageQuery(groupId, access, query));
   return { votes: page.rows.map((row) => mapGroupVote(row, groupId, access)), total: page.total };
+}
+
+export async function getGroupVoteDetail(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  voteId: string,
+): Promise<GroupVoteDetail> {
+  const { row, capabilities } = await resolveGroupVote(db, viewer, groupId, voteId);
+  const [hydrated] = await hydrateVotesForUser(db, [row], viewer.userId, groupId);
+  const result: VoteResult =
+    row.status === "closed" && capabilities.includes("view_results") ? closedVoteResult(row) : null;
+  return groupVoteDetailSchema.parse({ ...hydrated, result, capabilities });
+}
+
+export async function getGroupVoteResults(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  voteId: string,
+): Promise<VoteFullResult> {
+  const { row, capabilities } = await resolveGroupVote(db, viewer, groupId, voteId);
+  if (!capabilities.includes("view_results")) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
+  return closedVoteResult(row);
 }

@@ -47,6 +47,9 @@ import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
 import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
 import { GroupVotesList } from "./[groupId]/votes/index";
+import { GroupVoteGet } from "./[groupId]/votes/[voteId]/index";
+import { GroupVoteBallotsPost } from "./[groupId]/votes/[voteId]/ballots";
+import { GroupVoteResultsGet } from "./[groupId]/votes/[voteId]/results";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -79,6 +82,9 @@ openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissio
 openapi.get("/:groupId/events", GroupEventsList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.get("/:groupId/votes", GroupVotesList);
+openapi.get("/:groupId/votes/:voteId", GroupVoteGet);
+openapi.post("/:groupId/votes/:voteId/ballots", GroupVoteBallotsPost);
+openapi.get("/:groupId/votes/:voteId/results", GroupVoteResultsGet);
 openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
