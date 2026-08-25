@@ -11,6 +11,8 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { hasPermission } from "../functions/_lib/auth/permissions";
 import type { AuthAdmin } from "../functions/_lib/types";
+import { createAccessGrant, revokeAccessGrant } from "../functions/_lib/services/access-control/access-grants";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -331,6 +333,87 @@ describe("permission_grants (Access grants)", () => {
       created.grant.id,
     );
     expect(auditRows).toHaveLength(1);
+  });
+
+  it("rolls back access-grant creation when the actor loses authority before commit", async () => {
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      role: "admin",
+    };
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+
+    await expect(
+      createAccessGrant(racingDb, actor, { userId: staffUserId, permission: "donations:read" }),
+    ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM permission_grants WHERE user_id = ? AND permission = 'donations:read'",
+        staffUserId,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back access-grant revocation when the actor loses authority before commit", async () => {
+    const grantId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+    )
+      .bind(grantId, staffUserId, adminId)
+      .run();
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      role: "admin",
+    };
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+
+    await expect(revokeAccessGrant(racingDb, actor, grantId)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+    });
+    expect(
+      await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM permission_grants WHERE id = ?", [
+        grantId,
+      ]),
+    ).toEqual([{ revoked_at: null }]);
+  });
+
+  it("reports a conflict without a false audit when another writer revokes the target first", async () => {
+    const grantId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+    )
+      .bind(grantId, staffUserId, adminId)
+      .run();
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      role: "admin",
+    };
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?").bind(grantId).run(),
+    );
+
+    await expect(revokeAccessGrant(racingDb, actor, grantId)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_TARGET_CHANGED",
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'access_grant_revoked' AND entity_id = ?", [
+        grantId,
+      ]),
+    ).toHaveLength(0);
   });
 
   it("only a user with access:grant can create a grant, and only access:revoke can revoke one", async () => {

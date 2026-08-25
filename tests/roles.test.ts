@@ -12,6 +12,14 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrgRepresentative, REPRESENTATIVE_ROLE_IDS } from "./helpers/membership";
+import { createRole, deleteRole } from "../functions/_lib/services/access-control/roles";
+import {
+  assignUserRole,
+  revokeUserRoleAssignment,
+  updateUserRoleAssignmentExpiry,
+} from "../functions/_lib/services/access-control/user-role-assignments";
+import type { AuthAdmin } from "../functions/_lib/types";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -551,6 +559,166 @@ describe("roles (Built-in and custom roles)", () => {
     expect(allowed.status).toBe(201);
   });
 
+  it("rolls back role creation when the actor loses a required permission before commit", async () => {
+    const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    const name = `Racing role ${crypto.randomUUID()}`;
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+
+    await expect(createRole(racingDb, actor, { name, permissions: ["events:read"] })).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM roles WHERE name = ?", [name])).toHaveLength(0);
+  });
+
+  it("rolls back role deletion when the actor loses authority before commit", async () => {
+    const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    const roleId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES (?, ?, NULL, 0, datetime('now'), datetime('now'))`,
+    )
+      .bind(roleId, `Racing deletion ${crypto.randomUUID()}`)
+      .run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+
+    await expect(deleteRole(racingDb, actor, roleId)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM roles WHERE id = ?", [roleId])).toHaveLength(1);
+  });
+
+  it("reports a conflict without a false audit when another writer deletes the role first", async () => {
+    const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    const roleId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES (?, ?, NULL, 0, datetime('now'), datetime('now'))`,
+    )
+      .bind(roleId, `Concurrent deletion ${crypto.randomUUID()}`)
+      .run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("DELETE FROM roles WHERE id = ?").bind(roleId).run(),
+    );
+
+    await expect(deleteRole(racingDb, actor, roleId)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_TARGET_CHANGED",
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'role_deleted' AND entity_id = ?", [roleId]),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back role assignment when the actor loses authority before commit", async () => {
+    const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+
+    await expect(
+      assignUserRole(racingDb, actor, staffUserId, { roleId: "role-membership_processor" }),
+    ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [
+        staffUserId,
+        "role-membership_processor",
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back role revocation and expiry updates when the actor loses authority before commit", async () => {
+    const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    const assignmentId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO user_roles
+           (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
+         VALUES (?, ?, 'role-membership_processor', NULL, NULL, ?, 0, datetime('now'))`,
+    )
+      .bind(assignmentId, staffUserId, adminId)
+      .run();
+    const revokeDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+    await expect(revokeUserRoleAssignment(revokeDb, actor, staffUserId, assignmentId)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+    });
+    expect(
+      await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
+        assignmentId,
+      ]),
+    ).toEqual([{ revoked_at: null }]);
+
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
+    const expiryDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+    );
+    await expect(
+      updateUserRoleAssignmentExpiry(expiryDb, actor, staffUserId, assignmentId, {
+        expiresAt: "2030-01-01T00:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll<{ expires_at: string | null }>(env.DB, "SELECT expires_at FROM user_roles WHERE id = ?", [
+        assignmentId,
+      ]),
+    ).toEqual([{ expires_at: null }]);
+  });
+
+  it("does not overwrite or falsely audit concurrent role-assignment target changes", async () => {
+    const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    const revokeId = crypto.randomUUID();
+    const expiryId = crypto.randomUUID();
+    const expiryUserId = await insertUser(`expiry-race-${crypto.randomUUID()}@example.test`);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO user_roles
+             (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
+           VALUES (?, ?, 'role-membership_processor', NULL, NULL, ?, 0, datetime('now'))`,
+      ).bind(revokeId, staffUserId, adminId),
+      env.DB.prepare(
+        `INSERT INTO user_roles
+             (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
+           VALUES (?, ?, 'role-membership_processor', NULL, NULL, ?, 0, datetime('now'))`,
+      ).bind(expiryId, expiryUserId, adminId),
+    ]);
+    const revokeDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(revokeId).run(),
+    );
+    await expect(revokeUserRoleAssignment(revokeDb, actor, staffUserId, revokeId)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_TARGET_CHANGED",
+    });
+
+    const concurrentExpiry = "2029-01-01T00:00:00.000Z";
+    const expiryDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET expires_at = ? WHERE id = ?").bind(concurrentExpiry, expiryId).run(),
+    );
+    await expect(
+      updateUserRoleAssignmentExpiry(expiryDb, actor, expiryUserId, expiryId, {
+        expiresAt: "2030-01-01T00:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_TARGET_CHANGED" });
+    expect(
+      await queryAll<{ expires_at: string | null }>(env.DB, "SELECT expires_at FROM user_roles WHERE id = ?", [
+        expiryId,
+      ]),
+    ).toEqual([{ expires_at: concurrentExpiry }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_id IN (?, ?) AND action IN ('user_role_revoked', 'user_role_expiry_updated')",
+        [revokeId, expiryId],
+      ),
+    ).toHaveLength(0);
+  });
+
   it("records API-key role assignments without inventing a users(id) grantor", async () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
     const generic = await call(apiKey, `/api/v1/admin/users/${staffUserId}/roles`, {
@@ -665,6 +833,122 @@ describe("roles (Built-in and custom roles)", () => {
         expect(rows).toHaveLength(0);
       });
     }
+
+    it("requires membership-management authority in addition to access:grant for contact designations", async () => {
+      const representative = await insertOrgRepresentative(env.DB);
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, adminId)
+        .run();
+      const staffToken = await createAdminSession(env.DB, staffUserId, `semantic-role-${crypto.randomUUID()}`);
+      const input = {
+        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        contextType: "organization",
+        contextId: representative.memberId,
+      };
+
+      const denied = await call(staffToken, `/api/v1/admin/users/${representative.userId}/roles`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      expect(denied.status).toBe(403);
+      expect((await denied.json()) as { error: { code: string } }).toMatchObject({
+        error: { code: "ORGANIZATION_REPRESENTATION_MANAGEMENT_REQUIRED" },
+      });
+
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'membership:write', ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, adminId)
+        .run();
+      const allowed = await call(staffToken, `/api/v1/admin/users/${representative.userId}/roles`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      expect(allowed.status, await allowed.clone().text()).toBe(201);
+    });
+
+    it("rolls back a contact designation when membership-management authority is revoked before commit", async () => {
+      const representative = await insertOrgRepresentative(env.DB);
+      const membershipGrantId = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+             VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+        ).bind(crypto.randomUUID(), staffUserId, adminId),
+        env.DB.prepare(
+          `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+             VALUES (?, ?, 'membership:write', ?, datetime('now'))`,
+        ).bind(membershipGrantId, staffUserId, adminId),
+      ]);
+      const actor: AuthAdmin = {
+        identityType: "user",
+        id: staffUserId,
+        email: "staff-roles@example.test",
+        role: "user",
+        grants: [
+          { permission: "access:grant", contextType: null, contextId: null },
+          { permission: "membership:write", contextType: null, contextId: null },
+        ],
+      };
+      const racingDb = mutateBeforeNextBatch(env.DB, () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(membershipGrantId)
+          .run(),
+      );
+
+      await expect(
+        assignUserRole(racingDb, actor, representative.userId, {
+          roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+          contextType: "organization",
+          contextId: representative.memberId,
+        }),
+      ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [
+          representative.userId,
+          REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        ]),
+      ).toHaveLength(0);
+    });
+
+    it("requires membership-management authority to revoke a contact designation", async () => {
+      const representative = await insertOrgRepresentative(env.DB);
+      const adminActor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+      const assignment = await assignUserRole(env.DB, adminActor, representative.userId, {
+        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        contextType: "organization",
+        contextId: representative.memberId,
+      });
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'access:revoke', ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, adminId)
+        .run();
+      const staffToken = await createAdminSession(env.DB, staffUserId, `semantic-revoke-${crypto.randomUUID()}`);
+      const path = `/api/v1/admin/users/${representative.userId}/roles/${assignment.id}`;
+
+      const denied = await call(staffToken, path, { method: "DELETE" });
+      expect(denied.status).toBe(403);
+      expect(
+        await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
+          assignment.id,
+        ]),
+      ).toEqual([{ revoked_at: null }]);
+
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'membership:write', ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, adminId)
+        .run();
+      const allowed = await call(staffToken, path, { method: "DELETE" });
+      expect(allowed.status, await allowed.clone().text()).toBe(200);
+    });
 
     it("still succeeds with a real organization context and an active representative", async () => {
       const { userId, memberId } = await insertOrgRepresentative(env.DB);

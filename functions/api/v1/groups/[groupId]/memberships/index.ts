@@ -40,6 +40,7 @@ export const GroupMemberAdd = openApiRoute(groupMemberAddRouteSchema, async (c: 
       selection: data.body.capacitySelection,
       source: "staff",
       allowManaged: true,
+      managementActor: admin,
     }),
   );
 });

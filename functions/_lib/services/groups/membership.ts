@@ -8,12 +8,13 @@ import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLogAfterExpectedChanges } from "../audit";
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { prepareGroupJoinEligibilityGuard, selectGroupCapacities } from "./capacities";
+import { prepareGroupManagementAuthorizationGuard } from "./governance";
 import { getGroup, listActiveGroupMembershipsForUser } from "./read-model";
 
 async function requireGroupIdentity(db: DatabaseLike, idOrSlug: string): Promise<{ id: string; slug: string }> {
@@ -43,14 +44,22 @@ async function mutationResponse(
   };
 }
 
-export interface JoinGroupOptions {
+interface JoinGroupBaseOptions {
   actorUserId: string;
   actorDatabaseUserId?: string | null;
   targetUserId: string;
   selection: GroupCapacitySelection;
-  source: GroupMembershipSource;
-  allowManaged: boolean;
 }
+
+export type JoinGroupOptions = JoinGroupBaseOptions &
+  (
+    | { source: "staff"; allowManaged: true; managementActor: AuthAdmin }
+    | {
+        source: Exclude<GroupMembershipSource, "staff">;
+        allowManaged: boolean;
+        managementActor?: never;
+      }
+  );
 
 export interface BuildGroupCapacityJoinOptions {
   groupId: string;
@@ -135,12 +144,21 @@ export async function joinGroup(
   idOrSlug: string,
   options: JoinGroupOptions,
 ): Promise<GroupMembershipMutationResponse> {
+  if (options.source === "staff" && !options.managementActor) {
+    throw new Error("Staff group joins require a management actor");
+  }
+  if (options.source !== "staff" && options.allowManaged) {
+    throw new Error("Only staff group joins may bypass self-service eligibility");
+  }
   const group = await requireGroupIdentity(db, idOrSlug);
   const capacities = await selectGroupCapacities(db, group.id, options.targetUserId, options.selection, {
     allowManaged: options.allowManaged,
   });
   const at = nowIso();
   const statements: StatementLike[] = [
+    ...(options.managementActor
+      ? [prepareGroupManagementAuthorizationGuard(db, options.managementActor, [group.id])]
+      : []),
     ...buildGroupCapacityJoinStatements(db, {
       groupId: group.id,
       targetUserId: options.targetUserId,
@@ -160,7 +178,7 @@ export async function joinGroup(
       throw new AppError(
         409,
         "GROUP_JOIN_CONTEXT_CHANGED",
-        "Group eligibility changed while the membership was being saved; reload and retry",
+        "Group eligibility or management authority changed while the membership was being saved; reload and retry",
       );
     }
     throw error;
@@ -168,12 +186,14 @@ export async function joinGroup(
   return mutationResponse(db, group.id, options.targetUserId, []);
 }
 
-export interface LeaveGroupOptions {
+interface LeaveGroupBaseOptions {
   actorUserId: string;
   targetUserId: string;
   selection: GroupLeaveInput;
-  actorType: "member" | "admin" | "system";
 }
+
+export type LeaveGroupOptions = LeaveGroupBaseOptions &
+  ({ actorType: "admin"; managementActor: AuthAdmin } | { actorType: "member" | "system"; managementActor?: never });
 
 /** Ends capacities without deleting history; descendant ending is enforced by D1. */
 export async function leaveGroup(
@@ -181,6 +201,9 @@ export async function leaveGroup(
   idOrSlug: string,
   options: LeaveGroupOptions,
 ): Promise<GroupMembershipMutationResponse> {
+  if (options.actorType === "admin" && !options.managementActor) {
+    throw new Error("Admin group removals require a management actor");
+  }
   const group = await requireGroupIdentity(db, idOrSlug);
   const conditions = ["group_id = ?", "user_id = ?", "left_at IS NULL"];
   const bindings: unknown[] = [group.id, options.targetUserId];
@@ -205,6 +228,9 @@ export async function leaveGroup(
   const at = nowIso();
   try {
     await db.batch([
+      ...(options.managementActor
+        ? [prepareGroupManagementAuthorizationGuard(db, options.managementActor, [group.id])]
+        : []),
       db
         .prepare(`UPDATE group_memberships SET left_at = ?, updated_at = ? WHERE ${conditions.join(" AND ")}`)
         .bind(at, at, ...bindings),
@@ -226,6 +252,13 @@ export async function leaveGroup(
       prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "GROUP_MANAGEMENT_AUTHORIZATION_CHANGED",
+        "Group-management authority changed while the membership was being saved",
+      );
+    }
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
@@ -247,7 +280,7 @@ export async function endGroupMembership(
   db: DatabaseLike,
   groupIdOrSlug: string,
   membershipId: string,
-  actorUserId: string,
+  actor: AuthAdmin,
 ): Promise<GroupMembershipMutationResponse> {
   const group = await requireGroupIdentity(db, groupIdOrSlug);
   const membership = await first<{ user_id: string; member_id: string; left_at: string | null }>(
@@ -259,9 +292,10 @@ export async function endGroupMembership(
     throw new AppError(404, "GROUP_MEMBERSHIP_NOT_FOUND", "Active group membership capacity not found");
   }
   return leaveGroup(db, group.id, {
-    actorUserId,
+    actorUserId: actor.id,
     targetUserId: membership.user_id,
     selection: { mode: "selected", memberIds: [membership.member_id] },
     actorType: "admin",
+    managementActor: actor,
   });
 }

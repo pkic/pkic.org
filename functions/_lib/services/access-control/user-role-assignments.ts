@@ -20,8 +20,13 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { commitAccessControlMutation } from "./authorization";
 import { buildAssignRepresentativeRoleStatements, isRepresentativeRoleId } from "../membership/representative-roles";
+import {
+  prepareOrganizationRepresentativeManagementGuard,
+  requireOrganizationRepresentativeManagement,
+} from "../organization-representations/authorization";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 
 interface UserRoleRow {
@@ -98,6 +103,31 @@ async function getNonRevokedAssignment(
       WHERE ur.id = ? AND ur.user_id = ? AND ur.revoked_at IS NULL`,
     [assignmentId, userId],
   );
+}
+
+async function prepareSemanticRoleManagementGuards(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  roleId: string,
+  contextType: string | null,
+  contextId: string | null,
+): Promise<StatementLike[]> {
+  if (!isRepresentativeRoleId(roleId)) return [];
+  if (contextType !== "organization" || !contextId) {
+    throw new AppError(
+      409,
+      "REPRESENTATIVE_ROLE_CONTEXT_INVALID",
+      "Stored representative roles must have an organization context",
+    );
+  }
+  const authorization = {
+    memberId: contextId,
+    actorUserId: actor.id,
+    databaseUserId: adminDatabaseUserId(actor),
+    staffAuthorized: true,
+  } as const;
+  await requireOrganizationRepresentativeManagement(db, authorization);
+  return [prepareOrganizationRepresentativeManagementGuard(db, authorization)];
 }
 
 export async function listUserRoleAssignments(
@@ -230,6 +260,7 @@ export async function assignUserRole(
       );
     }
     statements.push(
+      ...(await prepareSemanticRoleManagementGuards(db, actor, input.roleId, contextType, contextId)),
       ...(await buildAssignRepresentativeRoleStatements(db, {
         memberId: contextId,
         userId,
@@ -289,7 +320,15 @@ export async function assignUserRole(
       now,
     ),
   );
-  await db.batch(statements);
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [
+      { permission: "access:grant" },
+      ...bundledPermissions.map(({ permission }) => (context ? { permission, context } : { permission })),
+    ],
+    statements,
+  );
 
   return userRoleResponseSchema.parse({
     id,
@@ -313,19 +352,32 @@ export async function revokeUserRoleAssignment(
   const row = await getNonRevokedAssignment(db, userId, assignmentId);
   if (!row) throw new AppError(404, "NOT_FOUND", "Role assignment not found");
   const now = nowIso();
-  await db.batch([
-    db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ?").bind(now, row.id),
-    prepareAuditLog(
-      db,
-      "admin",
-      actor.id,
-      "user_role_revoked",
-      "user_roles",
-      row.id,
-      { userId, roleId: row.role_id },
-      now,
-    ),
-  ]);
+  const semanticGuards = await prepareSemanticRoleManagementGuards(
+    db,
+    actor,
+    row.role_id,
+    row.context_type,
+    row.context_id,
+  );
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [{ permission: "access:revoke" }],
+    [
+      ...semanticGuards,
+      db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actor.id,
+        "user_role_revoked",
+        "user_roles",
+        row.id,
+        { userId, roleId: row.role_id },
+        now,
+      ),
+    ],
+  );
 }
 
 export async function updateUserRoleAssignmentExpiry(
@@ -338,19 +390,63 @@ export async function updateUserRoleAssignmentExpiry(
   requirePermission(actor, "access:grant");
   const row = await getNonRevokedAssignment(db, userId, assignmentId);
   if (!row) throw new AppError(404, "NOT_FOUND", "Role assignment not found");
+  if (isRepresentativeRoleId(row.role_id) && input.expiresAt !== null) {
+    throw new AppError(
+      422,
+      "REPRESENTATIVE_ROLE_NO_EXPIRY",
+      "Representative roles cannot be assigned an expiry through this endpoint",
+    );
+  }
+  const context = row.context_type && row.context_id ? { type: row.context_type, id: row.context_id } : undefined;
+  const bundledPermissions = await all<{ permission: string }>(
+    db,
+    "SELECT permission FROM role_permissions WHERE role_id = ?",
+    [row.role_id],
+  );
+  for (const { permission } of bundledPermissions) {
+    if (!hasPermission(actor, permission, context)) {
+      throw new AppError(
+        403,
+        "PERMISSION_REQUIRED",
+        `Cannot update a role assignment bundling a permission you do not hold: ${permission}`,
+      );
+    }
+  }
+  const semanticGuards = await prepareSemanticRoleManagementGuards(
+    db,
+    actor,
+    row.role_id,
+    row.context_type,
+    row.context_id,
+  );
   const now = nowIso();
-  await db.batch([
-    db.prepare("UPDATE user_roles SET expires_at = ? WHERE id = ?").bind(input.expiresAt, row.id),
-    prepareAuditLog(
-      db,
-      "admin",
-      actor.id,
-      "user_role_expiry_updated",
-      "user_roles",
-      row.id,
-      { userId, roleId: row.role_id, expiresAt: input.expiresAt },
-      now,
-    ),
-  ]);
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [
+      { permission: "access:grant" },
+      ...bundledPermissions.map(({ permission }) => (context ? { permission, context } : { permission })),
+    ],
+    [
+      ...semanticGuards,
+      db
+        .prepare(
+          `UPDATE user_roles SET expires_at = ?
+            WHERE id = ? AND revoked_at IS NULL
+              AND ((expires_at IS NULL AND ? IS NULL) OR expires_at = ?)`,
+        )
+        .bind(input.expiresAt, row.id, row.expires_at, row.expires_at),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actor.id,
+        "user_role_expiry_updated",
+        "user_roles",
+        row.id,
+        { userId, roleId: row.role_id, expiresAt: input.expiresAt },
+        now,
+      ),
+    ],
+  );
   return serialize({ ...row, expires_at: input.expiresAt });
 }

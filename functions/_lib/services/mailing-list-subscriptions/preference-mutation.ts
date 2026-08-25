@@ -1,12 +1,14 @@
 import type { MailingListPreferenceMutation } from "./types";
 import { first } from "../../db/queries";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../google-groups/sync-queue";
-import { canMemberAccessGroupResource } from "../resource-grants/access";
+import { canMemberAccessGroupResource, prepareMemberGroupResourceAuthorizationGuard } from "../resource-grants/access";
 import { getEffectiveMailingListSubscription, resolveGroupId } from "./read-model";
+import { EFFECTIVE_SUBSCRIPTION_CTE } from "./projection";
 
 /** Persist one member preference and enqueue its provider-state transition atomically. */
 export async function setMailingListPreference(
@@ -35,7 +37,19 @@ export async function setMailingListPreference(
   if (current.preference === storedPreference) return current;
 
   const at = nowIso();
-  const statements: StatementLike[] = [];
+  const statements: StatementLike[] = [
+    prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "view"),
+  ];
+  if (preference === "subscribed") {
+    statements.push(
+      prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "subscribe"),
+      prepareAuthorizationGuard(db, {
+        sql: `${EFFECTIVE_SUBSCRIPTION_CTE}
+              SELECT 1 FROM effective_subscriptions WHERE id = ? AND eligible = 1`,
+        bindings: [userId, listId],
+      }),
+    );
+  }
   if (storedPreference) {
     statements.push(
       db
@@ -94,6 +108,17 @@ export async function setMailingListPreference(
       at,
     ),
   );
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "MAILING_LIST_AUTHORIZATION_CHANGED",
+        "Mailing-list eligibility changed while the preference was being saved",
+      );
+    }
+    throw error;
+  }
   return getEffectiveMailingListSubscription(db, userId, listId);
 }

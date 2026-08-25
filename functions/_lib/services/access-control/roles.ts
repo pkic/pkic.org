@@ -15,7 +15,8 @@ import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { commitAccessControlMutation } from "./authorization";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 
 interface RoleRow {
@@ -81,28 +82,33 @@ export async function createRole(db: DatabaseLike, actor: AuthAdmin, input: Role
 
   const id = uuid();
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        "INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)",
-      )
-      .bind(id, input.name, input.description ?? null, now, now),
-    ...input.permissions.map((permission) =>
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [{ permission: "access:grant" }, ...input.permissions.map((permission) => ({ permission }))],
+    [
       db
-        .prepare("INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES (?, ?, ?, ?)")
-        .bind(uuid(), id, permission, now),
-    ),
-    prepareAuditLog(
-      db,
-      "admin",
-      actor.id,
-      "role_created",
-      "role",
-      id,
-      { name: input.name, permissions: input.permissions },
-      now,
-    ),
-  ]);
+        .prepare(
+          "INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)",
+        )
+        .bind(id, input.name, input.description ?? null, now, now),
+      ...input.permissions.map((permission) =>
+        db
+          .prepare("INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES (?, ?, ?, ?)")
+          .bind(uuid(), id, permission, now),
+      ),
+      prepareAuditLog(
+        db,
+        "admin",
+        actor.id,
+        "role_created",
+        "role",
+        id,
+        { name: input.name, permissions: input.permissions },
+        now,
+      ),
+    ],
+  );
 
   return roleResponseSchema.parse({
     id,
@@ -130,9 +136,14 @@ export async function deleteRole(db: DatabaseLike, actor: AuthAdmin, roleId: str
     throw new AppError(409, "ROLE_HAS_ASSIGNMENT_HISTORY", "Role has user assignment history and cannot be deleted");
   }
 
-  await db.batch([
-    db.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(role.id),
-    db.prepare("DELETE FROM roles WHERE id = ?").bind(role.id),
-    prepareAuditLog(db, "admin", actor.id, "role_deleted", "role", role.id, { name: role.name }),
-  ]);
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [{ permission: "access:revoke" }],
+    [
+      db.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(role.id),
+      db.prepare("DELETE FROM roles WHERE id = ? AND is_system_role = 0").bind(role.id),
+      prepareAuditLogAfterOneChange(db, "admin", actor.id, "role_deleted", "role", role.id, { name: role.name }),
+    ],
+  );
 }

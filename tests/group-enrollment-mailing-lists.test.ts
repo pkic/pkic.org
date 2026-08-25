@@ -19,6 +19,7 @@ import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -184,6 +185,45 @@ describe("automatic group enrollment", () => {
 });
 
 describe("group mailing-list subscriptions", () => {
+  it("does not disclose an owning group's mailing-list configuration to a visible nonmember", async () => {
+    const admin = await insertAdmin();
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: `Visible mailing-list owner ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const userId = await insertUser(env.DB, `visible-nonmember-${crypto.randomUUID()}@example.test`);
+    await addOrganizationCapacity(userId, "A");
+    const list = await createMailingList(
+      env.DB,
+      {
+        email: `optional-${crypto.randomUUID()}@lists.example.test`,
+        label: "Member-only configuration",
+        purpose: "group",
+        groupId: group.id,
+        subscriptionDefault: "none",
+      },
+      admin.id,
+    );
+
+    expect(
+      (await listEffectiveGroupMailingListSubscriptions(env.DB, userId, group.id, { limit: 50, offset: 0 }))
+        .subscriptions,
+    ).toEqual([]);
+
+    await joinGroup(env.DB, group.id, {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    expect(
+      (await listEffectiveGroupMailingListSubscriptions(env.DB, userId, group.id, { limit: 50, offset: 0 }))
+        .subscriptions,
+    ).toEqual([expect.objectContaining({ mailingList: expect.objectContaining({ id: list.id }) })]);
+  });
+
   it("supports multiple lists, one primary, durable preferences, and changed-only desired state", async () => {
     const admin = await insertAdmin();
     const group = await createGroup(env.DB, admin, {
@@ -392,5 +432,64 @@ describe("group mailing-list subscriptions", () => {
     await expect(setMailingListPreference(env.DB, userId, grantee.id, list.id, "subscribed")).rejects.toMatchObject({
       code: "MAILING_LIST_SUBSCRIPTION_INELIGIBLE",
     });
+  });
+
+  it("rolls back a subscription preference when the shared capability is revoked before commit", async () => {
+    const admin = await insertAdmin();
+    const owner = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: `Race list owner ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const grantee = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: `Race list grantee ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const userId = await insertUser(env.DB, `race-list-member-${crypto.randomUUID()}@example.test`);
+    await addOrganizationCapacity(userId, "A");
+    await joinGroup(env.DB, grantee.id, {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const list = await createMailingList(
+      env.DB,
+      {
+        email: `shared-capability-${crypto.randomUUID()}@lists.example.test`,
+        label: "Racing shared list",
+        purpose: "group",
+        groupId: owner.id,
+        subscriptionDefault: "none",
+      },
+      admin.id,
+    );
+    await grantResourceToGroup(env.DB, admin, owner.id, "mailingList", list.id, {
+      granteeGroupId: grantee.id,
+      capability: "subscribe",
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `DELETE FROM mailing_list_group_grants
+            WHERE mailing_list_id = ? AND group_id = ? AND capability = 'subscribe'`,
+      )
+        .bind(list.id, grantee.id)
+        .run(),
+    );
+
+    await expect(setMailingListPreference(racingDb, userId, grantee.id, list.id, "subscribed")).rejects.toMatchObject({
+      status: 409,
+      code: "MAILING_LIST_AUTHORIZATION_CHANGED",
+    });
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM mailing_list_subscription_preferences WHERE mailing_list_id = ? AND user_id = ?",
+        [list.id, userId],
+      ),
+    ).toEqual([{ total: 0 }]);
+    expect(await desiredAction(userId, list.email)).toBeNull();
   });
 });

@@ -143,6 +143,43 @@ describe("organization representation domain evidence", () => {
     expect(representative).toEqual({ member_id: memberId, source: "verified_domain" });
   });
 
+  it("keeps email verification successful when the optional domain claim disappears before commit", async () => {
+    const email = `confirmed-${crypto.randomUUID()}@claim-race.example`;
+    const userId = await insertUser(env.DB, email);
+    const organizationId = await insertOrganization(env.DB, "Claim Race Org");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await claimDomain(organizationId, "claim-race.example");
+    const at = new Date().toISOString();
+    const associationStatements = await prepareVerifiedDomainAssociationStatements(env.DB, {
+      userId,
+      normalizedEmail: email,
+      at,
+    });
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain = ?").bind("claim-race.example").run();
+
+    await env.DB.batch([
+      prepareVerifyPrimaryEmailStatement(env.DB, {
+        userId,
+        normalizedEmail: email,
+        method: "registration_confirmation",
+        verifiedAt: at,
+      }),
+      ...associationStatements,
+    ]);
+
+    expect(
+      await queryAll<{ email_verified_at: string | null }>(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [
+        userId,
+      ]),
+    ).toEqual([{ email_verified_at: at }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_representatives WHERE user_id = ?", [userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_representative_domain_reconciled'"),
+    ).toHaveLength(0);
+  });
+
   it("reconciles the same verified domain concurrently without duplicate or failed relationships", async () => {
     const email = "race@verified-race.example";
     const userId = await insertUser(env.DB, email);
@@ -169,6 +206,32 @@ describe("organization representation domain evidence", () => {
         [memberId, userId],
       ),
     ).toHaveLength(1);
+  });
+
+  it("returns no association when a verified domain claim is revoked before the reconciliation batch", async () => {
+    const email = `reconcile-${crypto.randomUUID()}@revoked-claim.example`;
+    const userId = await insertUser(env.DB, email);
+    const organizationId = await insertOrganization(env.DB, "Revoked Claim Org");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await claimDomain(organizationId, "revoked-claim.example");
+    await env.DB.prepare(
+      `UPDATE users
+            SET email_verified_at = datetime('now'), email_verification_method = 'magic_link'
+          WHERE id = ?`,
+    )
+      .bind(userId)
+      .run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain = ?").bind("revoked-claim.example").run(),
+    );
+
+    await expect(reconcileVerifiedDomainRepresentations(racingDb, userId)).resolves.toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_representatives WHERE user_id = ?", [userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_representative_domain_reconciled'"),
+    ).toHaveLength(0);
   });
 });
 

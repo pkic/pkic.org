@@ -8,6 +8,7 @@
  * designations, never an arbitrary representative.
  */
 import { first, run } from "../db/queries";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
@@ -16,6 +17,7 @@ import type { AddedCoworker } from "../../../assets/shared/schemas/me";
 import { buildFindOrCreateUserStatement } from "./users";
 import { isActiveRepresentative, buildAddRepresentativeStatement } from "./membership/representatives";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
+import { prepareOrganizationRepresentativeManagementGuard } from "./organization-representations/authorization";
 import type { AuthMember, DatabaseLike } from "../types";
 
 async function requireOrgContact(db: DatabaseLike, member: AuthMember): Promise<void> {
@@ -77,8 +79,27 @@ export async function addCoworker(
     source: "organization_contact",
     now,
   });
-  const statements = userStatement ? [userStatement, representativeStatement] : [representativeStatement];
-  await db.batch(statements);
+  const statements = [
+    prepareOrganizationRepresentativeManagementGuard(db, {
+      memberId: member.memberId,
+      actorUserId: member.userId,
+      staffAuthorized: false,
+    }),
+    ...(userStatement ? [userStatement] : []),
+    representativeStatement,
+  ];
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
+        "Representative-management access changed while the coworker was being saved",
+      );
+    }
+    throw error;
+  }
 
   return {
     representativeId,

@@ -1,7 +1,8 @@
 import { hasPermission } from "../../auth/permissions";
+import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { AuthAdmin, DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { canManageAnyGroup } from "../groups/governance";
 import {
   getResourceGrantDefinition,
@@ -53,6 +54,107 @@ export async function resolveGroupResourceContextAccess(
 
 function placeholders(values: readonly unknown[]): string {
   return values.map(() => "?").join(", ");
+}
+
+/** Live member/resource evidence for use inside the protected D1 batch. */
+export function memberGroupResourceAuthorizationEvidence<K extends ResourceGrantKind>(
+  userId: string,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): AuthorizationEvidence {
+  const definition = getResourceGrantDefinition(kind);
+  if (isManagerResourceCapability(definition, capability)) return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  const accepted = memberResourceGrantCapabilitiesFor(definition, capability);
+  const sharedAccess =
+    accepted.length === 0
+      ? "0"
+      : `EXISTS (
+           SELECT 1 FROM ${definition.grantTable} grant_row
+            WHERE grant_row.${definition.grantResourceColumn} = resource.id
+              AND grant_row.group_id = context_group.id
+              AND grant_row.capability IN (${placeholders(accepted)})
+         )`;
+  return {
+    sql: `SELECT 1
+            FROM ${definition.resourceTable} resource
+            JOIN groups context_group ON context_group.id = ? AND context_group.active = 1
+           WHERE resource.id = ?
+             AND EXISTS (
+               SELECT 1 FROM group_memberships membership
+                WHERE membership.group_id = context_group.id
+                  AND membership.user_id = ?
+                  AND membership.left_at IS NULL
+             )
+             AND (
+               resource.${definition.ownerGroupColumn} = context_group.id
+               OR ${sharedAccess}
+             )
+           LIMIT 1`,
+    bindings: [groupId, resourceId, userId, ...accepted],
+  };
+}
+
+export function prepareMemberGroupResourceAuthorizationGuard<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  userId: string,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): StatementLike {
+  return prepareAuthorizationGuard(
+    db,
+    memberGroupResourceAuthorizationEvidence(userId, groupId, kind, resourceId, capability),
+  );
+}
+
+/** Proves that a resource is still owned by or shared with one managed group. */
+export function groupResourceContextAuthorizationEvidence<K extends ResourceGrantKind>(
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): AuthorizationEvidence {
+  const definition = getResourceGrantDefinition(kind);
+  const accepted = resourceGrantCapabilitiesFor(definition, capability).filter((candidate) =>
+    isManagerResourceCapability(definition, candidate),
+  );
+  const sharedAccess =
+    accepted.length === 0
+      ? "0"
+      : `EXISTS (
+           SELECT 1 FROM ${definition.grantTable} grant_row
+            WHERE grant_row.${definition.grantResourceColumn} = resource.id
+              AND grant_row.group_id = context_group.id
+              AND grant_row.capability IN (${placeholders(accepted)})
+         )`;
+  return {
+    sql: `SELECT 1
+            FROM ${definition.resourceTable} resource
+            JOIN groups context_group ON context_group.id = ? AND context_group.active = 1
+           WHERE resource.id = ?
+             AND (
+               resource.${definition.ownerGroupColumn} = context_group.id
+               OR ${sharedAccess}
+             )
+           LIMIT 1`,
+    bindings: [groupId, resourceId, ...accepted],
+  };
+}
+
+export function prepareGroupResourceContextAuthorizationGuard<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): StatementLike {
+  return prepareAuthorizationGuard(
+    db,
+    groupResourceContextAuthorizationEvidence(groupId, kind, resourceId, capability),
+  );
 }
 
 async function resourceOwnerGroupId<K extends ResourceGrantKind>(

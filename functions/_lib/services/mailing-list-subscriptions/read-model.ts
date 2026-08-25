@@ -67,12 +67,13 @@ export async function listEffectiveGroupMailingListSubscriptions(
   const visibleCapabilities = memberResourceGrantCapabilitiesFor(definition, "view");
   const capabilityPlaceholders = visibleCapabilities.map(() => "?").join(", ");
   const conditions = [
-    `(group_id = ? OR (
-       EXISTS (
-         SELECT 1 FROM group_memberships membership
-          WHERE membership.group_id = ? AND membership.user_id = ? AND membership.left_at IS NULL
-       )
-       AND EXISTS (
+    `(EXISTS (
+       SELECT 1 FROM group_memberships membership
+       JOIN groups membership_group ON membership_group.id = membership.group_id AND membership_group.active = 1
+        WHERE membership.group_id = ? AND membership.user_id = ? AND membership.left_at IS NULL
+     ) AND (
+       group_id = ?
+       OR EXISTS (
          SELECT 1 FROM mailing_list_group_grants grant_row
           WHERE grant_row.mailing_list_id = effective_subscriptions.id
             AND grant_row.group_id = ?
@@ -80,7 +81,7 @@ export async function listEffectiveGroupMailingListSubscriptions(
        )
      ))`,
   ];
-  const bindings: unknown[] = [userId, groupId, groupId, userId, groupId, ...visibleCapabilities];
+  const bindings: unknown[] = [userId, groupId, userId, groupId, groupId, ...visibleCapabilities];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
   if (search) {
     conditions.push(search.sql);

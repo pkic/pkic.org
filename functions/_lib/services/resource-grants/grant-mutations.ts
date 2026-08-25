@@ -1,12 +1,32 @@
 import { AppError } from "../../errors";
-import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import type { D1StatementResult, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
 import { isAuditOneChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { getGroup } from "../groups";
+import { prepareGroupManagementAuthorizationGuard } from "../groups/governance";
 import { getResourceGrantDefinition, isResourceGrantCapability, type ResourceGrantKind } from "./definitions";
 import { getResourceGroupGrant, resolveOwnedResource } from "./read";
 import { prepareGrantReconciliationStatements } from "./grant-reconciliation";
 import type { ResourceGrantMutationInput, ResourceGroupGrant } from "./types";
+
+async function commitResourceGrantBatch(
+  db: DatabaseLike,
+  statements: readonly StatementLike[],
+): Promise<D1StatementResult[]> {
+  try {
+    return await db.batch([...statements]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "RESOURCE_GRANT_AUTHORIZATION_CHANGED",
+        "Resource-sharing authority changed while the update was being saved",
+      );
+    }
+    throw error;
+  }
+}
 
 export async function grantResourceToGroup<K extends ResourceGrantKind>(
   db: DatabaseLike,
@@ -28,7 +48,17 @@ export async function grantResourceToGroup<K extends ResourceGrantKind>(
   }
   const now = nowIso();
   const reconciliation = prepareGrantReconciliationStatements(db, kind, resourceId, input.capability, now);
-  const results = await db.batch([
+  const results = await commitResourceGrantBatch(db, [
+    prepareGroupManagementAuthorizationGuard(db, actor, [ownerGroupId]),
+    prepareAuthorizationGuard(db, {
+      sql: `SELECT 1 FROM ${definition.resourceTable}
+             WHERE id = ? AND ${definition.ownerGroupColumn} = ?`,
+      bindings: [resourceId, ownerGroupId],
+    }),
+    prepareAuthorizationGuard(db, {
+      sql: "SELECT 1 FROM groups WHERE id = ? AND active = 1 AND id <> ?",
+      bindings: [grantee.id, ownerGroupId],
+    }),
     db
       .prepare(
         `INSERT OR IGNORE INTO ${definition.grantTable}
@@ -52,7 +82,7 @@ export async function grantResourceToGroup<K extends ResourceGrantKind>(
   ]);
   const grant = await getResourceGroupGrant(db, kind, resourceId, grantee.id, input.capability);
   if (!grant) throw new AppError(500, "RESOURCE_GRANT_READ_FAILED", "Failed to read resource grant after mutation");
-  return { grant, created: Number(results[0]?.meta?.changes ?? 0) === 1 };
+  return { grant, created: Number(results[3]?.meta?.changes ?? 0) === 1 };
 }
 
 export async function revokeResourceGroupGrant<K extends ResourceGrantKind>(
@@ -71,7 +101,13 @@ export async function revokeResourceGroupGrant<K extends ResourceGrantKind>(
   const now = nowIso();
   const reconciliation = prepareGrantReconciliationStatements(db, kind, resourceId, input.capability, now);
   try {
-    await db.batch([
+    await commitResourceGrantBatch(db, [
+      prepareGroupManagementAuthorizationGuard(db, actor, [ownerGroupId]),
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 FROM ${definition.resourceTable}
+               WHERE id = ? AND ${definition.ownerGroupColumn} = ?`,
+        bindings: [resourceId, ownerGroupId],
+      }),
       db
         .prepare(
           `DELETE FROM ${definition.grantTable}

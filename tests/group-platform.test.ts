@@ -209,6 +209,92 @@ describe("group capacity membership", () => {
     ).toHaveLength(0);
   });
 
+  it("rolls back a staff join when group-management authority is revoked before commit", async () => {
+    const admin = await insertActor("managed-join-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Managed Join Authorization Race",
+      eligibilityMode: "open",
+    });
+    const manager = await insertActor("managed-join-lead@example.test");
+    const leadershipId = await grantGroupLeadership(group.id, manager.id);
+    const userId = await insertUser(env.DB, "managed-join-target@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Managed Join Target Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(leadershipId).run(),
+    );
+
+    await expect(
+      joinGroup(racingDb, group.id, {
+        actorUserId: manager.id,
+        targetUserId: userId,
+        selection: { mode: "all_eligible", confirmed: true },
+        source: "staff",
+        allowManaged: true,
+        managementActor: manager,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_JOIN_CONTEXT_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ?", [group.id, userId]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_joined' AND entity_id = ?", group.id),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back a staff removal when group-management authority is revoked before commit", async () => {
+    const admin = await insertActor("managed-leave-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Managed Leave Authorization Race",
+      eligibilityMode: "open",
+    });
+    const manager = await insertActor("managed-leave-lead@example.test");
+    const leadershipId = await grantGroupLeadership(group.id, manager.id);
+    const userId = await insertUser(env.DB, "managed-leave-target@example.test");
+    const memberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Managed Leave Target Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, memberId, userId);
+    await joinGroup(env.DB, group.id, {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(leadershipId).run(),
+    );
+
+    await expect(
+      leaveGroup(racingDb, group.id, {
+        actorUserId: manager.id,
+        targetUserId: userId,
+        selection: { mode: "all" },
+        actorType: "admin",
+        managementActor: manager,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+        [group.id, userId],
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_left' AND entity_id = ?", group.id),
+    ).toHaveLength(0);
+  });
+
   it("rejects a stale multi-capacity leave without ending the remaining capacity or auditing success", async () => {
     const admin = await insertActor("leave-race-admin@example.test", "admin");
     const group = await createGroup(env.DB, admin, {

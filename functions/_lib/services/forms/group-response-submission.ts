@@ -1,9 +1,14 @@
 import type { GroupFormSubmissionInput } from "../../../../assets/shared/schemas/group-forms";
 import { AppError } from "../../errors";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
-import { canViewerAccessGroupResource, type GroupResourceViewer } from "../resource-grants";
+import {
+  canViewerAccessGroupResource,
+  prepareMemberGroupResourceAuthorizationGuard,
+  type GroupResourceViewer,
+} from "../resource-grants";
 import {
   formSubmissionContextChangedError,
   isFormSubmissionContextConflict,
@@ -59,6 +64,7 @@ export async function submitGroupFormResponse(
   );
   try {
     await db.batch([
+      prepareMemberGroupResourceAuthorizationGuard(db, viewer.userId, groupId, "formPlacement", placementId, "submit"),
       ...prepared.statements,
       prepareScopedAuditLog(
         db,
@@ -73,6 +79,13 @@ export async function submitGroupFormResponse(
       ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "FORM_SUBMISSION_AUTHORIZATION_CHANGED",
+        "Form submission access changed while the response was being saved",
+      );
+    }
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     throw error;
   }

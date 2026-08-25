@@ -1,12 +1,18 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createManagedForm, createManagedFormPlacement } from "../functions/_lib/services/forms";
+import {
+  createManagedForm,
+  createManagedFormPlacement,
+  submitGroupFormResponse,
+  updateGroupFormPlacement,
+} from "../functions/_lib/services/forms";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -274,6 +280,60 @@ describe("group form sharing", () => {
       `/api/v1/groups/${fixture.owner.id}/forms/${fixture.placementId}/submissions?limit=20`,
     );
     expect(wrongContext.status).toBe(403);
+  });
+
+  it("rolls back a response when its group grant is revoked before the D1 batch commits", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `DELETE FROM form_placement_group_grants
+            WHERE placement_id = ? AND group_id = ? AND capability = 'submit'`,
+      )
+        .bind(fixture.placementId, fixture.grantee.id)
+        .run(),
+    );
+
+    await expect(
+      submitGroupFormResponse(racingDb, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
+        answers: { topic: "Stale access" },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "FORM_SUBMISSION_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM form_submissions WHERE placement_id = ?",
+        [fixture.placementId],
+      ),
+    ).toEqual([{ total: 0 }]);
+  });
+
+  it("rolls back a placement update when group leadership is revoked before commit", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "manage",
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE user_roles SET revoked_at = datetime('now')
+            WHERE user_id = ? AND role_id = 'role-group_lead' AND context_type = 'group' AND context_id = ?`,
+      )
+        .bind(fixture.leader.id, fixture.grantee.id)
+        .run(),
+    );
+
+    await expect(
+      updateGroupFormPlacement(racingDb, fixture.leader, fixture.grantee.id, fixture.placementId, { active: false }),
+    ).rejects.toMatchObject({ status: 409, code: "FORM_PLACEMENT_AUTHORIZATION_CHANGED" });
+    expect(
+      await queryAll<{ active: number }>(env.DB, "SELECT active FROM form_placements WHERE id = ?", [
+        fixture.placementId,
+      ]),
+    ).toEqual([{ active: 1 }]);
   });
 
   it("does not let the generic endpoint bypass registration workflows", async () => {
