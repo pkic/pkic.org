@@ -25,6 +25,7 @@ interface UserDetailRow {
 
 interface MembershipRow {
   id: string;
+  capacity_member_id: string;
   category_code: string;
   status: string;
   show_on_org_profile: number;
@@ -33,15 +34,19 @@ interface MembershipRow {
   created_at: string;
 }
 
-interface WorkingGroupRow {
+interface MembershipGroupRow {
+  member_id: string;
   id: string;
   name: string;
   slug: string;
+  type_key: string;
+  type_singular_label: string;
+  type_plural_label: string;
 }
 
 /** Fetches the complete admin user projection in one D1 batch. */
 export async function getAdminUserDetail(db: DatabaseLike, userId: string) {
-  const [userResult, membershipResult, workingGroupsResult] = await db.batch([
+  const [userResult, membershipResult, groupsResult] = await db.batch([
     db
       .prepare(
         `SELECT id, email, first_name, last_name, preferred_name,
@@ -52,7 +57,7 @@ export async function getAdminUserDetail(db: DatabaseLike, userId: string) {
       .bind(userId),
     db
       .prepare(
-        `SELECT m.id, mca.category_code, m.status, 1 AS show_on_org_profile,
+        `SELECT m.id, m.id AS capacity_member_id, mca.category_code, m.status, 1 AS show_on_org_profile,
                 NULL AS organization_id, NULL AS organization_name, m.created_at,
                 '0_' || m.created_at AS sort_key
          FROM members m
@@ -61,7 +66,7 @@ export async function getAdminUserDetail(db: DatabaseLike, userId: string) {
 
          UNION ALL
 
-         SELECT r.id, mca.category_code, m.status, r.show_on_org_profile,
+         SELECT r.id, m.id AS capacity_member_id, mca.category_code, m.status, r.show_on_org_profile,
                 m.organization_id, o.name AS organization_name, r.created_at,
                 '1_' || r.joined_at AS sort_key
          FROM organization_representatives r
@@ -69,35 +74,49 @@ export async function getAdminUserDetail(db: DatabaseLike, userId: string) {
          JOIN organizations o ON o.id = m.organization_id
          JOIN member_category_assignments mca ON mca.member_id = m.id
          WHERE r.user_id = ? AND r.left_at IS NULL
-         ORDER BY sort_key ASC
-         LIMIT 1`,
+         ORDER BY sort_key ASC`,
       )
       .bind(userId, userId),
     db
       .prepare(
-        `SELECT wg.id, wg.name, wg.slug
-         FROM working_group_members wgm
-         JOIN working_groups wg ON wg.id = wgm.working_group_id
-         WHERE wgm.user_id = ? AND wgm.left_at IS NULL
-         ORDER BY wg.name ASC`,
+        `SELECT membership.member_id, g.id, g.name, g.slug, g.type_key,
+                type.singular_label AS type_singular_label,
+                type.plural_label AS type_plural_label
+           FROM group_memberships membership
+           JOIN groups g ON g.id = membership.group_id
+           JOIN group_types type ON type.key = g.type_key
+          WHERE membership.user_id = ? AND membership.left_at IS NULL
+          ORDER BY g.name COLLATE NOCASE, g.id`,
       )
       .bind(userId),
   ]);
   const user = batchFirst<UserDetailRow>(userResult);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
-  const membershipRow = batchFirst<MembershipRow>(membershipResult);
-  const membership = membershipRow
-    ? {
-        memberId: membershipRow.id,
-        membershipCategory: membershipRow.category_code,
-        status: membershipRow.status,
-        showOnOrgProfile: membershipRow.show_on_org_profile === 1,
-        organizationId: membershipRow.organization_id,
-        organizationName: membershipRow.organization_name,
-        createdAt: membershipRow.created_at,
-        workingGroups: batchRows<WorkingGroupRow>(workingGroupsResult),
-      }
-    : null;
+  const groupsByMemberId = new Map<string, MembershipGroupRow[]>();
+  for (const group of batchRows<MembershipGroupRow>(groupsResult)) {
+    const groups = groupsByMemberId.get(group.member_id) ?? [];
+    groups.push(group);
+    groupsByMemberId.set(group.member_id, groups);
+  }
+  const memberships = batchRows<MembershipRow>(membershipResult).map((membership) => ({
+    memberId: membership.id,
+    membershipCategory: membership.category_code,
+    status: membership.status,
+    showOnOrgProfile: membership.show_on_org_profile === 1,
+    organizationId: membership.organization_id,
+    organizationName: membership.organization_name,
+    createdAt: membership.created_at,
+    groups: (groupsByMemberId.get(membership.capacity_member_id) ?? []).map((group) => ({
+      id: group.id,
+      slug: group.slug,
+      name: group.name,
+      type: {
+        key: group.type_key,
+        singularLabel: group.type_singular_label,
+        pluralLabel: group.type_plural_label,
+      },
+    })),
+  }));
   const headshotUrl = user.headshot_r2_key
     ? `/api/v1/admin/users/${user.id}/headshot${
         user.headshot_updated_at ? `?v=${encodeURIComponent(user.headshot_updated_at)}` : ""
@@ -109,6 +128,6 @@ export async function getAdminUserDetail(db: DatabaseLike, userId: string) {
     isEcMember: Boolean(user.is_ec_member),
     links: parseLinksJson(user.links_json),
     headshotUrl,
-    membership,
+    memberships,
   };
 }

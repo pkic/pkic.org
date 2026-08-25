@@ -1,16 +1,16 @@
 import { useState } from "preact/hooks";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
+import { adminMemberMutationResponseSchema } from "../../../../shared/schemas/admin-members";
 import {
-  MEMBER_STATUSES,
   adminOrganizationsListResponseSchema,
   adminOrganizationDetailResponseSchema,
   organizationRepresentativeResponseSchema,
 } from "../../../../shared/schemas/admin-organizations";
-import { adminMemberMutationResponseSchema } from "../../../../shared/schemas/admin-members";
-import { api, apiCommand } from "../../api";
-import { fmt, toast } from "../../ui";
+import { api } from "../../api";
+import { toast } from "../../ui";
 import type { AdminOrganizationSummary } from "../../types";
 import type { UserDetail } from "./model";
+import { UserMembershipCard } from "./UserMembershipCard";
 
 const GRANT_MODE_ORG_TIED = "__org_tied__";
 
@@ -33,6 +33,7 @@ function GrantMembershipForm({
   const [error, setError] = useState("");
 
   const isIndividual = mode !== GRANT_MODE_ORG_TIED;
+  const mayGrantIndividual = user.memberships.length === 0;
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 
   async function searchOrgs() {
@@ -112,13 +113,14 @@ function GrantMembershipForm({
             onChange={(event) => setMode((event.target as HTMLSelectElement).value)}
           >
             <option value={GRANT_MODE_ORG_TIED}>Organization-tied (set by org)</option>
-            {MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
-              (category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ),
-            )}
+            {mayGrantIndividual &&
+              MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
+                (category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ),
+              )}
           </select>
         </div>
         {!isIndividual && (
@@ -182,150 +184,34 @@ function GrantMembershipForm({
 
 export function UserMembershipPanel({ user, onChanged }: { user: UserDetail; onChanged: () => Promise<void> | void }) {
   const [showGrantForm, setShowGrantForm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const membership = user.membership;
-
-  async function patchMember(body: Record<string, unknown>) {
-    if (!membership) return;
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/members/${membership.memberId}`, adminMemberMutationResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      toast("Membership updated", "success");
-      await onChanged();
-    } catch (error) {
-      toast((error as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeMembership() {
-    if (!membership) return;
-    if (!confirm("Remove this person's membership? Their user account is not deleted.")) return;
-    setBusy(true);
-    try {
-      await apiCommand(`/api/v1/admin/members/${membership.memberId}`, { method: "DELETE" });
-      toast("Membership removed", "success");
-      await onChanged();
-    } catch (error) {
-      toast((error as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const hasIndividualMembership = user.memberships.some((membership) => membership.organizationId === null);
 
   return (
     <div class="card border-0 shadow-sm mt-4">
       <div class="card-header bg-white fw-semibold">Membership</div>
       <div class="card-body p-3">
-        {!membership ? (
-          <>
-            {!showGrantForm ? (
-              <div class="d-flex align-items-center gap-2">
-                <span class="text-muted fst-italic">Not a member.</span>
-                <button class="btn btn-sm btn-outline-success" onClick={() => setShowGrantForm(true)}>
-                  Grant membership
-                </button>
-              </div>
-            ) : (
-              <GrantMembershipForm
-                user={user}
-                onGranted={() => {
-                  setShowGrantForm(false);
-                  void onChanged();
-                }}
-                onCancel={() => setShowGrantForm(false)}
-              />
-            )}
-          </>
-        ) : (
-          <div>
-            <table class="table table-sm table-borderless mb-2">
-              <tbody>
-                <tr>
-                  <th class="text-muted small adm-user-info-label">Organization</th>
-                  <td>{membership.organizationName ?? <span class="fst-italic text-muted">Individual member</span>}</td>
-                </tr>
-                <tr>
-                  <th class="text-muted small adm-user-info-label">Category</th>
-                  <td>
-                    {membership.organizationId ? (
-                      <span class="badge text-bg-success mono">{membership.membershipCategory}</span>
-                    ) : (
-                      <select
-                        class="form-select form-select-sm d-inline-block w-auto"
-                        value={membership.membershipCategory}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void patchMember({ membershipCategory: (event.target as HTMLSelectElement).value })
-                        }
-                      >
-                        {MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
-                          (category) => (
-                            <option key={category} value={category}>
-                              {category}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    )}
-                  </td>
-                </tr>
-                <tr>
-                  <th class="text-muted small adm-user-info-label">Status</th>
-                  <td>
-                    <select
-                      class="form-select form-select-sm d-inline-block w-auto"
-                      value={membership.status}
-                      disabled={busy}
-                      onChange={(event) => void patchMember({ status: (event.target as HTMLSelectElement).value })}
-                    >
-                      {MEMBER_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-                {membership.organizationId && (
-                  <tr>
-                    <th class="text-muted small adm-user-info-label">Show on org profile</th>
-                    <td>
-                      <input
-                        type="checkbox"
-                        class="form-check-input"
-                        checked={membership.showOnOrgProfile}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void patchMember({ showOnOrgProfile: (event.target as HTMLInputElement).checked })
-                        }
-                      />
-                    </td>
-                  </tr>
-                )}
-                <tr>
-                  <th class="text-muted small adm-user-info-label">Working groups</th>
-                  <td>
-                    {membership.workingGroups.length > 0
-                      ? membership.workingGroups.map((workingGroup) => workingGroup.name).join(", ")
-                      : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <th class="text-muted small adm-user-info-label">Member since</th>
-                  <td>{fmt(membership.createdAt)}</td>
-                </tr>
-              </tbody>
-            </table>
-            <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={removeMembership}>
-              Remove membership
-            </button>
+        {user.memberships.length === 0 && !showGrantForm && <span class="text-muted fst-italic">Not a member.</span>}
+        {user.memberships.length > 0 && (
+          <div class="d-grid gap-3 mb-3">
+            {user.memberships.map((membership) => (
+              <UserMembershipCard key={membership.memberId} membership={membership} onChanged={onChanged} />
+            ))}
           </div>
         )}
+        {showGrantForm ? (
+          <GrantMembershipForm
+            user={user}
+            onGranted={() => {
+              setShowGrantForm(false);
+              void onChanged();
+            }}
+            onCancel={() => setShowGrantForm(false)}
+          />
+        ) : !hasIndividualMembership ? (
+          <button class="btn btn-sm btn-outline-success ms-2" onClick={() => setShowGrantForm(true)}>
+            {user.memberships.length === 0 ? "Grant membership" : "Add organization representation"}
+          </button>
+        ) : null}
       </div>
     </div>
   );

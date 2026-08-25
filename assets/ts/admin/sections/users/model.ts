@@ -6,7 +6,12 @@ export interface UserMembership {
   organizationId: string | null;
   organizationName: string | null;
   createdAt: string;
-  workingGroups: Array<{ id: string; name: string; slug: string }>;
+  groups: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    type: { key: string; singularLabel: string; pluralLabel: string };
+  }>;
 }
 
 export interface UserDetail {
@@ -28,5 +33,5 @@ export interface UserDetail {
   created_at: string;
   updated_at: string;
   pii_redacted_at: string | null;
-  membership: UserMembership | null;
+  memberships: UserMembership[];
 }

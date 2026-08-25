@@ -10,6 +10,7 @@ import { adminUserIdParamsSchema, successResponseSchema, trimmedString } from ".
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
+import { groupLabelSchema } from "./groups";
 
 export const adminRoleValueSchema = z.enum(["admin", "user", "guest"]);
 export type AdminRoleValue = z.infer<typeof adminRoleValueSchema>;
@@ -93,7 +94,7 @@ export const adminUserMembershipDetailSchema = z.object({
   organizationId: z.string().nullable(),
   organizationName: z.string().nullable(),
   createdAt: z.string(),
-  workingGroups: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
+  groups: z.array(groupLabelSchema),
 });
 export const adminUserDetailSchema = z.object({
   id: z.string(),
@@ -121,7 +122,7 @@ export const adminUserDetailSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   pii_redacted_at: z.string().nullable(),
-  membership: adminUserMembershipDetailSchema.nullable(),
+  memberships: z.array(adminUserMembershipDetailSchema),
 });
 export const adminUserDetailResponseSchema = z.object({ user: adminUserDetailSchema });
 
@@ -131,7 +132,7 @@ export const adminUserDetailRouteSchema = {
   request: { params: adminUserIdParamsSchema },
   responses: {
     "200": {
-      description: "User detail, membership, and working-group information.",
+      description: "User detail and capacity-specific group participation.",
       content: { "application/json": { schema: adminUserDetailResponseSchema } },
     },
     "400": { description: "Invalid user identifier." },

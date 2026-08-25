@@ -2003,6 +2003,62 @@ BEGIN
   SELECT RAISE(ABORT, 'organization representative requires an organization membership');
 END;
 
+-- A person acts either as an individual Member or through one or more
+-- organizations, never both. Service checks provide useful errors; these
+-- triggers close the concurrent-writer race at the D1 boundary without a
+-- restrictive table CHECK or rebuild.
+CREATE TRIGGER trg_organization_representatives_reject_individual_insert
+BEFORE INSERT ON organization_representatives
+WHEN NEW.left_at IS NULL
+ AND EXISTS (
+   SELECT 1 FROM members individual
+    WHERE individual.user_id = NEW.user_id
+      AND individual.member_type = 'individual'
+      AND individual.status = 'active'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
+CREATE TRIGGER trg_organization_representatives_reject_individual_update
+BEFORE UPDATE OF user_id, left_at, blocked_at ON organization_representatives
+WHEN NEW.left_at IS NULL AND NEW.blocked_at IS NULL
+ AND EXISTS (
+   SELECT 1 FROM members individual
+    WHERE individual.user_id = NEW.user_id
+      AND individual.member_type = 'individual'
+      AND individual.status = 'active'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
+CREATE TRIGGER trg_members_reject_representative_capacity_insert
+BEFORE INSERT ON members
+WHEN NEW.member_type = 'individual' AND NEW.status = 'active'
+ AND EXISTS (
+   SELECT 1 FROM organization_representatives representative
+    WHERE representative.user_id = NEW.user_id
+      AND representative.left_at IS NULL
+      AND representative.blocked_at IS NULL
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
+CREATE TRIGGER trg_members_reject_representative_capacity_update
+BEFORE UPDATE OF user_id, member_type, status ON members
+WHEN NEW.member_type = 'individual' AND NEW.status = 'active'
+ AND EXISTS (
+   SELECT 1 FROM organization_representatives representative
+    WHERE representative.user_id = NEW.user_id
+      AND representative.left_at IS NULL
+      AND representative.blocked_at IS NULL
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+END;
+
 -- Closing or blocking a representation immediately removes every active
 -- group capacity held for that Member. Historical memberships and actions
 -- remain intact.
