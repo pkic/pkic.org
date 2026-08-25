@@ -3,6 +3,8 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import { GROUP_DEPUTY_LEAD_ROLE_ID, GROUP_LEAD_ROLE_ID } from "../group-leadership-query";
+import { getVisibleGroup, listGroups } from "../groups/read-model";
 import { deterministicRepresentativeJoinSql } from "./representative-lookup";
 import { toPublicRoleProfile, type PublicRoleProfile, type PublicRoleProfileRow } from "./public-role-profile";
 import type {
@@ -31,56 +33,34 @@ export interface WorkingGroupDetail extends WorkingGroupSummary {
   viceChair: WorkingGroupChairPublic | null;
 }
 
-interface WorkingGroupRow {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  mailing_list_email: string | null;
-  active: number;
-}
-
 interface WorkingGroupMemberRow {
   first_name: string | null;
   last_name: string | null;
   org_name: string | null;
 }
 
-const WORKING_GROUP_SELECT = "SELECT id, name, slug, description, mailing_list_email, active FROM working_groups";
-
-async function getActiveWorkingGroupRow(db: DatabaseLike, idOrSlug: string): Promise<WorkingGroupRow | null> {
-  return first<WorkingGroupRow>(db, `${WORKING_GROUP_SELECT} WHERE (id = ? OR slug = ?) AND active = 1 LIMIT 1`, [
-    idOrSlug,
-    idOrSlug,
-  ]);
+async function getPublicWorkingGroup(db: DatabaseLike, idOrSlug: string) {
+  const group = await getVisibleGroup(db, idOrSlug, {});
+  return group?.type.key === "working_group" ? group : null;
 }
 
 export async function listWorkingGroups(
   db: DatabaseLike,
   params: PublicWorkingGroupsListQuery,
 ): Promise<{ workingGroups: WorkingGroupSummary[]; total: number }> {
-  const search = params.q ? buildD1TextSearchFilter(params.q, ["name", "slug", "description"]) : null;
-  const where = search ? ` AND ${search.sql}` : "";
-  const bindings = [...(search?.bindings ?? [])];
-  const result = await queryPage<WorkingGroupRow>(db, {
-    sql: `${WORKING_GROUP_SELECT} WHERE active = 1${where}`,
-    bindings,
-    orderBy: resolveMappedOrderBy(
-      params.sort,
-      { name: "name COLLATE NOCASE", slug: "slug COLLATE NOCASE" },
-      "name COLLATE NOCASE ASC",
-      "id ASC",
-    ),
-    limit: params.limit,
-    offset: params.offset,
+  const result = await listGroups(db, {
+    ...params,
+    active: true,
+    typeKey: "working_group",
+    visibility: "public",
   });
   return {
-    workingGroups: result.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      description: row.description,
-      active: row.active === 1,
+    workingGroups: result.groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      slug: group.slug,
+      description: group.description,
+      active: group.active,
     })),
     total: result.total,
   };
@@ -88,7 +68,7 @@ export async function listWorkingGroups(
 
 async function getWorkingGroupChairsPublic(
   db: DatabaseLike,
-  workingGroupId: string,
+  workingGroupSlug: string,
 ): Promise<{ chair: WorkingGroupChairPublic | null; viceChair: WorkingGroupChairPublic | null }> {
   const rows = await all<
     PublicRoleProfileRow & {
@@ -101,16 +81,21 @@ async function getWorkingGroupChairsPublic(
             COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
+     JOIN groups leadership_group
+       ON leadership_group.id = ur.context_id
+      AND leadership_group.slug = ?
+      AND leadership_group.active = 1
+      AND leadership_group.public_leadership = 1
 ${deterministicRepresentativeJoinSql("u.id")}
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
-     WHERE ur.context_type = 'working_group' AND ur.context_id = ?
-       AND ur.role_id IN ('role-wg_chair', 'role-wg_vice_chair')
+     WHERE ur.context_type = 'group'
+       AND ur.role_id IN (?, ?)
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      ORDER BY ur.created_at DESC`,
-    [workingGroupId],
+    [workingGroupSlug, GROUP_LEAD_ROLE_ID, GROUP_DEPUTY_LEAD_ROLE_ID],
   );
 
   const toPublic = (row: (typeof rows)[number] | undefined): WorkingGroupChairPublic | null => {
@@ -119,8 +104,8 @@ ${deterministicRepresentativeJoinSql("u.id")}
   };
 
   return {
-    chair: toPublic(rows.find((row) => row.role_id === "role-wg_chair")),
-    viceChair: toPublic(rows.find((row) => row.role_id === "role-wg_vice_chair")),
+    chair: toPublic(rows.find((row) => row.role_id === GROUP_LEAD_ROLE_ID)),
+    viceChair: toPublic(rows.find((row) => row.role_id === GROUP_DEPUTY_LEAD_ROLE_ID)),
   };
 }
 
@@ -128,16 +113,25 @@ export async function getWorkingGroupByIdOrSlug(
   db: DatabaseLike,
   idOrSlug: string,
 ): Promise<WorkingGroupDetail | null> {
-  const row = await getActiveWorkingGroupRow(db, idOrSlug);
-  if (!row) return null;
-  const { chair, viceChair } = await getWorkingGroupChairsPublic(db, row.id);
+  const group = await getPublicWorkingGroup(db, idOrSlug);
+  if (!group) return null;
+  const [mailingList, { chair, viceChair }] = await Promise.all([
+    first<{ email: string }>(
+      db,
+      `SELECT email FROM mailing_lists
+       WHERE group_id = ? AND active = 1 AND is_primary_discussion = 1
+       LIMIT 1`,
+      [group.id],
+    ),
+    getWorkingGroupChairsPublic(db, group.slug),
+  ]);
   return {
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    description: row.description,
-    active: row.active === 1,
-    mailingListEmail: row.mailing_list_email,
+    id: group.id,
+    name: group.name,
+    slug: group.slug,
+    description: group.description,
+    active: group.active,
+    mailingListEmail: mailingList?.email ?? null,
     chair,
     viceChair,
   };
@@ -148,7 +142,7 @@ export async function listWorkingGroupMembers(
   idOrSlug: string,
   params: PublicWorkingGroupMembersListQuery,
 ): Promise<{ members: WorkingGroupMemberPublic[]; total: number } | null> {
-  const workingGroup = await getActiveWorkingGroupRow(db, idOrSlug);
+  const workingGroup = await getPublicWorkingGroup(db, idOrSlug);
   if (!workingGroup) return null;
 
   const search = params.q
@@ -156,12 +150,24 @@ export async function listWorkingGroupMembers(
     : null;
   const where = search ? ` AND ${search.sql}` : "";
   const bindings = [workingGroup.id, ...(search?.bindings ?? [])];
-  const from = `FROM working_group_members wgm
-     JOIN users u ON u.id = wgm.user_id
-${deterministicRepresentativeJoinSql("wgm.user_id")}
-     LEFT JOIN members m ON m.id = rep.member_id
+  const from = `FROM (
+       SELECT user_id, MIN(joined_at) AS first_joined_at
+       FROM group_memberships
+       WHERE group_id = ? AND left_at IS NULL
+       GROUP BY user_id
+     ) participant
+     JOIN users u ON u.id = participant.user_id
+     LEFT JOIN members m ON m.id = (
+       SELECT capacity.member_id
+       FROM group_memberships capacity
+       WHERE capacity.group_id = ?
+         AND capacity.user_id = participant.user_id
+         AND capacity.left_at IS NULL
+       ORDER BY capacity.joined_at ASC, capacity.id ASC
+       LIMIT 1
+     )
      LEFT JOIN organizations o ON o.id = m.organization_id
-     WHERE wgm.working_group_id = ? AND wgm.left_at IS NULL${where}`;
+     WHERE 1 = 1${where}`;
   const orderBy = resolveMappedOrderBy(
     params.sort,
     { name: "COALESCE(u.last_name, u.first_name)", organizationName: "o.name" },
@@ -170,7 +176,7 @@ ${deterministicRepresentativeJoinSql("wgm.user_id")}
   );
   const result = await queryPage<WorkingGroupMemberRow>(db, {
     sql: `SELECT u.first_name, u.last_name, o.name AS org_name ${from}`,
-    bindings,
+    bindings: [workingGroup.id, workingGroup.id, ...bindings.slice(1)],
     orderBy,
     limit: params.limit,
     offset: params.offset,

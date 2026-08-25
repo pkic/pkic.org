@@ -18,7 +18,7 @@ import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { getGroup } from "./read-model";
 
-const EFFECTIVE_LINEAGE_CTE = `WITH RECURSIVE effective_lineage(id, depth, continue_up) AS (
+export const EFFECTIVE_GROUP_LINEAGE_CTE = `WITH RECURSIVE effective_lineage(id, depth, continue_up) AS (
   SELECT g.id, 0, CASE WHEN g.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
   FROM groups g
   WHERE g.id = ?
@@ -225,7 +225,7 @@ export async function listEffectiveGroupLeadership(
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   const rows = await all<LeadershipRow>(
     db,
-    `${EFFECTIVE_LINEAGE_CTE}
+    `${EFFECTIVE_GROUP_LINEAGE_CTE}
      SELECT ur.id AS user_role_id, ur.user_id, u.first_name, u.last_name, u.email,
             ur.role_id, source_group.id AS source_group_id,
             source_group.slug AS source_group_slug, source_group.name AS source_group_name,

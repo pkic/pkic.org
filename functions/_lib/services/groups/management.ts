@@ -199,8 +199,8 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
           `INSERT INTO groups
              (id, type_key, parent_group_id, name, slug, description, links_json, visibility,
               governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
-              allow_automatic_opt_out, min_endorsers_for_ballot, active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+              allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
         .bind(
           id,
@@ -215,6 +215,7 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
           input.eligibilityMode ?? type.default_eligibility_mode,
           input.automaticEnrollmentMode ?? type.default_automatic_enrollment_mode,
           (input.allowAutomaticOptOut ?? type.default_allow_automatic_opt_out === 1) ? 1 : 0,
+          input.publicLeadership ? 1 : 0,
           input.minEndorsersForBallot ?? 0,
           at,
           at,
@@ -315,6 +316,7 @@ export async function updateGroup(
   if (changes.eligibilityMode !== undefined) add("eligibility_mode", changes.eligibilityMode);
   if (changes.automaticEnrollmentMode !== undefined) add("automatic_enrollment_mode", changes.automaticEnrollmentMode);
   if (changes.allowAutomaticOptOut !== undefined) add("allow_automatic_opt_out", changes.allowAutomaticOptOut ? 1 : 0);
+  if (changes.publicLeadership !== undefined) add("public_leadership", changes.publicLeadership ? 1 : 0);
   if (changes.minEndorsersForBallot !== undefined) add("min_endorsers_for_ballot", changes.minEndorsersForBallot);
   if (setters.length === 0) return existing;
   const at = nowIso();

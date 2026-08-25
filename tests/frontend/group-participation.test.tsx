@@ -22,6 +22,7 @@ function group(overrides: Partial<SelfGroup> = {}): SelfGroup {
     eligibilityMode: "open",
     automaticEnrollmentMode: "none",
     allowAutomaticOptOut: false,
+    publicLeadership: false,
     minEndorsersForBallot: 0,
     active: true,
     revision: 0,

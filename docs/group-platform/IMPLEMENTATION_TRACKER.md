@@ -375,6 +375,19 @@ Status: In progress
 
 - [x] Add canonical /api/v1/groups routes.
 - [x] Add nested members and leadership routes.
+      Evidence: group leadership now uses only generic group-scoped lead and
+      deputy roles, supports multiple local and inherited leaders, and shares
+      one effective-leadership SQL definition across administration, digests,
+      and authorization. The administration view selects any group type and
+      uses the canonical nested routes without N+1 group reads. Historical
+      Board and Executive Council positions remain separate non-authorizing
+      records with explicit affiliations and dates. Public consortium chairs
+      are sourced from the published All Members group; arbitrary private-group
+      leadership is not exposed. The canonical core backend suite passes 44
+      tests, the expanded backend selection passes 77, and the focused frontend
+      suite passes 5. Coverage includes inherited-source rendering, local
+      assignment deletion, compatibility routing, canonical public directory
+      reads, and fresh-D1 schema use.
 - [ ] Add nested votes and stats routes.
 - [ ] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
@@ -535,9 +548,11 @@ Status: Pending
       require the exact preflight capacity count at commit time; a stale
       multi-capacity leave rolls back its remaining update, audit, and mailing
       reconciliation with a bounded conflict. Group configuration and
-      category-rule replacements now reject stale state through the shared
+      category-rule replacements reject stale state through the shared
       aggregate revision and compare-and-set audit guard. Group-management,
-      leadership, and category-rule authorization races remain open.
+      leadership, and category-rule authorization races now revoke access
+      between preflight and batch execution and prove complete rollback. Voting
+      replacement and voting authorization races remain open.
 - [x] Run join-token, terms, guest, and attendance security tests.
       Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
       replacement, user and guest identity binding, membership loss, expiry,
@@ -548,14 +563,14 @@ Status: Pending
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
-      Current evidence: the gate was rerun after the meeting-access security
-      slice and stops only at the known, deliberately unsynchronized
-      leadership/voting type-contract cutover. Independent ESLint, SQL
+      Current evidence: the gate was rerun after the generic leadership
+      cutover and stops only at the known, deliberately unsynchronized voting
+      type-contract cutover. Independent ESLint, SQL
       projection, dependency architecture, API-contract, zero-duplication,
       formatting, max-lines, and filename gates pass. Earlier complete backend
       and frontend runs remain recorded above. Do not mark this complete until
-      the leadership/voting migration is authorized and every repository-wide
-      gate passes from the final schema.
+      the voting migration is complete and every repository-wide gate passes
+      from the final schema.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.

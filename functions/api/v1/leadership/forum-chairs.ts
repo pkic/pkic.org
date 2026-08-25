@@ -1,11 +1,9 @@
 /**
- * GET /api/v1/leadership/forum-chairs — public PKIC forum chair/vice chair.
+ * Deprecated compatibility alias for GET /api/v1/leadership/consortium-chairs.
  *
- * Resolved from role-forum_chair/role-forum_vice_chair (consolidated migration 0035),
- * the same global-context roles the admin Leadership tab's "Forum" card
- * assigns. Replaces the static "Chair and Vice Chair" section of
- * content/about/_index.md, which previously hardcoded names/dates that had
- * no connection to those admin-managed role assignments.
+ * The branch previously exposed this route before the forum-specific model was
+ * replaced by the ordinary All Members group. New consumers use the consortium
+ * route; keeping this alias avoids surprising branch clients during review.
  */
 import { json } from "../../../_lib/http";
 import { getForumChairsPublic } from "../../../_lib/services/leadership";

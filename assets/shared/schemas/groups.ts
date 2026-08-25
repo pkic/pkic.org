@@ -64,6 +64,7 @@ export const groupSchema = z.object({
   eligibilityMode: groupEligibilityModeSchema,
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema,
   allowAutomaticOptOut: z.boolean(),
+  publicLeadership: z.boolean(),
   minEndorsersForBallot: z.number().int().min(0),
   active: z.boolean(),
   revision: groupRevisionSchema,
@@ -80,6 +81,7 @@ const groupPolicyInputShape = {
   eligibilityMode: groupEligibilityModeSchema.optional(),
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema.optional(),
   allowAutomaticOptOut: z.boolean().optional(),
+  publicLeadership: z.boolean().optional(),
   minEndorsersForBallot: z.number().int().min(0).max(1000).optional(),
 };
 

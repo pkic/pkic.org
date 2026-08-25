@@ -4,10 +4,9 @@
  *
  * Every other role-assignment screen in the admin portal starts from a user
  * ("what roles does this person hold?" — GET /api/v1/admin/users/:userId/roles).
- * The Chairs tab
- * needs the reverse: "who currently holds role-forum_chair?" — with no user
- * already picked. This is that lookup, generic over any role id so it also
- * backs the WG chair/vice-chair display without a second endpoint.
+ * Some administration views need the reverse lookup without first selecting a
+ * user. This endpoint remains generic over any role ID; group leadership uses
+ * the canonical nested group route instead.
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";

@@ -5,7 +5,7 @@ import { getConfig } from "../config";
 import type { DatabaseLike, Env } from "../types";
 import { sha256Hex } from "../utils/crypto";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
-import { CURRENT_WORKING_GROUP_LEADERSHIP_CTES_SQL, WORKING_GROUP_CHAIR_ROLE_ID } from "./working-group-leadership";
+import { CURRENT_GROUP_LEADERSHIP_CTES_SQL, GROUP_LEAD_ROLE_ID } from "./group-leadership-query";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1_000;
 const DIGEST_BOUNDARY_HOUR_UTC = 8;
@@ -95,15 +95,15 @@ export function resolveWgChairDigestWindow(now: Date = new Date()): WgChairDiges
 
 const CHANGE_EVENTS_CTE_SQL = `
   change_events AS (
-    SELECT wgm.id AS membership_id, wgm.working_group_id, wgm.user_id,
-           'joined' AS change_type, wgm.joined_at AS changed_at
-      FROM working_group_members wgm
-     WHERE wgm.joined_at >= ? AND wgm.joined_at < ?
+    SELECT membership.id AS membership_id, membership.group_id AS working_group_id, membership.user_id,
+           'joined' AS change_type, membership.joined_at AS changed_at
+      FROM group_memberships membership
+     WHERE membership.joined_at >= ? AND membership.joined_at < ?
     UNION ALL
-    SELECT wgm.id AS membership_id, wgm.working_group_id, wgm.user_id,
-           'left' AS change_type, wgm.left_at AS changed_at
-      FROM working_group_members wgm
-     WHERE wgm.left_at IS NOT NULL AND wgm.left_at >= ? AND wgm.left_at < ?
+    SELECT membership.id AS membership_id, membership.group_id AS working_group_id, membership.user_id,
+           'left' AS change_type, membership.left_at AS changed_at
+      FROM group_memberships membership
+     WHERE membership.left_at IS NOT NULL AND membership.left_at >= ? AND membership.left_at < ?
   )
 `;
 
@@ -113,7 +113,7 @@ export const WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY = `WITH ${CHANGE_EVENTS_CTE_SQL
          ce.membership_id, ce.change_type, ce.changed_at,
          u.first_name, u.last_name, o.name AS organization_name
     FROM change_events ce
-    JOIN working_groups wg ON wg.id = ce.working_group_id AND wg.active = 1
+    JOIN groups wg ON wg.id = ce.working_group_id AND wg.active = 1
     JOIN users u ON u.id = ce.user_id
 ${deterministicRepresentativeJoinSql("ce.user_id")}
     LEFT JOIN members m ON m.id = rep.member_id
@@ -136,21 +136,21 @@ async function readDigestRows(
               changed_groups AS (
                 SELECT DISTINCT working_group_id FROM change_events
               ),
-              ${CURRENT_WORKING_GROUP_LEADERSHIP_CTES_SQL}
-         SELECT leadership.working_group_id,
+              ${CURRENT_GROUP_LEADERSHIP_CTES_SQL}
+         SELECT leadership.group_id AS working_group_id,
                 leadership.user_id AS recipient_user_id,
                 u.email AS recipient_email,
                 u.first_name AS recipient_first_name,
                 u.last_name AS recipient_last_name,
                 CASE
-                  WHEN MAX(CASE WHEN leadership.role_id = '${WORKING_GROUP_CHAIR_ROLE_ID}' THEN 1 ELSE 0 END) = 1
+                  WHEN MAX(CASE WHEN leadership.role_id = '${GROUP_LEAD_ROLE_ID}' THEN 1 ELSE 0 END) = 1
                     THEN 'chair'
                   ELSE 'vice chair'
                 END AS recipient_role
            FROM changed_groups changed
-           JOIN working_groups wg ON wg.id = changed.working_group_id AND wg.active = 1
-           JOIN current_working_group_leadership leadership
-             ON leadership.working_group_id = changed.working_group_id
+           JOIN groups wg ON wg.id = changed.working_group_id AND wg.active = 1
+           JOIN current_group_leadership leadership
+             ON leadership.group_id = changed.working_group_id
            JOIN users u ON u.id = leadership.user_id
           WHERE u.active = 1
             AND u.email <> ''
@@ -163,9 +163,9 @@ async function readDigestRows(
                     1
                   )
                 END = 1
-          GROUP BY leadership.working_group_id, leadership.user_id,
+          GROUP BY leadership.group_id, leadership.user_id,
                    u.email, u.first_name, u.last_name
-          ORDER BY leadership.working_group_id, leadership.user_id`,
+          ORDER BY leadership.group_id, leadership.user_id`,
       )
       .bind(...windowBindings(window)),
   ]);

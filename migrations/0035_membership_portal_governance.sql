@@ -1181,6 +1181,7 @@ CREATE TABLE groups (
   eligibility_mode            TEXT NOT NULL DEFAULT 'open',
   automatic_enrollment_mode   TEXT NOT NULL DEFAULT 'none',
   allow_automatic_opt_out     INTEGER NOT NULL DEFAULT 1 CHECK (allow_automatic_opt_out IN (0, 1)),
+  public_leadership           INTEGER NOT NULL DEFAULT 0 CHECK (public_leadership IN (0, 1)),
   min_endorsers_for_ballot    INTEGER NOT NULL DEFAULT 0,
   active                      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   revision                    INTEGER NOT NULL DEFAULT 0,
@@ -1197,6 +1198,30 @@ CREATE INDEX idx_groups_type_active
   ON groups(type_key, active, name, id);
 CREATE INDEX idx_groups_visibility_active
   ON groups(visibility, active, name, id);
+
+-- Public Board and Executive Council rosters are historical position records,
+-- not authorization assignments. Keep their free-text title, explicit Member
+-- affiliation, and service dates separate from group lead/deputy permissions.
+-- The body vocabulary is validated by the shared API schema and tests so it
+-- can evolve without rebuilding this D1 table.
+CREATE TABLE leadership_positions (
+  id         TEXT NOT NULL PRIMARY KEY,
+  body       TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  member_id  TEXT,
+  title      TEXT NOT NULL,
+  starts_at  TEXT NOT NULL,
+  ends_at    TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id)
+);
+
+CREATE INDEX idx_leadership_positions_body_dates
+  ON leadership_positions(body, ends_at, starts_at DESC, id);
+CREATE INDEX idx_leadership_positions_user
+  ON leadership_positions(user_id, body, starts_at DESC, id);
 
 -- D1 cannot defer recursive hierarchy validation to application code because
 -- other writers may exist. Reject direct and indirect cycles at the database
@@ -1428,32 +1453,32 @@ CREATE INDEX idx_group_auto_opt_outs_user
 INSERT OR IGNORE INTO groups
   (id, type_key, parent_group_id, name, slug, description, visibility,
    governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
-   allow_automatic_opt_out, min_endorsers_for_ballot, active, created_at, updated_at)
+   allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot, active, created_at, updated_at)
 VALUES
   ('20000000-0000-4000-8000-000000000001', 'community', NULL, 'All Members', 'all-members',
    'The default communication and coordination group for active consortium members.',
-   'authenticated', 'inherited', 'category', 'category', 1, 0, 1, datetime('now'), datetime('now')),
+   'authenticated', 'inherited', 'category', 'category', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000002', 'board', NULL, 'Executive Council', 'executive-council',
    'The consortium governing group.',
-   'participants', 'inherited', 'managed', 'none', 0, 0, 1, datetime('now'), datetime('now')),
+   'participants', 'inherited', 'managed', 'none', 0, 0, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000003', 'working_group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000004', 'working_group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000005', 'working_group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000006', 'working_group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000007', 'working_group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   'public', 'inherited', 'category', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'category', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
   ('20000000-0000-4000-8000-000000000008', 'working_group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   'public', 'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now'));
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
   (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)

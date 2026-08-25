@@ -3,7 +3,7 @@
  *
  * Board of Directors / Executive Council leadership positions (consolidated
  * migration 0035) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
- * public roster + forum-chairs reads (functions/api/v1/leadership). See
+ * public roster + consortium-chairs reads (functions/api/v1/leadership). See
  * functions/_lib/services/leadership.ts for the design (a dedicated table
  * instead of user_roles, since Board/EC need many simultaneous holders, an
  * explicit admin-set "from" date, and a free-text title).
@@ -393,27 +393,35 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(response.status).toBe(404);
   });
 
-  it("public GET /api/v1/leadership/forum-chairs resolves role-forum_chair/role-forum_vice_chair", async () => {
-    const emptyResponse = await call(null, "/api/v1/leadership/forum-chairs");
+  it("public chair compatibility response resolves published All Members group leadership", async () => {
+    const emptyResponse = await call(null, "/api/v1/leadership/consortium-chairs");
     expect(emptyResponse.status).toBe(200);
     expect((await emptyResponse.json()) as { chair: unknown }).toEqual({ chair: null, viceChair: null });
 
-    const chairRole = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_chair'"))[0];
-    const viceChairRole = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_vice_chair'")
+    const leadershipGroup = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM groups WHERE slug = 'all-members'")
     )[0];
-    const chairUserId = await insertUser("forum-chair@example.test", ["Forum", "Chair"]);
-    const viceChairUserId = await insertUser("forum-vice-chair@example.test", ["Forum", "ViceChair"]);
-    await assignRole(chairUserId, chairRole.id, adminId);
-    await assignRole(viceChairUserId, viceChairRole.id, adminId);
+    const chairUserId = await insertUser("consortium-chair@example.test", ["Consortium", "Chair"]);
+    const viceChairUserId = await insertUser("consortium-vice-chair@example.test", ["Consortium", "ViceChair"]);
+    await assignRole(chairUserId, "role-group_lead", adminId, { type: "group", id: leadershipGroup.id });
+    await assignRole(viceChairUserId, "role-group_deputy_lead", adminId, {
+      type: "group",
+      id: leadershipGroup.id,
+    });
 
-    const response = await call(null, "/api/v1/leadership/forum-chairs");
+    const response = await call(null, "/api/v1/leadership/consortium-chairs");
     const body = (await response.json()) as {
       chair: { name: string; startsAt: string } | null;
       viceChair: { name: string } | null;
     };
-    expect(body.chair?.name).toBe("Forum Chair");
+    expect(body.chair?.name).toBe("Consortium Chair");
     expect(body.chair?.startsAt).toBeTruthy();
-    expect(body.viceChair?.name).toBe("Forum ViceChair");
+    expect(body.viceChair?.name).toBe("Consortium ViceChair");
+
+    const compatibilityResponse = await call(null, "/api/v1/leadership/forum-chairs");
+    expect(compatibilityResponse.status).toBe(200);
+    expect(((await compatibilityResponse.json()) as { chair: { name: string } | null }).chair?.name).toBe(
+      "Consortium Chair",
+    );
   });
 });

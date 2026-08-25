@@ -1,235 +1,162 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import { Spinner } from "../../../components/Spinner";
-import { api, apiCommand } from "../../api";
-import { fmt, toast } from "../../ui";
-import type { RoleAssignment } from "../../types";
-import { UserPicker, type PickedUser } from "./UserPicker";
-import { LeadershipPositions } from "./LeadershipPositions";
-import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { workingGroupsListResponseSchema } from "../../../../shared/schemas/working-groups";
+import { useEffect, useState } from "preact/hooks";
 import {
-  roleAssignmentsListResponseSchema,
-  SYSTEM_ROLE_IDS,
-  userRoleResponseEnvelopeSchema,
-} from "../../../../shared/schemas/access-control";
+  GROUP_LEADERSHIP_ROLE_IDS,
+  groupLeadershipListResponseSchema,
+  groupsListResponseSchema,
+  type Group,
+  type GroupLeadershipAssignment,
+  type GroupLeadershipListResponse,
+} from "../../../../shared/schemas/groups";
+import { Spinner } from "../../../components/Spinner";
+import { api } from "../../api";
+import { ApiDataTable } from "../../components/ApiDataTable";
+import { fmt, toast } from "../../ui";
+import { LeadershipPositions } from "./LeadershipPositions";
+import { UserPicker, type PickedUser } from "./UserPicker";
 
-/**
- * "Create a new tab under the Access Control for chairs to set the chairs
- * for each working group and the forum" — one screen for both the
- * PKIC-wide (forum) chair/vice-chair (role-forum_chair/role-forum_vice_chair,
- * global — contextType/contextId both null, consolidated migration 0035) and every
- * working group's chair/vice-chair (role-wg_chair/role-wg_vice_chair,
- * context_type='working_group'). All of it is the same user_roles
- * assign/revoke mechanism the "Staff" and "Working Groups" tabs already use
- * — this tab just composes it per-role-per-context in one place instead of
- * requiring staff to already know which user to look up.
- *
- * Renamed from "Chairs" to "Leadership" when Board of Directors and
- * Executive Council roster management (consolidated migration 0035) were added here —
- * "Chairs" no longer described the page once it covered the full
- * leadership picture, not just chair/vice-chair designations.
- */
+const ROLE_LABELS: Record<(typeof GROUP_LEADERSHIP_ROLE_IDS)[number], string> = {
+  "role-group_lead": "Lead",
+  "role-group_deputy_lead": "Deputy lead",
+};
 
-interface HolderInfo {
-  userRoleId: string;
-  userId: string;
-  name: string;
-  email: string;
-  expiresAt: string | null;
-}
-
-/** ISO datetime -> the local "YYYY-MM-DDTHH:mm" value a datetime-local input expects. */
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function ChairSlot({
-  label,
-  roleId,
-  roleMissingLabel,
-  contextType,
-  contextId,
-  current,
+function AssignmentRow({
+  assignment,
+  groupId,
   onChanged,
 }: {
-  label: string;
-  roleId: string | null;
-  roleMissingLabel: string;
-  contextType: "working_group" | null;
-  contextId: string | null;
-  current: HolderInfo | null;
+  assignment: GroupLeadershipAssignment;
+  groupId: string;
   onChanged: () => void;
 }) {
-  const [picked, setPicked] = useState<PickedUser | null>(null);
-  const [expiresAt, setExpiresAt] = useState("");
   const [busy, setBusy] = useState(false);
-  const [editingExpiry, setEditingExpiry] = useState(false);
-  const [editExpiresAt, setEditExpiresAt] = useState("");
 
-  function startEditExpiry() {
-    setEditExpiresAt(current?.expiresAt ? toDatetimeLocal(current.expiresAt) : "");
-    setEditingExpiry(true);
-  }
-
-  async function saveExpiry(e: Event) {
-    e.preventDefault();
-    if (!current) return;
+  async function remove(): Promise<void> {
+    if (assignment.inherited) return;
+    if (!confirm(`Remove ${assignment.userName} as ${ROLE_LABELS[assignment.roleId].toLowerCase()}?`)) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, userRoleResponseEnvelopeSchema, {
-        method: "PATCH",
-        body: JSON.stringify({
-          expiresAt: editExpiresAt ? new Date(editExpiresAt).toISOString() : null,
-        }),
-      });
-      toast(`${label} expiry updated`, "success");
-      setEditingExpiry(false);
+      await api(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/leadership/${encodeURIComponent(assignment.userRoleId)}`,
+        groupLeadershipListResponseSchema,
+        { method: "DELETE" },
+      );
+      toast("Leadership assignment removed", "success");
       onChanged();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function assign(e: Event) {
-    e.preventDefault();
-    if (!picked || !roleId) return;
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/users/${picked.id}/roles`, userRoleResponseEnvelopeSchema, {
-        method: "POST",
-        body: JSON.stringify({
-          roleId,
-          contextType,
-          contextId,
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-        }),
-      });
-      toast(`${label} assigned`, "success");
-      setPicked(null);
-      setExpiresAt("");
-      onChanged();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove() {
-    if (!current) return;
-    if (!confirm(`Remove ${current.name} as ${label.toLowerCase()}?`)) return;
-    setBusy(true);
-    try {
-      await apiCommand(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, { method: "DELETE" });
-      toast(`${label} removed`, "success");
-      onChanged();
-    } catch (err) {
-      toast((err as Error).message, "error");
+    } catch (error) {
+      toast((error as Error).message, "error");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="small fw-semibold adm-leadership-slot-label">{label}</span>
-      {current ? (
-        <>
-          <span>
-            {current.name} <span class="text-muted small">({current.email})</span>
-          </span>
-          {editingExpiry ? (
-            <form onSubmit={saveExpiry} class="d-flex gap-2 align-items-center flex-wrap">
-              <input
-                class="form-control form-control-sm adm-leadership-date"
-                type="datetime-local"
-                title="Term expires (leave blank for no expiry)"
-                placeholder="Term expires (optional)"
-                value={editExpiresAt}
-                onInput={(e) => setEditExpiresAt((e.target as HTMLInputElement).value)}
-                disabled={busy}
-              />
-              <button type="submit" class="btn btn-sm btn-success" disabled={busy}>
-                Save
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
-                disabled={busy}
-                onClick={() => setEditingExpiry(false)}
-              >
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <>
-              <span class="text-muted small">
-                {current.expiresAt ? `Expires ${fmt(current.expiresAt)}` : "No expiry set"}
-              </span>
-              <button class="btn btn-sm btn-outline-secondary" disabled={busy} onClick={startEditExpiry}>
-                Edit expiry
-              </button>
-              <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
-                Remove
-              </button>
-            </>
-          )}
-        </>
-      ) : !roleId ? (
-        <span class="small text-danger">{roleMissingLabel}</span>
-      ) : (
-        <form onSubmit={assign} class="d-flex gap-2 align-items-center flex-wrap">
-          <div class="adm-leadership-user">
-            <UserPicker value={picked} onChange={setPicked} disabled={busy} />
-          </div>
-          <input
-            class="form-control form-control-sm adm-leadership-date"
-            type="datetime-local"
-            title="Term expires (optional)"
-            placeholder="Term expires (optional)"
-            value={expiresAt}
-            onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
-            disabled={busy}
-          />
-          <button type="submit" class="btn btn-sm btn-success" disabled={busy || !picked}>
-            Assign
-          </button>
-        </form>
+    <div class="d-flex align-items-center justify-content-between gap-3 border rounded p-2">
+      <div>
+        <div class="fw-semibold">
+          {assignment.userName} <span class="text-muted fw-normal">({assignment.email})</span>
+        </div>
+        <div class="small text-muted">
+          {ROLE_LABELS[assignment.roleId]}
+          {assignment.inherited ? ` · inherited from ${assignment.sourceGroup.name}` : " · local"}
+          {assignment.expiresAt ? ` · expires ${fmt(assignment.expiresAt)}` : ""}
+        </div>
+      </div>
+      {!assignment.inherited && (
+        <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
+          Remove
+        </button>
       )}
     </div>
   );
 }
 
-export function Leadership() {
-  const [forumChair, setForumChair] = useState<RoleAssignment | null>(null);
-  const [forumViceChair, setForumViceChair] = useState<RoleAssignment | null>(null);
-  const [loading, setLoading] = useState(true);
-  const workingGroupsRef = useRef<ApiTableActions | null>(null);
+function AssignmentForm({ groupId, onChanged }: { groupId: string; onChanged: () => void }) {
+  const [picked, setPicked] = useState<PickedUser | null>(null);
+  const [roleId, setRoleId] = useState<(typeof GROUP_LEADERSHIP_ROLE_IDS)[number]>("role-group_lead");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  async function load() {
+  async function submit(event: Event): Promise<void> {
+    event.preventDefault();
+    if (!picked) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`, groupLeadershipListResponseSchema, {
+        method: "POST",
+        body: JSON.stringify({
+          userId: picked.id,
+          roleId,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+        }),
+      });
+      toast("Leadership assignment added", "success");
+      setPicked(null);
+      setExpiresAt("");
+      onChanged();
+    } catch (error) {
+      toast((error as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form class="border rounded p-3" onSubmit={submit}>
+      <div class="row g-2 align-items-end">
+        <div class="col-lg-5">
+          <label class="form-label small">User</label>
+          <UserPicker value={picked} onChange={setPicked} disabled={busy} />
+        </div>
+        <div class="col-lg-3">
+          <label class="form-label small">Role</label>
+          <select
+            class="form-select form-select-sm"
+            value={roleId}
+            disabled={busy}
+            onChange={(event) =>
+              setRoleId((event.target as HTMLSelectElement).value as (typeof GROUP_LEADERSHIP_ROLE_IDS)[number])
+            }
+          >
+            {GROUP_LEADERSHIP_ROLE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {ROLE_LABELS[id]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div class="col-lg-3">
+          <label class="form-label small">Expires (optional)</label>
+          <input
+            class="form-control form-control-sm"
+            type="datetime-local"
+            value={expiresAt}
+            disabled={busy}
+            onInput={(event) => setExpiresAt((event.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="col-lg-1">
+          <button class="btn btn-sm btn-success w-100" type="submit" disabled={busy || !picked}>
+            Add
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function GroupLeadershipPanel({ group }: { group: Group }) {
+  const [leadership, setLeadership] = useState<GroupLeadershipListResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load(): Promise<void> {
     setLoading(true);
     try {
-      const [forumChairRaw, forumViceChairRaw] = await Promise.all([
-        api(
-          `/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumChair}/assignments?limit=1&offset=0&sort=-created_at`,
-          roleAssignmentsListResponseSchema,
-        ),
-        api(
-          `/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumViceChair}/assignments?limit=1&offset=0&sort=-created_at`,
-          roleAssignmentsListResponseSchema,
-        ),
-      ]);
-      const forumChairAssignments = forumChairRaw;
-      const forumViceChairAssignments = forumViceChairRaw;
-
-      setForumChair(forumChairAssignments.assignments[0] ?? null);
-      setForumViceChair(forumViceChairAssignments.assignments[0] ?? null);
-    } catch (e) {
-      toast((e as Error).message, "error");
+      setLeadership(
+        await api(`/api/v1/groups/${encodeURIComponent(group.id)}/leadership`, groupLeadershipListResponseSchema),
+      );
+    } catch (error) {
+      toast((error as Error).message, "error");
+      setLeadership(null);
     } finally {
       setLoading(false);
     }
@@ -237,89 +164,101 @@ export function Leadership() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [group.id]);
 
-  if (loading) return <Spinner />;
+  return (
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white d-flex align-items-center justify-content-between gap-2">
+        <div>
+          <span class="fw-semibold">{group.name}</span>
+          <span class="badge text-bg-light border ms-2">{group.type.singularLabel}</span>
+        </div>
+        <span class="small text-muted">
+          Governance: {group.governanceInheritanceMode === "local_only" ? "local only" : "inherited"}
+        </span>
+      </div>
+      <div class="card-body d-flex flex-column gap-3">
+        {loading ? (
+          <Spinner />
+        ) : (
+          <>
+            <div class="d-flex flex-column gap-2">
+              {leadership?.assignments.length ? (
+                leadership.assignments.map((assignment) => (
+                  <AssignmentRow
+                    key={assignment.userRoleId}
+                    assignment={assignment}
+                    groupId={group.id}
+                    onChanged={() => void load()}
+                  />
+                ))
+              ) : (
+                <p class="text-muted mb-0">No effective leadership assignments.</p>
+              )}
+            </div>
+            <AssignmentForm groupId={group.id} onChanged={() => void load()} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function Leadership() {
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
   return (
     <div>
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white fw-semibold">Forum</div>
-        <div class="card-body d-flex flex-column gap-2">
-          <ChairSlot
-            label="Chair"
-            roleId={SYSTEM_ROLE_IDS.forumChair}
-            roleMissingLabel='The built-in "forum_chair" role was not found.'
-            contextType={null}
-            contextId={null}
-            current={forumChair}
-            onChanged={() => void load()}
-          />
-          <ChairSlot
-            label="Vice chair"
-            roleId={SYSTEM_ROLE_IDS.forumViceChair}
-            roleMissingLabel='The built-in "forum_vice_chair" role was not found.'
-            contextType={null}
-            contextId={null}
-            current={forumViceChair}
-            onChanged={() => void load()}
-          />
-        </div>
-      </div>
-
       <LeadershipPositions body="board" label="Board of Directors" />
       <LeadershipPositions body="executive_council" label="Executive Council" />
 
+      {selectedGroup && <GroupLeadershipPanel key={selectedGroup.id} group={selectedGroup} />}
+
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-semibold">Working groups</div>
+        <div class="card-header bg-white fw-semibold">Group leadership</div>
         <div class="card-body">
+          <p class="small text-muted">
+            Select any group type. Parent leadership is shown as inherited unless the group uses local-only governance.
+          </p>
           <ApiDataTable
-            endpoint="/api/v1/admin/working-groups"
-            responseSchema={workingGroupsListResponseSchema}
-            resolve={(response) => response.workingGroups}
+            endpoint="/api/v1/groups"
+            responseSchema={groupsListResponseSchema}
+            resolve={(response) => response.groups}
             resolvePage={(response) => response.page}
             paginate
             initialPageSize={25}
             initialSort="name"
-            searchPlaceholder="Search working groups…"
-            actionsRef={workingGroupsRef}
+            searchPlaceholder="Search groups…"
             rowKey={(group) => group.id}
-            empty="No working groups"
+            empty="No groups"
             columns={[
               {
-                header: "Working group",
+                header: "Group",
                 cell: (group) => (
-                  <span class="fw-semibold small">
-                    {group.name}
+                  <div>
+                    <span class="fw-semibold">{group.name}</span>
                     {!group.active && <span class="badge text-bg-secondary ms-2">Inactive</span>}
-                  </span>
+                    <div class="small text-muted">
+                      {group.type.singularLabel}
+                      {group.parentGroup ? ` · ${group.parentGroup.name}` : ""}
+                    </div>
+                  </div>
                 ),
                 sort: { asc: "name", desc: "-name" },
               },
               {
-                header: "Leadership",
+                header: "Participants",
+                cell: (group) => group.participantCount,
+                sort: { asc: "participant_count", desc: "-participant_count" },
+              },
+              {
+                header: "",
                 cell: (group) => (
-                  <div class="d-flex flex-column gap-2">
-                    <ChairSlot
-                      label="Chair"
-                      roleId={SYSTEM_ROLE_IDS.workingGroupChair}
-                      roleMissingLabel='The built-in "wg_chair" role was not found.'
-                      contextType="working_group"
-                      contextId={group.id}
-                      current={group.chair}
-                      onChanged={() => workingGroupsRef.current?.reload()}
-                    />
-                    <ChairSlot
-                      label="Vice chair"
-                      roleId={SYSTEM_ROLE_IDS.workingGroupViceChair}
-                      roleMissingLabel='The built-in "wg_vice_chair" role was not found.'
-                      contextType="working_group"
-                      contextId={group.id}
-                      current={group.viceChair}
-                      onChanged={() => workingGroupsRef.current?.reload()}
-                    />
-                  </div>
+                  <button class="btn btn-sm btn-outline-primary" onClick={() => setSelectedGroup(group)}>
+                    Manage
+                  </button>
                 ),
+                className: "text-end",
               },
             ]}
           />

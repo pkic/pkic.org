@@ -1,5 +1,5 @@
 /**
- * Board of Directors / Executive Council / PKIC forum chair display.
+ * Board of Directors / Executive Council / consortium chair display.
  * Replaces the static content/about/board.md, executive-council.md
  * person-card lists and _index.md's hardcoded "Chair and Vice Chair"
  * section — all three are now admin-managed (Admin → Leadership) and
@@ -13,18 +13,16 @@
  *     `.consortium-past-timeline` for past positions, mirroring
  *     consortium-leadership.html's static rendering exactly (same CSS
  *     classes) but sourced from D1 instead of page front-matter.
- *   - "forum" — GET /api/v1/leadership/forum-chairs. Renders the PKIC-wide
- *     chair/vice-chair pair only (no past-position history is tracked for
- *     this pair — it's the same role-forum_chair/role-forum_vice_chair
- *     user_roles assignment the admin Leadership tab's "Forum" card
- *     manages, not a leadership_positions row).
+ *   - "consortium" — GET /api/v1/leadership/consortium-chairs. Renders the
+ *     published chair/vice-chair pair for the All Members group. Past-position
+ *     history is not tracked for this role assignment.
  */
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
-  forumChairsPublicResponseSchema,
+  consortiumChairsPublicResponseSchema,
   leadershipPublicResponseSchema,
-  type ForumChairsPublicResponse,
+  type ConsortiumChairsPublicResponse,
   type LeadershipPublicResponse,
 } from "../../shared/schemas/leadership";
 import { getJson } from "../shared/api-client";
@@ -125,12 +123,12 @@ function RosterWidget({ apiBase, body, color }: { apiBase: string; body: string;
   );
 }
 
-function ForumWidget({ apiBase, color }: { apiBase: string; color: string }) {
-  const [data, setData] = useState<ForumChairsPublicResponse | null>(null);
+function ConsortiumWidget({ apiBase, color }: { apiBase: string; color: string }) {
+  const [data, setData] = useState<ConsortiumChairsPublicResponse | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getJson(`${apiBase}/leadership/forum-chairs`, forumChairsPublicResponseSchema)
+    getJson(`${apiBase}/leadership/consortium-chairs`, consortiumChairsPublicResponseSchema)
       .then((response) => setData(response))
       .catch(() => setFailed(true));
   }, [apiBase]);
@@ -154,8 +152,8 @@ function main(): void {
     const source = root.dataset.source ?? "roster";
     const color = root.dataset.color ?? "green";
 
-    if (source === "forum") {
-      render(<ForumWidget apiBase={apiBase} color={color} />, root);
+    if (source === "consortium") {
+      render(<ConsortiumWidget apiBase={apiBase} color={color} />, root);
       return;
     }
 

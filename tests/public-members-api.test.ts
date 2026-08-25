@@ -630,13 +630,42 @@ describe("GET /api/v1/members/:id/logo", () => {
   });
 });
 
-async function seedWorkingGroup(params: { id: string; name: string; slug: string; active?: number }) {
-  await env.DB.prepare(
-    `INSERT INTO working_groups (id, name, slug, description, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+async function seedWorkingGroup(params: { id: string; name: string; slug: string; active?: number }): Promise<string> {
+  const row = await env.DB.prepare(
+    `INSERT INTO groups
+       (id, type_key, name, slug, description, visibility,
+        governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
+        allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot,
+        active, revision, created_at, updated_at)
+     VALUES (?, 'working_group', ?, ?, ?, 'public',
+             'inherited', 'open', 'none', 1, 1, 0, ?, 0, datetime('now'), datetime('now'))
+     ON CONFLICT(slug) DO UPDATE SET
+       name = excluded.name,
+       description = excluded.description,
+       visibility = 'public',
+       public_leadership = 1,
+       active = excluded.active,
+       updated_at = datetime('now')
+     RETURNING id`,
   )
     .bind(params.id, params.name, params.slug, `${params.name} description`, params.active ?? 1)
-    .run();
+    .first<{ id: string }>();
+  return row!.id;
+}
+
+async function addIndividualGroupMembership(groupId: string, userId: string): Promise<void> {
+  const memberId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+         VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
+    ).bind(memberId, userId),
+    env.DB.prepare(
+      `INSERT INTO group_memberships
+           (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+    ).bind(crypto.randomUUID(), groupId, userId, memberId),
+  ]);
 }
 
 describe("GET /api/v1/working-groups", () => {
@@ -655,16 +684,17 @@ describe("GET /api/v1/working-groups", () => {
       workingGroups: Array<{ slug: string }>;
       page: { total: number; hasMore: boolean };
     };
-    expect(body.workingGroups).toHaveLength(1);
-    expect(body.workingGroups[0].slug).toBe("pqc");
-    expect(body.page).toMatchObject({ total: 1, hasMore: false });
+    expect(body.workingGroups.some(({ slug }) => slug === "pqc")).toBe(true);
+    expect(body.workingGroups.some(({ slug }) => slug === "retired")).toBe(false);
+    expect(body.page.total).toBe(body.workingGroups.length);
+    expect(body.page.hasMore).toBe(false);
   });
 
   it("searches and pages working groups in D1 with deterministic ordering", async () => {
-    await seedWorkingGroup({ id: "wg-z", name: "Zeta Working Group", slug: "zeta" });
-    await seedWorkingGroup({ id: "wg-a", name: "Alpha Working Group", slug: "alpha" });
+    await seedWorkingGroup({ id: "wg-z", name: "Zeta Fixture Group", slug: "zeta" });
+    await seedWorkingGroup({ id: "wg-a", name: "Alpha Fixture Group", slug: "alpha" });
 
-    const response = await callPublicApi("https://pkic.org/api/v1/working-groups?q=working&limit=1&offset=1&sort=name");
+    const response = await callPublicApi("https://pkic.org/api/v1/working-groups?q=fixture&limit=1&offset=1&sort=name");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       workingGroups: Array<{ slug: string }>;
@@ -681,20 +711,16 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("keeps detail bounded and exposes the public roster through the shared list contract", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    const wgId = await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
 
     const userId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, "Wg", "Member"),
-      env.DB.prepare(
-        `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at)
-         VALUES (?, ?, ?, datetime('now'), NULL)`,
-      ).bind(crypto.randomUUID(), wgId, userId),
-    ]);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(userId, `${userId}@example.test`, `${userId}@example.test`, "Wg", "Member")
+      .run();
+    await addIndividualGroupMembership(wgId, userId);
 
     const response = await callPublicApi("https://pkic.org/api/v1/working-groups/pqc");
 
@@ -711,23 +737,19 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("searches the public working-group roster in D1 and rejects invalid list queries", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    const wgId = await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
     for (const [firstName, lastName] of [
       ["Alice", "Example"],
       ["Bob", "Other"],
     ]) {
       const userId = crypto.randomUUID();
-      await env.DB.batch([
-        env.DB.prepare(
-          `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-        ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, lastName),
-        env.DB.prepare(
-          `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at)
-           VALUES (?, ?, ?, datetime('now'), NULL)`,
-        ).bind(crypto.randomUUID(), wgId, userId),
-      ]);
+      await env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      )
+        .bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, lastName)
+        .run();
+      await addIndividualGroupMembership(wgId, userId);
     }
 
     const response = await callPublicApi("https://pkic.org/api/v1/working-groups/pqc/members?q=other&sort=name");
@@ -740,8 +762,12 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("returns 404 for inactive working-group detail and rosters by slug and UUID", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "Retired Working Group", slug: "retired", active: 0 });
+    const wgId = await seedWorkingGroup({
+      id: crypto.randomUUID(),
+      name: "Retired Working Group",
+      slug: "retired",
+      active: 0,
+    });
 
     for (const idOrSlug of ["retired", wgId]) {
       const detailResponse = await callPublicApi(`https://pkic.org/api/v1/working-groups/${idOrSlug}`);
@@ -753,8 +779,7 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("returns the chair and vice chair resolved from user_roles, not the static YAML frontmatter", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
 
     const chairUserId = crypto.randomUUID();
     const viceChairUserId = crypto.randomUUID();
@@ -769,12 +794,14 @@ describe("GET /api/v1/working-groups/:id", () => {
       ).bind(viceChairUserId, `${viceChairUserId}@example.test`, `${viceChairUserId}@example.test`, "Vice", "Chair"),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), chairUserId, wgId),
+         VALUES (?, ?, 'role-group_lead', 'group',
+                 (SELECT id FROM groups WHERE slug = 'pqc'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-         VALUES (?, ?, 'role-wg_vice_chair', 'working_group', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), viceChairUserId, wgId),
+         VALUES (?, ?, 'role-group_deputy_lead', 'group',
+                 (SELECT id FROM groups WHERE slug = 'pqc'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), viceChairUserId),
     ]);
 
     const response = await callEndpoint(
@@ -792,8 +819,7 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("enriches the chair with photo, LinkedIn, and organization logo/website", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
 
     const chairUserId = crypto.randomUUID();
     const orgId = crypto.randomUUID();
@@ -816,8 +842,9 @@ describe("GET /api/v1/working-groups/:id", () => {
       ),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), chairUserId, wgId),
+         VALUES (?, ?, 'role-group_lead', 'group',
+                 (SELECT id FROM groups WHERE slug = 'pqc'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId),
     ]);
     const aggregateId = await seedOrganizationAggregate(env.DB, orgId, "A");
     const representativeId = await addRepresentativeRow(env.DB, aggregateId, chairUserId);
@@ -846,8 +873,7 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("returns null enrichment fields for a chair with no photo, LinkedIn, or org logo on file", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
 
     const chairUserId = crypto.randomUUID();
     await env.DB.batch([
@@ -857,8 +883,9 @@ describe("GET /api/v1/working-groups/:id", () => {
       ).bind(chairUserId, `${chairUserId}@example.test`, `${chairUserId}@example.test`, "Bare", "Chair"),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), chairUserId, wgId),
+         VALUES (?, ?, 'role-group_lead', 'group',
+                 (SELECT id FROM groups WHERE slug = 'pqc'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId),
     ]);
 
     const response = await callEndpoint(
@@ -882,8 +909,7 @@ describe("GET /api/v1/working-groups/:id", () => {
   });
 
   it("omits unsafe persisted chair website and LinkedIn values", async () => {
-    const wgId = crypto.randomUUID();
-    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
     const chairUserId = crypto.randomUUID();
     const orgId = crypto.randomUUID();
     await env.DB.batch([
@@ -904,8 +930,9 @@ describe("GET /api/v1/working-groups/:id", () => {
       ),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), chairUserId, wgId),
+         VALUES (?, ?, 'role-group_lead', 'group',
+                 (SELECT id FROM groups WHERE slug = 'pqc'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId),
     ]);
     const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
     await addRepresentativeRow(env.DB, memberId, chairUserId);

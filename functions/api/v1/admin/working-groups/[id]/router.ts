@@ -22,10 +22,9 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * scoped to this working group. Mirrors requireEventManagementAccess
  * (events/[eventSlug]/router.ts) and replaces the narrower
  * requireWgMeetingsAccess this router.ts used to only apply to /meetings/**
- * — resolving the working group once here, for the whole subtree, is what
- * actually gives a role-wg_chair grant (context-scoped
- * working-groups:write per consolidated migration 0035) management of their own WG's
- * roster, not just its meetings.
+ * — resolving the working group once here, for the whole subtree, preserves
+ * scoped compatibility access while these routes are migrated to the generic
+ * group management surface.
  */
 async function requireWorkingGroupAccess(c: Context<RequestDbContext>, next: Next): Promise<void> {
   const admin = getCachedAdminForRequest(c.req.raw);

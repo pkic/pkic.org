@@ -27,8 +27,8 @@ const STALE_CHANGE = "2026-08-02T10:00:00.000Z";
 async function insertWorkingGroup(name: string, slug: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, NULL, 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO groups (id, type_key, name, slug, active, created_at, updated_at)
+     VALUES (?, 'working_group', ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, name, slug)
     .run();
@@ -42,9 +42,9 @@ async function insertWorkingGroups(count: number): Promise<void> {
     slug: `aaa-quiet-${index}`,
   }));
   await env.DB.prepare(
-    `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-     SELECT json_extract(value, '$.id'), json_extract(value, '$.name'), json_extract(value, '$.slug'),
-            NULL, NULL, 1, datetime('now'), datetime('now')
+    `INSERT INTO groups (id, type_key, name, slug, active, created_at, updated_at)
+     SELECT json_extract(value, '$.id'), 'working_group', json_extract(value, '$.name'),
+            json_extract(value, '$.slug'), 1, datetime('now'), datetime('now')
        FROM json_each(?)`,
   )
     .bind(JSON.stringify(groups))
@@ -67,11 +67,11 @@ async function insertUser(email: string, notificationPreferencesJson: string | n
 async function assignLeadership(
   userId: string,
   workingGroupId: string,
-  roleId: "role-wg_chair" | "role-wg_vice_chair",
+  roleId: "role-group_lead" | "role-group_deputy_lead",
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-     VALUES (?, ?, ?, 'working_group', ?, datetime('now'))`,
+     VALUES (?, ?, ?, 'group', ?, datetime('now'))`,
   )
     .bind(crypto.randomUUID(), userId, roleId, workingGroupId)
     .run();
@@ -83,11 +83,19 @@ async function insertMembership(
   joinedAt: string,
   leftAt: string | null = null,
 ): Promise<void> {
+  const memberId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+     VALUES (?, 'individual', ?, 'active', ?, ?)`,
   )
-    .bind(crypto.randomUUID(), workingGroupId, userId, joinedAt, leftAt)
+    .bind(memberId, userId, joinedAt, joinedAt)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO group_memberships
+       (id, group_id, user_id, member_id, source, joined_at, left_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'staff', ?, ?, ?, ?)`,
+  )
+    .bind(crypto.randomUUID(), workingGroupId, userId, memberId, joinedAt, leftAt, joinedAt, joinedAt)
     .run();
 }
 
@@ -165,7 +173,7 @@ describe("weekly WG chair membership-change digest", () => {
     const changedGroupId = await insertWorkingGroup("ZZZ Changed", "zzz-changed");
     const chairId = await insertUser("chair@example.test");
     const joinerId = await insertUser("joiner@example.test");
-    await assignLeadership(chairId, changedGroupId, "role-wg_chair");
+    await assignLeadership(chairId, changedGroupId, "role-group_lead");
     await insertMembership(changedGroupId, joinerId, WINDOW_JOIN);
 
     const budgeted = createD1QueryBudgetedDatabase(env.DB, 3);
@@ -184,8 +192,8 @@ describe("weekly WG chair membership-change digest", () => {
     );
     const viceChairId = await insertUser("vice-chair@example.test");
     const joinerId = await insertUser("joiner@example.test");
-    await assignLeadership(chairId, workingGroupId, "role-wg_chair");
-    await assignLeadership(viceChairId, workingGroupId, "role-wg_vice_chair");
+    await assignLeadership(chairId, workingGroupId, "role-group_lead");
+    await assignLeadership(viceChairId, workingGroupId, "role-group_deputy_lead");
     await insertMembership(workingGroupId, joinerId, WINDOW_JOIN);
 
     const result = await queueWeeklyWgChairDigest(env.DB, RUN_AT);
@@ -199,8 +207,8 @@ describe("weekly WG chair membership-change digest", () => {
     const workingGroupId = await insertWorkingGroup("Dual-role WG", "dual-role-wg");
     const leaderId = await insertUser("leader@example.test");
     const joinerId = await insertUser("joiner@example.test");
-    await assignLeadership(leaderId, workingGroupId, "role-wg_chair");
-    await assignLeadership(leaderId, workingGroupId, "role-wg_vice_chair");
+    await assignLeadership(leaderId, workingGroupId, "role-group_lead");
+    await assignLeadership(leaderId, workingGroupId, "role-group_deputy_lead");
     await insertMembership(workingGroupId, joinerId, WINDOW_JOIN);
 
     const result = await queueWeeklyWgChairDigest(env.DB, RUN_AT);
@@ -217,7 +225,7 @@ describe("weekly WG chair membership-change digest", () => {
     const chairId = await insertUser("chair@example.test");
     const moverId = await insertUser("mover@example.test");
     const staleId = await insertUser("stale@example.test");
-    await assignLeadership(chairId, workingGroupId, "role-wg_chair");
+    await assignLeadership(chairId, workingGroupId, "role-group_lead");
     await insertMembership(workingGroupId, moverId, WINDOW_JOIN, WINDOW_LEAVE);
     await insertMembership(workingGroupId, staleId, STALE_CHANGE, null);
 
@@ -240,7 +248,7 @@ describe("weekly WG chair membership-change digest", () => {
     const workingGroupId = await insertWorkingGroup("Retry WG", "retry-wg");
     const chairId = await insertUser("chair@example.test");
     const joinerId = await insertUser("joiner@example.test");
-    await assignLeadership(chairId, workingGroupId, "role-wg_chair");
+    await assignLeadership(chairId, workingGroupId, "role-group_lead");
     await insertMembership(workingGroupId, joinerId, WINDOW_JOIN);
 
     const first = await queueWeeklyWgChairDigest(env.DB, RUN_AT);
@@ -258,7 +266,7 @@ describe("weekly WG chair membership-change digest", () => {
     const chairId = await insertUser("chair@example.test");
     const firstJoinerId = await insertUser("first-joiner@example.test");
     const secondJoinerId = await insertUser("second-joiner@example.test");
-    await assignLeadership(chairId, workingGroupId, "role-wg_chair");
+    await assignLeadership(chairId, workingGroupId, "role-group_lead");
     await seedDigestTemplates(chairId);
     await insertMembership(workingGroupId, firstJoinerId, WINDOW_JOIN);
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
@@ -284,8 +292,8 @@ describe("weekly WG chair membership-change digest", () => {
     const chairId = await insertUser("chair@example.test");
     const viceChairId = await insertUser("vice-chair@example.test");
     const joinerId = await insertUser("joiner@example.test");
-    await assignLeadership(chairId, workingGroupId, "role-wg_chair");
-    await assignLeadership(viceChairId, workingGroupId, "role-wg_vice_chair");
+    await assignLeadership(chairId, workingGroupId, "role-group_lead");
+    await assignLeadership(viceChairId, workingGroupId, "role-group_deputy_lead");
     await seedDigestTemplates(chairId);
     await insertMembership(workingGroupId, joinerId, WINDOW_JOIN);
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
@@ -312,7 +320,7 @@ describe("weekly WG chair membership-change digest", () => {
     const workingGroupId = await insertWorkingGroup("Durable WG", "durable-wg");
     const chairId = await insertUser("chair@example.test");
     const joinerId = await insertUser("joiner@example.test");
-    await assignLeadership(chairId, workingGroupId, "role-wg_chair");
+    await assignLeadership(chairId, workingGroupId, "role-group_lead");
     await seedDigestTemplates(chairId);
     await insertMembership(workingGroupId, joinerId, WINDOW_JOIN);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 })));

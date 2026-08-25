@@ -15,11 +15,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { deterministicRepresentativeJoinSql } from "../membership/representative-lookup";
-import {
-  currentWorkingGroupRoleHolderSql,
-  WORKING_GROUP_CHAIR_ROLE_ID,
-  WORKING_GROUP_VICE_CHAIR_ROLE_ID,
-} from "../working-group-leadership";
+import { currentGroupRoleHolderSql, GROUP_DEPUTY_LEAD_ROLE_ID, GROUP_LEAD_ROLE_ID } from "../group-leadership-query";
 import { getWorkingGroupBySlugOrId } from "../working-groups";
 
 interface WorkingGroupSummaryRow {
@@ -109,8 +105,8 @@ const SUMMARY_SELECT = `
          vice_chair.email AS vice_chair_email, vice_chair.expires_at AS vice_chair_expires_at`;
 
 const SUMMARY_FROM = `FROM working_groups wg
-  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_CHAIR_ROLE_ID)}) chair ON chair.wg_id = wg.id
-  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_VICE_CHAIR_ROLE_ID)}) vice_chair ON vice_chair.wg_id = wg.id`;
+  LEFT JOIN (${currentGroupRoleHolderSql(GROUP_LEAD_ROLE_ID)}) chair ON chair.group_id = wg.id
+  LEFT JOIN (${currentGroupRoleHolderSql(GROUP_DEPUTY_LEAD_ROLE_ID)}) vice_chair ON vice_chair.group_id = wg.id`;
 
 export function buildAdminWorkingGroupsPageQuery(query: WorkingGroupsListQuery) {
   const search = query.q
