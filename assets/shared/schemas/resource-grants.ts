@@ -1,6 +1,6 @@
 /** Shared contract factory for FK-backed, resource-specific group grants. */
 import { z } from "zod";
-import { apiErrorPayloadSchema, successResponseSchema } from "./api-common";
+import { jsonErrorResponse, successResponseSchema } from "./api-common";
 import { groupLabelSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
@@ -50,10 +50,6 @@ export type EventGroupCapability = (typeof EVENT_GROUP_CAPABILITIES)[number];
 export type VoteGroupCapability = (typeof VOTE_GROUP_CAPABILITIES)[number];
 export type MailingListGroupCapability = (typeof MAILING_LIST_GROUP_CAPABILITIES)[number];
 
-function jsonError(description: string) {
-  return { description, content: { "application/json": { schema: apiErrorPayloadSchema } } };
-}
-
 function resourceGrantRouteSchemas<const Values extends CapabilityValues, Params extends z.ZodObject<z.ZodRawShape>>(
   schemas: ReturnType<typeof resourceGrantSchemas<Values>>,
   resourceParamsSchema: Params,
@@ -74,8 +70,8 @@ function resourceGrantRouteSchemas<const Values extends CapabilityValues, Params
           description: "A bounded page of resource-specific group grants.",
           content: { "application/json": { schema: schemas.listResponseSchema } },
         },
-        "403": jsonError("Effective management of the owning group is required."),
-        "404": jsonError("Group-owned resource not found."),
+        "403": jsonErrorResponse("Effective management of the owning group is required."),
+        "404": jsonErrorResponse("Group-owned resource not found."),
       },
     },
     create: {
@@ -94,9 +90,9 @@ function resourceGrantRouteSchemas<const Values extends CapabilityValues, Params
           description: "Resource grant created.",
           content: { "application/json": { schema: mutationResponseSchema } },
         },
-        "403": jsonError("Effective management of the owning group is required."),
-        "404": jsonError("Group-owned resource or grantee group not found."),
-        "409": jsonError("The owning group cannot be granted its own resource."),
+        "403": jsonErrorResponse("Effective management of the owning group is required."),
+        "404": jsonErrorResponse("Group-owned resource or grantee group not found."),
+        "409": jsonErrorResponse("The owning group cannot be granted its own resource."),
       },
     },
     revoke: {
@@ -108,8 +104,8 @@ function resourceGrantRouteSchemas<const Values extends CapabilityValues, Params
           description: "Resource grant revoked.",
           content: { "application/json": { schema: successResponseSchema } },
         },
-        "403": jsonError("Effective management of the owning group is required."),
-        "404": jsonError("Group-owned resource or grant not found."),
+        "403": jsonErrorResponse("Effective management of the owning group is required."),
+        "404": jsonErrorResponse("Group-owned resource or grant not found."),
       },
     },
     listResponseSchema: schemas.listResponseSchema,

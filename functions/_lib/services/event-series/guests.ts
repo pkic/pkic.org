@@ -42,7 +42,7 @@ export async function listOccurrenceGuests(
   }
   if (query.active !== undefined) {
     conditions.push(
-      query.active === "true"
+      query.active
         ? "revoked_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')"
         : "(revoked_at IS NOT NULL OR expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     );

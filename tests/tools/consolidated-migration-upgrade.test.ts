@@ -161,6 +161,30 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db
         .prepare(
+          `SELECT type, name FROM sqlite_master
+            WHERE name IN (
+              'event_attendance_management_guards',
+              'trg_event_attendance_management_guard_validate',
+              'trg_event_attendance_management_guard_release'
+            )
+            ORDER BY type, name`,
+        )
+        .all(),
+    ).toEqual([
+      { type: "table", name: "event_attendance_management_guards" },
+      { type: "trigger", name: "trg_event_attendance_management_guard_release" },
+      { type: "trigger", name: "trg_event_attendance_management_guard_validate" },
+    ]);
+    expect(
+      db
+        .prepare("PRAGMA foreign_key_list(event_attendance_management_guards)")
+        .all()
+        .map((foreignKey: any) => foreignKey.table)
+        .sort(),
+    ).toEqual(["events", "groups", "users"]);
+    expect(
+      db
+        .prepare(
           `SELECT u.normalized_email, ur.role_id
              FROM user_roles ur JOIN users u ON u.id = ur.user_id
             WHERE u.normalized_email = 'preprovisioned@example.test'`,

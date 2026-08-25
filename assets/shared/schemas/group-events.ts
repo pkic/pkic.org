@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { apiErrorPayloadSchema, eventIdSchema } from "./api-common";
+import { eventIdSchema, jsonErrorResponse } from "./api-common";
 import { eventProfileKeySchema, eventRegistrationPolicySchema, eventSourceModeSchema } from "./event-series";
 import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
@@ -42,10 +42,6 @@ export const groupEventsListResponseSchema = paginatedResponseSchema("events", g
 export const groupEventDetailResponseSchema = z.object({ event: groupEventSchema });
 
 const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
-const jsonError = (description: string) => ({
-  description,
-  content: { "application/json": { schema: apiErrorPayloadSchema } },
-});
 
 export const groupEventsListRouteSchema = {
   tags: ["Groups"],
@@ -57,8 +53,8 @@ export const groupEventsListRouteSchema = {
       description: "A bounded page of group-owned and explicitly shared events.",
       content: { "application/json": { schema: groupEventsListResponseSchema } },
     },
-    "401": jsonError("An authenticated portal identity is required."),
-    "404": jsonError("Group not found or not visible."),
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
 
@@ -71,8 +67,8 @@ export const groupEventDetailRouteSchema = {
       description: "The capability-filtered event projection.",
       content: { "application/json": { schema: groupEventDetailResponseSchema } },
     },
-    "401": jsonError("An authenticated portal identity is required."),
-    "404": jsonError("The event is not available through this group."),
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
   },
 };
 
@@ -93,9 +89,9 @@ export const groupEventRegistrationCreateRouteSchema = {
       description: "Authenticated registration completed.",
       content: { "application/json": { schema: registrationSubmissionResponseSchema } },
     },
-    "403": jsonError("The event does not permit registration through this group."),
-    "404": jsonError("The event is not available through this group."),
-    "409": jsonError("Registration state or capacity changed concurrently."),
-    "422": jsonError("The profile, answers, attendance, or consent is incomplete."),
+    "403": jsonErrorResponse("The event does not permit registration through this group."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Registration state or capacity changed concurrently."),
+    "422": jsonErrorResponse("The profile, answers, attendance, or consent is incomplete."),
   },
 };

@@ -1,5 +1,5 @@
 /** OpenAPI route contracts for the canonical group boundary. */
-import { apiErrorPayloadSchema } from "./api-common";
+import { jsonErrorResponse } from "./api-common";
 import {
   groupCategoryRulesReplaceSchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
@@ -23,11 +23,6 @@ import {
   groupsListResponseSchema,
 } from "./groups";
 import { databaseIdSchema } from "./identifiers";
-
-const jsonError = (description: string) => ({
-  description,
-  content: { "application/json": { schema: apiErrorPayloadSchema } },
-});
 
 export const groupTypesListRouteSchema = {
   tags: ["Groups"],
@@ -60,7 +55,7 @@ export const groupGetRouteSchema = {
   request: { params: groupReferenceParamsSchema },
   responses: {
     "200": { description: "Group detail.", content: { "application/json": { schema: groupResponseSchema } } },
-    "404": jsonError("Group not found or not visible."),
+    "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
 
@@ -70,8 +65,8 @@ export const groupCreateRouteSchema = {
   request: { body: { required: true, content: { "application/json": { schema: groupCreateSchema } } } },
   responses: {
     "201": { description: "Group created.", content: { "application/json": { schema: groupResponseSchema } } },
-    "403": jsonError("The caller may not create this group."),
-    "409": jsonError("The group slug already exists or the hierarchy is invalid."),
+    "403": jsonErrorResponse("The caller may not create this group."),
+    "409": jsonErrorResponse("The group slug already exists or the hierarchy is invalid."),
   },
 };
 
@@ -84,8 +79,8 @@ export const groupUpdateRouteSchema = {
   },
   responses: {
     "200": { description: "Group updated.", content: { "application/json": { schema: groupResponseSchema } } },
-    "403": jsonError("The caller lacks effective management permission."),
-    "409": jsonError("The update would create a cycle or unsafe local-only governance."),
+    "403": jsonErrorResponse("The caller lacks effective management permission."),
+    "409": jsonErrorResponse("The update would create a cycle or unsafe local-only governance."),
   },
 };
 
@@ -99,7 +94,7 @@ export const groupMembershipsListRouteSchema = {
       description: "A bounded membership-capacity page.",
       content: { "application/json": { schema: groupMembershipsListResponseSchema } },
     },
-    "404": jsonError("Group not found or not visible."),
+    "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
 
@@ -116,8 +111,8 @@ export const groupJoinRouteSchema = {
       description: "The active capacity set after the idempotent join.",
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
-    "403": jsonError("No selected capacity is eligible for this group."),
-    "409": jsonError("Parent membership or current representation is missing."),
+    "403": jsonErrorResponse("No selected capacity is eligible for this group."),
+    "409": jsonErrorResponse("Parent membership or current representation is missing."),
   },
 };
 
@@ -148,7 +143,7 @@ export const groupAutomaticEnrollmentPreferenceRouteSchema = {
       description: "Automatic-enrollment preference updated.",
       content: { "application/json": { schema: groupAutomaticEnrollmentPreferenceResponseSchema } },
     },
-    "409": jsonError("The group does not permit automatic-enrollment opt-out."),
+    "409": jsonErrorResponse("The group does not permit automatic-enrollment opt-out."),
   },
 };
 
@@ -165,7 +160,7 @@ export const groupMemberAddRouteSchema = {
       description: "Updated capacities.",
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
-    "403": jsonError("The caller may not manage this group or the target is ineligible."),
+    "403": jsonErrorResponse("The caller may not manage this group or the target is ineligible."),
   },
 };
 
@@ -178,7 +173,7 @@ export const groupMembershipEndRouteSchema = {
       description: "Capacity ended.",
       content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
     },
-    "404": jsonError("Membership capacity not found."),
+    "404": jsonErrorResponse("Membership capacity not found."),
   },
 };
 
@@ -201,7 +196,10 @@ export const groupLeadershipAssignRouteSchema = {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupLeadershipAssignSchema } } },
   },
-  responses: { "201": { description: "Leadership assigned." }, "403": jsonError("Assignment is not authorized.") },
+  responses: {
+    "201": { description: "Leadership assigned." },
+    "403": jsonErrorResponse("Assignment is not authorized."),
+  },
 };
 
 export const groupCategoryRulesReplaceRouteSchema = {
@@ -211,7 +209,10 @@ export const groupCategoryRulesReplaceRouteSchema = {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupCategoryRulesReplaceSchema } } },
   },
-  responses: { "200": { description: "Rules replaced." }, "403": jsonError("Rule management is not authorized.") },
+  responses: {
+    "200": { description: "Rules replaced." },
+    "403": jsonErrorResponse("Rule management is not authorized."),
+  },
 };
 
 export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.extend({
@@ -223,6 +224,6 @@ export const groupLeadershipRevokeRouteSchema = {
   request: { params: groupLeadershipAssignmentParamsSchema },
   responses: {
     "200": { description: "Leadership revoked." },
-    "409": jsonError("Local-only governance requires local leadership."),
+    "409": jsonErrorResponse("Local-only governance requires local leadership."),
   },
 };

@@ -1,6 +1,13 @@
 /** Shared event-profile, recurrence, occurrence, guest, and meeting-entry contracts. */
 import { z } from "zod";
-import { eventIdSchema, normalizedEmailSchema, tokenSchema, trimmedString } from "./api-common";
+import {
+  booleanQueryFlagSchema,
+  eventIdSchema,
+  jsonErrorResponse,
+  normalizedEmailSchema,
+  tokenSchema,
+  trimmedString,
+} from "./api-common";
 import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -109,7 +116,7 @@ export const eventSeriesMaterializeResponseSchema = z.object({
 
 export const EVENT_SERIES_SORT_COLUMNS = ["event_name", "next_occurrence_at", "created_at"] as const;
 export const eventSeriesListQuerySchema = listQuerySchema(EVENT_SERIES_SORT_COLUMNS).extend({
-  active: z.enum(["true", "false"]).optional(),
+  active: booleanQueryFlagSchema.optional(),
   profileKey: eventProfileKeySchema.optional(),
 });
 export const eventSeriesListResponseSchema = paginatedResponseSchema("series", eventSeriesSchema);
@@ -178,7 +185,7 @@ export const eventOccurrenceGuestInviteSchema = z.object({
   seriesWide: z.boolean().optional(),
 });
 export const eventOccurrenceGuestsListQuerySchema = listQuerySchema(["name", "email", "created_at"] as const).extend({
-  active: z.enum(["true", "false"]).optional(),
+  active: booleanQueryFlagSchema.optional(),
 });
 export const eventOccurrenceGuestsListResponseSchema = paginatedResponseSchema("guests", eventOccurrenceGuestSchema);
 
@@ -242,7 +249,7 @@ export const eventOccurrenceJoinConfirmationSchema = z.object({
 
 export const EVENT_ATTENDANCE_SORT_COLUMNS = ["name", "confirmed_at", "attendance_verified_at"] as const;
 export const eventAttendanceListQuerySchema = listQuerySchema(EVENT_ATTENDANCE_SORT_COLUMNS).extend({
-  verified: z.enum(["true", "false"]).optional(),
+  verified: booleanQueryFlagSchema.optional(),
 });
 export const eventAttendanceListResponseSchema = paginatedResponseSchema(
   "confirmations",
@@ -372,7 +379,14 @@ export const eventOccurrenceAttendanceListRouteSchema = {
   summary: "List occurrence join confirmations and verified attendance",
   description: "Search, verification filtering, sorting, counting, and pagination are executed in D1.",
   request: { params: eventOccurrenceParamsSchema, query: eventAttendanceListQuerySchema },
-  responses: { "200": { description: "A bounded occurrence-attendance page." } },
+  responses: {
+    "200": {
+      description: "A bounded occurrence-attendance page.",
+      content: { "application/json": { schema: eventAttendanceListResponseSchema } },
+    },
+    "403": jsonErrorResponse("Effective attendance-management capability is required."),
+    "404": jsonErrorResponse("The group, meeting series, or occurrence was not found."),
+  },
 };
 export const eventOccurrenceAttendanceVerifyRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -381,7 +395,15 @@ export const eventOccurrenceAttendanceVerifyRouteSchema = {
     params: eventAttendanceParamsSchema,
     body: { required: true, content: { "application/json": { schema: attendanceVerifySchema } } },
   },
-  responses: { "200": { description: "Attendance verification recorded." } },
+  responses: {
+    "200": {
+      description: "Attendance verification recorded.",
+      content: { "application/json": { schema: eventAttendanceResponseSchema } },
+    },
+    "403": jsonErrorResponse("Effective attendance-management capability is required."),
+    "404": jsonErrorResponse("The group, meeting occurrence, or join confirmation was not found."),
+    "409": jsonErrorResponse("The attendance target or management authority changed while the update was saved."),
+  },
 };
 export const meetingJoinLandingRouteSchema = {
   tags: ["Meetings"],

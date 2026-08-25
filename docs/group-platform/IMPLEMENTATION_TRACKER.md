@@ -273,8 +273,20 @@ Status: In progress
           closed. group-event-sharing.test.ts covers identity override rejection,
           immediate authenticated registration, public and ungranted rejection,
           disabled registration, and concurrent grant revocation.
-    - [ ] Apply `manage_attendance` to registration discovery and attendance
+    - [x] Apply `manage_attendance` to attendance discovery and verification
           mutations.
+          Evidence: the canonical occurrence-attendance routes accept the
+          shared bounded list query and run search, verification filtering,
+          sorting, counting, and pagination in D1. The shared resource-grant
+          evaluator requires effective management of the owner or exact
+          grantee group; `manage` implies `manage_attendance` without implying
+          member participation. A transient FK-backed D1 guard rechecks the
+          active actor, event ownership or grant, and current local/inherited
+          leadership in the same batch as verification and scoped audit.
+          group-event-sharing.test.ts proves mounted-route access, capability
+          implication, revocation, disabled-user rejection, scoped audit, and
+          use of idx_event_occurrence_attendance. The adjacent event-series and
+          resource-grant selection passes 22 tests.
   - [ ] Apply vote grants after the atomic generic voting cutover.
       Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
       and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
@@ -291,10 +303,11 @@ Status: In progress
       search, immediate revocation, and prevention of generic form endpoints
       bypassing registration, proposal, or application workflows.
       Group-event sharing tests additionally prove context-bound discovery,
-      shared flexible links, participant/manager separation, revocation, and
-      indexed owner/grantee query plans. Authenticated group registration also
-      proves strict identity binding, registration-policy enforcement, and the
-      atomic D1 authorization guard.
+      shared flexible links, participant/manager separation, revocation,
+      indexed owner/grantee and occurrence-attendance query plans, and atomic
+      attendance-management reauthorization. Authenticated group registration
+      also proves strict identity binding, registration-policy enforcement,
+      and the atomic D1 authorization guard.
 
 ## 9. Group-scoped REST API
 
@@ -307,8 +320,12 @@ Status: In progress
       and placement-management routes.
 - [x] Add nested group event discovery and detail routes.
 - [x] Add nested mailing-list discovery and preference routes.
-- [ ] Add /api/v1/groups/:groupId/meetings/series routes.
-- [ ] Add series occurrence, guest, join, and attendance routes.
+- [x] Add /api/v1/groups/:groupId/meetings/series routes.
+- [x] Add series occurrence, guest, join, and attendance routes.
+      Evidence: the mounted router exposes canonical series, occurrence,
+      calendar, materialization, guest, access-capability, attendance-list,
+      and attendance-verification routes; scanner-safe join inspection and
+      confirmation remain intentionally token-scoped under /api/v1/meetings.
 - [x] Keep routes thin and SQL-free.
 - [x] Reuse shared list query and page response contracts for implemented group
       and membership listings.

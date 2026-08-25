@@ -4149,6 +4149,117 @@ CREATE UNIQUE INDEX uq_event_occurrence_join_guest
 CREATE INDEX idx_event_occurrence_attendance
   ON event_occurrence_join_confirmations(occurrence_id, attendance_verified_at, confirmed_at, id);
 
+-- Attendance management may be delegated to another group's effective
+-- leadership. This short-lived row rechecks both the exact event grant and the
+-- actor's current group-management authority in the same D1 batch as the
+-- attendance mutation, closing grant and leadership revocation races.
+CREATE TABLE event_attendance_management_guards (
+  id                TEXT NOT NULL PRIMARY KEY,
+  event_id          TEXT NOT NULL REFERENCES events(id),
+  group_id          TEXT NOT NULL REFERENCES groups(id),
+  actor_user_id     TEXT REFERENCES users(id),
+  trusted_service   INTEGER NOT NULL DEFAULT 0 CHECK (trusted_service IN (0, 1)),
+  created_at        TEXT NOT NULL,
+  CHECK (
+    (actor_user_id IS NOT NULL AND trusted_service = 0)
+    OR (actor_user_id IS NULL AND trusted_service = 1)
+  )
+);
+
+CREATE TRIGGER trg_event_attendance_management_guard_validate
+BEFORE INSERT ON event_attendance_management_guards
+WHEN NOT EXISTS (
+  SELECT 1
+    FROM events event
+    JOIN groups target_group ON target_group.id = NEW.group_id AND target_group.active = 1
+   WHERE event.id = NEW.event_id
+     AND (
+       event.owner_group_id = target_group.id
+       OR EXISTS (
+         SELECT 1 FROM event_group_grants grant_row
+         WHERE grant_row.event_id = event.id
+            AND grant_row.group_id = target_group.id
+            AND grant_row.capability IN ('manage_attendance', 'manage')
+       )
+     )
+     AND (
+       NEW.trusted_service = 1
+       OR EXISTS (
+         SELECT 1 FROM users active_actor
+          WHERE active_actor.id = NEW.actor_user_id
+            AND active_actor.active = 1
+       )
+     )
+     AND (
+       NEW.trusted_service = 1
+       OR EXISTS (
+         SELECT 1 FROM users actor_user
+          WHERE actor_user.id = NEW.actor_user_id
+            AND actor_user.active = 1
+            AND actor_user.role = 'admin'
+       )
+       OR EXISTS (
+         SELECT 1
+           FROM user_roles actor_role
+           JOIN role_permissions role_permission ON role_permission.role_id = actor_role.role_id
+          WHERE actor_role.user_id = NEW.actor_user_id
+            AND role_permission.permission = 'groups:write'
+            AND actor_role.revoked_at IS NULL
+            AND (actor_role.expires_at IS NULL OR actor_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            AND (
+              (actor_role.context_type IS NULL AND actor_role.context_id IS NULL)
+              OR (actor_role.context_type = 'group' AND actor_role.context_id = target_group.id)
+            )
+       )
+       OR EXISTS (
+         SELECT 1 FROM permission_grants direct_grant
+          WHERE direct_grant.user_id = NEW.actor_user_id
+            AND direct_grant.permission = 'groups:write'
+            AND direct_grant.revoked_at IS NULL
+            AND (direct_grant.expires_at IS NULL OR direct_grant.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            AND (
+              (direct_grant.context_type IS NULL AND direct_grant.context_id IS NULL)
+              OR (direct_grant.context_type = 'group' AND direct_grant.context_id = target_group.id)
+            )
+       )
+       OR EXISTS (
+         WITH RECURSIVE effective_lineage(id, depth, continue_up) AS (
+           SELECT target_group.id, 0,
+                  CASE WHEN target_group.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+           UNION ALL
+           SELECT parent.id, lineage.depth + 1,
+                  CASE WHEN parent.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
+             FROM effective_lineage lineage
+             JOIN groups child ON child.id = lineage.id
+             JOIN groups parent ON parent.id = child.parent_group_id
+            WHERE lineage.continue_up = 1
+         )
+         SELECT 1
+           FROM effective_lineage lineage
+           JOIN user_roles inherited_role
+             ON inherited_role.context_type = 'group'
+            AND inherited_role.context_id = lineage.id
+            AND inherited_role.user_id = NEW.actor_user_id
+            AND inherited_role.role_id IN ('role-group_lead', 'role-group_deputy_lead')
+            AND inherited_role.revoked_at IS NULL
+            AND (inherited_role.expires_at IS NULL OR inherited_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+           JOIN role_permissions inherited_permission
+             ON inherited_permission.role_id = inherited_role.role_id
+            AND inherited_permission.permission = 'groups:write'
+          LIMIT 1
+       )
+     )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_event_attendance_management_guard_release
+AFTER INSERT ON event_attendance_management_guards
+BEGIN
+  DELETE FROM event_attendance_management_guards WHERE id = NEW.id;
+END;
+
 -- Seed portal-managed meeting aggregates, not uploaded files. Recurrence is
 -- intentionally empty until staff confirms each real schedule.
 INSERT OR IGNORE INTO events

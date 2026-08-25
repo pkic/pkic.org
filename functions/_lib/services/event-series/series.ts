@@ -45,7 +45,7 @@ export async function listGroupEventSeries(
   }
   if (query.active !== undefined) {
     conditions.push("series.active = ?");
-    bindings.push(query.active === "true" ? 1 : 0);
+    bindings.push(query.active ? 1 : 0);
   }
   if (query.profileKey) {
     conditions.push("event.profile_key = ?");

@@ -1,9 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import { eventAttendanceListQuerySchema } from "../assets/shared/schemas/event-series";
 import { groupEventsListQuerySchema } from "../assets/shared/schemas/group-events";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
-import { createGroupEventSeries } from "../functions/_lib/services/event-series";
+import { buildOccurrenceAttendancePageQuery, createGroupEventSeries } from "../functions/_lib/services/event-series";
 import { buildGroupEventsPageQuery } from "../functions/_lib/services/events/group-read-model";
 import { replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
@@ -22,6 +23,7 @@ interface Fixture {
   outsiderId: string;
   eventId: string;
   eventSlug: string;
+  seriesId: string;
   memberId: string;
   memberEmail: string;
   memberToken: string;
@@ -104,6 +106,7 @@ async function createFixture(): Promise<Fixture> {
     outsiderId: outsider.id,
     eventId: series.eventId,
     eventSlug: series.eventSlug,
+    seriesId: series.id,
     memberId: member.userId,
     memberEmail,
     memberToken: await createMemberSession(env.DB, member.userId, `group-event-member-${crypto.randomUUID()}`),
@@ -189,6 +192,23 @@ describe("group event sharing", () => {
 
   it("keeps attendance management separate from member participation", async () => {
     const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    const confirmationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_occurrences
+           (id, series_id, starts_at, ends_at, status, created_at, updated_at)
+         VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
+                 'scheduled', datetime('now'), datetime('now'))`,
+      ).bind(occurrenceId, fixture.seriesId),
+      env.DB.prepare(
+        `INSERT INTO event_occurrence_join_confirmations
+           (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+            join_count, confirmed_at, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, 'Test Member', 'Example Organization', 1,
+                 datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(confirmationId, occurrenceId, fixture.memberId),
+    ]);
     await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
       granteeGroupId: fixture.granteeId,
       capability: "manage_attendance",
@@ -204,6 +224,101 @@ describe("group event sharing", () => {
       events: [{ id: fixture.eventId, capabilities: ["view", "manage_attendance"] }],
       page: { total: 1 },
     });
+
+    const attendancePath = `/api/v1/groups/${fixture.granteeId}/meetings/series/${fixture.seriesId}/occurrences/${occurrenceId}/attendance`;
+    const attendanceQuery = buildOccurrenceAttendancePageQuery(
+      occurrenceId,
+      eventAttendanceListQuerySchema.parse({ q: "example", verified: "false", limit: 20 }),
+    );
+    const attendanceSql = buildOffsetPageSql(attendanceQuery);
+    const attendancePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${attendanceSql.pageSql}`)
+      .bind(...attendanceSql.bindings, attendanceQuery.limit, attendanceQuery.offset)
+      .all<{ detail: string }>();
+    expect(attendancePlan.results.map((row) => row.detail).join("\n")).toContain("idx_event_occurrence_attendance");
+
+    const memberAttendance = await authenticatedRequest(fixture.memberToken, attendancePath);
+    expect(memberAttendance.status).toBe(401);
+
+    const attendance = await authenticatedRequest(fixture.leaderToken, `${attendancePath}?q=example&verified=false`);
+    expect(attendance.status, await attendance.clone().text()).toBe(200);
+    expect(await attendance.json()).toMatchObject({
+      confirmations: [{ id: confirmationId, attendanceVerifiedAt: null }],
+      page: { total: 1 },
+    });
+
+    const verified = await authenticatedRequest(fixture.leaderToken, `${attendancePath}/${confirmationId}`, {
+      method: "PUT",
+      body: JSON.stringify({ source: "manual", note: "Verified by the delegated group lead" }),
+    });
+    expect(verified.status, await verified.clone().text()).toBe(200);
+    expect(await verified.json()).toMatchObject({
+      confirmation: { id: confirmationId, attendanceVerificationSource: "manual" },
+    });
+    expect(
+      await env.DB.prepare(
+        `SELECT scope_type, scope_id FROM audit_log
+          WHERE action = 'event_occurrence_attendance_verified' AND entity_id = ?`,
+      )
+        .bind(confirmationId)
+        .first(),
+    ).toEqual({ scope_type: "group", scope_id: fixture.granteeId });
+
+    await env.DB.prepare(
+      `CREATE TRIGGER test_event_attendance_zero_change
+       BEFORE UPDATE ON event_occurrence_join_confirmations
+       BEGIN
+         SELECT RAISE(IGNORE);
+       END`,
+    ).run();
+    const lostUpdate = await authenticatedRequest(fixture.leaderToken, `${attendancePath}/${confirmationId}`, {
+      method: "PUT",
+      body: JSON.stringify({ source: "manual", note: "This simulated update must not report success" }),
+    });
+    expect(lostUpdate.status).toBe(409);
+    expect(await lostUpdate.json()).toMatchObject({ error: { code: "MEETING_JOIN_CONFIRMATION_CHANGED" } });
+    await env.DB.prepare("DROP TRIGGER test_event_attendance_zero_change").run();
+    expect(
+      await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM audit_log
+          WHERE action = 'event_occurrence_attendance_verified' AND entity_id = ?`,
+      )
+        .bind(confirmationId)
+        .first("total"),
+    ).toBe(1);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+    const revoked = await authenticatedRequest(fixture.leaderToken, attendancePath);
+    expect(revoked.status).toBe(403);
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO event_attendance_management_guards
+           (id, event_id, group_id, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
+        .run(),
+    ).rejects.toThrow("EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED");
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const impliedManagement = await authenticatedRequest(fixture.leaderToken, attendancePath);
+    expect(impliedManagement.status, await impliedManagement.clone().text()).toBe(200);
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(fixture.admin.id).run();
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO event_attendance_management_guards
+           (id, event_id, group_id, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
+        .run(),
+    ).rejects.toThrow("EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED");
   });
 
   it("registers the verified session identity without accepting identity overrides", async () => {

@@ -5,7 +5,7 @@ import {
   adminFormSubmissionStatSchema,
   adminFormSubmissionsQuerySchema,
 } from "./admin-forms";
-import { apiErrorPayloadSchema, successResponseSchema } from "./api-common";
+import { jsonErrorResponse, successResponseSchema } from "./api-common";
 import {
   formFieldDefinitionSchema,
   formPlacementPolicyUpdateSchema,
@@ -98,11 +98,6 @@ export const groupFormSubmissionStatsResponseSchema = z.object({
 export const groupFormPlacementUpdateSchema = formPlacementPolicyUpdateSchema;
 export type GroupFormPlacementUpdateInput = z.infer<typeof groupFormPlacementUpdateSchema>;
 
-const jsonError = (description: string) => ({
-  description,
-  content: { "application/json": { schema: apiErrorPayloadSchema } },
-});
-
 export const groupFormsListRouteSchema = {
   tags: ["Groups"],
   summary: "List forms available through a group",
@@ -113,8 +108,8 @@ export const groupFormsListRouteSchema = {
       description: "A bounded page of owned and explicitly shared form placements.",
       content: { "application/json": { schema: groupFormsListResponseSchema } },
     },
-    "401": jsonError("An authenticated portal identity is required."),
-    "404": jsonError("Group not found or not visible."),
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
 
@@ -127,8 +122,8 @@ export const groupFormDefinitionRouteSchema = {
       description: "The live form definition and its group-owned placement.",
       content: { "application/json": { schema: groupFormDefinitionResponseSchema } },
     },
-    "401": jsonError("An authenticated portal identity is required."),
-    "404": jsonError("The form is not available through this group."),
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("The form is not available through this group."),
   },
 };
 
@@ -144,10 +139,10 @@ export const groupFormSubmissionCreateRouteSchema = {
       description: "Form response recorded.",
       content: { "application/json": { schema: groupFormSubmissionResponseSchema } },
     },
-    "403": jsonError("The caller lacks the submit capability."),
-    "404": jsonError("The form is not available through this group or is not accepting responses."),
-    "409": jsonError("The form changed while the response was being saved."),
-    "422": jsonError("The answers do not satisfy the live form definition."),
+    "403": jsonErrorResponse("The caller lacks the submit capability."),
+    "404": jsonErrorResponse("The form is not available through this group or is not accepting responses."),
+    "409": jsonErrorResponse("The form changed while the response was being saved."),
+    "422": jsonErrorResponse("The answers do not satisfy the live form definition."),
   },
 };
 
@@ -161,8 +156,8 @@ export const groupFormSubmissionsListRouteSchema = {
       description: "A bounded response page isolated to this placement.",
       content: { "application/json": { schema: groupFormSubmissionsResponseSchema } },
     },
-    "403": jsonError("Effective response-viewing capability is required."),
-    "404": jsonError("The form is not available through this group."),
+    "403": jsonErrorResponse("Effective response-viewing capability is required."),
+    "404": jsonErrorResponse("The form is not available through this group."),
   },
 };
 
@@ -176,8 +171,8 @@ export const groupFormSubmissionStatsRouteSchema = {
       description: "Placement-isolated form response statistics.",
       content: { "application/json": { schema: groupFormSubmissionStatsResponseSchema } },
     },
-    "403": jsonError("Effective response-viewing capability is required."),
-    "404": jsonError("The form is not available through this group."),
+    "403": jsonErrorResponse("Effective response-viewing capability is required."),
+    "404": jsonErrorResponse("The form is not available through this group."),
   },
 };
 
@@ -194,8 +189,8 @@ export const groupFormPlacementUpdateRouteSchema = {
       description: "Updated placement.",
       content: { "application/json": { schema: groupFormDefinitionResponseSchema } },
     },
-    "403": jsonError("Effective form-management capability is required."),
-    "404": jsonError("The form is not available through this group."),
-    "409": jsonError("The placement changed concurrently."),
+    "403": jsonErrorResponse("Effective form-management capability is required."),
+    "404": jsonErrorResponse("The form is not available through this group."),
+    "409": jsonErrorResponse("The placement changed concurrently."),
   },
 };

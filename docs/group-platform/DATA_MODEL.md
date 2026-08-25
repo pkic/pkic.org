@@ -409,6 +409,27 @@ Repeated joins may update the latest confirmation time or append bounded
 signals according to the reporting requirement; they never create multiple
 attendee counts for one identity and occurrence.
 
+### event_attendance_management_guards
+
+A transient authorization boundary used only inside the D1 batch that records
+attendance verification:
+
+    id
+    event_id -> events.id
+    group_id -> groups.id
+    actor_user_id -> users.id, nullable for a trusted service identity
+    trusted_service
+    created_at
+
+An insert trigger accepts the row only while the target group and user remain
+active, the event remains owned by that group or has an exact
+`manage_attendance`/`manage` grant, and the actor retains effective local or
+inherited group management. A release trigger deletes the guard immediately;
+it is not durable business state. D1 batches are transactional, so the guard,
+attendance update, and scoped audit either all commit or all roll back. This
+keeps the application preflight and write-time race protection separate from
+the attendance record without duplicating a long-lived authorization cache.
+
 ## Terms and consent
 
 The existing event_terms table remains the canonical versioned terms source.

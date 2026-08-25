@@ -226,6 +226,16 @@ Attendance therefore distinguishes:
 - join confirmed through PKIC;
 - attendance verified by a provider or authorized manual reconciliation.
 
+Attendance discovery and verification use the same resource-grant evaluator
+as every other group-owned resource. Effective leadership of the owning group
+may manage attendance directly; leadership of another group requires an exact
+`manage_attendance` or `manage` event grant. Neither capability creates the
+membership needed to register or attend. Search, verification filtering,
+sorting, counting, and pagination remain in D1. Verification commits an
+atomic authorization guard and a group-scoped audit event with the mutation,
+so grant revocation, leadership revocation, group deactivation, or actor
+deactivation cannot race a prepared update.
+
 ## Forms
 
 Forms are a live-editable Google Forms or Microsoft Forms alternative.
