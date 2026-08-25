@@ -27,6 +27,7 @@ interface AccessContextRow extends EventOccurrenceRow {
   owner_group_id: string;
   registration_policy: string;
   settings_json: string;
+  series_active: number;
   token_user_id: string | null;
   token_guest_id: string | null;
   token_expires_at: string;
@@ -51,7 +52,8 @@ const ACCESS_CONTEXT_SELECT = `token.id AS token_id, token.user_id AS token_user
   token.guest_id AS token_guest_id, token.expires_at AS token_expires_at,
   token.revoked_at AS token_revoked_at,
   occurrence.id, occurrence.series_id, occurrence.starts_at, occurrence.ends_at,
-  occurrence.status, COALESCE(occurrence.location_override, series.location) AS location,
+  occurrence.status, occurrence.location_override,
+  COALESCE(occurrence.location_override, series.location) AS location,
   occurrence.provider_join_url_ciphertext,
   (SELECT COUNT(*) FROM event_occurrence_guests counted_guest
     WHERE counted_guest.series_id = occurrence.series_id
@@ -65,6 +67,7 @@ const ACCESS_CONTEXT_SELECT = `token.id AS token_id, token.user_id AS token_user
       AND counted_confirmation.attendance_verified_at IS NOT NULL) AS attendance_verified_count,
   occurrence.created_at, occurrence.updated_at,
   event.id AS event_id, event.owner_group_id, event.registration_mode AS registration_policy,
+  series.active AS series_active,
   event.settings_json,
   user.active AS user_active,
   COALESCE(user.preferred_name,
@@ -100,6 +103,32 @@ async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userI
   if (await isCurrentSubjectEligible(db, row.id, userId, null)) return;
   if (row.user_active !== 1) throw new AppError(403, "MEETING_ACCESS_REVOKED", "The user is no longer active");
   if (row.status !== "scheduled") throw new AppError(409, "MEETING_NOT_JOINABLE", "This occurrence is not scheduled");
+  if (row.series_active !== 1) throw new AppError(409, "MEETING_NOT_JOINABLE", "This meeting series is inactive");
+  const settings = parseJsonSafe<{ memberEligibility?: string }>(row.settings_json, {});
+  if (settings.memberEligibility !== "public") {
+    const membership = await first<{ id: string }>(
+      db,
+      `SELECT membership.id
+         FROM group_memberships membership
+         JOIN groups membership_group ON membership_group.id = membership.group_id AND membership_group.active = 1
+        WHERE membership.user_id = ? AND membership.left_at IS NULL
+          AND (
+            membership.group_id = ?
+            OR (
+              ? = 'shared_groups' AND EXISTS (
+                SELECT 1 FROM event_group_grants grant_row
+                 WHERE grant_row.event_id = ? AND grant_row.group_id = membership.group_id
+                   AND grant_row.capability = 'attend'
+              )
+            )
+          )
+        LIMIT 1`,
+      [userId, row.owner_group_id, settings.memberEligibility, row.event_id],
+    );
+    if (!membership) {
+      throw new AppError(403, "MEETING_GROUP_MEMBERSHIP_REQUIRED", "Active group membership is required");
+    }
+  }
   if (row.registration_policy === "required" || row.registration_policy === "public") {
     const registration = await first<{ id: string }>(
       db,
@@ -107,31 +136,7 @@ async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userI
       [row.event_id, userId],
     );
     if (!registration) throw new AppError(403, "MEETING_REGISTRATION_REQUIRED", "An active registration is required");
-    throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting eligibility changed; reload before joining");
   }
-  const settings = parseJsonSafe<{ memberEligibility?: string }>(row.settings_json, {});
-  if (settings.memberEligibility === "public") {
-    throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting eligibility changed; reload before joining");
-  }
-  const membership = await first<{ id: string }>(
-    db,
-    `SELECT membership.id
-       FROM group_memberships membership
-      WHERE membership.user_id = ? AND membership.left_at IS NULL
-        AND (
-          membership.group_id = ?
-          OR (
-            ? = 'shared_groups' AND EXISTS (
-              SELECT 1 FROM event_group_grants grant_row
-               WHERE grant_row.event_id = ? AND grant_row.group_id = membership.group_id
-                 AND grant_row.capability = 'attend'
-            )
-          )
-        )
-      LIMIT 1`,
-    [userId, row.owner_group_id, settings.memberEligibility, row.event_id],
-  );
-  if (!membership) throw new AppError(403, "MEETING_GROUP_MEMBERSHIP_REQUIRED", "Active group membership is required");
   throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting eligibility changed; reload before joining");
 }
 
@@ -152,6 +157,7 @@ async function loadAccessContext(db: DatabaseLike, rawToken: string): Promise<Ac
   if (!row || row.token_revoked_at || row.token_expires_at <= now) {
     throw new AppError(404, "MEETING_ACCESS_NOT_FOUND", "Meeting access link is invalid or expired");
   }
+  if (row.series_active !== 1) throw new AppError(409, "MEETING_NOT_JOINABLE", "This meeting series is inactive");
   if (row.status !== "scheduled") throw new AppError(409, "MEETING_NOT_JOINABLE", "This occurrence is not scheduled");
   if (row.token_user_id) {
     await assertUserMayEnter(db, row, row.token_user_id);

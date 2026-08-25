@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import ICAL from "ical.js";
 import { eventSeriesMaterializeSchema } from "../../../../assets/shared/schemas/event-series";
+import { zonedDateTimeParts, zonedDateTimeToDate, type ZonedDateTimeParts } from "../../../../assets/shared/timezone";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -11,76 +12,17 @@ import { getManagedGroupEventSeries } from "./series";
 
 type MaterializeInput = z.infer<typeof eventSeriesMaterializeSchema>;
 
-interface LocalDateTime {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}
-
-function localDateTimeAt(date: Date, timeZone: string): LocalDateTime {
-  const formatter = new Intl.DateTimeFormat("en-US-u-ca-gregory", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-  const values = Object.fromEntries(
-    formatter
-      .formatToParts(date)
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)]),
-  );
-  return {
-    year: values.year,
-    month: values.month,
-    day: values.day,
-    hour: values.hour,
-    minute: values.minute,
-    second: values.second,
-  };
-}
-
-function localEpoch(value: LocalDateTime): number {
-  return Date.UTC(value.year, value.month - 1, value.day, value.hour, value.minute, value.second);
-}
-
-function sameLocalDateTime(left: LocalDateTime, right: LocalDateTime): boolean {
-  return (
-    left.year === right.year &&
-    left.month === right.month &&
-    left.day === right.day &&
-    left.hour === right.hour &&
-    left.minute === right.minute &&
-    left.second === right.second
-  );
-}
-
 /** Converts a floating recurrence value to UTC while preserving local wall-clock time across DST. */
-function localDateTimeToUtc(value: LocalDateTime, timeZone: string): Date {
-  const requestedEpoch = localEpoch(value);
-  let candidateEpoch = requestedEpoch;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const observed = localDateTimeAt(new Date(candidateEpoch), timeZone);
-    const adjustment = requestedEpoch - localEpoch(observed);
-    if (adjustment === 0 && sameLocalDateTime(observed, value)) return new Date(candidateEpoch);
-    candidateEpoch += adjustment;
-  }
-  const observed = localDateTimeAt(new Date(candidateEpoch), timeZone);
-  if (!sameLocalDateTime(observed, value)) {
+function localDateTimeToUtc(value: ZonedDateTimeParts, timeZone: string): Date {
+  try {
+    return zonedDateTimeToDate(value, timeZone);
+  } catch {
     throw new AppError(
       422,
       "EVENT_RECURRENCE_LOCAL_TIME_INVALID",
       "The recurrence contains a local time that does not exist in the configured timezone",
     );
   }
-  return new Date(candidateEpoch);
 }
 
 function expandStarts(
@@ -100,7 +42,7 @@ function expandStarts(
     );
   }
   try {
-    const localAnchor = localDateTimeAt(anchor, timeZone);
+    const localAnchor = zonedDateTimeParts(anchor, timeZone);
     const iterator = ICAL.Recur.fromString(recurrenceRule).iterator(
       ICAL.Time.fromData({ ...localAnchor, isDate: false }),
     );

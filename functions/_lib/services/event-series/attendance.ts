@@ -5,7 +5,6 @@ import {
   eventAttendanceListQuerySchema,
   eventOccurrenceJoinConfirmationSchema,
 } from "../../../../assets/shared/schemas/event-series";
-import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -15,6 +14,7 @@ import { nowIso } from "../../utils/time";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import {
   commitEventResourceManagementBatch,
+  queryEventResourceManagementPage,
   requireEventResourceManagementContext,
   type EventResourceManagementContext,
 } from "./management";
@@ -118,8 +118,14 @@ export async function listOccurrenceAttendance(
   occurrenceId: string,
   query: AttendanceQuery,
 ) {
-  await requireAttendanceManagementContext(db, actor, groupIdOrSlug, seriesId, occurrenceId);
-  const { rows, total } = await queryPage<AttendanceRow>(db, buildOccurrenceAttendancePageQuery(occurrenceId, query));
+  const context = await requireAttendanceManagementContext(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  const { rows, total } = await queryEventResourceManagementPage<AttendanceRow>(
+    db,
+    actor,
+    context,
+    "manage_attendance",
+    buildOccurrenceAttendancePageQuery(occurrenceId, query),
+  );
   return { confirmations: rows.map(toAttendance), total };
 }
 

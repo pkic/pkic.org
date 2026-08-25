@@ -6,6 +6,11 @@ import { MeetingJoinConfirm, MeetingJoinLanding } from "./join/[token]/index";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
+app.use("*", async (c, next) => {
+  c.set("sensitive", true);
+  await next();
+});
+
 openapi.get("/join/:token", MeetingJoinLanding);
 openapi.post("/join/:token", MeetingJoinConfirm);
 

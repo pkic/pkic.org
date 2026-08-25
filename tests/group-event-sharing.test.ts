@@ -1,13 +1,25 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { eventAttendanceListQuerySchema, eventSeriesListQuerySchema } from "../assets/shared/schemas/event-series";
+import {
+  eventAttendanceListQuerySchema,
+  eventOccurrenceGuestsListQuerySchema,
+  eventOccurrencesListQuerySchema,
+  eventSeriesListQuerySchema,
+} from "../assets/shared/schemas/event-series";
 import { groupEventsListQuerySchema } from "../assets/shared/schemas/group-events";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
 import {
   buildGroupEventSeriesPageQuery,
+  buildOccurrenceGuestsPageQuery,
   buildOccurrenceAttendancePageQuery,
+  buildSeriesOccurrencesPageQuery,
   createGroupEventSeries,
+  getGroupEventSeries,
+  inviteOccurrenceGuest,
+  listOccurrenceAttendance,
+  listOccurrenceGuests,
+  liveEventResourceContextAccess,
   materializeSeriesOccurrences,
   updateGroupEventSeries,
 } from "../functions/_lib/services/event-series";
@@ -25,12 +37,14 @@ import { resetDb } from "./helpers/reset-db";
 
 interface Fixture {
   admin: UserBackedAuthAdmin;
+  adminToken: string;
   ownerId: string;
   granteeId: string;
   outsiderId: string;
   eventId: string;
   eventSlug: string;
   seriesId: string;
+  seriesUpdatedAt: string;
   memberId: string;
   memberEmail: string;
   memberToken: string;
@@ -109,12 +123,14 @@ async function createFixture(): Promise<Fixture> {
   ]);
   return {
     admin,
+    adminToken: await createAdminSession(env.DB, admin.id, `group-event-admin-${crypto.randomUUID()}`),
     ownerId: owner.id,
     granteeId: grantee.id,
     outsiderId: outsider.id,
     eventId: series.eventId,
     eventSlug: series.eventSlug,
     seriesId: series.id,
+    seriesUpdatedAt: series.updatedAt,
     memberId: member.userId,
     memberEmail,
     memberToken: await createMemberSession(env.DB, member.userId, `group-event-member-${crypto.randomUUID()}`),
@@ -148,6 +164,31 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
+
+    const occurrenceQuery = buildSeriesOccurrencesPageQuery(
+      fixture.granteeId,
+      liveEventResourceContextAccess({ userId: fixture.memberId }, fixture.granteeId),
+      fixture.seriesId,
+      eventOccurrencesListQuerySchema.parse({ status: "scheduled", limit: 20 }),
+    );
+    const occurrenceSql = buildOffsetPageSql(occurrenceQuery);
+    const occurrencePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${occurrenceSql.pageSql}`)
+      .bind(...occurrenceSql.bindings, occurrenceQuery.limit, occurrenceQuery.offset)
+      .all<{ detail: string }>();
+    expect(occurrencePlan.results.map((row) => row.detail).join("\n")).toContain(
+      "idx_event_occurrences_series_status_start",
+    );
+
+    const guestQuery = buildOccurrenceGuestsPageQuery(
+      fixture.seriesId,
+      occurrenceId,
+      eventOccurrenceGuestsListQuerySchema.parse({ q: "guest", active: "true", limit: 20 }),
+    );
+    const guestSql = buildOffsetPageSql(guestQuery);
+    const guestPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${guestSql.pageSql}`)
+      .bind(...guestSql.bindings, guestQuery.limit, guestQuery.offset)
+      .all<{ detail: string }>();
+    expect(guestPlan.results.map((row) => row.detail).join("\n")).toContain("idx_event_occurrence_guests_series");
 
     const query = buildGroupEventsPageQuery(
       fixture.granteeId,
@@ -221,7 +262,14 @@ describe("group event sharing", () => {
     );
     expect(seriesList.status, await seriesList.clone().text()).toBe(200);
     expect(await seriesList.json()).toMatchObject({
-      series: [{ id: fixture.seriesId, ownerGroupId: fixture.ownerId, profileKey: "workshop" }],
+      series: [
+        {
+          id: fixture.seriesId,
+          ownerGroupId: fixture.ownerId,
+          profileKey: "workshop",
+          capabilities: ["view", "register"],
+        },
+      ],
       page: { total: 1, hasMore: false },
     });
 
@@ -275,6 +323,31 @@ describe("group event sharing", () => {
     ).toBe(404);
   });
 
+  it("does not let participant filters reveal inactive series while managers can request them explicitly", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await updateGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, fixture.seriesId, {
+      active: false,
+      expectedUpdatedAt: fixture.seriesUpdatedAt,
+    });
+
+    const participantPath = `/api/v1/groups/${fixture.granteeId}/meetings/series?active=false`;
+    const participant = await authenticatedRequest(fixture.memberToken, participantPath);
+    expect(participant.status, await participant.clone().text()).toBe(200);
+    expect(await participant.json()).toMatchObject({ series: [], page: { total: 0 } });
+
+    const managerPath = `/api/v1/groups/${fixture.ownerId}/meetings/series?active=false`;
+    const manager = await authenticatedRequest(fixture.adminToken, managerPath);
+    expect(manager.status, await manager.clone().text()).toBe(200);
+    expect(await manager.json()).toMatchObject({
+      series: [{ id: fixture.seriesId, active: false }],
+      page: { total: 1 },
+    });
+  });
+
   it("keeps attendance management separate from member participation", async () => {
     const fixture = await createFixture();
     const occurrenceId = crypto.randomUUID();
@@ -320,7 +393,10 @@ describe("group event sharing", () => {
       `/api/v1/groups/${fixture.granteeId}/meetings/series`,
     );
     expect(leaderSeries.status, await leaderSeries.clone().text()).toBe(200);
-    expect(await leaderSeries.json()).toMatchObject({ series: [{ id: fixture.seriesId }], page: { total: 1 } });
+    expect(await leaderSeries.json()).toMatchObject({
+      series: [{ id: fixture.seriesId, capabilities: ["view", "manage_attendance"] }],
+      page: { total: 1 },
+    });
 
     const attendancePath = `/api/v1/groups/${fixture.granteeId}/meetings/series/${fixture.seriesId}/occurrences/${occurrenceId}/attendance`;
     const attendanceQuery = buildOccurrenceAttendancePageQuery(
@@ -428,6 +504,83 @@ describe("group event sharing", () => {
     ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
   });
 
+  it("revalidates guest and attendance list authority in the same D1 batch as the page queries", async () => {
+    const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO event_occurrences
+         (id, series_id, starts_at, ends_at, status, created_at, updated_at)
+       VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
+               'scheduled', datetime('now'), datetime('now'))`,
+    )
+      .bind(occurrenceId, fixture.seriesId)
+      .run();
+    await inviteOccurrenceGuest(env.DB, fixture.admin, fixture.ownerId, fixture.seriesId, occurrenceId, {
+      email: `list-race-${crypto.randomUUID()}@example.test`,
+      name: "List Race Guest",
+      expiresAt: "2027-01-11T10:00:00.000Z",
+    });
+    await env.DB.prepare(
+      `INSERT INTO event_occurrence_join_confirmations
+         (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+          join_count, confirmed_at, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, 'List Race Member', 'Example Organization', 1,
+               datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), occurrenceId, fixture.memberId)
+      .run();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+
+    expect(
+      (
+        await listOccurrenceGuests(env.DB, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+          limit: 20,
+          offset: 0,
+        })
+      ).total,
+    ).toBe(1);
+    const guestRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage",
+      }),
+    );
+    await expect(
+      listOccurrenceGuests(guestRaceDb, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+        limit: 20,
+        offset: 0,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+
+    expect(
+      (
+        await listOccurrenceAttendance(env.DB, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+          limit: 20,
+          offset: 0,
+        })
+      ).total,
+    ).toBe(1);
+    const attendanceRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage_attendance",
+      }),
+    );
+    await expect(
+      listOccurrenceAttendance(attendanceRaceDb, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+        limit: 20,
+        offset: 0,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED" });
+  });
+
   it("requires exact delegated event management and revalidates it atomically", async () => {
     const fixture = await createFixture();
     const occurrenceId = crypto.randomUUID();
@@ -448,7 +601,10 @@ describe("group event sharing", () => {
     });
     const attendanceOnlyUpdate = await authenticatedRequest(fixture.leaderToken, seriesPath, {
       method: "PATCH",
-      body: JSON.stringify({ eventName: "Must not be changed by attendance management" }),
+      body: JSON.stringify({
+        eventName: "Must not be changed by attendance management",
+        expectedUpdatedAt: fixture.seriesUpdatedAt,
+      }),
     });
     expect(attendanceOnlyUpdate.status).toBe(403);
     expect((await authenticatedRequest(fixture.leaderToken, `${occurrencePath}/guests`)).status).toBe(403);
@@ -463,9 +619,13 @@ describe("group event sharing", () => {
     });
     const managedUpdate = await authenticatedRequest(fixture.leaderToken, seriesPath, {
       method: "PATCH",
-      body: JSON.stringify({ eventName: "Delegated architecture workshop" }),
+      body: JSON.stringify({
+        eventName: "Delegated architecture workshop",
+        expectedUpdatedAt: fixture.seriesUpdatedAt,
+      }),
     });
     expect(managedUpdate.status, await managedUpdate.clone().text()).toBe(200);
+    const managedSeries = (await managedUpdate.json<{ series: { updatedAt: string } }>()).series;
     const materialized = await authenticatedRequest(fixture.leaderToken, `${seriesPath}/materialize`, {
       method: "POST",
       body: JSON.stringify({ through: "2027-01-24T10:00:00.000Z", maxOccurrences: 10 }),
@@ -481,11 +641,15 @@ describe("group event sharing", () => {
       }),
     });
     expect(createdOccurrence.status, await createdOccurrence.clone().text()).toBe(201);
-    const createdOccurrenceId = (await createdOccurrence.json<{ occurrence: { id: string } }>()).occurrence.id;
+    const createdOccurrenceBody = await createdOccurrence.json<{ occurrence: { id: string; updatedAt: string } }>();
+    const createdOccurrenceId = createdOccurrenceBody.occurrence.id;
     const createdOccurrencePath = `${seriesPath}/occurrences/${createdOccurrenceId}`;
     const occurrenceUpdate = await authenticatedRequest(fixture.leaderToken, createdOccurrencePath, {
       method: "PATCH",
-      body: JSON.stringify({ locationOverride: "Delegated room" }),
+      body: JSON.stringify({
+        locationOverride: "Delegated room",
+        expectedUpdatedAt: createdOccurrenceBody.occurrence.updatedAt,
+      }),
     });
     expect(occurrenceUpdate.status, await occurrenceUpdate.clone().text()).toBe(200);
 
@@ -533,7 +697,10 @@ describe("group event sharing", () => {
     const wrongContext = await authenticatedRequest(
       fixture.leaderToken,
       `/api/v1/groups/${fixture.outsiderId}/meetings/series/${fixture.seriesId}`,
-      { method: "PATCH", body: JSON.stringify({ eventName: "Wrong context" }) },
+      {
+        method: "PATCH",
+        body: JSON.stringify({ eventName: "Wrong context", expectedUpdatedAt: managedSeries.updatedAt }),
+      },
     );
     expect(wrongContext.status).toBe(403);
 
@@ -545,7 +712,7 @@ describe("group event sharing", () => {
       (
         await authenticatedRequest(fixture.leaderToken, seriesPath, {
           method: "PATCH",
-          body: JSON.stringify({ eventName: "Revoked context" }),
+          body: JSON.stringify({ eventName: "Revoked context", expectedUpdatedAt: managedSeries.updatedAt }),
         })
       ).status,
     ).toBe(403);
@@ -563,6 +730,7 @@ describe("group event sharing", () => {
     await expect(
       updateGroupEventSeries(racingGrantDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
         eventName: "Grant race must roll back",
+        expectedUpdatedAt: (await getGroupEventSeries(env.DB, fixture.ownerId, fixture.seriesId)).updatedAt,
       }),
     ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
     expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(fixture.eventId).first("name")).toBe(
@@ -606,6 +774,7 @@ describe("group event sharing", () => {
     await expect(
       updateGroupEventSeries(racingLeadershipDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
         eventName: "Leadership race must roll back",
+        expectedUpdatedAt: (await getGroupEventSeries(env.DB, fixture.ownerId, fixture.seriesId)).updatedAt,
       }),
     ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
     expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(fixture.eventId).first("name")).toBe(

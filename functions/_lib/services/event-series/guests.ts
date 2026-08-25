@@ -3,7 +3,6 @@ import {
   eventOccurrenceGuestInviteSchema,
   eventOccurrenceGuestsListQuerySchema,
 } from "../../../../assets/shared/schemas/event-series";
-import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -13,7 +12,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
-import { commitEventResourceManagementBatch } from "./management";
+import { commitEventResourceManagementBatch, queryEventResourceManagementPage } from "./management";
 import { type EventGuestRow, toEventGuest } from "./record";
 import { getManagedSeriesOccurrence } from "./occurrences";
 
@@ -21,7 +20,7 @@ type GuestInviteInput = z.infer<typeof eventOccurrenceGuestInviteSchema>;
 type GuestListQuery = z.infer<typeof eventOccurrenceGuestsListQuerySchema>;
 
 const GUEST_COLUMNS = `id, series_id, occurrence_id, user_id, normalized_email,
-  name, affiliation, expires_at, revoked_at, created_at`;
+  name, affiliation, expires_at, revoked_at, created_at, updated_at`;
 
 export async function listOccurrenceGuests(
   db: DatabaseLike,
@@ -31,7 +30,22 @@ export async function listOccurrenceGuests(
   occurrenceId: string,
   query: GuestListQuery,
 ) {
-  await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  const { context } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  const { rows, total } = await queryEventResourceManagementPage<EventGuestRow>(
+    db,
+    actor,
+    context,
+    "manage",
+    buildOccurrenceGuestsPageQuery(seriesId, occurrenceId, query),
+  );
+  return {
+    guests: rows.map((row) => toEventGuest({ ...row, response_occurrence_id: occurrenceId })),
+    total,
+  };
+}
+
+/** Canonical page/count query for occurrence guests, also used by D1 EXPLAIN tests. */
+export function buildOccurrenceGuestsPageQuery(seriesId: string, occurrenceId: string, query: GuestListQuery) {
   const conditions = ["series_id = ?", "(occurrence_id IS NULL OR occurrence_id = ?)"];
   const bindings: unknown[] = [seriesId, occurrenceId];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["name", "normalized_email", "affiliation"]) : null;
@@ -47,7 +61,7 @@ export async function listOccurrenceGuests(
     );
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
-  const { rows, total } = await queryPage<EventGuestRow>(db, {
+  return {
     source: {
       selectSql: `SELECT ${GUEST_COLUMNS}`,
       fromSql: `FROM event_occurrence_guests ${where}`,
@@ -61,10 +75,6 @@ export async function listOccurrenceGuests(
     ),
     limit: query.limit,
     offset: query.offset,
-  });
-  return {
-    guests: rows.map((row) => toEventGuest({ ...row, response_occurrence_id: occurrenceId })),
-    total,
   };
 }
 
@@ -103,9 +113,18 @@ export async function inviteOccurrenceGuest(
         ? db
             .prepare(
               `UPDATE event_occurrence_guests SET user_id = ?, name = ?, affiliation = ?,
-                 expires_at = ?, revoked_at = NULL, updated_at = ? WHERE id = ?`,
+                 expires_at = ?, revoked_at = NULL, updated_at = ?
+               WHERE id = ? AND updated_at = ?`,
             )
-            .bind(user?.id ?? null, input.name, input.affiliation ?? null, input.expiresAt, now, id)
+            .bind(
+              user?.id ?? null,
+              input.name,
+              input.affiliation ?? null,
+              input.expiresAt,
+              now,
+              id,
+              existing.updated_at,
+            )
         : db
             .prepare(
               `INSERT INTO event_occurrence_guests
@@ -168,9 +187,10 @@ export async function revokeOccurrenceGuest(
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
       db
         .prepare(
-          "UPDATE event_occurrence_guests SET revoked_at = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL",
+          `UPDATE event_occurrence_guests SET revoked_at = ?, updated_at = ?
+           WHERE id = ? AND revoked_at IS NULL AND updated_at = ?`,
         )
-        .bind(now, now, guestId),
+        .bind(now, now, guestId, guest.updated_at),
       prepareScopedAuditLogAfterOneChange(
         db,
         { type: "group", id: context.groupId },

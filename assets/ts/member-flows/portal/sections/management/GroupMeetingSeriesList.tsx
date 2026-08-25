@@ -1,0 +1,90 @@
+import { useRef, useState, type MutableRef } from "preact/hooks";
+import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/event-series";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { Badge } from "../../../../components/Badge";
+import { fmt } from "../../ui";
+import { GroupMeetingSeriesDetail } from "./GroupMeetingSeriesDetail";
+import { ResourceCapabilities } from "./ResourceCapabilities";
+
+export function GroupMeetingSeriesList({
+  groupId,
+  actionsRef,
+}: {
+  groupId: string;
+  actionsRef?: MutableRef<ApiTableActions | null>;
+}) {
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
+  const localActions = useRef<ApiTableActions | null>(null);
+  const effectiveActions = actionsRef ?? localActions;
+
+  return (
+    <ApiDataTable
+      endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`}
+      responseSchema={eventSeriesListResponseSchema}
+      resolve={(response) => response.series}
+      resolvePage={(response) => response.page}
+      paginate
+      searchPlaceholder="Search meeting name or location…"
+      initialSort="next_occurrence_at"
+      actionsRef={effectiveActions}
+      columns={[
+        {
+          header: "Meeting series",
+          cell: (series) => (
+            <div>
+              <div class="fw-semibold">{series.eventName}</div>
+              {series.location && <div class="small text-muted">{series.location}</div>}
+            </div>
+          ),
+          sort: { asc: "event_name", desc: "-event_name" },
+        },
+        { header: "Profile", cell: (series) => <Badge status={series.profileKey} /> },
+        {
+          header: "Next",
+          cell: (series) => fmt(series.nextOccurrenceAt ?? series.startsAt),
+          className: "text-nowrap",
+          sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
+        },
+        {
+          header: "Status",
+          cell: (series) => <Badge status={series.active ? "active" : "inactive"} />,
+        },
+        { header: "Access", cell: (series) => <ResourceCapabilities capabilities={series.capabilities} /> },
+        {
+          header: "",
+          className: "text-end",
+          cell: (series) => (
+            <div class="d-flex justify-content-end gap-2">
+              <a
+                class="btn btn-sm btn-outline-secondary"
+                href={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}/calendar.ics`}
+              >
+                Calendar
+              </a>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                aria-expanded={selectedSeriesId === series.id}
+                aria-controls={`meeting-series-detail-${series.id}`}
+                onClick={() => setSelectedSeriesId((current) => (current === series.id ? null : series.id))}
+              >
+                {selectedSeriesId === series.id ? "Hide" : "Details"}
+              </button>
+            </div>
+          ),
+        },
+      ]}
+      empty="No matching meeting series."
+      rowKey={(series) => series.id}
+      detailRow={(series) =>
+        selectedSeriesId === series.id ? (
+          <GroupMeetingSeriesDetail
+            groupId={groupId}
+            series={series}
+            onChanged={() => effectiveActions.current?.reload()}
+          />
+        ) : null
+      }
+    />
+  );
+}

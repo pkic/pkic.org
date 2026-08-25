@@ -5,9 +5,12 @@ import {
   eventSeriesListQuerySchema,
   eventSeriesUpdateSchema,
   type EventSeries,
+  type GroupEventSeries,
 } from "../../../../assets/shared/schemas/event-series";
+import type { EventGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
 import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
@@ -16,14 +19,17 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
-import { buildAccessibleGroupResourceIdsCte } from "../resource-grants";
 import { getGroup } from "../groups";
-import { requireGroupManagement } from "../groups/governance";
+import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import {
-  canViewerAccessGroupResource,
-  resolveGroupResourceContextAccess,
+  buildAccessibleGroupResourceIdsCte,
+  buildLiveAccessibleGroupResourceIdsCte,
+  effectiveResourceCapabilitiesForContext,
+  getResourceGrantDefinition,
+  isResourceGrantCapability,
   type GroupResourceContextAccess,
   type GroupResourceViewer,
+  type LiveGroupResourceContextAccess,
 } from "../resource-grants";
 import {
   commitEventResourceManagementBatch,
@@ -31,9 +37,38 @@ import {
   type EventResourceManagementContext,
 } from "./management";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
+import { liveEventResourceContextAccess } from "./read-access";
 
 type EventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
 type EventSeriesUpdateInput = z.infer<typeof eventSeriesUpdateSchema>;
+
+interface GroupEventSeriesRow extends EventSeriesRow {
+  granted_capabilities: string | null;
+  occurrence_count: number;
+  member_access: number;
+  manager_access: number;
+}
+
+function grantedCapabilities(row: GroupEventSeriesRow): EventGroupCapability[] {
+  const definition = getResourceGrantDefinition("event");
+  return (row.granted_capabilities?.split(",") ?? []).filter((capability): capability is EventGroupCapability =>
+    isResourceGrantCapability(definition, capability),
+  );
+}
+
+function toGroupEventSeries(row: GroupEventSeriesRow, groupId: string): GroupEventSeries {
+  const series = toEventSeries(row);
+  return {
+    ...series,
+    occurrenceCount: row.occurrence_count,
+    capabilities: effectiveResourceCapabilitiesForContext(getResourceGrantDefinition("event"), {
+      owner: series.ownerGroupId === groupId,
+      member: row.member_access === 1,
+      manager: row.manager_access === 1,
+      grantedCapabilities: grantedCapabilities(row),
+    }),
+  };
+}
 
 const SORT_EXPRESSIONS = {
   event_name: "event.name COLLATE NOCASE",
@@ -43,12 +78,16 @@ const SORT_EXPRESSIONS = {
 
 export function buildGroupEventSeriesPageQuery(
   groupId: string,
-  access: GroupResourceContextAccess,
+  access: GroupResourceContextAccess | LiveGroupResourceContextAccess,
   query: z.infer<typeof eventSeriesListQuerySchema>,
 ) {
-  const accessibleEvents = buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
-  const conditions = ["event.owner_group_id IS NOT NULL"];
-  const bindings: unknown[] = [...accessibleEvents.bindings];
+  const live = "memberEvidence" in access;
+  const accessibleEvents = live
+    ? buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view")
+    : buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
+  const managerAccess = live ? "group_access.manager_access" : access.manager ? "1" : "0";
+  const conditions = ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR series.active = 1)`];
+  const bindings: unknown[] = [...accessibleEvents.bindings, groupId];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["event.name", "event.slug", "series.location"]) : null;
   if (search) {
     conditions.push(search.sql);
@@ -64,11 +103,18 @@ export function buildGroupEventSeriesPageQuery(
   }
   return {
     sql: `WITH ${accessibleEvents.sql}
-      ${EVENT_SERIES_SELECT}
+      ${EVENT_SERIES_SELECT},
+      GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
+      (SELECT COUNT(*) FROM event_occurrences occurrence WHERE occurrence.series_id = series.id) AS occurrence_count,
+      ${live ? "group_access.member_access" : access.member ? "1" : "0"} AS member_access,
+      ${live ? "group_access.manager_access" : access.manager ? "1" : "0"} AS manager_access
       FROM accessible_resource accessible
       JOIN events event ON event.id = accessible.resource_id
       JOIN event_series series ON series.event_id = event.id
-      WHERE ${conditions.join(" AND ")}`,
+      ${live ? "CROSS JOIN group_access" : ""}
+      LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
+      WHERE ${conditions.join(" AND ")}
+      GROUP BY series.id`,
     bindings,
     orderBy: resolveMappedOrderBy(query.sort, SORT_EXPRESSIONS, SORT_EXPRESSIONS.next_occurrence_at, "series.id ASC"),
     limit: query.limit,
@@ -81,17 +127,20 @@ export async function listGroupEventSeries(
   viewer: GroupResourceViewer,
   groupId: string,
   query: z.infer<typeof eventSeriesListQuerySchema>,
-): Promise<{ series: EventSeries[]; total: number }> {
-  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
-  if (!access.member && !access.manager) return { series: [], total: 0 };
-  const { rows, total } = await queryPage<EventSeriesRow>(db, buildGroupEventSeriesPageQuery(groupId, access, query));
-  return { series: rows.map(toEventSeries), total };
+): Promise<{ series: GroupEventSeries[]; total: number }> {
+  const { rows, total } = await queryPage<GroupEventSeriesRow>(
+    db,
+    buildGroupEventSeriesPageQuery(groupId, liveEventResourceContextAccess(viewer, groupId), query),
+  );
+  return { series: rows.map((row) => toGroupEventSeries(row, groupId)), total };
+}
+
+async function getEventSeriesRowById(db: DatabaseLike, seriesId: string): Promise<EventSeriesRow | null> {
+  return first<EventSeriesRow>(db, `${EVENT_SERIES_SELECT} ${EVENT_SERIES_FROM} WHERE series.id = ?`, [seriesId]);
 }
 
 async function getEventSeriesById(db: DatabaseLike, seriesId: string): Promise<EventSeries | null> {
-  const row = await first<EventSeriesRow>(db, `${EVENT_SERIES_SELECT} ${EVENT_SERIES_FROM} WHERE series.id = ?`, [
-    seriesId,
-  ]);
+  const row = await getEventSeriesRowById(db, seriesId);
   return row ? toEventSeries(row) : null;
 }
 
@@ -115,11 +164,23 @@ export async function getAccessibleGroupEventSeries(
   throughGroupId: string,
   seriesId: string,
 ): Promise<EventSeries> {
-  const series = await getEventSeriesById(db, seriesId);
-  if (!series || !(await canViewerAccessGroupResource(db, viewer, throughGroupId, "event", series.eventId, "view"))) {
+  const access = liveEventResourceContextAccess(viewer, throughGroupId);
+  const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", throughGroupId, access, "view");
+  const row = await first<EventSeriesRow>(
+    db,
+    `WITH ${accessibleEvents.sql}
+     ${EVENT_SERIES_SELECT}
+     FROM accessible_resource accessible
+     JOIN events event ON event.id = accessible.resource_id
+     JOIN event_series series ON series.event_id = event.id
+     CROSS JOIN group_access
+     WHERE series.id = ? AND (group_access.manager_access = 1 OR series.active = 1)`,
+    [...accessibleEvents.bindings, seriesId],
+  );
+  if (!row) {
     throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
   }
-  return series;
+  return toEventSeries(row);
 }
 
 export async function getManagedGroupEventSeries(
@@ -127,11 +188,12 @@ export async function getManagedGroupEventSeries(
   actor: AuthAdmin,
   groupIdOrSlug: string,
   seriesId: string,
-): Promise<{ series: EventSeries; context: EventResourceManagementContext }> {
-  const series = await getEventSeriesById(db, seriesId);
-  if (!series) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+): Promise<{ series: EventSeries; context: EventResourceManagementContext; settingsJson: string }> {
+  const row = await getEventSeriesRowById(db, seriesId);
+  if (!row) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+  const series = toEventSeries(row);
   const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, series.eventId, "manage");
-  return { series, context };
+  return { series, context, settingsJson: row.settings_json };
 }
 
 function normalizedSlug(value: string): string {
@@ -150,6 +212,7 @@ export async function createGroupEventSeries(
 ): Promise<EventSeries> {
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
+  if (!group.active) throw new AppError(409, "GROUP_INACTIVE", "Meetings cannot be created in an inactive group");
   await requireGroupManagement(db, actor, group.id);
   const id = uuid();
   const eventId = uuid();
@@ -161,6 +224,11 @@ export async function createGroupEventSeries(
   });
   try {
     await db.batch([
+      prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 FROM groups WHERE id = ? AND active = 1",
+        bindings: [group.id],
+      }),
       db
         .prepare(
           `INSERT INTO events
@@ -208,6 +276,13 @@ export async function createGroupEventSeries(
       }),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "EVENT_SERIES_AUTHORIZATION_CHANGED",
+        "Group meeting-management authority changed while the series was being created",
+      );
+    }
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
       throw new AppError(409, "EVENT_SLUG_EXISTS", "An event with this slug already exists");
     }
@@ -223,7 +298,14 @@ export async function updateGroupEventSeries(
   seriesId: string,
   input: EventSeriesUpdateInput,
 ): Promise<EventSeries> {
-  const { series: existing, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
+  const {
+    series: existing,
+    context,
+    settingsJson,
+  } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
+  if (existing.updatedAt !== input.expectedUpdatedAt) {
+    throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed; reload before saving");
+  }
   const scheduleChanged =
     input.startsAt !== undefined ||
     input.recurrenceRule !== undefined ||
@@ -244,10 +326,7 @@ export async function updateGroupEventSeries(
     }
   }
   const now = nowIso();
-  const currentSettings = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id = ?", [
-    existing.eventId,
-  ]);
-  const currentPolicy = parseJsonSafe<Record<string, unknown>>(currentSettings?.settings_json ?? "{}", {});
+  const currentPolicy = parseJsonSafe<Record<string, unknown>>(settingsJson, {});
   const settings = JSON.stringify(
     input.policy
       ? {
@@ -257,8 +336,18 @@ export async function updateGroupEventSeries(
         }
       : currentPolicy,
   );
+  const auditChanges: Record<string, unknown> = { ...input };
+  delete auditChanges.expectedUpdatedAt;
   try {
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1
+                FROM event_series guarded_series
+                JOIN events guarded_event ON guarded_event.id = guarded_series.event_id
+               WHERE guarded_series.id = ?
+                 AND MAX(guarded_series.updated_at, guarded_event.updated_at) = ?`,
+        bindings: [seriesId, input.expectedUpdatedAt],
+      }),
       db
         .prepare(
           `UPDATE events SET name = COALESCE(?, name), profile_key = COALESCE(?, profile_key),
@@ -308,10 +397,13 @@ export async function updateGroupEventSeries(
         "event_series_updated",
         "event_series",
         seriesId,
-        input,
+        auditChanges,
       ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while the update was being saved");
+    }
     if (isAuditOneChangeGuardFailure(error)) {
       if (scheduleChanged) {
         throw new AppError(

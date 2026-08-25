@@ -12,9 +12,11 @@ import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpsCapabilityUrlSchema } from "./urls";
+import { eventGroupGrantSchemas } from "./resource-grants";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
+export type EventProfileKey = z.infer<typeof eventProfileKeySchema>;
 export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
 
@@ -26,13 +28,18 @@ export const EVENT_REGISTRATION_POLICIES = [
   "public",
 ] as const;
 export const eventRegistrationPolicySchema = z.enum(EVENT_REGISTRATION_POLICIES);
+export type EventRegistrationPolicy = z.infer<typeof eventRegistrationPolicySchema>;
 export const EVENT_GUEST_POLICIES = ["none", "occurrence_invitation", "public_registration"] as const;
 export const eventGuestPolicySchema = z.enum(EVENT_GUEST_POLICIES);
 export type EventGuestPolicy = z.infer<typeof eventGuestPolicySchema>;
 
+export const EVENT_MEMBER_ELIGIBILITIES = ["owner_group", "shared_groups", "public"] as const;
+export const eventMemberEligibilitySchema = z.enum(EVENT_MEMBER_ELIGIBILITIES);
+export type EventMemberEligibility = z.infer<typeof eventMemberEligibilitySchema>;
+
 export const eventProfilePolicySchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
-  memberEligibility: z.enum(["owner_group", "shared_groups", "public"]),
+  memberEligibility: eventMemberEligibilitySchema,
   guestPolicy: eventGuestPolicySchema,
 });
 
@@ -85,6 +92,13 @@ export const eventSeriesSchema = z.object({
 });
 export type EventSeries = z.infer<typeof eventSeriesSchema>;
 
+/** Group-context projection with live effective resource capabilities. */
+export const groupEventSeriesSchema = eventSeriesSchema.extend({
+  capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
+  occurrenceCount: z.number().int().min(0),
+});
+export type GroupEventSeries = z.infer<typeof groupEventSeriesSchema>;
+
 export const eventSeriesCreateSchema = z.object({
   eventName: trimmedString(1, 200),
   eventSlug: z.string().trim().min(1).max(200),
@@ -106,6 +120,7 @@ export const eventSeriesUpdateSchema = eventSeriesCreateSchema.omit({ eventSlug:
   // must not silently reset a board meeting or workshop to `meeting`.
   profileKey: eventProfileKeySchema.optional(),
   active: z.boolean().optional(),
+  expectedUpdatedAt: z.iso.datetime(),
 });
 
 export const eventSeriesMaterializeSchema = z.object({
@@ -123,16 +138,18 @@ export const eventSeriesListQuerySchema = listQuerySchema(EVENT_SERIES_SORT_COLU
   active: booleanQueryFlagSchema.optional(),
   profileKey: eventProfileKeySchema.optional(),
 });
-export const eventSeriesListResponseSchema = paginatedResponseSchema("series", eventSeriesSchema);
+export const eventSeriesListResponseSchema = paginatedResponseSchema("series", groupEventSeriesSchema);
 
 export const EVENT_OCCURRENCE_STATUSES = ["scheduled", "cancelled", "completed"] as const;
 export const eventOccurrenceStatusSchema = z.enum(EVENT_OCCURRENCE_STATUSES);
+export type EventOccurrenceStatus = z.infer<typeof eventOccurrenceStatusSchema>;
 export const eventOccurrenceSchema = z.object({
   id: databaseIdSchema,
   seriesId: databaseIdSchema,
   startsAt: z.iso.datetime(),
   endsAt: z.iso.datetime(),
   status: eventOccurrenceStatusSchema,
+  locationOverride: z.string().nullable(),
   location: z.string().nullable(),
   providerConfigured: z.boolean().optional(),
   guestCount: z.number().int().min(0),
@@ -141,6 +158,7 @@ export const eventOccurrenceSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+export type EventOccurrence = z.infer<typeof eventOccurrenceSchema>;
 
 const eventOccurrenceInputSchema = z.object({
   startsAt: z.iso.datetime(),
@@ -154,7 +172,10 @@ export const eventOccurrenceCreateSchema = eventOccurrenceInputSchema.refine((va
 });
 export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
   .partial()
-  .extend({ status: eventOccurrenceStatusSchema.optional() })
+  .extend({
+    status: eventOccurrenceStatusSchema.optional(),
+    expectedUpdatedAt: z.iso.datetime(),
+  })
   .refine((value) => !value.startsAt || !value.endsAt || value.endsAt > value.startsAt, {
     message: "Occurrence must end after it starts",
     path: ["endsAt"],
@@ -180,7 +201,9 @@ export const eventOccurrenceGuestSchema = z.object({
   expiresAt: z.string(),
   revokedAt: z.string().nullable(),
   createdAt: z.string(),
+  updatedAt: z.string(),
 });
+export type EventOccurrenceGuest = z.infer<typeof eventOccurrenceGuestSchema>;
 export const eventOccurrenceGuestInviteSchema = z.object({
   email: normalizedEmailSchema,
   name: trimmedString(1, 200),
@@ -250,6 +273,7 @@ export const eventOccurrenceJoinConfirmationSchema = z.object({
   attendanceVerifiedAt: z.string().nullable(),
   attendanceVerificationSource: attendanceVerificationSourceSchema.nullable(),
 });
+export type EventOccurrenceJoinConfirmation = z.infer<typeof eventOccurrenceJoinConfirmationSchema>;
 
 export const EVENT_ATTENDANCE_SORT_COLUMNS = ["name", "confirmed_at", "attendance_verified_at"] as const;
 export const eventAttendanceListQuerySchema = listQuerySchema(EVENT_ATTENDANCE_SORT_COLUMNS).extend({

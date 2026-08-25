@@ -5,6 +5,7 @@ import {
   createGroupEventSeries,
   createSeriesOccurrence,
   generateGroupSeriesIcs,
+  getGroupEventSeries,
   getMeetingJoinLanding,
   inviteOccurrenceGuest,
   issueOccurrenceAccessToken,
@@ -86,6 +87,39 @@ beforeEach(async () => {
 });
 
 describe("group-owned event series", () => {
+  it("rolls back creation when group-management authority changes during the D1 batch", async () => {
+    const admin = await insertAdmin();
+    const eventSlug = `authorization-race-${crypto.randomUUID()}`;
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(admin.id).run(),
+    );
+    await expect(
+      createGroupEventSeries(racingDb, admin, GROUP_ID, {
+        eventName: "Authorization race meeting",
+        eventSlug,
+        profileKey: "meeting",
+        policy: {
+          registrationPolicy: "no_registration",
+          memberEligibility: "owner_group",
+          guestPolicy: "occurrence_invitation",
+        },
+        startsAt: new Date(Date.now() + 3_600_000).toISOString(),
+        recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+        timezone: "UTC",
+        durationMinutes: 60,
+        providerType: null,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_SERIES_AUTHORIZATION_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM events WHERE slug = ?").bind(eventSlug).first("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_series_created'").first(
+        "total",
+      ),
+    ).toBe(0);
+  });
+
   it("materializes recurring local time across DST idempotently", async () => {
     const admin = await insertAdmin();
     const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
@@ -133,6 +167,7 @@ describe("group-owned event series", () => {
     await expect(
       updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
         recurrenceRule: "FREQ=WEEKLY;BYDAY=WE",
+        expectedUpdatedAt: (await getGroupEventSeries(env.DB, GROUP_ID, series.id)).updatedAt,
       }),
     ).rejects.toMatchObject({ code: "EVENT_SERIES_SCHEDULE_MATERIALIZED" });
   });
@@ -160,14 +195,21 @@ describe("group-owned event series", () => {
   });
 
   it("accepts only HTTPS provider destinations and never copies them into audit details", async () => {
-    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "javascript:alert(1)" }).success).toBe(false);
-    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "data:text/html,unsafe" }).success).toBe(false);
-    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "http://meet.example.test/room" }).success).toBe(
-      false,
-    );
-    expect(eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "https://meet.example.test/room" }).success).toBe(
-      true,
-    );
+    const expectedUpdatedAt = new Date().toISOString();
+    expect(
+      eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "javascript:alert(1)", expectedUpdatedAt }).success,
+    ).toBe(false);
+    expect(
+      eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "data:text/html,unsafe", expectedUpdatedAt }).success,
+    ).toBe(false);
+    expect(
+      eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "http://meet.example.test/room", expectedUpdatedAt })
+        .success,
+    ).toBe(false);
+    expect(
+      eventOccurrenceUpdateSchema.safeParse({ providerJoinUrl: "https://meet.example.test/room", expectedUpdatedAt })
+        .success,
+    ).toBe(true);
 
     const { admin, series, occurrence } = await createMeetingFixture();
     const originalCiphertext = await env.DB.prepare(
@@ -182,7 +224,7 @@ describe("group-owned event series", () => {
         GROUP_ID,
         series.id,
         occurrence.id,
-        { providerJoinUrl: "http://meet.example.test/unsafe-room" },
+        { providerJoinUrl: "http://meet.example.test/unsafe-room", expectedUpdatedAt: occurrence.updatedAt },
         ENCRYPTION_SECRET,
       ),
     ).rejects.toThrow();
@@ -206,7 +248,11 @@ describe("group-owned event series", () => {
       GROUP_ID,
       series.id,
       occurrence.id,
-      { locationOverride: "Updated room", providerJoinUrl: replacementUrl },
+      {
+        locationOverride: "Updated room",
+        providerJoinUrl: replacementUrl,
+        expectedUpdatedAt: occurrence.updatedAt,
+      },
       ENCRYPTION_SECRET,
     );
     const audit = await env.DB.prepare(
@@ -223,6 +269,143 @@ describe("group-owned event series", () => {
       providerJoinUrlChanged: { from: null, to: true },
       providerConfigured: { from: null, to: true },
     });
+  });
+
+  it("adds, rotates, and removes an occurrence provider without exposing its destination", async () => {
+    const admin = await insertAdmin();
+    const startsAt = new Date(Date.now() + 3_600_000).toISOString();
+    const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
+      eventName: "Provider lifecycle meeting",
+      eventSlug: `provider-lifecycle-${crypto.randomUUID()}`,
+      profileKey: "meeting",
+      policy: {
+        registrationPolicy: "no_registration",
+        memberEligibility: "owner_group",
+        guestPolicy: "occurrence_invitation",
+      },
+      startsAt,
+      recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+      timezone: "UTC",
+      durationMinutes: 60,
+      providerType: "external_url",
+    });
+    const occurrence = await createSeriesOccurrence(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      { startsAt, endsAt: new Date(Date.now() + 7_200_000).toISOString() },
+      ENCRYPTION_SECRET,
+    );
+    expect(occurrence.providerConfigured).toBe(false);
+
+    const added = await updateSeriesOccurrence(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      occurrence.id,
+      { providerJoinUrl: "https://meet.example.test/new-room", expectedUpdatedAt: occurrence.updatedAt },
+      ENCRYPTION_SECRET,
+    );
+    expect(added.providerConfigured).toBe(true);
+    const ciphertext = await env.DB.prepare("SELECT provider_join_url_ciphertext FROM event_occurrences WHERE id = ?")
+      .bind(occurrence.id)
+      .first<string>("provider_join_url_ciphertext");
+    expect(ciphertext).toMatch(/^v1\./);
+    expect(ciphertext).not.toContain("new-room");
+
+    const removed = await updateSeriesOccurrence(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      occurrence.id,
+      { providerJoinUrl: null, expectedUpdatedAt: added.updatedAt },
+      ENCRYPTION_SECRET,
+    );
+    expect(removed.providerConfigured).toBe(false);
+    expect(
+      await env.DB.prepare("SELECT provider_join_url_ciphertext FROM event_occurrences WHERE id = ?")
+        .bind(occurrence.id)
+        .first("provider_join_url_ciphertext"),
+    ).toBeNull();
+  });
+
+  it("rolls back stale series and occurrence updates instead of partially changing event state", async () => {
+    const { admin, series, occurrence } = await createMeetingFixture();
+    const staleSeriesDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE event_series SET updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?")
+        .bind(series.id)
+        .run(),
+    );
+    await expect(
+      updateGroupEventSeries(staleSeriesDb, admin, GROUP_ID, series.id, {
+        eventName: "This stale name must roll back",
+        expectedUpdatedAt: series.updatedAt,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_SERIES_CHANGED" });
+    expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(series.eventId).first("name")).toBe(
+      series.eventName,
+    );
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_series_updated' AND entity_id = ?",
+      )
+        .bind(series.id)
+        .first("total"),
+    ).toBe(0);
+
+    const staleOccurrenceDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE event_occurrences SET updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?")
+        .bind(occurrence.id)
+        .run(),
+    );
+    await expect(
+      updateSeriesOccurrence(
+        staleOccurrenceDb,
+        admin,
+        GROUP_ID,
+        series.id,
+        occurrence.id,
+        { locationOverride: "This stale location must roll back", expectedUpdatedAt: occurrence.updatedAt },
+        ENCRYPTION_SECRET,
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_OCCURRENCE_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT location_override FROM event_occurrences WHERE id = ?")
+        .bind(occurrence.id)
+        .first("location_override"),
+    ).toBeNull();
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_occurrence_updated' AND entity_id = ?",
+      )
+        .bind(occurrence.id)
+        .first("total"),
+    ).toBe(0);
+  });
+
+  it("treats event and recurrence rows as one concurrency-protected series aggregate", async () => {
+    const { admin, series } = await createMeetingFixture();
+    const concurrentSettings = JSON.stringify({
+      memberEligibility: "owner_group",
+      guestPolicy: "none",
+      concurrentMarker: "preserve",
+    });
+    await env.DB.prepare("UPDATE events SET settings_json = ?, updated_at = ? WHERE id = ?")
+      .bind(concurrentSettings, "2099-01-01T00:00:00.000Z", series.eventId)
+      .run();
+
+    await expect(
+      updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
+        eventName: "Stale aggregate update",
+        expectedUpdatedAt: series.updatedAt,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_SERIES_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT name, settings_json FROM events WHERE id = ?").bind(series.eventId).first(),
+    ).toEqual({ name: series.eventName, settings_json: concurrentSettings });
   });
 
   it("does not consume scanner GETs, reuses current terms, and records each intentional join", async () => {
@@ -403,6 +586,7 @@ describe("group-owned event series", () => {
     expect(userPlanText).not.toContain("SCAN active_user");
 
     await updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
+      expectedUpdatedAt: (await getGroupEventSeries(env.DB, GROUP_ID, series.id)).updatedAt,
       policy: {
         registrationPolicy: "no_registration",
         memberEligibility: "owner_group",
@@ -425,6 +609,51 @@ describe("group-owned event series", () => {
         expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
       }),
     ).rejects.toMatchObject({ code: "EVENT_GUESTS_DISABLED" });
+  });
+
+  it("keeps legacy guest policy data readable while writing only the canonical vocabulary", async () => {
+    const { admin, series, occurrence } = await createMeetingFixture();
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(JSON.stringify({ memberEligibility: "group", guestPolicy: "invitation_only" }), series.eventId)
+      .run();
+    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `legacy-policy-${crypto.randomUUID()}@example.test`,
+      name: "Legacy Policy Guest",
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      guestId: guest.id,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    expect(await getMeetingJoinLanding(env.DB, access.token)).toMatchObject({ name: "Legacy Policy Guest" });
+  });
+
+  it("invalidates member and guest capabilities when the owning group becomes inactive", async () => {
+    const { admin, userId, series, occurrence } = await createMeetingFixture();
+    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `inactive-group-${crypto.randomUUID()}@example.test`,
+      name: "Inactive Group Guest",
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const memberAccess = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      userId,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const guestAccess = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      guestId: guest.id,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(GROUP_ID).run();
+    try {
+      await expect(getMeetingJoinLanding(env.DB, memberAccess.token)).rejects.toMatchObject({
+        code: "MEETING_GROUP_MEMBERSHIP_REQUIRED",
+      });
+      await expect(getMeetingJoinLanding(env.DB, guestAccess.token)).rejects.toMatchObject({
+        code: "MEETING_GUEST_ACCESS_REVOKED",
+      });
+    } finally {
+      await env.DB.prepare("UPDATE groups SET active = 1 WHERE id = ?").bind(GROUP_ID).run();
+    }
   });
 
   it("atomically rejects guest policy changes before intentional join", async () => {
@@ -462,6 +691,34 @@ describe("group-owned event series", () => {
         occurrence.id,
       ]),
     ).toEqual([]);
+  });
+
+  it("rejects stale guest invitation updates instead of overwriting a concurrent change", async () => {
+    const { admin, series, occurrence } = await createMeetingFixture();
+    const email = `guest-update-race-${crypto.randomUUID()}@example.test`;
+    const expiresAt = new Date(Date.now() + 10_800_000).toISOString();
+    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email,
+      name: "Original Guest",
+      expiresAt,
+    });
+    const concurrentUpdatedAt = "2099-01-01T00:00:00.000Z";
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE event_occurrence_guests SET updated_at = ? WHERE id = ?")
+        .bind(concurrentUpdatedAt, guest.id)
+        .run(),
+    );
+
+    await expect(
+      inviteOccurrenceGuest(racingDb, admin, GROUP_ID, series.id, occurrence.id, {
+        email,
+        name: "Stale Overwrite",
+        expiresAt,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_GUEST_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT name, updated_at FROM event_occurrence_guests WHERE id = ?").bind(guest.id).first(),
+    ).toEqual({ name: "Original Guest", updated_at: concurrentUpdatedAt });
   });
 
   it("atomically rejects token issuance after guest revocation without leaving a capability", async () => {

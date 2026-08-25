@@ -12,6 +12,7 @@ import { RepresentativeContactSelect } from "../../assets/ts/admin/components/Re
 import { FormActions } from "../../assets/ts/admin/components/FormActions";
 import { RegistrationActionCard } from "../../assets/ts/admin/sections/events/detail/registration-detail/RegistrationActionCard";
 import { AdminSettingsEditor } from "../../assets/ts/admin/components/AdminSettingsEditor";
+import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/admin/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
 
@@ -200,6 +201,42 @@ describe("shared admin presentation components", () => {
     expect(buttons.filter((button) => button.classList.contains("active"))).toHaveLength(1);
     void act(() => buttons[1].click());
     expect(onChange).toHaveBeenCalledWith("approved");
+  });
+
+  it("moves focus with the complete tabs keyboard pattern without requiring generated ids", () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    const onChange = vi.fn();
+    const container = mount(
+      <Tabs
+        items={[
+          { key: "settings", label: "Settings" },
+          { key: "occurrences", label: "Occurrences" },
+          { key: "attendance", label: "Attendance" },
+        ]}
+        active="settings"
+        onChange={onChange}
+      />,
+    );
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>("[role='tab']")];
+    tabs[0].focus();
+    void act(() => {
+      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    });
+    expect(onChange).toHaveBeenLastCalledWith("attendance");
+    expect(document.activeElement).toBe(tabs[2]);
+    void act(() => {
+      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    });
+    expect(onChange).toHaveBeenLastCalledWith("settings");
+    expect(document.activeElement).toBe(tabs[0]);
+    void act(() => {
+      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    expect(onChange).toHaveBeenLastCalledWith("attendance");
+    expect(document.activeElement).toBe(tabs[2]);
   });
 
   it("renders shared audit columns while preserving domain-specific cells", async () => {

@@ -38,7 +38,7 @@ export const EVENT_SERIES_SELECT = `SELECT series.id, series.event_id, event.own
     WHERE next_occurrence.series_id = series.id
       AND next_occurrence.status = 'scheduled'
       AND next_occurrence.starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS next_occurrence_at,
-  series.created_at, series.updated_at`;
+  series.created_at, MAX(series.updated_at, event.updated_at) AS updated_at`;
 
 export const EVENT_SERIES_FROM = `FROM event_series series
   JOIN events event ON event.id = series.event_id`;
@@ -83,6 +83,7 @@ export interface EventOccurrenceRow {
   starts_at: string;
   ends_at: string;
   status: "scheduled" | "cancelled" | "completed";
+  location_override: string | null;
   location: string | null;
   provider_join_url_ciphertext: string | null;
   guest_count: number;
@@ -99,6 +100,7 @@ export function toEventOccurrence(row: EventOccurrenceRow) {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     status: row.status,
+    locationOverride: row.location_override,
     location: row.location,
     providerConfigured: row.provider_join_url_ciphertext !== null,
     guestCount: row.guest_count,
@@ -121,6 +123,7 @@ export interface EventGuestRow {
   expires_at: string;
   revoked_at: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 export function toEventGuest(row: EventGuestRow) {
@@ -136,5 +139,6 @@ export function toEventGuest(row: EventGuestRow) {
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   });
 }

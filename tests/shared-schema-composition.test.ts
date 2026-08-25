@@ -243,9 +243,11 @@ describe("canonical shared schema composition", () => {
     );
     expect(eventSeriesUpdateRouteSchema.request.params).toBe(eventSeriesParamsSchema);
     expect(eventSeriesUpdateRouteSchema.request.body.content["application/json"].schema).toBe(eventSeriesUpdateSchema);
-    expect(eventSeriesUpdateSchema.parse({ eventName: "Weekly call", active: true })).toEqual({
+    const expectedUpdatedAt = "2026-08-25T12:00:00.000Z";
+    expect(eventSeriesUpdateSchema.parse({ eventName: "Weekly call", active: true, expectedUpdatedAt })).toEqual({
       eventName: "Weekly call",
       active: true,
+      expectedUpdatedAt,
     });
   });
 

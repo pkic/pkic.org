@@ -4007,6 +4007,8 @@ CREATE TABLE event_occurrences (
 
 CREATE INDEX idx_event_occurrences_series_start
   ON event_occurrences(series_id, starts_at, id);
+CREATE INDEX idx_event_occurrences_series_status_start
+  ON event_occurrences(series_id, status, starts_at, id);
 CREATE INDEX idx_event_occurrences_upcoming
   ON event_occurrences(status, starts_at, id);
 
@@ -4046,50 +4048,48 @@ CREATE VIEW current_event_occurrence_subject_eligibility AS
 SELECT occurrence.id AS occurrence_id, event.id AS event_id,
        active_user.id AS user_id, NULL AS guest_id
   FROM event_occurrences occurrence
-  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN event_series series ON series.id = occurrence.series_id AND series.active = 1
   JOIN events event ON event.id = series.event_id
+  JOIN groups owner_group ON owner_group.id = event.owner_group_id AND owner_group.active = 1
   JOIN users active_user ON active_user.active = 1
  WHERE occurrence.status = 'scheduled'
    AND (
-     (
-       event.registration_mode IN ('required', 'public')
-       AND EXISTS (
-         SELECT 1 FROM registrations registration
-          WHERE registration.event_id = event.id
-            AND registration.user_id = active_user.id
-            AND registration.status = 'registered'
-       )
-     )
-     OR (
-       event.registration_mode NOT IN ('required', 'public')
-       AND (
-         COALESCE(json_extract(event.settings_json, '$.memberEligibility'), 'owner_group') = 'public'
-         OR EXISTS (
-           SELECT 1 FROM group_memberships membership
-            WHERE membership.user_id = active_user.id
-              AND membership.left_at IS NULL
-              AND (
-                membership.group_id = event.owner_group_id
-                OR (
-                  json_extract(event.settings_json, '$.memberEligibility') = 'shared_groups'
-                  AND EXISTS (
-                    SELECT 1 FROM event_group_grants grant_row
-                     WHERE grant_row.event_id = event.id
-                       AND grant_row.group_id = membership.group_id
-                       AND grant_row.capability = 'attend'
-                  )
-                )
+     COALESCE(json_extract(event.settings_json, '$.memberEligibility'), 'owner_group') = 'public'
+     OR EXISTS (
+       SELECT 1 FROM group_memberships membership
+        JOIN groups membership_group ON membership_group.id = membership.group_id AND membership_group.active = 1
+        WHERE membership.user_id = active_user.id
+          AND membership.left_at IS NULL
+          AND (
+            membership.group_id = event.owner_group_id
+            OR (
+              json_extract(event.settings_json, '$.memberEligibility') = 'shared_groups'
+              AND EXISTS (
+                SELECT 1 FROM event_group_grants grant_row
+                 WHERE grant_row.event_id = event.id
+                   AND grant_row.group_id = membership.group_id
+                   AND grant_row.capability = 'attend'
               )
-         )
-       )
+            )
+          )
+     )
+   )
+   AND (
+     event.registration_mode NOT IN ('required', 'public')
+     OR EXISTS (
+       SELECT 1 FROM registrations registration
+        WHERE registration.event_id = event.id
+          AND registration.user_id = active_user.id
+          AND registration.status = 'registered'
      )
    )
 UNION ALL
 SELECT occurrence.id AS occurrence_id, event.id AS event_id,
        NULL AS user_id, guest.id AS guest_id
   FROM event_occurrences occurrence
-  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN event_series series ON series.id = occurrence.series_id AND series.active = 1
   JOIN events event ON event.id = series.event_id
+  JOIN groups owner_group ON owner_group.id = event.owner_group_id AND owner_group.active = 1
   JOIN event_occurrence_guests guest
     ON guest.series_id = occurrence.series_id
    AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
@@ -4415,7 +4415,7 @@ SELECT
   NULL,
   'no_registration',
   0,
-  '{"memberEligibility":"group","guestPolicy":"invitation_only"}',
+  '{"memberEligibility":"owner_group","guestPolicy":"occurrence_invitation"}',
   datetime('now'),
   datetime('now'),
   id,

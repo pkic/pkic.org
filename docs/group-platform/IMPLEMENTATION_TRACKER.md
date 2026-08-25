@@ -52,7 +52,7 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-      Evidence: all 37 migrations, including 224 statements in 0035, applied to
+      Evidence: all 37 migrations, including 234 commands in 0035, applied to
       a fresh independent local D1 state under ScanDisk after the authenticated
       group-registration guard on 2026-08-25.
 - [x] Prove production-shaped upgrade fixture application.
@@ -175,7 +175,7 @@ Status: In progress
 
 - [x] Add controlled event profiles and per-event settings.
 - [x] Add one owning group to portal-managed events.
-- [ ] Replace unreleased meeting_series with shared event_series.
+- [x] Replace unreleased meeting_series with shared event_series.
 - [x] Add authoritative recurring schedule and event occurrences.
 - [x] Generate ICS from series and occurrence state.
 - [ ] Remove uploaded ICS as the meeting source of truth.
@@ -196,10 +196,18 @@ Status: In progress
 - [x] Keep join-confirmed separate from provider or manually verified attendance.
 - [x] Add provider interfaces without implementing Microsoft Graph or a hosted
       meeting provider.
+- [x] Add group-portal management for series settings, recurrence
+      materialization, occurrences, encrypted provider destinations, guests,
+      join confirmations, and verified attendance.
+- [ ] Bind member entry to the authenticated portal identity and guest entry to
+      a separately verified guest session rather than treating a bearer URL as
+      sufficient identity proof.
+- [ ] Deliver rotatable guest invitations through the durable outbox and move
+      the capability out of the request path before any landing data is read.
 - [ ] Cover link scanners, forwarding, expiry, revocation, guest identity,
       membership loss, terms changes, repeated joins, and attendance counts.
-      Evidence so far: event-series-platform.test.ts passes 14 focused tests.
-      The entry
+      Evidence so far: event-series-platform.test.ts passes 21 focused tests.
+      The current entry
       path accepts only HTTPS provider destinations, encrypts them at rest,
       never copies them into audit details, exposes them only after an
       intentional POST, derives identity and affiliation from server state,
@@ -209,11 +217,12 @@ Status: In progress
       and join revocation races, guest and member identity tampering, membership
       loss, policy changes, terms changes and races, repeated joins, attendance
       counts, and service-issued guest attribution through the canonical audit.
-      Forwarding a user-bound capability remains open because public registered
-      attendees do not yet share the member-session eligibility model. All
-      migrations replay on a fresh local D1 database. ESLint, formatting, SQL projection, dependency
-      architecture, duplication, and max-lines gates pass for this round.
-      Legacy meeting-calendar retirement and UI integration remain incomplete.
+      These controls do not yet prove the human presenting a forwarded bearer
+      URL is that server-side identity. Member self-entry, verified guest
+      sessions, invitation delivery and token transport therefore remain open
+      security work. All 37 migrations replay on a fresh local D1 database.
+      Management UI integration is implemented; participant entry UI and
+      legacy meeting-calendar retirement remain incomplete.
 
 ## 6. Reusable live-editable forms
 
@@ -356,7 +365,12 @@ Status: In progress
           Recurrence materialization inserts up to the bounded limit with one
           `json_each` set operation in the same transaction, replacing partial
           50-statement batches. The focused event suites pass 19 tests and the
-          consolidated migration upgrade suite passes two tests.
+          consolidated migration upgrade suite passes two tests. Guest and
+          attendance list reads now reuse one management-page executor that
+          revalidates the exact capability in the same D1 batch as page and
+          count queries. Race tests prove revoked grants cannot expose either
+          collection, and occurrence/guest EXPLAIN assertions prove indexed
+          series-bounded access.
   - [x] Apply vote grants after the atomic generic voting cutover.
     - [x] Apply `view` implications to canonical group-scoped vote discovery.
           Evidence: the nested vote route reuses the canonical vote summary and
@@ -511,8 +525,10 @@ Status: In progress
       calendar, materialization, guest, access-capability, attendance-list,
       and attendance-verification routes. Series, calendar, and occurrence
       reads now use the same group-context event-resource policy as ordinary
-      event discovery; scanner-safe join inspection and confirmation remain
-      intentionally token-scoped under /api/v1/meetings.
+      event discovery. The temporary scanner-safe join inspection and
+      confirmation endpoints remain token-scoped under `/api/v1/meetings`;
+      replacing that bearer-only boundary with member and verified-guest
+      identity binding is still required.
 - [x] Keep routes thin and SQL-free.
 - [x] Add one generic `/api/v1/me/groups` self-participation read model.
       Evidence: the shared contract composes the canonical group list filters,
@@ -604,7 +620,9 @@ Status: In progress
       audit management into the portal.
       Current evidence: the selected-group portal owns group settings,
       capacity-aware participant add/remove, local leadership assign/revoke,
-      effective inherited-leadership display, meeting-series list/create,
+      effective inherited-leadership display, meeting-series and occurrence
+      list/create/edit, recurrence materialization, guest and attendance
+      management,
       capability-filtered event and form discovery, member mailing-list
       preferences, and the group-scoped audit view. These collections share
       the same schema-validated server search, sorting, counting, and pagination
@@ -635,10 +653,10 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 1,950 backend tests
-      (one skipped), 191 frontend tests, and 79 tool tests. Mailing-list
-      management, group statistics, complete meeting lifecycle, and resource
-      sharing remain open.
+      statistics/list requests; the complete check passes 1,963 backend tests
+      (one skipped), 195 frontend tests, and 79 tool tests. Mailing-list
+      management, group statistics, identity-bound participant meeting entry,
+      invitation delivery, and resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.
@@ -669,7 +687,9 @@ Status: Pending
       `idx_group_memberships_user_active` for page and count predicates; the
       event and recurring-series page/count assertions prove indexed owner and
       exact grantee-group access through `idx_events_owner_profile` and
-      `idx_event_group_grants_group`; organization-contact authorization proves
+      `idx_event_group_grants_group`; occurrence and guest pages prove
+      series-bounded access through `idx_event_occurrences_series_status_start`
+      and `idx_event_occurrence_guests_series`; organization-contact authorization proves
       indexed representative and contextual-role lookups without a table scan;
       write-time group-join eligibility proves indexed parent membership and
       category-rule lookups without a table scan or temporary B-tree;
@@ -707,23 +727,30 @@ Status: Pending
       leadership, and category-rule authorization races now revoke access
       between preflight and batch execution and prove complete rollback. Voting
       replacement and voting authorization races remain open.
-- [x] Run join-token, terms, guest, and attendance security tests.
-      Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
+- [ ] Run join-token, terms, guest, and attendance security tests.
+      Current evidence: 21 event-platform tests cover scanner-safe GET, terms reuse and
       replacement, user and guest identity binding, membership loss, expiry,
       guest-policy changes, revocation races at issue and use time, HTTPS-only
       destinations, audit redaction, repeated joins, and verified attendance.
       Both user and guest predicates on the canonical eligibility view have
-      explicit D1 query-plan assertions proving indexed subject lookups.
+      explicit D1 query-plan assertions proving indexed subject lookups. Keep
+      this open until member-session binding, verified guest sessions,
+      forwarding resistance, and invitation delivery are implemented and
+      covered.
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,926 backend tests pass with one skipped, 183 frontend tests
+      checkpoint: 1,963 backend tests pass with one skipped, 195 frontend tests
       pass, and 79 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
-      frontend/Hugo builds, max-lines, and filename gates also pass. Keep this
-      item open until the final architecture state passes the same complete
-      gate.
+      frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
+      combined run identified one 607-line test file; the meeting cases
+      were separated into a focused file. The complete composite gate was then
+      rerun successfully after the aggregate concurrency and guest-update race
+      regressions were added.
+      Keep this item open until the final architecture state passes the same
+      complete gate.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.

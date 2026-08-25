@@ -1,4 +1,5 @@
 import { AppError } from "../../errors";
+import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import type { AuthAdmin, D1StatementResult, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
@@ -59,6 +60,16 @@ export async function commitEventResourceManagementBatch(
   capability: EventResourceManagementCapability,
   statements: StatementLike[],
 ): Promise<D1StatementResult[]> {
+  return executeEventResourceManagementBatch(db, actor, context, capability, statements);
+}
+
+async function executeEventResourceManagementBatch(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  context: EventResourceManagementContext,
+  capability: EventResourceManagementCapability,
+  statements: StatementLike[],
+): Promise<D1StatementResult[]> {
   try {
     return await db.batch([prepareEventResourceManagementGuard(db, actor, context, capability), ...statements]);
   } catch (error) {
@@ -78,4 +89,22 @@ export async function commitEventResourceManagementBatch(
     }
     throw error;
   }
+}
+
+/** Revalidates event-management authority in the same D1 batch as a page and its count. */
+export async function queryEventResourceManagementPage<T>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  context: EventResourceManagementContext,
+  capability: EventResourceManagementCapability,
+  query: OffsetPageQuery,
+): Promise<{ rows: T[]; total: number }> {
+  const [, pageResult, countResult] = await executeEventResourceManagementBatch(
+    db,
+    actor,
+    context,
+    capability,
+    buildOffsetPageStatements(db, query),
+  );
+  return decodeOffsetPageResults<T>(pageResult, countResult);
 }

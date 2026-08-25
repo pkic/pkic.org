@@ -1,15 +1,17 @@
 import { all } from "../../db/queries";
+import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import type { GroupResourceViewer } from "../resource-grants";
-import { getAccessibleGroupEventSeries } from "./series";
+import { buildLiveAccessibleGroupResourceIdsCte, type GroupResourceViewer } from "../resource-grants";
+import { liveEventResourceContextAccess } from "./read-access";
 
 interface CalendarOccurrenceRow {
-  id: string;
-  starts_at: string;
-  ends_at: string;
-  status: "scheduled" | "cancelled" | "completed";
+  event_name: string;
+  id: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  status: "scheduled" | "cancelled" | "completed" | null;
   location: string | null;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 interface CalendarGroupContext {
@@ -46,35 +48,54 @@ export async function generateGroupSeriesIcs(
   seriesId: string,
   baseUrl: string,
 ): Promise<string> {
-  const series = await getAccessibleGroupEventSeries(db, viewer, throughGroup.id, seriesId);
-  const occurrences = await all<CalendarOccurrenceRow>(
+  const access = liveEventResourceContextAccess(viewer, throughGroup.id);
+  const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", throughGroup.id, access, "view");
+  const rows = await all<CalendarOccurrenceRow>(
     db,
-    `SELECT occurrence.id, occurrence.starts_at, occurrence.ends_at, occurrence.status,
+    `WITH ${accessibleEvents.sql}
+     SELECT event.name AS event_name, occurrence.id, occurrence.starts_at, occurrence.ends_at, occurrence.status,
             COALESCE(occurrence.location_override, series.location) AS location,
             occurrence.updated_at
-       FROM event_occurrences occurrence
-       JOIN event_series series ON series.id = occurrence.series_id
-      WHERE occurrence.series_id = ? AND occurrence.starts_at >= datetime('now', '-30 days')
+       FROM accessible_resource accessible
+       JOIN events event ON event.id = accessible.resource_id
+       JOIN event_series series ON series.event_id = event.id
+       CROSS JOIN group_access
+  LEFT JOIN event_occurrences occurrence ON occurrence.series_id = series.id
+        AND occurrence.starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')
+      WHERE series.id = ? AND (group_access.manager_access = 1 OR series.active = 1)
       ORDER BY occurrence.starts_at, occurrence.id
       LIMIT 500`,
-    [seriesId],
+    [...accessibleEvents.bindings, seriesId],
   );
+  if (rows.length === 0) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
+  }
+  const eventName = rows[0].event_name;
   const portalUrl = `${baseUrl.replace(/\/$/, "")}/portal/groups/${throughGroup.slug}/meetings`;
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//PKI Consortium//Group Meetings//EN",
     "CALSCALE:GREGORIAN",
-    `X-WR-CALNAME:${escapeIcs(series.eventName)}`,
+    `X-WR-CALNAME:${escapeIcs(eventName)}`,
   ];
-  for (const occurrence of occurrences) {
+  for (const occurrence of rows) {
+    if (
+      !occurrence.id ||
+      !occurrence.starts_at ||
+      !occurrence.ends_at ||
+      !occurrence.status ||
+      !occurrence.updated_at
+    ) {
+      continue;
+    }
     lines.push(
       "BEGIN:VEVENT",
       `UID:${occurrence.id}@pkic.org`,
       `DTSTAMP:${utcTimestamp(occurrence.updated_at)}`,
       `DTSTART:${utcTimestamp(occurrence.starts_at)}`,
       `DTEND:${utcTimestamp(occurrence.ends_at)}`,
-      `SUMMARY:${escapeIcs(series.eventName)}`,
+      `SUMMARY:${escapeIcs(eventName)}`,
       `URL:${escapeIcs(portalUrl)}`,
     );
     if (occurrence.location) lines.push(`LOCATION:${escapeIcs(occurrence.location)}`);
