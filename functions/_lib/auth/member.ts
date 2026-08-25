@@ -76,16 +76,13 @@ const MEMBER_ELIGIBLE_USER_COLUMNS =
 // grant check; self-service is identity-gated (see AuthMember's doc
 // comment in types.ts).
 //
-// A person can be simultaneously an org-less individual member AND an
-// active representative of one or more organizations, and can represent
-// more than one organization at once (confirmed product decision — see
-// consolidated migration 0035's header). This UNION can therefore return multiple rows
-// for one user id. `sort_key` gives every consumer a single, deterministic
-// ordering (individual row first, then organizations by earliest
-// joined_at) instead of relying on whichever row D1 happens to return
-// first — callers that need every eligible context read all rows
-// (resolveEligibleMemberships); callers that just need "is this email
-// eligible at all" may still take the first.
+// Individual membership and organization representation are mutually
+// exclusive, but a person can actively represent more than one organization
+// at once. This UNION can therefore return multiple rows for one user id.
+// `sort_key` gives every consumer a single, deterministic ordering instead of
+// relying on whichever row D1 happens to return first — callers that need
+// every eligible context read all rows (resolveEligibleMemberships); callers
+// that just need "is this email eligible at all" may still take the first.
 const MEMBER_ELIGIBLE_USER_SELECT = `
   SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
          m.id AS member_id, NULL AS organization_id, NULL AS organization_name,
