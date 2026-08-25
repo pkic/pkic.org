@@ -74,6 +74,7 @@ export const groupCreateRouteSchema = {
 export const groupUpdateRouteSchema = {
   tags: ["Groups"],
   summary: "Update a group",
+  description: "Send expectedRevision from the group response to reject an edit based on stale state.",
   request: {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupUpdateSchema } } },
@@ -81,7 +82,7 @@ export const groupUpdateRouteSchema = {
   responses: {
     "200": { description: "Group updated.", content: { "application/json": { schema: groupResponseSchema } } },
     "403": jsonErrorResponse("The caller lacks effective management permission."),
-    "409": jsonErrorResponse("The update would create a cycle or unsafe local-only governance."),
+    "409": jsonErrorResponse("The group changed before commit, or the update would create an invalid hierarchy."),
   },
 };
 
@@ -209,13 +210,18 @@ export const groupLeadershipAssignRouteSchema = {
 export const groupCategoryRulesReplaceRouteSchema = {
   tags: ["Groups"],
   summary: "Replace category eligibility and automatic-enrollment rules",
+  description: "Send expectedRevision from the group response to reject a replacement based on stale state.",
   request: {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupCategoryRulesReplaceSchema } } },
   },
   responses: {
-    "200": { description: "Rules replaced." },
+    "200": {
+      description: "Rules replaced and the updated aggregate revision returned.",
+      content: { "application/json": { schema: groupResponseSchema } },
+    },
     "403": jsonErrorResponse("Rule management is not authorized."),
+    "409": jsonErrorResponse("The group changed before the replacement committed."),
   },
 };
 

@@ -7,6 +7,7 @@ import { membershipCategorySchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const groupIdSchema = databaseIdSchema;
+export const groupRevisionSchema = z.number().int().min(0);
 export const groupSlugSchema = z.string().trim().min(1).max(200).regex(slugPattern);
 export const groupReferenceSchema = z.union([groupIdSchema, groupSlugSchema]);
 export const groupTypeKeySchema = z
@@ -65,6 +66,7 @@ export const groupSchema = z.object({
   allowAutomaticOptOut: z.boolean(),
   minEndorsersForBallot: z.number().int().min(0),
   active: z.boolean(),
+  revision: groupRevisionSchema,
   membershipCapacityCount: z.number().int().min(0),
   participantCount: z.number().int().min(0),
   childCount: z.number().int().min(0),
@@ -94,6 +96,7 @@ export const groupCreateSchema = z.object({
 export type GroupCreateInput = z.infer<typeof groupCreateSchema>;
 
 export const groupUpdateSchema = z.object({
+  expectedRevision: groupRevisionSchema.optional(),
   typeKey: groupTypeKeySchema.optional(),
   parentGroupId: groupIdSchema.nullable().optional(),
   name: trimmedString(1, 200).optional(),
@@ -113,6 +116,7 @@ export const groupCategoryRuleSchema = z.object({
   automaticEnrollment: z.boolean(),
 });
 export const groupCategoryRulesReplaceSchema = z.object({
+  expectedRevision: groupRevisionSchema.optional(),
   rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })).max(100),
 });
 export type GroupCategoryRulesReplaceInput = z.infer<typeof groupCategoryRulesReplaceSchema>;

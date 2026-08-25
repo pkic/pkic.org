@@ -10,7 +10,6 @@ export const GroupCategoryRulesReplace = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-    await replaceGroupCategoryRules(db, admin, data.params.groupId, data.body);
-    return json({ success: true });
+    return json({ group: await replaceGroupCategoryRules(db, admin, data.params.groupId, data.body) });
   },
 );

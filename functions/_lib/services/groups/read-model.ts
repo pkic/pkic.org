@@ -39,6 +39,7 @@ interface GroupRow {
   allow_automatic_opt_out: number;
   min_endorsers_for_ballot: number;
   active: number;
+  revision: number;
   membership_capacity_count: number;
   participant_count: number;
   child_count: number;
@@ -56,7 +57,7 @@ const GROUP_SELECT = `SELECT
   parent_type.plural_label AS parent_type_plural_label,
   g.description, g.links_json, g.visibility, g.governance_inheritance_mode,
   g.eligibility_mode, g.automatic_enrollment_mode,
-  g.allow_automatic_opt_out, g.min_endorsers_for_ballot, g.active,
+  g.allow_automatic_opt_out, g.min_endorsers_for_ballot, g.active, g.revision,
   COALESCE(capacities.capacity_count, 0) AS membership_capacity_count,
   COALESCE(capacities.participant_count, 0) AS participant_count,
   COALESCE(children.child_count, 0) AS child_count,
@@ -111,6 +112,7 @@ function mapGroup(row: GroupRow): Group {
     allowAutomaticOptOut: row.allow_automatic_opt_out === 1,
     minEndorsersForBallot: row.min_endorsers_for_ballot,
     active: row.active === 1,
+    revision: row.revision,
     membershipCapacityCount: row.membership_capacity_count,
     participantCount: row.participant_count,
     childCount: row.child_count,

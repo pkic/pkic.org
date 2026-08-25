@@ -161,6 +161,14 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db
         .prepare(
+          `SELECT name, type, "notnull" AS "notnull", dflt_value
+             FROM pragma_table_info('groups') WHERE name = 'revision'`,
+        )
+        .get(),
+    ).toEqual({ name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0" });
+    expect(
+      db
+        .prepare(
           `SELECT type, name FROM sqlite_master
             WHERE name IN (
               'event_resource_management_guards',

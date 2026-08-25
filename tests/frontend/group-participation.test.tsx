@@ -23,6 +23,7 @@ function group(overrides: Partial<SelfGroup> = {}): SelfGroup {
     allowAutomaticOptOut: false,
     minEndorsersForBallot: 0,
     active: true,
+    revision: 0,
     membershipCapacityCount: 0,
     participantCount: 0,
     childCount: 0,

@@ -487,6 +487,82 @@ describe("group capacity membership", () => {
   });
 });
 
+describe("group configuration concurrency", () => {
+  it("rejects a stale group update without overwriting the winning change or auditing success", async () => {
+    const admin = await insertActor("group-update-race-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Group Update Race",
+      description: "Initial description",
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      updateGroup(env.DB, admin, group.id, { description: "Winning description" }),
+    );
+
+    await expect(updateGroup(racingDb, admin, group.id, { name: "Losing name" })).rejects.toMatchObject({
+      status: 409,
+      code: "GROUP_CHANGED",
+    });
+    await expect(
+      updateGroup(env.DB, admin, group.id, { expectedRevision: group.revision, name: "Stale editor name" }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_CHANGED" });
+    expect(
+      await queryAll<{ name: string; description: string; revision: number }>(
+        env.DB,
+        "SELECT name, description, revision FROM groups WHERE id = ?",
+        [group.id],
+      ),
+    ).toEqual([{ name: "Group Update Race", description: "Winning description", revision: 1 }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'group_updated' AND entity_id = ?", group.id),
+    ).toHaveLength(1);
+  });
+
+  it("rejects a stale category-rule replacement without deleting the winning rules", async () => {
+    const admin = await insertActor("category-rule-race-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Category Rule Race",
+      eligibilityMode: "category",
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      replaceGroupCategoryRules(env.DB, admin, group.id, {
+        rules: [{ membershipCategory: "B", permitsJoin: true, automaticEnrollment: false }],
+      }),
+    );
+
+    await expect(
+      replaceGroupCategoryRules(racingDb, admin, group.id, {
+        rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: true }],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_CHANGED" });
+    await expect(
+      replaceGroupCategoryRules(env.DB, admin, group.id, {
+        expectedRevision: group.revision,
+        rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: true }],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "GROUP_CHANGED" });
+    expect(
+      await queryAll<{ membership_category_code: string; permits_join: number; automatic_enrollment: number }>(
+        env.DB,
+        `SELECT membership_category_code, permits_join, automatic_enrollment
+           FROM group_membership_category_rules WHERE group_id = ?`,
+        [group.id],
+      ),
+    ).toEqual([{ membership_category_code: "B", permits_join: 1, automatic_enrollment: 0 }]);
+    expect(
+      await queryAll<{ revision: number }>(env.DB, "SELECT revision FROM groups WHERE id = ?", [group.id]),
+    ).toEqual([{ revision: 1 }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'group_category_rules_replaced' AND entity_id = ?",
+        group.id,
+      ),
+    ).toHaveLength(1);
+  });
+});
+
 describe("group leadership inheritance", () => {
   it("rejects direct and recursive hierarchy cycles without recording a mutation", async () => {
     const admin = await insertActor("cycle-admin@example.test", "admin");
@@ -560,6 +636,53 @@ describe("group leadership inheritance", () => {
 });
 
 describe("group route contracts", () => {
+  it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {
+    const admin = await insertActor("mounted-revision-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Mounted Revision Group",
+      eligibilityMode: "category",
+    });
+    const apiKey = "mounted-group-revision-key";
+    const testEnv = { ...env, ADMIN_API_KEY: apiKey } as Env;
+    const headers = { authorization: `Bearer ${apiKey}`, "content-type": "application/json" };
+
+    const update = await callApi(testEnv, `/api/v1/groups/${group.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ expectedRevision: group.revision, description: "Updated through the API" }),
+    });
+    expect(update.status, await update.clone().text()).toBe(200);
+    await expect(update.json()).resolves.toMatchObject({ group: { revision: 1 } });
+
+    const staleUpdate = await callApi(testEnv, `/api/v1/groups/${group.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ expectedRevision: group.revision, name: "Stale API update" }),
+    });
+    expect(staleUpdate.status).toBe(409);
+    await expect(staleUpdate.json()).resolves.toMatchObject({ error: { code: "GROUP_CHANGED" } });
+
+    const replace = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        expectedRevision: 1,
+        rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+      }),
+    });
+    expect(replace.status, await replace.clone().text()).toBe(200);
+    await expect(replace.json()).resolves.toMatchObject({ group: { revision: 2 } });
+
+    const staleReplace = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ expectedRevision: 1, rules: [] }),
+    });
+    expect(staleReplace.status).toBe(409);
+    await expect(staleReplace.json()).resolves.toMatchObject({ error: { code: "GROUP_CHANGED" } });
+  });
+
   it("requires confirmation for all-capacity joins and rejects empty explicit selection", () => {
     expect(groupJoinSchema.safeParse({ capacitySelection: { mode: "all_eligible" } }).success).toBe(false);
     expect(groupJoinSchema.safeParse({ capacitySelection: { mode: "all_eligible", confirmed: false } }).success).toBe(

@@ -15,7 +15,7 @@ import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareScopedAuditLog } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForGroupStatements } from "./automatic-enrollment-group";
 import { canEnableLocalOnlyGovernance, requireGroupManagement } from "./governance";
 import { getGroup } from "./read-model";
@@ -127,6 +127,9 @@ async function requireParent(db: DatabaseLike, parentGroupId: string): Promise<v
 }
 
 function translateGroupWriteError(error: unknown): never {
+  if (isAuditChangeGuardFailure(error)) {
+    throw new AppError(409, "GROUP_CHANGED", "The group changed before this update committed");
+  }
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("UNIQUE constraint failed: groups.slug")) {
     throw new AppError(409, "GROUP_SLUG_EXISTS", "A group with this slug already exists");
@@ -264,6 +267,7 @@ export async function updateGroup(
   if (patch.governanceInheritanceMode === "local_only" && existing.governanceInheritanceMode !== "local_only") {
     await assertLocalOnlyTransition(db, actor, existing.id);
   }
+  const { expectedRevision = existing.revision, ...changes } = patch;
 
   const setters: string[] = [];
   const bindings: unknown[] = [];
@@ -271,27 +275,30 @@ export async function updateGroup(
     setters.push(`${column} = ?`);
     bindings.push(value);
   };
-  if (patch.typeKey !== undefined) add("type_key", patch.typeKey);
-  if (patch.parentGroupId !== undefined) add("parent_group_id", patch.parentGroupId);
-  if (patch.name !== undefined) add("name", patch.name);
-  if (patch.slug !== undefined) add("slug", patch.slug);
-  if (patch.description !== undefined) add("description", patch.description);
-  if (patch.links !== undefined) add("links_json", serializeLinks(patch.links));
-  if (patch.visibility !== undefined) add("visibility", patch.visibility);
-  if (patch.active !== undefined) add("active", patch.active ? 1 : 0);
-  if (patch.governanceInheritanceMode !== undefined)
-    add("governance_inheritance_mode", patch.governanceInheritanceMode);
-  if (patch.eligibilityMode !== undefined) add("eligibility_mode", patch.eligibilityMode);
-  if (patch.automaticEnrollmentMode !== undefined) add("automatic_enrollment_mode", patch.automaticEnrollmentMode);
-  if (patch.allowAutomaticOptOut !== undefined) add("allow_automatic_opt_out", patch.allowAutomaticOptOut ? 1 : 0);
-  if (patch.minEndorsersForBallot !== undefined) add("min_endorsers_for_ballot", patch.minEndorsersForBallot);
+  if (changes.typeKey !== undefined) add("type_key", changes.typeKey);
+  if (changes.parentGroupId !== undefined) add("parent_group_id", changes.parentGroupId);
+  if (changes.name !== undefined) add("name", changes.name);
+  if (changes.slug !== undefined) add("slug", changes.slug);
+  if (changes.description !== undefined) add("description", changes.description);
+  if (changes.links !== undefined) add("links_json", serializeLinks(changes.links));
+  if (changes.visibility !== undefined) add("visibility", changes.visibility);
+  if (changes.active !== undefined) add("active", changes.active ? 1 : 0);
+  if (changes.governanceInheritanceMode !== undefined)
+    add("governance_inheritance_mode", changes.governanceInheritanceMode);
+  if (changes.eligibilityMode !== undefined) add("eligibility_mode", changes.eligibilityMode);
+  if (changes.automaticEnrollmentMode !== undefined) add("automatic_enrollment_mode", changes.automaticEnrollmentMode);
+  if (changes.allowAutomaticOptOut !== undefined) add("allow_automatic_opt_out", changes.allowAutomaticOptOut ? 1 : 0);
+  if (changes.minEndorsersForBallot !== undefined) add("min_endorsers_for_ballot", changes.minEndorsersForBallot);
   if (setters.length === 0) return existing;
   const at = nowIso();
   add("updated_at", at);
+  setters.push("revision = revision + 1");
   try {
     const statements: StatementLike[] = [
-      db.prepare(`UPDATE groups SET ${setters.join(", ")} WHERE id = ?`).bind(...bindings, existing.id),
-      prepareScopedAuditLog(
+      db
+        .prepare(`UPDATE groups SET ${setters.join(", ")} WHERE id = ? AND revision = ?`)
+        .bind(...bindings, existing.id, expectedRevision),
+      prepareScopedAuditLogAfterOneChange(
         db,
         { type: "group", id: existing.id },
         "admin",
@@ -299,14 +306,14 @@ export async function updateGroup(
         "group_updated",
         "group",
         existing.id,
-        patch,
+        changes,
       ),
     ];
     if (
-      patch.active !== undefined ||
-      patch.eligibilityMode !== undefined ||
-      patch.automaticEnrollmentMode !== undefined ||
-      patch.allowAutomaticOptOut !== undefined
+      changes.active !== undefined ||
+      changes.eligibilityMode !== undefined ||
+      changes.automaticEnrollmentMode !== undefined ||
+      changes.allowAutomaticOptOut !== undefined
     ) {
       statements.push(...prepareAutomaticGroupEnrollmentForGroupStatements(db, existing.id, at));
     }
@@ -324,12 +331,29 @@ export async function replaceGroupCategoryRules(
   actor: AuthAdmin,
   groupIdOrSlug: string,
   input: GroupCategoryRulesReplaceInput,
-): Promise<void> {
+): Promise<Group> {
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, actor, group.id);
   const at = nowIso();
   const statements: StatementLike[] = [
+    db
+      .prepare(
+        `UPDATE groups
+            SET revision = revision + 1, updated_at = ?
+          WHERE id = ? AND revision = ?`,
+      )
+      .bind(at, group.id, input.expectedRevision ?? group.revision),
+    prepareScopedAuditLogAfterOneChange(
+      db,
+      { type: "group", id: group.id },
+      "admin",
+      actor.id,
+      "group_category_rules_replaced",
+      "group",
+      group.id,
+      { rules: input.rules },
+    ),
     db.prepare("DELETE FROM group_membership_category_rules WHERE group_id = ?").bind(group.id),
     ...input.rules.map((rule) =>
       db
@@ -340,19 +364,14 @@ export async function replaceGroupCategoryRules(
         )
         .bind(group.id, rule.membershipCategory, rule.permitsJoin ? 1 : 0, rule.automaticEnrollment ? 1 : 0, at, at),
     ),
-    prepareScopedAuditLog(
-      db,
-      { type: "group", id: group.id },
-      "admin",
-      actor.id,
-      "group_category_rules_replaced",
-      "group",
-      group.id,
-      {
-        rules: input.rules,
-      },
-    ),
     ...prepareAutomaticGroupEnrollmentForGroupStatements(db, group.id, at),
   ];
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    translateGroupWriteError(error);
+  }
+  const updated = await getGroup(db, group.id);
+  if (!updated) throw new AppError(500, "GROUP_UPDATE_FAILED", "Failed to load the updated group");
+  return updated;
 }

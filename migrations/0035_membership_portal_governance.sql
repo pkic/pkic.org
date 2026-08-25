@@ -1183,6 +1183,7 @@ CREATE TABLE groups (
   allow_automatic_opt_out     INTEGER NOT NULL DEFAULT 1 CHECK (allow_automatic_opt_out IN (0, 1)),
   min_endorsers_for_ballot    INTEGER NOT NULL DEFAULT 0,
   active                      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  revision                    INTEGER NOT NULL DEFAULT 0,
   created_at                  TEXT NOT NULL,
   updated_at                  TEXT NOT NULL,
   FOREIGN KEY(type_key) REFERENCES group_types(key),

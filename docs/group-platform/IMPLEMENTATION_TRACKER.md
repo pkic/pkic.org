@@ -73,7 +73,7 @@ Status: In progress
 
 ## 2. Group membership and governance
 
-Status: Complete
+Status: In progress
 
 - [x] Implement group creation and update with parent-cycle prevention.
 - [x] Implement explicit join using all eligible organizations by default.
@@ -87,16 +87,25 @@ Status: Complete
 - [x] Extend inherited leadership with local roles by default.
 - [x] Implement safely authorized local-only governance.
 - [x] Make roster, hierarchy, and management queries set-based and paginated.
+- [x] Reject stale group configuration and category-rule replacement batches
+      before they can overwrite newer state.
+- [ ] Revalidate group-management authorization inside the same D1 batch as
+      group configuration, category-rule, and leadership mutations.
 - [x] Cover multiple capacities, parent loss, alternative capacity, cycles,
       inherited management, local-only management, and concurrent joins.
-      Evidence: group-platform.test.ts now covers every listed behavior in eight
-      focused cases. Direct self-parenting and recursive cycles fail with the
+      Evidence: group-platform.test.ts covers each listed behavior. Direct
+      self-parenting and recursive cycles fail with the
       canonical GROUP_HIERARCHY_CYCLE response and roll back their audit rows.
       Concurrent join commands retain one active capacity and one group-joined
       audit record: each operation preallocates candidate membership IDs and the
       shared conditional-audit helper records the mutation only when at least
       one of those exact rows committed. No read-before-write race or duplicate
-      compatibility table is introduced.
+      compatibility table is introduced. Group configuration and category-rule
+      replacement share one integer aggregate revision on groups; stale writes
+      return GROUP_CHANGED and roll back the attempted state, audit, and derived
+      enrollment changes. Mounted routes preserve and enforce the same revision
+      contract for both commands. The focused group-platform suite passes 16
+      tests.
 
 ## 3. Organization representatives
 
@@ -509,8 +518,10 @@ Status: Pending
       identities are not written into user foreign keys. Leave/end commands
       require the exact preflight capacity count at commit time; a stale
       multi-capacity leave rolls back its remaining update, audit, and mailing
-      reconciliation with a bounded conflict. Group-management, leadership,
-      and category-rule mutation races remain open.
+      reconciliation with a bounded conflict. Group configuration and
+      category-rule replacements now reject stale state through the shared
+      aggregate revision and compare-and-set audit guard. Group-management,
+      leadership, and category-rule authorization races remain open.
 - [x] Run join-token, terms, guest, and attendance security tests.
       Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
       replacement, user and guest identity binding, membership loss, expiry,
