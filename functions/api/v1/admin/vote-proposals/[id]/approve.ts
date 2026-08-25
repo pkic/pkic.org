@@ -5,8 +5,7 @@
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { requireEffectiveGroupPermission } from "../../../../../_lib/services/groups/governance";
-import { approveVoteProposal, getProposalGroupForPermissionCheck } from "../../../../../_lib/services/votes";
+import { approveVoteProposal } from "../../../../../_lib/services/votes";
 import {
   adminApproveProposalRouteSchema,
   adminVoteProposalApproveResponseSchema,
@@ -19,9 +18,6 @@ export const AdminVoteProposalApprovePost = openApiRoute(
     const db = requestDb(c);
     const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
     const id = data.params.id;
-
-    const ownerGroupId = await getProposalGroupForPermissionCheck(db, id);
-    await requireEffectiveGroupPermission(db, admin, ownerGroupId, "votes:manage");
 
     const result = await approveVoteProposal(db, admin, id);
 

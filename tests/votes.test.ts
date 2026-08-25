@@ -11,10 +11,19 @@ import {
   groupVoteBallotsAuditResponseSchema,
   groupVoteMutationResponseSchema,
 } from "../assets/shared/schemas/group-vote-management";
+import {
+  groupVoteProposalApproveResponseSchema,
+  groupVoteProposalCreateResponseSchema,
+  groupVoteProposalDetailResponseSchema,
+  groupVoteProposalEndorseResponseSchema,
+  groupVoteProposalRejectResponseSchema,
+  groupVoteProposalsListResponseSchema,
+} from "../assets/shared/schemas/group-vote-proposals";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { activeGroupMembershipAuthorizationEvidence } from "../functions/_lib/services/groups/access";
 import {
   approveVoteProposal,
+  buildGroupVoteProposalsPageQuery,
   buildGroupVotesPageQuery,
   closeDueVotes,
   computeMotionResult,
@@ -525,6 +534,267 @@ describe("canonical group voting", () => {
     ]);
   });
 
+  it("binds proposal submission, discovery, detail, and endorsement to the selected group", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id IN (?, ?)")
+      .bind(TEST_GROUPS.pqc, TEST_GROUPS.cm)
+      .run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    const endorser = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    await joinVotingGroup(env.DB, TEST_GROUPS.cm, proposer.userId, [proposer.memberId]);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, endorser.userId, [endorser.memberId]);
+    const proposerToken = await createMemberSession(env.DB, proposer.userId, `group-proposer-${crypto.randomUUID()}`);
+    const endorserToken = await createMemberSession(env.DB, endorser.userId, `group-endorser-${crypto.randomUUID()}`);
+    const proposedOpensAt = new Date(Date.now() + 60_000).toISOString();
+    const proposedClosesAt = new Date(Date.now() + 120_000).toISOString();
+
+    const createResponse = await call(proposerToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Selected-group proposal",
+        description: "The path, rather than a caller-supplied owner, defines the proposal boundary.",
+        voteType: "motion",
+        ownerGroupId: TEST_GROUPS.cm,
+        eligibleCategories: ["A", "B"],
+        proposedOpensAt,
+        proposedClosesAt,
+      }),
+    });
+    expect(createResponse.status, await createResponse.clone().text()).toBe(200);
+    const created = groupVoteProposalCreateResponseSchema.parse(await createResponse.json()).proposal;
+    expect(created).toMatchObject({
+      ownerGroupId: TEST_GROUPS.pqc,
+      eligibleCategories: ["A", "B"],
+      proposedOpensAt,
+      proposedClosesAt,
+      capabilities: expect.arrayContaining(["view", "endorse", "withdraw"]),
+    });
+
+    const listResponse = await call(
+      proposerToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals?q=Selected&sort=title&limit=1`,
+    );
+    expect(listResponse.status, await listResponse.clone().text()).toBe(200);
+    expect(groupVoteProposalsListResponseSchema.parse(await listResponse.json())).toMatchObject({
+      proposals: [{ id: created.id, ownerGroupId: TEST_GROUPS.pqc }],
+      page: { total: 1, hasMore: false },
+    });
+    expect(
+      groupVoteProposalsListResponseSchema.parse(
+        await (await call(proposerToken, `/api/v1/groups/${TEST_GROUPS.cm}/vote-proposals`)).json(),
+      ).proposals,
+    ).toHaveLength(0);
+    expect((await call(proposerToken, `/api/v1/groups/${TEST_GROUPS.cm}/vote-proposals/${created.id}`)).status).toBe(
+      404,
+    );
+    const detailResponse = await call(proposerToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${created.id}`);
+    expect(detailResponse.status, await detailResponse.clone().text()).toBe(200);
+    expect(groupVoteProposalDetailResponseSchema.parse(await detailResponse.json())).toMatchObject({
+      proposal: { id: created.id, capabilities: expect.arrayContaining(["view", "endorse", "withdraw"]) },
+      endorserUserIds: [],
+    });
+
+    const ownEndorsement = await call(
+      proposerToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${created.id}/endorsement`,
+      { method: "POST" },
+    );
+    expect(ownEndorsement.status, await ownEndorsement.clone().text()).toBe(200);
+    expect(groupVoteProposalEndorseResponseSchema.parse(await ownEndorsement.json()).proposal.capabilities).toContain(
+      "withdraw_endorsement",
+    );
+    const conversion = await call(
+      endorserToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${created.id}/endorsement`,
+      { method: "POST" },
+    );
+    expect(conversion.status, await conversion.clone().text()).toBe(200);
+    const converted = groupVoteProposalEndorseResponseSchema.parse(await conversion.json());
+    expect(converted.convertedVote).toMatchObject({ ownerGroupId: TEST_GROUPS.pqc, voteType: "motion" });
+    expect(converted.proposal).toMatchObject({ status: "converted_to_vote", capabilities: ["view"] });
+  });
+
+  it("supports withdrawing an endorsement and then the proposal through mounted group routes", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 3 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    const otherMember = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, otherMember.userId, [otherMember.memberId]);
+    const proposerToken = await createMemberSession(
+      env.DB,
+      proposer.userId,
+      `withdraw-proposer-${crypto.randomUUID()}`,
+    );
+    const otherToken = await createMemberSession(env.DB, otherMember.userId, `withdraw-other-${crypto.randomUUID()}`);
+    const createResponse = await call(proposerToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Withdraw through selected group",
+        description: "Mounted mutation routes preserve the proposal owner boundary.",
+        voteType: "motion",
+      }),
+    });
+    const proposal = groupVoteProposalCreateResponseSchema.parse(await createResponse.json()).proposal;
+
+    expect(
+      (
+        await call(proposerToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}/endorsement`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(200);
+    const withdrawEndorsement = await call(
+      proposerToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}/endorsement`,
+      { method: "DELETE" },
+    );
+    expect(withdrawEndorsement.status, await withdrawEndorsement.clone().text()).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT endorser_user_id FROM vote_proposal_endorsements WHERE proposal_id = ?",
+        proposal.id,
+      ),
+    ).toHaveLength(0);
+
+    expect(
+      (
+        await call(otherToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(403);
+    const withdrawProposal = await call(
+      proposerToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}`,
+      { method: "DELETE" },
+    );
+    expect(withdrawProposal.status, await withdrawProposal.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT status FROM vote_proposals WHERE id = ?", proposal.id)).toEqual([
+      { status: "withdrawn" },
+    ]);
+  });
+
+  it("retracts proposal discovery when the owning group becomes inactive", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const member = await resolveAuthMember(env.DB, proposer.userId);
+    const proposal = await submitVoteProposal(env.DB, member, {
+      title: "Inactive owner group",
+      description: "Visibility follows the current state of the owning group.",
+      voteType: "motion",
+      ownerGroupId: TEST_GROUPS.pqc,
+    });
+
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    expect((await listVoteProposals(env.DB, proposer.userId, { limit: 20, offset: 0 })).proposals).toHaveLength(0);
+    await expect(getVoteProposalDetailForMember(env.DB, proposal.id, proposer.userId)).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.status === 404,
+    );
+    await env.DB.prepare("UPDATE groups SET active = 1 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+  });
+
+  it("keeps selected-group proposal decisions manager-only and context-bound", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const member = await resolveAuthMember(env.DB, proposer.userId);
+    const memberToken = await createMemberSession(env.DB, proposer.userId, `decision-member-${crypto.randomUUID()}`);
+    const proposal = await submitVoteProposal(env.DB, member, {
+      title: "Approve through exact group",
+      description: "A management decision must be bound to the proposal owner selected in the route.",
+      voteType: "consultation",
+      ownerGroupId: TEST_GROUPS.pqc,
+    });
+
+    expect(
+      (
+        await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}/approve`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call(adminToken, `/api/v1/groups/${TEST_GROUPS.cm}/vote-proposals/${proposal.id}/approve`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(404);
+    const approveResponse = await call(
+      adminToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}/approve`,
+      { method: "POST" },
+    );
+    expect(approveResponse.status, await approveResponse.clone().text()).toBe(200);
+    expect(groupVoteProposalApproveResponseSchema.parse(await approveResponse.json())).toMatchObject({
+      proposal: { id: proposal.id, status: "converted_to_vote", capabilities: ["view"] },
+      convertedVote: { ownerGroupId: TEST_GROUPS.pqc },
+    });
+
+    const rejectedProposal = await submitVoteProposal(env.DB, member, {
+      title: "Reject through exact group",
+      description: "Managers can reject through the owning group without a duplicate admin policy implementation.",
+      voteType: "motion",
+      ownerGroupId: TEST_GROUPS.pqc,
+    });
+    const rejectResponse = await call(
+      adminToken,
+      `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${rejectedProposal.id}/reject`,
+      { method: "POST", body: JSON.stringify({ reason: "Needs more discussion" }) },
+    );
+    expect(rejectResponse.status, await rejectResponse.clone().text()).toBe(200);
+    expect(groupVoteProposalRejectResponseSchema.parse(await rejectResponse.json()).proposal).toMatchObject({
+      status: "rejected",
+      rejectionReason: "Needs more discussion",
+      capabilities: ["view"],
+    });
+    const managerList = groupVoteProposalsListResponseSchema.parse(
+      await (await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals?status=rejected&limit=1`)).json(),
+    );
+    expect(managerList).toMatchObject({ proposals: [{ id: rejectedProposal.id }], page: { total: 1 } });
+    const memberList = groupVoteProposalsListResponseSchema.parse(
+      await (
+        await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals?status=rejected&limit=1`)
+      ).json(),
+    );
+    expect(memberList).toMatchObject({ proposals: [], page: { total: 0 } });
+  });
+
+  it("rejects invalid selected-group proposal contracts before persistence", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const token = await createMemberSession(env.DB, proposer.userId, `invalid-proposal-${crypto.randomUUID()}`);
+    const invalidElection = await call(token, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Unsupported election",
+        description: "Candidates are not part of the proposal contract yet.",
+        voteType: "election",
+      }),
+    });
+    expect(invalidElection.status).toBe(400);
+    const invalidWindow = await call(token, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Invalid proposed window",
+        description: "The shared schema rejects the same invariant as the service.",
+        voteType: "motion",
+        proposedOpensAt: new Date(Date.now() + 120_000).toISOString(),
+        proposedClosesAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    });
+    expect(invalidWindow.status).toBe(400);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM vote_proposals WHERE title IN (?, ?)", [
+        "Unsupported election",
+        "Invalid proposed window",
+      ]),
+    ).toHaveLength(0);
+  });
+
   it("atomically rechecks group permission for approval and rejection", async () => {
     await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
     const proposer = await createOrganizationCapacity(env.DB);
@@ -789,6 +1059,22 @@ describe("canonical group voting", () => {
     ]);
     expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_status/);
     expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_group_grants_group/);
+    const groupProposals = buildOffsetPageSql(
+      buildGroupVoteProposalsPageQuery({ userId: admin.id, admin }, TEST_GROUPS.pqc, {
+        limit: 20,
+        offset: 0,
+        status: "open_for_endorsement",
+      }),
+    );
+    const groupProposalsPlan = await queryAll<{ detail: string }>(
+      env.DB,
+      `EXPLAIN QUERY PLAN ${groupProposals.pageSql}`,
+      [...groupProposals.bindings, 20, 0],
+    );
+    expect(groupProposalsPlan.map((row) => row.detail).join("\n")).toMatch(
+      /idx_vote_proposals_(?:group_status|status_scope_created_at)/,
+    );
+    expect(groupProposalsPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_proposal_endorsements_proposal/);
     const visibilityPlan = await queryAll<{ detail: string }>(
       env.DB,
       `EXPLAIN QUERY PLAN

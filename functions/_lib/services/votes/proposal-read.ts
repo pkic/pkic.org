@@ -8,6 +8,8 @@ import type { DatabaseLike } from "../../types";
 import type { VoteProposalStatus, VoteType } from "./shared";
 import type { ListProposalsQuery, ProposalSummary } from "../../../../assets/shared/schemas/votes";
 import type { AdminListProposalsQuery } from "../../../../assets/shared/schemas/votes-admin";
+import { parseJsonSafe } from "../../utils/json";
+import { activeGroupVoterSql } from "./voter-eligibility";
 
 export interface ProposalRow {
   id: string;
@@ -28,11 +30,15 @@ export interface ProposalRow {
   updated_at: string;
 }
 
-const PROPOSAL_ROW_COLUMNS =
-  "id, title, description, vote_type, owner_group_id, " +
-  "(SELECT name FROM groups owner_group WHERE owner_group.id = vote_proposals.owner_group_id) AS owner_group_name, " +
-  "proposed_by_user_id, eligible_categories, " +
-  "proposed_opens_at, proposed_closes_at, status, vote_id, rejection_reason, transition_revision, created_at, updated_at";
+export function proposalRowProjection(alias: "vote_proposals" | "proposal"): string {
+  return `${alias}.id, ${alias}.title, ${alias}.description, ${alias}.vote_type, ${alias}.owner_group_id,
+    (SELECT name FROM groups owner_group WHERE owner_group.id = ${alias}.owner_group_id) AS owner_group_name,
+    ${alias}.proposed_by_user_id, ${alias}.eligible_categories, ${alias}.proposed_opens_at,
+    ${alias}.proposed_closes_at, ${alias}.status, ${alias}.vote_id, ${alias}.rejection_reason,
+    ${alias}.transition_revision, ${alias}.created_at, ${alias}.updated_at`;
+}
+
+const PROPOSAL_ROW_COLUMNS = proposalRowProjection("vote_proposals");
 
 export async function minEndorsersFor(db: DatabaseLike, ownerGroupId: string): Promise<number> {
   const group = await first<{ min_endorsers_for_ballot: number }>(
@@ -43,7 +49,11 @@ export async function minEndorsersFor(db: DatabaseLike, ownerGroupId: string): P
   return group?.min_endorsers_for_ballot ?? 0;
 }
 
-function mapProposalSummary(row: ProposalRow, endorsementCount: number, minEndorsersRequired: number): ProposalSummary {
+export function mapProposalSummary(
+  row: ProposalRow,
+  endorsementCount: number,
+  minEndorsersRequired: number,
+): ProposalSummary {
   return {
     id: row.id,
     title: row.title,
@@ -52,6 +62,9 @@ function mapProposalSummary(row: ProposalRow, endorsementCount: number, minEndor
     ownerGroupId: row.owner_group_id,
     ownerGroupName: row.owner_group_name,
     proposedByUserId: row.proposed_by_user_id,
+    eligibleCategories: parseJsonSafe<ProposalSummary["eligibleCategories"]>(row.eligible_categories, null),
+    proposedOpensAt: row.proposed_opens_at,
+    proposedClosesAt: row.proposed_closes_at,
     status: row.status,
     voteId: row.vote_id,
     rejectionReason: row.rejection_reason,
@@ -134,12 +147,7 @@ async function queryProposalPage(
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   if (memberUserId) {
-    conditions.push(`EXISTS (
-      SELECT 1 FROM group_memberships viewer_membership
-      WHERE viewer_membership.group_id = vote_proposals.owner_group_id
-        AND viewer_membership.user_id = ?
-        AND viewer_membership.left_at IS NULL
-    )`);
+    conditions.push(activeGroupVoterSql("vote_proposals.owner_group_id"));
     bindings.push(memberUserId);
   }
   if (params.ownerGroupId) {
@@ -215,13 +223,10 @@ export async function getVoteProposalDetailForMember(
     db,
     `SELECT 1 AS authorized
        FROM vote_proposals proposal
-       JOIN group_memberships membership
-         ON membership.group_id = proposal.owner_group_id
-        AND membership.user_id = ?
-        AND membership.left_at IS NULL
       WHERE proposal.id = ?
+        AND ${activeGroupVoterSql("proposal.owner_group_id")}
       LIMIT 1`,
-    [memberUserId, proposalId],
+    [proposalId, memberUserId],
   );
   if (!visible) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Vote proposal not found");
   return getVoteProposalDetail(db, proposalId);

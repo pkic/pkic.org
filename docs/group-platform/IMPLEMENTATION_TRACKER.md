@@ -249,21 +249,31 @@ Status: Complete
 
 ## 7. Voting
 
-Status: Pending
+Status: Complete
 
-- [ ] Replace forum and working-group scope with one owning group.
-- [ ] Support controlled per-Member and per-person electorates.
-- [ ] Use canonical member_id rather than raw organization_id for Member ballots.
-- [ ] Present separate ballots for every eligible represented Member.
-- [ ] Require one explicit Member per organizational ballot submission.
-- [ ] Permit every active representative to replace the Member ballot.
-- [ ] Preserve one effective ballot per vote, Member, and round.
-- [ ] Record latest actor and choice on the effective ballot.
-- [ ] Record every replacement in the shared audit log.
-- [ ] Make the latest authorized pre-close submission effective.
-- [ ] Preserve history when a representative is removed.
-- [ ] Cover concurrent replacement, close races, multiple organizations,
+- [x] Replace forum and working-group scope with one owning group.
+- [x] Support controlled per-Member and per-person electorates.
+- [x] Use canonical member_id rather than raw organization_id for Member ballots.
+- [x] Present separate ballots for every eligible represented Member.
+- [x] Require one explicit Member per organizational ballot submission.
+- [x] Permit every active representative to replace the Member ballot.
+- [x] Preserve one effective ballot per vote, Member, and round.
+- [x] Record latest actor and choice on the effective ballot.
+- [x] Record every replacement in the shared audit log.
+- [x] Make the latest authorized pre-close submission effective.
+- [x] Preserve history when a representative is removed.
+- [x] Cover concurrent replacement, close races, multiple organizations,
       representative removal, round changes, and tally correctness.
+      Evidence: the canonical vote model owns every vote through one group and
+      stores organizational ballots against Member capacity. The ballot API
+      returns and accepts separate capacities, atomically rechecks current
+      representation and group participation, upserts one effective ballot per
+      vote, round, and Member, and appends every accepted replacement to the
+      shared audit log. Per-person electorates use the same command with a
+      distinct uniqueness key. Mounted and direct-service voting tests cover
+      multi-organization representatives, explicit capacity selection, latest
+      ballot replacement, representative removal, concurrent replacement and
+      close races, election rounds, and tally correctness.
 
 ## 8. Resource ownership and sharing
 
@@ -386,14 +396,27 @@ Status: In progress
           contracts. Mounted and direct-service tests cover path-owned creation,
           wrong-context denial, explicit manage sharing, member denial, and
           raw-ballot isolation.
-    - [ ] Apply `manage` to canonical vote proposal and lifecycle routes.
-          Proposal conversion hardening is complete before route exposure: one
-          shared validator now governs direct creation, settings windows, and
-          proposal conversion. Proposal submission and conversion both reject
-          invalid time windows, and election proposals are explicitly disabled
-          until proposals can represent the required candidate aggregate. This
-          prevents an endorsed or approved proposal from creating an unusable
-          election with zero candidates.
+    - [x] Apply `manage` to canonical vote proposal routes.
+          Evidence: the selected-group proposal collection, detail,
+          endorsement, withdrawal, approval, and rejection routes derive their
+          owner from the path and reuse canonical vote-proposal contracts and
+          commands. One D1 read model performs live participant/manager
+          authorization, search, status filtering, sorting, counting,
+          pagination, endorsement aggregation, and capability projection.
+          Exact-group authorization is rechecked inside approval, rejection,
+          and conversion batches. Members cannot use staff sessions, managers
+          cannot satisfy authorization through another group, inactive groups
+          retract member visibility, and management never implies
+          participation. One shared validator governs direct creation,
+          settings windows, submission, and proposal conversion. Election
+          proposals remain disabled until their candidate aggregate is
+          modeled, preventing conversion into an unusable election. The focused
+          mounted and direct-service suite passes 30 voting tests, including
+          invalid contracts, wrong-context access, withdrawals, endorsement
+          conversion, manager decisions, authorization races, and indexed D1
+          query plans.
+    - [ ] Apply `manage` to canonical vote lifecycle routes and retract stale
+          list/detail capabilities when lifecycle state changes.
           Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
           and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
           broader focused form/grant regression selection passes 20 tests. Four
@@ -440,7 +463,11 @@ Status: In progress
       Evidence: request bodies extend canonical domain contracts, ownership is
       path-derived, and every resource mutation binds both preflight and atomic
       authorization to the selected group.
-- [ ] Add nested vote proposal, lifecycle, and stats routes.
+- [x] Add nested vote proposal routes.
+      Evidence: `/api/v1/groups/:groupId/vote-proposals` and its detail,
+      endorsement, withdrawal, approval, and rejection subresources are mounted
+      with shared request/response schemas and thin handlers.
+- [ ] Add nested vote lifecycle and stats routes.
 - [ ] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.

@@ -54,6 +54,14 @@ import { GroupVoteCreate } from "./[groupId]/votes/create";
 import { GroupVoteSettingsPatch } from "./[groupId]/votes/[voteId]/settings";
 import { GroupVoteVisibilityPatch } from "./[groupId]/votes/[voteId]/visibility";
 import { GroupVoteBallotAuditGet } from "./[groupId]/votes/[voteId]/ballot-audit";
+import { GroupVoteProposalCreate, GroupVoteProposalsList } from "./[groupId]/vote-proposals/index";
+import { GroupVoteProposalDelete, GroupVoteProposalGet } from "./[groupId]/vote-proposals/[proposalId]/index";
+import {
+  GroupVoteProposalEndorseDelete,
+  GroupVoteProposalEndorsePost,
+} from "./[groupId]/vote-proposals/[proposalId]/endorsement";
+import { GroupVoteProposalApprovePost } from "./[groupId]/vote-proposals/[proposalId]/approve";
+import { GroupVoteProposalRejectPost } from "./[groupId]/vote-proposals/[proposalId]/reject";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -93,6 +101,14 @@ openapi.patch("/:groupId/votes/:voteId/visibility", GroupVoteVisibilityPatch);
 openapi.get("/:groupId/votes/:voteId/ballots", GroupVoteBallotAuditGet);
 openapi.post("/:groupId/votes/:voteId/ballots", GroupVoteBallotsPost);
 openapi.get("/:groupId/votes/:voteId/results", GroupVoteResultsGet);
+openapi.get("/:groupId/vote-proposals", GroupVoteProposalsList);
+openapi.post("/:groupId/vote-proposals", GroupVoteProposalCreate);
+openapi.get("/:groupId/vote-proposals/:proposalId", GroupVoteProposalGet);
+openapi.delete("/:groupId/vote-proposals/:proposalId", GroupVoteProposalDelete);
+openapi.post("/:groupId/vote-proposals/:proposalId/endorsement", GroupVoteProposalEndorsePost);
+openapi.delete("/:groupId/vote-proposals/:proposalId/endorsement", GroupVoteProposalEndorseDelete);
+openapi.post("/:groupId/vote-proposals/:proposalId/approve", GroupVoteProposalApprovePost);
+openapi.post("/:groupId/vote-proposals/:proposalId/reject", GroupVoteProposalRejectPost);
 openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);

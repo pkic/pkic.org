@@ -8,7 +8,10 @@ import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
-import { prepareEffectiveGroupPermissionAuthorizationGuard } from "../groups/governance";
+import {
+  prepareEffectiveGroupPermissionAuthorizationGuard,
+  requireEffectiveGroupPermission,
+} from "../groups/governance";
 import {
   convertProposalToVote,
   convertProposalToVoteForMember,
@@ -101,12 +104,21 @@ export interface EndorseProposalResult {
   convertedVote: VoteSummary | null;
 }
 
+function requireProposalGroup(row: { owner_group_id: string }, throughGroupId?: string): string {
+  if (throughGroupId && row.owner_group_id !== throughGroupId) {
+    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Vote proposal not found through this group");
+  }
+  return throughGroupId ?? row.owner_group_id;
+}
+
 async function endorseVoteProposalOnce(
   db: DatabaseLike,
   member: AuthMember,
   proposalId: string,
+  throughGroupId?: string,
 ): Promise<EndorseProposalResult> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  requireProposalGroup(row, throughGroupId);
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "This proposal is not open for endorsement");
   }
@@ -148,10 +160,11 @@ export async function endorseVoteProposal(
   db: DatabaseLike,
   member: AuthMember,
   proposalId: string,
+  throughGroupId?: string,
 ): Promise<EndorseProposalResult> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await endorseVoteProposalOnce(db, member, proposalId);
+      return await endorseVoteProposalOnce(db, member, proposalId, throughGroupId);
     } catch (error) {
       if (!isStaleProposalTransition(error) || attempt === 2) throw error;
     }
@@ -159,8 +172,14 @@ export async function endorseVoteProposal(
   throw new Error("Vote proposal endorsement could not be committed after concurrent changes");
 }
 
-async function withdrawEndorsementOnce(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
+async function withdrawEndorsementOnce(
+  db: DatabaseLike,
+  member: AuthMember,
+  proposalId: string,
+  throughGroupId?: string,
+): Promise<void> {
   const proposal = await getProposalRowOrThrow(db, proposalId);
+  requireProposalGroup(proposal, throughGroupId);
   if (proposal.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "Only an open proposal endorsement can be withdrawn");
   }
@@ -189,18 +208,29 @@ async function withdrawEndorsementOnce(db: DatabaseLike, member: AuthMember, pro
   ]);
 }
 
-export async function withdrawEndorsement(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
+export async function withdrawEndorsement(
+  db: DatabaseLike,
+  member: AuthMember,
+  proposalId: string,
+  throughGroupId?: string,
+): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await withdrawEndorsementOnce(db, member, proposalId);
+      return await withdrawEndorsementOnce(db, member, proposalId, throughGroupId);
     } catch (error) {
       if (!isStaleProposalTransition(error) || attempt === 2) throw error;
     }
   }
 }
 
-export async function withdrawVoteProposal(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
+export async function withdrawVoteProposal(
+  db: DatabaseLike,
+  member: AuthMember,
+  proposalId: string,
+  throughGroupId?: string,
+): Promise<void> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  requireProposalGroup(row, throughGroupId);
   if (row.proposed_by_user_id !== member.userId) {
     throw new AppError(403, "NOT_PROPOSER", "Only the proposer may withdraw this proposal");
   }
@@ -227,13 +257,16 @@ export async function approveVoteProposal(
   db: DatabaseLike,
   admin: AuthAdmin,
   proposalId: string,
+  throughGroupId?: string,
 ): Promise<ApproveProposalResult> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  const authorizationGroupId = requireProposalGroup(row, throughGroupId);
+  await requireEffectiveGroupPermission(db, admin, authorizationGroupId, "votes:manage");
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "This proposal is not open for endorsement");
   }
   return {
-    convertedVote: await convertProposalToVote(db, row, admin),
+    convertedVote: await convertProposalToVote(db, row, admin, authorizationGroupId),
     proposal: await toProposalSummary(db, await getProposalRowOrThrow(db, proposalId)),
   };
 }
@@ -251,8 +284,11 @@ export async function rejectVoteProposal(
   admin: AuthAdmin,
   proposalId: string,
   reason: string,
+  throughGroupId?: string,
 ): Promise<RejectProposalResult> {
   const row = await getProposalRowOrThrow(db, proposalId);
+  const authorizationGroupId = requireProposalGroup(row, throughGroupId);
+  await requireEffectiveGroupPermission(db, admin, authorizationGroupId, "votes:manage");
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_OPEN_FOR_ENDORSEMENT", "This proposal is not open for endorsement");
   }
@@ -267,7 +303,7 @@ export async function rejectVoteProposal(
     : "";
   const now = nowIso();
   const statements: StatementLike[] = [
-    prepareEffectiveGroupPermissionAuthorizationGuard(db, admin, [row.owner_group_id], "votes:manage"),
+    prepareEffectiveGroupPermissionAuthorizationGuard(db, admin, [authorizationGroupId], "votes:manage"),
     prepareProposalTransitionGuard(db, row),
     db
       .prepare("UPDATE vote_proposals SET status = 'rejected', rejection_reason = ?, updated_at = ? WHERE id = ?")

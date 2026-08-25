@@ -15,4 +15,7 @@ export * from "./closing";
 export * from "./public";
 export * from "./portal";
 export * from "./group-read-model";
+export * from "./group-proposal-read-model";
+export * from "./group-proposal-participation";
+export * from "./group-proposal-decisions";
 export * from "./proposals";

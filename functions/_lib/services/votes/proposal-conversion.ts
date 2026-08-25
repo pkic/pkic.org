@@ -157,6 +157,7 @@ async function convertProposalToVoteWithGuard(
   db: DatabaseLike,
   proposal: ProposalRow,
   approvedByAdmin: AuthAdmin | undefined,
+  authorizationGroupId: string | null,
   member: AuthMember | null,
 ): Promise<VoteSummary> {
   const fields = await buildConversionFields(db, proposal);
@@ -165,7 +166,12 @@ async function convertProposalToVoteWithGuard(
   const statements: StatementLike[] = [];
   if (approvedByAdmin) {
     statements.push(
-      prepareEffectiveGroupPermissionAuthorizationGuard(db, approvedByAdmin, [proposal.owner_group_id], "votes:manage"),
+      prepareEffectiveGroupPermissionAuthorizationGuard(
+        db,
+        approvedByAdmin,
+        [authorizationGroupId ?? proposal.owner_group_id],
+        "votes:manage",
+      ),
     );
   }
   statements.push(
@@ -215,9 +221,10 @@ async function convertProposalToVoteWithGuard(
 export function convertProposalToVote(
   db: DatabaseLike,
   proposal: ProposalRow,
-  approvedByAdmin?: AuthAdmin,
+  approvedByAdmin: AuthAdmin,
+  authorizationGroupId: string,
 ): Promise<VoteSummary> {
-  return convertProposalToVoteWithGuard(db, proposal, approvedByAdmin, null);
+  return convertProposalToVoteWithGuard(db, proposal, approvedByAdmin, authorizationGroupId, null);
 }
 
 export function convertProposalToVoteForMember(
@@ -225,7 +232,7 @@ export function convertProposalToVoteForMember(
   proposal: ProposalRow,
   member: AuthMember,
 ): Promise<VoteSummary> {
-  return convertProposalToVoteWithGuard(db, proposal, undefined, member);
+  return convertProposalToVoteWithGuard(db, proposal, undefined, null, member);
 }
 
 export async function insertEndorsementAndMaybeConvert(

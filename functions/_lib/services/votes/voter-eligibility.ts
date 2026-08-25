@@ -1,4 +1,5 @@
 import type { AuthMember } from "../../types";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 
 /**
  * Execution-time proof that the request's selected membership context is
@@ -47,6 +48,11 @@ export function activeGroupVoterSql(groupIdExpression = "?"): string {
   WHERE active_group_membership.user_id = ?
     AND active_group_membership.group_id = ${groupIdExpression}
     AND active_group_membership.left_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM groups active_voter_group
+      WHERE active_voter_group.id = ${groupIdExpression}
+        AND active_voter_group.active = 1
+    )
     AND (
       active_group_member.user_id = active_group_membership.user_id
       OR EXISTS (
@@ -64,5 +70,9 @@ export function activeGroupVoterSql(groupIdExpression = "?"): string {
 export const ACTIVE_GROUP_VOTER_SQL = activeGroupVoterSql();
 
 export function activeGroupVoterBindings(userId: string, groupId: string): unknown[] {
-  return [userId, groupId];
+  return [userId, groupId, groupId];
+}
+
+export function activeGroupVoterAuthorizationEvidence(userId: string, groupId: string): AuthorizationEvidence {
+  return { sql: `SELECT 1 WHERE ${ACTIVE_GROUP_VOTER_SQL}`, bindings: activeGroupVoterBindings(userId, groupId) };
 }
