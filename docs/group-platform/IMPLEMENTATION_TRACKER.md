@@ -357,7 +357,7 @@ Status: In progress
           `json_each` set operation in the same transaction, replacing partial
           50-statement batches. The focused event suites pass 19 tests and the
           consolidated migration upgrade suite passes two tests.
-  - [ ] Apply vote grants after the atomic generic voting cutover.
+  - [x] Apply vote grants after the atomic generic voting cutover.
     - [x] Apply `view` implications to canonical group-scoped vote discovery.
           Evidence: the nested vote route reuses the canonical vote summary and
           list-query contracts, while one resource-kind-aware indexed CTE now
@@ -617,8 +617,12 @@ Status: In progress
       Group vote discovery now uses that same controller and renders effective
       per-resource capabilities. Its detail view reuses the existing ballot and
       result components while the nested API binds participation to the
-      selected group. Form authoring/response management, vote creation and
-      lifecycle/proposal management, mailing-list management, statistics,
+      selected group. Managers can create and edit votes, set result visibility,
+      inspect identifiable ballots, and apply lifecycle transitions; participants
+      and managers can use the same group-scoped proposal list with only the
+      actions advertised by the backend. The duplicate admin Votes navigation
+      and components are removed, while the old URL redirects to the portal.
+      Form authoring/response management, mailing-list management, statistics,
       complete meeting lifecycle, and resource sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.

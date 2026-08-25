@@ -19,7 +19,6 @@ import { Organizations } from "../sections/Organizations";
 import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
 import { MailingLists } from "../sections/MailingLists";
 import { Sponsorships } from "../sections/Sponsorships";
-import { Votes } from "../sections/Votes";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
@@ -35,6 +34,13 @@ function SectionWrapper({ title, children }: { title: string; children: preact.C
       {children}
     </div>
   );
+}
+
+function PortalVotesRedirect() {
+  useEffect(() => {
+    window.location.assign("/portal/#/management");
+  }, []);
+  return <p>Vote management has moved to the group-centered portal.</p>;
 }
 
 export function AdminShell() {
@@ -249,14 +255,7 @@ export function AdminShell() {
                 </SectionWrapper>
               )}
             />
-            <Route
-              path="/votes"
-              component={() => (
-                <SectionWrapper title="Votes">
-                  <Votes />
-                </SectionWrapper>
-              )}
-            />
+            <Route path="/votes" component={PortalVotesRedirect} />
             <Route
               path="/membership"
               component={() => (

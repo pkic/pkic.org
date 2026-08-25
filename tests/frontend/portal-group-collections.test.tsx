@@ -159,7 +159,7 @@ describe("portal selected-group collections", () => {
     const forms = mount(<GroupForms groupId={GROUP_ID} />);
     const events = mount(<GroupEvents groupId={GROUP_ID} />);
     const audit = mount(<GroupAuditLog groupId={GROUP_ID} />);
-    const votes = mount(<GroupVotes groupId={GROUP_ID} />);
+    const votes = mount(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate />);
     await settle();
 
     expect(forms.textContent).toContain("Architecture survey");

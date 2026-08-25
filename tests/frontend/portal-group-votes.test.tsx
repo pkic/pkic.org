@@ -88,7 +88,7 @@ describe("selected-group vote participation", () => {
 
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVotes groupId={GROUP_ID} />, container));
+    await act(() => render(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate />, container));
     await settle();
 
     const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
@@ -153,7 +153,7 @@ describe("selected-group vote participation", () => {
 
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVotes groupId={GROUP_ID} />, container));
+    await act(() => render(<GroupVotes groupId={GROUP_ID} canManage canParticipate />, container));
     await settle();
     await act(() =>
       (
@@ -227,7 +227,7 @@ describe("selected-group vote participation", () => {
 
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVotes groupId={GROUP_ID} />, container));
+    await act(() => render(<GroupVotes groupId={GROUP_ID} canManage canParticipate />, container));
     await settle();
     await act(() =>
       (
