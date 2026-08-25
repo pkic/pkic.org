@@ -17,6 +17,7 @@ import {
   type VoteSummary,
 } from "./shared";
 import { ACTIVE_GROUP_VOTER_SQL, activeGroupVoterBindings, activeGroupVoterSql } from "./voter-eligibility";
+import { requireSupportedVoteProposalType, validateVoteConfiguration } from "./configuration";
 
 export function prepareProposalTransitionGuard(db: DatabaseLike, proposal: ProposalRow): StatementLike {
   return db
@@ -65,16 +66,25 @@ interface ConversionFields {
 }
 
 async function buildConversionFields(db: DatabaseLike, proposal: ProposalRow): Promise<ConversionFields> {
+  requireSupportedVoteProposalType(proposal.vote_type);
   const now = nowIso();
   const opensAt = proposal.proposed_opens_at ?? now;
   const closesAt = proposal.proposed_closes_at ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const thresholdType: ThresholdType = "simple_majority";
+  validateVoteConfiguration({
+    voteType: proposal.vote_type,
+    thresholdType,
+    candidateCount: 0,
+    opensAt,
+    closesAt,
+  });
   return {
     id: uuid(),
     slug: await uniqueSlug(db, proposal.title),
     now,
     opensAt,
     closesAt,
-    thresholdType: proposal.vote_type === "election" ? "successive_elimination" : "simple_majority",
+    thresholdType,
     status: new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled",
   };
 }

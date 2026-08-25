@@ -313,15 +313,32 @@ export const proposalSummarySchema = z.object({
 });
 export type ProposalSummary = z.infer<typeof proposalSummarySchema>;
 
-export const submitProposalSchema = z.object({
+const voteProposalInputShape = {
   title: z.string().trim().min(1).max(300),
   description: z.string().trim().min(1).max(10000),
-  voteType: voteTypeSchema,
-  ownerGroupId: groupIdSchema,
+  voteType: voteTypeSchema.exclude(["election"]),
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
-});
+};
+
+function addVoteProposalWindowIssue(
+  value: { proposedOpensAt?: string | null; proposedClosesAt?: string | null },
+  context: z.RefinementCtx,
+): void {
+  if (value.proposedOpensAt && value.proposedClosesAt && value.proposedClosesAt <= value.proposedOpensAt) {
+    context.addIssue({
+      code: "custom",
+      path: ["proposedClosesAt"],
+      message: "Proposed closing time must be after the proposed opening time",
+    });
+  }
+}
+
+export const voteProposalFieldsSchema = z.object(voteProposalInputShape).superRefine(addVoteProposalWindowIssue);
+export const submitProposalSchema = z
+  .object({ ...voteProposalInputShape, ownerGroupId: groupIdSchema })
+  .superRefine(addVoteProposalWindowIssue);
 export const submitProposalResponseSchema = z.object({ proposal: proposalSummarySchema });
 
 export const submitProposalRouteSchema = {

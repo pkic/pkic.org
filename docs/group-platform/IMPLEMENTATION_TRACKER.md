@@ -387,6 +387,13 @@ Status: In progress
           wrong-context denial, explicit manage sharing, member denial, and
           raw-ballot isolation.
     - [ ] Apply `manage` to canonical vote proposal and lifecycle routes.
+          Proposal conversion hardening is complete before route exposure: one
+          shared validator now governs direct creation, settings windows, and
+          proposal conversion. Proposal submission and conversion both reject
+          invalid time windows, and election proposals are explicitly disabled
+          until proposals can represent the required candidate aggregate. This
+          prevents an endorsed or approved proposal from creating an unusable
+          election with zero candidates.
           Existing evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
           and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
           broader focused form/grant regression selection passes 20 tests. Four

@@ -19,6 +19,7 @@ import {
 import { getProposalRowOrThrow, minEndorsersFor, toProposalSummary, type ProposalSummary } from "./proposal-read";
 import { resolveVoteOwnerGroup, type VoteSummary, type VoteType } from "./shared";
 import { ACTIVE_GROUP_VOTER_SQL, activeGroupVoterBindings } from "./voter-eligibility";
+import { requireSupportedVoteProposalType, validateVoteWindow } from "./configuration";
 
 export {
   getProposalGroupForPermissionCheck,
@@ -44,6 +45,10 @@ export async function submitVoteProposal(
   member: AuthMember,
   input: SubmitProposalInput,
 ): Promise<ProposalSummary> {
+  requireSupportedVoteProposalType(input.voteType);
+  if (input.proposedClosesAt) {
+    validateVoteWindow(input.proposedOpensAt ?? nowIso(), input.proposedClosesAt);
+  }
   const ownerGroupId = await resolveVoteOwnerGroup(db, input.ownerGroupId);
   const eligible = await first<{ authorized: number }>(
     db,

@@ -41,6 +41,7 @@ import {
 } from "./shared";
 import { prepareVoteManagementAuthorizationGuard } from "./vote-access";
 import type { AuthAdmin, DatabaseLike } from "../../types";
+import { validateVoteConfiguration, validateVoteWindow } from "./configuration";
 
 export interface CreateVoteInput {
   title: string;
@@ -55,23 +56,6 @@ export interface CreateVoteInput {
   candidates?: { name: string; bio?: string; userId?: string | null }[];
 }
 
-function validateThresholdForType(voteType: VoteType, thresholdType: ThresholdType, candidateCount: number): void {
-  if (voteType === "election") {
-    if (thresholdType === "successive_elimination" && candidateCount < 3) {
-      throw new AppError(
-        422,
-        "INVALID_THRESHOLD",
-        "successive_elimination requires at least 3 candidates; use simple_majority for 2-candidate elections",
-      );
-    }
-    if (thresholdType === "supermajority") {
-      throw new AppError(422, "INVALID_THRESHOLD", "supermajority does not apply to elections");
-    }
-  } else if (thresholdType === "successive_elimination") {
-    throw new AppError(422, "INVALID_THRESHOLD", "successive_elimination only applies to elections");
-  }
-}
-
 export async function createVoteDirect(
   db: DatabaseLike,
   admin: AuthAdmin,
@@ -79,16 +63,15 @@ export async function createVoteDirect(
 ): Promise<VoteSummary> {
   const ownerGroupId = await resolveVoteOwnerGroup(db, input.ownerGroupId);
   const candidates = input.voteType === "election" ? (input.candidates ?? []) : [];
-  if (input.voteType === "election" && candidates.length < 2) {
-    throw new AppError(422, "CANDIDATES_REQUIRED", "Election votes require at least 2 candidates");
-  }
-  validateThresholdForType(input.voteType, input.thresholdType, candidates.length);
-
   const now = nowIso();
   const opensAt = input.opensAt ?? now;
-  if (new Date(input.closesAt).getTime() <= new Date(opensAt).getTime()) {
-    throw new AppError(422, "INVALID_WINDOW", "closesAt must be after opensAt");
-  }
+  validateVoteConfiguration({
+    voteType: input.voteType,
+    thresholdType: input.thresholdType,
+    candidateCount: candidates.length,
+    opensAt,
+    closesAt: input.closesAt,
+  });
 
   const id = uuid();
   const slug = await uniqueSlug(db, input.title);
@@ -185,9 +168,7 @@ export async function updateVoteSettings(
   }
   const opensAt = input.opensAt ?? existing.opens_at;
   const closesAt = input.closesAt ?? existing.closes_at;
-  if (new Date(closesAt).getTime() <= new Date(opensAt).getTime()) {
-    throw new AppError(422, "INVALID_WINDOW", "closesAt must be after opensAt");
-  }
+  validateVoteWindow(opensAt, closesAt);
   const now = nowIso();
   try {
     await db.batch([

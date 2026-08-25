@@ -467,6 +467,64 @@ describe("canonical group voting", () => {
     });
   });
 
+  it("rejects proposal configurations that cannot produce a valid vote", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const member = await resolveAuthMember(env.DB, proposer.userId);
+    const opensAt = new Date(Date.now() + 120_000).toISOString();
+    const closesAt = new Date(Date.now() + 60_000).toISOString();
+
+    await expect(
+      submitVoteProposal(env.DB, member, {
+        title: "Election without candidates",
+        description: "Proposal elections cannot be converted until candidates are represented in the proposal.",
+        voteType: "election",
+        ownerGroupId: TEST_GROUPS.pqc,
+      }),
+    ).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "ELECTION_PROPOSAL_UNSUPPORTED");
+    await expect(
+      submitVoteProposal(env.DB, member, {
+        title: "Invalid window",
+        description: "Closing before opening must not reach storage.",
+        voteType: "motion",
+        ownerGroupId: TEST_GROUPS.pqc,
+        proposedOpensAt: opensAt,
+        proposedClosesAt: closesAt,
+      }),
+    ).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "INVALID_WINDOW");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM vote_proposals WHERE title IN (?, ?)", [
+        "Election without candidates",
+        "Invalid window",
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("revalidates a proposal window before conversion", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const proposal = await submitVoteProposal(env.DB, await resolveAuthMember(env.DB, proposer.userId), {
+      title: "Window changed before approval",
+      description: "Stored proposal data is validated again at the conversion boundary.",
+      voteType: "motion",
+      ownerGroupId: TEST_GROUPS.pqc,
+      proposedOpensAt: new Date(Date.now() + 60_000).toISOString(),
+      proposedClosesAt: new Date(Date.now() + 120_000).toISOString(),
+    });
+    await env.DB.prepare("UPDATE vote_proposals SET proposed_closes_at = proposed_opens_at WHERE id = ?")
+      .bind(proposal.id)
+      .run();
+
+    await expect(approveVoteProposal(env.DB, admin, proposal.id)).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "INVALID_WINDOW",
+    );
+    expect(await queryAll(env.DB, "SELECT status, vote_id FROM vote_proposals WHERE id = ?", proposal.id)).toEqual([
+      { status: "open_for_endorsement", vote_id: null },
+    ]);
+  });
+
   it("atomically rechecks group permission for approval and rejection", async () => {
     await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
     const proposer = await createOrganizationCapacity(env.DB);
