@@ -18,9 +18,9 @@ import {
   getResourceGrantDefinition,
   isResourceGrantCapability,
   resolveGroupResourceContextAccess,
-  visibleResourceGrantCapabilitiesForContext,
   type GroupResourceViewer,
 } from "../resource-grants";
+import { buildAccessibleGroupEventIdsCte } from "./access-query";
 
 interface GroupEventRow {
   event_id: string;
@@ -99,28 +99,9 @@ export function buildGroupEventsPageQuery(
   access: { member: boolean; manager: boolean },
   query: GroupEventsListQuery,
 ) {
-  const visibleGrants = visibleResourceGrantCapabilitiesForContext(getResourceGrantDefinition("event"), "view", access);
-  const accessibleEvents = `accessible_event AS (
-    SELECT owned.id AS event_id
-      FROM events owned INDEXED BY idx_events_owner_profile
-     WHERE owned.owner_group_id = ? AND ? = 1
-    ${
-      visibleGrants.length > 0
-        ? `UNION
-    SELECT shared.event_id
-      FROM event_group_grants shared INDEXED BY idx_event_group_grants_group
-     WHERE shared.group_id = ?
-       AND shared.capability IN (${visibleGrants.map(() => "?").join(", ")})`
-        : ""
-    }
-  )`;
+  const accessibleEvents = buildAccessibleGroupEventIdsCte(groupId, access);
   const conditions = ["event.owner_group_id IS NOT NULL"];
-  const bindings: unknown[] = [
-    groupId,
-    access.member || access.manager ? 1 : 0,
-    ...(visibleGrants.length > 0 ? [groupId, ...visibleGrants] : []),
-    groupId,
-  ];
+  const bindings: unknown[] = [...accessibleEvents.bindings, groupId];
   if (query.profileKey) {
     conditions.push("event.profile_key = ?");
     bindings.push(query.profileKey);
@@ -148,7 +129,7 @@ export function buildGroupEventsPageQuery(
   }
   return {
     sql: `WITH ${NEXT_OCCURRENCE_CTE},
-      ${accessibleEvents}
+      ${accessibleEvents.sql}
       ${EVENT_SELECT}
       FROM accessible_event accessible
       JOIN events event ON event.id = accessible.event_id

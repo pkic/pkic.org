@@ -274,6 +274,18 @@ Status: In progress
   - [ ] Apply event grants beyond meeting entry.
     - [x] Apply `view` implications to canonical group-scoped event discovery
           and detail reads.
+    - [x] Apply the same `view` implications to recurring-series discovery,
+          generated calendars, and occurrence discovery.
+          Evidence: one shared event-ID CTE now drives both event and series
+          pages. Canonical series, calendar, and occurrence reads require an
+          authenticated group context and distinguish owner membership,
+          participant grants, and management-class grants without letting
+          management imply participation. Mounted tests prove shared access,
+          anonymous and wrong-context denial, participant/manager separation,
+          immediate grant revocation, and generated calendar and occurrence
+          behavior. EXPLAIN assertions cover both page and count statements and
+          prove use of `idx_events_owner_profile` and
+          `idx_event_group_grants_group`.
     - [x] Apply `register` to the authenticated registration workflow.
           Evidence: the group route accepts only participation fields, derives
           identity and profile data from the verified session, and reuses the
@@ -349,8 +361,10 @@ Status: In progress
 - [x] Add series occurrence, guest, join, and attendance routes.
       Evidence: the mounted router exposes canonical series, occurrence,
       calendar, materialization, guest, access-capability, attendance-list,
-      and attendance-verification routes; scanner-safe join inspection and
-      confirmation remain intentionally token-scoped under /api/v1/meetings.
+      and attendance-verification routes. Series, calendar, and occurrence
+      reads now use the same group-context event-resource policy as ordinary
+      event discovery; scanner-safe join inspection and confirmation remain
+      intentionally token-scoped under /api/v1/meetings.
 - [x] Keep routes thin and SQL-free.
 - [x] Add one generic `/api/v1/me/groups` self-participation read model.
       Evidence: the shared contract composes the canonical group list filters,
@@ -410,7 +424,10 @@ Status: Pending
 - [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
       Current evidence: the self-participation catalog asserts use of
       `idx_group_memberships_user_active` for page and count predicates; the
-      broader group architecture selection passes 43 tests.
+      event and recurring-series page/count assertions prove indexed owner and
+      exact grantee-group access through `idx_events_owner_profile` and
+      `idx_event_group_grants_group`; the broader group architecture selection
+      passes 43 tests.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and

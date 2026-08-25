@@ -148,7 +148,7 @@ describe("group-owned event series", () => {
   });
 
   it("stores provider destinations encrypted and generates ICS from occurrence state", async () => {
-    const { series, occurrence } = await createMeetingFixture();
+    const { admin, series, occurrence } = await createMeetingFixture();
     const stored = await queryAll<{ provider_join_url_ciphertext: string }>(
       env.DB,
       "SELECT provider_join_url_ciphertext FROM event_occurrences WHERE id = ?",
@@ -157,7 +157,13 @@ describe("group-owned event series", () => {
     expect(stored[0].provider_join_url_ciphertext).toMatch(/^v1\./);
     expect(stored[0].provider_join_url_ciphertext).not.toContain("meet.example.test");
 
-    const calendar = await generateGroupSeriesIcs(env.DB, GROUP_ID, series.id, "https://pkic.example.test");
+    const calendar = await generateGroupSeriesIcs(
+      env.DB,
+      { userId: admin.id, admin },
+      { id: GROUP_ID, slug: "architecture-working-group" },
+      series.id,
+      "https://pkic.example.test",
+    );
     expect(calendar).toContain("BEGIN:VCALENDAR");
     expect(calendar).toContain(`UID:${occurrence.id}@pkic.org`);
     expect(calendar).not.toContain("secret-room");

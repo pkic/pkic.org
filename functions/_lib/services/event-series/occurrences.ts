@@ -14,9 +14,10 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { requireGroupManagement } from "../groups/governance";
+import type { GroupResourceViewer } from "../resource-grants";
 import { sealProviderJoinUrl } from "./provider-url";
 import { type EventOccurrenceRow, toEventOccurrence } from "./record";
-import { getGroupEventSeries } from "./series";
+import { getAccessibleGroupEventSeries, getGroupEventSeries } from "./series";
 
 type OccurrenceCreateInput = z.infer<typeof eventOccurrenceCreateSchema>;
 type OccurrenceUpdateInput = z.infer<typeof eventOccurrenceUpdateSchema>;
@@ -66,11 +67,12 @@ export async function getSeriesOccurrence(
 
 export async function listSeriesOccurrences(
   db: DatabaseLike,
+  viewer: GroupResourceViewer,
   groupIdOrSlug: string,
   seriesId: string,
   query: OccurrenceListQuery,
 ) {
-  await getGroupEventSeries(db, groupIdOrSlug, seriesId);
+  await getAccessibleGroupEventSeries(db, viewer, groupIdOrSlug, seriesId);
   const conditions = ["occurrence.series_id = ?"];
   const bindings: unknown[] = [seriesId];
   if (query.status) {

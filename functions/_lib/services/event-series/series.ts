@@ -16,8 +16,15 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { buildAccessibleGroupEventIdsCte } from "../events/access-query";
 import { getGroup } from "../groups";
 import { requireGroupManagement } from "../groups/governance";
+import {
+  canViewerAccessGroupResource,
+  resolveGroupResourceContextAccess,
+  type GroupResourceContextAccess,
+  type GroupResourceViewer,
+} from "../resource-grants";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
 
 type EventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
@@ -29,15 +36,14 @@ const SORT_EXPRESSIONS = {
   created_at: "series.created_at",
 } satisfies Record<(typeof EVENT_SERIES_SORT_COLUMNS)[number], string>;
 
-export async function listGroupEventSeries(
-  db: DatabaseLike,
-  groupIdOrSlug: string,
+export function buildGroupEventSeriesPageQuery(
+  groupId: string,
+  access: GroupResourceContextAccess,
   query: z.infer<typeof eventSeriesListQuerySchema>,
-): Promise<{ series: EventSeries[]; total: number }> {
-  const group = await getGroup(db, groupIdOrSlug);
-  if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
-  const conditions = ["event.owner_group_id = ?"];
-  const bindings: unknown[] = [group.id];
+) {
+  const accessibleEvents = buildAccessibleGroupEventIdsCte(groupId, access);
+  const conditions = ["event.owner_group_id IS NOT NULL"];
+  const bindings: unknown[] = [...accessibleEvents.bindings];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["event.name", "event.slug", "series.location"]) : null;
   if (search) {
     conditions.push(search.sql);
@@ -51,19 +57,37 @@ export async function listGroupEventSeries(
     conditions.push("event.profile_key = ?");
     bindings.push(query.profileKey);
   }
-  const where = `WHERE ${conditions.join(" AND ")}`;
-  const { rows, total } = await queryPage<EventSeriesRow>(db, {
-    source: {
-      selectSql: EVENT_SERIES_SELECT,
-      fromSql: `${EVENT_SERIES_FROM} ${where}`,
-      countFromSql: `${EVENT_SERIES_FROM} ${where}`,
-      bindings,
-    },
+  return {
+    sql: `WITH ${accessibleEvents.sql}
+      ${EVENT_SERIES_SELECT}
+      FROM accessible_event accessible
+      JOIN events event ON event.id = accessible.event_id
+      JOIN event_series series ON series.event_id = event.id
+      WHERE ${conditions.join(" AND ")}`,
+    bindings,
     orderBy: resolveMappedOrderBy(query.sort, SORT_EXPRESSIONS, SORT_EXPRESSIONS.next_occurrence_at, "series.id ASC"),
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listGroupEventSeries(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  query: z.infer<typeof eventSeriesListQuerySchema>,
+): Promise<{ series: EventSeries[]; total: number }> {
+  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
+  if (!access.member && !access.manager) return { series: [], total: 0 };
+  const { rows, total } = await queryPage<EventSeriesRow>(db, buildGroupEventSeriesPageQuery(groupId, access, query));
   return { series: rows.map(toEventSeries), total };
+}
+
+async function getEventSeriesById(db: DatabaseLike, seriesId: string): Promise<EventSeries | null> {
+  const row = await first<EventSeriesRow>(db, `${EVENT_SERIES_SELECT} ${EVENT_SERIES_FROM} WHERE series.id = ?`, [
+    seriesId,
+  ]);
+  return row ? toEventSeries(row) : null;
 }
 
 export async function getGroupEventSeries(
@@ -73,13 +97,24 @@ export async function getGroupEventSeries(
 ): Promise<EventSeries> {
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
-  const row = await first<EventSeriesRow>(
-    db,
-    `${EVENT_SERIES_SELECT} ${EVENT_SERIES_FROM} WHERE series.id = ? AND event.owner_group_id = ?`,
-    [seriesId, group.id],
-  );
-  if (!row) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found in this group");
-  return toEventSeries(row);
+  const series = await getEventSeriesById(db, seriesId);
+  if (!series || series.ownerGroupId !== group.id) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found in this group");
+  }
+  return series;
+}
+
+export async function getAccessibleGroupEventSeries(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  throughGroupId: string,
+  seriesId: string,
+): Promise<EventSeries> {
+  const series = await getEventSeriesById(db, seriesId);
+  if (!series || !(await canViewerAccessGroupResource(db, viewer, throughGroupId, "event", series.eventId, "view"))) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
+  }
+  return series;
 }
 
 function normalizedSlug(value: string): string {

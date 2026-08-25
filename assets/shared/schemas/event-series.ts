@@ -280,10 +280,14 @@ export const eventAttendanceResponseSchema = z.object({ confirmation: eventOccur
 
 export const groupMeetingSeriesListRouteSchema = {
   tags: ["Groups", "Meetings"],
-  summary: "List meeting series owned by a group",
-  description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
+  summary: "List meeting series available through a group",
+  description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
   request: { params: groupMeetingSeriesParamsSchema, query: eventSeriesListQuerySchema },
-  responses: { "200": { description: "A bounded meeting-series page." } },
+  responses: {
+    "200": { description: "A bounded page of group-owned and explicitly shared meeting series." },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("Group not found or not visible."),
+  },
 };
 export const groupMeetingSeriesCreateRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -307,7 +311,11 @@ export const eventOccurrencesListRouteSchema = {
   tags: ["Groups", "Meetings"],
   summary: "List occurrences in a meeting series",
   request: { params: eventSeriesParamsSchema, query: eventOccurrencesListQuerySchema },
-  responses: { "200": { description: "A bounded occurrence page." } },
+  responses: {
+    "200": { description: "A bounded occurrence page." },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("The meeting series is not available through this group."),
+  },
 };
 export const eventOccurrenceCreateRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -353,7 +361,11 @@ export const eventSeriesCalendarRouteSchema = {
   tags: ["Groups", "Meetings"],
   summary: "Generate the current meeting-series calendar",
   request: { params: eventSeriesParamsSchema },
-  responses: { "200": { description: "Generated text/calendar content." } },
+  responses: {
+    "200": { description: "Generated text/calendar content." },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("The meeting series is not available through this group."),
+  },
 };
 export const eventSeriesMaterializeRouteSchema = {
   tags: ["Groups", "Meetings"],

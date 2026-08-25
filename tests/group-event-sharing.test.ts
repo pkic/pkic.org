@@ -1,10 +1,14 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { eventAttendanceListQuerySchema } from "../assets/shared/schemas/event-series";
+import { eventAttendanceListQuerySchema, eventSeriesListQuerySchema } from "../assets/shared/schemas/event-series";
 import { groupEventsListQuerySchema } from "../assets/shared/schemas/group-events";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
-import { buildOccurrenceAttendancePageQuery, createGroupEventSeries } from "../functions/_lib/services/event-series";
+import {
+  buildGroupEventSeriesPageQuery,
+  buildOccurrenceAttendancePageQuery,
+  createGroupEventSeries,
+} from "../functions/_lib/services/event-series";
 import { buildGroupEventsPageQuery } from "../functions/_lib/services/events/group-read-model";
 import { replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
@@ -126,6 +130,15 @@ beforeEach(resetDb);
 describe("group event sharing", () => {
   it("discovers and reads an event only through the selected member grant context", async () => {
     const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO event_occurrences
+         (id, series_id, starts_at, ends_at, status, created_at, updated_at)
+       VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
+               'scheduled', datetime('now'), datetime('now'))`,
+    )
+      .bind(occurrenceId, fixture.seriesId)
+      .run();
     await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
       granteeGroupId: fixture.granteeId,
       capability: "register",
@@ -148,6 +161,24 @@ describe("group event sharing", () => {
     const plan = [...pagePlan.results, ...countPlan.results].map((row) => row.detail).join("\n");
     expect(plan).toContain("idx_events_owner_profile");
     expect(plan).toContain("idx_event_group_grants_group");
+
+    const seriesQuery = buildGroupEventSeriesPageQuery(
+      fixture.granteeId,
+      { member: true, manager: false },
+      eventSeriesListQuerySchema.parse({ q: "architecture", profileKey: "workshop", limit: 20 }),
+    );
+    const seriesSql = buildOffsetPageSql(seriesQuery);
+    const [seriesPagePlan, seriesCountPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${seriesSql.pageSql}`)
+        .bind(...seriesSql.bindings, seriesQuery.limit, seriesQuery.offset)
+        .all<{ detail: string }>(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${seriesSql.countSql}`)
+        .bind(...seriesSql.countBindings)
+        .all<{ detail: string }>(),
+    ]);
+    const seriesPlanText = [...seriesPagePlan.results, ...seriesCountPlan.results].map((row) => row.detail).join("\n");
+    expect(seriesPlanText).toContain("idx_events_owner_profile");
+    expect(seriesPlanText).toContain("idx_event_group_grants_group");
 
     const list = await authenticatedRequest(
       fixture.memberToken,
@@ -175,11 +206,51 @@ describe("group event sharing", () => {
     expect(detail.status, await detail.clone().text()).toBe(200);
     expect(await detail.json()).toMatchObject({ event: { id: fixture.eventId, capabilities: ["view", "register"] } });
 
+    const seriesPath = `/api/v1/groups/${fixture.granteeId}/meetings/series`;
+    const anonymousSeries = await callApi(env, seriesPath);
+    expect(anonymousSeries.status).toBe(401);
+
+    const seriesList = await authenticatedRequest(
+      fixture.memberToken,
+      `${seriesPath}?q=architecture&profileKey=workshop&sort=event_name&limit=20`,
+    );
+    expect(seriesList.status, await seriesList.clone().text()).toBe(200);
+    expect(await seriesList.json()).toMatchObject({
+      series: [{ id: fixture.seriesId, ownerGroupId: fixture.ownerId, profileKey: "workshop" }],
+      page: { total: 1, hasMore: false },
+    });
+
+    const calendar = await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/calendar.ics`);
+    expect(calendar.status, await calendar.clone().text()).toBe(200);
+    expect(calendar.headers.get("content-type")).toContain("text/calendar");
+    expect(await calendar.text()).toContain(`UID:${occurrenceId}@pkic.org`);
+
+    const occurrences = await authenticatedRequest(
+      fixture.memberToken,
+      `${seriesPath}/${fixture.seriesId}/occurrences?status=scheduled&limit=20`,
+    );
+    expect(occurrences.status, await occurrences.clone().text()).toBe(200);
+    expect(await occurrences.json()).toMatchObject({
+      occurrences: [{ id: occurrenceId, seriesId: fixture.seriesId }],
+      page: { total: 1, hasMore: false },
+    });
+
     const wrongContext = await authenticatedRequest(
       fixture.memberToken,
       `/api/v1/groups/${fixture.outsiderId}/events/${fixture.eventId}`,
     );
     expect(wrongContext.status).toBe(404);
+    const wrongSeriesContext = `/api/v1/groups/${fixture.outsiderId}/meetings/series`;
+    const wrongSeriesList = await authenticatedRequest(fixture.memberToken, wrongSeriesContext);
+    expect(wrongSeriesList.status).toBe(200);
+    expect(await wrongSeriesList.json()).toMatchObject({ series: [], page: { total: 0 } });
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}/calendar.ics`))
+        .status,
+    ).toBe(404);
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}/occurrences`)).status,
+    ).toBe(404);
 
     await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
       granteeGroupId: fixture.granteeId,
@@ -188,6 +259,15 @@ describe("group event sharing", () => {
     const revoked = await authenticatedRequest(fixture.memberToken, `/api/v1/groups/${fixture.granteeId}/events`);
     expect(revoked.status).toBe(200);
     expect(await revoked.json()).toMatchObject({ events: [], page: { total: 0 } });
+    const revokedSeries = await authenticatedRequest(fixture.memberToken, seriesPath);
+    expect(revokedSeries.status).toBe(200);
+    expect(await revokedSeries.json()).toMatchObject({ series: [], page: { total: 0 } });
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/calendar.ics`)).status,
+    ).toBe(404);
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/occurrences`)).status,
+    ).toBe(404);
   });
 
   it("keeps attendance management separate from member participation", async () => {
@@ -217,6 +297,12 @@ describe("group event sharing", () => {
     const memberList = await authenticatedRequest(fixture.memberToken, `/api/v1/groups/${fixture.granteeId}/events`);
     expect(memberList.status).toBe(200);
     expect(await memberList.json()).toMatchObject({ events: [], page: { total: 0 } });
+    const memberSeries = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/meetings/series`,
+    );
+    expect(memberSeries.status).toBe(200);
+    expect(await memberSeries.json()).toMatchObject({ series: [], page: { total: 0 } });
 
     const leaderList = await authenticatedRequest(fixture.leaderToken, `/api/v1/groups/${fixture.granteeId}/events`);
     expect(leaderList.status, await leaderList.clone().text()).toBe(200);
@@ -224,6 +310,12 @@ describe("group event sharing", () => {
       events: [{ id: fixture.eventId, capabilities: ["view", "manage_attendance"] }],
       page: { total: 1 },
     });
+    const leaderSeries = await authenticatedRequest(
+      fixture.leaderToken,
+      `/api/v1/groups/${fixture.granteeId}/meetings/series`,
+    );
+    expect(leaderSeries.status, await leaderSeries.clone().text()).toBe(200);
+    expect(await leaderSeries.json()).toMatchObject({ series: [{ id: fixture.seriesId }], page: { total: 1 } });
 
     const attendancePath = `/api/v1/groups/${fixture.granteeId}/meetings/series/${fixture.seriesId}/occurrences/${occurrenceId}/attendance`;
     const attendanceQuery = buildOccurrenceAttendancePageQuery(
