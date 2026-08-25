@@ -9,8 +9,15 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { managedGroupCatalog } from "./catalog";
 import { GroupSettingsForm } from "./GroupSettingsForm";
+import { GroupMembers } from "./GroupMembers";
+import { GroupLeadership } from "./GroupLeadership";
 
 const OVERVIEW_VIEW = "overview";
+const MANAGEMENT_VIEWS = [
+  { key: OVERVIEW_VIEW, label: "Overview and settings" },
+  { key: "members", label: "Members" },
+  { key: "leadership", label: "Leadership" },
+] as const;
 
 function GroupContextHeader({ group }: { group: Group }) {
   return (
@@ -81,16 +88,20 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
         <>
           <GroupContextHeader group={group} />
           <nav class="nav nav-tabs" aria-label={`${group.name} management`}>
-            <Link
-              href={`/management/${encodeURIComponent(group.id)}/${OVERVIEW_VIEW}`}
-              class={`nav-link${view === OVERVIEW_VIEW ? " active" : ""}`}
-            >
-              Overview and settings
-            </Link>
+            {MANAGEMENT_VIEWS.map((item) => (
+              <Link
+                key={item.key}
+                href={`/management/${encodeURIComponent(group.id)}/${item.key}`}
+                class={`nav-link${view === item.key ? " active" : ""}`}
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
-          {view === OVERVIEW_VIEW ? (
-            <GroupSettingsForm group={group} onUpdated={detail.reload} />
-          ) : (
+          {view === OVERVIEW_VIEW && <GroupSettingsForm group={group} onUpdated={detail.reload} />}
+          {view === "members" && <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />}
+          {view === "leadership" && <GroupLeadership key={group.id} groupId={group.id} />}
+          {!MANAGEMENT_VIEWS.some((item) => item.key === view) && (
             <ErrorAlert error="This group-management section does not exist." />
           )}
         </>
