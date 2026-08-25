@@ -5,13 +5,7 @@ import { joinGroup } from "../../functions/_lib/services/groups";
 import { requireMemberFromRequest } from "../../functions/_lib/auth/member";
 import { createAdminSession, createMemberSession } from "./auth";
 import { queryAll, seedEventAndAdmin } from "./context";
-import {
-  addRepresentative,
-  insertIndividualMember,
-  insertOrganization,
-  insertUser,
-  seedOrganizationAggregate,
-} from "./membership";
+import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./membership";
 
 export const TEST_GROUPS = {
   allMembers: "20000000-0000-4000-8000-000000000001",
@@ -98,15 +92,15 @@ export async function createCanonicalVote(
   });
 }
 
-export async function createIndividualAndOrganizationUser(
+export async function createMultiOrganizationUser(
   db: DatabaseLike,
-): Promise<{ userId: string; individualMemberId: string; organizationMemberId: string }> {
-  const individual = await insertIndividualMember(db, "H6");
-  const organization = await createOrganizationCapacity(db, { userId: individual.userId, category: "A" });
+): Promise<{ userId: string; defaultMemberId: string; groupMemberId: string }> {
+  const defaultCapacity = await createOrganizationCapacity(db, { category: "A" });
+  const groupCapacity = await createOrganizationCapacity(db, { userId: defaultCapacity.userId, category: "B" });
   return {
-    userId: individual.userId,
-    individualMemberId: individual.memberId,
-    organizationMemberId: organization.memberId,
+    userId: defaultCapacity.userId,
+    defaultMemberId: defaultCapacity.memberId,
+    groupMemberId: groupCapacity.memberId,
   };
 }
 

@@ -15,8 +15,6 @@ import {
   setMailingListPreference,
 } from "../functions/_lib/services/mailing-list-subscriptions";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
-import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
-import { nowIso } from "../functions/_lib/utils/time";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
@@ -82,17 +80,14 @@ afterEach(async () => {
 });
 
 describe("automatic group enrollment", () => {
-  it("enrolls every represented organization and suppresses individual IPR capacity", async () => {
+  it("enrolls every represented organization as a separate IPR capacity", async () => {
     const userId = await insertUser(env.DB, `multi-capacity-${crypto.randomUUID()}@example.test`);
-    const individual = buildCreateIndividualMemberStatements(env.DB, userId, "H6", nowIso());
-    await env.DB.batch(individual.statements);
     const organizationA = await addOrganizationCapacity(userId, "A");
     const organizationB = await addOrganizationCapacity(userId, "B");
 
     await reconcileAutomaticGroupEnrollmentForUser(env.DB, userId);
 
     expect(await activeMemberIds(ALL_MEMBERS_GROUP_ID, userId)).toEqual([organizationA, organizationB].sort());
-    expect(await activeMemberIds(ALL_MEMBERS_GROUP_ID, userId)).not.toContain(individual.memberId);
     expect(await desiredAction(userId, "pkic@lists.pkic.org")).toBe("add_to_list");
     expect(await desiredAction(userId, "consultation@lists.pkic.org")).toBe("add_to_list");
   });

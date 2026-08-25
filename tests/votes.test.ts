@@ -28,7 +28,7 @@ import {
   TEST_GROUPS,
   authorizedRequest,
   createCanonicalVote,
-  createIndividualAndOrganizationUser,
+  createMultiOrganizationUser,
   createOrganizationCapacity,
   joinVotingGroup,
   resolveAuthMember,
@@ -250,21 +250,23 @@ describe("canonical group voting", () => {
 
   it("uses all active group capacities rather than the session's first membership for proposals", async () => {
     await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
-    const mixed = await createIndividualAndOrganizationUser(env.DB);
+    const multiOrganization = await createMultiOrganizationUser(env.DB);
     const endorser = await createOrganizationCapacity(env.DB);
     const outsider = await createOrganizationCapacity(env.DB);
-    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, mixed.userId, [mixed.organizationMemberId]);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, multiOrganization.userId, [multiOrganization.groupMemberId]);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, endorser.userId, [endorser.memberId]);
     await joinVotingGroup(env.DB, TEST_GROUPS.cm, outsider.userId, [outsider.memberId]);
-    const proposerMember = await resolveAuthMember(env.DB, mixed.userId);
-    expect(proposerMember.memberId).toBe(mixed.individualMemberId);
+    const proposerMember = await resolveAuthMember(env.DB, multiOrganization.userId);
+    expect(proposerMember.memberId).toBe(multiOrganization.defaultMemberId);
     const proposal = await submitVoteProposal(env.DB, proposerMember, {
       title: "Multi-capacity proposal",
-      description: "The active group capacity is organizational even though the default session capacity is not.",
+      description: "The active group capacity differs from the default represented organization in the session.",
       voteType: "motion",
       ownerGroupId: TEST_GROUPS.pqc,
     });
-    expect((await listVoteProposals(env.DB, mixed.userId, { limit: 20, offset: 0 })).proposals).toHaveLength(1);
+    expect(
+      (await listVoteProposals(env.DB, multiOrganization.userId, { limit: 20, offset: 0 })).proposals,
+    ).toHaveLength(1);
     expect((await listVoteProposals(env.DB, outsider.userId, { limit: 20, offset: 0 })).proposals).toHaveLength(0);
     await expect(getVoteProposalDetailForMember(env.DB, proposal.id, outsider.userId)).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.status === 404,
