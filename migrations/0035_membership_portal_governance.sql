@@ -4149,14 +4149,15 @@ CREATE UNIQUE INDEX uq_event_occurrence_join_guest
 CREATE INDEX idx_event_occurrence_attendance
   ON event_occurrence_join_confirmations(occurrence_id, attendance_verified_at, confirmed_at, id);
 
--- Attendance management may be delegated to another group's effective
--- leadership. This short-lived row rechecks both the exact event grant and the
+-- Event management may be delegated to another group's effective leadership.
+-- This short-lived row rechecks both the exact event capability and the
 -- actor's current group-management authority in the same D1 batch as the
--- attendance mutation, closing grant and leadership revocation races.
-CREATE TABLE event_attendance_management_guards (
+-- protected mutation, closing grant and leadership revocation races.
+CREATE TABLE event_resource_management_guards (
   id                TEXT NOT NULL PRIMARY KEY,
   event_id          TEXT NOT NULL REFERENCES events(id),
   group_id          TEXT NOT NULL REFERENCES groups(id),
+  required_capability TEXT NOT NULL,
   actor_user_id     TEXT REFERENCES users(id),
   trusted_service   INTEGER NOT NULL DEFAULT 0 CHECK (trusted_service IN (0, 1)),
   created_at        TEXT NOT NULL,
@@ -4166,9 +4167,10 @@ CREATE TABLE event_attendance_management_guards (
   )
 );
 
-CREATE TRIGGER trg_event_attendance_management_guard_validate
-BEFORE INSERT ON event_attendance_management_guards
-WHEN NOT EXISTS (
+CREATE TRIGGER trg_event_resource_management_guard_validate
+BEFORE INSERT ON event_resource_management_guards
+WHEN NEW.required_capability NOT IN ('manage', 'manage_attendance')
+OR NOT EXISTS (
   SELECT 1
     FROM events event
     JOIN groups target_group ON target_group.id = NEW.group_id AND target_group.active = 1
@@ -4179,7 +4181,13 @@ WHEN NOT EXISTS (
          SELECT 1 FROM event_group_grants grant_row
          WHERE grant_row.event_id = event.id
             AND grant_row.group_id = target_group.id
-            AND grant_row.capability IN ('manage_attendance', 'manage')
+            AND (
+              (NEW.required_capability = 'manage' AND grant_row.capability = 'manage')
+              OR (
+                NEW.required_capability = 'manage_attendance'
+                AND grant_row.capability IN ('manage_attendance', 'manage')
+              )
+            )
        )
      )
      AND (
@@ -4251,13 +4259,13 @@ WHEN NOT EXISTS (
      )
 )
 BEGIN
-  SELECT RAISE(ABORT, 'EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED');
+  SELECT RAISE(ABORT, 'EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED');
 END;
 
-CREATE TRIGGER trg_event_attendance_management_guard_release
-AFTER INSERT ON event_attendance_management_guards
+CREATE TRIGGER trg_event_resource_management_guard_release
+AFTER INSERT ON event_resource_management_guards
 BEGIN
-  DELETE FROM event_attendance_management_guards WHERE id = NEW.id;
+  DELETE FROM event_resource_management_guards WHERE id = NEW.id;
 END;
 
 -- Seed portal-managed meeting aggregates, not uploaded files. Recurrence is

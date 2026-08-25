@@ -12,10 +12,10 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
-import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
-import { requireGroupManagement } from "../groups/governance";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { commitEventResourceManagementBatch } from "./management";
 import { type EventGuestRow, toEventGuest } from "./record";
-import { getSeriesOccurrence } from "./occurrences";
+import { getManagedSeriesOccurrence } from "./occurrences";
 
 type GuestInviteInput = z.infer<typeof eventOccurrenceGuestInviteSchema>;
 type GuestListQuery = z.infer<typeof eventOccurrenceGuestsListQuerySchema>;
@@ -31,8 +31,7 @@ export async function listOccurrenceGuests(
   occurrenceId: string,
   query: GuestListQuery,
 ) {
-  const { series } = await getSeriesOccurrence(db, groupIdOrSlug, seriesId, occurrenceId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   const conditions = ["series_id = ?", "(occurrence_id IS NULL OR occurrence_id = ?)"];
   const bindings: unknown[] = [seriesId, occurrenceId];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["name", "normalized_email", "affiliation"]) : null;
@@ -77,8 +76,7 @@ export async function inviteOccurrenceGuest(
   occurrenceId: string,
   input: GuestInviteInput,
 ) {
-  const { series } = await getSeriesOccurrence(db, groupIdOrSlug, seriesId, occurrenceId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  const { context } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   if (input.expiresAt <= nowIso()) {
     throw new AppError(422, "EVENT_GUEST_EXPIRY_INVALID", "Guest access must expire in the future");
   }
@@ -96,40 +94,52 @@ export async function inviteOccurrenceGuest(
   ]);
   const id = existing?.id ?? uuid();
   const now = nowIso();
-  await db.batch([
-    existing
-      ? db
-          .prepare(
-            `UPDATE event_occurrence_guests SET user_id = ?, name = ?, affiliation = ?,
-               expires_at = ?, revoked_at = NULL, updated_at = ? WHERE id = ?`,
-          )
-          .bind(user?.id ?? null, input.name, input.affiliation ?? null, input.expiresAt, now, id)
-      : db
-          .prepare(
-            `INSERT INTO event_occurrence_guests
-               (id, series_id, occurrence_id, user_id, normalized_email, name, affiliation,
-                expires_at, invited_by_user_id, revoked_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-          )
-          .bind(
-            id,
-            seriesId,
-            scopedOccurrenceId,
-            user?.id ?? null,
-            email,
-            input.name,
-            input.affiliation ?? null,
-            input.expiresAt,
-            actor.id,
-            now,
-            now,
-          ),
-    prepareAuditLog(db, "admin", actor.id, "event_guest_invited", "event_occurrence_guest", id, {
-      seriesId,
-      occurrenceId: scopedOccurrenceId,
-      seriesWide: input.seriesWide ?? false,
-    }),
-  ]);
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      existing
+        ? db
+            .prepare(
+              `UPDATE event_occurrence_guests SET user_id = ?, name = ?, affiliation = ?,
+                 expires_at = ?, revoked_at = NULL, updated_at = ? WHERE id = ?`,
+            )
+            .bind(user?.id ?? null, input.name, input.affiliation ?? null, input.expiresAt, now, id)
+        : db
+            .prepare(
+              `INSERT INTO event_occurrence_guests
+                 (id, series_id, occurrence_id, user_id, normalized_email, name, affiliation,
+                  expires_at, invited_by_user_id, revoked_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+            )
+            .bind(
+              id,
+              seriesId,
+              scopedOccurrenceId,
+              user?.id ?? null,
+              email,
+              input.name,
+              input.affiliation ?? null,
+              input.expiresAt,
+              actor.id,
+              now,
+              now,
+            ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_guest_invited",
+        "event_occurrence_guest",
+        id,
+        { seriesId, occurrenceId: scopedOccurrenceId, seriesWide: input.seriesWide ?? false },
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "EVENT_GUEST_CHANGED", "The guest invitation changed while it was being saved");
+    }
+    throw error;
+  }
   const row = await first<EventGuestRow>(db, `SELECT ${GUEST_COLUMNS} FROM event_occurrence_guests WHERE id = ?`, [id]);
   if (!row) throw new AppError(500, "EVENT_GUEST_READ_FAILED", "Failed to read guest invitation");
   return toEventGuest({ ...row, response_occurrence_id: occurrenceId });
@@ -143,8 +153,7 @@ export async function revokeOccurrenceGuest(
   occurrenceId: string,
   guestId: string,
 ): Promise<void> {
-  const { series } = await getSeriesOccurrence(db, groupIdOrSlug, seriesId, occurrenceId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  const { context } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   const guest = await first<EventGuestRow>(
     db,
     `SELECT ${GUEST_COLUMNS} FROM event_occurrence_guests
@@ -153,16 +162,31 @@ export async function revokeOccurrenceGuest(
   );
   if (!guest) throw new AppError(404, "EVENT_GUEST_NOT_FOUND", "Guest invitation not found");
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare("UPDATE event_occurrence_guests SET revoked_at = ?, updated_at = ? WHERE id = ?")
-      .bind(now, now, guestId),
-    db
-      .prepare("UPDATE event_occurrence_access_tokens SET revoked_at = ? WHERE guest_id = ? AND revoked_at IS NULL")
-      .bind(now, guestId),
-    prepareAuditLogAfterOneChange(db, "admin", actor.id, "event_guest_revoked", "event_occurrence_guest", guestId, {
-      seriesId,
-      occurrenceId,
-    }),
-  ]);
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          "UPDATE event_occurrence_guests SET revoked_at = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL",
+        )
+        .bind(now, now, guestId),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_guest_revoked",
+        "event_occurrence_guest",
+        guestId,
+        { seriesId, occurrenceId },
+      ),
+      db
+        .prepare("UPDATE event_occurrence_access_tokens SET revoked_at = ? WHERE guest_id = ? AND revoked_at IS NULL")
+        .bind(now, guestId),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "EVENT_GUEST_CHANGED", "The guest invitation changed while it was being revoked");
+    }
+    throw error;
+  }
 }

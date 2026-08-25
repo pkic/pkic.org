@@ -11,11 +11,13 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
-import { getGroup } from "../groups";
-import { requireGroupResourceAccess } from "../resource-grants";
+import {
+  commitEventResourceManagementBatch,
+  requireEventResourceManagementContext,
+  type EventResourceManagementContext,
+} from "./management";
 
 type AttendanceQuery = z.infer<typeof eventAttendanceListQuerySchema>;
 type AttendanceVerifyInput = z.infer<typeof attendanceVerifySchema>;
@@ -59,20 +61,13 @@ const SORT_EXPRESSIONS = {
   attendance_verified_at: "confirmation.attendance_verified_at",
 } satisfies Record<(typeof EVENT_ATTENDANCE_SORT_COLUMNS)[number], string>;
 
-interface AttendanceManagementContext {
-  groupId: string;
-  eventId: string;
-}
-
 async function requireAttendanceManagementContext(
   db: DatabaseLike,
   actor: AuthAdmin,
   groupIdOrSlug: string,
   seriesId: string,
   occurrenceId: string,
-): Promise<AttendanceManagementContext> {
-  const group = await getGroup(db, groupIdOrSlug);
-  if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
+): Promise<EventResourceManagementContext> {
   const context = await first<{ event_id: string }>(
     db,
     `SELECT series.event_id
@@ -82,25 +77,7 @@ async function requireAttendanceManagementContext(
     [seriesId, occurrenceId],
   );
   if (!context) throw new AppError(404, "EVENT_OCCURRENCE_NOT_FOUND", "Meeting occurrence not found in this series");
-  await requireGroupResourceAccess(db, actor, "event", context.event_id, "manage_attendance", group.id);
-  return { groupId: group.id, eventId: context.event_id };
-}
-
-function prepareAttendanceManagementGuard(db: DatabaseLike, actor: AuthAdmin, context: AttendanceManagementContext) {
-  return db
-    .prepare(
-      `INSERT INTO event_attendance_management_guards
-         (id, event_id, group_id, actor_user_id, trusted_service, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      uuid(),
-      context.eventId,
-      context.groupId,
-      actor.identityType === "user" ? actor.id : null,
-      actor.identityType === "service" ? 1 : 0,
-      nowIso(),
-    );
+  return requireEventResourceManagementContext(db, actor, groupIdOrSlug, context.event_id, "manage_attendance");
 }
 
 /** Canonical page/count query for occurrence attendance, also used by EXPLAIN tests. */
@@ -165,8 +142,7 @@ export async function verifyOccurrenceAttendance(
   if (!existing) throw new AppError(404, "MEETING_JOIN_CONFIRMATION_NOT_FOUND", "Join confirmation not found");
   const verifiedAt = input.verifiedAt ?? nowIso();
   try {
-    await db.batch([
-      prepareAttendanceManagementGuard(db, actor, context),
+    await commitEventResourceManagementBatch(db, actor, context, "manage_attendance", [
       db
         .prepare(
           `UPDATE event_occurrence_join_confirmations
@@ -186,13 +162,6 @@ export async function verifyOccurrenceAttendance(
       ),
     ]);
   } catch (error) {
-    if (error instanceof Error && error.message.includes("EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED")) {
-      throw new AppError(
-        409,
-        "EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED",
-        "Attendance-management access changed while the verification was being saved",
-      );
-    }
     if (isAuditOneChangeGuardFailure(error)) {
       throw new AppError(
         409,

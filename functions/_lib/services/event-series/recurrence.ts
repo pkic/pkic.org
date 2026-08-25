@@ -2,12 +2,12 @@ import type { z } from "zod";
 import ICAL from "ical.js";
 import { eventSeriesMaterializeSchema } from "../../../../assets/shared/schemas/event-series";
 import { AppError } from "../../errors";
-import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
+import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog } from "../audit";
-import { requireGroupManagement } from "../groups/governance";
-import { getGroupEventSeries } from "./series";
+import { prepareScopedAuditLog } from "../audit";
+import { commitEventResourceManagementBatch } from "./management";
+import { getManagedGroupEventSeries } from "./series";
 
 type MaterializeInput = z.infer<typeof eventSeriesMaterializeSchema>;
 
@@ -134,15 +134,6 @@ function expandStarts(
   }
 }
 
-async function executeBatches(db: DatabaseLike, statements: StatementLike[]): Promise<number> {
-  let changes = 0;
-  for (let index = 0; index < statements.length; index += 50) {
-    const results = await db.batch(statements.slice(index, index + 50));
-    changes += results.reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
-  }
-  return changes;
-}
-
 export async function materializeSeriesOccurrences(
   db: DatabaseLike,
   actor: AuthAdmin,
@@ -150,8 +141,7 @@ export async function materializeSeriesOccurrences(
   seriesId: string,
   input: MaterializeInput,
 ) {
-  const series = await getGroupEventSeries(db, groupIdOrSlug, seriesId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  const { series, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
   if (!series.active) throw new AppError(409, "EVENT_SERIES_INACTIVE", "Inactive meeting series cannot be expanded");
   const starts = expandStarts(
     series.startsAt,
@@ -161,25 +151,24 @@ export async function materializeSeriesOccurrences(
     input.maxOccurrences,
   );
   const now = nowIso();
-  const statements = starts.map((start) =>
+  const requested = starts.map((start) => ({
+    id: uuid(),
+    startsAt: start,
+    endsAt: new Date(Date.parse(start) + series.durationMinutes * 60_000).toISOString(),
+  }));
+  const results = await commitEventResourceManagementBatch(db, actor, context, "manage", [
     db
       .prepare(
         `INSERT OR IGNORE INTO event_occurrences
            (id, series_id, starts_at, ends_at, status, location_override,
             provider_join_url_ciphertext, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'scheduled', NULL, NULL, ?, ?)`,
+         SELECT json_extract(requested.value, '$.id'), ?,
+                json_extract(requested.value, '$.startsAt'),
+                json_extract(requested.value, '$.endsAt'),
+                'scheduled', NULL, NULL, ?, ?
+           FROM json_each(?) requested`,
       )
-      .bind(
-        uuid(),
-        seriesId,
-        start,
-        new Date(Date.parse(start) + series.durationMinutes * 60_000).toISOString(),
-        now,
-        now,
-      ),
-  );
-  const created = await executeBatches(db, statements);
-  await db.batch([
+      .bind(seriesId, now, now, JSON.stringify(requested)),
     db
       .prepare(
         `UPDATE events SET
@@ -188,11 +177,20 @@ export async function materializeSeriesOccurrences(
            updated_at = ? WHERE id = ?`,
       )
       .bind(seriesId, seriesId, now, series.eventId),
-    prepareAuditLog(db, "admin", actor.id, "event_series_materialized", "event_series", seriesId, {
-      through: input.through,
-      created,
-      existing: starts.length - created,
-    }),
+    prepareScopedAuditLog(
+      db,
+      { type: "group", id: context.groupId },
+      "admin",
+      actor.id,
+      "event_series_materialized",
+      "event_series",
+      seriesId,
+      {
+        through: input.through,
+        requested: starts.length,
+      },
+    ),
   ]);
+  const created = Number(results[1]?.meta?.changes ?? 0);
   return { created, existing: starts.length - created, through: input.through };
 }

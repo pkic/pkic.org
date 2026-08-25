@@ -12,12 +12,12 @@ import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
-import { requireGroupManagement } from "../groups/governance";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import type { GroupResourceViewer } from "../resource-grants";
+import { commitEventResourceManagementBatch } from "./management";
 import { sealProviderJoinUrl } from "./provider-url";
 import { type EventOccurrenceRow, toEventOccurrence } from "./record";
-import { getAccessibleGroupEventSeries, getGroupEventSeries } from "./series";
+import { getAccessibleGroupEventSeries, getGroupEventSeries, getManagedGroupEventSeries } from "./series";
 
 type OccurrenceCreateInput = z.infer<typeof eventOccurrenceCreateSchema>;
 type OccurrenceUpdateInput = z.infer<typeof eventOccurrenceUpdateSchema>;
@@ -65,6 +65,23 @@ export async function getSeriesOccurrence(
   return { series, occurrence: toEventOccurrence(row) };
 }
 
+export async function getManagedSeriesOccurrence(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  seriesId: string,
+  occurrenceId: string,
+) {
+  const managed = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
+  const row = await first<EventOccurrenceRow>(
+    db,
+    `${OCCURRENCE_SELECT} ${OCCURRENCE_FROM} WHERE occurrence.id = ? AND occurrence.series_id = ?`,
+    [occurrenceId, seriesId],
+  );
+  if (!row) throw new AppError(404, "EVENT_OCCURRENCE_NOT_FOUND", "Meeting occurrence not found in this series");
+  return { ...managed, occurrence: toEventOccurrence(row) };
+}
+
 export async function listSeriesOccurrences(
   db: DatabaseLike,
   viewer: GroupResourceViewer,
@@ -110,33 +127,45 @@ export async function createSeriesOccurrence(
   input: OccurrenceCreateInput,
   encryptionSecret: string,
 ) {
-  const series = await getGroupEventSeries(db, groupIdOrSlug, seriesId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  const { series, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
   const id = uuid();
   const now = nowIso();
   const ciphertext = input.providerJoinUrl ? await sealProviderJoinUrl(input.providerJoinUrl, encryptionSecret) : null;
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO event_occurrences
-           (id, series_id, starts_at, ends_at, status, location_override,
-            provider_join_url_ciphertext, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)`,
-      )
-      .bind(id, seriesId, input.startsAt, input.endsAt, input.locationOverride ?? null, ciphertext, now, now),
-    db
-      .prepare(
-        `UPDATE events SET
-           starts_at = (SELECT MIN(starts_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
-           ends_at = (SELECT MAX(ends_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
-           updated_at = ? WHERE id = ?`,
-      )
-      .bind(seriesId, seriesId, now, series.eventId),
-    prepareAuditLog(db, "admin", actor.id, "event_occurrence_created", "event_occurrence", id, {
-      seriesId,
-      startsAt: input.startsAt,
-    }),
-  ]);
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          `INSERT INTO event_occurrences
+             (id, series_id, starts_at, ends_at, status, location_override,
+              provider_join_url_ciphertext, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)`,
+        )
+        .bind(id, seriesId, input.startsAt, input.endsAt, input.locationOverride ?? null, ciphertext, now, now),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_occurrence_created",
+        "event_occurrence",
+        id,
+        { seriesId, startsAt: input.startsAt },
+      ),
+      db
+        .prepare(
+          `UPDATE events SET
+             starts_at = (SELECT MIN(starts_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
+             ends_at = (SELECT MAX(ends_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
+             updated_at = ? WHERE id = ?`,
+        )
+        .bind(seriesId, seriesId, now, series.eventId),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
+    }
+    throw error;
+  }
   return (await getSeriesOccurrence(db, series.ownerGroupId, seriesId, id)).occurrence;
 }
 
@@ -149,8 +178,7 @@ export async function updateSeriesOccurrence(
   input: OccurrenceUpdateInput,
   encryptionSecret: string,
 ) {
-  const current = await getSeriesOccurrence(db, groupIdOrSlug, seriesId, occurrenceId);
-  await requireGroupManagement(db, actor, current.series.ownerGroupId);
+  const current = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   const startsAt = input.startsAt ?? current.occurrence.startsAt;
   const endsAt = input.endsAt ?? current.occurrence.endsAt;
   if (endsAt <= startsAt) {
@@ -162,43 +190,51 @@ export async function updateSeriesOccurrence(
       ? null
       : undefined;
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE event_occurrences SET starts_at = ?, ends_at = ?, status = COALESCE(?, status),
-           location_override = CASE WHEN ? = 1 THEN ? ELSE location_override END,
-           provider_join_url_ciphertext = CASE WHEN ? = 1 THEN ? ELSE provider_join_url_ciphertext END,
-           updated_at = ? WHERE id = ? AND series_id = ?`,
-      )
-      .bind(
-        startsAt,
-        endsAt,
-        input.status ?? null,
-        input.locationOverride !== undefined ? 1 : 0,
-        input.locationOverride ?? null,
-        ciphertext !== undefined ? 1 : 0,
-        ciphertext ?? null,
-        now,
+  try {
+    await commitEventResourceManagementBatch(db, actor, current.context, "manage", [
+      db
+        .prepare(
+          `UPDATE event_occurrences SET starts_at = ?, ends_at = ?, status = COALESCE(?, status),
+             location_override = CASE WHEN ? = 1 THEN ? ELSE location_override END,
+             provider_join_url_ciphertext = CASE WHEN ? = 1 THEN ? ELSE provider_join_url_ciphertext END,
+             updated_at = ? WHERE id = ? AND series_id = ?`,
+        )
+        .bind(
+          startsAt,
+          endsAt,
+          input.status ?? null,
+          input.locationOverride !== undefined ? 1 : 0,
+          input.locationOverride ?? null,
+          ciphertext !== undefined ? 1 : 0,
+          ciphertext ?? null,
+          now,
+          occurrenceId,
+          seriesId,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: current.context.groupId },
+        "admin",
+        actor.id,
+        "event_occurrence_updated",
+        "event_occurrence",
         occurrenceId,
-        seriesId,
+        input,
       ),
-    db
-      .prepare(
-        `UPDATE events SET
-           starts_at = (SELECT MIN(starts_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
-           ends_at = (SELECT MAX(ends_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
-           updated_at = ? WHERE id = ?`,
-      )
-      .bind(seriesId, seriesId, now, current.series.eventId),
-    prepareAuditLogAfterOneChange(
-      db,
-      "admin",
-      actor.id,
-      "event_occurrence_updated",
-      "event_occurrence",
-      occurrenceId,
-      input,
-    ),
-  ]);
+      db
+        .prepare(
+          `UPDATE events SET
+             starts_at = (SELECT MIN(starts_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
+             ends_at = (SELECT MAX(ends_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
+             updated_at = ? WHERE id = ?`,
+        )
+        .bind(seriesId, seriesId, now, current.series.eventId),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
+    }
+    throw error;
+  }
   return (await getSeriesOccurrence(db, current.series.ownerGroupId, seriesId, occurrenceId)).occurrence;
 }

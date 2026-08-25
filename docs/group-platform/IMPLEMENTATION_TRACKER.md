@@ -312,27 +312,40 @@ Status: In progress
           implication, revocation, disabled-user rejection, scoped audit, and
           use of idx_event_occurrence_attendance. The adjacent event-series and
           resource-grant selection passes 22 tests.
+    - [x] Apply `manage` to canonical meeting-series, occurrence, guest, and
+          access-capability management.
+          Evidence: all management commands resolve the selected group through
+          one shared exact-capability service and prepend one transient D1
+          authorization guard to the protected write and group-scoped audit.
+          `manage_attendance` cannot mutate event state. Mounted tests prove
+          exact grant implication, wrong-context denial, immediate revocation,
+          guest/access management, and rollback when either the grant or local
+          leadership is revoked between preflight and batch execution.
+          Recurrence materialization inserts up to the bounded limit with one
+          `json_each` set operation in the same transaction, replacing partial
+          50-statement batches. The focused event suites pass 14 tests and the
+          consolidated migration upgrade suite passes two tests.
   - [ ] Apply vote grants after the atomic generic voting cutover.
-      Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
-      and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
-      broader focused form/grant regression selection passes 20 tests. Four
-      resource-specific grant tables retain real resource and group foreign
-      keys; one shared service provides idempotent audited creation, exact
-      revocation, D1-side search/filter/sort/pagination, and participant versus
-      effective-leadership evaluation. Mounted group routes use the same exact
-      domain contracts. The tests cover capability implication, escalation,
-      immediate revocation, inherited and local-only governance, idempotency,
-      owner immutability, validation, orphan prevention, context-bound member
-      access, atomic Google Groups desired-state removal, placement-owner
-      immutability, group-scoped form discovery and mutation, D1-side answer
-      search, immediate revocation, and prevention of generic form endpoints
-      bypassing registration, proposal, or application workflows.
-      Group-event sharing tests additionally prove context-bound discovery,
-      shared flexible links, participant/manager separation, revocation,
-      indexed owner/grantee and occurrence-attendance query plans, and atomic
-      attendance-management reauthorization. Authenticated group registration
-      also proves strict identity binding, registration-policy enforcement,
-      and the atomic D1 authorization guard.
+        Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
+        and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
+        broader focused form/grant regression selection passes 20 tests. Four
+        resource-specific grant tables retain real resource and group foreign
+        keys; one shared service provides idempotent audited creation, exact
+        revocation, D1-side search/filter/sort/pagination, and participant versus
+        effective-leadership evaluation. Mounted group routes use the same exact
+        domain contracts. The tests cover capability implication, escalation,
+        immediate revocation, inherited and local-only governance, idempotency,
+        owner immutability, validation, orphan prevention, context-bound member
+        access, atomic Google Groups desired-state removal, placement-owner
+        immutability, group-scoped form discovery and mutation, D1-side answer
+        search, immediate revocation, and prevention of generic form endpoints
+        bypassing registration, proposal, or application workflows.
+        Group-event sharing tests additionally prove context-bound discovery,
+        shared flexible links, participant/manager separation, revocation,
+        indexed owner/grantee and occurrence-attendance query plans, and atomic
+        attendance-management reauthorization. Authenticated group registration
+        also proves strict identity binding, registration-policy enforcement,
+        and the atomic D1 authorization guard.
 
 ## 9. Group-scoped REST API
 

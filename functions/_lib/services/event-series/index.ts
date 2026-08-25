@@ -2,6 +2,7 @@ export * from "./access";
 export * from "./attendance";
 export * from "./guests";
 export * from "./ics";
+export * from "./management";
 export * from "./occurrences";
 export * from "./provider-url";
 export * from "./providers";

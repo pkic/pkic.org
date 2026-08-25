@@ -163,21 +163,21 @@ describe("consolidated pending migration upgrade", () => {
         .prepare(
           `SELECT type, name FROM sqlite_master
             WHERE name IN (
-              'event_attendance_management_guards',
-              'trg_event_attendance_management_guard_validate',
-              'trg_event_attendance_management_guard_release'
+              'event_resource_management_guards',
+              'trg_event_resource_management_guard_validate',
+              'trg_event_resource_management_guard_release'
             )
             ORDER BY type, name`,
         )
         .all(),
     ).toEqual([
-      { type: "table", name: "event_attendance_management_guards" },
-      { type: "trigger", name: "trg_event_attendance_management_guard_release" },
-      { type: "trigger", name: "trg_event_attendance_management_guard_validate" },
+      { type: "table", name: "event_resource_management_guards" },
+      { type: "trigger", name: "trg_event_resource_management_guard_release" },
+      { type: "trigger", name: "trg_event_resource_management_guard_validate" },
     ]);
     expect(
       db
-        .prepare("PRAGMA foreign_key_list(event_attendance_management_guards)")
+        .prepare("PRAGMA foreign_key_list(event_resource_management_guards)")
         .all()
         .map((foreignKey: any) => foreignKey.table)
         .sort(),

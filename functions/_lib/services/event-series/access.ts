@@ -12,11 +12,11 @@ import { hmacSha256Hex, randomToken, sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog } from "../audit";
-import { requireGroupManagement } from "../groups/governance";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { commitEventResourceManagementBatch } from "./management";
 import { openProviderJoinUrl } from "./provider-url";
 import { toEventOccurrence, type EventOccurrenceRow } from "./record";
-import { getSeriesOccurrence } from "./occurrences";
+import { getManagedSeriesOccurrence } from "./occurrences";
 
 type AccessIssueInput = z.infer<typeof eventAccessTokenIssueSchema>;
 type JoinConfirmInput = z.infer<typeof meetingJoinConfirmSchema>;
@@ -161,8 +161,7 @@ export async function issueOccurrenceAccessToken(
   occurrenceId: string,
   input: AccessIssueInput,
 ) {
-  const { series, occurrence } = await getSeriesOccurrence(db, groupIdOrSlug, seriesId, occurrenceId);
-  await requireGroupManagement(db, actor, series.ownerGroupId);
+  const { context, occurrence } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   const now = nowIso();
   if (input.expiresAt <= now || input.expiresAt > new Date(Date.parse(occurrence.endsAt) + 86_400_000).toISOString()) {
     throw new AppError(
@@ -200,29 +199,41 @@ export async function issueOccurrenceAccessToken(
   }
   const token = randomToken(32);
   const id = uuid();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO event_occurrence_access_tokens
-           (id, occurrence_id, user_id, guest_id, token_hash, expires_at,
-            first_used_at, last_used_at, use_count, revoked_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?)`,
-      )
-      .bind(
-        id,
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          `INSERT INTO event_occurrence_access_tokens
+             (id, occurrence_id, user_id, guest_id, token_hash, expires_at,
+              first_used_at, last_used_at, use_count, revoked_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?)`,
+        )
+        .bind(
+          id,
+          occurrenceId,
+          input.userId ?? null,
+          input.guestId ?? null,
+          await sha256Hex(token),
+          input.expiresAt,
+          now,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_occurrence_access_issued",
+        "event_occurrence",
         occurrenceId,
-        input.userId ?? null,
-        input.guestId ?? null,
-        await sha256Hex(token),
-        input.expiresAt,
-        now,
+        { userId: input.userId, guestId: input.guestId, expiresAt: input.expiresAt },
       ),
-    prepareAuditLog(db, "admin", actor.id, "event_occurrence_access_issued", "event_occurrence", occurrenceId, {
-      userId: input.userId,
-      guestId: input.guestId,
-      expiresAt: input.expiresAt,
-    }),
-  ]);
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access changed while it was being issued");
+    }
+    throw error;
+  }
   return { token, joinPath: `/api/v1/meetings/join/${token}`, expiresAt: input.expiresAt };
 }
 

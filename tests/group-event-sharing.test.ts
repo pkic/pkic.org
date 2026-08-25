@@ -8,13 +8,15 @@ import {
   buildGroupEventSeriesPageQuery,
   buildOccurrenceAttendancePageQuery,
   createGroupEventSeries,
+  materializeSeriesOccurrences,
+  updateGroupEventSeries,
 } from "../functions/_lib/services/event-series";
 import { buildGroupEventsPageQuery } from "../functions/_lib/services/events/group-read-model";
 import { replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
-import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+import type { D1StatementResult, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
@@ -31,7 +33,21 @@ interface Fixture {
   memberId: string;
   memberEmail: string;
   memberToken: string;
+  leader: UserBackedAuthAdmin;
   leaderToken: string;
+}
+
+function mutateBeforeNextBatch(mutation: () => Promise<unknown>): DatabaseLike {
+  let pending = mutation;
+  return {
+    prepare: (sql: string) => env.DB.prepare(sql) as unknown as StatementLike,
+    batch: async (statements: StatementLike[]): Promise<D1StatementResult[]> => {
+      const runMutation = pending;
+      pending = async () => undefined;
+      await runMutation();
+      return (await env.DB.batch(statements as D1PreparedStatement[])) as unknown as D1StatementResult[];
+    },
+  };
 }
 
 async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
@@ -114,6 +130,7 @@ async function createFixture(): Promise<Fixture> {
     memberId: member.userId,
     memberEmail,
     memberToken: await createMemberSession(env.DB, member.userId, `group-event-member-${crypto.randomUUID()}`),
+    leader,
     leaderToken: await createAdminSession(env.DB, leader.id, `group-event-leader-${crypto.randomUUID()}`),
   };
 }
@@ -386,13 +403,13 @@ describe("group event sharing", () => {
     expect(revoked.status).toBe(403);
     await expect(
       env.DB.prepare(
-        `INSERT INTO event_attendance_management_guards
-           (id, event_id, group_id, actor_user_id, trusted_service, created_at)
-         VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+        `INSERT INTO event_resource_management_guards
+           (id, event_id, group_id, required_capability, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, 'manage_attendance', ?, 0, datetime('now'))`,
       )
         .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
         .run(),
-    ).rejects.toThrow("EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED");
+    ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
 
     await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
       granteeGroupId: fixture.granteeId,
@@ -401,16 +418,211 @@ describe("group event sharing", () => {
     const impliedManagement = await authenticatedRequest(fixture.leaderToken, attendancePath);
     expect(impliedManagement.status, await impliedManagement.clone().text()).toBe(200);
 
-    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(fixture.admin.id).run();
     await expect(
       env.DB.prepare(
-        `INSERT INTO event_attendance_management_guards
-           (id, event_id, group_id, actor_user_id, trusted_service, created_at)
-         VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+        `INSERT INTO event_resource_management_guards
+           (id, event_id, group_id, required_capability, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, 'unknown_capability', ?, 0, datetime('now'))`,
       )
         .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
         .run(),
-    ).rejects.toThrow("EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED");
+    ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(fixture.admin.id).run();
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO event_resource_management_guards
+           (id, event_id, group_id, required_capability, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, 'manage_attendance', ?, 0, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
+        .run(),
+    ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
+  });
+
+  it("requires exact delegated event management and revalidates it atomically", async () => {
+    const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO event_occurrences
+         (id, series_id, starts_at, ends_at, status, created_at, updated_at)
+       VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
+               'scheduled', datetime('now'), datetime('now'))`,
+    )
+      .bind(occurrenceId, fixture.seriesId)
+      .run();
+    const seriesPath = `/api/v1/groups/${fixture.granteeId}/meetings/series/${fixture.seriesId}`;
+    const occurrencePath = `${seriesPath}/occurrences/${occurrenceId}`;
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+    const attendanceOnlyUpdate = await authenticatedRequest(fixture.leaderToken, seriesPath, {
+      method: "PATCH",
+      body: JSON.stringify({ eventName: "Must not be changed by attendance management" }),
+    });
+    expect(attendanceOnlyUpdate.status).toBe(403);
+    expect((await authenticatedRequest(fixture.leaderToken, `${occurrencePath}/guests`)).status).toBe(403);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const managedUpdate = await authenticatedRequest(fixture.leaderToken, seriesPath, {
+      method: "PATCH",
+      body: JSON.stringify({ eventName: "Delegated architecture workshop" }),
+    });
+    expect(managedUpdate.status, await managedUpdate.clone().text()).toBe(200);
+    const materialized = await authenticatedRequest(fixture.leaderToken, `${seriesPath}/materialize`, {
+      method: "POST",
+      body: JSON.stringify({ through: "2027-01-24T10:00:00.000Z", maxOccurrences: 10 }),
+    });
+    expect(materialized.status, await materialized.clone().text()).toBe(200);
+    expect(await materialized.json()).toMatchObject({ created: 1, existing: 1 });
+
+    const createdOccurrence = await authenticatedRequest(fixture.leaderToken, `${seriesPath}/occurrences`, {
+      method: "POST",
+      body: JSON.stringify({
+        startsAt: "2099-02-01T10:00:00.000Z",
+        endsAt: "2099-02-01T11:00:00.000Z",
+      }),
+    });
+    expect(createdOccurrence.status, await createdOccurrence.clone().text()).toBe(201);
+    const createdOccurrenceId = (await createdOccurrence.json<{ occurrence: { id: string } }>()).occurrence.id;
+    const createdOccurrencePath = `${seriesPath}/occurrences/${createdOccurrenceId}`;
+    const occurrenceUpdate = await authenticatedRequest(fixture.leaderToken, createdOccurrencePath, {
+      method: "PATCH",
+      body: JSON.stringify({ locationOverride: "Delegated room" }),
+    });
+    expect(occurrenceUpdate.status, await occurrenceUpdate.clone().text()).toBe(200);
+
+    const guestInvite = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`, {
+      method: "POST",
+      body: JSON.stringify({
+        email: `delegated-guest-${crypto.randomUUID()}@example.test`,
+        name: "Delegated Guest",
+        expiresAt: "2099-02-01T12:00:00.000Z",
+      }),
+    });
+    expect(guestInvite.status, await guestInvite.clone().text()).toBe(201);
+    const guestId = (await guestInvite.json<{ guest: { id: string } }>()).guest.id;
+    expect((await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`)).status).toBe(200);
+    const accessIssue = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/access`, {
+      method: "POST",
+      body: JSON.stringify({ guestId, expiresAt: "2099-02-01T12:00:00.000Z" }),
+    });
+    expect(accessIssue.status, await accessIssue.clone().text()).toBe(201);
+    const guestRevoke = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests/${guestId}`, {
+      method: "DELETE",
+    });
+    expect(guestRevoke.status, await guestRevoke.clone().text()).toBe(200);
+
+    const scopedActions = await env.DB.prepare(
+      `SELECT action, scope_id FROM audit_log
+        WHERE scope_type = 'group' AND scope_id = ?
+          AND action IN ('event_series_updated', 'event_occurrence_created', 'event_occurrence_updated',
+                         'event_series_materialized', 'event_guest_invited',
+                         'event_occurrence_access_issued', 'event_guest_revoked')
+        ORDER BY action`,
+    )
+      .bind(fixture.granteeId)
+      .all<{ action: string; scope_id: string }>();
+    expect(scopedActions.results.map((row) => row.action)).toEqual([
+      "event_guest_invited",
+      "event_guest_revoked",
+      "event_occurrence_access_issued",
+      "event_occurrence_created",
+      "event_occurrence_updated",
+      "event_series_materialized",
+      "event_series_updated",
+    ]);
+
+    const wrongContext = await authenticatedRequest(
+      fixture.leaderToken,
+      `/api/v1/groups/${fixture.outsiderId}/meetings/series/${fixture.seriesId}`,
+      { method: "PATCH", body: JSON.stringify({ eventName: "Wrong context" }) },
+    );
+    expect(wrongContext.status).toBe(403);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    expect(
+      (
+        await authenticatedRequest(fixture.leaderToken, seriesPath, {
+          method: "PATCH",
+          body: JSON.stringify({ eventName: "Revoked context" }),
+        })
+      ).status,
+    ).toBe(403);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const racingGrantDb = mutateBeforeNextBatch(() =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage",
+      }),
+    );
+    await expect(
+      updateGroupEventSeries(racingGrantDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
+        eventName: "Grant race must roll back",
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(fixture.eventId).first("name")).toBe(
+      "Delegated architecture workshop",
+    );
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const occurrenceCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrences WHERE series_id = ?")
+      .bind(fixture.seriesId)
+      .first<number>("total");
+    const racingMaterializeDb = mutateBeforeNextBatch(() =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage",
+      }),
+    );
+    await expect(
+      materializeSeriesOccurrences(racingMaterializeDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
+        through: "2027-01-24T10:00:00.000Z",
+        maxOccurrences: 10,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrences WHERE series_id = ?")
+        .bind(fixture.seriesId)
+        .first<number>("total"),
+    ).toBe(occurrenceCount);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const racingLeadershipDb = mutateBeforeNextBatch(() =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ? AND context_id = ?")
+        .bind(fixture.leader.id, fixture.granteeId)
+        .run(),
+    );
+    await expect(
+      updateGroupEventSeries(racingLeadershipDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
+        eventName: "Leadership race must roll back",
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(fixture.eventId).first("name")).toBe(
+      "Delegated architecture workshop",
+    );
   });
 
   it("registers the verified session identity without accepting identity overrides", async () => {

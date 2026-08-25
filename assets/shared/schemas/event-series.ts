@@ -272,6 +272,13 @@ export const eventAccessTokenIssueSchema = z
   });
 export const eventAttendanceParamsSchema = eventOccurrenceParamsSchema.extend({ confirmationId: databaseIdSchema });
 
+const eventManagementErrorResponses = {
+  "401": jsonErrorResponse("An authenticated management identity is required."),
+  "403": jsonErrorResponse("Effective event-management capability through this group is required."),
+  "404": jsonErrorResponse("The group, meeting series, occurrence, or child resource was not found."),
+  "409": jsonErrorResponse("Management context or target state changed while the command was being saved."),
+};
+
 export const eventSeriesResponseSchema = z.object({ series: eventSeriesSchema });
 export const eventOccurrenceResponseSchema = z.object({ occurrence: eventOccurrenceSchema });
 export const eventOccurrenceGuestResponseSchema = z.object({ guest: eventOccurrenceGuestSchema });
@@ -300,12 +307,12 @@ export const groupMeetingSeriesCreateRouteSchema = {
 };
 export const eventSeriesUpdateRouteSchema = {
   tags: ["Groups", "Meetings"],
-  summary: "Update a group-owned meeting series",
+  summary: "Update a meeting series through a management group context",
   request: {
     params: eventSeriesParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventSeriesUpdateSchema } } },
   },
-  responses: { "200": { description: "Meeting series updated." } },
+  responses: { "200": { description: "Meeting series updated." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrencesListRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -324,7 +331,7 @@ export const eventOccurrenceCreateRouteSchema = {
     params: eventSeriesParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventOccurrenceCreateSchema } } },
   },
-  responses: { "201": { description: "Occurrence created." } },
+  responses: { "201": { description: "Occurrence created." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceUpdateRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -333,7 +340,7 @@ export const eventOccurrenceUpdateRouteSchema = {
     params: eventOccurrenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventOccurrenceUpdateSchema } } },
   },
-  responses: { "200": { description: "Occurrence updated." } },
+  responses: { "200": { description: "Occurrence updated." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestInviteRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -342,20 +349,20 @@ export const eventOccurrenceGuestInviteRouteSchema = {
     params: eventOccurrenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventOccurrenceGuestInviteSchema } } },
   },
-  responses: { "201": { description: "Guest invitation created." } },
+  responses: { "201": { description: "Guest invitation created." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestsListRouteSchema = {
   tags: ["Groups", "Meetings"],
   summary: "List occurrence-specific and series-wide guests",
   description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
   request: { params: eventOccurrenceParamsSchema, query: eventOccurrenceGuestsListQuerySchema },
-  responses: { "200": { description: "A bounded guest page." } },
+  responses: { "200": { description: "A bounded guest page." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestRevokeRouteSchema = {
   tags: ["Groups", "Meetings"],
   summary: "Revoke a meeting guest and every active access capability",
   request: { params: eventGuestParamsSchema },
-  responses: { "200": { description: "Guest access revoked." } },
+  responses: { "200": { description: "Guest access revoked." }, ...eventManagementErrorResponses },
 };
 export const eventSeriesCalendarRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -370,12 +377,16 @@ export const eventSeriesCalendarRouteSchema = {
 export const eventSeriesMaterializeRouteSchema = {
   tags: ["Groups", "Meetings"],
   summary: "Idempotently materialize recurring meeting occurrences",
-  description: "Expansion is bounded, timezone-aware, and existing occurrences are preserved.",
+  description:
+    "Expansion is bounded, timezone-aware, set-based, atomic with authorization, and preserves existing occurrences.",
   request: {
     params: eventSeriesParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventSeriesMaterializeSchema } } },
   },
-  responses: { "200": { description: "Recurring occurrences materialized through the requested horizon." } },
+  responses: {
+    "200": { description: "Recurring occurrences materialized through the requested horizon." },
+    ...eventManagementErrorResponses,
+  },
 };
 export const eventOccurrenceAccessIssueRouteSchema = {
   tags: ["Groups", "Meetings"],
@@ -384,7 +395,7 @@ export const eventOccurrenceAccessIssueRouteSchema = {
     params: eventOccurrenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventAccessTokenIssueSchema } } },
   },
-  responses: { "201": { description: "Opaque access capability issued." } },
+  responses: { "201": { description: "Opaque access capability issued." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceAttendanceListRouteSchema = {
   tags: ["Groups", "Meetings"],

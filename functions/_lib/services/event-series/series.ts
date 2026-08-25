@@ -15,7 +15,7 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
-import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { buildAccessibleGroupEventIdsCte } from "../events/access-query";
 import { getGroup } from "../groups";
 import { requireGroupManagement } from "../groups/governance";
@@ -25,6 +25,11 @@ import {
   type GroupResourceContextAccess,
   type GroupResourceViewer,
 } from "../resource-grants";
+import {
+  commitEventResourceManagementBatch,
+  requireEventResourceManagementContext,
+  type EventResourceManagementContext,
+} from "./management";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
 
 type EventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
@@ -117,6 +122,18 @@ export async function getAccessibleGroupEventSeries(
   return series;
 }
 
+export async function getManagedGroupEventSeries(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  seriesId: string,
+): Promise<{ series: EventSeries; context: EventResourceManagementContext }> {
+  const series = await getEventSeriesById(db, seriesId);
+  if (!series) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+  const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, series.eventId, "manage");
+  return { series, context };
+}
+
 function normalizedSlug(value: string): string {
   const slug = value.trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
@@ -206,8 +223,7 @@ export async function updateGroupEventSeries(
   seriesId: string,
   input: EventSeriesUpdateInput,
 ): Promise<EventSeries> {
-  const existing = await getGroupEventSeries(db, groupIdOrSlug, seriesId);
-  await requireGroupManagement(db, actor, existing.ownerGroupId);
+  const { series: existing, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
   const scheduleChanged =
     input.startsAt !== undefined ||
     input.recurrenceRule !== undefined ||
@@ -241,45 +257,74 @@ export async function updateGroupEventSeries(
         }
       : currentPolicy,
   );
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE events SET name = COALESCE(?, name), profile_key = COALESCE(?, profile_key),
-           registration_mode = COALESCE(?, registration_mode), settings_json = ?,
-           timezone = COALESCE(?, timezone), updated_at = ? WHERE id = ?`,
-      )
-      .bind(
-        input.eventName ?? null,
-        input.profileKey ?? null,
-        input.policy?.registrationPolicy ?? null,
-        settings,
-        input.timezone ?? null,
-        now,
-        existing.eventId,
-      ),
-    db
-      .prepare(
-        `UPDATE event_series SET starts_at = COALESCE(?, starts_at),
-           recurrence_rule = COALESCE(?, recurrence_rule), timezone = COALESCE(?, timezone),
-           duration_minutes = COALESCE(?, duration_minutes),
-           location = CASE WHEN ? = 1 THEN ? ELSE location END,
-           provider_type = CASE WHEN ? = 1 THEN ? ELSE provider_type END,
-           active = COALESCE(?, active), updated_at = ? WHERE id = ?`,
-      )
-      .bind(
-        input.startsAt ?? null,
-        input.recurrenceRule ?? null,
-        input.timezone ?? null,
-        input.durationMinutes ?? null,
-        input.location !== undefined ? 1 : 0,
-        input.location ?? null,
-        input.providerType !== undefined ? 1 : 0,
-        input.providerType ?? null,
-        input.active === undefined ? null : input.active ? 1 : 0,
-        now,
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          `UPDATE events SET name = COALESCE(?, name), profile_key = COALESCE(?, profile_key),
+             registration_mode = COALESCE(?, registration_mode), settings_json = ?,
+             timezone = COALESCE(?, timezone), updated_at = ? WHERE id = ?`,
+        )
+        .bind(
+          input.eventName ?? null,
+          input.profileKey ?? null,
+          input.policy?.registrationPolicy ?? null,
+          settings,
+          input.timezone ?? null,
+          now,
+          existing.eventId,
+        ),
+      db
+        .prepare(
+          `UPDATE event_series SET starts_at = COALESCE(?, starts_at),
+             recurrence_rule = COALESCE(?, recurrence_rule), timezone = COALESCE(?, timezone),
+             duration_minutes = COALESCE(?, duration_minutes),
+             location = CASE WHEN ? = 1 THEN ? ELSE location END,
+             provider_type = CASE WHEN ? = 1 THEN ? ELSE provider_type END,
+             active = COALESCE(?, active), updated_at = ?
+           WHERE id = ?
+             AND (? = 0 OR NOT EXISTS (SELECT 1 FROM event_occurrences WHERE series_id = ?))`,
+        )
+        .bind(
+          input.startsAt ?? null,
+          input.recurrenceRule ?? null,
+          input.timezone ?? null,
+          input.durationMinutes ?? null,
+          input.location !== undefined ? 1 : 0,
+          input.location ?? null,
+          input.providerType !== undefined ? 1 : 0,
+          input.providerType ?? null,
+          input.active === undefined ? null : input.active ? 1 : 0,
+          now,
+          seriesId,
+          scheduleChanged ? 1 : 0,
+          seriesId,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_series_updated",
+        "event_series",
         seriesId,
+        input,
       ),
-    prepareAuditLogAfterOneChange(db, "admin", actor.id, "event_series_updated", "event_series", seriesId, input),
-  ]);
-  return getGroupEventSeries(db, existing.ownerGroupId, seriesId);
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      if (scheduleChanged) {
+        throw new AppError(
+          409,
+          "EVENT_SERIES_SCHEDULE_MATERIALIZED",
+          "The recurring schedule cannot be changed after occurrences are materialized",
+        );
+      }
+      throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while the update was being saved");
+    }
+    throw error;
+  }
+  const updated = await getEventSeriesById(db, seriesId);
+  if (!updated) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+  return updated;
 }
