@@ -52,6 +52,83 @@ export interface JoinGroupOptions {
   allowManaged: boolean;
 }
 
+export interface BuildGroupCapacityJoinOptions {
+  groupId: string;
+  targetUserId: string;
+  memberIds: readonly string[];
+  source: GroupMembershipSource;
+  actorUserId: string | null;
+  actorDatabaseUserId?: string | null;
+  allowManaged: boolean;
+  at: string;
+}
+
+/**
+ * Builds the canonical capacity-level join command for an outer D1 batch.
+ * This is shared by ordinary group joins and membership provisioning, where
+ * the user, Member, and representation may be created earlier in that same
+ * atomic batch and therefore cannot be resolved by a pre-write service call.
+ */
+export function buildGroupCapacityJoinStatements(
+  db: DatabaseLike,
+  options: BuildGroupCapacityJoinOptions,
+): StatementLike[] {
+  const memberIds = [...new Set(options.memberIds)];
+  if (memberIds.length === 0) throw new Error("At least one Member capacity is required");
+  const plannedMemberships = memberIds.map((memberId) => ({ id: uuid(), memberId }));
+  const statements: StatementLike[] = [
+    prepareGroupJoinEligibilityGuard(db, options.groupId, options.targetUserId, memberIds, {
+      allowManaged: options.allowManaged,
+    }),
+    ...plannedMemberships.map(({ id, memberId }) =>
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO group_memberships
+             (id, group_id, user_id, member_id, source, created_by_user_id,
+              joined_at, left_at, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?
+            WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1)`,
+        )
+        .bind(
+          id,
+          options.groupId,
+          options.targetUserId,
+          memberId,
+          options.source,
+          options.actorDatabaseUserId === undefined ? options.actorUserId : options.actorDatabaseUserId,
+          options.at,
+          options.at,
+          options.at,
+          options.targetUserId,
+        ),
+    ),
+  ];
+  const insertedMembershipFilter = buildD1JsonMembershipFilter(
+    "id",
+    plannedMemberships.map((membership) => membership.id),
+  );
+  statements.push(
+    prepareAuditLogWhen(db, {
+      actorType:
+        options.source === "self_service" ? "member" : options.source === "automatic_policy" ? "system" : "admin",
+      actorId: options.actorUserId,
+      action: "group_joined",
+      entityType: "group",
+      entityId: options.groupId,
+      details: {
+        targetUserId: options.targetUserId,
+        requestedMemberIds: memberIds,
+        source: options.source,
+      },
+      conditionSql: `SELECT 1 FROM group_memberships WHERE ${insertedMembershipFilter.sql}`,
+      conditionBindings: insertedMembershipFilter.bindings,
+      createdAt: options.at,
+      scope: { type: "group", id: options.groupId },
+    }),
+  );
+  return statements;
+}
+
 /** Adds the selected capacity set atomically and idempotently. */
 export async function joinGroup(
   db: DatabaseLike,
@@ -63,63 +140,19 @@ export async function joinGroup(
     allowManaged: options.allowManaged,
   });
   const at = nowIso();
-  const plannedMemberships = capacities.map((capacity) => ({ id: uuid(), capacity }));
   const statements: StatementLike[] = [
-    prepareGroupJoinEligibilityGuard(
-      db,
-      group.id,
-      options.targetUserId,
-      capacities.map((capacity) => capacity.memberId),
-      { allowManaged: options.allowManaged },
-    ),
-    ...plannedMemberships.map(({ id, capacity }) =>
-      db
-        .prepare(
-          `INSERT OR IGNORE INTO group_memberships
-           (id, group_id, user_id, member_id, source, created_by_user_id,
-            joined_at, left_at, created_at, updated_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?
-          WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1)`,
-        )
-        .bind(
-          id,
-          group.id,
-          options.targetUserId,
-          capacity.memberId,
-          options.source,
-          options.actorDatabaseUserId === undefined ? options.actorUserId : options.actorDatabaseUserId,
-          at,
-          at,
-          at,
-          options.targetUserId,
-        ),
-    ),
-  ];
-  const insertedMembershipFilter = buildD1JsonMembershipFilter(
-    "id",
-    plannedMemberships.map((membership) => membership.id),
-  );
-  statements.push(
-    // Candidate IDs are operation-local. A concurrent/no-op command therefore
-    // cannot satisfy this predicate with the winning command's membership.
-    prepareAuditLogWhen(db, {
-      actorType: options.source === "self_service" ? "member" : "admin",
-      actorId: options.actorUserId,
-      action: "group_joined",
-      entityType: "group",
-      entityId: group.id,
-      details: {
-        targetUserId: options.targetUserId,
-        requestedMemberIds: capacities.map((capacity) => capacity.memberId),
-        source: options.source,
-      },
-      conditionSql: `SELECT 1 FROM group_memberships WHERE ${insertedMembershipFilter.sql}`,
-      conditionBindings: insertedMembershipFilter.bindings,
-      createdAt: at,
-      scope: { type: "group", id: group.id },
+    ...buildGroupCapacityJoinStatements(db, {
+      groupId: group.id,
+      targetUserId: options.targetUserId,
+      memberIds: capacities.map((capacity) => capacity.memberId),
+      source: options.source,
+      actorUserId: options.actorUserId,
+      actorDatabaseUserId: options.actorDatabaseUserId,
+      allowManaged: options.allowManaged,
+      at,
     }),
     prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
-  );
+  ];
   try {
     await db.batch(statements);
   } catch (error) {

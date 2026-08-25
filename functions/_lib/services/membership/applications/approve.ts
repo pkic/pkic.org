@@ -60,18 +60,14 @@ import { AppError } from "../../../errors";
 import { getApplicationAnswers, getMemberApplicationById } from "./queries";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
 import { buildProvisionOrganizationMembership } from "../provisioning";
-import { buildEnqueueGoogleGroupsSyncStatement } from "../../google-groups";
-import { prepareAutomaticGroupEnrollmentForUserStatements } from "../../groups/automatic-enrollment";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
-import { resolveApprovalIcsAttachments } from "../../meeting-calendar";
 import {
   buildMemberAccountClaimEmail,
   buildApplicationApprovedWelcomeEmail,
   buildOrgContactAssignedEmail,
 } from "../notifications";
-import { CA_WORKING_GROUP_SLUG, CA_ONLY_CATEGORY } from "../../working-groups";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../../types";
 
 export interface ApproveApplicationResult {
@@ -142,10 +138,6 @@ export async function approveApplication(
   // Read them back out here so they land on the newly provisioned user.
   const answers = await getApplicationAnswers(db, application.form_submission_id);
   const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(answers);
-  // CA WG constraint: only category A may be added to ca@.
-  const workingGroupSlugs = requestedWorkingGroupSlugs.filter(
-    (slug) => slug !== CA_WORKING_GROUP_SLUG || application.membership_category === CA_ONLY_CATEGORY,
-  );
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const links = typeof answers.linkedin === "string" && answers.linkedin.trim() ? [answers.linkedin.trim()] : [];
   const databaseActorUserId = params.actor ? adminDatabaseUserId(params.actor) : null;
@@ -167,20 +159,23 @@ export async function approveApplication(
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     representationSource: "staff",
-    workingGroupSlugs,
+    workingGroupSlugs: requestedWorkingGroupSlugs,
+    allowManagedGroupEnrollment: false,
+    ineligibleGroupPolicy: "omit",
     grantedByUserId: databaseActorUserId,
   });
   // Pure/synchronous — safe to call before the batch below commits, since
   // every id and decision it reports was already resolved by a pre-batch
   // read while building `provisioning.statements`.
-  const { organizationId, organizationWasCreated, representatives } = provisioning.buildResult();
+  const { organizationId, organizationWasCreated, representatives, groups } = provisioning.buildResult();
   const member = representatives[0];
+  const workingGroupSlugs = groups.map((group) => group.slug);
+  const workingGroupNames = groups.map((group) => group.name);
 
   const now = nowIso();
   const fromStage = application.stage;
   const requireNoEcDecline = params.approvalMode === "automatic_no_ec_objection";
   const statements: StatementLike[] = [...provisioning.statements];
-  statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, member.userId, now));
 
   // Compare-and-set: only applies if the application is still in ec_review,
   // guarding against a stale read racing a concurrent decline/on-hold/
@@ -213,30 +208,10 @@ export async function approveApplication(
       .bind(uuid(), application.id, fromStage, databaseActorUserId, params.eventNote ?? "Application approved", now),
   );
 
-  const workingGroupNames: string[] = [];
-  for (const slug of workingGroupSlugs) {
-    const wg = await first<{ name: string; mailing_list_email: string | null }>(
-      db,
-      "SELECT name, mailing_list_email FROM working_groups WHERE slug = ?",
-      [slug],
-    );
-    if (!wg) continue;
-    workingGroupNames.push(wg.name);
-    if (wg.mailing_list_email) {
-      const { statement } = buildEnqueueGoogleGroupsSyncStatement(db, {
-        userId: member.userId,
-        googleGroupEmail: wg.mailing_list_email,
-        action: "add_to_list",
-      });
-      statements.push(statement);
-    }
-  }
-
   // Every email below is queued (not sent — sending needs env/executionCtx,
   // which callers still own, see header comment), so the insert can commit
-  // in the same batch as membership state above. All reads it depends on
-  // (icsAttachments) already happened.
-  const icsAttachments = await resolveApprovalIcsAttachments(db, workingGroupSlugs);
+  // in the same batch as membership state above. Group meeting invitations
+  // are driven by group-owned events, not uploaded ICS welcome attachments.
   const outboxIds: string[] = [];
 
   const claimEmail = prepareQueueEmailStatement(
@@ -254,7 +229,6 @@ export async function approveApplication(
       applicantName: member.name,
       loginUrl: params.loginUrl,
       workingGroupNames,
-      icsAttachments,
     }),
     now,
   );

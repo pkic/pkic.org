@@ -36,19 +36,16 @@
  * organization fails its whole batch cleanly via a foreign-key check,
  * rather than writing anything against the wrong aggregate).
  */
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { normalizeEmail } from "../../validation";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, splitPersonName, type UserRecord } from "../users";
 import { normalizeOrgName } from "../sponsorship";
-import {
-  assertCaConstraint,
-  buildAddWorkingGroupMemberStatements,
-  getWorkingGroupsBySlugs,
-  type WorkingGroupRow,
-} from "../working-groups";
+import { buildGroupCapacityJoinStatements } from "../groups/membership";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import {
   buildGetOrCreateOrganizationMemberAggregateStatements,
   buildCreateIndividualMemberStatements,
@@ -91,6 +88,10 @@ export interface ProvisionMembershipInput {
   /** Provenance for organization representation rows. Required for org-tied provisioning. */
   representationSource: OrganizationRepresentationSource;
   workingGroupSlugs: string[];
+  /** Staff provisioning may enter managed groups; application approval may only honor self-service-eligible requests. */
+  allowManagedGroupEnrollment?: boolean;
+  /** Whether an ineligible requested group rejects provisioning or is omitted from the approved request. */
+  ineligibleGroupPolicy?: "reject" | "omit";
   /** Backing users.id for relational role-grant attribution; null for synthetic/system actors. */
   grantedByUserId?: string | null;
   /** Reject (409) a representative who already holds/represents the target membership. Default true. */
@@ -118,6 +119,57 @@ export interface ProvisionMembershipResult {
   organizationId: string | null;
   organizationWasCreated: boolean;
   representatives: ProvisionedRepresentative[];
+  groups: ProvisionedGroup[];
+}
+
+export interface ProvisionedGroup {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+interface ProvisioningGroupRow extends ProvisionedGroup {
+  eligibility_mode: "open" | "category" | "managed";
+  permits_join: number | null;
+}
+
+async function resolveProvisioningGroups(
+  db: DatabaseLike,
+  input: ProvisionMembershipInput,
+): Promise<ProvisionedGroup[]> {
+  const slugs = [...new Set(input.workingGroupSlugs)];
+  if (slugs.length === 0) return [];
+  const filter = buildD1JsonMembershipFilter("g.slug", slugs);
+  const rows = await all<ProvisioningGroupRow>(
+    db,
+    `SELECT g.id, g.slug, g.name, g.eligibility_mode, rule.permits_join
+       FROM groups g
+  LEFT JOIN group_membership_category_rules rule
+         ON rule.group_id = g.id AND rule.membership_category_code = ?
+      WHERE g.type_key = 'working_group' AND g.active = 1 AND ${filter.sql}`,
+    [input.membershipCategory, ...filter.bindings],
+  );
+  const bySlug = new Map(rows.map((row) => [row.slug, row]));
+  const requested = slugs.flatMap((slug) => {
+    const row = bySlug.get(slug);
+    return row ? [row] : [];
+  });
+  const allowManaged = input.allowManagedGroupEnrollment ?? true;
+  const eligible = requested.filter(
+    (group) =>
+      group.eligibility_mode === "open" ||
+      (group.eligibility_mode === "category" && group.permits_join === 1) ||
+      (group.eligibility_mode === "managed" && allowManaged),
+  );
+  if ((input.ineligibleGroupPolicy ?? "reject") === "reject" && eligible.length !== requested.length) {
+    const ineligible = requested.find((group) => !eligible.includes(group));
+    throw new AppError(
+      403,
+      "GROUP_CAPACITY_INELIGIBLE",
+      ineligible ? `The membership category is not eligible for ${ineligible.name}` : "A requested group is ineligible",
+    );
+  }
+  return eligible.map(({ id, slug, name }) => ({ id, slug, name }));
 }
 
 async function buildRepresentativeUserStatement(db: DatabaseLike, rep: ProvisionRepresentativeInput) {
@@ -147,7 +199,7 @@ export interface BuiltProvisioning {
 async function buildProvisionIndividualMemberships(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
-  workingGroups: readonly WorkingGroupRow[],
+  groups: readonly ProvisionedGroup[],
   now: string,
 ): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
@@ -183,9 +235,21 @@ async function buildProvisionIndividualMemberships(
       statements.push(db.prepare("UPDATE members SET member_since = ? WHERE id = ?").bind(input.memberSince, memberId));
     }
 
-    for (const wg of workingGroups) {
-      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, memberId)));
+    for (const group of groups) {
+      statements.push(
+        ...buildGroupCapacityJoinStatements(db, {
+          groupId: group.id,
+          targetUserId: user.id,
+          memberIds: [memberId],
+          source: "staff",
+          actorUserId: input.grantedByUserId ?? null,
+          actorDatabaseUserId: input.grantedByUserId ?? null,
+          allowManaged: input.allowManagedGroupEnrollment ?? true,
+          at: now,
+        }),
+      );
     }
+    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
 
     representatives.push({
       userId: user.id,
@@ -201,7 +265,7 @@ async function buildProvisionIndividualMemberships(
 
   return {
     statements,
-    buildResult: () => ({ organizationId: null, organizationWasCreated: false, representatives }),
+    buildResult: () => ({ organizationId: null, organizationWasCreated: false, representatives, groups: [...groups] }),
   };
 }
 
@@ -301,7 +365,7 @@ async function buildResolveOrCreateAggregateStatements(
 async function buildProvisionOrganizationTiedMemberships(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
-  workingGroups: readonly WorkingGroupRow[],
+  groups: readonly ProvisionedGroup[],
   now: string,
 ): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
@@ -380,9 +444,21 @@ async function buildProvisionOrganizationTiedMemberships(
     });
     statements.push(repStatement);
 
-    for (const wg of workingGroups) {
-      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, aggregateId)));
+    for (const group of groups) {
+      statements.push(
+        ...buildGroupCapacityJoinStatements(db, {
+          groupId: group.id,
+          targetUserId: user.id,
+          memberIds: [aggregateId],
+          source: "staff",
+          actorUserId: input.grantedByUserId ?? null,
+          actorDatabaseUserId: input.grantedByUserId ?? null,
+          allowManaged: input.allowManagedGroupEnrollment ?? true,
+          at: now,
+        }),
+      );
     }
+    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
 
     pending.push({ rep, user, representativeId });
   }
@@ -418,6 +494,7 @@ async function buildProvisionOrganizationTiedMemberships(
     buildResult: () => ({
       organizationId,
       organizationWasCreated,
+      groups: [...groups],
       representatives: pending.map(({ rep, user, representativeId }, index) => ({
         userId: user.id,
         email: user.email,
@@ -445,16 +522,13 @@ export async function buildProvisionOrganizationMembership(
   input: ProvisionMembershipInput,
 ): Promise<BuiltProvisioning> {
   const now = nowIso();
-  const workingGroups = await getWorkingGroupsBySlugs(db, input.workingGroupSlugs);
-  for (const workingGroup of workingGroups) {
-    assertCaConstraint(workingGroup, [input.membershipCategory]);
-  }
+  const groups = await resolveProvisioningGroups(db, input);
 
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
   if (isIndividual || !input.organizationName) {
-    return buildProvisionIndividualMemberships(db, input, workingGroups, now);
+    return buildProvisionIndividualMemberships(db, input, groups, now);
   }
-  return buildProvisionOrganizationTiedMemberships(db, input, workingGroups, now);
+  return buildProvisionOrganizationTiedMemberships(db, input, groups, now);
 }
 
 /** Builds and immediately commits, for callers that don't need to fold this into a larger batch. */

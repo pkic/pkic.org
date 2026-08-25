@@ -3,7 +3,7 @@
  *
  * post-approval onboarding — POST /api/v1/admin/applications/:id/approve.
  * Covers org-tied vs. individual branches, primary contact assignment,
- * organization_domain_claims transfer, Google Groups enqueue, CA WG constraint,
+ * organization_domain_claims transfer, mailing-list reconciliation, group eligibility,
  * and the three onboarding emails.
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -34,12 +34,28 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 }
 
 async function seedWorkingGroup(slug: string, mailingListEmail: string | null = null): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, ?, 1, datetime('now'), datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), slug.toUpperCase(), slug, mailingListEmail)
-    .run();
+  const existing = await env.DB.prepare("SELECT id FROM groups WHERE slug = ?").bind(slug).first<{ id: string }>();
+  if (existing) return;
+  const groupId = crypto.randomUUID();
+  const at = new Date().toISOString();
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO groups
+         (id, type_key, name, slug, description, visibility, eligibility_mode, created_at, updated_at)
+       VALUES (?, 'working_group', ?, ?, NULL, 'public', 'open', ?, ?)`,
+    ).bind(groupId, slug.toUpperCase(), slug, at, at),
+  ];
+  if (mailingListEmail) {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO mailing_lists
+           (id, email, label, purpose, group_id, is_primary_discussion,
+            subscription_default, posting_policy, moderation_policy, created_at, updated_at)
+         VALUES (?, ?, ?, 'group', ?, 1, 'group_members', 'subscribers', 'moderated', ?, ?)`,
+      ).bind(crypto.randomUUID(), mailingListEmail, `${slug.toUpperCase()} discussion`, groupId, at, at),
+    );
+  }
+  await env.DB.batch(statements);
 }
 
 async function createEcReviewApplication(
@@ -203,14 +219,17 @@ describe("Post-approval onboarding", () => {
     expect(orgCount).toHaveLength(0);
   });
 
-  it("adds the member to working_group_members for requested WGs and enqueues Google Groups sync", async () => {
+  it("adds the requested group capacity and reconciles mailing-list subscriptions", async () => {
     const { id } = await createEcReviewApplication();
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; memberId: string };
 
     const wgRows = await queryAll<{ member_id: string | null }>(
       env.DB,
-      "SELECT wgm.member_id FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'pqc'",
+      `SELECT membership.member_id
+         FROM group_memberships membership
+         JOIN groups g ON g.id = membership.group_id
+        WHERE membership.user_id = ? AND g.slug = 'pqc' AND membership.left_at IS NULL`,
       body.userId,
     );
     expect(wgRows).toHaveLength(1);
@@ -230,7 +249,7 @@ describe("Post-approval onboarding", () => {
     expect(groupEmails).toContain("pqc@lists.pkic.org");
   });
 
-  it("enforces the CA working group constraint even if requested by a non-A category", async () => {
+  it("omits a requested group when its configured category rule is not satisfied", async () => {
     const { id } = await createEcReviewApplication({ membership_category: "B" }, { working_groups: ["ca", "pqc"] });
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; workingGroupSlugs: string[] };
@@ -239,7 +258,10 @@ describe("Post-approval onboarding", () => {
 
     const caRows = await queryAll(
       env.DB,
-      "SELECT 1 FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'ca'",
+      `SELECT 1
+         FROM group_memberships membership
+         JOIN groups g ON g.id = membership.group_id
+        WHERE membership.user_id = ? AND g.slug = 'ca' AND membership.left_at IS NULL`,
       body.userId,
     );
     expect(caRows).toHaveLength(0);
@@ -450,15 +472,8 @@ describe("Post-approval onboarding", () => {
       "SELECT google_group_email FROM google_groups_sync_queue WHERE user_id = ?",
       body.userId,
     );
-    // Distinct target lists are unaffected by the race (the loser enqueues
-    // nothing extra, and nothing goes to the wrong list). Row *count* isn't
-    // asserted here: independent of this test, a pre-existing bug
-    // double-enqueues a working group's own mailing_list_email once via
-    // provisionOrganizationMembership's WG-join path
-    // (working-groups.ts's buildAddWorkingGroupMemberStatements) and again
-    // via this route's own WG loop, on every single approval — racing or
-    // not. Out of scope for Phase 5 (not a transaction-atomicity issue);
-    // flagged in the Phase 5 write-up rather than fixed here.
+    // The canonical subscription projection emits at most one desired-state
+    // transition per list; the losing approval race contributes no rows.
     const groupEmails = new Set(syncRows.map((r) => r.google_group_email));
     expect(groupEmails).toEqual(new Set(["pkic@lists.pkic.org", "consultation@lists.pkic.org", "pqc@lists.pkic.org"]));
   });
