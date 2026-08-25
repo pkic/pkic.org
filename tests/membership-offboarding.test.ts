@@ -5,42 +5,60 @@ import { queryAll } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
 import { removeAdminMember } from "../functions/_lib/services/admin-organizations/representatives";
-import {
-  addWorkingGroupMember,
-  buildAddWorkingGroupMemberStatements,
-  type WorkingGroupRow,
-} from "../functions/_lib/services/working-groups";
 import { buildUserAccessOffboardingStatements } from "../functions/_lib/services/membership/offboarding";
+import { reconcileMailingListSubscriptionsForUser } from "../functions/_lib/services/mailing-list-subscriptions";
 import type { AuthAdmin } from "../functions/_lib/types";
 
-async function insertWorkingGroup(name: string, email: string): Promise<string> {
+async function insertGroup(name: string, email: string): Promise<string> {
   const id = crypto.randomUUID();
+  const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${id.slice(0, 6)}`;
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO groups
+         (id, type_key, name, slug, visibility, eligibility_mode, created_at, updated_at)
+       VALUES (?, 'working_group', ?, ?, 'public', 'open', ?, ?)`,
+    ).bind(id, name, slug, at, at),
+    env.DB.prepare(
+      `INSERT INTO mailing_lists
+         (id, email, label, purpose, group_id, is_primary_discussion,
+          subscription_default, posting_policy, moderation_policy, created_at, updated_at)
+       VALUES (?, ?, ?, 'group', ?, 1, 'group_members', 'subscribers', 'moderated', ?, ?)`,
+    ).bind(crypto.randomUUID(), email, `${name} discussion`, id, at, at),
+  ]);
+  return id;
+}
+
+async function joinGroupCapacity(groupId: string, userId: string, memberId: string): Promise<string> {
+  const id = crypto.randomUUID();
+  const at = new Date().toISOString();
   await env.DB.prepare(
-    `INSERT INTO working_groups
-       (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, ?, 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO group_memberships
+       (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'staff', ?, ?, ?)`,
   )
-    .bind(id, name, `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${id.slice(0, 6)}`, email)
+    .bind(id, groupId, userId, memberId, at, at, at)
     .run();
   return id;
 }
 
-async function joinWorkingGroup(workingGroupId: string, userId: string, memberId: string | null): Promise<string> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO working_group_members
-       (id, working_group_id, user_id, member_id, joined_at, left_at)
-     VALUES (?, ?, ?, ?, datetime('now'), NULL)`,
-  )
-    .bind(id, workingGroupId, userId, memberId)
-    .run();
-  return id;
+async function establishDesiredSubscriptions(userId: string): Promise<number> {
+  await reconcileMailingListSubscriptionsForUser(env.DB, userId);
+  const [{ total }] = await queryAll<{ total: number }>(
+    env.DB,
+    `SELECT COUNT(*) AS total
+       FROM google_groups_membership_desired_state
+      WHERE user_id = ? AND desired_action = 'add_to_list'`,
+    userId,
+  );
+  await env.DB.prepare("DELETE FROM google_groups_sync_queue WHERE user_id = ?").bind(userId).run();
+  return total;
 }
 
 describe("membership access offboarding", () => {
   beforeEach(resetDb);
 
-  it("atomically deactivates a user, closes every active WG seat, and enqueues one deterministic removal per managed list", async () => {
+  it("atomically deactivates a user, closes every group capacity, and reconciles projected subscriptions", async () => {
     const actorId = await insertUser(env.DB, "offboarding-admin@example.test");
     const userId = await insertUser(env.DB, "offboarding-user@example.test");
     const actor: AuthAdmin = {
@@ -49,25 +67,18 @@ describe("membership access offboarding", () => {
       email: "offboarding-admin@example.test",
       role: "admin",
     };
-    const workingGroupId = await insertWorkingGroup("Offboarding WG", "offboarding-wg@lists.pkic.org");
+    const groupId = await insertGroup("Offboarding Group", "offboarding-group@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Offboarding Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     await addRepresentative(env.DB, memberId, userId);
-    await joinWorkingGroup(workingGroupId, userId, null);
+    await joinGroupCapacity(groupId, userId, memberId);
+    const desiredSubscriptionCount = await establishDesiredSubscriptions(userId);
 
-    const [{ active_lists: activeListCount }] = await queryAll<{ active_lists: number }>(
-      env.DB,
-      "SELECT COUNT(DISTINCT email) AS active_lists FROM mailing_lists WHERE active = 1",
-    );
     await updateAdminUser(env.DB, actor, userId, { active: false });
 
     expect(await queryAll(env.DB, "SELECT active FROM users WHERE id = ?", userId)).toEqual([{ active: 0 }]);
     expect(
-      await queryAll(
-        env.DB,
-        "SELECT left_at IS NOT NULL AS closed FROM working_group_members WHERE user_id = ?",
-        userId,
-      ),
+      await queryAll(env.DB, "SELECT left_at IS NOT NULL AS closed FROM group_memberships WHERE user_id = ?", userId),
     ).toEqual([{ closed: 1 }]);
     expect(
       await queryAll(
@@ -84,13 +95,13 @@ describe("membership access offboarding", () => {
         ORDER BY google_group_email`,
       userId,
     );
-    expect(removals).toHaveLength(activeListCount + 1);
-    expect(removals.map((row) => row.google_group_email)).toContain("offboarding-wg@lists.pkic.org");
+    expect(removals).toHaveLength(desiredSubscriptionCount);
+    expect(removals.map((row) => row.google_group_email)).toContain("offboarding-group@lists.pkic.org");
     expect(new Set(removals.map((row) => row.idempotency_key)).size).toBe(removals.length);
-    expect(removals.every((row) => row.idempotency_key.startsWith(`user:${userId}:deactivate:`))).toBe(true);
+    expect(removals.every((row) => row.idempotency_key.startsWith(`mailing-list-reconcile:${userId}:`))).toBe(true);
   });
 
-  it("rolls back access closure and queueing when the deactivation audit cannot commit", async () => {
+  it("rolls back access closure and subscription reconciliation when the audit cannot commit", async () => {
     const actorId = await insertUser(env.DB, "rollback-admin@example.test");
     const userId = await insertUser(env.DB, "rollback-user@example.test");
     const actor: AuthAdmin = {
@@ -99,11 +110,12 @@ describe("membership access offboarding", () => {
       email: "rollback-admin@example.test",
       role: "admin",
     };
-    const workingGroupId = await insertWorkingGroup("Rollback WG", "rollback-wg@lists.pkic.org");
+    const groupId = await insertGroup("Rollback Group", "rollback-group@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Rollback Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     await addRepresentative(env.DB, memberId, userId);
-    await joinWorkingGroup(workingGroupId, userId, null);
+    await joinGroupCapacity(groupId, userId, memberId);
+    await establishDesiredSubscriptions(userId);
     await env.DB.prepare(
       `CREATE TRIGGER reject_offboarding_audit
        BEFORE INSERT ON audit_log
@@ -118,7 +130,7 @@ describe("membership access offboarding", () => {
         "forced offboarding audit failure",
       );
       expect(await queryAll(env.DB, "SELECT active FROM users WHERE id = ?", userId)).toEqual([{ active: 1 }]);
-      expect(await queryAll(env.DB, "SELECT left_at FROM working_group_members WHERE user_id = ?", userId)).toEqual([
+      expect(await queryAll(env.DB, "SELECT left_at FROM group_memberships WHERE user_id = ?", userId)).toEqual([
         { left_at: null },
       ]);
       expect(
@@ -135,93 +147,20 @@ describe("membership access offboarding", () => {
     }
   });
 
-  it("does not enqueue an add when a concurrently inserted WG seat makes the guarded insert a no-op", async () => {
-    const userId = await insertUser(env.DB, "ignored-seat-add@example.test");
-    const workingGroupId = await insertWorkingGroup("Ignored insert WG", "ignored-insert@lists.pkic.org");
-    const workingGroup: WorkingGroupRow = {
-      id: workingGroupId,
-      slug: "ignored-insert-wg",
-      name: "Ignored insert WG",
-      mailing_list_email: "ignored-insert@lists.pkic.org",
-      active: 1,
-    };
-    const staleAddPlan = await buildAddWorkingGroupMemberStatements(env.DB, workingGroup, userId);
-    await joinWorkingGroup(workingGroupId, userId, null);
-
-    await env.DB.batch(staleAddPlan);
-
-    expect(
-      await queryAll(env.DB, "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ?", [
-        workingGroupId,
-        userId,
-      ]),
-    ).toHaveLength(1);
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT id FROM google_groups_sync_queue WHERE user_id = ? AND google_group_email = ?",
-        userId,
-        workingGroup.mailing_list_email,
-      ),
-    ).toHaveLength(0);
-  });
-
-  it("rejects a stale WG add plan after deactivation commits", async () => {
-    const actorId = await insertUser(env.DB, "stale-add-admin@example.test");
-    const userId = await insertUser(env.DB, "stale-add-user@example.test");
-    const actor: AuthAdmin = {
-      identityType: "user",
-      id: actorId,
-      email: "stale-add-admin@example.test",
-      role: "admin",
-    };
-    const workingGroupId = await insertWorkingGroup("Stale add WG", "stale-add@lists.pkic.org");
-    const workingGroup: WorkingGroupRow = {
-      id: workingGroupId,
-      slug: "stale-add-wg",
-      name: "Stale add WG",
-      mailing_list_email: "stale-add@lists.pkic.org",
-      active: 1,
-    };
-    const staleAddPlan = await buildAddWorkingGroupMemberStatements(env.DB, workingGroup, userId);
-
-    await updateAdminUser(env.DB, actor, userId, { active: false });
-    await env.DB.batch(staleAddPlan);
-
-    expect(
-      await queryAll(env.DB, "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ?", [
-        workingGroupId,
-        userId,
-      ]),
-    ).toHaveLength(0);
-    expect(
-      await queryAll(
-        env.DB,
-        `SELECT id FROM google_groups_sync_queue
-          WHERE user_id = ? AND google_group_email = ? AND action = 'add_to_list'`,
-        userId,
-        workingGroup.mailing_list_email,
-      ),
-    ).toHaveLength(0);
-  });
-
-  it("closes and removes a WG seat inserted after offboarding was planned but before it commits", async () => {
-    const userId = await insertUser(env.DB, "late-seat-user@example.test");
-    const workingGroupId = await insertWorkingGroup("Late seat WG", "late-seat@lists.pkic.org");
-    const workingGroup: WorkingGroupRow = {
-      id: workingGroupId,
-      slug: "late-seat-wg",
-      name: "Late seat WG",
-      mailing_list_email: "late-seat@lists.pkic.org",
-      active: 1,
-    };
+  it("closes a capacity inserted after offboarding was planned but before it commits", async () => {
+    const userId = await insertUser(env.DB, "late-capacity-user@example.test");
+    const groupId = await insertGroup("Late Capacity Group", "late-capacity@lists.pkic.org");
+    const organizationId = await insertOrganization(env.DB, "Late Capacity Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
     const at = new Date().toISOString();
     const staleOffboardingPlan = await buildUserAccessOffboardingStatements(env.DB, {
       userId,
       causeKey: `user:${userId}:interleaved-deactivate`,
       at,
     });
-    await addWorkingGroupMember(env.DB, workingGroup, userId);
+    await joinGroupCapacity(groupId, userId, memberId);
+    await establishDesiredSubscriptions(userId);
 
     await env.DB.batch([
       env.DB.prepare("UPDATE users SET active = 0, updated_at = ? WHERE id = ?").bind(at, userId),
@@ -231,31 +170,21 @@ describe("membership access offboarding", () => {
     expect(
       await queryAll<{ closed: number }>(
         env.DB,
-        "SELECT left_at IS NOT NULL AS closed FROM working_group_members WHERE working_group_id = ? AND user_id = ?",
-        workingGroupId,
-        userId,
+        "SELECT left_at IS NOT NULL AS closed FROM group_memberships WHERE group_id = ? AND user_id = ?",
+        [groupId, userId],
       ),
     ).toEqual([{ closed: 1 }]);
-    expect(
-      await queryAll<{ action: string }>(
-        env.DB,
-        "SELECT action FROM google_groups_sync_queue WHERE user_id = ? AND google_group_email = ? ORDER BY rowid",
-        userId,
-        workingGroup.mailing_list_email,
-      ),
-    ).toEqual([{ action: "add_to_list" }, { action: "remove_from_list" }]);
     expect(
       await queryAll<{ desired_action: string }>(
         env.DB,
         `SELECT desired_action FROM google_groups_membership_desired_state
           WHERE user_id = ? AND google_group_email = ?`,
-        userId,
-        workingGroup.mailing_list_email,
+        [userId, "late-capacity@lists.pkic.org"],
       ),
     ).toEqual([{ desired_action: "remove_from_list" }]);
   });
 
-  it("removing one representative closes only seats justified by that membership and preserves other access", async () => {
+  it("removing one representative closes only that Member capacity and preserves other access", async () => {
     const actorId = await insertUser(env.DB, "representative-admin@example.test");
     const userId = await insertUser(env.DB, "multi-representative@example.test");
     const orgA = await insertOrganization(env.DB, "Representative Org A");
@@ -264,18 +193,22 @@ describe("membership access offboarding", () => {
     const memberB = await seedOrganizationAggregate(env.DB, orgB, "B");
     const representativeA = await addRepresentative(env.DB, memberA, userId);
     await addRepresentative(env.DB, memberB, userId);
-    const wgA = await insertWorkingGroup("Representative A WG", "representative-a@lists.pkic.org");
-    const wgB = await insertWorkingGroup("Representative B WG", "representative-b@lists.pkic.org");
-    await joinWorkingGroup(wgA, userId, memberA);
-    await joinWorkingGroup(wgB, userId, memberB);
+    const groupA = await insertGroup("Representative A Group", "representative-a@lists.pkic.org");
+    const groupB = await insertGroup("Representative B Group", "representative-b@lists.pkic.org");
+    await joinGroupCapacity(groupA, userId, memberA);
+    await joinGroupCapacity(groupB, userId, memberB);
+    await establishDesiredSubscriptions(userId);
 
     await removeAdminMember(env.DB, actorId, representativeA);
 
     expect(
       await queryAll<{ member_id: string; closed: number }>(
         env.DB,
-        "SELECT member_id, left_at IS NOT NULL AS closed FROM working_group_members WHERE user_id = ? ORDER BY member_id",
-        userId,
+        `SELECT member_id, left_at IS NOT NULL AS closed
+           FROM group_memberships
+          WHERE user_id = ? AND group_id IN (?, ?)
+          ORDER BY member_id`,
+        [userId, groupA, groupB],
       ),
     ).toEqual(
       [
@@ -284,7 +217,13 @@ describe("membership access offboarding", () => {
       ].sort((a, b) => a.member_id.localeCompare(b.member_id)),
     );
     expect(
-      await queryAll(env.DB, "SELECT google_group_email FROM google_groups_sync_queue WHERE user_id = ?", userId),
+      await queryAll<{ google_group_email: string }>(
+        env.DB,
+        `SELECT google_group_email FROM google_groups_sync_queue
+          WHERE user_id = ? AND action = 'remove_from_list'
+          ORDER BY google_group_email`,
+        userId,
+      ),
     ).toEqual([{ google_group_email: "representative-a@lists.pkic.org" }]);
     expect(
       await queryAll(

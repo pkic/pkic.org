@@ -66,6 +66,18 @@ const SEEDED_GROUP_IDS = [
   "20000000-0000-4000-8000-000000000008",
 ] as const;
 
+const SEEDED_MAILING_LIST_IDS = [
+  "30000000-0000-4000-8000-000000000001",
+  "30000000-0000-4000-8000-000000000002",
+  "30000000-0000-4000-8000-000000000003",
+  "30000000-0000-4000-8000-000000000004",
+  "30000000-0000-4000-8000-000000000005",
+  "30000000-0000-4000-8000-000000000006",
+  "30000000-0000-4000-8000-000000000007",
+  "30000000-0000-4000-8000-000000000008",
+  "30000000-0000-4000-8000-000000000009",
+] as const;
+
 async function listResettableTables(): Promise<string[]> {
   const { results } = await env.DB.prepare(
     `SELECT name
@@ -133,6 +145,27 @@ async function restoreHistoryDeleteTrigger(sql: string | null): Promise<void> {
   await env.DB.prepare(sql).run();
 }
 
+async function suspendMailingListDeleteTrigger(): Promise<string | null> {
+  const trigger = await env.DB.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_mailing_lists_prevent_delete'",
+  ).first<{ sql: string }>();
+  if (!trigger?.sql) return null;
+  await env.DB.prepare("DROP TRIGGER trg_mailing_lists_prevent_delete").run();
+  return trigger.sql;
+}
+
+async function restoreMailingListDeleteTrigger(sql: string | null): Promise<void> {
+  if (!sql) return;
+  await env.DB.prepare(sql).run();
+}
+
+/** Preserve migration-owned list configuration while removing test-created lists. */
+async function clearTestMailingLists(): Promise<void> {
+  await env.DB.prepare(`DELETE FROM mailing_lists WHERE id NOT IN (SELECT value FROM json_each(?))`)
+    .bind(JSON.stringify(SEEDED_MAILING_LIST_IDS))
+    .run();
+}
+
 /** Preserve migration-owned group configuration while removing test-created groups. */
 async function clearTestGroups(): Promise<void> {
   const seedIdsJson = JSON.stringify(SEEDED_GROUP_IDS);
@@ -152,12 +185,15 @@ async function clearTestGroups(): Promise<void> {
  */
 export async function resetDb(): Promise<void> {
   const historyDeleteTriggerSql = await suspendHistoryDeleteTrigger();
+  const mailingListDeleteTriggerSql = await suspendMailingListDeleteTrigger();
   try {
     await clearMembershipSettingsActorReference();
     const tableNames = await listResettableTables();
     await clearTablesWithRetry(tableNames);
+    await clearTestMailingLists();
     await clearTestGroups();
   } finally {
+    await restoreMailingListDeleteTrigger(mailingListDeleteTriggerSql);
     await restoreHistoryDeleteTrigger(historyDeleteTriggerSql);
   }
 }
