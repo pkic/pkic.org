@@ -105,7 +105,7 @@ export async function insertIndividualMember(
   return { userId, memberId };
 }
 
-/** Grants a representative role (primary/secondary contact or voting delegate), revoking any prior holder. */
+/** Grants a primary or secondary organization-contact role, revoking any prior holder. */
 export async function assignRepresentativeRole(
   db: DatabaseLike,
   memberId: string,

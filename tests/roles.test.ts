@@ -284,31 +284,28 @@ describe("roles (Built-in and custom roles)", () => {
     });
   });
 
-  // ── Consolidated migration 0035: WG vice chair + forum chair/vice chair roles ─────────
+  // ── Consolidated migration 0035: canonical group leadership roles ───────
 
-  it("seeds role-wg_vice_chair with the same permission bundle as role-wg_chair", async () => {
+  it("seeds group deputy lead with the same permission bundle as group lead", async () => {
     const response = await call(adminToken, "/api/v1/admin/roles");
     const body = (await response.json()) as {
       roles: Array<{ id: string; name: string; isSystemRole: boolean; permissions: string[] }>;
     };
-    const chair = body.roles.find((r) => r.name === "wg_chair");
-    const viceChair = body.roles.find((r) => r.name === "wg_vice_chair");
-    expect(chair).toBeTruthy();
-    expect(viceChair).toBeTruthy();
-    expect(viceChair?.isSystemRole).toBe(true);
-    expect([...(viceChair?.permissions ?? [])].sort()).toEqual([...(chair?.permissions ?? [])].sort());
+    const lead = body.roles.find((r) => r.name === "group_lead");
+    const deputy = body.roles.find((r) => r.name === "group_deputy_lead");
+    expect(lead).toBeTruthy();
+    expect(deputy).toBeTruthy();
+    expect(deputy?.isSystemRole).toBe(true);
+    expect([...(deputy?.permissions ?? [])].sort()).toEqual([...(lead?.permissions ?? [])].sort());
   });
 
-  it("seeds role-forum_chair/role-forum_vice_chair as global, permission-less designation roles", async () => {
+  it("does not seed legacy forum or working-group-specific leadership roles", async () => {
     const response = await call(adminToken, "/api/v1/admin/roles");
     const body = (await response.json()) as {
       roles: Array<{ id: string; name: string; isSystemRole: boolean; permissions: string[] }>;
     };
-    for (const name of ["forum_chair", "forum_vice_chair"]) {
-      const role = body.roles.find((r) => r.name === name);
-      expect(role).toBeTruthy();
-      expect(role?.isSystemRole).toBe(true);
-      expect(role?.permissions ?? []).toHaveLength(0);
+    for (const name of ["forum_chair", "forum_vice_chair", "wg_chair", "wg_vice_chair"]) {
+      expect(body.roles.find((r) => r.name === name)).toBeUndefined();
     }
   });
 
@@ -383,11 +380,11 @@ describe("roles (Built-in and custom roles)", () => {
   });
 
   it("GET /api/v1/admin/roles/:id/assignments searches, sorts, and paginates only effective holders", async () => {
-    const forumChairRole = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_chair'")
+    const assignmentRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'event_volunteer'")
     )[0];
 
-    const emptyResponse = await call(adminToken, `/api/v1/admin/roles/${forumChairRole.id}/assignments`);
+    const emptyResponse = await call(adminToken, `/api/v1/admin/roles/${assignmentRole.id}/assignments`);
     expect(emptyResponse.status).toBe(200);
     expect(await emptyResponse.json()).toMatchObject({
       assignments: [],
@@ -397,24 +394,24 @@ describe("roles (Built-in and custom roles)", () => {
     await env.DB.prepare("UPDATE users SET first_name = 'Zelda', last_name = 'Zulu' WHERE id = ?")
       .bind(staffUserId)
       .run();
-    await assignRole(staffUserId, forumChairRole.id, adminId);
+    await assignRole(staffUserId, assignmentRole.id, adminId);
     const alphaUserId = await insertUser("alpha-holder@example.test");
     await env.DB.prepare("UPDATE users SET first_name = 'Alpha', last_name = 'Able' WHERE id = ?")
       .bind(alphaUserId)
       .run();
-    await assignRole(alphaUserId, forumChairRole.id, adminId, { type: "event", id: eventAId });
+    await assignRole(alphaUserId, assignmentRole.id, adminId, { type: "event", id: eventAId });
     const expiredUserId = await insertUser("expired-holder@example.test");
     await env.DB.prepare(
       `INSERT INTO user_roles
          (id, user_id, role_id, granted_by_user_id, expires_at, created_at)
        VALUES (?, ?, ?, ?, '2020-01-01T00:00:00.000Z', datetime('now'))`,
     )
-      .bind(crypto.randomUUID(), expiredUserId, forumChairRole.id, adminId)
+      .bind(crypto.randomUUID(), expiredUserId, assignmentRole.id, adminId)
       .run();
 
     const searchResponse = await call(
       adminToken,
-      `/api/v1/admin/roles/${forumChairRole.id}/assignments?q=${encodeURIComponent("Alpha Able")}&sort=name&limit=1&offset=0`,
+      `/api/v1/admin/roles/${assignmentRole.id}/assignments?q=${encodeURIComponent("Alpha Able")}&sort=name&limit=1&offset=0`,
     );
     expect(searchResponse.status).toBe(200);
     expect(await searchResponse.json()).toMatchObject({
@@ -424,7 +421,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     const firstPage = await call(
       adminToken,
-      `/api/v1/admin/roles/${forumChairRole.id}/assignments?sort=-email&limit=1&offset=0`,
+      `/api/v1/admin/roles/${assignmentRole.id}/assignments?sort=-email&limit=1&offset=0`,
     );
     const firstBody = (await firstPage.json()) as {
       assignments: Array<{ userId: string }>;
@@ -435,7 +432,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     const finalPage = await call(
       adminToken,
-      `/api/v1/admin/roles/${forumChairRole.id}/assignments?sort=-email&limit=1&offset=1`,
+      `/api/v1/admin/roles/${assignmentRole.id}/assignments?sort=-email&limit=1&offset=1`,
     );
     expect(await finalPage.json()).toMatchObject({
       assignments: [{ userId: alphaUserId }],
@@ -594,18 +591,14 @@ describe("roles (Built-in and custom roles)", () => {
   });
 
   describe("POST /api/v1/admin/users/:userId/roles rejects representative role IDs granted outside an organization context", () => {
-    // A representative role (primary/secondary contact, voting delegate) is
+    // An organization-contact role (primary/secondary contact) is
     // singleton-per-organization and carries a service-layer invariant (the
     // target user must actively represent the organization). The mounted
     // route must reject every context other than
     // contextType='organization' + a real contextId outright — it must
     // never fall through to the generic single_holder_per_context insert
     // path, which has no concept of "actively represents this org".
-    for (const roleId of [
-      REPRESENTATIVE_ROLE_IDS.primaryContact,
-      REPRESENTATIVE_ROLE_IDS.secondaryContact,
-      REPRESENTATIVE_ROLE_IDS.votingDelegate,
-    ]) {
+    for (const roleId of [REPRESENTATIVE_ROLE_IDS.primaryContact, REPRESENTATIVE_ROLE_IDS.secondaryContact]) {
       it(`rejects ${roleId} with no context at all`, async () => {
         const { userId } = await insertOrgRepresentative(env.DB);
         const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
@@ -622,11 +615,11 @@ describe("roles (Built-in and custom roles)", () => {
         expect(rows).toHaveLength(0);
       });
 
-      it(`rejects ${roleId} with a working_group context`, async () => {
+      it(`rejects ${roleId} with a group context`, async () => {
         const { userId } = await insertOrgRepresentative(env.DB);
         const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
           method: "POST",
-          body: JSON.stringify({ roleId, contextType: "working_group", contextId: crypto.randomUUID() }),
+          body: JSON.stringify({ roleId, contextType: "group", contextId: crypto.randomUUID() }),
         });
         expect(response.status).toBe(422);
         const body = (await response.json()) as { error: { code: string } };

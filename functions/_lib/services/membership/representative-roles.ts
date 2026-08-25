@@ -1,11 +1,11 @@
 /**
- * Organization representative role grants (primary contact, secondary
- * contact, voting delegate) — ordinary `user_roles` rows scoped
+ * Organization contact role grants (primary and secondary contact) —
+ * ordinary `user_roles` rows scoped
  * `context_type='organization'`, `context_id=members.id`, reusing the
  * existing roles/user_roles RBAC system (consolidated migration 0035) instead of a
  * second, bespoke role table.
  *
- * Each of the three is a singleton per organization
+ * Each role is a singleton per organization
  * (`uq_user_roles_single_holder_per_context`, consolidated migration 0035): assigning a
  * new holder revokes the previous active grant in the same `db.batch()`.
  */
@@ -26,7 +26,7 @@ export type { RepresentativeRoleId };
 
 /**
  * Builds [revoke-previous-holder, insert-new-grant] statements for one of
- * the three singleton representative roles, without doing a preflight read
+ * the two singleton organization-contact roles, without doing a preflight read
  * of `organization_representatives` — for callers that are themselves
  * inserting that exact representative row earlier in the same `db.batch()`.
  * The migration-level trigger `trg_user_roles_representative_requires_active`
@@ -70,7 +70,7 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
 
 /**
  * Builds [revoke-previous-holder?, insert-new-grant] statements for one of
- * the three singleton representative roles. Throws before building any
+ * the two singleton organization-contact roles. Throws before building any
  * statement if `(userId, memberId)` has no active `organization_representatives`
  * row — the service-layer invariant that replaces the composite FK a
  * bespoke role table would have had (see consolidated migration 0035's header).
@@ -193,7 +193,6 @@ export async function resolveRepresentativeRoleHolder(
 export interface RepresentativeRoleHolders {
   primaryContactUserId: string | null;
   secondaryContactUserId: string | null;
-  votingDelegateUserId: string | null;
 }
 
 export async function resolveRepresentativeRoleHolders(
@@ -209,20 +208,13 @@ export async function resolveRepresentativeRoleHolders(
        ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
      WHERE ur.context_type = 'organization' AND ur.context_id = ?
        AND ${representativeRoleActivePredicate()}
-       AND ur.role_id IN (?, ?, ?)`,
-    [
-      memberId,
-      nowIso(),
-      REPRESENTATIVE_ROLE_IDS.primaryContact,
-      REPRESENTATIVE_ROLE_IDS.secondaryContact,
-      REPRESENTATIVE_ROLE_IDS.votingDelegate,
-    ],
+       AND ur.role_id IN (?, ?)`,
+    [memberId, nowIso(), REPRESENTATIVE_ROLE_IDS.primaryContact, REPRESENTATIVE_ROLE_IDS.secondaryContact],
   );
   const byRole = new Map(rows.map((row) => [row.role_id, row.user_id]));
   return {
     primaryContactUserId: byRole.get(REPRESENTATIVE_ROLE_IDS.primaryContact) ?? null,
     secondaryContactUserId: byRole.get(REPRESENTATIVE_ROLE_IDS.secondaryContact) ?? null,
-    votingDelegateUserId: byRole.get(REPRESENTATIVE_ROLE_IDS.votingDelegate) ?? null,
   };
 }
 

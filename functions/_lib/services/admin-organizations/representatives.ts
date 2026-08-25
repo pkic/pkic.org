@@ -418,12 +418,6 @@ export async function removeAdminMember(
         userId: representative.user_id,
         now,
       }),
-      buildRevokeRepresentativeRoleStatement(db, {
-        memberId: representative.member_id,
-        roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
-        userId: representative.user_id,
-        now,
-      }),
       db
         .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
         .bind(representative.member_id, representative.user_id),
@@ -439,7 +433,7 @@ export async function removeAdminMember(
         organizationId: orgRow?.organization_id ?? null,
       }),
     ];
-    // The three role-revoke statements above are scoped to this
+    // The two role-revoke statements above are scoped to this
     // representative's own user_id (0 rows affected if they didn't hold
     // that role) — safe as no-ops, avoiding a read to check which role (if
     // any) this rep held, and critically NOT clearing a role actually held

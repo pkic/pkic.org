@@ -192,14 +192,13 @@ async function toOrgDetail(
 ) {
   const holders = memberId
     ? await resolveRepresentativeRoleHolders(db, memberId)
-    : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
+    : { primaryContactUserId: null, secondaryContactUserId: null };
   const primaryContactUserId = row.primary_contact_user_id;
   return {
     ...toOrgSummary(row),
     ...toOrganizationExtendedContent(row),
     primaryContactUserId,
     secondaryContactUserId: holders.secondaryContactUserId,
-    votingDelegateUserId: holders.votingDelegateUserId,
     representatives: representatives.map((r) => ({
       // representativeId is this representative's own
       // organization_representatives.id — the identifier PATCH/DELETE

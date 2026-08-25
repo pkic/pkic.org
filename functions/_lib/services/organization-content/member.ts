@@ -60,7 +60,6 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     isOrgContact: member.userId === holders.primaryContactUserId || member.userId === holders.secondaryContactUserId,
     isPrimaryContact: member.userId === holders.primaryContactUserId,
     pendingSecondaryContactUserId: nomination?.nominated_user_id ?? null,
-    votingDelegateUserId: holders.votingDelegateUserId,
     pendingReview: pendingReview ? toReviewSummary(pendingReview) : null,
   };
 }

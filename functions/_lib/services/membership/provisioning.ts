@@ -428,7 +428,7 @@ async function buildProvisionOrganizationTiedMemberships(
 
   const existingHolders = onlyIfVacant
     ? await resolveRepresentativeRoleHolders(db, aggregateId)
-    : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
+    : { primaryContactUserId: null, secondaryContactUserId: null };
 
   const pending: { rep: ProvisionRepresentativeInput; user: UserRecord; representativeId: string }[] = [];
 

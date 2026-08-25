@@ -277,7 +277,7 @@ export const memberDeleteRouteSchema = {
   tags: ["Membership"],
   summary: "Remove a membership (detach a representative)",
   description:
-    "Closes the org-less individual members row, or the organization_representatives row for an organization representative (:id is disambiguated by lookup, not by caller). The underlying user account and, for a representative, the organization's shared aggregate are untouched. If the removed person held the organization's primary/secondary contact or voting delegate role, that role's grant is revoked — but only if this person actually held it, never another representative's.",
+    "Closes the org-less individual members row, or the organization_representatives row for an organization representative (:id is disambiguated by lookup, not by caller). The underlying user account and, for a representative, the organization's shared aggregate are untouched. If the removed person held the organization's primary or secondary contact role, that role's grant is revoked — but only if this person actually held it, never another representative's.",
   request: { params: memberIdParamsSchema },
   responses: {
     "200": { description: "Membership removed." },
