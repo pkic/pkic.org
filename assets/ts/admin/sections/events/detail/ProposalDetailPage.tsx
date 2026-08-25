@@ -7,7 +7,7 @@ import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
-import { FormAnswerTable } from "./FormResponses";
+import { FormAnswerTable } from "../../../../components/forms/FormResponseViews";
 import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";

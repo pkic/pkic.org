@@ -124,7 +124,7 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
           {view === "leadership" && canManage && <GroupLeadership key={group.id} groupId={group.id} />}
           {view === "events" && <GroupEvents key={group.id} groupId={group.id} />}
           {view === "meetings" && <GroupMeetings key={group.id} groupId={group.id} canManage={canManage} />}
-          {view === "forms" && <GroupForms key={group.id} groupId={group.id} />}
+          {view === "forms" && <GroupForms key={group.id} groupId={group.id} canManage={canManage} />}
           {view === "votes" && (
             <GroupVotes
               key={group.id}

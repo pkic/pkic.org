@@ -1,8 +1,10 @@
 import { useMemo, useEffect, useState } from "preact/hooks";
-import { ApiDataTable } from "../../../components/ApiDataTable";
-import type { AdminFormDetailField, AdminFormSubmission } from "../../../types";
-import { fmt } from "../../../ui";
-import { adminFormSubmissionsResponseSchema } from "../../../../../shared/schemas/admin-forms";
+import type { z } from "zod";
+import type { AdminFormSubmission } from "../../../shared/schemas/admin-forms";
+import type { FormFieldDefinition } from "../../../shared/schemas/forms";
+import type { PageInfo } from "../../../shared/schemas/pagination";
+import { formatDateTime } from "../../shared/ui";
+import { ApiDataTable } from "../ApiDataTable";
 
 export interface FormAnswerRow {
   key: string;
@@ -15,7 +17,7 @@ type VisualizationKind = "bar" | "pie" | "wordcloud" | "list";
 type VisualizationChoice = "auto" | VisualizationKind;
 
 interface FieldStat {
-  field: AdminFormDetailField;
+  field: FormFieldDefinition;
   totalAnswers: number;
   uniqueAnswers: number;
   visualization: VisualizationKind;
@@ -63,7 +65,7 @@ function stringifyAnswer(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-export function formatFormAnswerValue(value: unknown, field?: AdminFormDetailField): string[] {
+export function formatFormAnswerValue(value: unknown, field?: FormFieldDefinition): string[] {
   const labels = optionLabelMap(field?.options);
 
   if (Array.isArray(value)) {
@@ -84,7 +86,7 @@ function answerKind(value: unknown, formatted: string[]): FormAnswerRow["kind"] 
 
 export function buildFormAnswerRows(
   answers: Record<string, unknown> | null | undefined,
-  fields: AdminFormDetailField[] | null | undefined,
+  fields: FormFieldDefinition[] | null | undefined,
 ): FormAnswerRow[] {
   if (!answers || Object.keys(answers).length === 0) return [];
 
@@ -117,7 +119,7 @@ export function FormAnswerTable({
   empty = "No form answers recorded.",
 }: {
   answers: Record<string, unknown> | null | undefined;
-  fields: AdminFormDetailField[] | null | undefined;
+  fields: FormFieldDefinition[] | null | undefined;
   empty?: string;
 }) {
   const rows = buildFormAnswerRows(answers, fields);
@@ -154,13 +156,13 @@ export function FormAnswerTable({
   );
 }
 
-function configuredVisualization(field: AdminFormDetailField): VisualizationKind | null {
+function configuredVisualization(field: FormFieldDefinition): VisualizationKind | null {
   const validation = isRecord(field.validation) ? field.validation : null;
   const value = validation?.adminVisualization ?? validation?.visualization;
   return value === "bar" || value === "pie" || value === "wordcloud" || value === "list" ? value : null;
 }
 
-function autoVisualization(field: AdminFormDetailField, uniqueAnswers: number): VisualizationKind {
+function autoVisualization(field: FormFieldDefinition, uniqueAnswers: number): VisualizationKind {
   const optionCount = Array.isArray(field.options) ? field.options.length : 0;
   if (field.fieldType === "boolean") return "pie";
   if (field.fieldType === "select") return optionCount > 5 ? "bar" : "pie";
@@ -170,7 +172,7 @@ function autoVisualization(field: AdminFormDetailField, uniqueAnswers: number): 
   return "list";
 }
 
-function mapServerStats(fields: AdminFormDetailField[], stats: ServerFieldStat[]): FieldStat[] {
+function mapServerStats(fields: FormFieldDefinition[], stats: ServerFieldStat[]): FieldStat[] {
   const fieldMap = new Map(fields.map((field) => [field.key, field]));
   return stats
     .map((stat) => {
@@ -280,7 +282,7 @@ function StatChartContent({ stat }: { stat: FieldStat }) {
   return <ListStat stat={stat} />;
 }
 
-function compactAnswer(value: unknown, field: AdminFormDetailField): { text: string; title: string } {
+function compactAnswer(value: unknown, field: FormFieldDefinition): { text: string; title: string } {
   const values = formatFormAnswerValue(value, field).filter((entry) => entry !== "-");
   const text = values.length ? values.join(", ") : "-";
   return { text: text.length > 90 ? `${text.slice(0, 87)}...` : text, title: text };
@@ -366,7 +368,7 @@ export function FormResponseStats({
   stats,
   total,
 }: {
-  fields: AdminFormDetailField[];
+  fields: FormFieldDefinition[];
   stats: ServerFieldStat[];
   total: number;
 }) {
@@ -452,13 +454,15 @@ export function FormResponseStats({
   );
 }
 
-export function FormSubmissionsTable({
+export function FormSubmissionsTable<Response extends { submissions: AdminFormSubmission[]; page: PageInfo }>({
   fields,
   endpoint,
+  responseSchema,
   params,
 }: {
-  fields: AdminFormDetailField[];
+  fields: FormFieldDefinition[];
   endpoint: string;
+  responseSchema: z.ZodType<Response>;
   params?: Record<string, string>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -478,10 +482,11 @@ export function FormSubmissionsTable({
   return (
     <ApiDataTable
       endpoint={endpoint}
-      responseSchema={adminFormSubmissionsResponseSchema}
+      responseSchema={responseSchema}
       resolve={(data) => data.submissions}
       resolvePage={(data) => data.page}
       paginate
+      initialSort="-submitted_at"
       params={params}
       empty="No responses found"
       rowKey={(submission) => submission.id}
@@ -509,7 +514,7 @@ export function FormSubmissionsTable({
         ...answerColumns,
         {
           header: "Submitted",
-          cell: (submission) => fmt(submission.submittedAt),
+          cell: (submission) => formatDateTime(submission.submittedAt),
           className: "mono small",
           sort: { asc: "submitted_at", desc: "-submitted_at", defaultDirection: "desc" },
         },

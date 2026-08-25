@@ -7,7 +7,7 @@ import { CustomFieldInput } from "../form/custom-field-widgets";
 
 type FieldValue = string | number | boolean | string[] | { start: string; end: string };
 
-interface VisibilityContext {
+export interface VisibilityContext {
   dayAttendance: Array<{ attendanceType: string }>;
   eventAttendanceType?: AttendanceType;
 }
@@ -98,7 +98,7 @@ function CustomFieldRow({
   );
 }
 
-function CustomFieldList({
+export function CustomFieldList({
   fields,
   context,
   geoHint,

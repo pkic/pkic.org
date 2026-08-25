@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
-import type { AdminFormDetailField } from "../../../types";
+import type { FormFieldDefinition } from "../../../shared/schemas/forms";
 
-export type FieldType = AdminFormDetailField["fieldType"];
+export type FieldType = FormFieldDefinition["fieldType"];
 export type VisualizationConfig = "auto" | "bar" | "pie" | "wordcloud" | "list";
 
 export interface FieldDraft {

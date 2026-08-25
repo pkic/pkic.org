@@ -1,19 +1,55 @@
+import { useRef, useState } from "preact/hooks";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { GroupFormDetail } from "./GroupFormDetail";
+import { GroupFormEditor } from "./GroupFormEditor";
 import { ResourceCapabilities } from "./ResourceCapabilities";
 
-export function GroupForms({ groupId }: { groupId: string }) {
+export function GroupForms({ groupId, canManage }: { groupId: string; canManage: boolean }) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
+  const tableActions = useRef<ApiTableActions | null>(null);
+
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Forms</div>
       <div class="card-body">
+        {canManage && (
+          <div class="mb-3">
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              aria-expanded={showCreate}
+              onClick={() => setShowCreate((shown) => !shown)}
+            >
+              {showCreate ? "Hide form editor" : "Create form"}
+            </button>
+          </div>
+        )}
+        {showCreate && (
+          <div class="card mb-3">
+            <div class="card-header fw-semibold">New group form</div>
+            <div class="card-body">
+              <GroupFormEditor
+                groupId={groupId}
+                detail={null}
+                onSaved={async () => {
+                  setShowCreate(false);
+                  await tableActions.current?.reload();
+                }}
+                onCancel={() => setShowCreate(false)}
+              />
+            </div>
+          </div>
+        )}
         <ApiDataTable
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/forms`}
           responseSchema={groupFormsListResponseSchema}
           resolve={(response) => response.forms}
           resolvePage={(response) => response.page}
           paginate
+          actionsRef={tableActions}
           searchPlaceholder="Search forms…"
           initialSort="title"
           columns={[
@@ -47,9 +83,34 @@ export function GroupForms({ groupId }: { groupId: string }) {
               ),
             },
             { header: "Access", cell: (row) => <ResourceCapabilities capabilities={row.capabilities} /> },
+            {
+              header: "",
+              className: "text-end",
+              cell: (row) => (
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  aria-expanded={selectedPlacementId === row.placement.id}
+                  onClick={() =>
+                    setSelectedPlacementId((current) => (current === row.placement.id ? null : row.placement.id))
+                  }
+                >
+                  {selectedPlacementId === row.placement.id ? "Hide" : "Details"}
+                </button>
+              ),
+            },
           ]}
           empty="No forms are available through this group."
           rowKey={(row) => row.placement.id}
+          detailRow={(row) =>
+            selectedPlacementId === row.placement.id ? (
+              <GroupFormDetail
+                groupId={groupId}
+                placementId={row.placement.id}
+                onChanged={() => tableActions.current?.reload()}
+              />
+            ) : null
+          }
         />
       </div>
     </div>

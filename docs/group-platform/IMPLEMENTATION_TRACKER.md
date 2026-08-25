@@ -625,9 +625,20 @@ Status: In progress
       Group-owned survey and feedback definitions now use one shared authoring
       schema with the legacy admin API and one atomic, live-authorized create or
       update command. Definition ownership remains with the owning group even
-      when placement management is shared. The portal authoring/response UI,
-      mailing-list management, statistics, complete meeting lifecycle, and
-      resource sharing remain open.
+      when placement management is shared. The portal and admin contexts now
+      reuse the same definition editor, field configuration controls, response
+      statistics, answer rendering, submission table, and custom-field widgets.
+      Group managers can author owned surveys and feedback forms, edit mutable
+      definitions, manage placement availability, submit responses, and inspect
+      D1-aggregated statistics and server-paginated responses. A shared-placement
+      manager receives placement controls but cannot edit the owner's definition.
+      Statistics are loaded only when selected, avoiding an unnecessary D1
+      aggregate on every form detail view. Focused frontend regressions cover
+      path-owned creation, shared-definition isolation, and placement-scoped
+      statistics/list requests; the complete check passes 1,950 backend tests
+      (one skipped), 191 frontend tests, and 79 tool tests. Mailing-list
+      management, group statistics, complete meeting lifecycle, and resource
+      sharing remain open.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.

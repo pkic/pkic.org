@@ -6,7 +6,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
-import { FormAnswerTable } from "./FormResponses";
+import { FormAnswerTable } from "../../../../components/forms/FormResponseViews";
 import {
   adminRegistrationDetailResponseSchema,
   type AdminRegistrationDetailResponse,
