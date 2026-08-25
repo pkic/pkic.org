@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
+import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const MEMBERSHIP_ID = "20000000-0000-4000-8000-000000000001";
@@ -37,6 +38,88 @@ afterEach(() => {
 });
 
 describe("portal group management resources", () => {
+  it("lists and creates recurring meetings only through canonical group routes", async () => {
+    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
+    let created = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ url, method, body });
+        const series = {
+          id: "60000000-0000-4000-8000-000000000001",
+          eventId: "70000000-0000-4000-8000-000000000001",
+          ownerGroupId: GROUP_ID,
+          eventName: "Architecture call",
+          eventSlug: "architecture-call",
+          profileKey: "meeting",
+          registrationPolicy: "no_registration",
+          memberEligibility: "owner_group",
+          guestPolicy: "occurrence_invitation",
+          startsAt: "2026-09-01T15:00:00.000Z",
+          recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
+          timezone: "Europe/Amsterdam",
+          durationMinutes: 60,
+          location: "https://meet.example.test/architecture",
+          providerType: null,
+          providerConfigured: false,
+          active: true,
+          nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+          createdAt: "2026-08-01T00:00:00.000Z",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+        } as const;
+        if (method === "POST") {
+          created = true;
+          return json({ series });
+        }
+        return json({
+          series: created ? [series] : [],
+          page: { limit: 25, offset: 0, total: created ? 1 : 0, hasMore: false },
+        });
+      }),
+    );
+    const container = mount(<GroupMeetings groupId={GROUP_ID} />);
+    await settle();
+
+    expect(container.textContent).toContain("No matching active meeting series");
+    const name = container.querySelector<HTMLInputElement>("#managed-group-meeting-name")!;
+    name.value = "Architecture call";
+    void act(() => {
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+    const create = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Create meeting series",
+    )!;
+    await act(async () => create.click());
+    await settle();
+    await settle();
+
+    const request = requests.find(({ method }) => method === "POST");
+    expect(request?.url.pathname).toBe(`/api/v1/groups/${GROUP_ID}/meetings/series`);
+    expect(request?.body).toMatchObject({
+      eventName: "Architecture call",
+      eventSlug: "architecture-call",
+      profileKey: "meeting",
+      policy: {
+        registrationPolicy: "no_registration",
+        memberEligibility: "owner_group",
+        guestPolicy: "occurrence_invitation",
+      },
+    });
+    expect(container.textContent).toContain("Architecture call");
+    expect(container.querySelector<HTMLAnchorElement>("a[href$='/calendar.ics']")?.href).toContain(
+      `/api/v1/groups/${GROUP_ID}/meetings/series/60000000-0000-4000-8000-000000000001/calendar.ics`,
+    );
+    expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
+    expect(requests.some(({ url }) => url.pathname.includes("/admin/"))).toBe(false);
+  });
+
   it("searches and removes exact membership capacities through canonical group routes", async () => {
     const requests: Array<{ url: URL; method: string }> = [];
     let removed = false;

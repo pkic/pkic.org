@@ -11,12 +11,14 @@ import { managedGroupCatalog } from "./catalog";
 import { GroupSettingsForm } from "./GroupSettingsForm";
 import { GroupMembers } from "./GroupMembers";
 import { GroupLeadership } from "./GroupLeadership";
+import { GroupMeetings } from "./GroupMeetings";
 
 const OVERVIEW_VIEW = "overview";
 const MANAGEMENT_VIEWS = [
   { key: OVERVIEW_VIEW, label: "Overview and settings" },
   { key: "members", label: "Members" },
   { key: "leadership", label: "Leadership" },
+  { key: "meetings", label: "Meetings" },
 ] as const;
 
 function GroupContextHeader({ group }: { group: Group }) {
@@ -101,6 +103,7 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
           {view === OVERVIEW_VIEW && <GroupSettingsForm group={group} onUpdated={detail.reload} />}
           {view === "members" && <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />}
           {view === "leadership" && <GroupLeadership key={group.id} groupId={group.id} />}
+          {view === "meetings" && <GroupMeetings key={group.id} groupId={group.id} />}
           {!MANAGEMENT_VIEWS.some((item) => item.key === view) && (
             <ErrorAlert error="This group-management section does not exist." />
           )}
