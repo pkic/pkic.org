@@ -11,8 +11,8 @@ import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const PortalVoteResultsGet = openApiRoute(voteResultsRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  await requireMemberFromRequest(db, c.req.raw, c.env);
+  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
   const id = data.params.id;
-  const result = await getVoteResultsForMember(db, id);
+  const result = await getVoteResultsForMember(db, member, id);
   return json({ result });
 });

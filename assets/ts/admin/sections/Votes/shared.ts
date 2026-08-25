@@ -4,7 +4,7 @@ export const TOP_TABS = ["votes", "proposals"] as const;
 export type TopTab = (typeof TOP_TABS)[number];
 
 export const VOTE_TYPES = ["motion", "consultation", "election"] as const;
-export const SCOPE_TYPES = ["forum", "working_group"] as const;
+export const ELECTORATE_MODES = ["per_member", "per_person"] as const;
 
 export const PROPOSAL_STATUS_TABS = ["open_for_endorsement", "converted_to_vote", "rejected", "withdrawn"] as const;
 

@@ -4571,7 +4571,7 @@ CREATE TABLE vote_proposals (
 CREATE INDEX idx_vote_proposals_group_status
   ON vote_proposals(owner_group_id, status, created_at, id);
 
--- Supports both the bounded portal list (status + scope, ordered by
+-- Supports both the bounded portal list (status + owning group, ordered by
 -- created_at) and the bounded admin list (status alone, ordered by
 -- created_at) via a shared leading (status) column.
 CREATE INDEX idx_vote_proposals_status_scope_created_at

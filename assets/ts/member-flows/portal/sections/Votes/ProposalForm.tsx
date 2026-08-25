@@ -5,33 +5,32 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { submitProposalResponseSchema } from "../../../../../shared/schemas/votes";
-import { myWorkingGroupsListResponseSchema } from "../../../../../shared/schemas/me";
+import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
 import { toast } from "../../ui";
-import type { VoteType, VoteScopeType } from "../../types";
+import type { VoteType } from "../../types";
 import { useAsyncSubmission } from "../../../../hooks/useAsyncSubmission";
 
 export function ProposalForm({ onCreated }: { onCreated: () => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [voteType, setVoteType] = useState<VoteType>("motion");
-  const [scopeType, setScopeType] = useState<VoteScopeType>("forum");
-  const [scopeId, setScopeId] = useState("");
-  const [scopeLabel, setScopeLabel] = useState("");
+  const [ownerGroupId, setOwnerGroupId] = useState("");
+  const [ownerGroupLabel, setOwnerGroupLabel] = useState("");
   const [pendingGroupSearch, setPendingGroupSearch] = useState("");
   const [groupSearch, setGroupSearch] = useState("");
   const submission = useAsyncSubmission();
-  const groupsPage = useApiPage<z.infer<typeof myWorkingGroupsListResponseSchema>>(
-    "/api/v1/me/working-groups",
+  const groupsPage = useApiPage<z.infer<typeof selfGroupsListResponseSchema>>(
+    "/api/v1/me/groups",
     { view: "joined", ...(groupSearch ? { q: groupSearch } : {}) },
-    myWorkingGroupsListResponseSchema,
-    (data) => data.workingGroups,
+    selfGroupsListResponseSchema,
+    (data) => data.groups,
   );
 
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
     submission.setError(null);
-    if (scopeType === "working_group" && !scopeId) {
-      submission.setError("Choose a working group.");
+    if (!ownerGroupId) {
+      submission.setError("Choose the group that owns this proposal.");
       return;
     }
     submission.begin();
@@ -42,8 +41,7 @@ export function ProposalForm({ onCreated }: { onCreated: () => Promise<void> }) 
           title: title.trim(),
           description: description.trim(),
           voteType,
-          scopeType,
-          scopeId: scopeType === "working_group" ? scopeId : null,
+          ownerGroupId,
         },
         submitProposalResponseSchema,
       );
@@ -99,78 +97,60 @@ export function ProposalForm({ onCreated }: { onCreated: () => Promise<void> }) 
                 <option value="election">Election</option>
               </select>
             </div>
-            <div class="col-sm-6">
-              <label class="form-label fw-semibold small">Scope</label>
+            <div class="col-12">
+              <label class="form-label fw-semibold small">Owning group</label>
+              <div class="input-group input-group-sm mb-1">
+                <input
+                  type="search"
+                  class="form-control"
+                  aria-label="Group search"
+                  placeholder="Search your groups…"
+                  value={pendingGroupSearch}
+                  disabled={submission.submitting}
+                  onInput={(e) => setPendingGroupSearch((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      setGroupSearch(pendingGroupSearch.trim());
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  disabled={submission.submitting}
+                  onClick={() => setGroupSearch(pendingGroupSearch.trim())}
+                >
+                  Search
+                </button>
+              </div>
               <select
                 class="form-select"
-                value={scopeType}
+                value={ownerGroupId}
                 onChange={(e) => {
-                  setScopeType((e.target as HTMLSelectElement).value as VoteScopeType);
-                  setScopeId("");
-                  setScopeLabel("");
+                  const id = (e.target as HTMLSelectElement).value;
+                  const selected = groupsPage.data?.groups.find((group) => group.id === id);
+                  setOwnerGroupId(id);
+                  setOwnerGroupLabel(selected?.name ?? id);
                 }}
-                disabled={submission.submitting}
+                disabled={submission.submitting || groupsPage.loading}
               >
-                <option value="forum">Forum</option>
-                <option value="working_group">Working group</option>
-              </select>
-            </div>
-            {scopeType === "working_group" && (
-              <div class="col-12">
-                <label class="form-label fw-semibold small">Working group</label>
-                <div class="input-group input-group-sm mb-1">
-                  <input
-                    type="search"
-                    class="form-control"
-                    aria-label="Working group search"
-                    placeholder="Search joined working groups…"
-                    value={pendingGroupSearch}
-                    disabled={submission.submitting}
-                    onInput={(e) => setPendingGroupSearch((e.target as HTMLInputElement).value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        setGroupSearch(pendingGroupSearch.trim());
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    class="btn btn-outline-secondary"
-                    disabled={submission.submitting}
-                    onClick={() => setGroupSearch(pendingGroupSearch.trim())}
-                  >
-                    Search
-                  </button>
-                </div>
-                <select
-                  class="form-select"
-                  value={scopeId}
-                  onChange={(e) => {
-                    const id = (e.target as HTMLSelectElement).value;
-                    const selected = groupsPage.data?.workingGroups.find((group) => group.workingGroupId === id);
-                    setScopeId(id);
-                    setScopeLabel(selected?.name ?? id);
-                  }}
-                  disabled={submission.submitting || groupsPage.loading}
-                >
-                  <option value="">Choose…</option>
-                  {scopeId && !groupsPage.data?.workingGroups.some((group) => group.workingGroupId === scopeId) && (
-                    <option value={scopeId}>{scopeLabel || scopeId}</option>
-                  )}
-                  {groupsPage.data?.workingGroups.map((wg) => (
-                    <option key={wg.workingGroupId} value={wg.workingGroupId}>
-                      {wg.name}
-                    </option>
-                  ))}
-                </select>
-                {groupsPage.error && <div class="form-text text-danger">Could not load joined working groups.</div>}
-                {groupsPage.data?.workingGroups.length === 0 && !groupsPage.loading && (
-                  <div class="form-text">You must be a member of a working group to propose a WG-level vote.</div>
+                <option value="">Choose…</option>
+                {ownerGroupId && !groupsPage.data?.groups.some((group) => group.id === ownerGroupId) && (
+                  <option value={ownerGroupId}>{ownerGroupLabel || ownerGroupId}</option>
                 )}
-                {groupsPage.pagerProps && <Pager {...groupsPage.pagerProps} />}
-              </div>
-            )}
+                {groupsPage.data?.groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name} ({group.type.singularLabel})
+                  </option>
+                ))}
+              </select>
+              {groupsPage.error && <div class="form-text text-danger">Could not load your groups.</div>}
+              {groupsPage.data?.groups.length === 0 && !groupsPage.loading && (
+                <div class="form-text">You must participate in a group before proposing a vote.</div>
+              )}
+              {groupsPage.pagerProps && <Pager {...groupsPage.pagerProps} />}
+            </div>
           </div>
 
           {submission.error && <ErrorAlert error={submission.error} />}

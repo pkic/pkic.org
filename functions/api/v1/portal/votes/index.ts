@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/portal/votes — every vote visible to the caller:
- * every forum vote, every public vote, plus every vote scoped to a working
+ * every public vote plus votes owned by or shared with the caller's groups,
  * group the caller belongs to.
  */
 import { openApiRoute } from "../../../../_lib/openapi/route";

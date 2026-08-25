@@ -6,7 +6,7 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../
 import { VOTE_ELECTION_TALLY_QUERY, VOTE_MOTION_TALLY_QUERY, VOTE_STANDING_CANDIDATES_QUERY } from "./due-queries";
 import type { CandidateRow, VoteRow } from "./shared";
 import { computeMotionResultFromCounts, tallyElectionRoundFromCounts, type ElectionRoundTally } from "./tally";
-import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
+import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
 
 interface MotionCountsRow {
   in_favor: number;
@@ -53,7 +53,7 @@ export async function openDueVote(db: DatabaseLike, vote: VoteRow, now: string):
         { opensAt: vote.opens_at, transitionRevision: vote.transition_revision },
         now,
       ),
-      prepareForumVoteDelegateNotificationIntents(db, vote.id, vote.current_round, now),
+      prepareVoteRepresentativeNotificationIntents(db, vote.id, vote.current_round, now),
     ]);
     return true;
   } catch (error) {
@@ -256,7 +256,7 @@ async function advanceOrFinalizeElection(db: DatabaseLike, vote: ClaimedVote, no
       },
       now,
     ),
-    prepareForumVoteDelegateNotificationIntents(db, vote.id, vote.current_round + 1, now),
+    prepareVoteRepresentativeNotificationIntents(db, vote.id, vote.current_round + 1, now),
   );
 
   try {

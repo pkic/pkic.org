@@ -5,7 +5,7 @@
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
-import { getVoteProposalDetail, withdrawVoteProposal } from "../../../../../_lib/services/votes";
+import { getVoteProposalDetailForMember, withdrawVoteProposal } from "../../../../../_lib/services/votes";
 import {
   proposalDetailRouteSchema,
   withdrawProposalResponseSchema,
@@ -15,9 +15,9 @@ import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const PortalVoteProposalGet = openApiRoute(proposalDetailRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  await requireMemberFromRequest(db, c.req.raw, c.env);
+  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
   const id = data.params.id;
-  const result = await getVoteProposalDetail(db, id);
+  const result = await getVoteProposalDetailForMember(db, id, member.userId);
   return json(result);
 });
 

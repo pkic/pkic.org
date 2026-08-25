@@ -9,6 +9,7 @@ import {
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
 import type { PageInfo } from "../../../shared/schemas/pagination";
+import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
 import { workingGroupsListResponseSchema, type AdminWorkingGroupSummary } from "../../../shared/schemas/working-groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
 import { api } from "../api";
@@ -44,6 +45,20 @@ export const adminWorkingGroupCatalog: AdminCatalog<
 
 export function activeAdminWorkingGroupCatalog(): typeof adminWorkingGroupCatalog {
   return { ...adminWorkingGroupCatalog, params: { active: "true" } };
+}
+
+export const adminGroupCatalog: AdminCatalog<Group, z.infer<typeof groupsListResponseSchema>> = {
+  endpoint: "/api/v1/groups",
+  responseSchema: groupsListResponseSchema,
+  resolveItems: (response) => response.groups,
+  resolvePage: (response) => response.page,
+  itemKey: (item) => item.id,
+  itemLabel: (item) => `${item.name} (${item.type.singularLabel})${item.active ? "" : " — inactive"}`,
+  sort: "name",
+};
+
+export function activeAdminGroupCatalog(): typeof adminGroupCatalog {
+  return { ...adminGroupCatalog, params: { active: "true" } };
 }
 
 export function adminEventFormCatalog(

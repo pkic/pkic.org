@@ -10,11 +10,10 @@ import { all, first } from "../../db/queries";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
-import { VOTING_CATEGORIES } from "../membership/applications/create";
-import { getWorkingGroupBySlugOrId } from "../working-groups";
+import { getGroup } from "../groups/read-model";
 import type {
   VOTE_TYPES,
-  VOTE_SCOPE_TYPES,
+  VOTE_ELECTORATE_MODES,
   THRESHOLD_TYPES,
   VOTE_STATUSES,
   VOTE_PROPOSAL_STATUSES,
@@ -24,13 +23,13 @@ import type {
   voteFullResultSchema,
   voteResultSchema,
 } from "../../../../assets/shared/schemas/votes";
-import type { AuthMember, DatabaseLike } from "../../types";
+import type { DatabaseLike } from "../../types";
 
 // Derived from the canonical shared schema (assets/shared/schemas/votes.ts)
 // rather than hand-duplicated, so the DB-facing service layer and the API
 // response contract can never drift apart (PR #1 review §1.3).
 export type VoteType = (typeof VOTE_TYPES)[number];
-export type VoteScopeType = (typeof VOTE_SCOPE_TYPES)[number];
+export type VoteElectorateMode = (typeof VOTE_ELECTORATE_MODES)[number];
 export type ThresholdType = (typeof THRESHOLD_TYPES)[number];
 export type VoteStatus = (typeof VOTE_STATUSES)[number];
 export type VoteProposalStatus = (typeof VOTE_PROPOSAL_STATUSES)[number];
@@ -48,8 +47,9 @@ export interface VoteRow {
   title: string;
   description: string | null;
   vote_type: VoteType;
-  scope_type: VoteScopeType;
-  scope_id: string | null;
+  owner_group_id: string;
+  owner_group_name: string;
+  electorate_mode: VoteElectorateMode;
   created_by_user_id: string | null;
   proposed_by_user_id: string | null;
   eligible_categories: string | null;
@@ -70,7 +70,9 @@ export interface VoteRow {
 
 /** Canonical explicit projection for every query that hydrates a complete VoteRow. */
 export const VOTE_ROW_COLUMNS =
-  "id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id, " +
+  "id, slug, title, description, vote_type, owner_group_id, " +
+  "(SELECT name FROM groups owner_group WHERE owner_group.id = votes.owner_group_id) AS owner_group_name, " +
+  "electorate_mode, created_by_user_id, proposed_by_user_id, " +
   "eligible_categories, threshold_type, opens_at, closes_at, current_round, transition_revision, " +
   "transition_processing_token, transition_lease_expires_at, status, result_json, visibility, public_detail_level, " +
   "created_at, updated_at";
@@ -141,8 +143,9 @@ export interface VoteSummary {
   title: string;
   description: string | null;
   voteType: VoteType;
-  scopeType: VoteScopeType;
-  scopeId: string | null;
+  ownerGroupId: string;
+  ownerGroupName: string;
+  electorateMode: VoteElectorateMode;
   thresholdType: ThresholdType;
   eligibleCategories: string[] | null;
   opensAt: string;
@@ -162,8 +165,9 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
     title: row.title,
     description: row.description,
     voteType: row.vote_type,
-    scopeType: row.scope_type,
-    scopeId: row.scope_id,
+    ownerGroupId: row.owner_group_id,
+    ownerGroupName: row.owner_group_name,
+    electorateMode: row.electorate_mode,
     thresholdType: row.threshold_type,
     eligibleCategories: eligibleCategoriesOf(row),
     opensAt: row.opens_at,
@@ -220,34 +224,9 @@ export async function getVoteRowOrThrow(db: DatabaseLike, idOrSlug: string): Pro
   return row;
 }
 
-/**
- * Just enough to build a votes:manage permission context (WG-scoped vs
- * global) before mutating — admin route handlers call this first so a WG
- * chair's scoped grant is checked against the vote's actual working group.
- */
-export async function getVoteScopeForPermissionCheck(
-  db: DatabaseLike,
-  idOrSlug: string,
-): Promise<{ scopeType: VoteScopeType; scopeId: string | null }> {
-  const row = await getVoteRowOrThrow(db, idOrSlug);
-  return { scopeType: row.scope_type, scopeId: row.scope_id };
-}
-
-export async function assertVotingCategory(member: AuthMember): Promise<void> {
-  if (!VOTING_CATEGORIES.has(member.membershipCategory)) {
-    throw new AppError(403, "H_CATEGORY_CANNOT_VOTE", "H-category members cannot cast a ballot");
-  }
-}
-
-/** Resolves a working_group scopeId to its canonical id (or null for forum scope) — shared by direct vote creation and proposal submission. */
-export async function resolveScope(
-  db: DatabaseLike,
-  scopeType: VoteScopeType,
-  scopeId?: string | null,
-): Promise<string | null> {
-  if (scopeType === "forum") return null;
-  if (!scopeId) throw new AppError(422, "SCOPE_ID_REQUIRED", "scopeId is required for working_group-scoped votes");
-  const wg = await getWorkingGroupBySlugOrId(db, scopeId);
-  if (!wg) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
-  return wg.id;
+/** Resolve and validate the canonical owning group shared by votes and proposals. */
+export async function resolveVoteOwnerGroup(db: DatabaseLike, ownerGroupId: string): Promise<string> {
+  const group = await getGroup(db, ownerGroupId);
+  if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "Owning group not found");
+  return group.id;
 }

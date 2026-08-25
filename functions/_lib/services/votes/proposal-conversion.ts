@@ -1,10 +1,12 @@
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { prepareAuditLog } from "../audit";
-import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
+import { prepareEffectiveGroupPermissionAuthorizationGuard } from "../groups/governance";
+import type { AuthAdmin, AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
+import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
 import type { ProposalRow } from "./proposal-read";
 import {
   getVoteRowOrThrow,
@@ -14,7 +16,7 @@ import {
   type VoteStatus,
   type VoteSummary,
 } from "./shared";
-import { ACTIVE_VOTER_MEMBERSHIP_SQL, activeVoterMembershipBindings } from "./voter-eligibility";
+import { ACTIVE_GROUP_VOTER_SQL, activeGroupVoterBindings, activeGroupVoterSql } from "./voter-eligibility";
 
 export function prepareProposalTransitionGuard(db: DatabaseLike, proposal: ProposalRow): StatementLike {
   return db
@@ -27,16 +29,8 @@ export function prepareProposalTransitionGuard(db: DatabaseLike, proposal: Propo
 
 function proposalMemberGuard(proposal: ProposalRow, member: AuthMember): { sql: string; args: unknown[] } {
   return {
-    sql: `${ACTIVE_VOTER_MEMBERSHIP_SQL}
-          AND (
-            ? <> 'working_group'
-            OR EXISTS (
-              SELECT 1
-              FROM working_group_members wgm
-              WHERE wgm.working_group_id = ? AND wgm.user_id = ? AND wgm.left_at IS NULL
-            )
-          )`,
-    args: [...activeVoterMembershipBindings(member), proposal.scope_type, proposal.scope_id, member.userId],
+    sql: ACTIVE_GROUP_VOTER_SQL,
+    args: activeGroupVoterBindings(member.userId, proposal.owner_group_id),
   };
 }
 
@@ -97,10 +91,11 @@ function buildConversionStatements(
     db
       .prepare(
         `INSERT INTO votes
-           (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
+           (id, slug, title, description, vote_type, owner_group_id, electorate_mode,
+            created_by_user_id, proposed_by_user_id,
             source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round, status,
             result_json, visibility, public_detail_level, created_at, updated_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
+         SELECT ?, ?, ?, ?, ?, ?, 'per_member', NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
          FROM vote_proposals
          WHERE id = ? AND status = 'open_for_endorsement'${guardSql}`,
       )
@@ -110,8 +105,7 @@ function buildConversionStatements(
         proposal.title,
         proposal.description,
         proposal.vote_type,
-        proposal.scope_type,
-        proposal.scope_id,
+        proposal.owner_group_id,
         proposal.proposed_by_user_id,
         proposal.id,
         proposal.eligible_categories,
@@ -152,23 +146,29 @@ async function resolveLostRaceVote(db: DatabaseLike, proposalId: string): Promis
 async function convertProposalToVoteWithGuard(
   db: DatabaseLike,
   proposal: ProposalRow,
-  approvedByAdminId: string | undefined,
+  approvedByAdmin: AuthAdmin | undefined,
   member: AuthMember | null,
 ): Promise<VoteSummary> {
   const fields = await buildConversionFields(db, proposal);
   const memberGuard = member ? proposalMemberGuard(proposal, member) : undefined;
   const [voteInsert, updateStatus] = buildConversionStatements(db, proposal, fields, memberGuard);
-  const statements = [
+  const statements: StatementLike[] = [];
+  if (approvedByAdmin) {
+    statements.push(
+      prepareEffectiveGroupPermissionAuthorizationGuard(db, approvedByAdmin, [proposal.owner_group_id], "votes:manage"),
+    );
+  }
+  statements.push(
     member ? prepareEndorsementTransitionGuard(db, proposal, member) : prepareProposalTransitionGuard(db, proposal),
-    voteInsert,
-    updateStatus,
-  ];
-  if (approvedByAdminId) {
+  );
+  const voteInsertIndex = statements.length;
+  statements.push(voteInsert, updateStatus);
+  if (approvedByAdmin) {
     statements.push(
       prepareAuditLog(
         db,
         "admin",
-        approvedByAdminId,
+        approvedByAdmin.id,
         "vote_proposal_approved",
         "vote_proposal",
         proposal.id,
@@ -177,18 +177,21 @@ async function convertProposalToVoteWithGuard(
       ),
     );
   }
-  statements.push(prepareForumVoteDelegateNotificationIntents(db, fields.id, 1, fields.now));
+  statements.push(prepareVoteRepresentativeNotificationIntents(db, fields.id, 1, fields.now));
 
   let results;
   try {
     results = await db.batch(statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before commit");
+    }
     if (!isStaleProposalTransition(error)) throw error;
     const convertedVote = await resolveLostRaceVote(db, proposal.id);
     if (convertedVote) return convertedVote;
     throw new AppError(409, "PROPOSAL_NOT_CONVERTIBLE", "This proposal is no longer open for endorsement");
   }
-  if ((results[1]?.meta?.changes ?? 0) === 0) {
+  if ((results[voteInsertIndex]?.meta?.changes ?? 0) === 0) {
     const convertedVote = await resolveLostRaceVote(db, proposal.id);
     if (convertedVote) return convertedVote;
     if (member) {
@@ -202,9 +205,9 @@ async function convertProposalToVoteWithGuard(
 export function convertProposalToVote(
   db: DatabaseLike,
   proposal: ProposalRow,
-  approvedByAdminId?: string,
+  approvedByAdmin?: AuthAdmin,
 ): Promise<VoteSummary> {
-  return convertProposalToVoteWithGuard(db, proposal, approvedByAdminId, null);
+  return convertProposalToVoteWithGuard(db, proposal, approvedByAdmin, null);
 }
 
 export function convertProposalToVoteForMember(
@@ -236,17 +239,7 @@ export async function insertEndorsementAndMaybeConvert(
          SELECT ?, ?, ?, ?
          FROM vote_proposals vp
          WHERE vp.id = ? AND vp.transition_revision = ?
-           AND ${ACTIVE_VOTER_MEMBERSHIP_SQL}
-           AND (
-             vp.scope_type <> 'working_group'
-             OR EXISTS (
-               SELECT 1
-               FROM working_group_members wgm
-               WHERE wgm.working_group_id = vp.scope_id
-                 AND wgm.user_id = ?
-                 AND wgm.left_at IS NULL
-             )
-           )`,
+           AND ${activeGroupVoterSql("vp.owner_group_id")}`,
       )
       .bind(
         endorsementId,
@@ -255,12 +248,11 @@ export async function insertEndorsementAndMaybeConvert(
         nowIso(),
         proposal.id,
         proposal.transition_revision + 1,
-        ...activeVoterMembershipBindings(member),
         member.userId,
       ),
     voteInsert,
     updateStatus,
-    prepareForumVoteDelegateNotificationIntents(db, fields.id, 1, fields.now),
+    prepareVoteRepresentativeNotificationIntents(db, fields.id, 1, fields.now),
   ]);
   if ((results[1]?.meta?.changes ?? 0) !== 1) {
     throw new AppError(409, "MEMBERSHIP_CHANGED", "Voting eligibility changed; reload and retry");

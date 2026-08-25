@@ -12,11 +12,6 @@ import { groupIdSchema } from "./groups";
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
 
-/** @deprecated Temporary parser for legacy vote callers while they migrate to ownerGroupId. */
-export const VOTE_SCOPE_TYPES = ["forum", "working_group"] as const;
-/** @deprecated Use ownerGroupId. */
-export const voteScopeTypeSchema = z.enum(VOTE_SCOPE_TYPES);
-
 export const VOTE_ELECTORATE_MODES = ["per_member", "per_person"] as const;
 export const voteElectorateModeSchema = z.enum(VOTE_ELECTORATE_MODES);
 
@@ -137,11 +132,18 @@ export const publicVoteSchema = z.object({
   result: voteResultSchema,
 });
 
+export const eligibleMemberBallotSchema = z.object({
+  memberId: databaseIdSchema,
+  organizationName: z.string(),
+  hasCastBallot: z.boolean(),
+});
+
 export const portalVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
   candidates: z.array(candidateSummarySchema).nullable(),
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
+  memberBallots: z.array(eligibleMemberBallotSchema).nullable(),
   result: voteResultSchema,
 });
 

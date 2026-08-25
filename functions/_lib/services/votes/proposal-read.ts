@@ -4,10 +4,8 @@ import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
-import { getMembershipSettings } from "../membership-settings";
 import type { DatabaseLike } from "../../types";
-import type { VoteProposalStatus, VoteScopeType, VoteType } from "./shared";
-import { getWorkingGroupNamesByIds } from "../working-groups";
+import type { VoteProposalStatus, VoteType } from "./shared";
 import type { ListProposalsQuery, ProposalSummary } from "../../../../assets/shared/schemas/votes";
 import type { AdminListProposalsQuery } from "../../../../assets/shared/schemas/votes-admin";
 
@@ -16,8 +14,8 @@ export interface ProposalRow {
   title: string;
   description: string;
   vote_type: VoteType;
-  scope_type: VoteScopeType;
-  scope_id: string | null;
+  owner_group_id: string;
+  owner_group_name: string;
   proposed_by_user_id: string;
   eligible_categories: string | null;
   proposed_opens_at: string | null;
@@ -31,39 +29,28 @@ export interface ProposalRow {
 }
 
 const PROPOSAL_ROW_COLUMNS =
-  "id, title, description, vote_type, scope_type, scope_id, proposed_by_user_id, eligible_categories, " +
+  "id, title, description, vote_type, owner_group_id, " +
+  "(SELECT name FROM groups owner_group WHERE owner_group.id = vote_proposals.owner_group_id) AS owner_group_name, " +
+  "proposed_by_user_id, eligible_categories, " +
   "proposed_opens_at, proposed_closes_at, status, vote_id, rejection_reason, transition_revision, created_at, updated_at";
 
-export async function minEndorsersFor(
-  db: DatabaseLike,
-  scopeType: VoteScopeType,
-  scopeId: string | null,
-): Promise<number> {
-  if (scopeType === "forum") {
-    return (await getMembershipSettings(db)).forum_vote_min_endorsers;
-  }
-  const wg = await first<{ min_endorsers_for_ballot: number }>(
+export async function minEndorsersFor(db: DatabaseLike, ownerGroupId: string): Promise<number> {
+  const group = await first<{ min_endorsers_for_ballot: number }>(
     db,
-    "SELECT min_endorsers_for_ballot FROM working_groups WHERE id = ?",
-    [scopeId],
+    "SELECT min_endorsers_for_ballot FROM groups WHERE id = ? AND active = 1",
+    [ownerGroupId],
   );
-  return wg?.min_endorsers_for_ballot ?? 0;
+  return group?.min_endorsers_for_ballot ?? 0;
 }
 
-function mapProposalSummary(
-  row: ProposalRow,
-  endorsementCount: number,
-  minEndorsersRequired: number,
-  scopeName: string | null,
-): ProposalSummary {
+function mapProposalSummary(row: ProposalRow, endorsementCount: number, minEndorsersRequired: number): ProposalSummary {
   return {
     id: row.id,
     title: row.title,
     description: row.description,
     voteType: row.vote_type,
-    scopeType: row.scope_type,
-    scopeId: row.scope_id,
-    scopeName,
+    ownerGroupId: row.owner_group_id,
+    ownerGroupName: row.owner_group_name,
     proposedByUserId: row.proposed_by_user_id,
     status: row.status,
     voteId: row.vote_id,
@@ -80,16 +67,8 @@ export async function toProposalSummary(db: DatabaseLike, row: ProposalRow): Pro
     "SELECT COUNT(*) AS n FROM vote_proposal_endorsements WHERE proposal_id = ?",
     [row.id],
   );
-  const [minEndorsersRequired, scopeNames] = await Promise.all([
-    minEndorsersFor(db, row.scope_type, row.scope_id),
-    getWorkingGroupNamesByIds(db, row.scope_id ? [row.scope_id] : []),
-  ]);
-  return mapProposalSummary(
-    row,
-    Number(countRow?.n ?? 0),
-    minEndorsersRequired,
-    row.scope_id ? (scopeNames.get(row.scope_id) ?? null) : null,
-  );
+  const minEndorsersRequired = await minEndorsersFor(db, row.owner_group_id);
+  return mapProposalSummary(row, Number(countRow?.n ?? 0), minEndorsersRequired);
 }
 
 async function loadEndorsementCounts(db: DatabaseLike, proposalIds: string[]): Promise<Map<string, number>> {
@@ -106,47 +85,30 @@ async function loadEndorsementCounts(db: DatabaseLike, proposalIds: string[]): P
 
 async function loadMinEndorsers(db: DatabaseLike, rows: ProposalRow[]): Promise<Map<string, number>> {
   const result = new Map<string, number>();
-  const forumRows = rows.filter((row) => row.scope_type === "forum");
-  const workingGroupRows = rows.filter((row) => row.scope_type === "working_group" && row.scope_id);
-  if (forumRows.length > 0) {
-    const threshold = (await getMembershipSettings(db)).forum_vote_min_endorsers;
-    for (const row of forumRows) result.set(row.id, threshold);
-  }
-  if (workingGroupRows.length > 0) {
-    const ids = [...new Set(workingGroupRows.map((row) => row.scope_id as string))];
+  if (rows.length > 0) {
+    const ids = [...new Set(rows.map((row) => row.owner_group_id))];
     const filter = buildD1JsonMembershipFilter("id", ids);
     const groups = await all<{ id: string; min_endorsers_for_ballot: number }>(
       db,
-      `SELECT id, min_endorsers_for_ballot FROM working_groups WHERE ${filter.sql}`,
+      `SELECT id, min_endorsers_for_ballot FROM groups WHERE ${filter.sql}`,
       filter.bindings,
     );
     const byId = new Map(groups.map((group) => [group.id, group.min_endorsers_for_ballot]));
-    for (const row of workingGroupRows) result.set(row.id, byId.get(row.scope_id as string) ?? 0);
+    for (const row of rows) result.set(row.id, byId.get(row.owner_group_id) ?? 0);
   }
   return result;
 }
 
 async function toProposalSummaries(db: DatabaseLike, rows: ProposalRow[]): Promise<ProposalSummary[]> {
   if (rows.length === 0) return [];
-  const [endorsementCounts, thresholds, scopeNames] = await Promise.all([
+  const [endorsementCounts, thresholds] = await Promise.all([
     loadEndorsementCounts(
       db,
       rows.map((row) => row.id),
     ),
     loadMinEndorsers(db, rows),
-    getWorkingGroupNamesByIds(
-      db,
-      rows.flatMap((row) => (row.scope_id ? [row.scope_id] : [])),
-    ),
   ]);
-  return rows.map((row) =>
-    mapProposalSummary(
-      row,
-      endorsementCounts.get(row.id) ?? 0,
-      thresholds.get(row.id) ?? 0,
-      row.scope_id ? (scopeNames.get(row.scope_id) ?? null) : null,
-    ),
-  );
+  return rows.map((row) => mapProposalSummary(row, endorsementCounts.get(row.id) ?? 0, thresholds.get(row.id) ?? 0));
 }
 
 export async function getProposalRowOrThrow(db: DatabaseLike, id: string): Promise<ProposalRow> {
@@ -155,12 +117,9 @@ export async function getProposalRowOrThrow(db: DatabaseLike, id: string): Promi
   return row;
 }
 
-export async function getProposalScopeForPermissionCheck(
-  db: DatabaseLike,
-  id: string,
-): Promise<{ scopeType: VoteScopeType; scopeId: string | null }> {
+export async function getProposalGroupForPermissionCheck(db: DatabaseLike, id: string): Promise<string> {
   const row = await getProposalRowOrThrow(db, id);
-  return { scopeType: row.scope_type, scopeId: row.scope_id };
+  return row.owner_group_id;
 }
 
 export type VoteProposalListParams = ListProposalsQuery & Partial<Pick<AdminListProposalsQuery, "status">>;
@@ -170,23 +129,29 @@ async function queryProposalPage(
   db: DatabaseLike,
   params: VoteProposalListParams,
   requireDefaultOpenStatus: boolean,
+  memberUserId?: string,
 ): Promise<{ proposals: ProposalSummary[]; total: number }> {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
-  if (params.scopeType) {
-    conditions.push("scope_type = ?");
-    bindings.push(params.scopeType);
+  if (memberUserId) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM group_memberships viewer_membership
+      WHERE viewer_membership.group_id = vote_proposals.owner_group_id
+        AND viewer_membership.user_id = ?
+        AND viewer_membership.left_at IS NULL
+    )`);
+    bindings.push(memberUserId);
   }
-  if (params.scopeId) {
-    conditions.push("scope_id = ?");
-    bindings.push(params.scopeId);
+  if (params.ownerGroupId) {
+    conditions.push("owner_group_id = ?");
+    bindings.push(params.ownerGroupId);
   }
   if (params.status || requireDefaultOpenStatus) {
     conditions.push("status = ?");
     bindings.push(params.status ?? "open_for_endorsement");
   }
   if (params.q) {
-    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "scope_type"]);
+    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status"]);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
@@ -215,9 +180,10 @@ async function queryProposalPage(
 
 export function listVoteProposals(
   db: DatabaseLike,
+  memberUserId: string,
   params: ListProposalsQuery,
 ): Promise<{ proposals: ProposalSummary[]; total: number }> {
-  return queryProposalPage(db, params, true);
+  return queryProposalPage(db, params, true, memberUserId);
 }
 
 export function listAllVoteProposalsForAdmin(
@@ -238,4 +204,25 @@ export async function getVoteProposalDetail(
     [proposalId],
   );
   return { proposal: await toProposalSummary(db, row), endorserUserIds: endorsers.map((row) => row.endorser_user_id) };
+}
+
+export async function getVoteProposalDetailForMember(
+  db: DatabaseLike,
+  proposalId: string,
+  memberUserId: string,
+): Promise<{ proposal: ProposalSummary; endorserUserIds: string[] }> {
+  const visible = await first<{ authorized: number }>(
+    db,
+    `SELECT 1 AS authorized
+       FROM vote_proposals proposal
+       JOIN group_memberships membership
+         ON membership.group_id = proposal.owner_group_id
+        AND membership.user_id = ?
+        AND membership.left_at IS NULL
+      WHERE proposal.id = ?
+      LIMIT 1`,
+    [memberUserId, proposalId],
+  );
+  if (!visible) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Vote proposal not found");
+  return getVoteProposalDetail(db, proposalId);
 }

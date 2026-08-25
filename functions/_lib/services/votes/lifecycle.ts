@@ -18,10 +18,12 @@ import {
   type AdminVotesListQuery,
 } from "../../../../assets/shared/schemas/votes-admin";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
-import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
+import { prepareEffectiveGroupPermissionAuthorizationGuard } from "../groups/governance";
+import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
 import {
-  resolveScope,
+  resolveVoteOwnerGroup,
   uniqueSlug,
   toVoteSummary,
   getVoteRowOrThrow,
@@ -29,7 +31,7 @@ import {
   VOTE_ROW_COLUMNS,
   type VoteRow,
   type VoteType,
-  type VoteScopeType,
+  type VoteElectorateMode,
   type ThresholdType,
   type VoteStatus,
   type VoteVisibility,
@@ -37,14 +39,15 @@ import {
   type VoteSummary,
   type CandidateSummary,
 } from "./shared";
+import { prepareVoteManagementAuthorizationGuard } from "./vote-access";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 
 export interface CreateVoteInput {
   title: string;
   description?: string;
   voteType: VoteType;
-  scopeType: VoteScopeType;
-  scopeId?: string | null;
+  ownerGroupId: string;
+  electorateMode: VoteElectorateMode;
   thresholdType: ThresholdType;
   eligibleCategories?: string[] | null;
   opensAt?: string;
@@ -74,7 +77,7 @@ export async function createVoteDirect(
   admin: AuthAdmin,
   input: CreateVoteInput,
 ): Promise<VoteSummary> {
-  const scopeId = await resolveScope(db, input.scopeType, input.scopeId);
+  const ownerGroupId = await resolveVoteOwnerGroup(db, input.ownerGroupId);
   const candidates = input.voteType === "election" ? (input.candidates ?? []) : [];
   if (input.voteType === "election" && candidates.length < 2) {
     throw new AppError(422, "CANDIDATES_REQUIRED", "Election votes require at least 2 candidates");
@@ -98,10 +101,12 @@ export async function createVoteDirect(
   // committed with no candidates (or only some), visible to concurrent
   // reads, or a slug a retry then collides with.
   const statements = [
+    prepareEffectiveGroupPermissionAuthorizationGuard(db, admin, [ownerGroupId], "votes:create"),
     db
       .prepare(
         `INSERT INTO votes
-           (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
+           (id, slug, title, description, vote_type, owner_group_id, electorate_mode,
+            created_by_user_id, proposed_by_user_id,
             eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json,
             visibility, public_detail_level, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?)`,
@@ -112,8 +117,8 @@ export async function createVoteDirect(
         input.title,
         input.description ?? null,
         input.voteType,
-        input.scopeType,
-        scopeId,
+        ownerGroupId,
+        input.electorateMode,
         databaseUserId,
         input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
         input.thresholdType,
@@ -141,13 +146,21 @@ export async function createVoteDirect(
       {
         title: input.title,
         voteType: input.voteType,
-        scopeType: input.scopeType,
+        ownerGroupId,
+        electorateMode: input.electorateMode,
       },
       now,
     ),
-    prepareForumVoteDelegateNotificationIntents(db, id, 1, now),
+    prepareVoteRepresentativeNotificationIntents(db, id, 1, now),
   ];
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "VOTE_CREATE_AUTHORIZATION_CHANGED", "Vote creation permission changed before commit");
+    }
+    throw error;
+  }
 
   return toVoteSummary(await getVoteRowOrThrow(db, id));
 }
@@ -177,6 +190,7 @@ export async function updateVoteSettings(
   const now = nowIso();
   try {
     await db.batch([
+      await prepareVoteManagementAuthorizationGuard(db, admin, existing.id),
       db
         .prepare(
           `UPDATE votes SET
@@ -215,6 +229,9 @@ export async function updateVoteSettings(
       ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before commit");
+    }
     if (isAuditOneChangeGuardFailure(error)) {
       throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
     }
@@ -233,6 +250,7 @@ export async function updateVoteVisibility(
   const now = nowIso();
   try {
     await db.batch([
+      await prepareVoteManagementAuthorizationGuard(db, admin, existing.id),
       db
         .prepare(
           `UPDATE votes
@@ -263,6 +281,9 @@ export async function updateVoteVisibility(
       ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before commit");
+    }
     if (isAuditOneChangeGuardFailure(error)) {
       throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
     }
@@ -295,7 +316,14 @@ export async function listVotesForAdmin(
     whereArgs.push(params.status);
   }
   if (params.q) {
-    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type", "scope_type"]);
+    const search = buildD1TextSearchFilter(params.q, [
+      "title",
+      "description",
+      "status",
+      "vote_type",
+      "electorate_mode",
+      "(SELECT name FROM groups owner_group WHERE owner_group.id = votes.owner_group_id)",
+    ]);
     conditions.push(search.sql);
     whereArgs.push(...search.bindings);
   }
@@ -326,10 +354,11 @@ export async function listVotesForAdmin(
 export interface AdminBallotRow {
   id: string;
   userId: string;
-  organizationId: string | null;
+  memberId: string | null;
   choice: string;
   round: number;
   submittedAt: string;
+  updatedAt: string;
 }
 
 const ADMIN_BALLOT_SORT_COLUMNS = {
@@ -337,7 +366,7 @@ const ADMIN_BALLOT_SORT_COLUMNS = {
   round: "b.round",
   choice: "b.choice",
   userId: "b.user_id",
-  organizationId: "b.organization_id",
+  memberId: "b.member_id",
 } as const satisfies Record<(typeof ADMIN_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
 
 export async function listBallotsForAdmin(
@@ -353,7 +382,7 @@ export async function listBallotsForAdmin(
     bindings.push(query.round);
   }
   if (query.q) {
-    const search = buildD1TextSearchFilter(query.q, ["b.user_id", "b.organization_id", "b.choice", "b.round"]);
+    const search = buildD1TextSearchFilter(query.q, ["b.user_id", "b.member_id", "b.choice", "b.round"]);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
@@ -367,12 +396,13 @@ export async function listBallotsForAdmin(
   const { rows, total } = await queryPage<{
     id: string;
     user_id: string;
-    organization_id: string | null;
+    member_id: string | null;
     choice: string;
     round: number;
     submitted_at: string;
+    updated_at: string;
   }>(db, {
-    sql: `SELECT b.id, b.user_id, b.organization_id, b.choice, b.round, b.submitted_at
+    sql: `SELECT b.id, b.user_id, b.member_id, b.choice, b.round, b.submitted_at, b.updated_at
               FROM vote_ballots b ${where}`,
     bindings,
     orderBy,
@@ -382,10 +412,11 @@ export async function listBallotsForAdmin(
   const ballots = rows.map((r) => ({
     id: r.id,
     userId: r.user_id,
-    organizationId: r.organization_id,
+    memberId: r.member_id,
     choice: r.choice,
     round: r.round,
     submittedAt: r.submitted_at,
+    updatedAt: r.updated_at,
   }));
   return { ballots, page: buildPageInfo(query.limit, query.offset, total, ballots.length) };
 }

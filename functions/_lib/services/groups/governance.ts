@@ -46,20 +46,21 @@ function trustedAuthorizationEvidence(): AuthorizationEvidence {
  * evidence is used for request preflight and for a transient guard inside the
  * protected D1 batch, avoiding a second trigger-owned policy model.
  */
-export function groupManagementAuthorizationEvidence(
+function groupAuthorizationEvidence(
   actor: AuthAdmin,
   groupIds: readonly string[],
-  mode: GroupManagementAuthorizationMode = "effective",
+  permission: string,
+  mode: GroupManagementAuthorizationMode,
 ): AuthorizationEvidence {
   const targets = [...new Set(groupIds)];
-  if (actor.scopeRestricted && actor.scopes?.includes("groups:write") !== true) {
+  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
     return deniedAuthorizationEvidence();
   }
 
   const hasGlobalSnapshot =
     actor.role === "admin" ||
     (actor.grants ?? []).some(
-      (grant) => grant.permission === "groups:write" && grant.contextType === null && grant.contextId === null,
+      (grant) => grant.permission === permission && grant.contextType === null && grant.contextId === null,
     );
   if (!isUserBackedAuthAdmin(actor)) {
     if (hasGlobalSnapshot) return trustedAuthorizationEvidence();
@@ -67,8 +68,7 @@ export function groupManagementAuthorizationEvidence(
       mode === "effective" &&
       targets.some((groupId) =>
         (actor.grants ?? []).some(
-          (grant) =>
-            grant.permission === "groups:write" && grant.contextType === "group" && grant.contextId === groupId,
+          (grant) => grant.permission === permission && grant.contextType === "group" && grant.contextId === groupId,
         ),
       )
     ) {
@@ -127,7 +127,7 @@ export function groupManagementAuthorizationEvidence(
                    FROM user_roles actor_role
                    JOIN role_permissions role_permission ON role_permission.role_id = actor_role.role_id
                   WHERE actor_role.user_id = active_actor.id
-                    AND role_permission.permission = 'groups:write'
+                    AND role_permission.permission = ?
                     AND actor_role.revoked_at IS NULL
                     AND (actor_role.expires_at IS NULL OR actor_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                     AND (
@@ -139,7 +139,7 @@ export function groupManagementAuthorizationEvidence(
                  SELECT 1
                    FROM permission_grants direct_grant
                   WHERE direct_grant.user_id = active_actor.id
-                    AND direct_grant.permission = 'groups:write'
+                    AND direct_grant.permission = ?
                     AND direct_grant.revoked_at IS NULL
                     AND (direct_grant.expires_at IS NULL OR direct_grant.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                     AND (
@@ -149,8 +149,25 @@ export function groupManagementAuthorizationEvidence(
                )
              )
            LIMIT 1`,
-    bindings: [JSON.stringify(targets), actor.id],
+    bindings: [JSON.stringify(targets), actor.id, permission, permission],
   };
+}
+
+export function groupPermissionAuthorizationEvidence(
+  actor: AuthAdmin,
+  groupIds: readonly string[],
+  permission: string,
+  mode: GroupManagementAuthorizationMode = "effective",
+): AuthorizationEvidence {
+  return groupAuthorizationEvidence(actor, groupIds, permission, mode);
+}
+
+export function groupManagementAuthorizationEvidence(
+  actor: AuthAdmin,
+  groupIds: readonly string[],
+  mode: GroupManagementAuthorizationMode = "effective",
+): AuthorizationEvidence {
+  return groupAuthorizationEvidence(actor, groupIds, "groups:write", mode);
 }
 
 export function prepareGroupManagementAuthorizationGuard(
@@ -160,6 +177,15 @@ export function prepareGroupManagementAuthorizationGuard(
   mode: GroupManagementAuthorizationMode = "effective",
 ): StatementLike {
   return prepareAuthorizationGuard(db, groupManagementAuthorizationEvidence(actor, groupIds, mode));
+}
+
+export function prepareEffectiveGroupPermissionAuthorizationGuard(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIds: readonly string[],
+  permission: string,
+): StatementLike {
+  return prepareAuthorizationGuard(db, groupPermissionAuthorizationEvidence(actor, groupIds, permission));
 }
 
 async function hasGroupManagementAuthorization(
@@ -174,6 +200,33 @@ async function hasGroupManagementAuthorization(
       ...evidence.bindings,
     ])) !== null
   );
+}
+
+export async function hasEffectiveGroupPermission(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIds: readonly string[],
+  permission: string,
+): Promise<boolean> {
+  const targets = [...new Set(groupIds)];
+  if (targets.length === 0) return false;
+  const evidence = groupPermissionAuthorizationEvidence(actor, targets, permission);
+  return (
+    (await first<{ authorized: number }>(db, `SELECT 1 AS authorized WHERE EXISTS (${evidence.sql})`, [
+      ...evidence.bindings,
+    ])) !== null
+  );
+}
+
+export async function requireEffectiveGroupPermission(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  permission: string,
+): Promise<void> {
+  if (!(await hasEffectiveGroupPermission(db, actor, [groupId], permission))) {
+    throw new AppError(403, "GROUP_PERMISSION_REQUIRED", "Effective group permission is required");
+  }
 }
 
 interface LeadershipRow {

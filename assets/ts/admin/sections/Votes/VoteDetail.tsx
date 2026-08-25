@@ -45,7 +45,10 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
         <p class="small mb-3">
           <span class={`badge ${statusBadge(vote.status)} me-1 text-capitalize`}>{vote.status}</span>
           <span class="badge text-bg-light me-1 text-capitalize">{vote.voteType}</span>
-          <span class="badge text-bg-light me-1 text-capitalize">{vote.scopeType.replace("_", " ")}</span>
+          <span class="badge text-bg-light me-1">{vote.ownerGroupName}</span>
+          <span class="badge text-bg-light me-1">
+            {vote.electorateMode === "per_member" ? "Per Member" : "Per person"}
+          </span>
           <span class="text-muted">
             Round {vote.currentRound} · Closes {fmt(vote.closesAt)}
           </span>
@@ -119,10 +122,10 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
                   sort: { asc: "userId", desc: "-userId" },
                 },
                 {
-                  header: "Organization",
-                  cell: (ballot) => ballot.organizationId ?? "—",
+                  header: "Member",
+                  cell: (ballot) => ballot.memberId ?? "—",
                   className: "small",
-                  sort: { asc: "organizationId", desc: "-organizationId" },
+                  sort: { asc: "memberId", desc: "-memberId" },
                 },
                 {
                   header: "Choice",
@@ -141,6 +144,11 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
                   cell: (ballot) => fmt(ballot.submittedAt),
                   className: "small",
                   sort: { asc: "submittedAt", desc: "-submittedAt" },
+                },
+                {
+                  header: "Updated",
+                  cell: (ballot) => fmt(ballot.updatedAt),
+                  className: "small",
                 },
               ]}
               empty="No ballots yet."

@@ -2,10 +2,10 @@ import { useState } from "preact/hooks";
 import { api } from "../../api";
 import { adminVoteMutationResponseSchema } from "../../../../shared/schemas/votes-admin";
 import { toast } from "../../ui";
-import { VOTE_TYPES, SCOPE_TYPES, thresholdOptionsFor } from "./shared";
+import { ELECTORATE_MODES, VOTE_TYPES, thresholdOptionsFor } from "./shared";
 import { performAdminAction } from "../../actions";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";
-import { activeAdminWorkingGroupCatalog } from "../../services/catalogs";
+import { activeAdminGroupCatalog } from "../../services/catalogs";
 
 interface CandidateDraft {
   name: string;
@@ -16,8 +16,8 @@ interface CreateDraft {
   title: string;
   description: string;
   voteType: (typeof VOTE_TYPES)[number];
-  scopeType: (typeof SCOPE_TYPES)[number];
-  scopeId: string;
+  ownerGroupId: string;
+  electorateMode: (typeof ELECTORATE_MODES)[number];
   thresholdType: string;
   opensAt: string;
   closesAt: string;
@@ -29,8 +29,8 @@ function emptyDraft(): CreateDraft {
     title: "",
     description: "",
     voteType: "motion",
-    scopeType: "forum",
-    scopeId: "",
+    ownerGroupId: "",
+    electorateMode: "per_member",
     thresholdType: "simple_majority",
     opensAt: "",
     closesAt: "",
@@ -44,7 +44,7 @@ function emptyDraft(): CreateDraft {
 export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
   const [draft, setDraft] = useState<CreateDraft>(emptyDraft());
   const [saving, setSaving] = useState(false);
-  const [workingGroupLabel, setWorkingGroupLabel] = useState<string>();
+  const [groupLabel, setGroupLabel] = useState<string>();
 
   function patch(p: Partial<CreateDraft>) {
     setDraft((d) => ({ ...d, ...p }));
@@ -56,6 +56,10 @@ export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
       toast("Closes-at is required", "error");
       return;
     }
+    if (!draft.ownerGroupId) {
+      toast("Owning group is required", "error");
+      return;
+    }
     await performAdminAction({
       setBusy: setSaving,
       request: () =>
@@ -65,8 +69,8 @@ export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
             voteType: draft.voteType,
-            scopeType: draft.scopeType,
-            scopeId: draft.scopeType === "working_group" ? draft.scopeId || undefined : undefined,
+            ownerGroupId: draft.ownerGroupId,
+            electorateMode: draft.electorateMode,
             thresholdType: draft.thresholdType,
             opensAt: draft.opensAt ? new Date(draft.opensAt).toISOString() : undefined,
             closesAt: new Date(draft.closesAt).toISOString(),
@@ -84,6 +88,7 @@ export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
       successMessage: "Vote created",
       afterSuccess: () => {
         setDraft(emptyDraft());
+        setGroupLabel(undefined);
         onCreated();
       },
     });
@@ -128,34 +133,34 @@ export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
             </select>
           </div>
           <div class="col-sm-3">
-            <label class="form-label small">Scope</label>
+            <label class="form-label small">Electorate</label>
             <select
               class="form-select form-select-sm"
-              value={draft.scopeType}
-              onChange={(e) => patch({ scopeType: (e.target as HTMLSelectElement).value as CreateDraft["scopeType"] })}
+              value={draft.electorateMode}
+              onChange={(e) =>
+                patch({ electorateMode: (e.target as HTMLSelectElement).value as CreateDraft["electorateMode"] })
+              }
             >
-              {SCOPE_TYPES.map((t) => (
-                <option value={t} key={t}>
-                  {t === "forum" ? "Forum (one org/vote)" : "Working group"}
+              {ELECTORATE_MODES.map((mode) => (
+                <option value={mode} key={mode}>
+                  {mode === "per_member" ? "One ballot per Member" : "One ballot per person"}
                 </option>
               ))}
             </select>
           </div>
-          {draft.scopeType === "working_group" && (
-            <div class="col-sm-3">
-              <ServerSearchSelect
-                catalog={activeAdminWorkingGroupCatalog()}
-                label="Working group"
-                value={draft.scopeId}
-                selectedLabel={workingGroupLabel}
-                disabled={saving}
-                onChange={(group) => {
-                  patch({ scopeId: group?.id ?? "" });
-                  setWorkingGroupLabel(group?.name);
-                }}
-              />
-            </div>
-          )}
+          <div class="col-sm-3">
+            <ServerSearchSelect
+              catalog={activeAdminGroupCatalog()}
+              label="Owning group"
+              value={draft.ownerGroupId}
+              selectedLabel={groupLabel}
+              disabled={saving}
+              onChange={(group) => {
+                patch({ ownerGroupId: group?.id ?? "" });
+                setGroupLabel(group?.name);
+              }}
+            />
+          </div>
           <div class="col-sm-3">
             <label class="form-label small">Threshold</label>
             <select

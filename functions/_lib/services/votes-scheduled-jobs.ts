@@ -1,7 +1,7 @@
 /**
  * Voting due-work: opens scheduled votes, closes/
- * advances open votes past closes_at, and emails each forum vote's
- * eligible delegates (`forum-vote-delegate-notify`) on initial open and on
+ * advances open votes past closes_at, and emails every eligible Member
+ * representative (`member-vote-representative-notify`) on initial open and on
  * every round advance. The router gives this lane its own cron invocation
  * and D1 statement budget, separate from registration, membership, and
  * sponsorship due-work. closeDueVotes is already bounded by its own LIMIT,
@@ -14,7 +14,7 @@ import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import {
   closeDueVotes,
-  listPendingForumVoteNotificationIntents,
+  listPendingVoteRepresentativeNotificationIntents,
   prepareMarkVoteNotificationIntentsQueued,
   type PreparedVoteNotificationDelivery,
 } from "./votes";
@@ -24,7 +24,7 @@ export interface VotesDueWorkResult {
   opened: number;
   closed: number;
   roundsAdvanced: number;
-  delegateNoticesQueued: number;
+  representativeNoticesQueued: number;
 }
 
 export async function runVotesDueWork(
@@ -48,27 +48,27 @@ export async function runVotesDueWork(
       opened: result.opened.length,
       closed: result.closed.length,
       roundsAdvanced: result.roundsAdvanced.length,
-      delegateNoticesQueued: 0,
+      representativeNoticesQueued: 0,
     };
   }
-  const pending = await listPendingForumVoteNotificationIntents(db, notificationLimit);
+  const pending = await listPendingVoteRepresentativeNotificationIntents(db, notificationLimit);
   const queuedAt = nowIso();
   const preparedRecipients = await Promise.all(
     pending.map(async (recipient) => {
-      const operationKey = `forum-vote-delegate-notify:${recipient.voteId}:${recipient.round}:${recipient.organizationId}`;
+      const operationKey = `member-vote-representative-notify:${recipient.voteId}:${recipient.round}:${recipient.memberId}:${recipient.representativeUserId}`;
       return { recipient, operationKey, outboxId: (await sha256Hex(operationKey)).slice(0, 32) };
     }),
   );
   const emailRows: BulkEmailQueueRow[] = preparedRecipients.map(({ recipient, operationKey, outboxId }) => ({
     outboxId,
     idempotencyKey: operationKey,
-    templateKey: "forum-vote-delegate-notify",
-    recipientUserId: recipient.delegateUserId,
-    recipientEmail: recipient.delegateEmail,
+    templateKey: "member-vote-representative-notify",
+    recipientUserId: recipient.representativeUserId,
+    recipientEmail: recipient.representativeEmail,
     messageType: "transactional",
-    subject: `Forum vote open: ${recipient.voteTitle}`,
+    subject: `Vote open: ${recipient.voteTitle}`,
     data: {
-      delegateName: recipient.delegateName,
+      representativeName: recipient.representativeName,
       organizationName: recipient.organizationName,
       voteTitle: recipient.voteTitle,
       closesAt: recipient.closesAt,
@@ -79,17 +79,18 @@ export async function runVotesDueWork(
     ({ recipient, operationKey, outboxId }) => ({
       voteId: recipient.voteId,
       round: recipient.round,
-      organizationId: recipient.organizationId,
+      memberId: recipient.memberId,
+      representativeUserId: recipient.representativeUserId,
       outboxId,
       idempotencyKey: operationKey,
     }),
   );
   const emailStatements = prepareBulkQueueEmailChunkStatements(db, emailRows, queuedAt).map((chunk) => chunk.statement);
   const markStatements = prepareMarkVoteNotificationIntentsQueued(db, deliveries, queuedAt);
-  let delegateNoticesQueued = 0;
+  let representativeNoticesQueued = 0;
   if (emailStatements.length + markStatements.length > 0) {
     const batchResults = await db.batch([...emailStatements, ...markStatements]);
-    delegateNoticesQueued = batchResults
+    representativeNoticesQueued = batchResults
       .slice(emailStatements.length)
       .reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
   }
@@ -98,6 +99,6 @@ export async function runVotesDueWork(
     opened: result.opened.length,
     closed: result.closed.length,
     roundsAdvanced: result.roundsAdvanced.length,
-    delegateNoticesQueued,
+    representativeNoticesQueued,
   };
 }

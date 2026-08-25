@@ -1,12 +1,9 @@
 import type { AuthAdmin, DatabaseLike } from "../types";
-import { getVoteScopeForPermissionCheck } from "../services/votes";
-import { requirePermission } from "./permissions";
+import { hasVoteManagementAuthorization } from "../services/votes/vote-access";
+import { AppError } from "../errors";
 
 export async function requireVoteManagementAccess(db: DatabaseLike, actor: AuthAdmin, voteId: string): Promise<void> {
-  const scope = await getVoteScopeForPermissionCheck(db, voteId);
-  requirePermission(
-    actor,
-    "votes:manage",
-    scope.scopeType === "working_group" && scope.scopeId ? { type: "working_group", id: scope.scopeId } : undefined,
-  );
+  if (!(await hasVoteManagementAuthorization(db, actor, voteId))) {
+    throw new AppError(403, "VOTE_MANAGEMENT_REQUIRED", "Effective vote management permission is required");
+  }
 }

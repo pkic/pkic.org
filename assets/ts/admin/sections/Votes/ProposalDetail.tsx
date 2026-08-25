@@ -76,7 +76,7 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
         <p class="small mb-2 text-pre-wrap">{proposal.description}</p>
         <p class="small text-muted mb-3">
           <span class="badge text-bg-light me-1 text-capitalize">{proposal.voteType}</span>
-          <span class="badge text-bg-light me-1 text-capitalize">{proposal.scopeType.replace("_", " ")}</span>
+          <span class="badge text-bg-light me-1">{proposal.ownerGroupName}</span>
           Endorsements: {proposal.endorsementCount} / {proposal.minEndorsersRequired}
         </p>
         {endorserUserIds.length > 0 && <p class="small text-muted mb-3">Endorsers: {endorserUserIds.join(", ")}</p>}

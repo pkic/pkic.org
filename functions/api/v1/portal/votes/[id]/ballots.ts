@@ -21,6 +21,6 @@ export const PortalVoteBallotsPost = openApiRoute(submitBallotRouteSchema, async
   const ip = getClientIp(c.req.raw);
   const ipHash = ip ? await hmacSha256Hex(requireInternalSecret(c.env), ip) : null;
 
-  await submitBallot(db, member, id, data.body.choice, ipHash);
+  await submitBallot(db, member, id, data.body.memberId, data.body.choice, ipHash);
   return json(submitBallotResponseSchema.parse({ success: true }));
 });

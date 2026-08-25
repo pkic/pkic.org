@@ -21,10 +21,48 @@ export const ACTIVE_VOTER_MEMBERSHIP_SQL = `EXISTS (
         WHERE active_rep.member_id = active_member.id
           AND active_rep.user_id = ?
           AND active_rep.left_at IS NULL
+          AND active_rep.blocked_at IS NULL
       )
     )
 )`;
 
 export function activeVoterMembershipBindings(member: AuthMember): unknown[] {
   return [member.userId, member.memberId, member.membershipCategory, member.userId, member.userId];
+}
+
+/** Any current A-G capacity held by a user in one exact group. */
+export function activeGroupVoterSql(groupIdExpression = "?"): string {
+  return `EXISTS (
+  SELECT 1
+  FROM group_memberships active_group_membership
+  JOIN members active_group_member
+    ON active_group_member.id = active_group_membership.member_id
+   AND active_group_member.status = 'active'
+  JOIN member_category_assignments active_group_category
+    ON active_group_category.member_id = active_group_member.id
+   AND active_group_category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
+  JOIN users active_group_user
+    ON active_group_user.id = active_group_membership.user_id
+   AND active_group_user.active = 1
+  WHERE active_group_membership.user_id = ?
+    AND active_group_membership.group_id = ${groupIdExpression}
+    AND active_group_membership.left_at IS NULL
+    AND (
+      active_group_member.user_id = active_group_membership.user_id
+      OR EXISTS (
+        SELECT 1
+        FROM organization_representatives active_group_rep
+        WHERE active_group_rep.member_id = active_group_member.id
+          AND active_group_rep.user_id = active_group_membership.user_id
+          AND active_group_rep.left_at IS NULL
+          AND active_group_rep.blocked_at IS NULL
+      )
+  )
+)`;
+}
+
+export const ACTIVE_GROUP_VOTER_SQL = activeGroupVoterSql();
+
+export function activeGroupVoterBindings(userId: string, groupId: string): unknown[] {
+  return [userId, groupId];
 }

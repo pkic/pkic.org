@@ -5,15 +5,29 @@ import type { PortalVote } from "../../types";
 import { MOTION_CHOICES } from "./shared";
 import { submitBallotResponseSchema } from "../../../../../shared/schemas/votes";
 
-export function BallotForm({ vote, onCast }: { vote: PortalVote; onCast: () => Promise<void> }) {
+export function BallotForm({
+  vote,
+  memberId,
+  hasCastBallot = false,
+  onCast,
+}: {
+  vote: PortalVote;
+  memberId?: string;
+  hasCastBallot?: boolean;
+  onCast: () => Promise<void>;
+}) {
   const [choice, setChoice] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(selected: string): Promise<void> {
     setSubmitting(true);
     try {
-      await postJson(`/api/v1/portal/votes/${vote.id}/ballots`, { choice: selected }, submitBallotResponseSchema);
-      toast("Ballot cast", "success");
+      await postJson(
+        `/api/v1/portal/votes/${vote.id}/ballots`,
+        { choice: selected, ...(memberId ? { memberId } : {}) },
+        submitBallotResponseSchema,
+      );
+      toast(hasCastBallot ? "Ballot updated" : "Ballot cast", "success");
       await onCast();
     } catch (e) {
       toast(e instanceof ApiClientError ? e.message : "Could not cast your ballot.", "error");
@@ -32,7 +46,7 @@ export function BallotForm({ vote, onCast }: { vote: PortalVote; onCast: () => P
               <input
                 type="radio"
                 class="form-check-input mt-1"
-                name={`ballot-${vote.id}`}
+                name={`ballot-${vote.id}-${memberId ?? "person"}`}
                 checked={choice === c.id}
                 disabled={submitting}
                 onChange={() => setChoice(c.id)}
@@ -50,7 +64,7 @@ export function BallotForm({ vote, onCast }: { vote: PortalVote; onCast: () => P
           disabled={!choice || submitting}
           onClick={() => void submit(choice)}
         >
-          {submitting ? "Casting…" : "Cast ballot"}
+          {submitting ? "Saving…" : hasCastBallot ? "Update ballot" : "Cast ballot"}
         </button>
       </div>
     );
