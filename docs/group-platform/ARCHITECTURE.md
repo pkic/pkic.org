@@ -212,11 +212,17 @@ separate facts.
 
 ## Meeting entry, terms, and attendance
 
-A personalized opaque PKIC join link opens a PKIC landing page. A GET request
-does not record attendance because email security scanners may follow links.
-The page identifies the authenticated member or invited guest, displays their
-name and affiliation, presents applicable terms, and requires an intentional
-POST before redirecting to the provider.
+Members open the occurrence entry page through their authenticated portal
+session. An invited guest receives a rotatable capability in the URL fragment;
+the fragment is removed before any network request and may only start a
+browser-bound mailbox-code challenge. No meeting identity, terms, or provider
+destination is returned until an exact member session or occurrence-scoped
+guest session has been established.
+
+A GET request never records attendance because email security scanners may
+follow links. The authenticated page displays the authoritative name and
+affiliation, presents applicable terms, and requires an intentional POST before
+the provider destination is decrypted and returned.
 
 Every occurrence records the intentional join confirmation. Full terms
 acceptance is required only when the person has not accepted the currently
@@ -290,6 +296,10 @@ Canonical group routes use the following shape:
     /api/v1/groups/:groupId/mailing-lists
     /api/v1/groups/:groupId/stats
     /api/v1/groups/:groupId/audit-log
+    /api/v1/me/meetings/occurrences/:occurrenceId/join
+    /api/v1/meeting-guests/invitations/bootstrap
+    /api/v1/meeting-guests/invitations/verify
+    /api/v1/meeting-guests/meetings/occurrences/:occurrenceId/join
 
 Routes validate canonical shared contracts, resolve one authorization context,
 call one focused use case, and serialize the shared response. SQL, transitions,
@@ -330,8 +340,13 @@ The separate admin application is retired incrementally:
 - Recursive group traversal is bounded by cycle prevention and indexed parent
   lookups.
 - List and aggregation queries are set-based and explain-plan tested.
-- Personalized join tokens are random, stored hashed, scoped to one identity
-  and occurrence, revocable, expiring, and never placed in analytics payloads.
+- Member entry is bound to the exact live portal session. Guest invitation
+  capabilities are rotatable, fragment-transported bootstrap authority only;
+  mailbox verification creates a separate expiring, revocable,
+  occurrence-scoped session.
+- Landing revisions and D1 join guards bind the authoritative identity,
+  affiliation, current terms, occurrence, eligibility, and exact session before
+  the provider destination is returned.
 - Terms and attendance evidence retain only justified identity snapshots and
   follow the configured retention policy.
 - No production personal data is copied into preview or tests.

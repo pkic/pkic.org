@@ -8,6 +8,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
+import { newCapabilityLinkSecret } from "../../auth/capability-links";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
@@ -20,7 +21,8 @@ type GuestInviteInput = z.infer<typeof eventOccurrenceGuestInviteSchema>;
 type GuestListQuery = z.infer<typeof eventOccurrenceGuestsListQuerySchema>;
 
 const GUEST_COLUMNS = `id, series_id, occurrence_id, user_id, normalized_email,
-  name, affiliation, expires_at, revoked_at, created_at, updated_at`;
+  name, affiliation, invitation_secret, invitation_version,
+  expires_at, revoked_at, created_at, updated_at`;
 
 export async function listOccurrenceGuests(
   db: DatabaseLike,
@@ -106,6 +108,8 @@ export async function inviteOccurrenceGuest(
     email,
   ]);
   const id = existing?.id ?? uuid();
+  const invitationSecret = newCapabilityLinkSecret();
+  const invitationVersion = (existing?.invitation_version ?? 0) + 1;
   const now = nowIso();
   try {
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
@@ -113,13 +117,16 @@ export async function inviteOccurrenceGuest(
         ? db
             .prepare(
               `UPDATE event_occurrence_guests SET user_id = ?, name = ?, affiliation = ?,
-                 expires_at = ?, revoked_at = NULL, updated_at = ?
+                 invitation_secret = ?, invitation_version = ?, expires_at = ?,
+                 revoked_at = NULL, updated_at = ?
                WHERE id = ? AND updated_at = ?`,
             )
             .bind(
               user?.id ?? null,
               input.name,
               input.affiliation ?? null,
+              invitationSecret,
+              invitationVersion,
               input.expiresAt,
               now,
               id,
@@ -129,8 +136,8 @@ export async function inviteOccurrenceGuest(
             .prepare(
               `INSERT INTO event_occurrence_guests
                  (id, series_id, occurrence_id, user_id, normalized_email, name, affiliation,
-                  expires_at, revoked_at, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+                  invitation_secret, invitation_version, expires_at, revoked_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
             )
             .bind(
               id,
@@ -140,6 +147,8 @@ export async function inviteOccurrenceGuest(
               email,
               input.name,
               input.affiliation ?? null,
+              invitationSecret,
+              invitationVersion,
               input.expiresAt,
               now,
               now,
@@ -154,6 +163,19 @@ export async function inviteOccurrenceGuest(
         id,
         { seriesId, occurrenceId: scopedOccurrenceId, seriesWide: input.seriesWide ?? false },
       ),
+      ...(existing
+        ? [
+            db
+              .prepare("UPDATE meeting_guest_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE guest_id = ?")
+              .bind(now, id),
+            db
+              .prepare(
+                `UPDATE meeting_guest_browser_challenges SET used_at = COALESCE(used_at, ?)
+                  WHERE guest_id = ? AND used_at IS NULL`,
+              )
+              .bind(now, id),
+          ]
+        : []),
     ]);
   } catch (error) {
     if (isAuditOneChangeGuardFailure(error)) {
@@ -187,10 +209,11 @@ export async function revokeOccurrenceGuest(
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
       db
         .prepare(
-          `UPDATE event_occurrence_guests SET revoked_at = ?, updated_at = ?
+          `UPDATE event_occurrence_guests SET invitation_secret = ?,
+             invitation_version = invitation_version + 1, revoked_at = ?, updated_at = ?
            WHERE id = ? AND revoked_at IS NULL AND updated_at = ?`,
         )
-        .bind(now, now, guestId, guest.updated_at),
+        .bind(newCapabilityLinkSecret(), now, now, guestId, guest.updated_at),
       prepareScopedAuditLogAfterOneChange(
         db,
         { type: "group", id: context.groupId },
@@ -202,7 +225,12 @@ export async function revokeOccurrenceGuest(
         { seriesId, occurrenceId },
       ),
       db
-        .prepare("UPDATE event_occurrence_access_tokens SET revoked_at = ? WHERE guest_id = ? AND revoked_at IS NULL")
+        .prepare("UPDATE meeting_guest_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE guest_id = ?")
+        .bind(now, guestId),
+      db
+        .prepare(
+          "UPDATE meeting_guest_browser_challenges SET used_at = COALESCE(used_at, ?) WHERE guest_id = ? AND used_at IS NULL",
+        )
         .bind(now, guestId),
     ]);
   } catch (error) {

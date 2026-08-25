@@ -19,6 +19,17 @@ export function jsonNoStore(data: unknown, status = 200, headers?: HeadersInit):
   });
 }
 
+/** Security headers for identity- and capability-sensitive browser flows. */
+export function jsonPrivate(data: unknown, status = 200, headers?: HeadersInit): Response {
+  return jsonNoStore(data, status, {
+    "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "x-robots-tag": "noindex, nofollow, noarchive",
+    ...headers,
+  });
+}
+
 export function noContent(): Response {
   return new Response(null, { status: 204 });
 }

@@ -14,7 +14,12 @@ const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MAX_TOKEN_LENGTH = 512;
 
 export type CapabilityPurpose =
-  "registration_manage" | "registration_confirm" | "invite" | "proposal_manage" | "speaker_manage";
+  | "registration_manage"
+  | "registration_confirm"
+  | "invite"
+  | "proposal_manage"
+  | "speaker_manage"
+  | "meeting_guest_verify";
 
 const purposeCodes: Record<CapabilityPurpose, string> = {
   registration_manage: "rm",
@@ -22,6 +27,7 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   invite: "iv",
   proposal_manage: "pm",
   speaker_manage: "sm",
+  meeting_guest_verify: "mgv",
 };
 
 const purposesByCode = Object.fromEntries(
@@ -49,12 +55,13 @@ export type CapabilityVerifyResult =
 
 export function omitCapabilitySecrets<T extends object>(
   record: T,
-): Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret"> {
+): Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret" | "invitation_secret"> {
   const sanitized = { ...record } as Record<string, unknown>;
   delete sanitized.confirmation_link_secret;
   delete sanitized.manage_link_secret;
   delete sanitized.link_secret;
-  return sanitized as Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret">;
+  delete sanitized.invitation_secret;
+  return sanitized as Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret" | "invitation_secret">;
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -255,6 +262,8 @@ function capabilitySecretQuery(purpose: CapabilityPurpose): string {
       return "SELECT manage_link_secret AS link_secret FROM session_proposals WHERE id = ?";
     case "speaker_manage":
       return "SELECT manage_link_secret AS link_secret FROM proposal_speakers WHERE id = ?";
+    case "meeting_guest_verify":
+      return "SELECT invitation_secret AS link_secret FROM event_occurrence_guests WHERE id = ?";
   }
 }
 

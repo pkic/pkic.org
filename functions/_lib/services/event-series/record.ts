@@ -120,6 +120,8 @@ export interface EventGuestRow {
   normalized_email: string;
   name: string;
   affiliation: string | null;
+  invitation_secret: string;
+  invitation_version: number;
   expires_at: string;
   revoked_at: string | null;
   created_at: string;

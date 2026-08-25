@@ -4020,6 +4020,8 @@ CREATE TABLE event_occurrence_guests (
   normalized_email   TEXT NOT NULL,
   name               TEXT NOT NULL,
   affiliation        TEXT,
+  invitation_secret  TEXT NOT NULL,
+  invitation_version INTEGER NOT NULL DEFAULT 1 CHECK (invitation_version >= 1),
   expires_at         TEXT NOT NULL,
   revoked_at         TEXT,
   created_at         TEXT NOT NULL,
@@ -4039,6 +4041,151 @@ CREATE UNIQUE INDEX uq_event_occurrence_guest_email
 CREATE UNIQUE INDEX uq_event_series_guest_email
   ON event_occurrence_guests(series_id, normalized_email)
   WHERE occurrence_id IS NULL;
+
+-- A guest invitation capability proves possession of the current invitation
+-- secret, but a browser session is issued only after a separate, short-lived
+-- verification challenge. The authorization hash binds the browser-held
+-- secret to the independently delivered verification code without storing
+-- either value. invitation_version invalidates outstanding challenges and
+-- sessions whenever the invitation is intentionally rotated.
+CREATE TABLE meeting_guest_browser_challenges (
+  id                   TEXT NOT NULL PRIMARY KEY,
+  guest_id             TEXT NOT NULL,
+  occurrence_id        TEXT NOT NULL,
+  invitation_version   INTEGER NOT NULL CHECK (invitation_version >= 1),
+  authorization_hash   TEXT NOT NULL CHECK (
+    length(authorization_hash) = 64 AND authorization_hash NOT GLOB '*[^0-9a-f]*'
+  ),
+  expires_at           TEXT NOT NULL,
+  used_at              TEXT,
+  created_at           TEXT NOT NULL,
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id)
+);
+
+CREATE INDEX idx_meeting_guest_browser_challenges_guest
+  ON meeting_guest_browser_challenges(guest_id, invitation_version, created_at, id);
+CREATE INDEX idx_meeting_guest_browser_challenges_expiry
+  ON meeting_guest_browser_challenges(expires_at, id);
+CREATE INDEX idx_meeting_guest_browser_challenges_occurrence
+  ON meeting_guest_browser_challenges(occurrence_id, guest_id, created_at, id);
+
+CREATE TRIGGER trg_meeting_guest_browser_challenge_context
+BEFORE INSERT ON meeting_guest_browser_challenges
+WHEN unixepoch(NEW.expires_at) <= unixepoch()
+  OR NOT EXISTS (
+    SELECT 1
+      FROM event_occurrence_guests guest
+     WHERE guest.id = NEW.guest_id
+       AND guest.invitation_version = NEW.invitation_version
+       AND guest.revoked_at IS NULL
+       AND unixepoch(guest.expires_at) > unixepoch()
+       AND unixepoch(NEW.expires_at) <= unixepoch(guest.expires_at)
+       AND EXISTS (
+         SELECT 1
+           FROM current_event_occurrence_subject_eligibility eligible
+          WHERE eligible.occurrence_id = NEW.occurrence_id
+            AND eligible.guest_id = NEW.guest_id
+       )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'MEETING_GUEST_CHALLENGE_CONTEXT_CHANGED');
+END;
+
+-- Prevent retries, double-clicks, and parallel requests from generating an
+-- email storm for the same invitation generation. The guard is enforced at
+-- the database boundary so concurrent Workers cannot bypass it.
+CREATE TRIGGER trg_meeting_guest_browser_challenge_rate_limit
+BEFORE INSERT ON meeting_guest_browser_challenges
+WHEN EXISTS (
+  SELECT 1
+    FROM meeting_guest_browser_challenges challenge
+   WHERE challenge.guest_id = NEW.guest_id
+     AND challenge.invitation_version = NEW.invitation_version
+     AND unixepoch(challenge.created_at) > unixepoch() - 60
+)
+BEGIN
+  SELECT RAISE(ABORT, 'MEETING_GUEST_CHALLENGE_RATE_LIMITED');
+END;
+
+CREATE TABLE meeting_guest_sessions (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  guest_id           TEXT NOT NULL,
+  token_hash         TEXT NOT NULL UNIQUE,
+  challenge_id       TEXT NOT NULL UNIQUE,
+  authorization_hash TEXT NOT NULL CHECK (
+    length(authorization_hash) = 64 AND authorization_hash NOT GLOB '*[^0-9a-f]*'
+  ),
+  expires_at         TEXT NOT NULL,
+  revoked_at         TEXT,
+  created_at         TEXT NOT NULL,
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id),
+  FOREIGN KEY(challenge_id) REFERENCES meeting_guest_browser_challenges(id)
+);
+
+CREATE INDEX idx_meeting_guest_sessions_guest
+  ON meeting_guest_sessions(guest_id, revoked_at, expires_at, id);
+
+-- The session INSERT is the one atomic challenge-consumption boundary. A
+-- concurrent completion cannot observe and consume the same challenge after
+-- the winning INSERT marks it used, and a session can never outlive its guest.
+CREATE TRIGGER trg_meeting_guest_session_validate
+BEFORE INSERT ON meeting_guest_sessions
+WHEN unixepoch(NEW.expires_at) <= unixepoch()
+  OR NOT EXISTS (
+    SELECT 1
+      FROM meeting_guest_browser_challenges challenge
+      JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
+     WHERE challenge.id = NEW.challenge_id
+       AND challenge.guest_id = NEW.guest_id
+       AND challenge.authorization_hash = NEW.authorization_hash
+       AND challenge.used_at IS NULL
+       AND unixepoch(challenge.expires_at) > unixepoch()
+       AND challenge.invitation_version = guest.invitation_version
+       AND guest.revoked_at IS NULL
+       AND unixepoch(guest.expires_at) > unixepoch()
+       AND unixepoch(NEW.expires_at) <= unixepoch(guest.expires_at)
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'MEETING_GUEST_SESSION_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_meeting_guest_session_consume_challenge
+AFTER INSERT ON meeting_guest_sessions
+BEGIN
+  UPDATE meeting_guest_browser_challenges
+     SET used_at = NEW.created_at
+   WHERE id = NEW.challenge_id AND used_at IS NULL;
+END;
+
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type, r2_object_key,
+   checksum_sha256, status, created_by_user_id, created_at, message_type)
+VALUES
+  (
+    lower(hex(randomblob(16))), 'meeting-guest-invitation', 1,
+    'Invitation: {{eventName}}',
+    'Hi {{guestName}},
+
+You have been invited to {{eventName}}, starting {{startsAt}}.
+
+[Open your meeting invitation]({{invitationUrl}})
+
+For your protection, opening the invitation starts a separate verification step. The meeting destination is shown only after verification and acceptance of the current meeting terms.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  ),
+  (
+    lower(hex(randomblob(16))), 'meeting-guest-verification-code', 1,
+    'Your meeting verification code',
+    'Hi {{guestName}},
+
+Enter this code in the same browser where you opened the meeting invitation:
+
+{{verificationCode}}
+
+This code expires at {{expiresAt}}. If you did not request it, you may ignore this email.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  );
 
 -- One canonical SQL read model defines whether a meeting subject may enter an
 -- occurrence now. Token issuance and token consumption both use it so policy,
@@ -4099,42 +4246,6 @@ SELECT occurrence.id AS occurrence_id, event.id AS event_id,
    AND COALESCE(json_extract(event.settings_json, '$.guestPolicy'), 'none')
        IN ('occurrence_invitation', 'public_registration', 'invitation_only');
 
--- Tokens are opaque, single-purpose capabilities. GET may render the landing
--- page but cannot consume a token or record attendance; only the intentional
--- POST command may consume it and reveal the protected provider destination.
-CREATE TABLE event_occurrence_access_tokens (
-  id            TEXT NOT NULL PRIMARY KEY,
-  occurrence_id TEXT NOT NULL,
-  user_id       TEXT,
-  guest_id      TEXT,
-  token_hash    TEXT NOT NULL UNIQUE,
-  expires_at    TEXT NOT NULL,
-  first_used_at TEXT,
-  last_used_at  TEXT,
-  use_count     INTEGER NOT NULL DEFAULT 0,
-  revoked_at    TEXT,
-  created_at    TEXT NOT NULL,
-  CHECK ((user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)),
-  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id)
-);
-
-CREATE INDEX idx_event_occurrence_access_subject
-  ON event_occurrence_access_tokens(occurrence_id, user_id, guest_id, expires_at);
-
-CREATE TRIGGER trg_event_occurrence_access_subject_context
-BEFORE INSERT ON event_occurrence_access_tokens
-WHEN NOT EXISTS (
-  SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
-   WHERE eligible.occurrence_id = NEW.occurrence_id
-     AND eligible.user_id IS NEW.user_id
-     AND eligible.guest_id IS NEW.guest_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'EVENT_OCCURRENCE_ACCESS_CONTEXT_CHANGED');
-END;
-
 -- Meeting access does not require an event registration, while the deployed
 -- consent_acceptances table intentionally requires a registration or proposal.
 -- One companion table therefore records current-version meeting terms for
@@ -4183,17 +4294,21 @@ BEGIN
 END;
 
 -- The join landing is an advisory read. Membership, registration, guest,
--- token, occurrence, and current-term state can all change before the
--- intentional POST. Revalidate every condition inside the same D1 batch as
--- the confirmation so revoked access can never leave attendance evidence.
+-- session, occurrence, and current-term state can all change before the
+-- intentional POST. Revalidate the exact authenticated session and every
+-- policy condition inside the same D1 batch as the confirmation.
 CREATE TABLE event_occurrence_join_guards (
   id            TEXT NOT NULL PRIMARY KEY,
-  token_id      TEXT NOT NULL,
+  session_kind  TEXT NOT NULL,
+  session_id    TEXT NOT NULL,
   occurrence_id TEXT NOT NULL,
   event_id      TEXT NOT NULL,
   user_id       TEXT,
   guest_id      TEXT,
-  FOREIGN KEY(token_id) REFERENCES event_occurrence_access_tokens(id),
+  CHECK (
+    (session_kind = 'member' AND user_id IS NOT NULL AND guest_id IS NULL)
+    OR (session_kind = 'guest' AND user_id IS NULL AND guest_id IS NOT NULL)
+  ),
   FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
   FOREIGN KEY(event_id) REFERENCES events(id),
   FOREIGN KEY(user_id) REFERENCES users(id),
@@ -4204,18 +4319,46 @@ CREATE TRIGGER trg_event_occurrence_join_guard_validate
 BEFORE INSERT ON event_occurrence_join_guards
 WHEN NOT EXISTS (
   SELECT 1
-    FROM event_occurrence_access_tokens token
-    JOIN event_occurrences occurrence ON occurrence.id = token.occurrence_id
+    FROM event_occurrences occurrence
     JOIN event_series series ON series.id = occurrence.series_id
     JOIN events event ON event.id = series.event_id
-   WHERE token.id = NEW.token_id
-     AND token.occurrence_id = NEW.occurrence_id
+   WHERE occurrence.id = NEW.occurrence_id
      AND event.id = NEW.event_id
-     AND token.user_id IS NEW.user_id
-     AND token.guest_id IS NEW.guest_id
-     AND token.revoked_at IS NULL
-     AND unixepoch(token.expires_at) > unixepoch()
      AND occurrence.status = 'scheduled'
+     AND (
+       (
+         NEW.session_kind = 'member'
+         AND EXISTS (
+           SELECT 1 FROM sessions member_session
+            WHERE member_session.id = NEW.session_id
+              AND member_session.user_id = NEW.user_id
+              AND member_session.session_type = 'auth'
+              AND member_session.revoked_at IS NULL
+              AND unixepoch(member_session.expires_at) > unixepoch()
+         )
+       )
+       OR (
+         NEW.session_kind = 'guest'
+         AND EXISTS (
+           SELECT 1
+             FROM meeting_guest_sessions guest_session
+             JOIN meeting_guest_browser_challenges challenge
+               ON challenge.id = guest_session.challenge_id
+             JOIN event_occurrence_guests guest
+               ON guest.id = guest_session.guest_id AND guest.id = challenge.guest_id
+            WHERE guest_session.id = NEW.session_id
+              AND guest_session.guest_id = NEW.guest_id
+              AND challenge.occurrence_id = NEW.occurrence_id
+              AND guest_session.revoked_at IS NULL
+              AND unixepoch(guest_session.expires_at) > unixepoch()
+              AND challenge.used_at IS NOT NULL
+              AND guest_session.authorization_hash = challenge.authorization_hash
+              AND challenge.invitation_version = guest.invitation_version
+              AND guest.revoked_at IS NULL
+              AND unixepoch(guest.expires_at) > unixepoch()
+         )
+       )
+     )
      AND EXISTS (
        SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
         WHERE eligible.occurrence_id = NEW.occurrence_id

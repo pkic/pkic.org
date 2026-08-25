@@ -71,7 +71,7 @@ export async function generateGroupSeriesIcs(
     throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
   }
   const eventName = rows[0].event_name;
-  const portalUrl = `${baseUrl.replace(/\/$/, "")}/portal/groups/${throughGroup.slug}/meetings`;
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -89,6 +89,7 @@ export async function generateGroupSeriesIcs(
     ) {
       continue;
     }
+    const joinUrl = `${normalizedBaseUrl}/meetings/join/?occurrence=${encodeURIComponent(occurrence.id)}`;
     lines.push(
       "BEGIN:VEVENT",
       `UID:${occurrence.id}@pkic.org`,
@@ -96,7 +97,7 @@ export async function generateGroupSeriesIcs(
       `DTSTART:${utcTimestamp(occurrence.starts_at)}`,
       `DTEND:${utcTimestamp(occurrence.ends_at)}`,
       `SUMMARY:${escapeIcs(eventName)}`,
-      `URL:${escapeIcs(portalUrl)}`,
+      `URL:${escapeIcs(joinUrl)}`,
     );
     if (occurrence.location) lines.push(`LOCATION:${escapeIcs(occurrence.location)}`);
     if (occurrence.status === "cancelled") lines.push("STATUS:CANCELLED");

@@ -29,7 +29,6 @@ import {
   GroupMeetingGuestsList,
 } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/index";
 import { GroupMeetingGuestRevoke } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/[guestId]";
-import { GroupMeetingAccessIssue } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/access";
 import { GroupMeetingAttendanceList } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/index";
 import { GroupMeetingAttendanceVerify } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/[confirmationId]";
 import {
@@ -132,7 +131,6 @@ openapi.delete(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/guests/:guestId",
   GroupMeetingGuestRevoke,
 );
-openapi.post("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/access", GroupMeetingAccessIssue);
 openapi.get("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/attendance", GroupMeetingAttendanceList);
 openapi.put(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/attendance/:confirmationId",

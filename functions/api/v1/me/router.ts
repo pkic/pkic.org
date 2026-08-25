@@ -15,6 +15,7 @@ import { MeNotificationPreferencesGet, MeNotificationPreferencesPatch } from "./
 import { MeVotesGet } from "./votes";
 import applications_Router from "./applications/router";
 import groups_Router from "./groups/router";
+import { MemberMeetingJoinConfirm, MemberMeetingJoinLanding } from "./meetings/occurrences/[occurrenceId]/join";
 import type { RequestDbContext } from "../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -36,6 +37,8 @@ openapi.post("/headshot", MeHeadshotPost);
 openapi.get("/notification-preferences", MeNotificationPreferencesGet);
 openapi.patch("/notification-preferences", MeNotificationPreferencesPatch);
 openapi.get("/votes", MeVotesGet);
+openapi.get("/meetings/occurrences/:occurrenceId/join", MemberMeetingJoinLanding);
+openapi.post("/meetings/occurrences/:occurrenceId/join", MemberMeetingJoinConfirm);
 openapi.route("/applications", applications_Router);
 openapi.route("/groups", groups_Router);
 

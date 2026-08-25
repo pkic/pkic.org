@@ -376,9 +376,12 @@ default; an explicit null occurrence_id makes it series-wide:
     normalized_email
     name
     affiliation
+    invitation_secret
+    invitation_version
     expires_at
     revoked_at
     created_at
+    updated_at
 
 The email is an invitation destination, not proof of an existing user identity.
 A verified account may claim an invitation through the existing identity
@@ -386,20 +389,56 @@ boundary. The atomic group-scoped audit entry is the canonical inviter
 attribution for both user-backed and service identities; the guest row does not
 duplicate that polymorphic actor relationship.
 
-### event_occurrence_access_tokens
+Rotating the invitation secret increments the invitation version and invalidates
+every pending browser challenge and guest session. A capability-bearing
+invitation authorizes only the start of mailbox verification; it is not an
+attendee identity and cannot read landing data or reveal the provider URL.
 
-Opaque hashed capabilities bind one occurrence to exactly one authenticated
-user or invited guest. GET renders the landing page without mutating state.
-The intentional POST records first and latest use and may be repeated until the
-token expires or is revoked, so a participant who is disconnected can rejoin.
+### meeting_guest_browser_challenges
+
+A short-lived challenge binds one invited guest and occurrence to a random
+browser-held secret and a separately delivered mailbox code:
+
+    id
+    guest_id -> event_occurrence_guests.id
+    occurrence_id -> event_occurrences.id
+    invitation_version
+    authorization_hash
+    expires_at
+    used_at
+    created_at
+
+Only the hash of the challenge ID, browser secret, and code is stored. The D1
+insert trigger rechecks the current invitation generation and canonical guest
+eligibility for the exact occurrence. A second trigger limits concurrent code
+issuance for one invitation generation.
+
+### meeting_guest_sessions
+
+The one-time challenge exchange creates a distinct guest session:
+
+    id
+    guest_id -> event_occurrence_guests.id
+    challenge_id -> meeting_guest_browser_challenges.id
+    token_hash
+    authorization_hash
+    expires_at
+    revoked_at
+    created_at
+
+The insert atomically validates and consumes the challenge. Runtime
+authentication checks the exact session, invitation generation, occurrence,
+expiry, revocation, and authorization hash. A series-wide invitation may start
+a new occurrence-scoped session for another occurrence; one verified session
+does not silently gain access to every occurrence.
 
 The `current_event_occurrence_subject_eligibility` D1 view is the canonical
 write-time and use-time policy projection for both authenticated users and
 guests. It combines occurrence state, registration or group eligibility,
 resource grants, guest scope, current guest policy, revocation, and expiry.
-Both token insertion and intentional join guards query this same view, so a
-policy change or revocation takes effect on the next use and a racing token
-cannot later revive when a guest is reinvited.
+Both challenge insertion and intentional join guards query this same view, so a
+policy change or revocation takes effect on the next use and a stale challenge
+cannot revive when a guest is reinvited.
 
 ### event_occurrence_join_confirmations
 
@@ -416,9 +455,10 @@ One intentional PKIC join action:
     attendance_verified_at
     attendance_verification_source
 
-Exactly one of user or guest is required. The shared service verifies the
-opaque join token, current eligibility, revocation, terms version, and
-intentional POST before the row and audit event are committed.
+Exactly one of user or guest is required. The shared service verifies the exact
+member or occurrence-scoped guest session, current eligibility, revocation,
+landing revision, current terms, and intentional POST before the row and audit
+event are committed. Client-supplied identity or affiliation is never accepted.
 
 Repeated joins may update the latest confirmation time or append bounded
 signals according to the reporting requirement; they never create multiple
@@ -440,7 +480,7 @@ an event-management mutation:
 An insert trigger accepts the row only while the target group and user remain
 active, the event remains owned by that group or has the exact required grant,
 and the actor retains effective local or inherited group management. `manage`
-is required for series, occurrence, guest, and access-token commands;
+is required for series, occurrence, and guest commands;
 `manage_attendance` also accepts the broader `manage` grant. A release trigger
 deletes the guard immediately; it is not durable business state. D1 batches
 are transactional, so the guard, protected write, and group-scoped audit either

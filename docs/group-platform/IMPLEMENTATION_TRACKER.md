@@ -186,7 +186,8 @@ Status: In progress
 - [x] Support external guests scoped to one occurrence by default.
 - [x] Support explicit series-wide guest exceptions.
 - [x] Keep public workshop registration in the shared event-registration flow.
-- [x] Add opaque, hashed, expiring, revocable PKIC join capabilities.
+- [x] Add rotatable, expiring guest invitation capabilities that authorize only
+      browser-bound mailbox verification, never meeting entry by themselves.
 - [x] Make GET render only; require intentional POST before redirect.
 - [x] Display and snapshot name and affiliation.
 - [x] Reuse existing event terms and consent acceptance logic through one
@@ -202,27 +203,29 @@ Status: In progress
 - [ ] Bind member entry to the authenticated portal identity and guest entry to
       a separately verified guest session rather than treating a bearer URL as
       sufficient identity proof.
+      Current evidence: member entry is mounted under `/api/v1/me` and derives
+      the identity and exact live session server-side. Guest JWTs are a distinct
+      token type backed by a one-time browser/mailbox challenge, current
+      invitation generation, exact D1 session, and occurrence scope. The
+      mounted guest landing and confirmation endpoints reject a valid guest
+      session for another occurrence. The public bootstrap and verification
+      delivery endpoints remain to be completed before this item is checked.
 - [ ] Deliver rotatable guest invitations through the durable outbox and move
       the capability out of the request path before any landing data is read.
 - [ ] Cover link scanners, forwarding, expiry, revocation, guest identity,
       membership loss, terms changes, repeated joins, and attendance counts.
-      Evidence so far: event-series-platform.test.ts passes 21 focused tests.
-      The current entry
-      path accepts only HTTPS provider destinations, encrypts them at rest,
-      never copies them into audit details, exposes them only after an
-      intentional POST, derives identity and affiliation from server state,
-      and atomically rechecks token, occurrence, canonical subject eligibility,
-      current guest policy, and current-term state in the same D1 batch as the
-      join record. Coverage includes scanner-safe GET, expiry, token-issuance
-      and join revocation races, guest and member identity tampering, membership
-      loss, policy changes, terms changes and races, repeated joins, attendance
-      counts, and service-issued guest attribution through the canonical audit.
-      These controls do not yet prove the human presenting a forwarded bearer
-      URL is that server-side identity. Member self-entry, verified guest
-      sessions, invitation delivery and token transport therefore remain open
-      security work. All 37 migrations replay on a fresh local D1 database.
-      Management UI integration is implemented; participant entry UI and
-      legacy meeting-calendar retirement remain incomplete.
+      Evidence so far: meeting-entry-security.test.ts passes 18 focused tests
+      covering exact member and guest sessions, browser/code binding, challenge
+      replay, occurrence scope, expiry/revocation and policy races, identity
+      tampering, membership loss, terms changes, repeated joins, encrypted
+      HTTPS-only destinations, and the separation of join confirmation from
+      verified attendance. The shared D1 guard rechecks the exact session,
+      occurrence, canonical eligibility, current guest policy, and current-term
+      state in the confirmation batch. Frontend fragment and authoritative
+      identity rendering tests pass. Durable invitation and verification-code
+      delivery, public challenge routes, a fresh migration replay, and final
+      browser validation remain open. Management UI integration is implemented;
+      legacy meeting-calendar retirement remains incomplete.
 
 ## 6. Reusable live-editable forms
 
@@ -522,13 +525,13 @@ Status: In progress
 - [x] Add /api/v1/groups/:groupId/meetings/series routes.
 - [x] Add series occurrence, guest, join, and attendance routes.
       Evidence: the mounted router exposes canonical series, occurrence,
-      calendar, materialization, guest, access-capability, attendance-list,
-      and attendance-verification routes. Series, calendar, and occurrence
-      reads now use the same group-context event-resource policy as ordinary
-      event discovery. The temporary scanner-safe join inspection and
-      confirmation endpoints remain token-scoped under `/api/v1/meetings`;
-      replacing that bearer-only boundary with member and verified-guest
-      identity binding is still required.
+      calendar, materialization, guest, attendance-list, and
+      attendance-verification routes. Series, calendar, and occurrence reads
+      use the same group-context event-resource policy as ordinary event
+      discovery. The bearer-only `/api/v1/meetings/join/:token` endpoints and
+      manager-issued access-token route were removed. Member and verified-guest
+      landing/confirmation endpoints are mounted at their identity-scoped API
+      boundaries; guest bootstrap and challenge verification routes remain open.
 - [x] Keep routes thin and SQL-free.
 - [x] Add one generic `/api/v1/me/groups` self-participation read model.
       Evidence: the shared contract composes the canonical group list filters,
@@ -727,16 +730,15 @@ Status: Pending
       leadership, and category-rule authorization races now revoke access
       between preflight and batch execution and prove complete rollback. Voting
       replacement and voting authorization races remain open.
-- [ ] Run join-token, terms, guest, and attendance security tests.
-      Current evidence: 21 event-platform tests cover scanner-safe GET, terms reuse and
-      replacement, user and guest identity binding, membership loss, expiry,
-      guest-policy changes, revocation races at issue and use time, HTTPS-only
-      destinations, audit redaction, repeated joins, and verified attendance.
-      Both user and guest predicates on the canonical eligibility view have
-      explicit D1 query-plan assertions proving indexed subject lookups. Keep
-      this open until member-session binding, verified guest sessions,
-      forwarding resistance, and invitation delivery are implemented and
-      covered.
+- [ ] Run meeting-entry, terms, guest, and attendance security tests.
+      Current evidence: 18 focused tests cover exact member-session binding,
+      browser/mailbox guest verification primitives, challenge replay,
+      occurrence scope, terms reuse and replacement, membership loss, expiry,
+      guest-policy changes, revocation races, HTTPS-only destinations, audit
+      redaction, repeated joins, and verified attendance. Both subject
+      predicates on the canonical eligibility view have indexed query-plan
+      assertions. Keep this open until invitation/code delivery routes and
+      their atomic outbox, rate-limit, forwarding, and revocation tests pass.
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.

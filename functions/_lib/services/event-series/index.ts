@@ -1,4 +1,4 @@
-export * from "./access";
+export * from "./meeting-entry";
 export * from "./attendance";
 export * from "./guests";
 export * from "./ics";
