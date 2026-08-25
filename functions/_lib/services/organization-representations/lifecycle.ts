@@ -1,11 +1,15 @@
 import type { OrganizationRepresentative } from "../../../../assets/shared/schemas/organization-representation";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
-import { requireOrganizationRepresentativeManagement } from "./authorization";
+import {
+  prepareOrganizationRepresentativeManagementGuard,
+  requireOrganizationRepresentativeManagement,
+} from "./authorization";
 import { loadRepresentationNotificationContext, prepareRepresentationNotification } from "./notifications";
 import type { RepresentativeManagerActor } from "./types";
 
@@ -13,6 +17,28 @@ interface RepresentativeStateRow {
   id: string;
   left_at: string | null;
   blocked_at: string | null;
+}
+
+async function commitRepresentativeLifecycleBatch(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
+        "Representative-management access changed while the update was being saved",
+      );
+    }
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_REPRESENTATION_CHANGED",
+        "The organization representation changed concurrently; reload and retry",
+      );
+    }
+    throw error;
+  }
 }
 
 async function requireRepresentation(
@@ -41,6 +67,7 @@ export async function blockOrganizationRepresentative(
   await requireOrganizationRepresentativeManagement(db, {
     memberId: input.memberId,
     actorUserId: actor.userId,
+    databaseUserId: actor.databaseUserId,
     staffAuthorized: actor.staffAuthorized,
   });
   const representative = await requireRepresentation(db, input.memberId, input.userId);
@@ -53,6 +80,12 @@ export async function blockOrganizationRepresentative(
   const notification = await loadRepresentationNotificationContext(db, input.memberId, input.userId, false);
   const at = nowIso();
   const statements: StatementLike[] = [
+    prepareOrganizationRepresentativeManagementGuard(db, {
+      memberId: input.memberId,
+      actorUserId: actor.userId,
+      databaseUserId: actor.databaseUserId,
+      staffAuthorized: actor.staffAuthorized,
+    }),
     db
       .prepare(
         `UPDATE organization_representatives
@@ -80,7 +113,7 @@ export async function blockOrganizationRepresentative(
     }),
     ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at),
   ];
-  await db.batch(statements);
+  await commitRepresentativeLifecycleBatch(db, statements);
 }
 
 export async function restoreOrganizationRepresentative(
@@ -91,6 +124,7 @@ export async function restoreOrganizationRepresentative(
   await requireOrganizationRepresentativeManagement(db, {
     memberId: input.memberId,
     actorUserId: actor.userId,
+    databaseUserId: actor.databaseUserId,
     staffAuthorized: actor.staffAuthorized,
   });
   const representative = await requireRepresentation(db, input.memberId, input.userId);
@@ -100,7 +134,13 @@ export async function restoreOrganizationRepresentative(
   const notification = await loadRepresentationNotificationContext(db, input.memberId, input.userId, true);
   const at = nowIso();
   const source: OrganizationRepresentative["source"] = actor.staffAuthorized ? "staff" : "organization_contact";
-  await db.batch([
+  await commitRepresentativeLifecycleBatch(db, [
+    prepareOrganizationRepresentativeManagementGuard(db, {
+      memberId: input.memberId,
+      actorUserId: actor.userId,
+      databaseUserId: actor.databaseUserId,
+      staffAuthorized: actor.staffAuthorized,
+    }),
     db
       .prepare(
         `UPDATE organization_representatives

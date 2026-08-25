@@ -481,14 +481,24 @@ Status: Pending
       `idx_group_memberships_user_active` for page and count predicates; the
       event and recurring-series page/count assertions prove indexed owner and
       exact grantee-group access through `idx_events_owner_profile` and
-      `idx_event_group_grants_group`; the broader group architecture selection
-      passes 43 tests.
+      `idx_event_group_grants_group`; organization-contact authorization proves
+      indexed representative and contextual-role lookups without a table scan;
+      the broader group architecture selection passes 43 tests.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and
       preserves unattributed historical event-form projections.
 - [x] Run migration tests against empty databases.
-- [ ] Run representative and group authorization security tests.
+- [x] Run representative authorization security tests.
+      Evidence: the canonical representative-management predicate is reused for
+      preflight and an atomic D1 write guard. Race tests revoke an organization
+      contact role and demote a staff administrator after preflight but before
+      commit; both commands return a bounded conflict and roll back the
+      representative change, audit record, notification, and enrollment
+      fallout. Association compare-and-set conflicts and an indexed query plan
+      are also covered. The focused platform and mounted endpoint selection
+      passes 13 tests.
+- [ ] Run group authorization security tests.
 - [x] Run join-token, terms, guest, and attendance security tests.
       Evidence: 14 event-platform tests cover scanner-safe GET, terms reuse and
       replacement, user and guest identity binding, membership loss, expiry,

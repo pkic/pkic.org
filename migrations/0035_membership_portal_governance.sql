@@ -2276,6 +2276,30 @@ BEGIN
   SELECT RAISE(ABORT, 'PERMISSION_GRANT_CONTEXT_INVALID');
 END;
 
+-- State-changing services use one shared transient guard to re-evaluate their
+-- canonical authorization or eligibility SELECT inside the same D1 batch as
+-- the protected writes. The evidence query stays in the owning TypeScript
+-- domain module, so database atomicity does not create a second copy of group,
+-- representative, or resource policy in migration triggers.
+CREATE TABLE authorization_guards (
+  id         TEXT NOT NULL PRIMARY KEY,
+  authorized INTEGER NOT NULL CHECK (authorized IN (0, 1)),
+  created_at TEXT NOT NULL
+);
+
+CREATE TRIGGER trg_authorization_guard_validate
+BEFORE INSERT ON authorization_guards
+WHEN NEW.authorized <> 1
+BEGIN
+  SELECT RAISE(ABORT, 'AUTHORIZATION_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_authorization_guard_release
+AFTER INSERT ON authorization_guards
+BEGIN
+  DELETE FROM authorization_guards WHERE id = NEW.id;
+END;
+
 -- Retain authorization history rather than deleting its parent and leaving
 -- stale polymorphic context IDs behind. Existing FK-backed children already
 -- provide the same protection for their own aggregates.
