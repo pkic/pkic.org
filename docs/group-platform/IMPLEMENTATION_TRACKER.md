@@ -51,6 +51,11 @@ Status: In progress
 - [x] Compose one canonical shared group entity, list query, page response,
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
+      Current evidence: the unreleased working-group collection contracts and
+      routes have been removed. Narrow compatibility exports remain only where
+      an existing admin consumer still uses the canonical mailing-list, vote,
+      registration, audit, or organization-content implementation; remove each
+      export with that consumer rather than creating a second contract.
 - [x] Prove empty-database migration application.
       Evidence: all 37 migrations, including 234 commands in 0035, applied to
       a fresh independent local D1 state under ScanDisk after the authenticated
@@ -606,7 +611,14 @@ Status: In progress
 - [x] Run filters, search, sort, aggregation, and pagination in D1 for
       implemented canonical group listings.
 - [x] Add deterministic tie-break sorting for implemented listings.
-- [ ] Add mounted Hono/Chanfana tests for validation and middleware.
+- [x] Add mounted Hono/Chanfana tests for validation and middleware.
+      Evidence: the canonical group context, creation, configuration,
+      category-rule, membership, leadership, event, meeting, form, vote,
+      mailing-list, statistics, audit, user-catalog, and resource-grant routes
+      are exercised through the mounted router. The tests cover schema
+      rejection, authentication, capability middleware, stale revisions, and
+      authorization changes between request preflight and the D1 batch rather
+      than testing services alone.
 - [x] Remove temporary working-group endpoint compatibility before completion.
       Evidence: the unreleased /api/v1/working-groups and
       /api/v1/me/working-groups routes, services, contracts, and route-specific
@@ -677,9 +689,9 @@ Status: In progress
       to `/groups`; the navigation and component no longer preserve a parallel
       working-group concept. Component tests cover every request shape and
       prove the catalog omits the type filter; no client-side eligibility,
-      search, sorting, or pagination logic was introduced. The legacy backend
-      endpoint remains mounted temporarily for explicit compatibility only;
-      the last known production caller, the public leadership widget, now uses
+      search, sorting, or pagination logic was introduced. The unreleased
+      working-group backend endpoints have been removed; the last known former
+      caller, the public leadership widget, now uses
       the narrow generic `/api/v1/groups/:groupId/directory` projection.
       That public contract exposes no internal counts or eligibility policy and
       does not disclose the identity of a non-public inherited source group.
@@ -736,8 +748,8 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 2,002 backend tests
-      (one skipped), 215 frontend tests, and 80 tool tests. Group statistics now
+      statistics/list requests; the complete check passes 2,003 backend tests
+      (one skipped), 224 frontend tests, and 80 tool tests. Group statistics now
       use a management-only portal view over the explicit people/capacity and
       current/history contract. Mailing-list managers and participants share
       one selected-group section while retaining separate configuration and
@@ -749,8 +761,30 @@ Status: In progress
       Identity-bound participant meeting entry is implemented, including an
       explicit shared-group `attend` grant test proving that `view`, `register`,
       and `manage` do not imply entry and that grant revocation fails closed.
+      Authorized global managers can now create any active D1-backed group
+      type, while local group managers are not shown a misleading global-create
+      action. The same selected-group settings view manages category eligibility
+      through membership-category labels loaded from D1 and revision-checked
+      replacement commands. The selected group and its effective capabilities
+      are always rechecked before management routes run; possession of an
+      unrelated staff capacity no longer authorizes the selected group.
+      Account Settings is now a capacity-aware portal destination for staff,
+      members, and dual-capacity users; staff-only users do not call member
+      notification APIs. The duplicate admin view and navigation item are gone,
+      and the former admin hash route redirects to the portal.
+      Remaining gap: the group Events view still provides discovery, detail,
+      sharing, meeting management, and the canonical registration endpoint, but
+      not the full event create/update/attendee workflow. That workflow remains
+      in the admin application, so this parent item is intentionally open.
 - [ ] Move remaining global management views into the portal.
-- [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
+- [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
+      Evidence: one typed management-link adapter owns the semantic destinations
+      used by admin sign-in, MCP OAuth, membership due work, organization content
+      review, sponsorship inquiries, checkout processing, and renewal due work.
+      Destinations that still require the admin application remain explicit in
+      that adapter and can move to portal routes without changing email or job
+      business logic. Persisted URLs in already-applied D1 templates are called
+      out separately in ARCHITECTURE.md.
 - [ ] Add temporary legacy redirects where needed.
 - [ ] Remove the admin shell and its separate navigation.
 - [ ] Remove duplicate admin and member session assumptions.
@@ -760,7 +794,7 @@ Status: In progress
 
 ## 11. Quality, security, and performance
 
-Status: Pending
+Status: In progress
 
 - [x] Run focused tests during every implementation round.
 - [x] Run SQL projection lint and architecture lint after backend boundaries move.
@@ -853,16 +887,16 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,002 backend tests pass with one skipped, 215 frontend tests
+      checkpoint: 2,003 backend tests pass with one skipped, 224 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
       combined run identified one 607-line test file; the meeting cases
       were separated into a focused file. The complete composite gate was then
-      rerun successfully after the aggregate concurrency and guest-update race
-      regressions were added.
-      Keep this item open until the final architecture state passes the same
-      complete gate.
+      rerun successfully after the selected-group authorization, account
+      cutover, centralized management destinations, group creation, and category
+      rule regressions were added. The final architecture state must pass the
+      same complete gate again before handoff.
 - [ ] Run focused Playwright flows while iterating.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
