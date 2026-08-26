@@ -2,6 +2,7 @@ import { queueAdminSignInCapability } from "../auth/admin";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
+import { buildManagementLink } from "./management-links";
 
 export async function requestAdminSignInLink(
   db: DatabaseLike,
@@ -28,7 +29,10 @@ export async function requestAdminSignInLink(
     subject: "Your PKI Consortium admin sign-in link",
     data: {
       email: magic.admin.email,
-      magicLinkUrl: `${payload.appBaseUrl}/admin/?token=${encodeURIComponent(magic.queuedToken)}`,
+      magicLinkUrl: buildManagementLink(payload.appBaseUrl, {
+        kind: "admin-sign-in",
+        token: magic.queuedToken,
+      }),
       expiresInMinutes: payload.ttlMinutes,
     },
     capabilityLinkValues: [magic.queuedToken],

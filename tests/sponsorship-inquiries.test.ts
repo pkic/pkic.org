@@ -123,6 +123,14 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     expect(outbox).toHaveLength(1);
     expect(outbox[0].recipient_email).toBe("sponsorships-team@pkic.org");
 
+    const [staffPayload] = await queryAll<{ payload_json: string }>(
+      testEnv.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsorship-new-inquiry' ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(JSON.parse(staffPayload!.payload_json)).toMatchObject({
+      adminUrl: "https://app.test/admin/#/sponsorships",
+    });
+
     const brochureOutbox = await queryAll<{ recipient_email: string }>(
       testEnv.DB,
       "SELECT recipient_email FROM email_outbox WHERE template_key = 'sponsorship-brochure' ORDER BY created_at DESC LIMIT 1",

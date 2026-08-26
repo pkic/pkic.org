@@ -37,7 +37,8 @@ export interface CreateSponsorshipInquiryInput {
   eventName: string;
   brochureUrl: string;
   notificationEmail: string;
-  adminUrl: string;
+  /** Current staff-management destination; the legacy template key remains adminUrl. */
+  managementUrl: string;
 }
 
 export async function createSponsorshipInquiry(
@@ -77,7 +78,7 @@ export async function createSponsorshipInquiry(
         // staff notification legible without introducing a fake catalog value.
         tierText: escapeMarkdownText(input.tier ?? "Not specified"),
         notesText: escapeMarkdownText(input.notes ?? ""),
-        adminUrl: input.adminUrl,
+        adminUrl: input.managementUrl,
       },
     },
     now,
@@ -211,7 +212,8 @@ export interface RecordPaidSponsorshipCheckoutParams {
   priceCurrency: string;
   brochureUrl: string;
   notificationEmail: string;
-  adminUrl: string;
+  /** Current staff-management destination; the legacy template key remains adminUrl. */
+  managementUrl: string;
 }
 
 export interface RecordPaidSponsorshipCheckoutResult {
@@ -283,7 +285,7 @@ export async function recordPaidSponsorshipCheckout(
         sponsorTypeText: "event",
         tierText: escapeMarkdownText(params.tier),
         notesText: "Paid via self-service Stripe checkout",
-        adminUrl: params.adminUrl,
+        adminUrl: params.managementUrl,
       },
     },
     now,

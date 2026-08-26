@@ -23,14 +23,16 @@ import { AppError } from "../errors";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
 import { enforceRateLimit } from "../rate-limit";
 import { writeAuditLog } from "../services/audit";
+import { ADMIN_UI_PATH, buildManagementLink } from "../services/management-links";
 import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../types";
 
 export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/oauth/authorize";
 export const MCP_OAUTH_VERIFY_API_PATH = "/api/v1/oauth/verify-link";
 export const MCP_OAUTH_TOKEN_PATH = "/api/v1/oauth/token";
 export const MCP_OAUTH_REGISTER_PATH = "/api/v1/oauth/register";
-export const MCP_OAUTH_UI_PATH = "/admin/";
-
+// Kept as a module export for existing MCP route consumers; the path itself
+// is owned by the semantic management-link adapter.
+export const MCP_OAUTH_UI_PATH = ADMIN_UI_PATH;
 const MCP_OAUTH_LOGIN_COOKIE_NAME = "pkic_mcp_oauth";
 const MCP_OAUTH_LOGIN_COOKIE_PATH = MCP_OAUTH_AUTHORIZE_PATH;
 const MCP_OAUTH_LOGIN_COOKIE_MAX_AGE_SECONDS = 10 * 60;
@@ -196,13 +198,11 @@ export function buildMcpOauthUiUrl(
   returnTo: string,
   error?: string,
 ): string {
-  const url = new URL(MCP_OAUTH_UI_PATH, resolveAppBaseUrl(env, request));
-  url.searchParams.set("flow", "mcp-oauth");
-  url.searchParams.set("return_to", sanitizeAuthorizeReturnTo(returnTo));
-  if (error) {
-    url.searchParams.set("error", error);
-  }
-  return url.toString();
+  return buildManagementLink(resolveAppBaseUrl(env, request), {
+    kind: "mcp-oauth",
+    returnTo: sanitizeAuthorizeReturnTo(returnTo),
+    error,
+  });
 }
 
 export function redirectToMcpOauthUi(
@@ -353,7 +353,11 @@ export async function sendMcpAuthorizeMagicLink(options: {
   }
 
   const appBaseUrl = resolveAppBaseUrl(options.env, options.request);
-  const magicLinkUrl = `${appBaseUrl}${MCP_OAUTH_UI_PATH}?flow=mcp-oauth&token=${encodeURIComponent(magic.queuedToken)}`;
+  const magicLinkUrl = buildManagementLink(appBaseUrl, {
+    kind: "mcp-oauth",
+    returnTo: sanitizeAuthorizeReturnTo(options.returnTo),
+    token: magic.queuedToken,
+  });
   const outboxId = await queueEmail(options.env.DB, {
     templateKey: "admin_magic_link",
     recipientEmail: magic.admin.email,

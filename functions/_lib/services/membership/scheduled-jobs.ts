@@ -25,6 +25,7 @@ import { buildConsultationBatchEmail, buildEcReviewBatchEmail } from "./notifica
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env } from "../../types";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { buildManagementLink } from "../management-links";
 
 // ── Consultation batch (Mon/Wed 07:15 UTC) ─────────────────────
 
@@ -171,7 +172,7 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100):
       applications: candidates.map((a) => ({
         organizationName: a.organization_name ?? a.applicant_name,
         membershipCategory: a.membership_category,
-        reviewUrl: `${config.appBaseUrl}/admin/#/applications/${a.id}`,
+        reviewUrl: buildManagementLink(config.appBaseUrl, { kind: "membership-application", id: a.id }),
       })),
     }),
   );

@@ -26,6 +26,7 @@ import {
   processStorageDeletionForKey,
   withStorageUploadCompensation,
 } from "../../../../_lib/services/storage-deletion-outbox";
+import { buildManagementLink } from "../../../../_lib/services/management-links";
 
 export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRouteSchema, async (c: AdminContext) => {
   const db = requestDb(c);
@@ -40,7 +41,9 @@ export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRoute
   const image = await readValidatedUploadedImage(c.req.raw, "Logo");
   const ext = imageExtension(image.contentType);
   const r2Key = `org-logos/${organization.id}/staging-${crypto.randomUUID()}.${ext}`;
-  const reviewUrl = `${getConfig(c.env, c.req.raw).appBaseUrl}/admin/#/organizations/content-reviews`;
+  const reviewUrl = buildManagementLink(getConfig(c.env, c.req.raw).appBaseUrl, {
+    kind: "organization-content-reviews",
+  });
   const prepared = await prepareAuthorizedOrganizationLogoStage(db, member, organization.id, r2Key, reviewUrl);
 
   try {

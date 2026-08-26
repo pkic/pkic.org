@@ -22,6 +22,7 @@ import {
 } from "../../../../../assets/shared/schemas/sponsorship";
 import { verifyStripeWebhookSignature } from "../../../../_lib/integrations/stripe/verify-webhook";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
+import { buildManagementLink } from "../../../../_lib/services/management-links";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const env = c.env;
@@ -95,7 +96,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     priceCurrency: session.currency,
     brochureUrl: env.SPONSORSHIP_BROCHURE_URL ?? "https://pkic.org/sponsors/",
     notificationEmail: env.SPONSORSHIP_NOTIFICATION_EMAIL ?? "sponsorships@pkic.org",
-    adminUrl: `${resolveAppBaseUrl(env, request)}/admin/`,
+    managementUrl: buildManagementLink(resolveAppBaseUrl(env, request), { kind: "sponsorship-list" }),
   });
   for (const outboxId of result.outboxIds) {
     c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, outboxId));

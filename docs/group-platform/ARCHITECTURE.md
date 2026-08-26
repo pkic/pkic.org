@@ -330,6 +330,14 @@ The separate admin application is retired incrementally:
 4. remove the admin shell, route literals, duplicate session assumptions, and
    compatibility endpoints before completion.
 
+Until each destination is migrated, notification and scheduled-work producers
+must use the semantic management-link adapter rather than concatenating admin
+paths. URLs already persisted in D1 (including review notification intents and
+queued email payloads) are not rewritten by changing a source migration; the
+eventual migration must either retain a compatible redirect or explicitly
+update those stored values. Changing migration seed text alone only affects a
+fresh database.
+
 ## D1, security, and performance
 
 - Foreign keys and indexed access paths protect every authoritative relation.
