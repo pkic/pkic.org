@@ -4,6 +4,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "browser-auth",
   "browser-presentation",
   "browser-waitlist",
+  "meeting-guest",
   "sponsor-portal",
   "votes",
 ]);

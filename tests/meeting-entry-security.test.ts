@@ -25,7 +25,7 @@ import {
 } from "../functions/_lib/auth/meeting-guest-session";
 import { signCapabilityToken } from "../functions/_lib/auth/capability-links";
 import { joinGroup } from "../functions/_lib/services/groups";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
@@ -34,6 +34,17 @@ import { resetDb } from "./helpers/reset-db";
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 const SIGNING_SECRET = "meeting-entry-signing-secret";
 const ENCRYPTION_SECRET = "meeting-entry-encryption-secret-000000000000000";
+
+async function inviteTestOccurrenceGuest(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  seriesId: string,
+  occurrenceId: string,
+  input: Parameters<typeof inviteOccurrenceGuest>[5],
+) {
+  return (await inviteOccurrenceGuest(db, actor, groupId, seriesId, occurrenceId, input, "https://app.test")).guest;
+}
 
 async function fixture() {
   const adminId = await insertUser(env.DB, `meeting-security-admin-${crypto.randomUUID()}@example.test`);
@@ -360,7 +371,7 @@ describe("authenticated meeting entry", () => {
 
   it("establishes a distinct guest session only with the matching browser secret and mailbox code", async () => {
     const { admin, series, occurrence } = await fixture();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `verified-guest-${crypto.randomUUID()}@example.test`,
       name: "Verified Guest",
       affiliation: "Guest Organization",
@@ -396,7 +407,7 @@ describe("authenticated meeting entry", () => {
 
   it("rejects a forwarded invitation when the second mailbox code is unavailable", async () => {
     const { admin, series, occurrence } = await fixture();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `forwarded-${crypto.randomUUID()}@example.test`,
       name: "Forwarded Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -437,7 +448,7 @@ describe("authenticated meeting entry", () => {
 
   it("mounts guest entry behind the exact verified occurrence session", async () => {
     const { admin, series, occurrence } = await fixture();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `route-guest-${crypto.randomUUID()}@example.test`,
       name: "Route Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -490,7 +501,7 @@ describe("authenticated meeting entry", () => {
 
   it("allows only one guest session per browser challenge", async () => {
     const { admin, series, occurrence } = await fixture();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `replay-${crypto.randomUUID()}@example.test`,
       name: "Replay Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -502,7 +513,7 @@ describe("authenticated meeting entry", () => {
         authorizationHash: verified.challenge.authorizationHash,
         sessionTtlHours: 72,
       }),
-    ).rejects.toMatchObject({ code: "MEETING_GUEST_CHALLENGE_INVALID" });
+    ).rejects.toMatchObject({ code: "MEETING_GUEST_CHALLENGE_USED" });
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS total FROM meeting_guest_sessions WHERE guest_id = ?")
         .bind(guest.id)
@@ -512,7 +523,7 @@ describe("authenticated meeting entry", () => {
 
   it("revokes guest sessions and pending challenges with the invitation", async () => {
     const { admin, series, occurrence } = await fixture();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `revoked-${crypto.randomUUID()}@example.test`,
       name: "Revoked Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -543,7 +554,7 @@ describe("authenticated meeting entry", () => {
     const { admin, userId, series, occurrence } = await fixture();
     await createMemberSession(env.DB, userId, "inactive-owner-session", SIGNING_SECRET);
     const memberSessionId = await sessionIdFor(userId);
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `policy-${crypto.randomUUID()}@example.test`,
       name: "Policy Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -586,7 +597,7 @@ describe("authenticated meeting entry", () => {
     await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
       .bind(JSON.stringify({ memberEligibility: "group", guestPolicy: "invitation_only" }), series.eventId)
       .run();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `legacy-${crypto.randomUUID()}@example.test`,
       name: "Legacy Policy Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -606,7 +617,7 @@ describe("authenticated meeting entry", () => {
     const { admin, series, occurrence } = await fixture();
     const email = `race-${crypto.randomUUID()}@example.test`;
     const expiresAt = new Date(Date.now() + 10_800_000).toISOString();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email,
       name: "Original Guest",
       expiresAt,
@@ -617,7 +628,7 @@ describe("authenticated meeting entry", () => {
         .run(),
     );
     await expect(
-      inviteOccurrenceGuest(racingUpdateDb, admin, GROUP_ID, series.id, occurrence.id, {
+      inviteTestOccurrenceGuest(racingUpdateDb, admin, GROUP_ID, series.id, occurrence.id, {
         email,
         name: "Stale Overwrite",
         expiresAt,
@@ -649,7 +660,7 @@ describe("authenticated meeting entry", () => {
 
   it("keeps eligibility lookups indexed for member and guest entry", async () => {
     const { userId, occurrence, admin, series } = await fixture();
-    const guest = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `plan-${crypto.randomUUID()}@example.test`,
       name: "Plan Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
@@ -683,7 +694,7 @@ describe("authenticated meeting entry", () => {
       email: "meeting-invitation-service@internal.invalid",
       role: "admin",
     };
-    const guest = await inviteOccurrenceGuest(env.DB, service, GROUP_ID, series.id, occurrence.id, {
+    const guest = await inviteTestOccurrenceGuest(env.DB, service, GROUP_ID, series.id, occurrence.id, {
       email: `service-${crypto.randomUUID()}@example.test`,
       name: "Service Guest",
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),

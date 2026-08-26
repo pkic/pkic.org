@@ -4,9 +4,9 @@ import type { DatabaseLike, Env, StatementLike } from "../types";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import { uuid } from "../utils/ids";
 import { addHours, addMinutes, nowIso } from "../utils/time";
-import { verifyDatabaseCapability } from "./capability-links";
+import { verifyCapabilityToken, verifyDatabaseCapability } from "./capability-links";
 import {
-  findMeetingGuest,
+  findMeetingGuestCapabilitySnapshot,
   requireLiveMeetingGuest,
   toMeetingGuest,
   type MeetingGuest,
@@ -15,6 +15,14 @@ import {
 
 const CHALLENGE_AUTHORIZATION_DOMAIN = "pkic-meeting-guest-authorization:v1";
 const DEFAULT_CHALLENGE_TTL_MINUTES = 10;
+
+function meetingGuestInvitationVerificationError(reason: "invalid" | "expired"): AppError {
+  return new AppError(
+    reason === "expired" ? 410 : 404,
+    reason === "expired" ? "MEETING_GUEST_INVITATION_EXPIRED" : "MEETING_GUEST_INVITATION_INVALID",
+    reason === "expired" ? "Meeting invitation has expired" : "Meeting invitation is invalid",
+  );
+}
 
 export interface PreparedMeetingGuestBrowserChallenge {
   challengeId: string;
@@ -40,13 +48,45 @@ export async function verifyMeetingGuestInvitationCapability(
     token,
   });
   if (!verified.ok) {
-    throw new AppError(
-      verified.reason === "expired" ? 410 : 404,
-      verified.reason === "expired" ? "MEETING_GUEST_INVITATION_EXPIRED" : "MEETING_GUEST_INVITATION_INVALID",
-      verified.reason === "expired" ? "Meeting invitation has expired" : "Meeting invitation is invalid",
-    );
+    throw meetingGuestInvitationVerificationError(verified.reason);
   }
-  return toMeetingGuest(requireLiveMeetingGuest(await findMeetingGuest(db, verified.resourceId)));
+  const snapshot = requireLiveMeetingGuest(await findMeetingGuestCapabilitySnapshot(db, verified.resourceId));
+  const snapshotVerification = await verifyCapabilityToken({
+    signingSecret: env.INTERNAL_SIGNING_SECRET,
+    linkSecret: snapshot.invitation_secret,
+    purpose: "meeting_guest_verify",
+    token,
+  });
+  if (!snapshotVerification.ok) throw meetingGuestInvitationVerificationError(snapshotVerification.reason);
+  if (snapshotVerification.resourceId !== snapshot.id) throw meetingGuestInvitationVerificationError("invalid");
+  return toMeetingGuest(snapshot);
+}
+
+/** Public bootstrap intentionally does not reveal whether a guest capability expired or was revoked. */
+export async function verifyMeetingGuestInvitationForBootstrap(
+  db: DatabaseLike,
+  token: string,
+  env?: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<MeetingGuest> {
+  try {
+    return await verifyMeetingGuestInvitationCapability(db, token, env);
+  } catch (error) {
+    if (
+      error instanceof AppError &&
+      [
+        "MEETING_GUEST_INVITATION_EXPIRED",
+        "MEETING_GUEST_INVITATION_INVALID",
+        "MEETING_GUEST_INVITATION_INACTIVE",
+      ].includes(error.code)
+    ) {
+      throw new AppError(
+        404,
+        "MEETING_GUEST_INVITATION_INVALID",
+        "Meeting invitation is invalid or no longer eligible",
+      );
+    }
+    throw error;
+  }
 }
 
 function generateVerificationCode(): string {
@@ -104,7 +144,28 @@ export async function prepareMeetingGuestBrowserChallenge(
 interface MeetingGuestChallengeRow extends MeetingGuestRow {
   challenge_id: string;
   challenge_occurrence_id: string;
+  challenge_expires_at: string;
+  challenge_used_at: string | null;
+  challenge_invitation_version: number;
   authorization_hash: string;
+}
+
+function assertUsableMeetingGuestChallenge(challenge: MeetingGuestChallengeRow | null): MeetingGuestChallengeRow {
+  if (!challenge) {
+    throw new AppError(401, "MEETING_GUEST_CHALLENGE_INVALID", "Meeting guest verification is invalid or expired");
+  }
+  if (challenge.challenge_used_at) {
+    throw new AppError(409, "MEETING_GUEST_CHALLENGE_USED", "Meeting guest verification was already used");
+  }
+  if (
+    new Date(challenge.challenge_expires_at).getTime() <= Date.now() ||
+    new Date(challenge.expires_at).getTime() <= Date.now() ||
+    challenge.revoked_at ||
+    challenge.challenge_invitation_version !== challenge.invitation_version
+  ) {
+    throw new AppError(410, "MEETING_GUEST_CHALLENGE_EXPIRED", "Meeting guest verification has expired");
+  }
+  return challenge;
 }
 
 export async function issueMeetingGuestSession(
@@ -117,45 +178,35 @@ export async function issueMeetingGuestSession(
   authorizationHash: string;
   expiresAt: string;
 }> {
-  const challenge = await first<MeetingGuestChallengeRow>(
-    db,
-    `SELECT guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
+  const challenge = assertUsableMeetingGuestChallenge(
+    await first<MeetingGuestChallengeRow>(
+      db,
+      `SELECT guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
             guest.name, guest.affiliation, guest.expires_at, guest.revoked_at,
             guest.invitation_version, challenge.id AS challenge_id, challenge.authorization_hash,
-            challenge.occurrence_id AS challenge_occurrence_id
+            challenge.occurrence_id AS challenge_occurrence_id,
+            challenge.expires_at AS challenge_expires_at, challenge.used_at AS challenge_used_at,
+            challenge.invitation_version AS challenge_invitation_version
        FROM meeting_guest_browser_challenges challenge
        JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
-      WHERE challenge.id = ? AND challenge.authorization_hash = ?
-        AND challenge.used_at IS NULL AND unixepoch(challenge.expires_at) > unixepoch()
-        AND challenge.invitation_version = guest.invitation_version`,
-    [payload.challengeId, payload.authorizationHash],
+      WHERE challenge.id = ? AND challenge.authorization_hash = ?`,
+      [payload.challengeId, payload.authorizationHash],
+    ),
   );
-  if (!challenge || challenge.revoked_at || new Date(challenge.expires_at).getTime() <= Date.now()) {
-    throw new AppError(401, "MEETING_GUEST_CHALLENGE_INVALID", "Meeting guest verification is invalid or expired");
-  }
   const createdAt = nowIso();
   const requestedExpiresAt = addHours(createdAt, Math.max(1, payload.sessionTtlHours));
   const expiresAt = new Date(
     Math.min(new Date(requestedExpiresAt).getTime(), new Date(challenge.expires_at).getTime()),
   ).toISOString();
   const sessionId = uuid();
-  const tokenHash = await sha256Hex(randomToken(24));
   try {
     await db
       .prepare(
         `INSERT INTO meeting_guest_sessions
-           (id, guest_id, token_hash, challenge_id, authorization_hash, expires_at, revoked_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+           (id, guest_id, challenge_id, authorization_hash, expires_at, revoked_at, created_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?)`,
       )
-      .bind(
-        sessionId,
-        challenge.id,
-        tokenHash,
-        challenge.challenge_id,
-        challenge.authorization_hash,
-        expiresAt,
-        createdAt,
-      )
+      .bind(sessionId, challenge.id, challenge.challenge_id, challenge.authorization_hash, expiresAt, createdAt)
       .run();
   } catch (error) {
     if (
@@ -163,6 +214,20 @@ export async function issueMeetingGuestSession(
       (error.message.includes("MEETING_GUEST_SESSION_CONTEXT_CHANGED") ||
         error.message.includes("meeting_guest_sessions.challenge_id"))
     ) {
+      const current = await first<MeetingGuestChallengeRow>(
+        db,
+        `SELECT guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
+                guest.name, guest.affiliation, guest.expires_at, guest.revoked_at,
+                guest.invitation_version, challenge.id AS challenge_id, challenge.authorization_hash,
+                challenge.occurrence_id AS challenge_occurrence_id,
+                challenge.expires_at AS challenge_expires_at, challenge.used_at AS challenge_used_at,
+                challenge.invitation_version AS challenge_invitation_version
+           FROM meeting_guest_browser_challenges challenge
+           JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
+          WHERE challenge.id = ? AND challenge.authorization_hash = ?`,
+        [payload.challengeId, payload.authorizationHash],
+      );
+      assertUsableMeetingGuestChallenge(current);
       throw new AppError(409, "MEETING_GUEST_CHALLENGE_USED", "Meeting guest verification was already used");
     }
     throw error;

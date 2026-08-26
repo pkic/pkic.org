@@ -12,6 +12,7 @@ describe("E2E admin identities", () => {
     expect(new Set(emails).size).toBe(E2E_ADMIN_SCOPES.length * 3);
     expect(emails).toContain("admin@pkic.org");
     expect(emails).toContain("admin.browser-waitlist.w2@pkic.org");
+    expect(emails).toContain("admin.meeting-guest.w2@pkic.org");
   });
 
   it("rejects unknown scopes and invalid worker counts", () => {

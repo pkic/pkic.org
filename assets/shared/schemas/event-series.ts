@@ -263,7 +263,6 @@ export const meetingGuestInvitationBootstrapSchema = z.object({
 });
 export const meetingGuestInvitationBootstrapResponseSchema = z.object({
   challengeId: databaseIdSchema,
-  emailHint: z.string(),
   expiresAt: z.iso.datetime(),
 });
 export const meetingGuestInvitationVerifySchema = z.object({
@@ -506,6 +505,7 @@ export const meetingGuestInvitationBootstrapRouteSchema = {
     },
     "404": jsonErrorResponse("The invitation is invalid, expired, or no longer eligible."),
     "429": jsonErrorResponse("A verification code was requested too recently."),
+    "503": jsonErrorResponse("Verification is temporarily unavailable because rate limiting could not be enforced."),
   },
 };
 
@@ -521,7 +521,9 @@ export const meetingGuestInvitationVerifyRouteSchema = {
       content: { "application/json": { schema: meetingGuestInvitationVerifyResponseSchema } },
     },
     "401": jsonErrorResponse("The code or browser challenge is invalid."),
+    "429": jsonErrorResponse("Too many verification attempts were made from this client."),
     "409": jsonErrorResponse("The challenge was already used."),
     "410": jsonErrorResponse("The challenge or invitation expired."),
+    "503": jsonErrorResponse("Verification is temporarily unavailable because rate limiting could not be enforced."),
   },
 };

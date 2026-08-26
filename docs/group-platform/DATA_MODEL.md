@@ -420,13 +420,14 @@ The one-time challenge exchange creates a distinct guest session:
     id
     guest_id -> event_occurrence_guests.id
     challenge_id -> meeting_guest_browser_challenges.id
-    token_hash
     authorization_hash
     expires_at
     revoked_at
     created_at
 
-The insert atomically validates and consumes the challenge. Runtime
+The signed browser token carries the session ID and authorization hash; the
+database therefore does not persist a second, unrelated token hash. The insert
+atomically validates and consumes the challenge. Runtime
 authentication checks the exact session, invitation generation, occurrence,
 expiry, revocation, and authorization hash. A series-wide invitation may start
 a new occurrence-scoped session for another occurrence; one verified session

@@ -4111,7 +4111,6 @@ END;
 CREATE TABLE meeting_guest_sessions (
   id                 TEXT NOT NULL PRIMARY KEY,
   guest_id           TEXT NOT NULL,
-  token_hash         TEXT NOT NULL UNIQUE,
   challenge_id       TEXT NOT NULL UNIQUE,
   authorization_hash TEXT NOT NULL CHECK (
     length(authorization_hash) = 64 AND authorization_hash NOT GLOB '*[^0-9a-f]*'

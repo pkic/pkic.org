@@ -200,7 +200,7 @@ Status: In progress
 - [x] Add group-portal management for series settings, recurrence
       materialization, occurrences, encrypted provider destinations, guests,
       join confirmations, and verified attendance.
-- [ ] Bind member entry to the authenticated portal identity and guest entry to
+- [x] Bind member entry to the authenticated portal identity and guest entry to
       a separately verified guest session rather than treating a bearer URL as
       sufficient identity proof.
       Current evidence: member entry is mounted under `/api/v1/me` and derives
@@ -208,13 +208,20 @@ Status: In progress
       token type backed by a one-time browser/mailbox challenge, current
       invitation generation, exact D1 session, and occurrence scope. The
       mounted guest landing and confirmation endpoints reject a valid guest
-      session for another occurrence. The public bootstrap and verification
-      delivery endpoints remain to be completed before this item is checked.
-- [ ] Deliver rotatable guest invitations through the durable outbox and move
+      session for another occurrence. Public bootstrap and verification routes
+      establish that session only after the browser-held secret and separately
+      delivered mailbox code match.
+- [x] Deliver rotatable guest invitations through the durable outbox and move
       the capability out of the request path before any landing data is read.
-- [ ] Cover link scanners, forwarding, expiry, revocation, guest identity,
+      Evidence: guest eligibility, audit, invitation rotation, access
+      invalidation, and the secret-bound invitation outbox row commit in one D1
+      batch. Challenge creation and its verification-code outbox row commit in
+      a second atomic batch. Capability materialization fails after reinvitation
+      instead of minting current authority from a stale message.
+- [x] Cover link scanners, forwarding, expiry, revocation, guest identity,
       membership loss, terms changes, repeated joins, and attendance counts.
-      Evidence so far: meeting-entry-security.test.ts passes 18 focused tests
+      Evidence so far: meeting-entry-security.test.ts and
+      meeting-guest-invitations.test.ts pass 25 focused tests
       covering exact member and guest sessions, browser/code binding, challenge
       replay, occurrence scope, expiry/revocation and policy races, identity
       tampering, membership loss, terms changes, repeated joins, encrypted
@@ -222,10 +229,16 @@ Status: In progress
       verified attendance. The shared D1 guard rechecks the exact session,
       occurrence, canonical eligibility, current guest policy, and current-term
       state in the confirmation batch. Frontend fragment and authoritative
-      identity rendering tests pass. Durable invitation and verification-code
-      delivery, public challenge routes, a fresh migration replay, and final
-      browser validation remain open. Management UI integration is implemented;
-      legacy meeting-calendar retirement remains incomplete.
+      identity rendering tests pass. The product-path tests additionally cover
+      mocked SendGrid delivery, forwarding without the exact browser cookie,
+      wrong codes, replay, stale queued capabilities, fail-closed rate limits,
+      invitation-rotation races, pre-verification identity confidentiality,
+      and both outbox transaction boundaries. The focused Playwright journey
+      passes through the intercepted invitation and code messages in a fresh
+      browser context. All 37 migrations replay cleanly in fresh local D1 state,
+      and the complete repository gate passes at this checkpoint. Management UI
+      integration is implemented; legacy meeting-calendar retirement remains
+      incomplete.
 
 ## 6. Reusable live-editable forms
 
@@ -530,8 +543,8 @@ Status: In progress
       use the same group-context event-resource policy as ordinary event
       discovery. The bearer-only `/api/v1/meetings/join/:token` endpoints and
       manager-issued access-token route were removed. Member and verified-guest
-      landing/confirmation endpoints are mounted at their identity-scoped API
-      boundaries; guest bootstrap and challenge verification routes remain open.
+      landing/confirmation, guest bootstrap, and mailbox-challenge verification
+      endpoints are mounted at their identity-scoped API boundaries.
 - [x] Keep routes thin and SQL-free.
 - [x] Add one generic `/api/v1/me/groups` self-participation read model.
       Evidence: the shared contract composes the canonical group list filters,
@@ -730,20 +743,23 @@ Status: Pending
       leadership, and category-rule authorization races now revoke access
       between preflight and batch execution and prove complete rollback. Voting
       replacement and voting authorization races remain open.
-- [ ] Run meeting-entry, terms, guest, and attendance security tests.
-      Current evidence: 18 focused tests cover exact member-session binding,
+- [x] Run meeting-entry, terms, guest, and attendance security tests.
+      Current evidence: 25 focused meeting-entry and guest-delivery tests cover
+      exact member-session binding,
       browser/mailbox guest verification primitives, challenge replay,
       occurrence scope, terms reuse and replacement, membership loss, expiry,
       guest-policy changes, revocation races, HTTPS-only destinations, audit
       redaction, repeated joins, and verified attendance. Both subject
       predicates on the canonical eligibility view have indexed query-plan
-      assertions. Keep this open until invitation/code delivery routes and
-      their atomic outbox, rate-limit, forwarding, and revocation tests pass.
+      assertions. Invitation and code delivery use mocked/intercepted SendGrid;
+      mounted route, atomic outbox, rate-limit, forwarding, revocation, cookie,
+      and one-time-code behavior pass in both Worker integration tests and the
+      focused Playwright journey.
 - [ ] Run voting replacement and race tests.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [ ] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,963 backend tests pass with one skipped, 195 frontend tests
+      checkpoint: 1,974 backend tests pass with one skipped, 197 frontend tests
       pass, and 79 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

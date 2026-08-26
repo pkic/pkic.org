@@ -46,7 +46,6 @@ function errorMessage(error: unknown): string {
 export function App({ invitation }: { invitation: MeetingGuestInvitationFragment | null }) {
   const occurrenceId = invitation?.occurrenceId ?? new URLSearchParams(window.location.search).get("occurrence") ?? "";
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [emailHint, setEmailHint] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [landing, setLanding] = useState<MeetingJoinLanding | null>(null);
   const [persona, setPersona] = useState<JoinPersona | null>(null);
@@ -71,7 +70,6 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
           );
           if (!cancelled) {
             setChallengeId(challenge.challengeId);
-            setEmailHint(challenge.emailHint);
           }
         } else {
           const authenticated = await loadAuthenticatedLanding(occurrenceId);
@@ -142,7 +140,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
       <div class="card shadow-sm">
         <div class="card-body p-4">
           <h1 class="h4">Verify your invitation</h1>
-          <p>Enter the code sent to {emailHint ?? "the invited email address"} in this same browser.</p>
+          <p>Enter the code sent to the invited email address in this same browser.</p>
           <label class="form-label fw-semibold" for="meeting-guest-code">
             Verification code
           </label>

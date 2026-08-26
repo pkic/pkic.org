@@ -25,6 +25,10 @@ export interface MeetingGuestRow {
   invitation_version: number;
 }
 
+export interface MeetingGuestCapabilityRow extends MeetingGuestRow {
+  invitation_secret: string;
+}
+
 export function toMeetingGuest(row: MeetingGuestRow): MeetingGuest {
   return {
     guestId: row.id,
@@ -49,7 +53,22 @@ export async function findMeetingGuest(db: DatabaseLike, guestId: string): Promi
   );
 }
 
-export function requireLiveMeetingGuest(row: MeetingGuestRow | null): MeetingGuestRow {
+/** Exact guest generation used to revalidate a capability before challenge creation. */
+export async function findMeetingGuestCapabilitySnapshot(
+  db: DatabaseLike,
+  guestId: string,
+): Promise<MeetingGuestCapabilityRow | null> {
+  return first<MeetingGuestCapabilityRow>(
+    db,
+    `SELECT id, series_id, occurrence_id, normalized_email, name, affiliation,
+            expires_at, revoked_at, invitation_version, invitation_secret
+       FROM event_occurrence_guests
+      WHERE id = ?`,
+    [guestId],
+  );
+}
+
+export function requireLiveMeetingGuest<T extends MeetingGuestRow>(row: T | null): T {
   if (!row) {
     throw new AppError(404, "MEETING_GUEST_INVITATION_INVALID", "Meeting invitation is invalid");
   }

@@ -14,6 +14,7 @@ import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { commitEventResourceManagementBatch, queryEventResourceManagementPage } from "./management";
+import { prepareMeetingGuestInvitationDelivery } from "./guest-delivery";
 import { type EventGuestRow, toEventGuest } from "./record";
 import { getManagedSeriesOccurrence } from "./occurrences";
 
@@ -87,8 +88,15 @@ export async function inviteOccurrenceGuest(
   seriesId: string,
   occurrenceId: string,
   input: GuestInviteInput,
+  appBaseUrl: string,
 ) {
-  const { context, series } = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  const { context, series, occurrence } = await getManagedSeriesOccurrence(
+    db,
+    actor,
+    groupIdOrSlug,
+    seriesId,
+    occurrenceId,
+  );
   if (series.guestPolicy === "none") {
     throw new AppError(409, "EVENT_GUESTS_DISABLED", "Guest invitations are disabled for this event");
   }
@@ -111,6 +119,18 @@ export async function inviteOccurrenceGuest(
   const invitationSecret = newCapabilityLinkSecret();
   const invitationVersion = (existing?.invitation_version ?? 0) + 1;
   const now = nowIso();
+  const delivery = await prepareMeetingGuestInvitationDelivery(db, {
+    guestId: id,
+    invitationSecret,
+    invitationVersion,
+    expiresAt: input.expiresAt,
+    recipientEmail: email,
+    guestName: input.name,
+    eventName: series.eventName,
+    startsAt: occurrence.startsAt,
+    occurrenceId,
+    appBaseUrl,
+  });
   try {
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
       existing
@@ -176,6 +196,7 @@ export async function inviteOccurrenceGuest(
               .bind(now, id),
           ]
         : []),
+      delivery.statement,
     ]);
   } catch (error) {
     if (isAuditOneChangeGuardFailure(error)) {
@@ -185,7 +206,7 @@ export async function inviteOccurrenceGuest(
   }
   const row = await first<EventGuestRow>(db, `SELECT ${GUEST_COLUMNS} FROM event_occurrence_guests WHERE id = ?`, [id]);
   if (!row) throw new AppError(500, "EVENT_GUEST_READ_FAILED", "Failed to read guest invitation");
-  return toEventGuest({ ...row, response_occurrence_id: occurrenceId });
+  return { guest: toEventGuest({ ...row, response_occurrence_id: occurrenceId }), outboxId: delivery.id };
 }
 
 export async function revokeOccurrenceGuest(

@@ -515,11 +515,19 @@ describe("group event sharing", () => {
     )
       .bind(occurrenceId, fixture.seriesId)
       .run();
-    await inviteOccurrenceGuest(env.DB, fixture.admin, fixture.ownerId, fixture.seriesId, occurrenceId, {
-      email: `list-race-${crypto.randomUUID()}@example.test`,
-      name: "List Race Guest",
-      expiresAt: "2027-01-11T10:00:00.000Z",
-    });
+    await inviteOccurrenceGuest(
+      env.DB,
+      fixture.admin,
+      fixture.ownerId,
+      fixture.seriesId,
+      occurrenceId,
+      {
+        email: `list-race-${crypto.randomUUID()}@example.test`,
+        name: "List Race Guest",
+        expiresAt: "2027-01-11T10:00:00.000Z",
+      },
+      "https://app.test",
+    );
     await env.DB.prepare(
       `INSERT INTO event_occurrence_join_confirmations
          (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
@@ -664,11 +672,6 @@ describe("group event sharing", () => {
     expect(guestInvite.status, await guestInvite.clone().text()).toBe(201);
     const guestId = (await guestInvite.json<{ guest: { id: string } }>()).guest.id;
     expect((await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`)).status).toBe(200);
-    const accessIssue = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/access`, {
-      method: "POST",
-      body: JSON.stringify({ guestId, expiresAt: "2099-02-01T12:00:00.000Z" }),
-    });
-    expect(accessIssue.status, await accessIssue.clone().text()).toBe(201);
     const guestRevoke = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests/${guestId}`, {
       method: "DELETE",
     });
@@ -679,7 +682,7 @@ describe("group event sharing", () => {
         WHERE scope_type = 'group' AND scope_id = ?
           AND action IN ('event_series_updated', 'event_occurrence_created', 'event_occurrence_updated',
                          'event_series_materialized', 'event_guest_invited',
-                         'event_occurrence_access_issued', 'event_guest_revoked')
+                         'event_guest_revoked')
         ORDER BY action`,
     )
       .bind(fixture.granteeId)
@@ -687,7 +690,6 @@ describe("group event sharing", () => {
     expect(scopedActions.results.map((row) => row.action)).toEqual([
       "event_guest_invited",
       "event_guest_revoked",
-      "event_occurrence_access_issued",
       "event_occurrence_created",
       "event_occurrence_updated",
       "event_series_materialized",
