@@ -30,28 +30,33 @@ ALTER TABLE auth_magic_links ADD COLUMN purpose TEXT;
 
 CREATE TABLE membership_categories (
   code         TEXT NOT NULL PRIMARY KEY,
+  label        TEXT NOT NULL,
+  description  TEXT,
+  display_order INTEGER NOT NULL,
   is_individual INTEGER NOT NULL DEFAULT 0 CHECK (is_individual IN (0, 1)),
   -- org-less categories (H5/H6/H7) — mirrors INDIVIDUAL_MEMBERSHIP_CATEGORIES
   is_voting     INTEGER NOT NULL DEFAULT 0 CHECK (is_voting IN (0, 1))
   -- consortium and group voting rights (A-G only) — mirrors VOTING_CATEGORIES
 );
 
-INSERT INTO membership_categories (code, is_individual, is_voting) VALUES
-  ('A', 0, 1),
-  ('B', 0, 1),
-  ('C', 0, 1),
-  ('D', 0, 1),
-  ('E', 0, 1),
-  ('F', 0, 1),
-  ('G', 0, 1),
-  ('H1', 0, 0),
-  ('H2', 0, 0),
-  ('H3', 0, 0),
-  ('H4', 0, 0),
-  ('H5', 1, 0),
-  ('H6', 1, 0),
-  ('H7', 1, 0),
-  ('H8', 0, 0);
+INSERT INTO membership_categories
+  (code, label, description, display_order, is_individual, is_voting)
+VALUES
+  ('A', 'Certification Authorities and Trust Service Providers', 'Included on a trust list maintained by the PKI Consortium.', 10, 0, 1),
+  ('B', 'Trust list supervisory entities', 'Entities that supervise and maintain a list contained in a PKI Consortium trust list.', 20, 0, 1),
+  ('C', 'Industry regulators and supervisory bodies', NULL, 30, 0, 1),
+  ('D', 'Conformity assessment bodies and auditors', NULL, 40, 0, 1),
+  ('E', 'Standards developing organizations', NULL, 50, 0, 1),
+  ('F', 'PKI or cryptographic software and device providers', NULL, 60, 0, 1),
+  ('G', 'Relying-party software providers', NULL, 70, 0, 1),
+  ('H1', 'Government entities with a general PKI or cryptography interest', 'For entities that do not fall under category C.', 80, 0, 0),
+  ('H2', 'PKI or cryptography consultancy organizations', NULL, 90, 0, 0),
+  ('H3', 'PKI or cryptography research organizations', NULL, 100, 0, 0),
+  ('H4', 'Universities with PKI or cryptography programs', NULL, 110, 0, 0),
+  ('H5', 'PhD students researching PKI or cryptography', 'Requires an institutional or university email address.', 120, 1, 0),
+  ('H6', 'Unaffiliated independent PKI or cryptography consultants', 'For qualified consultants who are not affiliated with any organization.', 130, 1, 0),
+  ('H7', 'Unaffiliated independent PKI or cryptography researchers', 'For qualified researchers who are not affiliated with any organization.', 140, 1, 0),
+  ('H8', 'Private PKI operators', 'Organizations operating a private PKI governed by formal policies and practices.', 150, 0, 0);
 
 -- Engagement is part of several aggregate transactions. Retried or concurrent
 -- requests must not award the same domain action more than once. A nullable
@@ -922,6 +927,9 @@ CREATE TABLE member_applications (
   organization_domain  TEXT,
   membership_category  TEXT NOT NULL,
   form_submission_id   TEXT,
+  -- Set by the public verified-email flow. Nullable only for imported legacy
+  -- workflow rows; the public command requires it in application code.
+  join_capability_id   TEXT,
   -- the application's answers live in form_submissions/form_submission_answers
   -- (against the 'membership-application' form seeded below), not on this row.
   stage                TEXT NOT NULL DEFAULT 'pending',
@@ -954,6 +962,9 @@ CREATE TABLE member_applications (
 );
 
 CREATE INDEX idx_member_applications_email ON member_applications(applicant_email);
+CREATE UNIQUE INDEX uq_member_applications_join_capability
+  ON member_applications(join_capability_id)
+  WHERE join_capability_id IS NOT NULL;
 CREATE INDEX idx_member_applications_domain ON member_applications(organization_domain);
 CREATE INDEX idx_member_applications_stage ON member_applications(stage);
 -- Supports the scheduled on-hold-reminder/EC-auto-approve due-work queries'
@@ -1502,6 +1513,10 @@ FROM membership_categories;
 -- options remain editable like Google Forms or Microsoft Forms.
 ALTER TABLE form_fields ADD COLUMN updated_at TEXT;
 ALTER TABLE form_fields ADD COLUMN archived_at TEXT;
+-- Open vocabulary: a field may resolve its choices from a server-owned
+-- catalog instead of storing a stale options snapshot. Unknown values are
+-- ignored by the application until a resolver is registered for them.
+ALTER TABLE form_fields ADD COLUMN option_source TEXT;
 
 UPDATE form_fields SET updated_at = created_at WHERE updated_at IS NULL;
 
@@ -1849,9 +1864,36 @@ VALUES
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'reason', 'Why do you want to join PKI Consortium?', 'textarea', 1, NULL, NULL, 60, datetime('now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'groups', 'Working Groups of Interest', 'multi_select', 0,
-   '[{"value":"pqc","label":"Post-Quantum Cryptography Working Group"},{"value":"cm","label":"Cryptographic Module Working Group"},{"value":"pkimm","label":"PKI Maturity Model Working Group"},{"value":"tcwg","label":"Training and Certification Working Group"},{"value":"ca","label":"CA Working Group"},{"value":"cbom","label":"CBOM Profiles Working Group"}]',
-   '{"uiWidget":"checkboxes"}', 70, datetime('now'));
+   'working_groups', 'Working Groups of Interest', 'multi_select', 0,
+   NULL,
+   '{"uiWidget":"checkboxes"}', 70, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'contribution_type', 'How do you expect to participate?', 'select', 0,
+   '[{"value":"active","label":"Actively contribute to the consortium and its mission"},{"value":"observer","label":"Observe without actively contributing"}]',
+   '{"helpText":"Members are not required to attend every meeting or participate in every activity."}', 80, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'wants_to_present', 'I would like to introduce myself, my organization, and our participation goals to the consortium', 'boolean', 0,
+   NULL, NULL, 90, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'interested_in_sponsoring', 'I would like to discuss sponsoring or donating to the consortium', 'boolean', 0,
+   NULL, '{"helpText":"Membership has no fee; sponsorships and donations support the consortium."}', 100, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'agrees_bylaws', 'I and my organization (if applicable) agree to follow the PKI Consortium Bylaws', 'boolean', 1,
+   NULL, '{"requireTrue":true,"referenceLink":{"href":"/bylaws/","label":"Read the PKI Consortium Bylaws"}}', 110, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'agrees_code_of_conduct', 'I and my organization (if applicable) agree to follow the PKI Consortium Code of Conduct', 'boolean', 1,
+   NULL, '{"requireTrue":true,"referenceLink":{"href":"/code-of-conduct/","label":"Read the PKI Consortium Code of Conduct"}}', 120, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'agrees_ipr_policy', 'I and my organization (if applicable) agree to follow the PKI Consortium IPR Policy', 'boolean', 1,
+   NULL, '{"requireTrue":true,"referenceLink":{"href":"/ipr/","label":"Read the PKI Consortium IPR Policy"}}', 130, datetime('now')),
+  (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
+   'warranted_authority', 'I represent and warrant that I have authority to submit this application and agree to be bound by these terms', 'boolean', 1,
+   NULL, '{"requireTrue":true}', 140, datetime('now'));
+
+UPDATE form_fields
+SET option_source = 'active_working_groups'
+WHERE form_id = (SELECT id FROM forms WHERE key = 'membership-application')
+  AND key = 'working_groups';
 
 UPDATE form_fields
 SET updated_at = created_at
@@ -1880,6 +1922,16 @@ VALUES (
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
 VALUES
+  (
+    lower(hex(randomblob(16))), 'membership_join_verify', 1,
+    'Verify your email address to join the PKI Consortium',
+    'Use the secure, short-lived link below to verify your email address and continue joining the PKI Consortium.
+
+[Verify email and continue]({{verificationUrl}})
+
+If you did not request this link, you can safely ignore this email.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  ),
   (
     lower(hex(randomblob(16))), 'application-received', 1,
     'We received your PKI Consortium membership application',

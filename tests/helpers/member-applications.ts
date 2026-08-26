@@ -1,5 +1,10 @@
 import { env } from "cloudflare:workers";
 import { queryAll } from "./context";
+import { isIndividualMembershipCategory } from "../../assets/shared/schemas/membership-categories";
+import {
+  issueMemberJoinApplicationToken,
+  newMemberJoinCapabilityPayload,
+} from "../../functions/_lib/services/membership/join/capabilities";
 
 /**
  * member_applications no longer carries its own answers_json blob (PR review
@@ -13,6 +18,28 @@ import { queryAll } from "./context";
  */
 
 const APPLICATION_FORM_KEY = "membership-application";
+
+export const requiredMembershipApplicationAnswers = {
+  agrees_bylaws: true,
+  agrees_code_of_conduct: true,
+  agrees_ipr_policy: true,
+  warranted_authority: true,
+} as const;
+
+export async function verifiedMemberApplicationPayload<T extends Record<string, unknown>>(
+  payload: T,
+  signingSecret = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+): Promise<T & { joinToken: string }> {
+  const membershipCategory = String(payload.membershipCategory ?? "");
+  const capability = newMemberJoinCapabilityPayload(
+    String(payload.applicantEmail ?? ""),
+    isIndividualMembershipCategory(membershipCategory) ? "individual" : "organization",
+  );
+  return {
+    ...payload,
+    joinToken: await issueMemberJoinApplicationToken(signingSecret, capability, 15 * 60),
+  };
+}
 
 export interface SeedMemberApplicationOptions {
   id?: string;
@@ -90,27 +117,66 @@ export async function seedMembershipApplicationForm(): Promise<string> {
     .bind(formId, APPLICATION_FORM_KEY)
     .run();
   const fields = [
-    ["job_title", "Role / Job Title", "text", 0, null],
-    ["linkedin", "LinkedIn Profile", "url", 0, null],
-    ["organization_website", "Organization Website", "url", 0, null],
-    ["about_yourself", "About Yourself", "textarea", 0, null],
-    ["about_organization", "About Your Organization", "textarea", 0, null],
-    ["reason", "Why do you want to join PKI Consortium?", "textarea", 1, null],
+    ["job_title", "Role / Job Title", "text", 0, null, null, null],
+    ["linkedin", "LinkedIn Profile", "url", 0, null, null, null],
+    ["organization_website", "Organization Website", "url", 0, null, null, null],
+    ["about_yourself", "About Yourself", "textarea", 0, null, null, null],
+    ["about_organization", "About Your Organization", "textarea", 0, null, null, null],
+    ["reason", "Why do you want to join PKI Consortium?", "textarea", 1, null, null, null],
+    ["working_groups", "Working Groups of Interest", "multi_select", 0, null, "active_working_groups", null],
     [
-      "working_groups",
-      "Working Groups of Interest",
-      "multi_select",
+      "contribution_type",
+      "How do you expect to participate?",
+      "select",
       0,
-      JSON.stringify(["pqc", "cm", "pkimm", "tcwg", "ca", "cbom"]),
+      JSON.stringify([
+        { value: "active", label: "Actively contribute to the consortium and its mission" },
+        { value: "observer", label: "Observe without actively contributing" },
+      ]),
+      null,
+      null,
+    ],
+    ["wants_to_present", "I would like to introduce myself", "boolean", 0, null, null, null],
+    ["interested_in_sponsoring", "I would like to discuss sponsoring", "boolean", 0, null, null, null],
+    ["agrees_bylaws", "I agree to follow the Bylaws", "boolean", 1, null, null, '{"requireTrue":true}'],
+    [
+      "agrees_code_of_conduct",
+      "I agree to follow the Code of Conduct",
+      "boolean",
+      1,
+      null,
+      null,
+      '{"requireTrue":true}',
+    ],
+    ["agrees_ipr_policy", "I agree to follow the IPR Policy", "boolean", 1, null, null, '{"requireTrue":true}'],
+    [
+      "warranted_authority",
+      "I have authority to submit this application",
+      "boolean",
+      1,
+      null,
+      null,
+      '{"requireTrue":true}',
     ],
   ] as const;
   await env.DB.batch(
-    fields.map(([key, label, fieldType, required, optionsJson], index) =>
+    fields.map(([key, label, fieldType, required, optionsJson, optionSource, validationJson], index) =>
       env.DB.prepare(
         `INSERT INTO form_fields
-           (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), formId, key, label, fieldType, required, optionsJson, (index + 1) * 10),
+           (id, form_id, key, label, field_type, required, options_json, option_source, validation_json, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      ).bind(
+        crypto.randomUUID(),
+        formId,
+        key,
+        label,
+        fieldType,
+        required,
+        optionsJson,
+        optionSource,
+        validationJson,
+        (index + 1) * 10,
+      ),
     ),
   );
   return formId;
@@ -125,6 +191,7 @@ export async function createApplicationFormSubmission(
   answers: Record<string, unknown>,
   options: { submittedAt?: string } = {},
 ): Promise<string> {
+  const completeAnswers = { ...requiredMembershipApplicationAnswers, ...answers };
   const formId = await seedMembershipApplicationForm();
   const submissionId = crypto.randomUUID();
   await env.DB.prepare(
@@ -134,7 +201,7 @@ export async function createApplicationFormSubmission(
     .bind(submissionId, formId, options.submittedAt ?? new Date().toISOString())
     .run();
 
-  for (const [key, value] of Object.entries(answers)) {
+  for (const [key, value] of Object.entries(completeAnswers)) {
     const [field] = await queryAll<{ id: string }>(
       env.DB,
       "SELECT id FROM form_fields WHERE form_id = ? AND key = ? LIMIT 1",

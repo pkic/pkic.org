@@ -48,22 +48,50 @@ export const FORM_FIELD_TYPES = [
 export const formFieldTypeSchema = z.enum(FORM_FIELD_TYPES);
 export type FormFieldType = z.infer<typeof formFieldTypeSchema>;
 
+/**
+ * Optional server-owned option catalogs for choice fields. The source name is
+ * deliberately a small, typed vocabulary while the database column remains
+ * open text so adding a catalog does not require a table rebuild.
+ */
+export const FORM_FIELD_OPTION_SOURCES = ["active_working_groups"] as const;
+export const formFieldOptionSourceSchema = z.enum(FORM_FIELD_OPTION_SOURCES);
+export type FormFieldOptionSource = z.infer<typeof formFieldOptionSourceSchema>;
+
 /** Canonical form-authoring field input shared by every management context. */
-export const formFieldInputSchema = z.object({
-  id: databaseIdSchema.optional(),
-  key: z
-    .string()
-    .trim()
-    .min(1)
-    .max(80)
-    .regex(/^[a-z][a-z0-9_]*$/),
-  label: z.string().trim().min(1).max(200),
-  fieldType: formFieldTypeSchema,
-  required: z.boolean().default(false),
-  sortOrder: z.number().int().min(0).max(9999).default(0),
-  options: formFieldOptionsSchema.optional(),
-  validation: formFieldRulesSchema.optional(),
-});
+export const formFieldInputSchema = z
+  .object({
+    id: databaseIdSchema.optional(),
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .regex(/^[a-z][a-z0-9_]*$/),
+    label: z.string().trim().min(1).max(200),
+    fieldType: formFieldTypeSchema,
+    required: z.boolean().default(false),
+    sortOrder: z.number().int().min(0).max(9999).default(0),
+    options: formFieldOptionsSchema.optional(),
+    optionSource: formFieldOptionSourceSchema.nullable().optional(),
+    validation: formFieldRulesSchema.optional(),
+  })
+  .superRefine((field, context) => {
+    if (!field.optionSource) return;
+    if (field.fieldType !== "select" && field.fieldType !== "multi_select") {
+      context.addIssue({
+        code: "custom",
+        path: ["optionSource"],
+        message: "Dynamic option sources are only supported for select fields",
+      });
+    }
+    if (field.options && field.options.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "A field cannot use static options and a dynamic option source together",
+      });
+    }
+  });
 
 function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> }, context: z.RefinementCtx): void {
   addDuplicateStringIssues(value.fields ?? [], context, {
@@ -110,6 +138,7 @@ export const formFieldDefinitionSchema = z.object({
   fieldType: formFieldTypeSchema,
   required: z.boolean(),
   options: formFieldOptionsSchema.nullable(),
+  optionSource: formFieldOptionSourceSchema.nullable(),
   validation: formFieldRulesSchema.nullable(),
   sortOrder: z.number(),
   updatedAt: z.string(),

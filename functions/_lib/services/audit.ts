@@ -89,7 +89,7 @@ export async function writeAuditLog(
 /**
  * Returns a prepared statement for use in `db.batch()` calls.
  */
-export function prepareAuditLog(
+function prepareAuditLogInsert(
   db: DatabaseLike,
   actorType: string,
   actorId: string | null,
@@ -100,6 +100,7 @@ export function prepareAuditLog(
   createdAt = nowIso(),
   idempotencyKey: string | null = null,
   scope: AuditScope | null = null,
+  conflictMode: "ignore" | "error" = "ignore",
 ): StatementLike {
   return db
     .prepare(
@@ -107,7 +108,7 @@ export function prepareAuditLog(
       id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
       idempotency_key, scope_type, scope_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+    ${conflictMode === "ignore" ? "ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING" : ""}`,
     )
     .bind(
       uuid(),
@@ -148,6 +149,64 @@ export function prepareScopedAuditLog(
     createdAt,
     idempotencyKey,
     scope,
+  );
+}
+
+export function prepareAuditLog(
+  db: DatabaseLike,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt = nowIso(),
+  idempotencyKey: string | null = null,
+  scope: AuditScope | null = null,
+): StatementLike {
+  return prepareAuditLogInsert(
+    db,
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    details,
+    createdAt,
+    idempotencyKey,
+    scope,
+    "ignore",
+  );
+}
+
+/**
+ * Records a security-sensitive one-shot action. Reusing its idempotency key
+ * fails the surrounding D1 transaction instead of silently continuing.
+ */
+export function prepareOneTimeAuditLog(
+  db: DatabaseLike,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt: string,
+  idempotencyKey: string,
+  scope: AuditScope | null = null,
+): StatementLike {
+  return prepareAuditLogInsert(
+    db,
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    details,
+    createdAt,
+    idempotencyKey,
+    scope,
+    "error",
   );
 }
 

@@ -12,7 +12,7 @@ import type { FormFieldRow, FormRow as ManagedFormRow } from "../forms/read";
 export type FormRow = Pick<ManagedFormRow, "id" | "key" | "title" | "purpose" | "scope_type" | "scope_ref">;
 
 /** Database columns required to render answer statistics. */
-export type FieldRow = Pick<FormFieldRow, "id" | "key" | "options_json">;
+export type FieldRow = Pick<FormFieldRow, "id" | "key" | "options_json" | "option_source">;
 
 export type AdminSubmissionPayload = z.infer<typeof adminFormSubmissionSchema>;
 export type FieldStatPayload = z.infer<typeof adminFormSubmissionStatSchema>;

@@ -10,10 +10,11 @@ import { getConfig } from "../../../../_lib/config";
 import { AppError } from "../../../../_lib/errors";
 import { JSON_REQUEST_MAX_BYTES, readBoundedJsonBody } from "../../../../_lib/http-body";
 import { json } from "../../../../_lib/http";
-import { enforceRateLimit } from "../../../../_lib/rate-limit";
-import { getClientIp } from "../../../../_lib/request";
+import { enforceEmailTriggerRateLimits } from "../../../../_lib/rate-limit";
+import { getClientIp, requireInternalSecret } from "../../../../_lib/request";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { createMemberApplication } from "../../../../_lib/services/membership/applications/create";
+import { verifyMemberJoinApplicationToken } from "../../../../_lib/services/membership/join/capabilities";
 import {
   memberApplicationCreateRouteSchema,
   memberApplicationCreateSchema,
@@ -25,12 +26,6 @@ export async function onRequestPost(c: any): Promise<Response> {
   const db = env.DB;
   const config = getConfig(env, c.req.raw);
 
-  await enforceRateLimit({
-    binding: env.IP_RATE_LIMITER,
-    namespace: "member-applications:ip",
-    key: getClientIp(c.req.raw),
-  });
-
   // Field-level 422 (not the codebase's usual 400 VALIDATION_ERROR):
   // this public application endpoint specifically must return
   // 422 Unprocessable Entity for missing/invalid required fields.
@@ -40,14 +35,31 @@ export async function onRequestPost(c: any): Promise<Response> {
     throw new AppError(422, "VALIDATION_ERROR", "Invalid application payload", parsed.error.flatten());
   }
   const body = parsed.data;
+  await enforceEmailTriggerRateLimits({
+    emailBinding: env.EMAIL_RATE_LIMITER,
+    ipBinding: env.IP_RATE_LIMITER,
+    namespace: "member-applications",
+    email: body.applicantEmail,
+    clientIp: getClientIp(c.req.raw),
+  });
+  const joinCapability = await verifyMemberJoinApplicationToken(requireInternalSecret(env), body.joinToken);
+  if (joinCapability.email !== body.applicantEmail) {
+    throw new AppError(
+      401,
+      "MEMBER_JOIN_CAPABILITY_INVALID",
+      "Membership application capability does not match the verified email",
+    );
+  }
 
   const created = await createMemberApplication(db, {
-    applicantEmail: body.applicantEmail,
+    applicantEmail: joinCapability.email,
     applicantName: body.applicantName,
     membershipCategory: body.membershipCategory,
     organizationName: body.organizationName ?? null,
     answers: body.answers,
     appBaseUrl: config.appBaseUrl,
+    joinCapabilityId: joinCapability.capabilityId,
+    applicantKind: joinCapability.applicantKind,
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, created.outboxId));
 

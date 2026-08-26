@@ -49,7 +49,7 @@ describe("shared frontend response contracts", () => {
   });
 
   it("reuses application response contracts for empty and populated responses", () => {
-    expect(memberApplicationFormResponseSchema.parse({ form: null }).form).toBeNull();
+    expect(memberApplicationFormResponseSchema.parse({ categories: [], form: null }).form).toBeNull();
     expect(
       memberApplicationCreateResponseSchema.parse({
         applicationId: "00000000-0000-4000-8000-000000000002",

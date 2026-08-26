@@ -4,6 +4,7 @@ import { parseFormFieldOptions } from "../../../../assets/shared/schemas/form-fi
 import { adminFormSubmissionStatsResponseSchema } from "../../../../assets/shared/schemas/admin-forms";
 import type { DatabaseLike } from "../../types";
 import type { FieldRow, FieldStatPayload, GetFormSubmissionStatsParams, GetFormSubmissionStatsResult } from "./types";
+import { parseFormFieldOptionSource, resolveFormFieldOptionCatalogs } from "../forms/read";
 import {
   countSubmissionPopulation,
   resolveFormSubmissionPopulation,
@@ -20,14 +21,19 @@ interface AggregatedStatRow {
   unique_answers: number;
 }
 
-function buildFieldStatistics(fields: FieldRow[], rows: AggregatedStatRow[]): FieldStatPayload[] {
+function buildFieldStatistics(
+  fields: FieldRow[],
+  rows: AggregatedStatRow[],
+  catalogs: Awaited<ReturnType<typeof resolveFormFieldOptionCatalogs>>,
+): FieldStatPayload[] {
   const optionLabelsByField = new Map(
-    fields.map((field) => [
-      field.key,
-      new Map(
-        parseFormFieldOptions(parseJsonSafe(field.options_json, null)).map((option) => [option.value, option.label]),
-      ),
-    ]),
+    fields.map((field) => {
+      const source = parseFormFieldOptionSource(field.option_source);
+      const options = source
+        ? (catalogs[source] ?? [])
+        : parseFormFieldOptions(parseJsonSafe<unknown>(field.options_json, null));
+      return [field.key, new Map<string, string>(options.map((option) => [option.value, option.label]))] as const;
+    }),
   );
   const rowsByField = new Map<string, AggregatedStatRow[]>();
   for (const row of rows) {
@@ -142,7 +148,7 @@ export async function getFormSubmissionStats(
   const [fieldsResult, countResult, statisticsResult] = await db.batch([
     db
       .prepare(
-        `SELECT id, key, options_json
+        `SELECT id, key, options_json, option_source
          FROM form_fields
          WHERE form_id = ?
          ORDER BY sort_order ASC, key ASC`,
@@ -151,6 +157,11 @@ export async function getFormSubmissionStats(
     db.prepare(countQuery.sql).bind(...countQuery.bindings),
     db.prepare(statisticsQuery.sql).bind(...statisticsQuery.bindings),
   ]);
+
+  const fields = batchRows<FieldRow>(fieldsResult);
+  // Keep labels for retired choices in historical aggregates even though
+  // active form rendering no longer offers those values for new responses.
+  const catalogs = await resolveFormFieldOptionCatalogs(db, fields, { includeInactive: true });
 
   return adminFormSubmissionStatsResponseSchema.parse({
     form: {
@@ -161,6 +172,6 @@ export async function getFormSubmissionStats(
       placement: population.placement,
     },
     total: Number(batchFirst<{ total: number }>(countResult)?.total ?? 0),
-    stats: buildFieldStatistics(batchRows<FieldRow>(fieldsResult), batchRows<AggregatedStatRow>(statisticsResult)),
+    stats: buildFieldStatistics(fields, batchRows<AggregatedStatRow>(statisticsResult), catalogs),
   });
 }

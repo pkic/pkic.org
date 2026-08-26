@@ -6,10 +6,16 @@ import type {
   FormFieldDefinition,
   FormPlacement,
   FormFieldType,
+  FormFieldOptionSource,
   FormPurpose,
   FormStatus,
 } from "../../../../assets/shared/schemas/forms";
-import { parseFormFieldOptions, parseFormFieldRules } from "../../../../assets/shared/schemas/form-field-rules";
+import {
+  parseFormFieldOptions,
+  parseFormFieldRules,
+  type FormFieldOption,
+} from "../../../../assets/shared/schemas/form-field-rules";
+import { FORM_FIELD_OPTION_SOURCES } from "../../../../assets/shared/schemas/forms";
 import { defaultFormAudience, findActiveFormPlacement, findFormPlacement } from "./placements";
 
 export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
@@ -41,6 +47,7 @@ export interface FormFieldRow {
   field_type: FormFieldType;
   required: number;
   options_json: string | null;
+  option_source: string | null;
   validation_json: string | null;
   sort_order: number;
   created_at: string;
@@ -69,7 +76,7 @@ export interface ActiveFormDefinition {
 
 const FORM_COLUMNS = "id, key, scope_type, scope_ref, purpose, status, title, description";
 const FORM_FIELD_COLUMNS =
-  "id, key, label, field_type, required, options_json, validation_json, sort_order, created_at, updated_at, archived_at";
+  "id, key, label, field_type, required, options_json, option_source, validation_json, sort_order, created_at, updated_at, archived_at";
 
 async function loadFormFieldRows(db: DatabaseLike, formId: string, includeArchived = false): Promise<FormFieldRow[]> {
   return all<FormFieldRow>(
@@ -82,19 +89,67 @@ async function loadFormFieldRows(db: DatabaseLike, formId: string, includeArchiv
   );
 }
 
-export function mapManagedFormFields(fields: FormFieldRow[]) {
-  return fields.map((entry) => ({
-    id: entry.id,
-    key: entry.key,
-    label: entry.label,
-    fieldType: entry.field_type,
-    required: entry.required === 1,
-    options: parseFormFieldOptions(parseJsonSafe<unknown>(entry.options_json, null)),
-    validation: parseFormFieldRules(parseJsonSafe<unknown>(entry.validation_json, null)),
-    sortOrder: entry.sort_order,
-    updatedAt: entry.updated_at ?? entry.created_at,
-    archivedAt: entry.archived_at,
-  }));
+export function parseFormFieldOptionSource(value: string | null): FormFieldOptionSource | null {
+  if (value === null) return null;
+  if ((FORM_FIELD_OPTION_SOURCES as readonly string[]).includes(value)) return value as FormFieldOptionSource;
+  throw new AppError(500, "FORM_OPTION_SOURCE_UNSUPPORTED", `Unsupported form option source '${value}'`);
+}
+
+type OptionCatalogs = Partial<Record<FormFieldOptionSource, FormFieldOption[]>>;
+
+export function mapManagedFormFields(fields: FormFieldRow[], catalogs: OptionCatalogs = {}) {
+  return fields.map((entry) => {
+    const optionSource = parseFormFieldOptionSource(entry.option_source);
+    const options = optionSource
+      ? (catalogs[optionSource] ?? null)
+      : parseFormFieldOptions(parseJsonSafe<unknown>(entry.options_json, null));
+    return {
+      id: entry.id,
+      key: entry.key,
+      label: entry.label,
+      fieldType: entry.field_type,
+      required: entry.required === 1,
+      optionSource,
+      options,
+      validation: parseFormFieldRules(parseJsonSafe<unknown>(entry.validation_json, null)),
+      sortOrder: entry.sort_order,
+      updatedAt: entry.updated_at ?? entry.created_at,
+      archivedAt: entry.archived_at,
+    };
+  });
+}
+
+async function loadOptionCatalog(
+  db: DatabaseLike,
+  source: FormFieldOptionSource,
+  includeInactive: boolean,
+): Promise<FormFieldOption[]> {
+  switch (source) {
+    case "active_working_groups":
+      return all<{ value: string; label: string; active: number }>(
+        db,
+        `SELECT id AS value, name AS label, active
+           FROM groups
+          WHERE type_key = 'working_group'${includeInactive ? "" : " AND active = 1"}
+          ORDER BY name COLLATE NOCASE ASC, id ASC`,
+      ).then((rows) => rows.map((row) => ({ value: row.value, label: row.label, active: row.active === 1 })));
+  }
+}
+
+export async function resolveFormFieldOptionCatalogs(
+  db: DatabaseLike,
+  fields: Array<Pick<FormFieldRow, "option_source">>,
+  options: { includeInactive?: boolean } = {},
+): Promise<OptionCatalogs> {
+  const sources = [
+    ...new Set(fields.map((field) => parseFormFieldOptionSource(field.option_source)).filter(Boolean)),
+  ] as FormFieldOptionSource[];
+  const entries = await Promise.all(
+    sources.map(
+      async (source) => [source, await loadOptionCatalog(db, source, options.includeInactive ?? false)] as const,
+    ),
+  );
+  return Object.fromEntries(entries) as OptionCatalogs;
 }
 
 export async function getManagedFormWithFields(
@@ -224,6 +279,7 @@ async function loadFormDefinition(
 ): Promise<ActiveFormDefinition | null> {
   if (!resolved) return null;
   const fields = await loadFormFieldRows(db, resolved.form.id);
+  const catalogs = await resolveFormFieldOptionCatalogs(db, fields);
 
   return {
     id: resolved.form.id,
@@ -236,7 +292,7 @@ async function loadFormDefinition(
     description: resolved.form.description,
     formUpdatedAt: resolved.form.updated_at,
     placement: resolved.placement,
-    fields: mapManagedFormFields(fields),
+    fields: mapManagedFormFields(fields, catalogs),
   };
 }
 

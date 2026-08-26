@@ -57,7 +57,10 @@ describe("member application response schemas", () => {
         manageToken: "a-valid-manage-token",
       }),
     ).toMatchObject({ applicationId: "application-1", stage: "pending" });
-    expect(memberApplicationFormResponseSchema.parse({ form: null })).toEqual({ form: null });
+    expect(memberApplicationFormResponseSchema.parse({ categories: [], form: null })).toEqual({
+      categories: [],
+      form: null,
+    });
     expect(
       memberApplicationStatusResponseSchema.parse({
         id: "00000000-0000-4000-8000-000000000001",

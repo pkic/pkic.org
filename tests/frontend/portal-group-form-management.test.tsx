@@ -70,6 +70,7 @@ function detail(ownerGroupId: string, capabilities: string[]) {
         fieldType: "text",
         required: true,
         options: null,
+        optionSource: null,
         validation: null,
         sortOrder: 10,
         updatedAt: NOW,

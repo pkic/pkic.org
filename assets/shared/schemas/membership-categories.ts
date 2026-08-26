@@ -29,6 +29,17 @@ export const MEMBERSHIP_CATEGORIES = [
 export const membershipCategorySchema = z.enum(MEMBERSHIP_CATEGORIES);
 export type MembershipCategory = z.infer<typeof membershipCategorySchema>;
 
+/** D1-backed presentation and policy metadata returned to every category UI. */
+export const membershipCategoryCatalogEntrySchema = z.object({
+  code: membershipCategorySchema,
+  label: z.string().min(1),
+  description: z.string().nullable(),
+  displayOrder: z.number().int().nonnegative(),
+  isIndividual: z.boolean(),
+  isVoting: z.boolean(),
+});
+export type MembershipCategoryCatalogEntry = z.infer<typeof membershipCategoryCatalogEntrySchema>;
+
 /** Individual (org-less) membership categories — "NULL for individual categories H5/H6/H7" rule. */
 export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set<string>(["H5", "H6", "H7"]);
 

@@ -3,12 +3,13 @@ import { formFieldDefinitionSchema } from "./forms";
 import { normalizedEmailSchema } from "./api-common";
 import {
   membershipCategorySchema,
+  membershipCategoryCatalogEntrySchema,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   requiresUniversityEmail,
 } from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
-import { isPersonalEmailAddress } from "../constants/email-domains";
+import { emailDomainOf, isDisposableEmailDomain, isPersonalEmailAddress } from "../constants/email-domains";
 import {
   applicationDocumentsListQuerySchema,
   applicationDocumentsListResponseSchema,
@@ -95,6 +96,7 @@ export const memberApplicationCreateSchema = z
     applicantName: z.string().trim().min(1, "Name is required").max(160),
     membershipCategory: membershipCategorySchema,
     organizationName: z.string().trim().min(1).max(200).optional(),
+    joinToken: z.string().min(32).max(1024),
     /** Validated answers keyed by form_fields.key (see GET .../applications/form). */
     answers: formAnswersSchema.optional(),
   })
@@ -105,6 +107,21 @@ export const memberApplicationCreateSchema = z
         code: "custom",
         path: ["organizationName"],
         message: "Organization name is required for this membership category",
+      });
+    }
+    const emailDomain = emailDomainOf(value.applicantEmail);
+    if (isDisposableEmailDomain(emailDomain)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["applicantEmail"],
+        message: "Disposable email providers are not accepted",
+      });
+    }
+    if (!isIndividual && isPersonalEmailAddress(value.applicantEmail)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["applicantEmail"],
+        message: "Use your employer or organization email address for an organization membership application",
       });
     }
     if (requiresUniversityEmail(value.membershipCategory) && isPersonalEmailAddress(value.applicantEmail)) {
@@ -174,6 +191,7 @@ export const memberApplicationStatusRouteSchema = {
 };
 
 export const memberApplicationFormResponseSchema = z.object({
+  categories: z.array(membershipCategoryCatalogEntrySchema),
   form: z
     .object({
       id: z.string(),

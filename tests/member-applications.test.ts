@@ -7,7 +7,11 @@ import { onRequestPost as createApplication } from "../functions/api/v1/members/
 import { onRequestGet as getApplicationForm } from "../functions/api/v1/members/applications/form";
 import { onRequestGet as getApplicationStatus } from "../functions/api/v1/members/applications/[id]/status";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
-import { seedMembershipApplicationForm } from "./helpers/member-applications";
+import {
+  requiredMembershipApplicationAnswers,
+  seedMembershipApplicationForm,
+  verifiedMemberApplicationPayload,
+} from "./helpers/member-applications";
 import { callApi } from "./helpers/app";
 import {
   applicationDocumentUploadResponseSchema,
@@ -21,7 +25,12 @@ import {
 import { JSON_REQUEST_MAX_BYTES } from "../functions/_lib/http-body";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
-  return { ...env, IP_RATE_LIMITER: createTestRateLimiter(100), ...overrides } as typeof env;
+  return {
+    ...env,
+    IP_RATE_LIMITER: createTestRateLimiter(100),
+    EMAIL_RATE_LIMITER: createTestRateLimiter(100),
+    ...overrides,
+  } as typeof env;
 }
 
 function postRequest(url: string, body: unknown) {
@@ -30,6 +39,10 @@ function postRequest(url: string, body: unknown) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+async function applicationRequest(payload: Record<string, unknown>): Promise<Request> {
+  return postRequest("https://pkic.org/api/v1/members/applications", await verifiedMemberApplicationPayload(payload));
 }
 
 async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): Promise<Response> {
@@ -45,7 +58,7 @@ const validPayload = {
   applicantName: "Alice Example",
   membershipCategory: "A",
   organizationName: "Example Corp",
-  answers: { reason: "We want to contribute to the PKI community." },
+  answers: { reason: "We want to contribute to the PKI community.", ...requiredMembershipApplicationAnswers },
 };
 
 describe("POST /api/v1/members/applications", () => {
@@ -58,7 +71,7 @@ describe("POST /api/v1/members/applications", () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
-      createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+      createContext(testEnv, await applicationRequest(validPayload), {}),
     );
 
     expect(response.status).toBe(201);
@@ -96,11 +109,13 @@ describe("POST /api/v1/members/applications", () => {
     const response = await callApi(testEnv, "/api/v1/members/applications", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        applicantEmail: "student@gmail.com",
-        applicantName: "Student Example",
-        membershipCategory: "H5",
-      }),
+      body: JSON.stringify(
+        await verifiedMemberApplicationPayload({
+          applicantEmail: "student@gmail.com",
+          applicantName: "Student Example",
+          membershipCategory: "H5",
+        }),
+      ),
     });
 
     expect(response.status).toBe(422);
@@ -116,12 +131,14 @@ describe("POST /api/v1/members/applications", () => {
     const response = await callApi(testEnv, "/api/v1/members/applications", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        applicantEmail: "individual@gmail.com",
-        applicantName: "Individual Example",
-        membershipCategory: "H6",
-        answers: { reason: "I want to contribute to the PKI community." },
-      }),
+      body: JSON.stringify(
+        await verifiedMemberApplicationPayload({
+          applicantEmail: "individual@gmail.com",
+          applicantName: "Individual Example",
+          membershipCategory: "H6",
+          answers: { reason: "I want to contribute to the PKI community.", ...requiredMembershipApplicationAnswers },
+        }),
+      ),
     });
 
     expect(response.status).toBe(201);
@@ -131,7 +148,7 @@ describe("POST /api/v1/members/applications", () => {
     const testEnv = makeEnv();
     const first = await callEndpoint(
       createApplication,
-      createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+      createContext(testEnv, await applicationRequest(validPayload), {}),
     );
     expect(first.status).toBe(201);
 
@@ -139,7 +156,7 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           ...validPayload,
           applicantEmail: "bob@example-corp.test",
           applicantName: "Bob Example",
@@ -171,7 +188,7 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           ...validPayload,
           applicantEmail: "dana@first-domain.test",
         }),
@@ -184,7 +201,7 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           ...validPayload,
           applicantEmail: "dana@second-domain.test",
         }),
@@ -200,19 +217,16 @@ describe("POST /api/v1/members/applications", () => {
       applicantEmail: "solo@example-corp.test",
       applicantName: "Solo Person",
       membershipCategory: "H6",
-      answers: { reason: "I want to contribute to the PKI community." },
+      answers: { reason: "I want to contribute to the PKI community.", ...requiredMembershipApplicationAnswers },
     };
-    const first = await callEndpoint(
-      createApplication,
-      createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", payload), {}),
-    );
+    const first = await callEndpoint(createApplication, createContext(testEnv, await applicationRequest(payload), {}));
     expect(first.status).toBe(201);
 
     const second = await callEndpoint(
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           ...payload,
           applicantEmail: "solo2@example-corp.test",
         }),
@@ -241,7 +255,7 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           applicantEmail: "carol@example-corp.test",
           applicantName: "Carol Example",
           membershipCategory: "B",
@@ -258,7 +272,7 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           ...validPayload,
           answers: {},
         }),
@@ -271,9 +285,13 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", {
+        await applicationRequest({
           ...validPayload,
-          answers: { reason: "Valid reason", invented_field: "must not persist" },
+          answers: {
+            reason: "Valid reason",
+            ...requiredMembershipApplicationAnswers,
+            invented_field: "must not persist",
+          },
         }),
         {},
       ),
@@ -285,12 +303,12 @@ describe("POST /api/v1/members/applications", () => {
   it("allows exactly one of two concurrent submissions to claim an organization domain", async () => {
     const testEnv = makeEnv();
     const responses = await Promise.all(
-      ["alice", "bob"].map((name) =>
+      ["alice", "bob"].map(async (name) =>
         callEndpoint(
           createApplication,
           createContext(
             testEnv,
-            postRequest("https://pkic.org/api/v1/members/applications", {
+            await applicationRequest({
               ...validPayload,
               applicantEmail: `${name}@concurrent-domain.test`,
               applicantName: name,
@@ -325,7 +343,7 @@ describe("POST /api/v1/members/applications", () => {
     try {
       const response = await callEndpoint(
         createApplication,
-        createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+        createContext(testEnv, await applicationRequest(validPayload), {}),
       );
       expect(response.status).toBe(500);
       expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
@@ -346,7 +364,7 @@ describe("POST /api/v1/members/applications", () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
-      createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+      createContext(testEnv, await applicationRequest(validPayload), {}),
     );
     expect(response.status).toBe(201);
 
@@ -368,7 +386,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
   async function createTestApplication(testEnv: typeof env) {
     const response = await callEndpoint(
       createApplication,
-      createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+      createContext(testEnv, await applicationRequest(validPayload), {}),
     );
     return memberApplicationCreateResponseSchema.parse(await response.json());
   }
@@ -446,6 +464,32 @@ describe("GET /api/v1/members/applications/form", () => {
     expect(response.status).toBe(200);
     const body = memberApplicationFormResponseSchema.parse(await response.json());
     expect(body.form?.key).toBe("membership-application");
+  });
+
+  it("resolves working-group choices from active D1 rows rather than a seed snapshot", async () => {
+    await env.DB.prepare("UPDATE groups SET name = 'A Dynamic Working Group' WHERE slug = 'pqc'").run();
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE slug = 'cm'").run();
+
+    const testEnv = makeEnv();
+    const response = await callEndpoint(
+      getApplicationForm,
+      createContext(testEnv, new Request("https://pkic.org/api/v1/members/applications/form"), {}),
+    );
+
+    expect(response.status).toBe(200);
+    const body = memberApplicationFormResponseSchema.parse(await response.json());
+    const groups = body.form?.fields.find((field) => field.key === "working_groups");
+    expect(groups?.optionSource).toBe("active_working_groups");
+    expect(groups?.options).toEqual(
+      expect.arrayContaining([
+        {
+          value: "20000000-0000-4000-8000-000000000003",
+          label: "A Dynamic Working Group",
+          active: true,
+        },
+      ]),
+    );
+    expect(groups?.options?.some((option) => option.value === "20000000-0000-4000-8000-000000000004")).toBe(false);
   });
 });
 
@@ -936,11 +980,7 @@ describe("POST/GET /api/v1/members/applications/:id/documents", () => {
 async function createApplicationForDocumentTest(testEnv: typeof env, overrides: Partial<typeof validPayload> = {}) {
   const response = await callEndpoint(
     createApplication,
-    createContext(
-      testEnv,
-      postRequest("https://pkic.org/api/v1/members/applications", { ...validPayload, ...overrides }),
-      {},
-    ),
+    createContext(testEnv, await applicationRequest({ ...validPayload, ...overrides }), {}),
   );
   return (await response.json()) as { applicationId: string; manageToken: string };
 }

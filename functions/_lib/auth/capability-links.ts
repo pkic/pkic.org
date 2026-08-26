@@ -11,7 +11,7 @@ const QUEUED_TOKEN_PREFIX = "pkcq1_";
 const AUTHORIZED_MARKERS_FIELD = "__authorizedCapabilityMarkers";
 const SIGNING_DOMAIN = "pkic-public-capability:v1";
 const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
-const MAX_TOKEN_LENGTH = 512;
+const MAX_TOKEN_LENGTH = 1024;
 
 export type CapabilityPurpose =
   | "registration_manage"
@@ -19,7 +19,11 @@ export type CapabilityPurpose =
   | "invite"
   | "proposal_manage"
   | "speaker_manage"
-  | "meeting_guest_verify";
+  | "meeting_guest_verify"
+  | "member_join_verify"
+  | "member_join_apply";
+
+export type StatelessCapabilityPurpose = "member_join_verify" | "member_join_apply";
 
 const purposeCodes: Record<CapabilityPurpose, string> = {
   registration_manage: "rm",
@@ -28,6 +32,8 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   proposal_manage: "pm",
   speaker_manage: "sm",
   meeting_guest_verify: "mgv",
+  member_join_verify: "mjv",
+  member_join_apply: "mja",
 };
 
 const purposesByCode = Object.fromEntries(
@@ -48,6 +54,8 @@ interface QueuedCapabilityDescriptor {
   ttlSeconds: number;
   /** SHA-256 fingerprint of the link secret at enqueue time; never the secret itself. */
   linkSecretFingerprint?: string;
+  /** Optional absolute delivery deadline for request-time-bounded links. */
+  expiresAtSeconds?: number;
 }
 
 export type CapabilityVerifyResult =
@@ -112,7 +120,7 @@ function parseToken(token: string, expectedPurpose: CapabilityPurpose): ParsedCa
     if (
       purpose !== expectedPurpose ||
       !resourceId ||
-      resourceId.length > 128 ||
+      resourceId.length > 512 ||
       !Number.isSafeInteger(expiresAt) ||
       expiresAt <= 0
     ) {
@@ -201,20 +209,30 @@ function parseQueuedDescriptor(marker: string): QueuedCapabilityDescriptor | nul
   if (!unfoldedMarker.startsWith(QUEUED_TOKEN_PREFIX)) return null;
   try {
     const values = decodeText(unfoldedMarker.slice(QUEUED_TOKEN_PREFIX.length)).split("|");
-    if (values.length !== 3 && values.length !== 4) return null;
-    const [purposeCode, resourceId, ttlSecondsRaw, linkSecretFingerprint] = values;
+    if (values.length < 3 || values.length > 5) return null;
+    const [purposeCode, resourceId, ttlSecondsRaw, linkSecretFingerprint, expiresAtSecondsRaw] = values;
     const purpose = purposesByCode[purposeCode];
     const ttlSeconds = Number(ttlSecondsRaw);
+    const expiresAtSeconds = expiresAtSecondsRaw === undefined ? undefined : Number(expiresAtSecondsRaw);
     if (
       !purpose ||
       !resourceId ||
       !Number.isSafeInteger(ttlSeconds) ||
       ttlSeconds <= 0 ||
-      (linkSecretFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint))
+      (linkSecretFingerprint !== undefined &&
+        linkSecretFingerprint !== "" &&
+        !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint)) ||
+      (expiresAtSeconds !== undefined && (!Number.isSafeInteger(expiresAtSeconds) || expiresAtSeconds <= 0))
     ) {
       return null;
     }
-    return { purpose, resourceId, ttlSeconds, linkSecretFingerprint };
+    return {
+      purpose,
+      resourceId,
+      ttlSeconds,
+      linkSecretFingerprint: linkSecretFingerprint || undefined,
+      expiresAtSeconds,
+    };
   } catch {
     return null;
   }
@@ -225,15 +243,18 @@ export function queuedCapabilityToken(
   resourceId: string,
   ttlSeconds = DEFAULT_TTL_SECONDS,
   linkSecretFingerprint?: string,
+  expiresAtSeconds?: number,
 ): string {
   if (linkSecretFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint)) {
     throw new Error("Queued capability secret fingerprint is invalid");
   }
-  return `${QUEUED_TOKEN_PREFIX}${encodeText(
-    [purposeCodes[purpose], resourceId, String(Math.max(1, Math.floor(ttlSeconds))), linkSecretFingerprint]
-      .filter((value) => value !== undefined)
-      .join("|"),
-  )}`;
+  if (expiresAtSeconds !== undefined && (!Number.isSafeInteger(expiresAtSeconds) || expiresAtSeconds <= 0)) {
+    throw new Error("Queued capability expiry is invalid");
+  }
+  const values = [purposeCodes[purpose], resourceId, String(Math.max(1, Math.floor(ttlSeconds)))];
+  if (linkSecretFingerprint !== undefined || expiresAtSeconds !== undefined) values.push(linkSecretFingerprint ?? "");
+  if (expiresAtSeconds !== undefined) values.push(String(expiresAtSeconds));
+  return `${QUEUED_TOKEN_PREFIX}${encodeText(values.join("|"))}`;
 }
 
 /**
@@ -264,7 +285,41 @@ function capabilitySecretQuery(purpose: CapabilityPurpose): string {
       return "SELECT manage_link_secret AS link_secret FROM proposal_speakers WHERE id = ?";
     case "meeting_guest_verify":
       return "SELECT invitation_secret AS link_secret FROM event_occurrence_guests WHERE id = ?";
+    case "member_join_verify":
+    case "member_join_apply":
+      throw new Error("Stateless capabilities do not have a database secret query");
   }
+}
+
+function isStatelessCapabilityPurpose(purpose: CapabilityPurpose): purpose is StatelessCapabilityPurpose {
+  return purpose === "member_join_verify" || purpose === "member_join_apply";
+}
+
+function statelessCapabilityLinkSecret(purpose: StatelessCapabilityPurpose): string {
+  return `pkic-stateless-capability:${purpose}`;
+}
+
+export function signStatelessCapabilityToken(payload: {
+  signingSecret: string;
+  purpose: StatelessCapabilityPurpose;
+  resourceId: string;
+  ttlSeconds?: number;
+}): Promise<string> {
+  return signCapabilityToken({
+    ...payload,
+    linkSecret: statelessCapabilityLinkSecret(payload.purpose),
+  });
+}
+
+export function verifyStatelessCapabilityToken(payload: {
+  signingSecret: string;
+  purpose: StatelessCapabilityPurpose;
+  token: string;
+}): Promise<CapabilityVerifyResult> {
+  return verifyCapabilityToken({
+    ...payload,
+    linkSecret: statelessCapabilityLinkSecret(payload.purpose),
+  });
 }
 
 async function loadCapabilityLinkSecret(
@@ -272,6 +327,7 @@ async function loadCapabilityLinkSecret(
   purpose: CapabilityPurpose,
   resourceId: string,
 ): Promise<string | null> {
+  if (isStatelessCapabilityPurpose(purpose)) return statelessCapabilityLinkSecret(purpose);
   const row = await first<{ link_secret: string | null }>(db, capabilitySecretQuery(purpose), [resourceId]);
   return row?.link_secret ?? null;
 }
@@ -281,6 +337,7 @@ async function loadOrCreateCapabilityLinkSecret(
   purpose: CapabilityPurpose,
   resourceId: string,
 ): Promise<string | null> {
+  if (isStatelessCapabilityPurpose(purpose)) return statelessCapabilityLinkSecret(purpose);
   const existing = await loadCapabilityLinkSecret(db, purpose, resourceId);
   if (existing || purpose !== "speaker_manage") return existing;
 
@@ -411,12 +468,19 @@ async function materializeString(
       const descriptor = parseQueuedDescriptor(marker);
       if (!descriptor) throw new AppError(500, "CAPABILITY_DESCRIPTOR_INVALID", "Queued capability is invalid");
       try {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const remainingTtlSeconds = descriptor.expiresAtSeconds
+          ? descriptor.expiresAtSeconds - nowSeconds
+          : descriptor.ttlSeconds;
+        if (remainingTtlSeconds <= 0) {
+          throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability delivery deadline expired");
+        }
         const token = await issueDatabaseCapability({
           db,
           signingSecret,
           purpose: descriptor.purpose,
           resourceId: descriptor.resourceId,
-          ttlSeconds: descriptor.ttlSeconds,
+          ttlSeconds: Math.min(descriptor.ttlSeconds, remainingTtlSeconds),
           expectedLinkSecretFingerprint: descriptor.linkSecretFingerprint,
         });
         cache.set(canonicalMarker, token);

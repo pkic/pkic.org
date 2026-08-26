@@ -12,7 +12,12 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
+import {
+  createApplicationFormSubmission,
+  requiredMembershipApplicationAnswers,
+  seedMemberApplication,
+  verifiedMemberApplicationPayload,
+} from "./helpers/member-applications";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
 import { recordEcDecision } from "../functions/_lib/services/ec-review";
@@ -401,13 +406,18 @@ describe("Post-approval onboarding", () => {
       new Request("https://app.test/api/v1/members/applications", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          applicantEmail: "another@acme.test",
-          applicantName: "Another Person",
-          membershipCategory: "F",
-          organizationName: "Acme Corp Two",
-          answers: { reason: "We want to contribute to the PKI community." },
-        }),
+        body: JSON.stringify(
+          await verifiedMemberApplicationPayload({
+            applicantEmail: "another@acme.test",
+            applicantName: "Another Person",
+            membershipCategory: "F",
+            organizationName: "Acme Corp Two",
+            answers: {
+              reason: "We want to contribute to the PKI community.",
+              ...requiredMembershipApplicationAnswers,
+            },
+          }),
+        ),
       }),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,

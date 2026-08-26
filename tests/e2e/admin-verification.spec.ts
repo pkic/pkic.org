@@ -33,6 +33,7 @@ import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { adminApplicationDetailSchema } from "../../assets/shared/schemas/admin-applications";
+import { verifyMembershipJoinEmail } from "./helpers/member-join";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -129,8 +130,11 @@ async function provisionApprovedMember(
   opts: { email: string; name: string; orgName?: string; category?: string; stopBeforeApprove?: boolean },
 ): Promise<{ applicationId: string; organizationId: string | null; userId: string | null }> {
   const category = opts.category ?? "F";
+  const join = await verifyMembershipJoinEmail(page, opts.email);
+  expect(join.status).toBe("application_ready");
+  if (join.status !== "application_ready") throw new Error("Expected a membership application continuation");
   const created = await page.evaluate(
-    async ({ email, name, orgName, category }) => {
+    async ({ email, name, orgName, category, joinToken }) => {
       const res = await fetch("/api/v1/members/applications", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -139,13 +143,14 @@ async function provisionApprovedMember(
           applicantName: name,
           membershipCategory: category,
           organizationName: orgName,
+          joinToken,
           answers: { reason: "This E2E member wants to contribute to the PKI community." },
         }),
       });
       const body = (await res.json()) as { applicationId?: string };
       return { status: res.status, body };
     },
-    { email: opts.email, name: opts.name, orgName: opts.orgName, category },
+    { email: opts.email, name: opts.name, orgName: opts.orgName, category, joinToken: join.joinToken },
   );
   expect(created.status, JSON.stringify(created.body)).toBe(201);
   const applicationId = created.body.applicationId!;
