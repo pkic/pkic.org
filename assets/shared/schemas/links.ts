@@ -5,7 +5,7 @@
  * scripts/migrate-members/sql-renderer.mjs.
  */
 import { z } from "zod";
-import { hasUrlHostname, httpUrlSchema, sanitizeLegacyHttpUrl } from "./urls";
+import { hasUrlHostname, httpUrlSchema, sanitizeLegacyHttpUrl } from "./urls.ts";
 
 function uniqueStringList(values: string[]): boolean {
   return new Set(values.map((value) => value.toLowerCase())).size === values.length;

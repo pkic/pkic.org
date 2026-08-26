@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.5.1+sha512.93f7b57422ea7068257235b4c16eb60762eb68e1dc23723199cc739043ea9be2c4143274a399d8c6defa2b1176226d9ca1c4b63482d6200c1a8fbaa78c1d1485",
   "engines": {
-    "node": "^22 || ^24 || >=26"
+    "node": "^22.6.0 || ^24 || >=26"
   },
   "scripts": {
     "dev": "HUGO_PARAMS_SKIPREMOTEFEEDS=true CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
@@ -48,7 +48,8 @@
     "backup:production": "mkdir -p backups/d1 && f=backups/d1/production-$(date +%Y%m%d-%H%M%S).sql && pnpm exec wrangler d1 export DB --env production --remote --output \"$f\" && node scripts/reorder-d1-dump.mjs \"$f\"",
     "seed:local": "node scripts/seed.mjs --local",
     "seed:preview": "node scripts/seed.mjs --preview",
-    "seed:production": "node scripts/seed.mjs --production"
+    "seed:production": "node scripts/seed.mjs --production",
+    "migrate:members": "node --experimental-strip-types scripts/migrate-members-yaml-to-d1.mjs"
   },
   "dependencies": {
     "@cloudflare/codemode": "^0.3.8",

@@ -11,6 +11,16 @@ production.
 pnpm install                 # ensures `yaml` package etc. are present
 ```
 
+Run the importer through `pnpm run migrate:members`. The command enables
+Node's TypeScript type stripping so the importer can consume the canonical
+shared schemas; pass importer options after `--` as shown below. Do not use
+the production or preview options without an explicit migration plan and
+approval.
+
+This importer requires Node 22.6 or newer because that is the first Node 22
+release with the `--experimental-strip-types` runtime used by the package
+command. The repository's `engines.node` declaration reflects this minimum.
+
 Confirm the source data is in place:
 
 - `data/members/*.yaml` — 419 member YAML files (plus a non-YAML `AGENTS.md`)
@@ -52,7 +62,7 @@ your local DB already has other data you care about.
 ## Step 3 — Dry run the migration script
 
 ```bash
-node scripts/migrate-members-yaml-to-d1.mjs --local --dry-run
+pnpm run migrate:members -- --local --dry-run
 ```
 
 Parses the YAML + CSVs, does the domain-matching/pairing, and writes the
@@ -72,7 +82,7 @@ count instead of trusting this snapshot).
 ## Step 4 — Run it for real
 
 ```bash
-node scripts/migrate-members-yaml-to-d1.mjs --local
+pnpm run migrate:members -- --local
 ```
 
 Executes the generated SQL against local D1 via `wrangler d1 execute --file`.
@@ -102,8 +112,8 @@ server-side ingestion instead and was never affected.
 ## Step 5 — Logos/photos to R2 (on by default)
 
 ```bash
-node scripts/migrate-members-yaml-to-d1.mjs --local            # uploads by default
-node scripts/migrate-members-yaml-to-d1.mjs --local --skip-logos  # opt out (faster)
+pnpm run migrate:members -- --local            # uploads by default
+pnpm run migrate:members -- --local --skip-logos  # opt out (faster)
 ```
 
 Uploading is now the default (it was opt-in via `--upload-logos` through
