@@ -1,6 +1,7 @@
 import { getConfig } from "../../config";
 import { all } from "../../db/queries";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
+import { escapeMarkdownText } from "../../email/markdown";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
@@ -118,8 +119,8 @@ async function prepareReminderStatements(
         messageType: "transactional",
         subject: `Sponsorship renewal due in ${reminderDays} days: ${sponsorName(row)}`,
         data: {
-          organizationName: sponsorName(row),
-          tier: row.tier,
+          organizationNameText: escapeMarkdownText(sponsorName(row)),
+          tierText: escapeMarkdownText(row.tier ?? ""),
           renewalDate: row.renewal_date,
           adminUrl,
         },
@@ -199,8 +200,8 @@ export async function runSponsorshipDueWork(
               messageType: "transactional",
               subject: `Sponsorship lapsed: ${sponsorName(row)}`,
               data: {
-                organizationName: sponsorName(row),
-                tier: row.tier,
+                organizationNameText: escapeMarkdownText(sponsorName(row)),
+                tierText: escapeMarkdownText(row.tier ?? ""),
                 renewalDate: row.renewal_date,
                 adminUrl: `${config.appBaseUrl}/admin/#/sponsorships/${row.id}`,
               },

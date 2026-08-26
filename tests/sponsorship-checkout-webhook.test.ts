@@ -4,6 +4,7 @@ import { handleError } from "../functions/_lib/http";
 import { onRequestPost } from "../functions/api/v1/sponsorship/checkout/webhook";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
+import { renderEmail } from "../functions/_lib/email/render";
 
 const WEBHOOK_SECRET = "whsec_sponsorship_test";
 
@@ -103,6 +104,47 @@ describe("POST /api/v1/sponsorship/checkout/webhook", () => {
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'sponsorship_checkout_paid'")).toHaveLength(
       1,
     );
+  });
+
+  it("allows an in-flight paid session to complete after its catalog tier is deactivated", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      "UPDATE sponsorship_tier_catalog SET active = 0 WHERE sponsor_type = 'event' AND tier = 'Innovator'",
+    ).run();
+
+    try {
+      const response = await callWebhook(paidEvent("evt_inactive_tier", "cs_inactive_tier", eventId));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ received: true, duplicate: false });
+    } finally {
+      await env.DB.prepare(
+        "UPDATE sponsorship_tier_catalog SET active = 1 WHERE sponsor_type = 'event' AND tier = 'Innovator'",
+      ).run();
+    }
+  });
+
+  it("renders checkout metadata literally in the staff notification", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const event = paidEvent("evt_untrusted_text", "cs_untrusted_text", eventId);
+    event.data.object.metadata.contact_name = "Casey [Sponsor](https://attacker.invalid/name)";
+    event.data.object.metadata.organization_name = '<img src="https://attacker.invalid/org.gif">';
+
+    const response = await callWebhook(event);
+    expect(response.status).toBe(200);
+
+    const [outbox] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsorship-new-inquiry' LIMIT 1",
+    );
+    const rendered = await renderEmail(
+      "{{contactNameText}}\n\n{{organizationNameText}}\n\n{{notesText}}",
+      JSON.parse(outbox!.payload_json) as Record<string, unknown>,
+      "<!doctype html><html><body>{{{body_html}}}</body></html>",
+    );
+
+    expect(rendered.text).toContain("attacker.invalid");
+    expect(rendered.html).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
   });
 
   it("rejects incomplete signed payment data instead of acknowledging and losing it", async () => {

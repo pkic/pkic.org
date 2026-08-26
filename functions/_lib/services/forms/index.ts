@@ -4,6 +4,8 @@ export {
   getFormDefinitionByPlacement,
   getManagedFormWithFields,
   mapManagedFormFields,
+  parseFormFieldOptionSource,
+  resolveFormFieldOptionCatalogs,
   type ActiveFormDefinition,
   type ManagedFormWithFields,
   type FormFieldDefinition,

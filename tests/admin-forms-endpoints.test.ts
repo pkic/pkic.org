@@ -29,6 +29,7 @@ type FormFieldSeed = {
   required?: boolean;
   sortOrder?: number;
   options?: string[];
+  optionSource?: "active_working_groups";
   validation?: Record<string, unknown>;
 };
 
@@ -102,8 +103,8 @@ async function insertForm(opts: {
 
   for (const field of opts.fields) {
     await env.DB.prepare(
-      `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, option_source, validation_json, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         crypto.randomUUID(),
@@ -113,6 +114,7 @@ async function insertForm(opts: {
         field.fieldType,
         field.required ? 1 : 0,
         field.options ? JSON.stringify(field.options) : null,
+        field.optionSource ?? null,
         field.validation ? JSON.stringify(field.validation) : null,
         field.sortOrder ?? 0,
         timestamp,
@@ -829,6 +831,93 @@ describe("admin forms endpoints", () => {
         [formId],
       ),
     ).toHaveLength(1);
+  });
+
+  it("preserves a server-owned option catalog through the management API", async () => {
+    const { eventId } = await setupAdmin();
+    await insertForm({
+      key: "catalog-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "survey",
+      title: "Catalog form",
+      fields: [
+        {
+          key: "working_groups",
+          label: "Working Groups",
+          fieldType: "multi_select",
+          optionSource: "active_working_groups",
+        },
+      ],
+    });
+
+    const getResponse = await callAdmin("/api/v1/admin/forms/catalog-form");
+    expect(getResponse.status).toBe(200);
+    const getPayload = (await getResponse.json()) as {
+      fields: Array<{ key: string; optionSource?: string | null; options: unknown[] | null }>;
+    };
+    expect(getPayload.fields[0]).toMatchObject({
+      key: "working_groups",
+      optionSource: "active_working_groups",
+      options: null,
+    });
+
+    const patchResponse = await callAdmin("/api/v1/admin/forms/catalog-form", {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: [
+          {
+            key: "working_groups",
+            label: "Updated Working Groups",
+            fieldType: "multi_select",
+            optionSource: "active_working_groups",
+          },
+        ],
+      }),
+    });
+    expect(patchResponse.status, await patchResponse.clone().text()).toBe(200);
+    expect(
+      await queryAll<{ options_json: string | null; option_source: string | null }>(
+        env.DB,
+        `SELECT options_json, option_source
+           FROM form_fields
+          WHERE form_id = (SELECT id FROM forms WHERE key = 'catalog-form')`,
+      ),
+    ).toEqual([{ options_json: null, option_source: "active_working_groups" }]);
+  });
+
+  it("uses the same option catalog when labeling submission statistics", async () => {
+    const { eventId } = await setupAdmin();
+    const groupId = "20000000-0000-4000-8000-000000000003";
+    await insertForm({
+      key: "catalog-stats-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "survey",
+      title: "Catalog statistics",
+      fields: [
+        {
+          key: "working_groups",
+          label: "Working Groups",
+          fieldType: "multi_select",
+          optionSource: "active_working_groups",
+        },
+      ],
+      submission: {
+        contextType: "survey",
+        answers: { working_groups: [groupId] },
+      },
+    });
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(groupId).run();
+
+    const response = await callAdmin("/api/v1/admin/forms/catalog-stats-form/submissions/stats?eventSlug=pqc-2026");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const payload = (await response.json()) as {
+      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
+    };
+    expect(payload.stats.find((stat) => stat.fieldKey === "working_groups")?.entries).toEqual([
+      { label: "Post-Quantum Cryptography Working Group", count: 1, percent: 100, weight: 1 },
+    ]);
   });
 
   it("deletes an empty form and returns 404 for missing forms", async () => {

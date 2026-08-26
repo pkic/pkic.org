@@ -4,11 +4,13 @@
  */
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
+import { escapeMarkdownText } from "../../email/markdown";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import type { DatabaseLike } from "../../types";
+import type { SponsorshipType } from "../../../../assets/shared/schemas/sponsorship";
 
 export function normalizeOrgName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -22,7 +24,7 @@ export async function findOrganizationIdByName(db: DatabaseLike, organizationNam
 }
 
 export interface CreateSponsorshipInquiryInput {
-  sponsorType: "consortium" | "event";
+  sponsorType: SponsorshipType;
   organizationId: string | null;
   organizationName: string;
   nonMemberName: string | null;
@@ -30,7 +32,7 @@ export interface CreateSponsorshipInquiryInput {
   contactName: string;
   contactEmail: string;
   eventId: string | null;
-  tier: string;
+  tier: string | null;
   notes: string | null;
   eventName: string;
   brochureUrl: string;
@@ -52,8 +54,8 @@ export async function createSponsorshipInquiry(
       messageType: "transactional",
       subject: "PKI Consortium sponsorship information",
       data: {
-        contactName: input.contactName,
-        eventName: input.eventName,
+        contactNameText: escapeMarkdownText(input.contactName),
+        eventNameText: escapeMarkdownText(input.eventName),
         brochureUrl: input.brochureUrl,
       },
     },
@@ -67,12 +69,14 @@ export async function createSponsorshipInquiry(
       messageType: "transactional",
       subject: `New sponsorship inquiry: ${input.contactName} (${input.organizationName})`,
       data: {
-        contactName: input.contactName,
-        contactEmail: input.contactEmail,
-        organizationName: input.organizationName,
-        sponsorType: input.sponsorType,
-        tier: input.tier,
-        notes: input.notes ?? "",
+        contactNameText: escapeMarkdownText(input.contactName),
+        contactEmailText: escapeMarkdownText(input.contactEmail),
+        organizationNameText: escapeMarkdownText(input.organizationName),
+        sponsorTypeText: escapeMarkdownText(input.sponsorType),
+        // Keep storage/audit data null for an unselected tier, but make the
+        // staff notification legible without introducing a fake catalog value.
+        tierText: escapeMarkdownText(input.tier ?? "Not specified"),
+        notesText: escapeMarkdownText(input.notes ?? ""),
         adminUrl: input.adminUrl,
       },
     },
@@ -167,6 +171,10 @@ async function resolvePaidCheckoutContext(
   db: DatabaseLike,
   params: Pick<RecordPaidSponsorshipCheckoutParams, "eventId" | "eventSlug" | "tier" | "organizationName">,
 ): Promise<PaidCheckoutContext> {
+  // A catalog entry may be deactivated after Stripe created a valid checkout
+  // session. Accept that already-authorized payment as long as the immutable
+  // tier still exists; deactivation prevents new sessions, not completion of
+  // an in-flight one.
   const context = await first<PaidCheckoutContext>(
     db,
     `SELECT
@@ -254,8 +262,8 @@ export async function recordPaidSponsorshipCheckout(
       messageType: "transactional",
       subject: "PKI Consortium sponsorship information",
       data: {
-        contactName: params.contactName,
-        eventName: context.event_name,
+        contactNameText: escapeMarkdownText(params.contactName),
+        eventNameText: escapeMarkdownText(context.event_name),
         brochureUrl: params.brochureUrl,
       },
     },
@@ -269,12 +277,12 @@ export async function recordPaidSponsorshipCheckout(
       messageType: "transactional",
       subject: `New sponsorship inquiry: ${params.contactName} (${params.organizationName ?? "n/a"})`,
       data: {
-        contactName: params.contactName,
-        contactEmail: params.contactEmail,
-        organizationName: params.organizationName ?? "",
-        sponsorType: "event",
-        tier: params.tier,
-        notes: "Paid via self-service Stripe checkout",
+        contactNameText: escapeMarkdownText(params.contactName),
+        contactEmailText: escapeMarkdownText(params.contactEmail),
+        organizationNameText: escapeMarkdownText(params.organizationName ?? ""),
+        sponsorTypeText: "event",
+        tierText: escapeMarkdownText(params.tier),
+        notesText: "Paid via self-service Stripe checkout",
         adminUrl: params.adminUrl,
       },
     },

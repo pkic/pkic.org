@@ -89,7 +89,15 @@ function shuffled<T>(arr: T[]): T[] {
 // ── Widget components ─────────────────────────────────────────────────────
 
 function BooleanInput({ field }: { field: FormField; initialValue?: unknown }) {
-  return <input type="checkbox" name={`custom.${field.key}`} class="form-check-input" id={`custom-${field.key}`} />;
+  return (
+    <input
+      type="checkbox"
+      name={`custom.${field.key}`}
+      class="form-check-input"
+      id={`custom-${field.key}`}
+      required={field.required}
+    />
+  );
 }
 
 function SelectInput({ field, rules }: { field: FormField; rules: FieldRules }) {

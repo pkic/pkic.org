@@ -1,28 +1,57 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  isIndividualCategory,
-  readLegalAndInterestAnswers,
   buildApplicationPayload,
   applyCategoryUI,
+  filterCategoriesForApplicantKind,
+  renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
-import { requiresUniversityEmail } from "../../assets/shared/schemas/membership-categories";
-import { isPersonalEmailAddress } from "../../assets/shared/constants/email-domains";
+import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
+
+type Category = MemberApplicationFormResponse["categories"][number];
+
+const organizationContext = {
+  status: "application_ready" as const,
+  applicantEmail: "ada@example-corp.test",
+  applicantKind: "organization" as const,
+  joinToken: "a".repeat(32),
+};
+
+const individualContext = {
+  ...organizationContext,
+  applicantEmail: "ada@example.test",
+  applicantKind: "individual" as const,
+};
+
+const categories: Category[] = [
+  {
+    code: "A",
+    label: "Certification authority",
+    description: "An organization category.",
+    displayOrder: 10,
+    isIndividual: false,
+    isVoting: true,
+  },
+  {
+    code: "H6",
+    label: "Independent consultant",
+    description: "An individual category.",
+    displayOrder: 60,
+    isIndividual: true,
+    isVoting: false,
+  },
+];
 
 function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormElement {
   const form = document.createElement("form");
   form.innerHTML = `
     <input name="firstName" value="${overrides.firstName ?? "Ada"}" />
     <input name="lastName" value="${overrides.lastName ?? "Lovelace"}" />
-    <input name="email" value="${overrides.email ?? "ada@example-corp.test"}" />
-    <input id="organizationName" name="organizationName" value="${overrides.organizationName ?? "Example Corp"}" />
-    <input id="warrantAuthority" type="checkbox" checked />
-    <input type="checkbox" data-legal-agreement="Bylaws" checked />
-    <input type="checkbox" data-legal-agreement="Code of Conduct" checked />
-    <input type="radio" name="contribution" value="active" checked />
-    <input id="contribute" type="checkbox" checked />
-    <input id="sponsoring" type="checkbox" />
+    <div data-organization-name-field>
+      <input id="organizationName" name="organizationName" value="${overrides.organizationName ?? "Example Corp"}" />
+    </div>
     <input name="custom.reason" value="Because PKI." />
+    <input name="custom.warranted_authority" type="checkbox" checked />
   `;
   document.body.append(form);
   return form;
@@ -33,63 +62,48 @@ describe("join-form helpers", () => {
     document.body.innerHTML = "";
   });
 
-  it("classifies individual categories", () => {
-    expect(isIndividualCategory("H5")).toBe(true);
-    expect(isIndividualCategory("H6")).toBe(true);
-    expect(isIndividualCategory("H7")).toBe(true);
-    expect(isIndividualCategory("A")).toBe(false);
-    expect(isIndividualCategory("H8")).toBe(false);
-  });
-
-  it("requires a university email only for H5", () => {
-    expect(requiresUniversityEmail("H5")).toBe(true);
-    expect(requiresUniversityEmail("H6")).toBe(false);
-  });
-
-  it("flags common personal email providers", () => {
-    expect(isPersonalEmailAddress("someone@gmail.com")).toBe(true);
-    expect(isPersonalEmailAddress("someone@outlook.com")).toBe(true);
-    expect(isPersonalEmailAddress("someone@example-corp.test")).toBe(false);
-    expect(isPersonalEmailAddress("not-an-email")).toBe(false);
-  });
-
-  it("reads legal agreements and interest checkboxes", () => {
-    const form = buildForm();
-    const answers = readLegalAndInterestAnswers(form);
-    expect(answers.legalAgreements).toEqual(["Bylaws", "Code of Conduct"]);
-    expect(answers.warrantedAuthority).toBe(true);
-    expect(answers.contributionType).toBe("active");
-    expect(answers.wantsToPresent).toBe(true);
-    expect(answers.interestedInSponsoring).toBe(false);
-  });
-
   it("builds the application payload for an organization category", () => {
     const form = buildForm();
-    const payload = buildApplicationPayload(form, "A");
+    const payload = buildApplicationPayload(form, "A", organizationContext);
     expect(payload.applicantName).toBe("Ada Lovelace");
     expect(payload.applicantEmail).toBe("ada@example-corp.test");
     expect(payload.membershipCategory).toBe("A");
     expect(payload.organizationName).toBe("Example Corp");
+    expect(payload.joinToken).toBe("a".repeat(32));
     expect(payload.answers.reason).toBe("Because PKI.");
-    expect(payload.answers.warrantedAuthority).toBe(true);
+    expect(payload.answers.warranted_authority).toBe(true);
   });
 
   it("omits organizationName for individual categories", () => {
     const form = buildForm({ organizationName: "" });
-    const payload = buildApplicationPayload(form, "H5");
+    const payload = buildApplicationPayload(form, "H6", individualContext);
     expect(payload.organizationName).toBeUndefined();
   });
 
-  it("toggles the organization field for individual categories", () => {
+  it("toggles the organization field from server-provided category metadata", () => {
     const form = buildForm();
-    applyCategoryUI(form, "H6");
+    const container = form.querySelector<HTMLElement>("[data-organization-name-field]")!;
+    applyCategoryUI(form, categories[1]);
     const orgField = form.querySelector<HTMLInputElement>("#organizationName");
     expect(orgField?.required).toBe(false);
     expect(orgField?.disabled).toBe(true);
     expect(orgField?.value).toBe("");
+    expect(container.hidden).toBe(true);
 
-    applyCategoryUI(form, "A");
+    applyCategoryUI(form, categories[0]);
     expect(orgField?.required).toBe(true);
     expect(orgField?.disabled).toBe(false);
+    expect(container.hidden).toBe(false);
+  });
+
+  it("filters and renders only the server-authorized category catalog", () => {
+    expect(filterCategoriesForApplicantKind(categories, "organization").map(({ code }) => code)).toEqual(["A"]);
+    expect(filterCategoriesForApplicantKind(categories, "individual").map(({ code }) => code)).toEqual(["H6"]);
+
+    const container = document.createElement("div");
+    renderMembershipCategories(container, filterCategoriesForApplicantKind(categories, "individual"));
+    expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
+    expect(container.textContent).toContain("Independent consultant");
+    expect(container.textContent).not.toContain("Certification authority");
   });
 });

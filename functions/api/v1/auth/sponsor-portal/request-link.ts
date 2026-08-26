@@ -16,6 +16,7 @@ import { sponsorPortalAuthRequestSchema } from "../../../../../assets/shared/sch
 import type { AdminContext } from "../../../../_lib/db/context";
 import { prepareMagicLinkRequestHttp } from "../../../../_lib/auth/http-flow";
 import { dispatchPostOnly } from "../../../../_lib/http";
+import { escapeMarkdownText } from "../../../../_lib/email/markdown";
 
 const SPONSOR_MAGIC_LINK_REQUEST_RATE_LIMIT_NAMESPACE = "sponsor-portal-auth-request-link";
 
@@ -39,8 +40,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       messageType: "transactional",
       subject: "Access your sponsor portal",
       data: {
-        contactName: magic.sponsorship.contactEmail,
-        tier: magic.sponsorship.tier,
+        contactNameText: escapeMarkdownText(magic.sponsorship.contactEmail),
+        tierText: escapeMarkdownText(magic.sponsorship.tier),
+        eventNameText: "",
         portalUrl,
         expiresInMinutes: http.magicLinkTtlMinutes,
       },

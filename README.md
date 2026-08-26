@@ -99,6 +99,26 @@ Run the local seed flow to create admin/event data, forms/terms, and default ema
 pnpm run seed:local
 ```
 
+For ordinary interactive development, use:
+
+```bash
+pnpm run dev
+```
+
+This reuses persistent local D1 state and configured local email delivery.
+
+For an isolated disposable database with SendGrid delivery captured by a local
+interceptor, use the separate command:
+
+```bash
+pnpm run dev:intercepted
+```
+
+The intercepted server prints its capture URL and never sends messages to an
+external mailbox. Playwright starts this same isolated server automatically;
+do not start it manually before `pnpm run test:e2e` unless the test run sets
+`REUSE_SERVER`.
+
 If templates are missing or you want to reseed template versions only:
 
 ```bash

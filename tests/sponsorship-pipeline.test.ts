@@ -568,12 +568,18 @@ describe("Sponsorship sales pipeline", () => {
       body: JSON.stringify({ toStage: "active" }),
     });
 
-    const outboxRows = await queryAll<{ template_key: string; recipient_email: string }>(
+    const outboxRows = await queryAll<{ template_key: string; recipient_email: string; payload_json: string }>(
       env.DB,
-      "SELECT template_key, recipient_email FROM email_outbox WHERE template_key = 'sponsorship-active-confirmation'",
+      "SELECT template_key, recipient_email, payload_json FROM email_outbox WHERE template_key = 'sponsorship-active-confirmation'",
     );
     expect(outboxRows).toHaveLength(1);
     expect(outboxRows[0].recipient_email).toBe("primary@gamma.test");
+    expect(JSON.parse(outboxRows[0].payload_json)).toEqual({
+      contactNameText: "Primary Contact",
+      organizationNameText: "Gamma LLC",
+      tierText: "Silver",
+      startDate: expect.any(String),
+    });
   });
 
   it("advancing an event sponsorship to active at a qualifying tier sends sponsor-portal-access and issues a magic link", async () => {
@@ -601,11 +607,17 @@ describe("Sponsorship sales pipeline", () => {
     });
     expect(activateResponse.status).toBe(200);
 
-    const outboxRows = await queryAll<{ template_key: string }>(
+    const outboxRows = await queryAll<{ template_key: string; payload_json: string }>(
       env.DB,
-      "SELECT template_key FROM email_outbox WHERE template_key = 'sponsor-portal-access'",
+      "SELECT template_key, payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access'",
     );
     expect(outboxRows).toHaveLength(1);
+    expect(JSON.parse(outboxRows[0].payload_json)).toMatchObject({
+      contactNameText: "Leader Contact",
+      tierText: "Leader",
+      eventNameText: "PQC Conference 2026",
+      portalUrl: expect.stringContaining("/sponsor-portal/?token="),
+    });
 
     const magicLinkRows = await queryAll<{ sponsorship_id: string }>(
       env.DB,

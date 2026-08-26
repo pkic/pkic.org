@@ -71,10 +71,15 @@
  * `buildMigration` and writes its output.
  *
  * Usage:
- *   node scripts/migrate-members-yaml-to-d1.mjs --local
- *   node scripts/migrate-members-yaml-to-d1.mjs --preview
- *   node scripts/migrate-members-yaml-to-d1.mjs --production
- *   node scripts/migrate-members-yaml-to-d1.mjs --local --dry-run   (writes SQL + report only)
+ *   pnpm run migrate:members -- --local
+ *   pnpm run migrate:members -- --preview
+ *   pnpm run migrate:members -- --production
+ *   pnpm run migrate:members -- --local --dry-run   (writes SQL + report only)
+ *
+ * The package command enables Node's TypeScript type stripping for the small
+ * set of canonical shared schemas consumed by the importer. Use the package
+ * command rather than invoking this module directly so the runtime flags stay
+ * consistent with the repository's supported Node versions.
  *
  * Environment flags mirror scripts/seed.mjs's ENVS table (binding is always
  * "DB"; --env/--local|--remote select which wrangler.jsonc environment

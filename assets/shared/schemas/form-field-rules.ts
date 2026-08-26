@@ -17,6 +17,19 @@ const boundedLengthSchema = z.number().int().min(0).max(100_000);
 const boundedItemCountSchema = z.number().int().min(0).max(200);
 const boundedNumberSchema = z.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000);
 const attendanceOptionSchema = z.string().trim().min(1).max(64);
+const referenceLinkSchema = z
+  .object({
+    href: z.union([
+      httpUrlSchema,
+      z
+        .string()
+        .trim()
+        .max(500)
+        .regex(/^\/(?!\/)[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/),
+    ]),
+    label: z.string().trim().min(1).max(200),
+  })
+  .strict();
 
 const domainNameSchema = z
   .string()
@@ -103,6 +116,7 @@ const showWhenSchema = z
 const formFieldRulesShape = {
   placeholder: z.string().trim().max(500).optional(),
   helpText: z.string().trim().max(2000).optional(),
+  referenceLink: referenceLinkSchema.optional(),
   uiWidget: formFieldWidgetSchema.optional(),
   format: formFieldFormatSchema.optional(),
   pattern: safeFormFieldPatternSchema.optional(),

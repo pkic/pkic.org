@@ -5,7 +5,12 @@ import {
   eventOccurrenceUpdateSchema,
   eventOccurrencesListQuerySchema,
 } from "../../../../assets/shared/schemas/event-series";
-import { queryPage } from "../../db/pagination";
+import {
+  batchFirst,
+  buildOffsetPageStatements,
+  decodeOffsetPageResults,
+  type OffsetPageQuery,
+} from "../../db/pagination";
 import { first } from "../../db/queries";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
@@ -13,11 +18,16 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
-import type { GroupResourceViewer } from "../resource-grants";
+import {
+  buildLiveAccessibleGroupResourceIdsCte,
+  type GroupResourceViewer,
+  type LiveGroupResourceContextAccess,
+} from "../resource-grants";
 import { commitEventResourceManagementBatch } from "./management";
 import { sealProviderJoinUrl } from "./provider-url";
 import { type EventOccurrenceRow, toEventOccurrence } from "./record";
-import { getAccessibleGroupEventSeries, getGroupEventSeries, getManagedGroupEventSeries } from "./series";
+import { liveEventResourceContextAccess } from "./read-access";
+import { getGroupEventSeries, getManagedGroupEventSeries } from "./series";
 
 type OccurrenceCreateInput = z.infer<typeof eventOccurrenceCreateSchema>;
 type OccurrenceUpdateInput = z.infer<typeof eventOccurrenceUpdateSchema>;
@@ -25,6 +35,7 @@ type OccurrenceListQuery = z.infer<typeof eventOccurrencesListQuerySchema>;
 
 const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrence.starts_at,
   occurrence.ends_at, occurrence.status,
+  occurrence.location_override,
   COALESCE(occurrence.location_override, series.location) AS location,
   occurrence.provider_join_url_ciphertext,
   (SELECT COUNT(*) FROM event_occurrence_guests guest
@@ -89,9 +100,41 @@ export async function listSeriesOccurrences(
   seriesId: string,
   query: OccurrenceListQuery,
 ) {
-  await getAccessibleGroupEventSeries(db, viewer, groupIdOrSlug, seriesId);
+  const access = liveEventResourceContextAccess(viewer, groupIdOrSlug);
+  const pageQuery = buildSeriesOccurrencesPageQuery(groupIdOrSlug, access, seriesId, query);
+  const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupIdOrSlug, access, "view");
+  const [pageResult, countResult, accessResult] = await db.batch([
+    ...buildOffsetPageStatements(db, pageQuery),
+    db
+      .prepare(
+        `WITH ${accessibleEvents.sql}
+         SELECT 1 AS authorized
+           FROM accessible_resource accessible
+           JOIN events event ON event.id = accessible.resource_id
+           JOIN event_series series ON series.event_id = event.id
+           CROSS JOIN group_access
+          WHERE series.id = ? AND (group_access.manager_access = 1 OR series.active = 1)
+          LIMIT 1`,
+      )
+      .bind(...accessibleEvents.bindings, seriesId),
+  ]);
+  if (!batchFirst<{ authorized: number }>(accessResult)) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
+  }
+  const { rows, total } = decodeOffsetPageResults<EventOccurrenceRow>(pageResult, countResult);
+  return { occurrences: rows.map(toEventOccurrence), total };
+}
+
+/** Canonical page/count query for occurrences, also used by D1 EXPLAIN tests. */
+export function buildSeriesOccurrencesPageQuery(
+  groupId: string,
+  access: LiveGroupResourceContextAccess,
+  seriesId: string,
+  query: OccurrenceListQuery,
+): OffsetPageQuery {
+  const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const conditions = ["occurrence.series_id = ?"];
-  const bindings: unknown[] = [seriesId];
+  const bindings: unknown[] = [...accessibleEvents.bindings, seriesId];
   if (query.status) {
     conditions.push("occurrence.status = ?");
     bindings.push(query.status);
@@ -104,19 +147,20 @@ export async function listSeriesOccurrences(
     conditions.push("occurrence.starts_at <= ?");
     bindings.push(query.to);
   }
-  const where = `WHERE ${conditions.join(" AND ")}`;
-  const { rows, total } = await queryPage<EventOccurrenceRow>(db, {
-    source: {
-      selectSql: OCCURRENCE_SELECT,
-      fromSql: `${OCCURRENCE_FROM} ${where}`,
-      countFromSql: `FROM event_occurrences occurrence ${where}`,
-      bindings,
-    },
+  return {
+    sql: `WITH ${accessibleEvents.sql}
+      ${OCCURRENCE_SELECT}
+      ${OCCURRENCE_FROM}
+      JOIN events event ON event.id = series.event_id
+      JOIN accessible_resource accessible ON accessible.resource_id = event.id
+      CROSS JOIN group_access
+      WHERE ${conditions.join(" AND ")}
+        AND (group_access.manager_access = 1 OR series.active = 1)`,
+    bindings,
     orderBy: resolveMappedOrderBy(query.sort, SORT_EXPRESSIONS, SORT_EXPRESSIONS.starts_at, "occurrence.id ASC"),
     limit: query.limit,
     offset: query.offset,
-  });
-  return { occurrences: rows.map(toEventOccurrence), total };
+  };
 }
 
 export async function createSeriesOccurrence(
@@ -179,6 +223,9 @@ export async function updateSeriesOccurrence(
   encryptionSecret: string,
 ) {
   const current = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
+  if (current.occurrence.updatedAt !== input.expectedUpdatedAt) {
+    throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed; reload before saving");
+  }
   const startsAt = input.startsAt ?? current.occurrence.startsAt;
   const endsAt = input.endsAt ?? current.occurrence.endsAt;
   if (endsAt <= startsAt) {
@@ -189,7 +236,8 @@ export async function updateSeriesOccurrence(
     : input.providerJoinUrl === null
       ? null
       : undefined;
-  const auditChanges = { ...input };
+  const auditChanges: Record<string, unknown> = { ...input };
+  delete auditChanges.expectedUpdatedAt;
   delete auditChanges.providerJoinUrl;
   const auditDetails =
     input.providerJoinUrl === undefined
@@ -203,7 +251,7 @@ export async function updateSeriesOccurrence(
           `UPDATE event_occurrences SET starts_at = ?, ends_at = ?, status = COALESCE(?, status),
              location_override = CASE WHEN ? = 1 THEN ? ELSE location_override END,
              provider_join_url_ciphertext = CASE WHEN ? = 1 THEN ? ELSE provider_join_url_ciphertext END,
-             updated_at = ? WHERE id = ? AND series_id = ?`,
+             updated_at = ? WHERE id = ? AND series_id = ? AND updated_at = ?`,
         )
         .bind(
           startsAt,
@@ -216,6 +264,7 @@ export async function updateSeriesOccurrence(
           now,
           occurrenceId,
           seriesId,
+          input.expectedUpdatedAt,
         ),
       prepareScopedAuditLogAfterOneChange(
         db,

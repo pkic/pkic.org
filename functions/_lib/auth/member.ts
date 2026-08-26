@@ -37,6 +37,7 @@ import {
   sessionExpiresAtToExp,
   hasBaseSessionTokenClaims,
   insertSessionRow,
+  prepareSessionRow,
   fetchSessionRow,
   assertSessionActive,
   revokeSessionRow,
@@ -244,6 +245,11 @@ export async function issueMemberSession(
 ): Promise<{ member: AuthMember; sessionId: string; expiresAt: string }> {
   const { sessionId, expiresAt } = await insertSessionRow(db, SESSIONS_TABLE, member.userId, sessionTtlHours);
   return { member: { ...member, sessionId, expiresAt }, sessionId, expiresAt };
+}
+
+/** Prepares a normal revocable member session for an enclosing atomic command. */
+export function prepareMemberSession(db: DatabaseLike, userId: string, sessionTtlHours: number) {
+  return prepareSessionRow(db, SESSIONS_TABLE, userId, sessionTtlHours);
 }
 
 async function getMemberBySessionClaims(db: DatabaseLike, claims: MemberSessionTokenClaims): Promise<AuthMember> {

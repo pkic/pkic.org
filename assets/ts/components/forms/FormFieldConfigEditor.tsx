@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import type { FormFieldDefinition } from "../../../shared/schemas/forms";
+import type { FormFieldDefinition, FormFieldOptionSource } from "../../../shared/schemas/forms";
 
 export type FieldType = FormFieldDefinition["fieldType"];
 export type VisualizationConfig = "auto" | "bar" | "pie" | "wordcloud" | "list";
@@ -11,6 +11,8 @@ export interface FieldDraft {
   required: boolean;
   sortOrder: number;
   optionsText: string;
+  /** Server-owned option catalog, preserved when editing the field. */
+  optionSource?: FormFieldOptionSource;
   adminVisualization: VisualizationConfig;
   placeholder: string;
   helpText: string;

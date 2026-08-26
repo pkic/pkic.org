@@ -12,10 +12,15 @@ interface ExistingField {
   id: string;
   key: string;
   options_json: string | null;
+  option_source: string | null;
   has_answers: number;
 }
 
 function reconcileOptions(field: FieldInput, existing: ExistingField | undefined): FormFieldOption[] | null {
+  // A server-owned catalog is the canonical source of values. Never persist
+  // the currently resolved options alongside it: doing so would turn a live
+  // catalog into a stale snapshot on the next form edit.
+  if (field.optionSource) return null;
   const requested = field.options ?? [];
   if (!existing?.has_answers) return requested.length > 0 ? requested : null;
 
@@ -45,9 +50,9 @@ function fieldWriteStatement(
     return db
       .prepare(
         `INSERT INTO form_fields
-           (id, form_id, key, label, field_type, required, options_json, validation_json,
+           (id, form_id, key, label, field_type, required, options_json, option_source, validation_json,
             sort_order, created_at, updated_at, archived_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
       .bind(
         field.id ?? uuid(),
@@ -57,6 +62,7 @@ function fieldWriteStatement(
         field.fieldType,
         field.required ? 1 : 0,
         options ? stringifyJson(options) : null,
+        field.optionSource ?? null,
         field.validation ? stringifyJson(field.validation) : null,
         field.sortOrder,
         now,
@@ -66,7 +72,7 @@ function fieldWriteStatement(
   return db
     .prepare(
       `UPDATE form_fields
-       SET key = ?, label = ?, field_type = ?, required = ?, options_json = ?,
+       SET key = ?, label = ?, field_type = ?, required = ?, options_json = ?, option_source = ?,
            validation_json = ?, sort_order = ?, updated_at = ?, archived_at = NULL
        WHERE id = ? AND form_id = ?`,
     )
@@ -76,6 +82,7 @@ function fieldWriteStatement(
       field.fieldType,
       field.required ? 1 : 0,
       options ? stringifyJson(options) : null,
+      field.optionSource ?? null,
       field.validation ? stringifyJson(field.validation) : null,
       field.sortOrder,
       now,
@@ -92,7 +99,7 @@ export async function prepareFieldReconciliation(
 ): Promise<StatementLike[]> {
   const existing = await all<ExistingField>(
     db,
-    `SELECT ff.id, ff.key, ff.options_json,
+    `SELECT ff.id, ff.key, ff.options_json, ff.option_source,
             (EXISTS(SELECT 1 FROM form_submission_answers a WHERE a.field_id = ff.id)
              OR EXISTS(
                SELECT 1

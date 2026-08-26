@@ -47,6 +47,7 @@ function emptyField(index: number): FieldDraft {
     required: false,
     sortOrder: (index + 1) * 10,
     optionsText: "",
+    optionSource: undefined,
     adminVisualization: "auto",
     placeholder: "",
     helpText: "",
@@ -121,9 +122,12 @@ function fieldToDraft(field: FormFieldDefinition): FieldDraft {
     fieldType: field.fieldType,
     required: field.required,
     sortOrder: field.sortOrder,
-    optionsText: Array.isArray(field.options)
-      ? field.options.map((entry) => (typeof entry === "string" ? entry : String(entry.value ?? ""))).join("\n")
-      : "",
+    optionSource: field.optionSource ?? undefined,
+    optionsText: field.optionSource
+      ? ""
+      : Array.isArray(field.options)
+        ? field.options.map((entry) => (typeof entry === "string" ? entry : String(entry.value ?? ""))).join("\n")
+        : "",
     adminVisualization: visualizationConfig(validation.adminVisualization ?? validation.visualization),
     placeholder: stringConfig(validation, "placeholder"),
     helpText: stringConfig(validation, "helpText"),
@@ -186,6 +190,7 @@ function draftToPayload(
         .split(/\n/)
         .map((entry) => entry.trim())
         .filter(Boolean),
+      optionSource: field.optionSource,
       validation: buildFieldValidation(field),
     }))
     .map((field) => ({ ...field, options: field.options.length > 0 ? field.options : undefined }));

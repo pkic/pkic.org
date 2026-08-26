@@ -93,6 +93,13 @@ function CustomFieldRow({
         </>
       )}
       {rules.helpText?.trim() && <HelpText text={rules.helpText} />}
+      {rules.referenceLink && (
+        <div class="form-text">
+          <a href={rules.referenceLink.href} target="_blank" rel="noopener noreferrer">
+            {rules.referenceLink.label}
+          </a>
+        </div>
+      )}
       <div class="invalid-feedback d-block" data-field-error={field.key} />
     </div>
   );

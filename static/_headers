@@ -1,6 +1,12 @@
 https://:project.pages.dev/*
     X-Robots-Tag: noindex
 
+/meetings/join/*
+    Cache-Control: no-store, max-age=0
+    Referrer-Policy: no-referrer
+    X-Robots-Tag: noindex, nofollow, noarchive
+    Content-Security-Policy: default-src 'none'; img-src 'self' data:; form-action 'self'; base-uri 'self'; connect-src 'self'; block-all-mixed-content; style-src 'unsafe-inline' 'self'; font-src 'self'; script-src 'self'; frame-ancestors 'none';
+
 /*
     X-Frame-Options: DENY
     X-Content-Type-Options: nosniff

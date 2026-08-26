@@ -29,5 +29,5 @@ export function isFieldVisible(
 }
 
 export function optionsFor(field: FormField): FieldOption[] {
-  return parseFormFieldOptions(field.options);
+  return parseFormFieldOptions(field.options).filter((option) => option.active);
 }

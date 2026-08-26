@@ -23,25 +23,23 @@
     </div>
     <div class="col-12">
       <label for="organizationWebsite" class="form-label">Website</label>
-      <input type="url" class="form-control" id="organizationWebsite" name="organizationWebsite" placeholder="https://" />
+      <input
+        type="url"
+        class="form-control"
+        id="organizationWebsite"
+        name="organizationWebsite"
+        placeholder="https://"
+      />
       <div data-field-error="organizationWebsite" class="invalid-feedback d-block"></div>
     </div>
 
     <div class="col-12">
-      <label for="desiredTier" class="form-label">How would you like to sponsor?</label>
-      <select id="desiredTier" class="form-select" name="desiredTier" required>
-        <option value="" selected disabled>Select how you would like to sponsor</option>
-        <option value="Diamond">We would like to become a Diamond sponsor</option>
-        <option value="Titanium">We would like to become a Titanium sponsor</option>
-        <option value="Platinum">We would like to become a Platinum sponsor</option>
-        <option value="Gold">We would like to become a Gold sponsor</option>
-        <option value="Silver">We would like to become a Silver sponsor</option>
-        <option value="Bronze">We would like to become a Bronze sponsor</option>
-        <option value="Donation">We would like to make a donation</option>
-        <option value="To be decided">We would like to decide later</option>
-        <option value="Other">Other (specify below)</option>
+      <label for="tier" class="form-label">How would you like to sponsor?</label>
+      <select id="tier" class="form-select" name="tier" required disabled>
+        <option value="" selected disabled>Loading sponsorship options…</option>
       </select>
-      <div data-field-error="desiredTier" class="invalid-feedback d-block"></div>
+      <div class="form-text">Not sure which option is right for you? Choose the contact option and we will help.</div>
+      <div data-field-error="tier" class="invalid-feedback d-block"></div>
     </div>
 
     <div class="col-12">

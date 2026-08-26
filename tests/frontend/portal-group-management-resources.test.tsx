@@ -114,6 +114,8 @@ describe("portal group management resources", () => {
           nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
           createdAt: "2026-08-01T00:00:00.000Z",
           updatedAt: "2026-08-01T00:00:00.000Z",
+          capabilities: ["view", "register", "attend", "manage_attendance", "manage"],
+          occurrenceCount: 0,
         } as const;
         if (method === "POST") {
           created = true;
@@ -128,8 +130,8 @@ describe("portal group management resources", () => {
     const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
 
-    expect(container.textContent).toContain("No matching active meeting series");
-    const name = container.querySelector<HTMLInputElement>("#managed-group-meeting-name")!;
+    expect(container.textContent).toContain("No matching meeting series");
+    const name = container.querySelector<HTMLInputElement>("#managed-group-meeting-create-name")!;
     name.value = "Architecture call";
     void act(() => {
       name.dispatchEvent(new Event("input", { bubbles: true }));

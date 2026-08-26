@@ -118,6 +118,7 @@ export function ApiDataTable<T, Response = unknown>({
               type="search"
               class="form-control form-control-sm w-auto"
               placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               value={pendingSearch}
               onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
               onKeyDown={(event) => {

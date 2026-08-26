@@ -6,17 +6,21 @@
  * wired up here — sponsorshipCheckoutSchema requires an eventId, and no
  * event-scoped sponsor page exists yet in Hugo to host that flow.
  *
- * No form_fields are seeded for sponsorship (only the membership application
- * form is portal-managed today), so this submits a fixed field set matching
- * sponsorshipInquirySchema — no generic custom-field rendering needed.
+ * The form intentionally stays small, while the sponsorship tier vocabulary is
+ * loaded from D1 so the page cannot drift from the configured catalog.
  */
-import { postJson } from "../shared/api-client";
+import { getJson, postJson } from "../shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
-import { readField, findSubmitButton } from "../shared/form/helpers";
+import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
+import { findSubmitButton, readField, setStatus } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
-import { sponsorshipInquirySchema, sponsorshipInquiryResponseSchema } from "../../shared/schemas/sponsorship";
+import {
+  sponsorshipInquiryResponseSchema,
+  sponsorshipInquirySchema,
+  sponsorshipTiersResponseSchema,
+  type SponsorshipInquiryInput,
+} from "../../shared/schemas/sponsorship";
 
 const API_BASE = "/api/v1";
 
@@ -29,13 +33,13 @@ export function normalizeUrl(value: string): string {
   return trimmed;
 }
 
-export interface SponsorshipPayloadInput {
-  contactName: string;
-  contactEmail: string;
-  organizationName: string;
-  organizationWebsite?: string;
-  desiredTier: string;
-  comments?: string;
+const NOT_SURE_TIER = "__not_sure__";
+
+export type SponsorshipPayloadInput = SponsorshipInquiryInput;
+
+function selectedTier(form: HTMLFormElement): string | null {
+  const value = readField(form, "tier");
+  return value === NOT_SURE_TIER ? null : value || null;
 }
 
 export function buildSponsorshipPayload(form: HTMLFormElement): SponsorshipPayloadInput {
@@ -49,9 +53,26 @@ export function buildSponsorshipPayload(form: HTMLFormElement): SponsorshipPaylo
     contactEmail: readField(form, "email"),
     organizationName: readField(form, "organizationName"),
     organizationWebsite: website || undefined,
-    desiredTier: readField(form, "desiredTier"),
+    tier: selectedTier(form),
     comments: comments || undefined,
   };
+}
+
+/** Populate the tier selector from the D1-backed catalog without trusting HTML values. */
+export function populateTierOptions(select: HTMLSelectElement, tiers: string[]): void {
+  select.replaceChildren();
+
+  const placeholder = new Option("Select how you would like to sponsor", "", true, true);
+  placeholder.disabled = true;
+  select.append(placeholder);
+
+  for (const tier of tiers) {
+    const option = new Option(`We would like to become a ${tier} sponsor`, tier);
+    select.append(option);
+  }
+
+  select.append(new Option("Not sure yet — contact me", NOT_SURE_TIER));
+  select.disabled = false;
 }
 
 function showSuccessPanel(root: HTMLElement, form: HTMLFormElement): void {
@@ -72,7 +93,26 @@ async function main(): Promise<void> {
   if (!root) return;
   const form = root.querySelector<HTMLFormElement>("#inputForm");
   const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
-  if (!form || !statusEl) return;
+  const tierSelect = form?.elements.namedItem("tier");
+  if (!form || !statusEl || !(tierSelect instanceof HTMLSelectElement)) return;
+
+  const submitButton = findSubmitButton(form);
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const { tiers } = await getJson(
+      `${API_BASE}/sponsorship/tiers?sponsorType=consortium`,
+      sponsorshipTiersResponseSchema,
+    );
+    populateTierOptions(
+      tierSelect,
+      tiers.map(({ tier }) => tier),
+    );
+    if (submitButton) submitButton.disabled = false;
+  } catch {
+    setStatus(statusEl, "Sponsorship options are temporarily unavailable. Please try again later.", true);
+    return;
+  }
 
   installLiveValidation(form, statusEl);
 

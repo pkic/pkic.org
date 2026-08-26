@@ -17,7 +17,7 @@ function isAdminPath(pathname: string): boolean {
   return pathname.startsWith("/api/v1/admin/") || pathname.startsWith("/api/v1/internal/");
 }
 
-function applyCachePolicy(request: Request, response: Response, sensitive?: boolean): void {
+function applyResponsePolicy(request: Request, response: Response, sensitive?: boolean): void {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
   const method = request.method.toUpperCase();
   const hasAuthHeader = Boolean(request.headers.get("authorization"));
@@ -26,11 +26,15 @@ function applyCachePolicy(request: Request, response: Response, sensitive?: bool
 
   if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);
-    return;
+  } else if (isPublicCacheableGet(pathname)) {
+    response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   }
 
-  if (isPublicCacheableGet(pathname)) {
-    response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
+  if (isSensitive) {
+    response.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    response.headers.set("referrer-policy", "no-referrer");
+    response.headers.set("x-content-type-options", "nosniff");
+    response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
   }
 }
 
@@ -51,7 +55,7 @@ export function finalizeApiResponse(
   requestId?: string,
 ): Response {
   const mutableResponse = ensureMutableResponse(response);
-  applyCachePolicy(request, mutableResponse, sensitive);
+  applyResponsePolicy(request, mutableResponse, sensitive);
   if (requestId) {
     mutableResponse.headers.set("x-request-id", requestId);
   }

@@ -15,6 +15,7 @@ import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { advanceSponsorshipStage, updateAdminSponsorship } from "../functions/_lib/services/sponsorship/admin-pipeline";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { AuthAdmin } from "../functions/_lib/types";
+import { renderEmail } from "../functions/_lib/email/render";
 
 const NOTIFICATIONS = { appBaseUrl: "https://app.test", magicLinkTtlMinutes: 30 };
 
@@ -179,6 +180,9 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
   });
 
   it("sends sponsorship-lapsed-staff to the assigned staff member when auto-lapsing", async () => {
+    await env.DB.prepare("UPDATE organizations SET name = ? WHERE id = ?")
+      .bind("[Renewal Org](https://attacker.invalid/renewal)", organizationId)
+      .run();
     await seedActiveConsortiumSponsorship({
       organizationId,
       assignedToUserId: staffUserId,
@@ -187,12 +191,19 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
 
     await runSponsorshipDueWork(env.DB, env as any);
 
-    const outboxRows = await queryAll<{ recipient_email: string }>(
+    const outboxRows = await queryAll<{ recipient_email: string; payload_json: string }>(
       env.DB,
-      "SELECT recipient_email FROM email_outbox WHERE template_key = 'sponsorship-lapsed-staff'",
+      "SELECT recipient_email, payload_json FROM email_outbox WHERE template_key = 'sponsorship-lapsed-staff'",
     );
     expect(outboxRows).toHaveLength(1);
     expect(outboxRows[0].recipient_email).toBe("admin@pkic.org");
+    const rendered = await renderEmail(
+      "{{organizationNameText}}",
+      JSON.parse(outboxRows[0].payload_json) as Record<string, unknown>,
+      "<!doctype html><html><body>{{{body_html}}}</body></html>",
+    );
+    expect(rendered.text).toContain("attacker.invalid/renewal");
+    expect(rendered.html).not.toContain('href="https://attacker.invalid/renewal"');
   });
 
   it("rolls the lapse, organization projection, event, email, effect marker, and audit back together", async () => {

@@ -9,6 +9,7 @@ import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { getAdminSponsorship, type AdminSponsorshipRow } from "./admin-read-model";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
+import { escapeMarkdownText } from "../../email/markdown";
 import { prepareSponsorPortalMagicLinkForSponsorship } from "../../auth/sponsor-portal";
 import { prepareRefreshOrganizationSponsorshipProjection, prepareSponsorshipStageTransition } from "./stage-transition";
 import { hasFutureRenewalDate, initialRenewalActionDueAt, utcDate } from "./renewal-policy";
@@ -269,9 +270,9 @@ export async function advanceSponsorshipStage(
         messageType: "transactional",
         subject: "Your PKI Consortium sponsorship is now active",
         data: {
-          contactName: existing.contact_name ?? existing.organization_name ?? "there",
-          organizationName: existing.organization_name,
-          tier: existing.tier,
+          contactNameText: escapeMarkdownText(existing.contact_name ?? existing.organization_name ?? "there"),
+          organizationNameText: escapeMarkdownText(existing.organization_name ?? ""),
+          tierText: escapeMarkdownText(existing.tier ?? ""),
           startDate: existing.start_date ?? now,
         },
       },
@@ -294,9 +295,9 @@ export async function advanceSponsorshipStage(
         messageType: "transactional",
         subject: "Access your sponsor portal",
         data: {
-          contactName: existing.contact_name ?? "there",
-          tier: existing.tier,
-          eventName: existing.event_name,
+          contactNameText: escapeMarkdownText(existing.contact_name ?? "there"),
+          tierText: escapeMarkdownText(existing.tier ?? ""),
+          eventNameText: escapeMarkdownText(existing.event_name ?? ""),
           portalUrl,
           expiresInMinutes: params.notifications.magicLinkTtlMinutes,
         },

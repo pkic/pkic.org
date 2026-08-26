@@ -44,6 +44,8 @@ export interface CreateMemberApplicationInput {
   organizationName?: string | null;
   answers?: Record<string, unknown>;
   appBaseUrl: string;
+  joinCapabilityId: string;
+  applicantKind: "organization" | "individual";
 }
 
 export interface CreateMemberApplicationResult {
@@ -59,6 +61,13 @@ async function translateDomainClaimConflict(
   applicationId: string,
   error: unknown,
 ): Promise<never> {
+  if (
+    error instanceof Error &&
+    (error.message.includes("uq_member_applications_join_capability") ||
+      error.message.includes("member_applications.join_capability_id"))
+  ) {
+    throw new AppError(409, "MEMBER_JOIN_CAPABILITY_USED", "This verified application link has already been used");
+  }
   if (isFormSubmissionContextConflict(error)) {
     throw formSubmissionContextChangedError();
   }
@@ -97,6 +106,13 @@ export async function createMemberApplication(
   const manageToken = randomToken(24);
   const manageTokenHash = await sha256Hex(manageToken);
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
+  if (isIndividual !== (input.applicantKind === "individual")) {
+    throw new AppError(
+      422,
+      "MEMBERSHIP_CATEGORY_TYPE_MISMATCH",
+      "The membership category is not eligible for this verified join path",
+    );
+  }
   const organizationDomain = isIndividual ? null : emailDomain(input.applicantEmail);
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
@@ -106,9 +122,9 @@ export async function createMemberApplication(
       .prepare(
         `INSERT INTO member_applications
            (id, applicant_email, applicant_name, organization_name, organization_domain,
-            membership_category, form_submission_id, stage, stage_entered_at,
+            membership_category, form_submission_id, join_capability_id, stage, stage_entered_at,
             manage_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -118,6 +134,7 @@ export async function createMemberApplication(
         organizationDomain,
         input.membershipCategory,
         formSubmission.id,
+        input.joinCapabilityId,
         now,
         manageTokenHash,
         now,

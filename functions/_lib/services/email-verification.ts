@@ -24,3 +24,30 @@ export function prepareVerifyPrimaryEmailStatement(
     )
     .bind(verifiedAt, input.method, verifiedAt, input.userId, input.normalizedEmail);
 }
+
+/**
+ * Records proof for whichever address the capability actually reached.
+ * Exactly one statement changes because primary and secondary addresses share
+ * one database-enforced reservation namespace.
+ */
+export function prepareVerifyOwnedEmailStatements(
+  db: DatabaseLike,
+  input: {
+    userId: string;
+    normalizedEmail: string;
+    method: EmailVerificationMethod;
+    verifiedAt?: string;
+  },
+): StatementLike[] {
+  const verifiedAt = input.verifiedAt ?? nowIso();
+  return [
+    prepareVerifyPrimaryEmailStatement(db, { ...input, verifiedAt }),
+    db
+      .prepare(
+        `UPDATE user_emails
+            SET verified_at = ?, verification_method = ?
+          WHERE user_id = ? AND normalized_email = ?`,
+      )
+      .bind(verifiedAt, input.method, input.userId, input.normalizedEmail),
+  ];
+}

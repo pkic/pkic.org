@@ -13,6 +13,8 @@ import { AppError } from "../../errors";
 import {
   MEMBERSHIP_CATEGORIES,
   isIndividualMembershipCategory,
+  membershipCategoryCatalogEntrySchema,
+  type MembershipCategoryCatalogEntry,
 } from "../../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike } from "../../types";
 
@@ -42,24 +44,31 @@ export function assertCategoryCompatible(categoryCode: string, wantsIndividual: 
   }
 }
 
-export interface MembershipCategoryCatalogEntry {
-  code: string;
-  isIndividual: boolean;
-  isVoting: boolean;
-}
-
 interface MembershipCategoryRow {
   code: string;
+  label: string;
+  description: string | null;
+  display_order: number;
   is_individual: number;
   is_voting: number;
 }
 
 /** The DB-backed category reference table (consolidated migration 0035) — kept in parity with the shared TS vocabulary above by tests/membership-aggregate.test.ts. */
 export async function listMembershipCategories(db: DatabaseLike): Promise<MembershipCategoryCatalogEntry[]> {
-  const rows = await all<MembershipCategoryRow>(db, `SELECT code, is_individual, is_voting FROM membership_categories`);
-  return rows.map((row) => ({
-    code: row.code,
-    isIndividual: row.is_individual === 1,
-    isVoting: row.is_voting === 1,
-  }));
+  const rows = await all<MembershipCategoryRow>(
+    db,
+    `SELECT code, label, description, display_order, is_individual, is_voting
+       FROM membership_categories
+      ORDER BY display_order, code`,
+  );
+  return rows.map((row) =>
+    membershipCategoryCatalogEntrySchema.parse({
+      code: row.code,
+      label: row.label,
+      description: row.description,
+      displayOrder: row.display_order,
+      isIndividual: row.is_individual === 1,
+      isVoting: row.is_voting === 1,
+    }),
+  );
 }
