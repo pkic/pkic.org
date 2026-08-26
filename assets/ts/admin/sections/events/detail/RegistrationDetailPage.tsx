@@ -11,7 +11,7 @@ import {
   adminRegistrationDetailResponseSchema,
   type AdminRegistrationDetailResponse,
 } from "../../../../../shared/schemas/admin-registration-detail";
-import { adminEventDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { eventDaysResponseSchema } from "../../../../../shared/schemas/event-configuration";
 import {
   adminRegistrationOpenManageResponseSchema,
   adminRegistrationResendConfirmationResponseSchema,
@@ -45,10 +45,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     [slug, regId],
   );
 
-  const { data: daysData } = useData(
-    () => api(`/api/v1/admin/events/${slug}/days`, adminEventDaysResponseSchema),
-    [slug],
-  );
+  const { data: daysData } = useData(() => api(`/api/v1/admin/events/${slug}/days`, eventDaysResponseSchema), [slug]);
 
   const reg = data?.registration;
   const form = data?.form ?? null;

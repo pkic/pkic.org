@@ -799,6 +799,22 @@ Status: In progress
       attendance-day choices and current required terms, and submits through the
       canonical registration use case. It does not link to or duplicate the
       anonymous public-registration form.
+      Event managers now configure attendee, speaker, and presentation terms
+      plus optional per-day attendance choices in that selected-group event
+      context. One neutral event-configuration schema is shared by the API,
+      services, portal, and remaining read-only admin consumers. Every
+      replacement rechecks exact event management and standalone-event status
+      in the same D1 batch, advances the event revision with compare-and-set,
+      records a group-scoped audit entry, and rolls child writes back on a stale
+      revision or authorization race. Attendance counts remain D1-aggregated;
+      the production query has an indexed no-scan plan. The duplicate admin
+      Terms and Days editors, the admin Terms route, and the admin day mutation
+      route are removed. A read-only admin day projection remains temporarily
+      for registration and form views that have not yet moved. The complete
+      repository gate passes 2,020 backend tests (one skipped), 234 frontend
+      tests, and 80 tool tests, including the real Worker/D1 browser journey for
+      configuring terms and attendance days and then continuing to edit the
+      same event revision.
       Identity-bound participant meeting entry is implemented, including an
       explicit shared-group `attend` grant test proving that `view`, `register`,
       and `manage` do not imply entry and that grant revocation fails closed.
@@ -813,16 +829,14 @@ Status: In progress
       members, and dual-capacity users; staff-only users do not call member
       notification APIs. The duplicate admin view and navigation item are gone,
       and the former admin hash route redirects to the portal.
-      Remaining gap: portal event creation intentionally supports
-      no-registration standalone events only. The participant experience and
-      guarded submission path are now present, but the next vertical slice must
-      move manager-side form placement, attendee terms, attendance-day
-      configuration, and registration-policy enablement into the selected-group
-      portal. Until that configuration path exists, a real browser registration
-      journey cannot create its own registration-enabled fixture through the
-      product UI. The corresponding admin configuration workflow therefore
-      remains until that cutover is complete, so this parent item is
-      intentionally open.
+      Remaining gap: portal event creation intentionally starts with a
+      no-registration standalone event. Terms and attendance days now belong to
+      the portal, but the next vertical slice must add the exact attendee form
+      placement and guarded registration-policy activation. Until those final
+      setup controls exist, a real browser registration journey cannot create
+      its own registration-enabled fixture entirely through the product UI.
+      Legacy admin form/policy authoring therefore remains temporarily, so this
+      parent item is intentionally open.
 - [ ] Move remaining global management views into the portal.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
@@ -880,7 +894,9 @@ Status: In progress
       bounded to eight server-filtered identities. The focused group,
       statistics, mailing-list,
       meeting-entry, and grant selection passes 67 tests, followed by 38 tests
-      after the read-time authorization guard was added.
+      after the read-time authorization guard was added. Event-day management
+      now also asserts that its production attendance-count join uses indexed
+      registration, day-attendance, and event-day lookups without a table scan.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and

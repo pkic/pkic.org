@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { groupEventsListResponseSchema } from "../../assets/shared/schemas/group-events";
+import {
+  groupEventDaysResponseSchema,
+  groupEventTermsResponseSchema,
+  groupEventsListResponseSchema,
+} from "../../assets/shared/schemas/group-events";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
@@ -37,6 +41,38 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   );
   await expect(page.getByRole("link", { name: "Open registration" })).toHaveCount(0);
 
+  let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
+  await registrationSetup.getByRole("button", { name: "Add attendee term" }).click();
+  await registrationSetup.getByLabel("Key").fill("event-terms");
+  await registrationSetup.getByLabel("Agreement text").fill("I agree to the workshop terms");
+  const termsSaved = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
+      response.url().endsWith("/terms") &&
+      response.request().method() === "PUT",
+  );
+  await registrationSetup.getByRole("button", { name: "Save terms" }).click();
+  expect((await termsSaved).status()).toBe(200);
+
+  registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
+  await registrationSetup.getByText("Attendance days", { exact: true }).click();
+  await registrationSetup.getByRole("button", { name: "Add day" }).click();
+  await registrationSetup.getByLabel("Date").fill("2027-06-10");
+  await registrationSetup.getByLabel("Starts at").fill("09:00");
+  await registrationSetup.getByLabel("Ends at").fill("17:00");
+  await registrationSetup.getByRole("button", { name: "Add attendance option" }).click();
+  await registrationSetup.getByLabel("Value").fill("in_person");
+  await registrationSetup.getByLabel("Label").last().fill("In person");
+  await registrationSetup.getByLabel("Capacity").fill("40");
+  const daysSaved = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
+      response.url().endsWith("/days") &&
+      response.request().method() === "PUT",
+  );
+  await registrationSetup.getByRole("button", { name: "Save days" }).click();
+  expect((await daysSaved).status()).toBe(200);
+
   await page.getByRole("button", { name: "Edit event" }).click();
   const editor = page.getByRole("heading", { name: "Edit event" }).locator("..");
   await editor.getByLabel("Location").fill("Rotterdam and online");
@@ -64,4 +100,29 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       location: "Rotterdam and online",
     }),
   );
+
+  const configuration = await page.evaluate(
+    async ({ groupId, eventId }) => {
+      const [terms, days] = await Promise.all([
+        fetch(`/api/v1/groups/${groupId}/events/${eventId}/terms`, { credentials: "same-origin" }),
+        fetch(`/api/v1/groups/${groupId}/events/${eventId}/days`, { credentials: "same-origin" }),
+      ]);
+      return {
+        terms: { status: terms.status, body: await terms.json() },
+        days: { status: days.status, body: await days.json() },
+      };
+    },
+    { groupId: GROUP_ID, eventId: groupEventsListResponseSchema.parse(stored.body).events[0].id },
+  );
+  expect(configuration.terms.status, JSON.stringify(configuration.terms.body)).toBe(200);
+  expect(groupEventTermsResponseSchema.parse(configuration.terms.body).terms.attendee).toEqual([
+    expect.objectContaining({ term_key: "event-terms", display_text: "I agree to the workshop terms" }),
+  ]);
+  expect(configuration.days.status, JSON.stringify(configuration.days.body)).toBe(200);
+  expect(groupEventDaysResponseSchema.parse(configuration.days.body).days).toEqual([
+    expect.objectContaining({
+      date: "2027-06-10",
+      attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40 }],
+    }),
+  ]);
 });

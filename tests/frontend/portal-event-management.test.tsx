@@ -153,4 +153,103 @@ describe("portal event management", () => {
       },
     });
   });
+
+  it("manages terms and attendance days from the event context with one shared event revision", async () => {
+    const requests: Array<{ pathname: string; method: string; body?: unknown }> = [];
+    let revision = responseEvent.updatedAt;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ pathname: url.pathname, method, body });
+        if (url.pathname.endsWith("/terms")) {
+          if (method === "PUT") {
+            revision = "2026-08-01T00:00:01.000Z";
+            return json({ success: true, eventUpdatedAt: revision });
+          }
+          return json({
+            eventUpdatedAt: revision,
+            terms: {
+              attendee: [
+                {
+                  id: "term-1",
+                  audience_type: "attendee",
+                  term_key: "event-terms",
+                  version: "1.0",
+                  required: 1,
+                  content_ref: "https://example.test/terms",
+                  display_text: "I agree to the event terms",
+                  help_text: null,
+                },
+              ],
+              speaker: [],
+              presentation: [],
+            },
+          });
+        }
+        if (url.pathname.endsWith("/days")) {
+          if (method === "PUT") {
+            revision = "2026-08-01T00:00:02.000Z";
+            return json({
+              success: true,
+              eventUpdatedAt: revision,
+              skipped: [],
+            });
+          }
+          return json({ eventUpdatedAt: revision, days: [] });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(<GroupEventDetail event={responseEvent} groupId={GROUP_ID} />);
+    await settle();
+    expect(container.textContent).toContain("Registration setup");
+    expect(
+      Array.from(container.querySelectorAll<HTMLInputElement>("input")).some(
+        (input) => input.value === "I agree to the event terms",
+      ),
+    ).toBe(true);
+
+    const saveTerms = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save terms",
+    )!;
+    await act(async () => saveTerms.click());
+    await settle();
+    expect(requests.find(({ pathname, method }) => pathname.endsWith("/terms") && method === "PUT")).toMatchObject({
+      body: {
+        expectedUpdatedAt: responseEvent.updatedAt,
+        configuration: {
+          attendee: [
+            {
+              termKey: "event-terms",
+              version: "1.0",
+              required: true,
+              contentRef: "https://example.test/terms",
+              displayText: "I agree to the event terms",
+            },
+          ],
+          speaker: [],
+          presentation: [],
+        },
+      },
+    });
+
+    const saveDays = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save days",
+    )!;
+    await act(async () => saveDays.click());
+    await settle();
+    expect(requests.find(({ pathname, method }) => pathname.endsWith("/days") && method === "PUT")).toMatchObject({
+      body: {
+        expectedUpdatedAt: "2026-08-01T00:00:01.000Z",
+        configuration: { days: [] },
+      },
+    });
+  });
 });

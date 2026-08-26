@@ -1,0 +1,43 @@
+import { useEffect, useState } from "preact/hooks";
+import type { GroupEvent } from "../../../../../shared/schemas/group-events";
+import { EventDaysEditor } from "./EventDaysEditor";
+import { EventTermsEditor } from "./EventTermsEditor";
+
+export function GroupEventConfiguration({
+  event,
+  groupId,
+  onUpdated,
+}: {
+  event: GroupEvent;
+  groupId: string;
+  onUpdated?: () => void | Promise<void>;
+}) {
+  const [updatedAt, setUpdatedAt] = useState(event.updatedAt);
+  useEffect(() => setUpdatedAt(event.updatedAt), [event.id, event.updatedAt]);
+  const recordRevision = (nextUpdatedAt: string) => {
+    setUpdatedAt(nextUpdatedAt);
+    void onUpdated?.();
+  };
+
+  return (
+    <section class="border-top pt-3" aria-label={`Configure ${event.name} registration`}>
+      <h6>Registration setup</h6>
+      <p class="small text-muted">
+        Configure terms and optional per-day attendance choices here. The registration form and policy are enabled in
+        the next setup step.
+      </p>
+      <details class="card mb-3" open>
+        <summary class="card-header fw-semibold">Terms and conditions</summary>
+        <div class="card-body">
+          <EventTermsEditor groupId={groupId} event={event} expectedUpdatedAt={updatedAt} onRevision={recordRevision} />
+        </div>
+      </details>
+      <details class="card mb-3">
+        <summary class="card-header fw-semibold">Attendance days</summary>
+        <div class="card-body">
+          <EventDaysEditor groupId={groupId} event={event} expectedUpdatedAt={updatedAt} onRevision={recordRevision} />
+        </div>
+      </details>
+    </section>
+  );
+}

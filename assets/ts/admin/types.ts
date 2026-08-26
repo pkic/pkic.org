@@ -27,8 +27,6 @@ import type {
   AdminApplicationSummary as CanonicalAdminApplicationSummary,
 } from "../../shared/schemas/admin-applications";
 import type {
-  adminEventDaysResponseSchema,
-  adminEventTermsResponseSchema,
   AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
   AdminEventInviteSummary as CanonicalInviteRecord,
@@ -36,6 +34,7 @@ import type {
   AdminEventTeamListItem as CanonicalEventPermission,
   AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
 import type { membershipSettingsSchema } from "../../shared/schemas/membership-settings";
 import type {
@@ -85,9 +84,8 @@ export type { SponsorshipPipelineStage };
 export type EventSummary = CanonicalEventSummary;
 export type EventDetail = CanonicalAdminEventDetail;
 
-export type AdminEventDay = z.infer<typeof adminEventDaysResponseSchema>["days"][number];
+export type AdminEventDay = z.infer<typeof eventDaysResponseSchema>["days"][number];
 export type AdminAttendanceOption = AdminEventDay["attendanceOptions"][number];
-export type AdminEventTerm = z.infer<typeof adminEventTermsResponseSchema>["terms"]["attendee"][number];
 
 export type AdminEventFormSummary = CanonicalAdminEventFormSummary;
 

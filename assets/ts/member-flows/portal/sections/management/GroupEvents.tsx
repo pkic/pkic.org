@@ -126,6 +126,10 @@ export function GroupEvents({ groupId, canManage = false }: { groupId: string; c
                 <GroupEventDetail
                   event={selected}
                   groupId={groupId}
+                  onUpdated={async () => {
+                    await detail.reload();
+                    await tableActions.current?.reload();
+                  }}
                   onEdit={
                     selected.capabilities.includes("manage") && isStandaloneEvent(selected)
                       ? () => setEditingEventId(selected.id)

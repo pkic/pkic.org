@@ -4,6 +4,7 @@ import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
 import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
+import { GroupEventConfiguration } from "./GroupEventConfiguration";
 
 function label(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -13,10 +14,12 @@ export function GroupEventDetail({
   event,
   groupId,
   onEdit,
+  onUpdated,
 }: {
   event: GroupEvent;
   groupId: string;
   onEdit?: () => void;
+  onUpdated?: () => void | Promise<void>;
 }) {
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");
@@ -68,6 +71,10 @@ export function GroupEventDetail({
       )}
 
       {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
+
+      {canManage && !event.seriesId && (
+        <GroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />
+      )}
 
       {canManage && (
         <div class="border-top pt-3">

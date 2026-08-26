@@ -6,7 +6,6 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { apiErrorPayloadSchema, successResponseSchema } from "../assets/shared/schemas/api-common";
-import { adminEventTermsResponseSchema } from "../assets/shared/schemas/admin-events";
 import { adminEventSyncResponseSchema } from "../assets/shared/schemas/route-contracts-admin-events";
 import { eventSponsorTiersResponseSchema } from "../assets/shared/schemas/admin-sponsorships";
 import { openapi } from "../functions/router";
@@ -37,8 +36,9 @@ describe("admin event configuration OpenAPI boundaries", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
     expect(spec.paths["/api/v1/admin/events/sync-from-hugo"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/settings"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/terms"].get).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/terms"].put).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/terms"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/sponsor-tiers"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/sponsor-tiers"].put).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions/{permId}"].delete).toBeDefined();
@@ -54,20 +54,6 @@ describe("admin event configuration OpenAPI boundaries", () => {
     expect(malformed.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await malformed.json()).error.code).toBe("INVALID_JSON");
 
-    const invalidTerms = await call(token, "/api/v1/admin/events/pqc-2026/terms", {
-      method: "PUT",
-      body: JSON.stringify({
-        attendee: [
-          { termKey: "privacy-policy", version: "v1", displayText: "Accept this policy." },
-          { termKey: "privacy-policy", version: "v1", displayText: "Accept this policy twice." },
-        ],
-        speaker: [],
-        presentation: [],
-      }),
-    });
-    expect(invalidTerms.status).toBe(400);
-    expect(apiErrorPayloadSchema.parse(await invalidTerms.json()).error.code).toBe("VALIDATION_ERROR");
-
     const invalidTiers = await call(token, "/api/v1/admin/events/pqc-2026/sponsor-tiers", {
       method: "PUT",
       body: JSON.stringify({
@@ -81,7 +67,7 @@ describe("admin event configuration OpenAPI boundaries", () => {
     expect(apiErrorPayloadSchema.parse(await invalidTiers.json()).error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("parses successful response bodies for sync, terms, sponsor tiers, and permission revocation", async () => {
+  it("parses successful response bodies for sync, sponsor tiers, and permission revocation", async () => {
     const token = await setupAdmin();
 
     const sync = await call(token, "/api/v1/admin/events/sync-from-hugo", {
@@ -92,10 +78,6 @@ describe("admin event configuration OpenAPI boundaries", () => {
     });
     expect(sync.status).toBe(200);
     expect(adminEventSyncResponseSchema.parse(await sync.json()).event.slug).toBe("contract-event");
-
-    const terms = await call(token, "/api/v1/admin/events/pqc-2026/terms");
-    expect(terms.status).toBe(200);
-    expect(adminEventTermsResponseSchema.parse(await terms.json()).terms.attendee).toBeInstanceOf(Array);
 
     const tiersPut = await call(token, "/api/v1/admin/events/pqc-2026/sponsor-tiers", {
       method: "PUT",

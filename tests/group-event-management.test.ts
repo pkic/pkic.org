@@ -6,7 +6,12 @@ import {
   listGroupManagedEventRegistrations,
   updateGroupManagedEventSettings,
 } from "../functions/_lib/services/events/group-management";
+import {
+  replaceGroupManagedEventDays,
+  replaceGroupManagedEventTerms,
+} from "../functions/_lib/services/events/group-configuration";
 import { getGroupEvent, listGroupEvents } from "../functions/_lib/services/events/group-read-model";
+import { CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL } from "../functions/_lib/services/event-days";
 import { createGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";
@@ -106,6 +111,17 @@ async function createGroupEvent(fixture: Fixture): Promise<{ id: string; updated
 beforeEach(resetDb);
 
 describe("group event management routes", () => {
+  it("uses indexed D1 joins for event-day attendance counts", async () => {
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL}`)
+      .bind("event-id")
+      .all<{ detail: string }>();
+    const details = plan.results.map((row) => row.detail).join("\n");
+    expect(details).toContain("idx_registrations_event_status_created");
+    expect(details).toContain("sqlite_autoindex_registration_day_attendance_2");
+    expect(details).toContain("sqlite_autoindex_event_days_1");
+    expect(details).not.toContain("SCAN ");
+  });
+
   it("creates, updates, and lists attendees through the selected owner group", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);
@@ -197,6 +213,259 @@ describe("group event management routes", () => {
     );
     expect(delegated.status, await delegated.clone().text()).toBe(200);
     expect(await delegated.json()).toMatchObject({ event: { name: "Delegated update" } });
+  });
+
+  it("configures terms and attendance days through one guarded selected-group contract", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const terms = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/terms`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: created.updatedAt,
+          configuration: {
+            attendee: [
+              {
+                termKey: "event-terms",
+                version: "1.0",
+                required: true,
+                displayText: "I agree to the event terms",
+                contentRef: "https://example.test/terms",
+              },
+            ],
+            speaker: [],
+            presentation: [],
+          },
+        }),
+      },
+    );
+    expect(terms.status, await terms.clone().text()).toBe(200);
+    const termsBody = (await terms.json()) as { success: boolean; eventUpdatedAt: string };
+    expect(termsBody.success).toBe(true);
+    expect(termsBody.eventUpdatedAt).not.toBe(created.updatedAt);
+    const configuredTerms = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/terms`,
+    );
+    expect(configuredTerms.status, await configuredTerms.clone().text()).toBe(200);
+    expect(((await configuredTerms.json()) as { terms: { attendee: unknown[] } }).terms.attendee).toEqual([
+      expect.objectContaining({
+        audience_type: "attendee",
+        term_key: "event-terms",
+        version: "1.0",
+        required: 1,
+        display_text: "I agree to the event terms",
+      }),
+    ]);
+
+    const duplicateTerms = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/terms`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: termsBody.eventUpdatedAt,
+          configuration: {
+            attendee: [
+              { termKey: "duplicate", version: "1", displayText: "First duplicate" },
+              { termKey: "duplicate", version: "1", displayText: "Second duplicate" },
+            ],
+          },
+        }),
+      },
+    );
+    expect(duplicateTerms.status).toBe(400);
+
+    const days = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/days`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: termsBody.eventUpdatedAt,
+          configuration: {
+            days: [
+              {
+                date: "2027-04-12",
+                label: "Workshop day",
+                startTime: "10:00",
+                endTime: "17:00",
+                sortOrder: 10,
+                attendanceOptions: [
+                  { value: "in_person", label: "In person", capacity: 25 },
+                  { value: "virtual", label: "Virtual" },
+                ],
+              },
+            ],
+          },
+        }),
+      },
+    );
+    expect(days.status, await days.clone().text()).toBe(200);
+    expect(await days.json()).toMatchObject({
+      success: true,
+      skipped: [],
+    });
+    const configuredDays = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/days`,
+    );
+    expect(configuredDays.status, await configuredDays.clone().text()).toBe(200);
+    expect(await configuredDays.json()).toMatchObject({
+      days: [
+        {
+          date: "2027-04-12",
+          label: "Workshop day",
+          sortOrder: 10,
+          attendanceOptions: [
+            { value: "in_person", label: "In person", capacity: 25 },
+            { value: "virtual", label: "Virtual" },
+          ],
+          attendanceCounts: {},
+        },
+      ],
+    });
+
+    const audits = await env.DB.prepare(
+      `SELECT action, scope_type, scope_id
+         FROM audit_log
+        WHERE entity_id = ? AND action IN ('event_terms_replaced', 'event_days_updated')
+        ORDER BY created_at`,
+    )
+      .bind(created.id)
+      .all<{ action: string; scope_type: string; scope_id: string }>();
+    expect(audits.results).toEqual([
+      { action: "event_terms_replaced", scope_type: "group", scope_id: fixture.ownerGroupId },
+      { action: "event_days_updated", scope_type: "group", scope_id: fixture.ownerGroupId },
+    ]);
+  });
+
+  it("requires manage capability for event configuration and honors an explicit delegated manager", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    for (const capability of ["view", "register"] as const) {
+      await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
+        granteeGroupId: fixture.granteeGroupId,
+        capability,
+      });
+    }
+    const denied = await request(
+      fixture.granteeLeaderToken,
+      `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/terms`,
+    );
+    expect(denied.status).toBe(403);
+
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "manage",
+    });
+    const delegated = await request(
+      fixture.granteeLeaderToken,
+      `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/terms`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: created.updatedAt,
+          configuration: {
+            attendee: [{ termKey: "delegated", version: "1", displayText: "Delegated terms" }],
+          },
+        }),
+      },
+    );
+    expect(delegated.status, await delegated.clone().text()).toBe(200);
+    expect(await delegated.json()).toMatchObject({ success: true });
+    const configured = await request(
+      fixture.granteeLeaderToken,
+      `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/terms`,
+    );
+    expect(await configured.json()).toMatchObject({ terms: { attendee: [{ term_key: "delegated" }] } });
+  });
+
+  it("rolls back stale and concurrently unauthorized event configuration writes", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const first = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/terms`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: created.updatedAt,
+          configuration: {
+            attendee: [{ termKey: "current", version: "1", displayText: "Current terms" }],
+          },
+        }),
+      },
+    );
+    expect(first.status, await first.clone().text()).toBe(200);
+
+    const stale = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/days`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: created.updatedAt,
+          configuration: { days: [{ date: "2027-04-12", attendanceOptions: [] }] },
+        }),
+      },
+    );
+    expect(stale.status, await stale.clone().text()).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "GROUP_EVENT_CHANGED" } });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_days WHERE event_id = ?").bind(created.id).first(),
+    ).toEqual({ count: 0 });
+
+    const latest = (await first.json()) as { eventUpdatedAt: string };
+    await expect(
+      replaceGroupManagedEventTerms(
+        mutateBeforeNextBatch(env.DB, async () => {
+          await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
+            .bind(fixture.ownerLeader.id)
+            .run();
+        }),
+        fixture.ownerLeader,
+        fixture.ownerGroupId,
+        created.id,
+        latest.eventUpdatedAt,
+        {
+          attendee: [{ termKey: "must-not-save", version: "1", required: true, displayText: "No" }],
+          speaker: [],
+          presentation: [],
+        },
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT term_key FROM event_terms WHERE event_id = ? AND active = 1").bind(created.id).all(),
+    ).toMatchObject({ results: [{ term_key: "current" }] });
+  });
+
+  it("rolls back a day replacement if the event becomes series-managed before commit", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    await expect(
+      replaceGroupManagedEventDays(
+        mutateBeforeNextBatch(env.DB, async () => {
+          await env.DB.prepare(
+            `INSERT INTO event_series
+               (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes, active, created_at, updated_at)
+             VALUES (?, ?, ?, 'FREQ=WEEKLY', 'UTC', 60, 1, datetime('now'), datetime('now'))`,
+          )
+            .bind(crypto.randomUUID(), created.id, "2027-04-12T08:00:00.000Z")
+            .run();
+        }),
+        fixture.ownerLeader,
+        fixture.ownerGroupId,
+        created.id,
+        created.updatedAt,
+        { days: [{ date: "2027-04-12", attendanceOptions: [] }] },
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGED_BY_MEETING_SERIES" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_days WHERE event_id = ?").bind(created.id).first(),
+    ).toEqual({ count: 0 });
   });
 
   it("does not expose list or detail data after management access is revoked before the read", async () => {

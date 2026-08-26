@@ -37,7 +37,11 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeUndefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].put).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].put).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"].post).toBeDefined();
