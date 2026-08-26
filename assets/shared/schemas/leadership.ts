@@ -8,7 +8,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
  * Leadership positions (consolidated migration 0035) — Board of Directors and Executive
  * Council rosters, admin-managed and publicly readable. Replaces the static
  * `content/about/board.md` / `executive-council.md` person-card lists the
- * same way consolidated migration 0035's forum/WG chairs replaced static frontmatter:
+ * same way consolidated migration 0035's group chairs replaced static frontmatter:
  * assigned in the admin portal, rendered client-side on the public site.
  */
 
@@ -180,14 +180,11 @@ export const leadershipPublicRouteSchema = {
   },
 };
 
-export const forumChairsPublicResponseSchema = z.object({
+export const consortiumChairsPublicResponseSchema = z.object({
   chair: leadershipPublicPersonSchema.omit({ title: true, endsAt: true }).nullable(),
   viceChair: leadershipPublicPersonSchema.omit({ title: true, endsAt: true }).nullable(),
 });
-export type ForumChairsPublicResponse = z.infer<typeof forumChairsPublicResponseSchema>;
-
-export const consortiumChairsPublicResponseSchema = forumChairsPublicResponseSchema;
-export type ConsortiumChairsPublicResponse = ForumChairsPublicResponse;
+export type ConsortiumChairsPublicResponse = z.infer<typeof consortiumChairsPublicResponseSchema>;
 
 export const consortiumChairsPublicRouteSchema = {
   tags: ["Leadership"],
@@ -198,19 +195,6 @@ export const consortiumChairsPublicRouteSchema = {
     "200": {
       description: "Current consortium chair and vice chair, if assigned.",
       content: { "application/json": { schema: consortiumChairsPublicResponseSchema } },
-    },
-  },
-};
-
-export const forumChairsPublicRouteSchema = {
-  tags: ["Leadership"],
-  summary: "Deprecated compatibility alias for consortium chairs",
-  description:
-    "Use /api/v1/leadership/consortium-chairs. This alias is retained for compatibility with unreleased branch clients.",
-  responses: {
-    "200": {
-      description: "Current forum chair and vice chair, if assigned.",
-      content: { "application/json": { schema: forumChairsPublicResponseSchema } },
     },
   },
 };

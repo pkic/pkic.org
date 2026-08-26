@@ -607,8 +607,14 @@ Status: In progress
       implemented canonical group listings.
 - [x] Add deterministic tie-break sorting for implemented listings.
 - [ ] Add mounted Hono/Chanfana tests for validation and middleware.
-- [ ] Remove temporary working-group endpoint compatibility before completion
-      unless a documented external consumer requires a timed deprecation.
+- [x] Remove temporary working-group endpoint compatibility before completion.
+      Evidence: the unreleased /api/v1/working-groups and
+      /api/v1/me/working-groups routes, services, contracts, and route-specific
+      tests are removed. Generic /api/v1/groups, /api/v1/me/groups, and the
+      privacy-bounded public group directory are the only group collection and
+      self-service resources.
+      The portal retains only its hash-route redirect for existing bookmarks;
+      no production client or upstream API depended on the retired endpoints.
 
 ## 10. Unified portal and admin retirement
 

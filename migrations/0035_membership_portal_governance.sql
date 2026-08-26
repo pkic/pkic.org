@@ -886,7 +886,7 @@ CREATE INDEX idx_referral_conversions_code_created
 -- Section: RESTful API & Portal-Managed Forms
 --
 -- (Membership Application Endpoint), (Sponsor Interest
--- Endpoint), and (public members / working-groups endpoints) all need
+-- Endpoint), and (public members / group endpoints) all need
 -- tables that don't exist yet. Per the no-CHECK-constraint
 -- convention, status/stage/type columns below carry `-- allowed:`
 -- comments only; validation lives in the application layer (Zod).
@@ -908,11 +908,10 @@ CREATE INDEX idx_referral_conversions_code_created
 --    (idempotency key for the Stripe webhook, mirroring `donations.
 --    checkout_session_id`).
 --
--- 3. groups / group_memberships — required immediately by GET /api/v1/working-groups
---    (list) and GET /api/v1/working-groups/:id (detail + member list).
---    Seeded here with the six working groups already published under
---    content/wg/ so the public endpoints return real data before
---    or touch this table again (e.g. adding chair assignment UI).
+-- 3. groups / group_memberships — required immediately by the canonical
+--    /api/v1/groups and /api/v1/me/groups resources.
+--    Seeded with the published and coordination groups needed by the
+--    canonical group resources during initial local setup.
 
 -- ── Membership applications ──────────────────────────────
 

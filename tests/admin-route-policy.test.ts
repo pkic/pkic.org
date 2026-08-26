@@ -49,10 +49,6 @@ describe("admin route authorization policy", () => {
       kind: "delegated",
       boundary: "event router",
     });
-    expect(adminAuthorizationForRequest("/api/v1/admin/working-groups/wg-1/members", "POST")).toEqual({
-      kind: "delegated",
-      boundary: "working group router",
-    });
   });
 
   it("uses one contextual proposal policy for read, score, and management actions", () => {

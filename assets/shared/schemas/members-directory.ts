@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { publicOrganizationPersonSchema } from "./public-person";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import {
   organizationProfileExtendedFieldsSchema,
@@ -8,7 +7,7 @@ import {
 } from "./organization-profile";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
-/** Schemas for the public member directory & working groups endpoints. */
+/** Schemas for the public member directory endpoints. */
 
 export const publicMemberSummarySchema = z
   .object({
@@ -116,84 +115,5 @@ export const memberDetailRouteSchema = {
       content: { "application/json": { schema: publicMemberDetailSchema } },
     },
     "404": { description: "Member not found." },
-  },
-};
-
-export const workingGroupSummarySchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.string().nullable(),
-  active: z.boolean(),
-});
-
-export const PUBLIC_WORKING_GROUP_SORT_COLUMNS = ["name", "slug"] as const;
-export const publicWorkingGroupsListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_SORT_COLUMNS);
-export type PublicWorkingGroupsListQuery = z.infer<typeof publicWorkingGroupsListQuerySchema>;
-export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", workingGroupSummarySchema);
-export type PublicWorkingGroupsListResponse = z.infer<typeof workingGroupsListResponseSchema>;
-
-export const workingGroupsListRouteSchema = {
-  tags: ["Working Groups"],
-  summary: "List working groups",
-  description: "Paginated, searchable active working groups. D1 is the source of truth.",
-  request: { query: publicWorkingGroupsListQuerySchema },
-  responses: {
-    "200": {
-      description: "Active working groups.",
-      content: { "application/json": { schema: workingGroupsListResponseSchema } },
-    },
-  },
-};
-
-export const workingGroupChairSchema = publicOrganizationPersonSchema;
-
-export const workingGroupDetailSchema = workingGroupSummarySchema.extend({
-  mailingListEmail: z.string().nullable(),
-  chair: workingGroupChairSchema.nullable(),
-  viceChair: workingGroupChairSchema.nullable(),
-});
-export type WorkingGroupChair = z.infer<typeof workingGroupChairSchema>;
-export type WorkingGroupDetail = z.infer<typeof workingGroupDetailSchema>;
-
-export const workingGroupDetailRouteSchema = {
-  tags: ["Working Groups"],
-  summary: "Active working-group detail",
-  description: "Active working-group metadata and leadership. :id accepts either the working-group UUID or its slug.",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    "200": {
-      description: "Working group detail.",
-      content: { "application/json": { schema: workingGroupDetailSchema } },
-    },
-    "404": { description: "Working group not found." },
-  },
-};
-
-export const publicWorkingGroupMemberSchema = z.object({
-  name: z.string(),
-  organizationName: z.string().nullable(),
-});
-export const PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS = ["name", "organizationName"] as const;
-export const publicWorkingGroupMembersListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS);
-export type PublicWorkingGroupMembersListQuery = z.infer<typeof publicWorkingGroupMembersListQuerySchema>;
-export const publicWorkingGroupMembersListResponseSchema = paginatedResponseSchema(
-  "members",
-  publicWorkingGroupMemberSchema,
-);
-export const publicWorkingGroupMembersListRouteSchema = {
-  tags: ["Working Groups"],
-  summary: "List active working-group members",
-  description: "Paginated, searchable public roster for an active group. :wgId accepts a working-group id or slug.",
-  request: {
-    params: z.object({ wgId: z.string().trim().min(1).max(200) }),
-    query: publicWorkingGroupMembersListQuerySchema,
-  },
-  responses: {
-    "200": {
-      description: "Paginated public member roster.",
-      content: { "application/json": { schema: publicWorkingGroupMembersListResponseSchema } },
-    },
-    "404": { description: "Working group not found." },
   },
 };

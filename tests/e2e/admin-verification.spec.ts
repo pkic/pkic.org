@@ -7,8 +7,7 @@
  *
  * Screens covered, one test each: Organizations → Content Review,
  * Mailing Lists, Sponsorships + Events → Settings → Sponsor
- * Tiers, Admin → Votes + → Proposals, Working Groups
- * CRUD (2026-07-27 follow-up), and the Users secondary-email panel
+ * Tiers, Admin → Votes + → Proposals, and the Users secondary-email panel
  * (2026-07-27 follow-up).
  *
  * Fixture data (an approved org member, an approved individual member) goes
@@ -251,84 +250,6 @@ test.describe("Admin browser-verification pass", () => {
     await page.locator("tr").filter({ hasText: email }).getByRole("button", { name: "Delete" }).click();
     await expect(page.locator(".my-toast", { hasText: "Deleted" })).toBeVisible();
     await expect(page.locator("tr").filter({ hasText: email })).toHaveCount(0);
-  });
-
-  test("working groups: create, assign chair/vice chair via Leadership, add/remove member, deactivate/reactivate", async ({
-    page,
-  }) => {
-    page.on("dialog", (d) => d.accept());
-    const wgName = `E2E Working Group ${Date.now()}`;
-
-    await page.goto("/admin/#/working-groups");
-
-    const panel = page
-      .locator("div.card")
-      .filter({ has: page.locator(".card-header", { hasText: "Working group management" }) });
-    await expect(panel).toBeVisible();
-
-    await panel.getByRole("button", { name: "+ Create working group" }).click();
-    await panel.locator("form").locator("input").first().fill(wgName);
-    await panel.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page.locator(".my-toast", { hasText: "Working group created" })).toBeVisible();
-
-    const wgSelect = panel.locator("select");
-    await wgSelect.selectOption({ label: wgName });
-    await expect(page.getByText("Roster (0)")).toBeVisible();
-    await expect(panel.getByText('Chair and vice chair are assigned from the "Leadership" section.')).toBeVisible();
-
-    // Chair/vice-chair assignment lives on the dedicated Leadership admin
-    // page, not this panel (moved there per git history's "Move chair
-    // configuration to admin UI" — this panel only displays the current
-    // holders read-only). Assign the seeded admin as chair — a real user
-    // row, no separate fixture needed for the UserPicker search.
-    await page.goto("/admin/#/leadership");
-    // Leadership is a server-paginated table now. Keep this locator tied to
-    // the row's semantic structure rather than the former card wrapper.
-    const wgRow = page.locator("tbody tr").filter({ hasText: wgName });
-    await expect(wgRow).toBeVisible();
-
-    const chairSlot = wgRow
-      .locator("div.d-flex.align-items-center.gap-2.flex-wrap")
-      .filter({ has: page.getByText("Chair", { exact: true }) });
-    const chairPicker = chairSlot.getByPlaceholder("Search by email or name…");
-    await chairPicker.fill(ADMIN_EMAIL);
-    await expect(chairSlot.getByText(ADMIN_EMAIL)).toBeVisible({ timeout: 5_000 });
-    await chairSlot.getByText(ADMIN_EMAIL).click();
-    await chairSlot.getByRole("button", { name: "Assign" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Chair assigned" })).toBeVisible();
-    await expect(chairSlot.getByText(ADMIN_EMAIL)).toBeVisible();
-
-    // Back on the Working groups panel, the new chair now shows read-only.
-    await page.goto("/admin/#/working-groups");
-    await wgSelect.selectOption({ label: wgName });
-    await expect(panel.getByText(ADMIN_EMAIL).first()).toBeVisible();
-
-    // Add the same admin user to the roster (a distinct code path from
-    // leadership assignment — a plain group_memberships row).
-    const memberForm = panel.locator("form").filter({ has: page.getByText("Add member") });
-    const memberPicker = memberForm.getByPlaceholder("Search by email or name…");
-    await memberPicker.fill(ADMIN_EMAIL);
-    await expect(memberForm.getByText(ADMIN_EMAIL)).toBeVisible({ timeout: 5_000 });
-    await memberForm.getByText(ADMIN_EMAIL).click();
-    await memberForm.getByRole("button", { name: "Add member" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Member added" })).toBeVisible();
-    await expect(page.getByText("Roster (1)")).toBeVisible();
-
-    // Scope to the roster <table> specifically — the chair/vice-chair rows
-    // above it each have their own "Remove" button too.
-    await panel.locator("table").getByRole("button", { name: "Remove" }).first().click();
-    await expect(page.locator(".my-toast", { hasText: "Member removed" })).toBeVisible();
-    await expect(page.getByText("Roster (0)")).toBeVisible();
-
-    await panel.getByRole("button", { name: "Deactivate" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Working group deactivated" })).toBeVisible();
-    // The working-group <select>'s own option text also gains an
-    // "(inactive)" suffix at this point — scope to the status badge.
-    await expect(panel.locator("span.badge", { hasText: "Inactive" })).toBeVisible();
-
-    await panel.getByRole("button", { name: "Reactivate" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Working group reactivated" })).toBeVisible();
-    await expect(panel.locator("span.badge", { hasText: "Active" })).toBeVisible();
   });
 
   test("votes: create a vote via the admin UI and manage its visibility/ballots", async ({ page }) => {
