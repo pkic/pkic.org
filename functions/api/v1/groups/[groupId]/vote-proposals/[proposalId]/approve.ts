@@ -15,7 +15,7 @@ export const GroupVoteProposalApprovePost = openApiRoute(
     const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
     const result = await approveGroupVoteProposal(
       db,
-      requireGroupManagementActor(context.viewer),
+      requireGroupManagementActor(context),
       context.viewer,
       context.group.id,
       data.params.proposalId,

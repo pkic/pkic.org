@@ -12,10 +12,11 @@ export const GroupVoteTransitionPost = openApiRoute(
   groupVoteLifecycleTransitionRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);
-    const { group, viewer } = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const { group } = context;
     const result = await transitionManagedVote(
       db,
-      requireGroupManagementActor(viewer),
+      requireGroupManagementActor(context),
       data.params.voteId,
       data.body,
       group.id,

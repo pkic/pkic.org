@@ -1,4 +1,4 @@
-import type { Group } from "../../../../assets/shared/schemas/groups";
+import type { Group, GroupPortalCapability } from "../../../../assets/shared/schemas/groups";
 import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
 import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../../../_lib/types";
 import { AppError } from "../../../_lib/errors";
@@ -7,15 +7,16 @@ import type { GroupResourceViewer } from "../../../_lib/services/resource-grants
 
 export interface GroupResourceContext {
   group: Group;
+  capabilities: GroupPortalCapability[];
   viewer: GroupResourceViewer;
   member?: AuthMember;
 }
 
-export function requireGroupManagementActor(viewer: GroupResourceViewer): AuthAdmin {
-  if (!viewer.admin) {
+export function requireGroupManagementActor(context: GroupResourceContext): AuthAdmin {
+  if (!context.viewer.admin || !context.capabilities.includes("manage")) {
     throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
   }
-  return viewer.admin;
+  return context.viewer.admin;
 }
 
 export function requireGroupParticipantMember(context: GroupResourceContext): AuthMember {
@@ -45,6 +46,7 @@ export async function requireGroupResourceContext(
   );
   return {
     group: context.group,
+    capabilities: context.capabilities,
     viewer: {
       userId: resolved.userId,
       ...(resolved.kind === "admin" ? { admin: resolved.admin } : {}),

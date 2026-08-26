@@ -32,7 +32,7 @@ export const GroupMailingListSubscriptions = openApiRoute(
 export const GroupMailingListCreate = openApiRoute(groupMailingListCreateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
-  const actor = requireGroupManagementActor(context.viewer);
+  const actor = requireGroupManagementActor(context);
   const mailingList = await createGroupMailingList(db, actor, context.group.id, data.body);
   return json(mailingListResponseSchema.parse({ mailingList }), 201);
 });

@@ -15,7 +15,7 @@ export const GroupMailingListManagementList = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
-    const actor = requireGroupManagementActor(context.viewer);
+    const actor = requireGroupManagementActor(context);
     const result = await listGroupManagedMailingLists(db, actor, context.group.id, data.query);
     return json(
       mailingListsListResponseSchema.parse({
