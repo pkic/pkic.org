@@ -20,7 +20,7 @@ export const mailingListSchema = z.object({
   email: z.email(),
   label: trimmedString(1, 200),
   purpose: mailingListPurposeSchema,
-  groupId: groupIdSchema.nullable(),
+  groupId: groupIdSchema,
   primaryDiscussion: z.boolean(),
   subscriptionDefault: mailingListSubscriptionDefaultSchema,
   postingPolicy: trimmedString(1, 80),
@@ -45,11 +45,10 @@ export const mailingListsListResponseSchema = paginatedResponseSchema("mailingLi
 export const mailingListResponseSchema = z.object({ mailingList: mailingListSchema });
 export type MailingListsListResponse = z.infer<typeof mailingListsListResponseSchema>;
 
-export const mailingListCreateSchema = z.object({
+const mailingListMutableFieldsSchema = z.object({
   email: z.email().transform((value) => value.trim().toLowerCase()),
   label: trimmedString(1, 200),
   purpose: mailingListPurposeSchema,
-  groupId: groupIdSchema.nullable().optional(),
   primaryDiscussion: z.boolean().optional(),
   subscriptionDefault: mailingListSubscriptionDefaultSchema.optional(),
   postingPolicy: trimmedString(1, 80).optional(),
@@ -57,8 +56,10 @@ export const mailingListCreateSchema = z.object({
   autoSyncCategories: z.array(membershipCategorySchema).max(50).nullable().optional(),
   active: z.boolean().optional(),
 });
+export const mailingListCreateSchema = mailingListMutableFieldsSchema.extend({ groupId: groupIdSchema }).strict();
 export type MailingListCreateInput = z.infer<typeof mailingListCreateSchema>;
-export const mailingListUpdateSchema = mailingListCreateSchema.partial();
+/** Ownership is immutable through ordinary configuration updates. */
+export const mailingListUpdateSchema = mailingListMutableFieldsSchema.partial().strict();
 export type MailingListUpdateInput = z.infer<typeof mailingListUpdateSchema>;
 
 /**
@@ -66,9 +67,9 @@ export type MailingListUpdateInput = z.infer<typeof mailingListUpdateSchema>;
  * selected group route and is deliberately not accepted from the request
  * body, so a nested mutation cannot move a list between groups.
  */
-export const groupMailingListCreateSchema = mailingListCreateSchema.omit({ groupId: true });
+export const groupMailingListCreateSchema = mailingListMutableFieldsSchema.strict();
 export type GroupMailingListCreateInput = z.infer<typeof groupMailingListCreateSchema>;
-export const groupMailingListUpdateSchema = mailingListUpdateSchema.omit({ groupId: true });
+export const groupMailingListUpdateSchema = mailingListMutableFieldsSchema.partial().strict();
 export type GroupMailingListUpdateInput = z.infer<typeof groupMailingListUpdateSchema>;
 
 export const mailingListIdParamsSchema = z.object({ id: databaseIdSchema });

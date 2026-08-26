@@ -74,7 +74,9 @@ afterEach(async () => {
         WHERE mailing_list_id IN (SELECT id FROM mailing_lists WHERE ${testListPredicate})`,
     ),
     env.DB.prepare(
-      `UPDATE mailing_lists SET group_id = NULL, active = 0, archived_at = datetime('now')
+      `UPDATE mailing_lists
+          SET group_id = '${ALL_MEMBERS_GROUP_ID}', is_primary_discussion = 0,
+              active = 0, archived_at = datetime('now')
         WHERE ${testListPredicate}`,
     ),
   ]);

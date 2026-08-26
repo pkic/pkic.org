@@ -25,9 +25,9 @@ not intent.
 - [x] Verify PR3 head and target on GitHub.
       Evidence: PR3 head bb22b0e8, target migrate-to-rest-endpoints.
 - [x] Verify migration 0035 is pending in preview.
-      Evidence: Wrangler migration listing on 2026-08-24.
+      Evidence: Wrangler migration listing on 2026-08-26.
 - [x] Verify migration 0035 is pending in production.
-      Evidence: Wrangler migration listing on 2026-08-24.
+      Evidence: Wrangler migration listing on 2026-08-26.
 - [x] Record the accepted architecture and data model.
       Evidence: ARCHITECTURE.md and DATA_MODEL.md.
 - [x] Create the stacked pull request and keep its description synchronized.
@@ -154,6 +154,8 @@ Status: Complete
 - [x] Keep automatically enrolled coordination groups top-level and
       non-structural.
 - [x] Support multiple mailing lists per group.
+- [x] Require one valid, immutable owner group for every mailing list, including
+      consortium-wide coordination and consultation lists.
 - [x] Support one optional primary discussion list.
 - [x] Keep group membership and list subscription independent.
 - [x] Store durable per-list subscription preferences as user overrides.
@@ -167,7 +169,12 @@ Status: Complete
       capacity CTE, preserves explicit opt-outs and preferences, and only queues
       effective provider-state changes. SQL projection, dependency architecture,
       API-contract, duplication, max-lines, filename, ESLint, and formatting gates
-      pass for this round.
+      pass for this round. The pending consolidated migration now creates
+      `mailing_lists.group_id` as a required foreign key in its final form; the
+      shared create/read contracts are non-null, ordinary updates cannot transfer
+      ownership, and mounted validation plus direct D1 tests reject missing,
+      invalid, or null owners. The obsolete contradictory admin-only mailing-list
+      schema was removed rather than retained as a second contract.
 
 ## 5. Events, meetings, guests, and attendance
 
@@ -690,7 +697,7 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 1,995 backend tests
+      statistics/list requests; the complete check passes 1,996 backend tests
       (one skipped), 214 frontend tests, and 80 tool tests. Group statistics now
       use a management-only portal view over the explicit people/capacity and
       current/history contract. Mailing-list managers and participants share
@@ -804,7 +811,7 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,995 backend tests pass with one skipped, 214 frontend tests
+      checkpoint: 1,996 backend tests pass with one skipped, 214 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

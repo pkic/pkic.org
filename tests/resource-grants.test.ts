@@ -135,7 +135,12 @@ async function createFixture(): Promise<ResourceFixture> {
 
 async function detachTestMailingLists(): Promise<void> {
   await env.DB.prepare(
-    "UPDATE mailing_lists SET group_id = NULL, active = 0, archived_at = datetime('now') WHERE email LIKE 'shared-%@lists.example.test'",
+    `UPDATE mailing_lists
+        SET group_id = '20000000-0000-4000-8000-000000000001',
+            is_primary_discussion = 0,
+            active = 0,
+            archived_at = datetime('now')
+      WHERE email LIKE 'shared-%@lists.example.test'`,
   ).run();
 }
 

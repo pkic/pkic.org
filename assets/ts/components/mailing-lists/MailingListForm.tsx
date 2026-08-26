@@ -72,8 +72,9 @@ export function MailingListForm({
           <input
             id={`${idPrefix}-group`}
             class="form-control form-control-sm"
-            placeholder="Optional for global lists"
+            placeholder="Owning group ID"
             value={draft.groupId}
+            required
             onInput={(event) => onChange({ groupId: (event.target as HTMLInputElement).value })}
           />
         </div>

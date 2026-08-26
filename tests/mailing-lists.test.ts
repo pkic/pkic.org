@@ -18,6 +18,8 @@ import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
 import { mailingListsListResponseSchema } from "../assets/shared/schemas/mailing-lists";
 
+const ALL_MEMBERS_GROUP_ID = "20000000-0000-4000-8000-000000000001";
+
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
@@ -75,7 +77,12 @@ describe("Managed mailing list configuration", () => {
   it("POST creates a new mailing list", async () => {
     const response = await call(adminToken, "/api/v1/admin/mailing-lists", {
       method: "POST",
-      body: JSON.stringify({ email: "custom@lists.pkic.org", label: "Custom List", purpose: "custom" }),
+      body: JSON.stringify({
+        email: "custom@lists.pkic.org",
+        label: "Custom List",
+        purpose: "custom",
+        groupId: ALL_MEMBERS_GROUP_ID,
+      }),
     });
     expect(response.status).toBe(201);
     const body = (await response.json()) as { mailingList: { id: string; email: string } };
@@ -92,7 +99,12 @@ describe("Managed mailing list configuration", () => {
   it("rejects a duplicate email with 409", async () => {
     const response = await call(adminToken, "/api/v1/admin/mailing-lists", {
       method: "POST",
-      body: JSON.stringify({ email: "pkic@lists.pkic.org", label: "Duplicate", purpose: "custom" }),
+      body: JSON.stringify({
+        email: "pkic@lists.pkic.org",
+        label: "Duplicate",
+        purpose: "custom",
+        groupId: ALL_MEMBERS_GROUP_ID,
+      }),
     });
     expect(response.status).toBe(409);
   });
@@ -100,7 +112,12 @@ describe("Managed mailing list configuration", () => {
   it("PATCH edits a list's label/active state, DELETE removes it", async () => {
     const created = await call(adminToken, "/api/v1/admin/mailing-lists", {
       method: "POST",
-      body: JSON.stringify({ email: "temp@lists.pkic.org", label: "Temp", purpose: "custom" }),
+      body: JSON.stringify({
+        email: "temp@lists.pkic.org",
+        label: "Temp",
+        purpose: "custom",
+        groupId: ALL_MEMBERS_GROUP_ID,
+      }),
     });
     const { mailingList } = (await created.json()) as { mailingList: { id: string } };
 
@@ -145,8 +162,7 @@ describe("Managed mailing list configuration", () => {
     // user's actual DB role — unlike the real magic-link flow
     // (redeemAdminSignInCapability), which sets scopes: [] for any non-admin role.
     // Mailing Lists is gated by that legacy scope system (admin role
-    // required, no permission — see admin-mailing-lists.ts's header
-    // note), so this test builds the token directly with scopes: [] to
+    // required, no named permission), so this test builds the token directly with scopes: [] to
     // exercise the real production behavior for a non-admin role.
     const staffUserId = crypto.randomUUID();
     await env.DB.prepare(
@@ -190,6 +206,47 @@ describe("Managed mailing list configuration", () => {
 
     const response = await call(staffToken, "/api/v1/admin/mailing-lists");
     expect(response.status).toBe(403);
+  });
+
+  it("requires a valid owner group and does not allow ordinary ownership transfer", async () => {
+    const missingOwner = await call(adminToken, "/api/v1/admin/mailing-lists", {
+      method: "POST",
+      body: JSON.stringify({ email: "missing-owner@lists.pkic.org", label: "Missing owner", purpose: "custom" }),
+    });
+    expect(missingOwner.status).toBe(400);
+
+    const invalidOwner = await call(adminToken, "/api/v1/admin/mailing-lists", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "invalid-owner@lists.pkic.org",
+        label: "Invalid owner",
+        purpose: "custom",
+        groupId: crypto.randomUUID(),
+      }),
+    });
+    expect(invalidOwner.status).toBe(422);
+
+    const seeded = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM mailing_lists WHERE email = 'pkic@lists.pkic.org'")
+    )[0];
+    const transfer = await call(adminToken, `/api/v1/admin/mailing-lists/${seeded.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ groupId: null }),
+    });
+    expect(transfer.status).toBe(400);
+
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO mailing_lists
+           (id, email, label, purpose, group_id, created_at, updated_at)
+         VALUES (?, ?, 'Orphan', 'custom', NULL, datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), `orphan-${crypto.randomUUID()}@lists.pkic.org`)
+        .run(),
+    ).rejects.toThrow();
+    expect(
+      await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM mailing_lists WHERE group_id IS NULL"),
+    ).toEqual([{ total: 0 }]);
   });
 
   it("resolveAutoSyncListEmails returns both lists for a consultation category (A-G), only all_members for H-categories", async () => {

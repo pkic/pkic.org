@@ -6,7 +6,7 @@ export interface MailingListRow {
   email: string;
   label: string;
   purpose: MailingList["purpose"];
-  group_id: string | null;
+  group_id: string;
   is_primary_discussion: number;
   subscription_default: MailingList["subscriptionDefault"];
   posting_policy: string;

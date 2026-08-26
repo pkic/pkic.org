@@ -65,6 +65,7 @@ describe("atomic service audit boundaries", () => {
         email: "audit-rollback@lists.pkic.org",
         label: "Audit rollback",
         purpose: "custom",
+        groupId: "20000000-0000-4000-8000-000000000001",
       }),
     });
     expect(response.status).toBe(500);

@@ -1,4 +1,9 @@
-import type { MailingListCreateInput, MailingListUpdateInput } from "../../../../assets/shared/schemas/mailing-lists";
+import type {
+  GroupMailingListCreateInput,
+  GroupMailingListUpdateInput,
+  MailingListCreateInput,
+  MailingListUpdateInput,
+} from "../../../../assets/shared/schemas/mailing-lists";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -26,7 +31,7 @@ export async function createMailingList(
   const id = uuid();
   await validateMailingListConfiguration(db, {
     purpose: input.purpose,
-    groupId: input.groupId ?? null,
+    groupId: input.groupId,
     primaryDiscussion: input.primaryDiscussion ?? false,
     subscriptionDefault: input.subscriptionDefault ?? "none",
   });
@@ -45,7 +50,7 @@ export async function createMailingList(
           input.email,
           input.label,
           input.purpose,
-          input.groupId ?? null,
+          input.groupId,
           input.primaryDiscussion ? 1 : 0,
           input.subscriptionDefault ?? "none",
           input.postingPolicy ?? "subscribers",
@@ -91,7 +96,7 @@ export async function updateMailingList(
   if (!existing) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
   await validateMailingListConfiguration(db, {
     purpose: input.purpose ?? existing.purpose,
-    groupId: input.groupId === undefined ? existing.group_id : input.groupId,
+    groupId: existing.group_id,
     primaryDiscussion: input.primaryDiscussion ?? existing.is_primary_discussion === 1,
     subscriptionDefault: input.subscriptionDefault ?? existing.subscription_default,
   });
@@ -179,12 +184,9 @@ export async function createGroupMailingList(
   db: DatabaseLike,
   actor: AuthAdmin,
   groupId: string,
-  input: MailingListCreateInput,
+  input: GroupMailingListCreateInput,
 ) {
   await requireGroupManagement(db, actor, groupId);
-  if (input.groupId !== undefined && input.groupId !== groupId) {
-    throw new AppError(422, "MAILING_LIST_GROUP_MISMATCH", "A group mailing list cannot be assigned to another group");
-  }
   return createMailingList(db, { ...input, groupId }, actor.id, {
     authorizationGuards: [prepareGroupManagementAuthorizationGuard(db, actor, [groupId])],
     auditScope: { type: "group", id: groupId },
@@ -196,16 +198,11 @@ export async function updateGroupMailingList(
   actor: AuthAdmin,
   groupId: string,
   listId: string,
-  input: MailingListUpdateInput,
+  input: GroupMailingListUpdateInput,
 ) {
   await requireGroupManagement(db, actor, groupId);
-  const existing = await first<{ group_id: string | null }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [
-    listId,
-  ]);
+  const existing = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
   if (!existing || existing.group_id !== groupId) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
-  if (input.groupId !== undefined && input.groupId !== groupId) {
-    throw new AppError(422, "MAILING_LIST_GROUP_MISMATCH", "A group mailing list cannot be assigned to another group");
-  }
   return updateMailingList(db, listId, input, actor.id, {
     authorizationGuards: [
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
@@ -222,9 +219,7 @@ export async function archiveGroupMailingList(
   listId: string,
 ): Promise<void> {
   await requireGroupManagement(db, actor, groupId);
-  const existing = await first<{ group_id: string | null }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [
-    listId,
-  ]);
+  const existing = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
   if (!existing || existing.group_id !== groupId) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
   await deleteMailingList(db, listId, actor.id, {
     authorizationGuards: [
@@ -243,7 +238,6 @@ function addMailingListSetters(input: MailingListUpdateInput, setters: string[],
   if (input.email !== undefined) add("email", input.email);
   if (input.label !== undefined) add("label", input.label);
   if (input.purpose !== undefined) add("purpose", input.purpose);
-  if (input.groupId !== undefined) add("group_id", input.groupId);
   if (input.primaryDiscussion !== undefined) add("is_primary_discussion", input.primaryDiscussion ? 1 : 0);
   if (input.subscriptionDefault !== undefined) add("subscription_default", input.subscriptionDefault);
   if (input.postingPolicy !== undefined) add("posting_policy", input.postingPolicy);

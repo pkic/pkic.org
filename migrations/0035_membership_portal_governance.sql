@@ -3551,7 +3551,7 @@ END;
 -- ── Managed mailing list configuration ─────────────────────────────
 -- Replaces the hardcoded PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST constants
 -- in membership-onboarding.ts, which had no staff-editable home before this.
--- Every list may be owned by a group; groups may have multiple lists with
+-- Every list is owned by a group; groups may have multiple lists with
 -- independent purposes and subscription defaults.
 CREATE TABLE mailing_lists (
   id                        TEXT NOT NULL PRIMARY KEY,
@@ -3559,7 +3559,7 @@ CREATE TABLE mailing_lists (
   label                     TEXT NOT NULL,
   purpose                   TEXT NOT NULL,
   -- allowed: all_members | consultation | group | custom
-  group_id                  TEXT REFERENCES groups(id),
+  group_id                  TEXT NOT NULL REFERENCES groups(id),
   is_primary_discussion     INTEGER NOT NULL DEFAULT 0 CHECK (is_primary_discussion IN (0, 1)),
   subscription_default      TEXT NOT NULL DEFAULT 'none',
   -- allowed: group_members | eligible_categories | none

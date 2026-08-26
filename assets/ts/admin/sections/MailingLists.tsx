@@ -21,6 +21,7 @@ import { MailingListForm } from "../../components/mailing-lists/MailingListForm"
 import {
   emptyMailingListDraft,
   mailingListDraftToPayload,
+  mailingListDraftToUpdatePayload,
   mailingListToDraft,
   type MailingListDraft,
 } from "../../components/mailing-lists/model";
@@ -97,7 +98,7 @@ export function MailingLists() {
     try {
       await api(`/api/v1/admin/mailing-lists/${id}`, mailingListResponseSchema, {
         method: "PATCH",
-        body: JSON.stringify(mailingListDraftToPayload(editDraft, "admin")),
+        body: JSON.stringify(mailingListDraftToUpdatePayload(editDraft)),
       });
       toast("Saved", "success");
       setEditingId(null);
@@ -186,6 +187,8 @@ export function MailingLists() {
                     <MailingListForm
                       draft={editDraft}
                       onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))}
+                      showGroupOwnership={false}
+                      ownershipLabel="Immutable owner group"
                       idPrefix={`admin-mailing-list-${list.id}`}
                     />
                     <div class="mt-2 d-flex gap-2">

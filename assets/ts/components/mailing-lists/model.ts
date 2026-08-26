@@ -2,6 +2,7 @@ import type {
   GroupMailingListCreateInput,
   MailingList,
   MailingListCreateInput,
+  MailingListUpdateInput,
 } from "../../../shared/schemas/mailing-lists";
 import { MAILING_LIST_PURPOSES, MAILING_LIST_SUBSCRIPTION_DEFAULTS } from "../../../shared/schemas/mailing-lists";
 import { membershipCategorySchema } from "../../../shared/schemas/membership-categories";
@@ -42,7 +43,7 @@ export function mailingListToDraft(list: MailingList): MailingListDraft {
     email: list.email,
     label: list.label,
     purpose: list.purpose,
-    groupId: list.groupId ?? "",
+    groupId: list.groupId,
     primaryDiscussion: list.primaryDiscussion,
     subscriptionDefault: list.subscriptionDefault,
     postingPolicy: list.postingPolicy,
@@ -79,5 +80,9 @@ export function mailingListDraftToPayload(
   scope: MailingListFormScope = "admin",
 ): MailingListCreateInput | GroupMailingListCreateInput {
   const fields = draftFields(draft);
-  return scope === "group" ? fields : { ...fields, groupId: draft.groupId.trim() || null };
+  return scope === "group" ? fields : { ...fields, groupId: draft.groupId.trim() };
+}
+
+export function mailingListDraftToUpdatePayload(draft: MailingListDraft): MailingListUpdateInput {
+  return draftFields(draft);
 }

@@ -366,7 +366,7 @@ describe("group mailing-list management routes", () => {
     ).rejects.toMatchObject({ status: 403, code: "GROUP_MANAGEMENT_REQUIRED" });
   });
 
-  it("rejects a direct command that attempts to change ownership", async () => {
+  it("rejects a group-route request that attempts to change ownership", async () => {
     const staff = await actor(`mailing-list-command-${crypto.randomUUID()}@example.test`, "admin");
     const group = await createGroup(env.DB, staff, {
       typeKey: "working_group",
@@ -381,9 +381,16 @@ describe("group mailing-list management routes", () => {
       label: "Command list",
       purpose: "group",
     });
-    await expect(
-      updateGroupMailingList(env.DB, staff, group.id, created.id, { groupId: other.id }),
-    ).rejects.toMatchObject({ code: "MAILING_LIST_GROUP_MISMATCH" });
+    const response = await jsonRequest(
+      `/api/v1/groups/${group.id}/mailing-lists/${created.id}`,
+      "PATCH",
+      { groupId: other.id },
+      await token(staff.id),
+    );
+    expect(response.status).toBe(400);
+    expect(
+      await queryAll<{ group_id: string }>(env.DB, "SELECT group_id FROM mailing_lists WHERE id = ?", [created.id]),
+    ).toEqual([{ group_id: group.id }]);
     await archiveGroupMailingList(env.DB, staff, group.id, created.id);
   });
 });
