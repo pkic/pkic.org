@@ -146,6 +146,13 @@ describe("shared list/search contract", () => {
     expect(schema.safeParse({ limit: 201 }).success).toBe(false);
   });
 
+  it("supports a stricter endpoint maximum without redeclaring pagination validation", () => {
+    const bounded = listQuerySchema(["name"] as const, { limit: 8, maxLimit: 8 });
+    expect(bounded.parse({})).toMatchObject({ limit: 8, offset: 0 });
+    expect(bounded.safeParse({ limit: 9 }).success).toBe(false);
+    expect(() => paginationQuerySchemaWithDefaults({ limit: 9, maxLimit: 8 })).toThrow(RangeError);
+  });
+
   it("rejects offsets that would force an excessive D1 skip scan", () => {
     expect(schema.parse({ offset: MAX_PAGE_OFFSET }).offset).toBe(MAX_PAGE_OFFSET);
     expect(schema.safeParse({ offset: MAX_PAGE_OFFSET + 1 }).success).toBe(false);

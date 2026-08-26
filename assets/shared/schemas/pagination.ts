@@ -17,6 +17,7 @@ export const MAX_PAGE_OFFSET = 10_000;
 export interface PaginationDefaults {
   limit?: number;
   offset?: number;
+  maxLimit?: number;
 }
 
 /**
@@ -27,32 +28,35 @@ export interface PaginationDefaults {
 export function paginationQuerySchemaWithDefaults(defaults: PaginationDefaults = {}) {
   const limit = defaults.limit ?? DEFAULT_PAGE_LIMIT;
   const offset = defaults.offset ?? DEFAULT_PAGE_OFFSET;
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_LIMIT) {
-    throw new RangeError(`Default page limit must be an integer from 1 through ${MAX_PAGE_LIMIT}`);
+  const maxLimit = defaults.maxLimit ?? MAX_PAGE_LIMIT;
+  if (!Number.isInteger(maxLimit) || maxLimit < 1 || maxLimit > MAX_PAGE_LIMIT) {
+    throw new RangeError(`Maximum page limit must be an integer from 1 through ${MAX_PAGE_LIMIT}`);
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
+    throw new RangeError(`Default page limit must be an integer from 1 through ${maxLimit}`);
   }
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_PAGE_OFFSET) {
     throw new RangeError(`Default page offset must be an integer from 0 through ${MAX_PAGE_OFFSET}`);
   }
   return z.object({
-    limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(limit),
+    limit: z.coerce.number().int().min(1).max(maxLimit).default(limit),
     offset: z.coerce.number().int().min(0).max(MAX_PAGE_OFFSET).default(offset),
   });
 }
 
 export const paginationQuerySchema = paginationQuerySchemaWithDefaults();
 
-export const searchQuerySchema = z.object({
-  // Keep collection search bounded while permitting a complete email address.
-  // The shared D1 search builder uses bound INSTR contains predicates so long
-  // values do not exceed D1's LIKE/GLOB pattern limit.
-  q: z
-    .string()
-    .trim()
-    .min(1)
-    .max(254)
-    .refine((value) => new TextEncoder().encode(value).byteLength <= 254, "Search must be at most 254 UTF-8 bytes")
-    .optional(),
-});
+// Keep collection search bounded while permitting a complete email address.
+// The shared D1 search builder uses bound INSTR contains predicates so long
+// values do not exceed D1's LIKE/GLOB pattern limit.
+export const searchTermSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(254)
+  .refine((value) => new TextEncoder().encode(value).byteLength <= 254, "Search must be at most 254 UTF-8 bytes");
+
+export const searchQuerySchema = z.object({ q: searchTermSchema.optional() });
 
 /** Canonical pagination/search contract for list endpoints without sorting. */
 export const searchableQuerySchema = paginationQuerySchema.merge(searchQuerySchema);
@@ -120,19 +124,16 @@ export function sortColumnSchemaWithDefault<Columns extends readonly string[]>(
  * filters belong in a caller-owned `.extend(...)`; pagination, search, and
  * sort must not be redeclared per resource.
  */
-export function listQuerySchema<Columns extends readonly string[]>(
-  columns: Columns,
-  defaults: PaginationDefaults = {},
-) {
-  return searchableListQuerySchema(sortColumnSchema(columns), defaults);
+export function listQuerySchema<Columns extends readonly string[]>(columns: Columns, options: PaginationDefaults = {}) {
+  return searchableListQuerySchema(sortColumnSchema(columns), options);
 }
 
 /** Shared pagination/search contract for endpoints whose sort vocabulary is a domain-specific enum. */
 export function searchableListQuerySchema<SortSchema extends z.ZodTypeAny>(
   sortSchema: SortSchema,
-  defaults: PaginationDefaults = {},
+  options: PaginationDefaults = {},
 ) {
-  return paginationQuerySchemaWithDefaults(defaults).merge(searchQuerySchema).extend({
+  return paginationQuerySchemaWithDefaults(options).merge(searchQuerySchema).extend({
     sort: sortSchema,
   });
 }

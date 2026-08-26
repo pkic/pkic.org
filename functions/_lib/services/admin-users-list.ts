@@ -6,10 +6,10 @@ import {
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
-import { buildD1TextSearchFilter } from "../db/search";
 import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+import { buildUserIdentitySearchFilter } from "./user-search";
 
 interface UserRow {
   id: string;
@@ -54,17 +54,9 @@ export function buildAdminUsersPageQuery(query: AdminUsersListQuery) {
     conditions.push(`NOT ${USER_HAS_MEMBERSHIP} AND NOT ${USER_HAS_EVENT_PARTICIPATION}`);
   }
   if (query.q) {
-    const primary = buildD1TextSearchFilter(query.q, [
-      "u.email",
-      "u.first_name",
-      "u.last_name",
-      "u.first_name || ' ' || u.last_name",
-    ]);
-    const alternate = buildD1TextSearchFilter(query.q, ["ue.email"]);
-    conditions.push(`(${primary.sql} OR EXISTS (
-      SELECT 1 FROM user_emails ue WHERE ue.user_id = u.id AND ${alternate.sql}
-    ))`);
-    bindings.push(...primary.bindings, ...alternate.bindings);
+    const search = buildUserIdentitySearchFilter(query.q);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const representativeJoin = deterministicRepresentativeJoinSql("u.id");

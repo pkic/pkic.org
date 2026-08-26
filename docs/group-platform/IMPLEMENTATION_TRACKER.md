@@ -693,6 +693,18 @@ Status: In progress
       and managers can use the same group-scoped proposal list with only the
       actions advertised by the backend. The duplicate admin Votes navigation
       and components are removed, while the old URL redirects to the portal.
+      Portal membership and leadership selectors no longer cross the global
+      admin-user boundary: one group-scoped catalog returns only active users'
+      selection fields after required server-side search, enforces an eight-row
+      endpoint maximum through the shared pagination contract, and rechecks
+      inherited or local group-management authority in the same D1 batch as its
+      page and count. The shared picker retains the old admin source only for
+      admin workflows that have not migrated, disables browser autofill, and
+      uses the common collection URL and latest-request helpers. Mounted and
+      frontend tests prove data minimization, alias/name/organization search,
+      invalid-query rejection, unrelated and local-only denial, inherited
+      leadership, revocation-race closure, deterministic D1 ordering, and that
+      portal requests never fall back to `/api/v1/admin/users`.
       Group-owned survey and feedback definitions now use one shared authoring
       schema with the legacy admin API and one atomic, live-authorized create or
       update command. Definition ownership remains with the owning group even
@@ -706,8 +718,8 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 1,998 backend tests
-      (one skipped), 214 frontend tests, and 80 tool tests. Group statistics now
+      statistics/list requests; the complete check passes 2,002 backend tests
+      (one skipped), 215 frontend tests, and 80 tool tests. Group statistics now
       use a management-only portal view over the explicit people/capacity and
       current/history contract. Mailing-list managers and participants share
       one selected-group section while retaining separate configuration and
@@ -764,7 +776,10 @@ Status: Pending
       group statistics assert indexed group-membership windows and exact
       group-scoped audit access without table scans; group-owned mailing-list
       configuration asserts `idx_mailing_lists_group_active` for the actual
-      page and count builder. The focused group, statistics, mailing-list,
+      page and count builder; the group user catalog asserts its production
+      page builder uses the indexed alternate-email lookup while remaining
+      bounded to eight server-filtered identities. The focused group,
+      statistics, mailing-list,
       meeting-entry, and grant selection passes 67 tests, followed by 38 tests
       after the read-time authorization guard was added.
 - [x] Run migration tests against production-shaped databases.
@@ -820,7 +835,7 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,998 backend tests pass with one skipped, 214 frontend tests
+      checkpoint: 2,002 backend tests pass with one skipped, 215 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

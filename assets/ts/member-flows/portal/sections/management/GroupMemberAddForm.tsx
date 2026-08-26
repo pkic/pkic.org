@@ -49,7 +49,12 @@ export function GroupMemberAddForm({ groupId, onAdded }: { groupId: string; onAd
       <div class="row g-2 align-items-end">
         <div class="col-lg-10">
           <label class="form-label small fw-semibold">User</label>
-          <UserPicker value={user} onChange={setUser} disabled={saving} />
+          <UserPicker
+            value={user}
+            onChange={setUser}
+            disabled={saving}
+            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/user-catalog`}
+          />
         </div>
         <div class="col-lg-2">
           <button class="btn btn-sm btn-success w-100" type="submit" disabled={saving || !user}>

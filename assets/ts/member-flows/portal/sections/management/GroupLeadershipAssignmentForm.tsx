@@ -65,7 +65,12 @@ export function GroupLeadershipAssignmentForm({
       <div class="row g-2 align-items-end">
         <div class="col-lg-5">
           <label class="form-label small fw-semibold">User</label>
-          <UserPicker value={user} onChange={setUser} disabled={saving} />
+          <UserPicker
+            value={user}
+            onChange={setUser}
+            disabled={saving}
+            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/user-catalog`}
+          />
         </div>
         <div class="col-lg-3">
           <label class="form-label small fw-semibold" for="managed-group-leadership-role">
