@@ -332,23 +332,6 @@ async function processOutboxRow(
       }
     }
 
-    // Attach meeting calendar ICS files — static, staff-uploaded R2
-    // objects, unlike the generated per-recipient calendar.icsFiles above.
-    const icsAttachments = queuedAttachments.filter((a) => a.kind === "r2-ics-file");
-    if (icsAttachments.length > 0 && env.ASSETS_BUCKET) {
-      for (const icsAttachment of icsAttachments) {
-        const icsObj = await env.ASSETS_BUCKET.get(icsAttachment.r2Key);
-        if (!icsObj) {
-          continue;
-        }
-        const base64 = uint8ToBase64(new Uint8Array(await icsObj.arrayBuffer()));
-        attachments = [
-          ...(attachments ?? []),
-          { filename: icsAttachment.filename, contentType: "text/calendar", base64Content: base64 },
-        ];
-      }
-    }
-
     const bccRecipients = Array.isArray(payload.__bccRecipients)
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : undefined;

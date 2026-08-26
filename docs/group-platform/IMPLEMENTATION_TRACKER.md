@@ -185,7 +185,16 @@ Status: In progress
 - [x] Replace unreleased meeting_series with shared event_series.
 - [x] Add authoritative recurring schedule and event occurrences.
 - [x] Generate ICS from series and occurrence state.
-- [ ] Remove uploaded ICS as the meeting source of truth.
+- [x] Remove uploaded ICS as the meeting source of truth.
+      Evidence: the unused multipart upload utility, queued `r2-ics-file`
+      descriptor, R2 delivery branch, and dormant welcome-email option are
+      removed. Legacy queued descriptors are ignored and cannot trigger an R2
+      calendar fetch. Registration invitations still generate their ICS from
+      current event/registration state, and group series calendars still render
+      from `event_series` and `event_occurrences`; the focused calendar and
+      group-event tests cover both generated paths. The separate Hugo conference
+      agenda feed remains a generated public-content view, not an uploaded
+      meeting source of truth.
 - [x] Implement no-registration, optional opt-in, invitation-only, required,
       and permitted public-registration policies.
 - [x] Automatically make ordinary group meetings available only to eligible
@@ -244,8 +253,8 @@ Status: In progress
       passes through the intercepted invitation and code messages in a fresh
       browser context. All 37 migrations replay cleanly in fresh local D1 state,
       and the complete repository gate passes at this checkpoint. Management UI
-      integration is implemented; legacy meeting-calendar retirement remains
-      incomplete.
+      integration is implemented, and the dormant uploaded-calendar attachment
+      path is retired without removing generated registration or series ICS.
 
 ## 6. Reusable live-editable forms
 
@@ -697,7 +706,7 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 1,996 backend tests
+      statistics/list requests; the complete check passes 1,998 backend tests
       (one skipped), 214 frontend tests, and 80 tool tests. Group statistics now
       use a management-only portal view over the explicit people/capacity and
       current/history contract. Mailing-list managers and participants share
@@ -811,7 +820,7 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,996 backend tests pass with one skipped, 214 frontend tests
+      checkpoint: 1,998 backend tests pass with one skipped, 214 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

@@ -101,6 +101,33 @@ describe("email outbox batch processing", () => {
     expect(rows.every((r) => r.status === "sent")).toBe(true);
   });
 
+  it("ignores retired uploaded-ICS descriptors without reading R2", async () => {
+    const fetchMock = makeSendgridMock();
+    const get = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "legacy-calendar@example.test",
+      messageType: "transactional",
+      data: { firstName: "Legacy" },
+      attachments: [
+        {
+          kind: "r2-ics-file",
+          r2Key: "retired/meeting.ics",
+          filename: "meeting.ics",
+        },
+      ] as never,
+    });
+
+    const result = await processPendingOutbox(env.DB, { ...env, ASSETS_BUCKET: { get } } as unknown as Env, 10);
+
+    expect(result).toEqual({ processed: 1, failed: 0 });
+    expect(get).not.toHaveBeenCalled();
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).not.toHaveProperty("attachments");
+  });
+
   it("enqueues a domain notification exactly once when concurrent batches reuse its idempotency key", async () => {
     const payload = {
       outboxId: "1234567890abcdef1234567890abcdef",
