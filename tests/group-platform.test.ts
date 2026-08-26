@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   groupMembershipsListQuerySchema,
+  groupCategoryRulesResponseSchema,
   groupJoinSchema,
   groupPortalContextResponseSchema,
   groupsListResponseSchema,
@@ -1075,6 +1076,33 @@ describe("group route contracts", () => {
     const testEnv = { ...env, ADMIN_API_KEY: apiKey } as Env;
     const headers = { authorization: `Bearer ${apiKey}`, "content-type": "application/json" };
 
+    const createdResponse = await callApi(testEnv, "/api/v1/groups", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ typeKey: "working_group", name: "Mounted API-created Group", eligibilityMode: "open" }),
+    });
+    expect(createdResponse.status, await createdResponse.clone().text()).toBe(201);
+    await expect(createdResponse.json()).resolves.toMatchObject({ group: { name: "Mounted API-created Group" } });
+
+    const nonAdminUserId = await insertUser(env.DB, "mounted-group-non-admin@example.test");
+    const nonAdminToken = await createMemberSession(env.DB, nonAdminUserId, "mounted-group-non-admin-token");
+    const adminSession = await createAdminSession(env.DB, admin.id, "mounted-group-capability-admin-token");
+    const sessionHeaders = { authorization: `Bearer ${adminSession}` };
+    const canCreate = await callApi(testEnv, "/api/v1/groups/creation-capabilities", { headers: sessionHeaders });
+    expect(canCreate.status, await canCreate.clone().text()).toBe(200);
+    await expect(canCreate.json()).resolves.toEqual({ canCreate: true });
+    const cannotCreate = await callApi(testEnv, "/api/v1/groups/creation-capabilities", {
+      headers: { authorization: `Bearer ${nonAdminToken}` },
+    });
+    expect(cannotCreate.status).toBe(200);
+    await expect(cannotCreate.json()).resolves.toEqual({ canCreate: false });
+    const createDenied = await callApi(testEnv, "/api/v1/groups", {
+      method: "POST",
+      headers: { authorization: `Bearer ${nonAdminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ typeKey: "working_group", name: "Should Not Be Created" }),
+    });
+    expect(createDenied.status).toBe(401);
+
     const update = await callApi(testEnv, `/api/v1/groups/${group.id}`, {
       method: "PATCH",
       headers,
@@ -1101,6 +1129,21 @@ describe("group route contracts", () => {
     });
     expect(replace.status, await replace.clone().text()).toBe(200);
     await expect(replace.json()).resolves.toMatchObject({ group: { revision: 2 } });
+
+    const read = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, { headers: sessionHeaders });
+    expect(read.status, await read.clone().text()).toBe(200);
+    expect(groupCategoryRulesResponseSchema.parse(await read.json())).toMatchObject({
+      groupId: group.id,
+      revision: 2,
+      rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+    });
+
+    const participantUserId = await insertUser(env.DB, "category-rules-participant@example.test");
+    const participantToken = await createMemberSession(env.DB, participantUserId, "category-rules-participant-token");
+    const denied = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
+      headers: { authorization: `Bearer ${participantToken}` },
+    });
+    expect(denied.status).toBe(403);
 
     const staleReplace = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
       method: "PUT",

@@ -1,5 +1,6 @@
 export * from "./access";
 export * from "./capacities";
+export * from "./category-rules";
 export * from "./audit-log";
 export * from "./automatic-enrollment";
 export * from "./automatic-enrollment-group";

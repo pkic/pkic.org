@@ -13,6 +13,8 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { managedGroupCatalog } from "./catalog";
 import { GroupSettingsForm } from "./GroupSettingsForm";
+import { GroupCreateForm } from "./GroupCreateForm";
+import { GroupCategoryRulesEditor } from "./GroupCategoryRulesEditor";
 import { GroupMembers } from "./GroupMembers";
 import { GroupLeadership } from "./GroupLeadership";
 import { GroupMeetings } from "./GroupMeetings";
@@ -93,7 +95,12 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
         </div>
       )}
 
-      {!groupId && <p class="text-muted mb-0">Select a group to manage its resources and participation.</p>}
+      {!groupId && (
+        <>
+          <p class="text-muted mb-0">Select a group to manage its resources and participation.</p>
+          <GroupCreateForm onCreated={(created) => navigate(`/groups/${encodeURIComponent(created.id)}/settings`)} />
+        </>
+      )}
       {groupId && detail.loading && <Spinner />}
       {groupId && detail.error && <ErrorAlert error={detail.error} />}
       {group && (
@@ -118,7 +125,12 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
               </div>
             </div>
           )}
-          {view === "settings" && canManage && <GroupSettingsForm group={group} onUpdated={detail.reload} />}
+          {view === "settings" && canManage && (
+            <div class="d-flex flex-column gap-3">
+              <GroupSettingsForm group={group} onUpdated={detail.reload} />
+              <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
+            </div>
+          )}
           {view === "members" && canManage && (
             <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />
           )}

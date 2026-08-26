@@ -99,6 +99,24 @@ describe("portal selected-group management", () => {
         if (url.pathname === `/api/v1/groups/${GROUP_ID}/context` && method === "GET") {
           return json({ group: group(revision), capabilities: ["view", "manage"] });
         }
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/category-rules` && method === "GET") {
+          return json({ groupId: GROUP_ID, revision, rules: [] });
+        }
+        if (url.pathname === "/api/v1/members/applications/form" && method === "GET") {
+          return json({
+            categories: [
+              {
+                code: "A",
+                label: "Category A",
+                description: null,
+                displayOrder: 1,
+                isIndividual: false,
+                isVoting: true,
+              },
+            ],
+            form: null,
+          });
+        }
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "PATCH") {
           revision += 1;
           return json({ group: group(revision) });

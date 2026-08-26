@@ -6,6 +6,7 @@ import { GroupGet, GroupUpdate } from "./[groupId]";
 import { GroupPortalContextGet } from "./[groupId]/context";
 import { GroupDirectoryGet } from "./[groupId]/directory";
 import { GroupTypesList } from "./types";
+import { GroupCreationCapabilitiesGet } from "./creation-capabilities";
 import { GroupJoin } from "./[groupId]/join";
 import { GroupLeave } from "./[groupId]/leave";
 import { GroupMembershipsList, GroupMemberAdd } from "./[groupId]/memberships/index";
@@ -13,6 +14,7 @@ import { GroupMembershipEnd } from "./[groupId]/memberships/[membershipId]";
 import { GroupLeadershipAssign, GroupLeadershipList } from "./[groupId]/leadership/index";
 import { GroupLeadershipRevoke } from "./[groupId]/leadership/[userRoleId]";
 import { GroupCategoryRulesReplace } from "./[groupId]/category-rules";
+import { GroupCategoryRulesGet } from "./[groupId]/category-rules-get";
 import { GroupMailingListCreate, GroupMailingListSubscriptions } from "./[groupId]/mailing-lists/index";
 import {
   GroupMailingListArchive,
@@ -80,6 +82,7 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.get("/types", GroupTypesList);
+openapi.get("/creation-capabilities", GroupCreationCapabilitiesGet);
 openapi.get("/", GroupsList);
 openapi.post("/", GroupsCreate);
 openapi.get("/:groupId", GroupGet);
@@ -95,6 +98,7 @@ openapi.get("/:groupId/leadership", GroupLeadershipList);
 openapi.post("/:groupId/leadership", GroupLeadershipAssign);
 openapi.delete("/:groupId/leadership/:userRoleId", GroupLeadershipRevoke);
 openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
+openapi.get("/:groupId/category-rules", GroupCategoryRulesGet);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.get("/:groupId/mailing-lists/management", GroupMailingListManagementList);
 openapi.post("/:groupId/mailing-lists", GroupMailingListCreate);

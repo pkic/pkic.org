@@ -45,6 +45,8 @@ export const groupTypesListQuerySchema = listQuerySchema(["sort_order", "singula
 });
 export type GroupTypesListQuery = z.infer<typeof groupTypesListQuerySchema>;
 export const groupTypesListResponseSchema = paginatedResponseSchema("groupTypes", groupTypeSchema);
+export const groupCreationCapabilitiesResponseSchema = z.object({ canCreate: z.boolean() });
+export type GroupCreationCapabilitiesResponse = z.infer<typeof groupCreationCapabilitiesResponseSchema>;
 
 export const groupLabelSchema = z.object({
   id: groupIdSchema,
@@ -126,11 +128,18 @@ export const groupCategoryRuleSchema = z.object({
   permitsJoin: z.boolean(),
   automaticEnrollment: z.boolean(),
 });
+export type GroupCategoryRule = z.infer<typeof groupCategoryRuleSchema>;
 export const groupCategoryRulesReplaceSchema = z.object({
   expectedRevision: groupRevisionSchema.optional(),
   rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })).max(100),
 });
 export type GroupCategoryRulesReplaceInput = z.infer<typeof groupCategoryRulesReplaceSchema>;
+export const groupCategoryRulesResponseSchema = z.object({
+  groupId: groupIdSchema,
+  revision: groupRevisionSchema,
+  rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })),
+});
+export type GroupCategoryRulesResponse = z.infer<typeof groupCategoryRulesResponseSchema>;
 
 export const GROUP_MEMBERSHIP_SOURCES = [
   "self_service",
