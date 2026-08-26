@@ -158,7 +158,6 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/leadership", sec: "leadership", label: "Leadership", icon: "leadership" },
   { path: "/access-control", sec: "access-control", label: "Access Control", icon: "accesscontrol" },
   { path: "/auditlog", sec: "auditlog", label: "Audit Log", icon: "auditlog" },
-  { path: "/account", sec: "account", label: "Account Settings", icon: "account" },
 ];
 
 function closeSidebar() {

@@ -18,12 +18,14 @@ describe("portal capability-derived navigation", () => {
   it("shows management but no member actions to a staff-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ admin: true })).map((item) => item.label);
     expect(labels).toContain("Management");
+    expect(labels).toContain("Account Settings");
     expect(labels).not.toContain("My Profile");
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
+    expect(labels).toContain("Account Settings");
     expect(labels).toContain("Groups");
     expect(labels).not.toContain("Working Groups");
     expect(labels).not.toContain("Management");
@@ -40,6 +42,7 @@ describe("portal capability-derived navigation", () => {
     const labels = portalNavigationItems(portalSessionFixture({ admin: true, member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
     expect(labels).toContain("Management");
+    expect(labels).toContain("Account Settings");
   });
 
   it("keeps shared selected-group routes after member-capacity loss", () => {

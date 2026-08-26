@@ -14,7 +14,6 @@ import { Templates } from "../sections/Templates";
 import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
-import { AccountSettings } from "../sections/AccountSettings";
 import { Organizations } from "../sections/Organizations";
 import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
 import { MailingLists } from "../sections/MailingLists";
@@ -26,6 +25,7 @@ import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
+import { ADMIN_ACCOUNT_REDIRECT_TARGET } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
   return (
@@ -41,6 +41,13 @@ function PortalVotesRedirect() {
     window.location.assign("/portal/#/management");
   }, []);
   return <p>Vote management has moved to the group-centered portal.</p>;
+}
+
+function PortalAccountRedirect() {
+  useEffect(() => {
+    window.location.assign(ADMIN_ACCOUNT_REDIRECT_TARGET);
+  }, []);
+  return <p>Account settings have moved to the portal.</p>;
 }
 
 export function AdminShell() {
@@ -304,14 +311,7 @@ export function AdminShell() {
                 </SectionWrapper>
               )}
             />
-            <Route
-              path="/account"
-              component={() => (
-                <SectionWrapper title="Account Settings">
-                  <AccountSettings />
-                </SectionWrapper>
-              )}
-            />
+            <Route path="/account" component={PortalAccountRedirect} />
 
             <Route component={() => <div class="p-4 text-muted fst-italic">Section not found.</div>} />
           </Switch>

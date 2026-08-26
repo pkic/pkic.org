@@ -144,7 +144,7 @@ export function PortalShell() {
               )}
             />
           )}
-          {hasMemberCapacity && (
+          {(hasAdminCapacity || hasMemberCapacity) && (
             <Route
               path="/account"
               component={() => (
