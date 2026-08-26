@@ -8,6 +8,7 @@ import {
 } from "../assets/shared/schemas/event-series";
 import { groupEventsListQuerySchema } from "../assets/shared/schemas/group-events";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { first } from "../functions/_lib/db/queries";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
 import {
   buildGroupEventSeriesPageQuery,
@@ -28,15 +29,22 @@ import {
   getGroupEvent,
   listGroupEvents,
 } from "../functions/_lib/services/events/group-read-model";
+import { submitGroupEventRegistration } from "../functions/_lib/services/events/group-registration";
 import { replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
+import {
+  prepareGroupEventRegistrationGuard,
+  prepareVerifiedRegistrationUserGuard,
+} from "../functions/_lib/services/registrations/authorization";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
+import { createManagedForm, createManagedFormPlacement } from "../functions/_lib/services/forms";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
+import { userRecordColumns, type UserRecord } from "../functions/_lib/services/users";
 import { resetDb } from "./helpers/reset-db";
 
 interface Fixture {
@@ -148,6 +156,21 @@ function authenticatedRequest(token: string, path: string, init: RequestInit = {
   headers.set("authorization", `Bearer ${token}`);
   if (init.body) headers.set("content-type", "application/json");
   return callApi(env, path, { ...init, headers });
+}
+
+function registrationSubmissionMetadata() {
+  return {
+    clientIp: null,
+    userAgent: null,
+    appBaseUrl: "https://example.test",
+    signingSecret: "test-signing-secret",
+    config: {
+      maxPendingConfirmationReminders: 12,
+      pendingConfirmationReminderIntervalDays: 2,
+      confirmationLinkTtlHours: 24,
+      referralCodeLength: 8,
+    },
+  };
 }
 
 beforeEach(resetDb);
@@ -887,6 +910,117 @@ describe("group event sharing", () => {
     });
   });
 
+  it("bounds registration configuration to an authenticated register-capable group context", async () => {
+    const fixture = await createFixture();
+    const path = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registration-config`;
+
+    expect((await callApi(env, path)).status).toBe(401);
+    expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(404);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "view",
+    });
+    expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(403);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const available = await authenticatedRequest(fixture.memberToken, path);
+    expect(available.status, await available.clone().text()).toBe(200);
+
+    await env.DB.prepare("UPDATE events SET source_mode = 'legacy', owner_group_id = NULL WHERE id = ?")
+      .bind(fixture.eventId)
+      .run();
+    expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(404);
+  });
+
+  it("rolls back the canonical group adapter when grant, membership, or ownership changes before commit", async () => {
+    const fixture = await createFixture();
+    const input = {
+      attendanceType: "virtual" as const,
+      consents: [{ termKey: "meeting-terms", version: "1" }],
+    };
+    const viewer = { userId: fixture.memberId };
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+
+    const grantRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "register",
+      }),
+    );
+    await expect(
+      submitGroupEventRegistration(
+        grantRaceDb,
+        env,
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+        input,
+        registrationSubmissionMetadata(),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_REGISTRATION_CONTEXT_CHANGED" });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const membershipRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        "UPDATE group_memberships SET left_at = '9999-12-31T23:59:59.999Z' WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+      )
+        .bind(fixture.granteeId, fixture.memberId)
+        .run(),
+    );
+    await expect(
+      submitGroupEventRegistration(
+        membershipRaceDb,
+        env,
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+        input,
+        registrationSubmissionMetadata(),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_REGISTRATION_CONTEXT_CHANGED" });
+
+    await env.DB.prepare("UPDATE group_memberships SET left_at = NULL WHERE group_id = ? AND user_id = ?")
+      .bind(fixture.granteeId, fixture.memberId)
+      .run();
+    const ownershipRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE events SET source_mode = 'legacy', owner_group_id = NULL WHERE id = ?")
+        .bind(fixture.eventId)
+        .run(),
+    );
+    await expect(
+      submitGroupEventRegistration(
+        ownershipRaceDb,
+        env,
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+        input,
+        registrationSubmissionMetadata(),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_REGISTRATION_CONTEXT_CHANGED" });
+
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM consent_acceptances WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+  });
+
   it("rejects disabled, ungranted, public, and concurrently revoked registration paths", async () => {
     const fixture = await createFixture();
     const groupPath = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`;
@@ -963,5 +1097,181 @@ describe("group event sharing", () => {
       body: JSON.stringify(payload),
     });
     expect(disabled.status).toBe(403);
+  });
+
+  it("uses only an exact event form placement for group registration", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const globalForm = await createManagedForm(
+      env.DB,
+      fixture.admin.id,
+      { type: "global", ref: null },
+      {
+        key: `global-registration-${crypto.randomUUID()}`,
+        purpose: "event_registration",
+        title: "Global registration form",
+        status: "active",
+        fields: [{ key: "global_only", label: "Global only", fieldType: "text", required: true, sortOrder: 0 }],
+      },
+    );
+    const configPath = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registration-config`;
+    const withoutPlacement = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(withoutPlacement.status, await withoutPlacement.clone().text()).toBe(200);
+    expect(((await withoutPlacement.json()) as { form: unknown }).form).toBeNull();
+
+    const unknownConsent = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          consents: [{ termKey: "not-an-active-term", version: "1" }],
+        }),
+      },
+    );
+    expect(unknownConsent.status).toBe(400);
+    expect(((await unknownConsent.json()) as { error: { code: string } }).error.code).toBe("CONSENT_INVALID");
+
+    const invalidSubmission = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          customAnswers: { global_only: "must not be accepted" },
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+    expect(invalidSubmission.status).toBe(400);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<{ count: number }>("count"),
+    ).toBe(0);
+
+    const placement = await createManagedFormPlacement(env.DB, fixture.admin.id, globalForm.id, {
+      ownerGroupId: fixture.ownerId,
+      contextType: "event",
+      contextRef: fixture.eventId,
+      audience: "attendee",
+      active: true,
+    });
+    const withPlacement = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(withPlacement.status, await withPlacement.clone().text()).toBe(200);
+    expect(((await withPlacement.json()) as { form: unknown }).form).toMatchObject({ key: globalForm.key });
+
+    const registered = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          customAnswers: { global_only: "exact placement" },
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+    expect(registered.status, await registered.clone().text()).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT form_placement_id FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<{ form_placement_id: string }>("form_placement_id"),
+    ).toBe(placement.id);
+
+    await env.DB.prepare("UPDATE form_placements SET active = 0 WHERE id = ?").bind(placement.id).run();
+    const deactivated = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(deactivated.status, await deactivated.clone().text()).toBe(200);
+    expect(((await deactivated.json()) as { form: unknown }).form).toBeNull();
+  });
+
+  it("rejects registration when verified identity or attendee terms change before commit", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const payload = {
+      firstName: "Test",
+      lastName: "Member",
+      email: fixture.memberEmail,
+      attendanceType: "virtual" as const,
+      consents: [{ termKey: "meeting-terms", version: "1" }],
+    };
+    const buildOptions = async () => {
+      const user = await first<UserRecord>(env.DB, `SELECT ${userRecordColumns()} FROM users WHERE id = ?`, [
+        fixture.memberId,
+      ]);
+      if (!user) throw new Error("test user missing");
+      return {
+        eventId: fixture.eventId,
+        invite: null,
+        sourceType: "direct",
+        sourceRef: `group:${fixture.granteeId}`,
+        ip: null,
+        userAgent: null,
+        signingSecret: "test-signing-secret",
+        pendingConfirmationDeadlineHours: 24,
+        confirmationTtlHours: 24,
+        referralCodeLength: 8,
+        verifiedIdentity: { userId: fixture.memberId, registrationGroupId: fixture.granteeId },
+        authorizationGuards: [
+          prepareVerifiedRegistrationUserGuard(env.DB, user),
+          prepareGroupEventRegistrationGuard(env.DB, {
+            eventId: fixture.eventId,
+            groupId: fixture.granteeId,
+            userId: fixture.memberId,
+          }),
+        ],
+      };
+    };
+    const identityPrepared = await prepareValidatedAttendeeRegistration(env.DB, payload, await buildOptions());
+    await env.DB.prepare("UPDATE users SET first_name = 'Changed' WHERE id = ?").bind(fixture.memberId).run();
+    await expect(commitRegistrationSubmission(env.DB, identityPrepared.prepared)).rejects.toMatchObject({
+      status: 409,
+      code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
+    });
+
+    const termsPrepared = await prepareValidatedAttendeeRegistration(
+      env.DB,
+      { ...payload, firstName: "Changed" },
+      await buildOptions(),
+    );
+    await env.DB.prepare("UPDATE event_terms SET version = '2' WHERE event_id = ? AND term_key = 'meeting-terms'")
+      .bind(fixture.eventId)
+      .run();
+    await expect(commitRegistrationSubmission(env.DB, termsPrepared.prepared)).rejects.toMatchObject({
+      status: 409,
+      code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
+    });
+
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM consent_acceptances WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_created' AND actor_id = ?",
+      )
+        .bind(fixture.memberId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM email_outbox WHERE recipient_user_id = ?")
+        .bind(fixture.memberId)
+        .first<number>("total"),
+    ).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 # Group Platform Implementation Tracker
 
-Updated: 2026-08-26
+Updated: 2026-08-27
 
 Branch: agent/group-centered-portal-architecture-20260824
 
@@ -381,7 +381,18 @@ Status: In progress
           legacy-open policies; no-registration and group-only profiles fail
           closed. group-event-sharing.test.ts covers identity override rejection,
           immediate authenticated registration, public and ungranted rejection,
-          disabled registration, and concurrent grant revocation.
+          disabled registration, and concurrent grant revocation. The selected
+          group now also has one schema-validated configuration projection and
+          participant form that reuse the canonical attendance-day, dynamic-form,
+          and consent components. Group registration resolves only an exact active
+          event placement rather than inheriting a global fallback. The protected
+          D1 batch rechecks the verified profile snapshot, live membership,
+          register grant, portal ownership, exact form revision, and the complete
+          active attendee-term snapshot. Adapter-level tests prove complete
+          rollback when the grant, membership, ownership, identity, or terms
+          change between preflight and commit, and mounted tests cover the
+          configuration route's anonymous, inaccessible, view-only, available,
+          and lost-ownership states.
     - [x] Apply `manage_attendance` to attendance discovery and verification
           mutations.
           Evidence: the canonical occurrence-attendance routes accept the
@@ -782,6 +793,12 @@ Status: In progress
       the UI and API. A real Worker/D1 browser journey signs in through the
       portal email capability, creates and edits a workshop, and verifies its
       persisted owner, source mode, registration policy, link, and location.
+      Eligible participants now register inside that same selected-group event
+      detail. The portal derives identity from the verified session, renders an
+      exact event form placement with its authored title and instructions,
+      attendance-day choices and current required terms, and submits through the
+      canonical registration use case. It does not link to or duplicate the
+      anonymous public-registration form.
       Identity-bound participant meeting entry is implemented, including an
       explicit shared-group `attend` grant test proving that `view`, `register`,
       and `manage` do not imply entry and that grant revocation fails closed.
@@ -797,12 +814,15 @@ Status: In progress
       notification APIs. The duplicate admin view and navigation item are gone,
       and the former admin hash route redirects to the portal.
       Remaining gap: portal event creation intentionally supports
-      no-registration standalone events only. The next vertical slice must move
-      dynamic registration forms, terms, attendance-day configuration, and the
-      participant registration experience together before optional, required,
-      invitation-only, or public policies are exposed. The corresponding full
-      admin event workflow therefore remains until that cutover is complete,
-      so this parent item is intentionally open.
+      no-registration standalone events only. The participant experience and
+      guarded submission path are now present, but the next vertical slice must
+      move manager-side form placement, attendee terms, attendance-day
+      configuration, and registration-policy enablement into the selected-group
+      portal. Until that configuration path exists, a real browser registration
+      journey cannot create its own registration-enabled fixture through the
+      product UI. The corresponding admin configuration workflow therefore
+      remains until that cutover is complete, so this parent item is
+      intentionally open.
 - [ ] Move remaining global management views into the portal.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations

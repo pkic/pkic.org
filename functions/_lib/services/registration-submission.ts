@@ -19,6 +19,7 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
@@ -57,6 +58,8 @@ export async function prepareRegistrationSubmission(
     confirmationTtlHours?: number;
     referralCodeLength: number;
     formRevisionGuard?: StatementLike | null;
+    authorizationGuards?: readonly StatementLike[];
+    termsSnapshotGuard?: StatementLike | null;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
   },
 ): Promise<PreparedRegistrationSubmission> {
@@ -109,6 +112,8 @@ export async function prepareRegistrationSubmission(
     : null;
 
   const statements: StatementLike[] = [];
+  statements.push(...(payload.authorizationGuards ?? []));
+  if (payload.termsSnapshotGuard) statements.push(payload.termsSnapshotGuard);
   if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
   if (preparedUser.statement) statements.push(preparedUser.statement);
   statements.push(
@@ -179,11 +184,14 @@ export async function commitRegistrationSubmission(
   try {
     await db.batch([...prepared.statements, ...additionalStatements]);
   } catch (error) {
-    if (error instanceof Error && error.message.includes("EVENT_REGISTRATION_CONTEXT_CHANGED")) {
+    if (
+      (error instanceof Error && error.message.includes("EVENT_REGISTRATION_CONTEXT_CHANGED")) ||
+      isAuthorizationGuardFailure(error)
+    ) {
       throw new AppError(
         409,
         "EVENT_REGISTRATION_CONTEXT_CHANGED",
-        "Group registration access changed while the registration was being saved",
+        "Registration configuration or access changed while the registration was being saved; please submit again",
       );
     }
     if (isFormSubmissionContextConflict(error)) {

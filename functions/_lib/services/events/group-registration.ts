@@ -6,6 +6,10 @@ import type { GroupResourceViewer } from "../resource-grants";
 import { submitEventRegistration, type PublicRegistrationSubmissionConfig } from "../registrations/public-submission";
 import { userRecordColumns, type UserRecord } from "../users";
 import { getGroupEvent } from "./group-read-model";
+import {
+  prepareGroupEventRegistrationGuard,
+  prepareVerifiedRegistrationUserGuard,
+} from "../registrations/authorization";
 
 export async function submitGroupEventRegistration(
   db: DatabaseLike,
@@ -54,6 +58,11 @@ export async function submitGroupEventRegistration(
       eventSlug: event.slug,
       eventBasePath: null,
       verifiedIdentity: { userId: user.id, registrationGroupId: groupId },
+      authorizationGuards: [
+        prepareVerifiedRegistrationUserGuard(db, user),
+        prepareGroupEventRegistrationGuard(db, { eventId: event.id, groupId, userId: user.id }),
+      ],
+      formResolution: "event_placement",
     },
   );
 }

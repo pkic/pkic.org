@@ -1,5 +1,11 @@
 import { AppError } from "../../errors";
-import { getActiveFormByPurpose, type ActiveFormDefinition, type FormFieldDefinition, type FormPurpose } from "./read";
+import {
+  getActiveFormForResolution,
+  type ActiveFormDefinition,
+  type EventFormResolution,
+  type FormFieldDefinition,
+  type FormPurpose,
+} from "./read";
 import { deriveEventAttendanceType, type DayAttendanceSelection } from "../event-days";
 import type { DatabaseLike } from "../../types";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
@@ -276,9 +282,10 @@ export async function validateCustomAnswersForSubmission(
     purpose: FormPurpose;
     customAnswers?: Record<string, unknown>;
     context?: ValidationContext;
+    resolution?: EventFormResolution;
   },
 ): Promise<ValidatedCustomAnswers> {
-  const form = await getActiveFormByPurpose(db, payload.eventId, payload.purpose);
+  const form = await getActiveFormForResolution(db, payload.eventId, payload.purpose, payload.resolution);
 
   if (!form) {
     if (Object.keys(payload.customAnswers ?? {}).length > 0) {
@@ -302,6 +309,7 @@ export async function validateCustomAnswersByPurpose(
     purpose: FormPurpose;
     customAnswers?: Record<string, unknown>;
     context?: ValidationContext;
+    resolution?: EventFormResolution;
   },
 ): Promise<Record<string, CustomAnswerValue>> {
   return (await validateCustomAnswersForSubmission(db, payload)).answers;

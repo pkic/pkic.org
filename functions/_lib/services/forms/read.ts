@@ -333,6 +333,34 @@ export async function getActiveFormByPurpose(
 }
 
 /**
+ * Resolves only an active event-context placement. Unlike
+ * `getActiveFormByPurpose`, this deliberately does not fall back to a linked,
+ * event-scoped, or global form. Group-scoped registration must not silently
+ * inherit installation configuration that the owning group did not select.
+ */
+export async function getActiveEventFormByPurpose(
+  db: DatabaseLike,
+  eventId: string,
+  purpose: FormPurpose,
+): Promise<ActiveFormDefinition | null> {
+  return loadFormDefinition(db, await findPlacedEventForm(db, eventId, purpose));
+}
+
+export type EventFormResolution = "public_fallback" | "event_placement";
+
+/** Selects the explicit compatibility policy used by each registration adapter. */
+export function getActiveFormForResolution(
+  db: DatabaseLike,
+  eventId: string,
+  purpose: FormPurpose,
+  resolution: EventFormResolution = "public_fallback",
+): Promise<ActiveFormDefinition | null> {
+  return resolution === "event_placement"
+    ? getActiveEventFormByPurpose(db, eventId, purpose)
+    : getActiveFormByPurpose(db, eventId, purpose);
+}
+
+/**
  * Resolves the active global (non-event-scoped) form for a given `forms.key`
  * — used by forms like the membership application that aren't tied
  * to an event, so the `findActiveForm` event-scoping logic above doesn't apply.

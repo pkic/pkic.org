@@ -398,6 +398,25 @@ describe("portal selected-group collections", () => {
         );
         requests.push({ url, method: init.method ?? "GET" });
         if (url.pathname.endsWith("/events")) return json({ events: [event], page });
+        if (url.pathname.endsWith(`/events/${event.id}/registration-config`)) {
+          return json({
+            event: { id: event.id, slug: event.slug, name: event.name },
+            purpose: "event_registration",
+            form: null,
+            requiredTerms: [
+              {
+                termKey: "event-terms",
+                version: "2026-01",
+                required: true,
+                contentRef: null,
+                displayText: "I agree to the event terms",
+                helpText: null,
+              },
+            ],
+            allowedSessionTypes: [],
+            eventDays: [],
+          });
+        }
         if (url.pathname.endsWith(`/events/${event.id}/registrations`)) {
           return json({
             registrations: [
@@ -435,6 +454,7 @@ describe("portal selected-group collections", () => {
         }
         if (url.pathname.endsWith(`/events/${event.id}`)) return json({ event });
         if (url.pathname.endsWith("/grants")) return json({ grants: [], page });
+        if (url.pathname === "/api/v1/groups") return json({ groups: [], page: { ...page, total: 0 } });
         throw new Error(`Unexpected request: ${url.pathname}`);
       }),
     );
@@ -449,11 +469,12 @@ describe("portal selected-group collections", () => {
     await settle();
 
     expect(container.textContent).toContain("Registration");
-    expect(container.textContent).toContain("Open registration");
+    expect(container.textContent).toContain("Register for this event");
+    expect(container.textContent).toContain("I agree to the event terms");
     expect(container.textContent).toContain("Manage meeting series");
     expect(container.textContent).toContain("Attendees");
     expect(container.textContent).toContain("Group Member");
-    expect(container.querySelector('a[href="/events/2026/architecture-workshop/register/"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/events/2026/architecture-workshop/register/"]')).toBeNull();
     expect(container.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
   });

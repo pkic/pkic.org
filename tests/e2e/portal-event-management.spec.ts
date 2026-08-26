@@ -29,8 +29,9 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const row = page.getByRole("row").filter({ hasText: eventName });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Details" }).click();
-  await expect(page.getByText("Amsterdam and online", { exact: true })).toBeVisible();
-  await expect(page.locator('a[href="https://example.test/portal-workshop"]')).toHaveAttribute(
+  const detail = page.getByRole("region", { name: `${eventName} details` });
+  await expect(detail.getByText("Amsterdam and online", { exact: true })).toBeVisible();
+  await expect(detail.locator('a[href="https://example.test/portal-workshop"]')).toHaveAttribute(
     "href",
     "https://example.test/portal-workshop",
   );

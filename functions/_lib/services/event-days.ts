@@ -166,9 +166,10 @@ export async function countRegisteredByEventDay(
   const rows = await all<{ event_day_id: string; attendance_type: string; total: number }>(
     db,
     `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS total
-     FROM registration_day_attendance rda
-     JOIN registrations r ON r.id = rda.registration_id
-     WHERE r.event_id = ?
+     FROM event_days day
+     JOIN registration_day_attendance rda ON rda.event_day_id = day.id
+     JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
+     WHERE day.event_id = ?
        AND r.status IN ('pending_email_confirmation', 'registered')
      GROUP BY rda.event_day_id, rda.attendance_type`,
     [eventId],

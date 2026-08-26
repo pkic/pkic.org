@@ -3,14 +3,10 @@ import { getLinkLabel } from "../../../../../shared/schemas/links";
 import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
+import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
 
 function label(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function registrationPath(basePath: string | null): string | null {
-  if (!basePath || !basePath.startsWith("/") || basePath.startsWith("//")) return null;
-  return `${basePath.endsWith("/") ? basePath : `${basePath}/`}register/`;
 }
 
 export function GroupEventDetail({
@@ -24,7 +20,6 @@ export function GroupEventDetail({
 }) {
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");
-  const registrationHref = canRegister ? registrationPath(event.basePath) : null;
 
   return (
     <section aria-label={`${event.name} details`} class="d-flex flex-column gap-3">
@@ -72,16 +67,7 @@ export function GroupEventDetail({
         </div>
       )}
 
-      {canRegister &&
-        (registrationHref ? (
-          <a class="btn btn-sm btn-primary align-self-start" href={registrationHref}>
-            Open registration
-          </a>
-        ) : (
-          <p class="small text-muted mb-0">
-            Registration is available to eligible group participants through the authenticated group flow.
-          </p>
-        ))}
+      {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
 
       {canManage && (
         <div class="border-top pt-3">

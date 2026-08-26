@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eventIdSchema, frontendPathPattern, jsonErrorResponse } from "./api-common";
 import { eventRegistrationsListResponseSchema, eventRegistrationsQuerySchema } from "./event-registrations";
 import { eventCreateSchema, eventProfileCatalogResponseSchema, eventSettingsSchema } from "./event-management";
+import { eventFormsResponseSchema } from "./forms";
 import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
@@ -122,6 +123,23 @@ export const groupEventDetailRouteSchema = {
       content: { "application/json": { schema: groupEventDetailResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventRegistrationConfigRouteSchema = {
+  tags: ["Groups"],
+  summary: "Get registration configuration for a group event",
+  description:
+    "Returns the exact active event form placement, attendee terms, session types, and event-day attendance options.",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "The registration configuration for the selected group event.",
+      content: { "application/json": { schema: eventFormsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event registration access is required."),
     "404": jsonErrorResponse("The event is not available through this group."),
   },
 };
