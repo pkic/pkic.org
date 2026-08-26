@@ -17,6 +17,7 @@ export const PortalAuthRequestLink = openApiRoute(portalAuthRequestRouteSchema, 
     userAgentHash: http.userAgentHash,
     ttlMinutes: http.magicLinkTtlMinutes,
     appBaseUrl: http.appBaseUrl,
+    signingSecret: http.secret,
   });
 
   if (result.outboxId) {

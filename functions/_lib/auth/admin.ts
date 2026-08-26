@@ -2,13 +2,12 @@ import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { constantTimeEqual, sha256Hex } from "../utils/crypto";
+import { constantTimeEqual } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
 import { createServiceAuthAdmin, createUserBackedAuthAdmin, requireUserBackedAuthAdmin } from "./admin-identity";
 import {
-  AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
   getSessionCookieToken,
   serializeSessionCookie,
@@ -20,20 +19,21 @@ import {
   assertSessionActive,
   revokeSessionRow,
   prepareRevokeSessionRow,
-  prepareMagicLinkRow,
-  validateAndConsumeMagicLinkRow,
-  validateMagicLinkRow,
-  prepareConsumeMagicLinkStatement,
   type SessionTableConfig,
-  type MagicLinkTableConfig,
-  type AuthMagicLinkPurpose,
 } from "./session-engine";
 import { ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH } from "./session-cookies";
 export { ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH } from "./session-cookies";
-import { prepareAuditLogAfterOneChange } from "../services/audit";
 import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
 import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
 import { nowIso } from "../utils/time";
+import {
+  assertEmailAuthCapabilityEmail,
+  commitEmailAuthRedemption,
+  queueEmailAuthCapability,
+  verifyEmailAuthCapabilityToken,
+} from "./email-auth-capabilities";
+import type { EmailAuthCapabilityPurpose } from "./capability-links";
+import type { AuthorizationEvidence } from "../db/authorization-guard";
 
 /**
  * Who may sign in through the admin auth flow (magic link / session).
@@ -63,6 +63,18 @@ const STAFF_ACCESS_CONDITION = `(
       AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )
 )`;
+
+export function staffSignInAuthorizationEvidence(userId: string, normalizedEmail: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+          FROM users u
+          WHERE u.id = ?
+            AND u.normalized_email = ?
+            AND u.active = 1
+            AND ${STAFF_ACCESS_CONDITION}`,
+    bindings: [userId, normalizedEmail],
+  };
+}
 
 export interface EligibleStaffUser {
   id: string;
@@ -95,13 +107,7 @@ export interface AdminSessionTokenClaims {
 const ADMIN_SESSION_TOKEN_TYPE = "admin-session";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const MAGIC_LINKS_TABLE = { table: "auth_magic_links", subjectColumn: "user_id" } satisfies MagicLinkTableConfig;
-
-export type AdminMagicLinkPurpose = Extract<AuthMagicLinkPurpose, "admin" | "mcp_oauth">;
-
-function adminMagicLinkTable(purpose: AdminMagicLinkPurpose): MagicLinkTableConfig {
-  return { ...MAGIC_LINKS_TABLE, purpose };
-}
+export type AdminMagicLinkPurpose = Extract<EmailAuthCapabilityPurpose, "admin_sign_in" | "mcp_oauth_sign_in">;
 
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
 const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
@@ -259,7 +265,7 @@ export function prepareRevokeAdminSession(db: DatabaseLike, sessionId: string): 
 
 /**
  * True if `userId` is currently eligible to hold a session at all — the same
- * STAFF_ACCESS_CONDITION gate `requestAdminMagicLink`/`verifyAdminMagicLink`
+ * STAFF_ACCESS_CONDITION gate `queueAdminSignInCapability`/`redeemAdminSignInCapability`
  * apply. Used by the passkey authentication flow to
  * re-check eligibility at login time rather than trusting that it still
  * holds just because a passkey was registered in the past (registration
@@ -311,7 +317,7 @@ export async function getCurrentUserBackedAdmin(
 
 /**
  * Creates a `sessions` row for an already-verified user and returns the same
- * shape `verifyAdminMagicLink` does, so any login entry point (magic link,
+ * shape `redeemAdminSignInCapability` does, so any login entry point (magic link,
  * passkey) can share one session-issuance path.
  */
 export async function issueAdminSession(
@@ -366,35 +372,20 @@ export async function getAdminBySessionClaims(
   });
 }
 
-export async function requestAdminMagicLink(
+export async function queueAdminSignInCapability(
   db: DatabaseLike,
   payload: {
     email: string;
     ipHash?: string | null;
     userAgentHash?: string | null;
     ttlMinutes: number;
+    signingSecret: string;
     purpose?: AdminMagicLinkPurpose;
-  },
-): Promise<{ token: string | null; admin: UserBackedAuthAdmin | null }> {
-  const prepared = await prepareAdminMagicLink(db, payload);
-  if (!prepared.statement) return { token: null, admin: null };
-  await prepared.statement.run();
-  return { token: prepared.token, admin: prepared.admin };
-}
-
-export async function prepareAdminMagicLink(
-  db: DatabaseLike,
-  payload: {
-    email: string;
-    ipHash?: string | null;
-    userAgentHash?: string | null;
-    ttlMinutes: number;
-    purpose?: AdminMagicLinkPurpose;
+    returnTo?: string;
   },
 ): Promise<{
-  token: string | null;
+  queuedToken: string | null;
   admin: UserBackedAuthAdmin | null;
-  statement: import("../types").StatementLike | null;
 }> {
   const email = normalizeEmail(payload.email);
   const admin = await first<EligibleStaffUser>(
@@ -404,65 +395,66 @@ export async function prepareAdminMagicLink(
   );
 
   if (!admin) {
-    return { token: null, admin: null, statement: null };
+    return { queuedToken: null, admin: null };
   }
 
-  const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
-  const magic = await prepareMagicLinkRow(db, adminMagicLinkTable(purpose), admin.id, payload);
+  const purpose = payload.purpose ?? "admin_sign_in";
+  const magic = await queueEmailAuthCapability({
+    signingSecret: payload.signingSecret,
+    purpose,
+    subjectId: admin.id,
+    email: admin.email,
+    ttlSeconds: payload.ttlMinutes * 60,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+    returnTo: payload.returnTo,
+  });
 
   return {
-    token: magic.token,
+    queuedToken: magic.queuedToken,
     admin: createUserBackedAuthAdmin({
       id: admin.id,
       email: admin.email,
       role: admin.role,
     }),
-    statement: magic.statement,
   };
 }
 
-export async function verifyAdminMagicLink(
+export async function redeemAdminSignInCapability(
   db: DatabaseLike,
   payload: {
     token: string;
+    signingSecret: string;
     sessionTtlHours: number;
     ipHash?: string | null;
     userAgentHash?: string | null;
     purpose?: AdminMagicLinkPurpose;
-    auditAction?: "admin_magic_link_verified";
+    auditAction?: string;
   },
-): Promise<{ admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string }> {
-  const tokenHash = await sha256Hex(payload.token);
-  const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
-  const row = await first<{
-    id: string;
-    user_id: string;
-    expires_at: string;
-    used_at: string | null;
-    request_ip_hash: string | null;
-    user_agent_hash: string | null;
-    email: string;
-    role: string;
-  }>(
+): Promise<{ admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string; returnTo?: string }> {
+  const purpose = payload.purpose ?? "admin_sign_in";
+  const capability = await verifyEmailAuthCapabilityToken({
+    signingSecret: payload.signingSecret,
+    purpose,
+    token: payload.token,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  const row = await first<EligibleStaffUser>(
     db,
-    `SELECT m.id, m.user_id, m.expires_at, m.used_at, m.request_ip_hash, m.user_agent_hash, u.email, u.role
-     FROM auth_magic_links m
-     JOIN users u ON u.id = m.user_id
-     WHERE m.token_hash = ? AND m.purpose = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
-    [tokenHash, purpose],
+    `SELECT id, email, role, active FROM users u WHERE u.id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    [capability.subjectId],
   );
 
   if (!row) {
     throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid admin magic link token");
   }
 
-  const magicRow = {
-    id: row.id,
-    expiresAt: row.expires_at,
-    usedAt: row.used_at,
-    requestIpHash: row.request_ip_hash,
-    userAgentHash: row.user_agent_hash,
-  };
+  await assertEmailAuthCapabilityEmail({
+    signingSecret: payload.signingSecret,
+    capability,
+    currentEmail: row.email,
+  });
 
   // Legacy AUTH_SCOPES only apply to role='admin' — a staff role
   // (membership_processor, wg_chair, event_organizer, program_committee)
@@ -470,56 +462,47 @@ export async function verifyAdminMagicLink(
   // user_roles/permission_grants on every request (see
   // getAdminBySessionClaims), not baked into this token. issueAdminSession
   // applies that same rule.
-  if (!payload.auditAction) {
-    await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, magicRow, payload);
-    const normalizedEmail = normalizeEmail(row.email);
-    const verifiedAt = nowIso();
-    await db.batch([
+  const session = await prepareSessionRow(db, SESSIONS_TABLE, row.id, payload.sessionTtlHours);
+  const normalizedEmail = normalizeEmail(row.email);
+  const verifiedAt = nowIso();
+  await commitEmailAuthRedemption(db, {
+    purpose,
+    capabilityId: capability.capabilityId,
+    actorType: "admin",
+    actorId: row.id,
+    action: payload.auditAction ?? "admin_magic_link_verified",
+    entityType: "admin_session",
+    entityId: session.sessionId,
+    details: {
+      expiresAt: session.expiresAt,
+      purpose,
+    },
+    createdAt: verifiedAt,
+    authorizationEvidence: staffSignInAuthorizationEvidence(row.id, normalizedEmail),
+    statements: [
       prepareVerifyPrimaryEmailStatement(db, {
-        userId: row.user_id,
+        userId: row.id,
         normalizedEmail,
         method: "magic_link",
         verifiedAt,
       }),
       ...(await prepareVerifiedDomainAssociationStatements(db, {
-        userId: row.user_id,
+        userId: row.id,
         normalizedEmail,
         at: verifiedAt,
       })),
-    ]);
-    return issueAdminSession(db, { id: row.user_id, email: row.email, role: row.role }, payload.sessionTtlHours);
-  }
-
-  validateMagicLinkRow(magicRow, payload);
-  const session = await prepareSessionRow(db, SESSIONS_TABLE, row.user_id, payload.sessionTtlHours);
-  const normalizedEmail = normalizeEmail(row.email);
-  const verifiedAt = nowIso();
-  await db.batch([
-    prepareConsumeMagicLinkStatement(db, MAGIC_LINKS_TABLE.table, row.id),
-    prepareAuditLogAfterOneChange(db, "admin", row.user_id, payload.auditAction, "admin_session", session.sessionId, {
-      expiresAt: session.expiresAt,
-    }),
-    prepareVerifyPrimaryEmailStatement(db, {
-      userId: row.user_id,
-      normalizedEmail,
-      method: "magic_link",
-      verifiedAt,
-    }),
-    ...(await prepareVerifiedDomainAssociationStatements(db, {
-      userId: row.user_id,
-      normalizedEmail,
-      at: verifiedAt,
-    })),
-    session.statement,
-  ]);
+      session.statement,
+    ],
+  });
   return {
     admin: createUserBackedAuthAdmin({
-      id: row.user_id,
+      id: row.id,
       email: row.email,
       role: row.role,
       scopes: row.role === "admin" ? [...AUTH_SCOPES] : [],
     }),
     sessionId: session.sessionId,
     expiresAt: session.expiresAt,
+    ...(capability.returnTo ? { returnTo: capability.returnTo } : {}),
   };
 }

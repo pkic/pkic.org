@@ -143,7 +143,7 @@ describe("Managed mailing list configuration", () => {
     // createAdminSession (tests/helpers/auth.ts) always signs the full
     // AUTH_SCOPES set as a test-harness convenience, regardless of the
     // user's actual DB role — unlike the real magic-link flow
-    // (verifyAdminMagicLink), which sets scopes: [] for any non-admin role.
+    // (redeemAdminSignInCapability), which sets scopes: [] for any non-admin role.
     // Mailing Lists is gated by that legacy scope system (admin role
     // required, no permission — see admin-mailing-lists.ts's header
     // note), so this test builds the token directly with scopes: [] to

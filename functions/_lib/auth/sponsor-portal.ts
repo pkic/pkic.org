@@ -2,14 +2,11 @@
  * Sponsor portal authentication — "Sponsor Portal — Attendee Data
  * Access".
  *
- * Shares session/magic-link mechanism with ./admin.ts and ./member.ts via
- * ./session-engine.ts. What stays separate: a sponsor contact has no
- * `users` row ("no separate account required, consistent with the
- * non-member sponsor use case"), so the identity being authenticated is a
- * `sponsorships.id`, not a `users.id`. `auth_magic_links`/`sessions` are
- * both `user_id NOT NULL`, so this uses its own tables
- * (`sponsor_portal_magic_links`/`sponsor_portal_sessions`, consolidated migration 0035)
- * with the same shape, and a distinct JWT `typ` claim so a sponsor-portal
+ * Shares the signed email-auth capability mechanism with admin/member while
+ * retaining a distinct revocable session. A sponsor contact has no
+ * `users` row, so the identity being authenticated is a `sponsorships.id`,
+ * not a `users.id`. Only the normal `sponsor_portal_sessions` table is
+ * sponsor-specific, with a distinct JWT `typ` claim so a sponsor-portal
  * session can never be replayed against an admin/member endpoint or vice
  * versa.
  *
@@ -30,18 +27,22 @@ import {
   sessionExpiresAtToExp,
   hasBaseSessionTokenClaims,
   insertSessionRow,
+  prepareSessionRow,
   fetchSessionRow,
   assertSessionActive,
   revokeSessionRow,
-  insertMagicLinkRow,
-  prepareMagicLinkRow,
-  fetchMagicLinkRowByToken,
-  validateAndConsumeMagicLinkRow,
   type SessionTableConfig,
-  type MagicLinkTableConfig,
 } from "./session-engine";
 import { SPONSOR_PORTAL_SESSION_COOKIE_NAME, SPONSOR_PORTAL_SESSION_COOKIE_PATH } from "./session-cookies";
 export { SPONSOR_PORTAL_SESSION_COOKIE_NAME, SPONSOR_PORTAL_SESSION_COOKIE_PATH } from "./session-cookies";
+import {
+  assertEmailAuthCapabilityEmail,
+  commitEmailAuthRedemption,
+  queueEmailAuthCapability,
+  verifyEmailAuthCapabilityToken,
+} from "./email-auth-capabilities";
+import { nowIso } from "../utils/time";
+import type { AuthorizationEvidence } from "../db/authorization-guard";
 
 export interface SponsorPortalSession {
   sponsorshipId: string;
@@ -64,10 +65,23 @@ interface SponsorshipEligibleRow {
 const SPONSOR_PORTAL_SESSION_TOKEN_TYPE = "sponsor-portal-session";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sponsor_portal_sessions", subjectColumn: "sponsorship_id" };
-const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {
-  table: "sponsor_portal_magic_links",
-  subjectColumn: "sponsorship_id",
-};
+
+function sponsorSignInAuthorizationEvidence(
+  sponsorshipId: string,
+  normalizedContactEmail: string,
+): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+          FROM sponsorships s
+          JOIN events e ON e.id = s.event_id
+          WHERE s.id = ?
+            AND s.sponsor_type = 'event'
+            AND s.pipeline_stage = 'active'
+            AND s.event_id IS NOT NULL
+            AND lower(trim(s.contact_email)) = ?`,
+    bindings: [sponsorshipId, normalizedContactEmail],
+  };
+}
 
 const sponsorPortalByRequest = new WeakMap<Request, SponsorPortalSession>();
 
@@ -190,7 +204,7 @@ export async function requireSponsorPortalFromRequest(
   );
 
   const sponsorship = await findActiveEventSponsorship(db, sessionRow.subjectId);
-  if (!sponsorship) {
+  if (!sponsorship || !sponsorship.contact_email) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This sponsorship is no longer active");
   }
 
@@ -219,7 +233,7 @@ export async function requireSponsorPortalFromRequest(
  * "resolved server-side to the internal events.id" convention
  * POST /api/v1/sponsorship/checkout already established.
  */
-export async function requestSponsorPortalMagicLink(
+export async function queueSponsorPortalSignInCapabilityForEmail(
   db: DatabaseLike,
   payload: {
     email: string;
@@ -227,8 +241,9 @@ export async function requestSponsorPortalMagicLink(
     ipHash?: string | null;
     userAgentHash?: string | null;
     ttlMinutes: number;
+    signingSecret: string;
   },
-): Promise<{ token: string | null; sponsorship: SponsorPortalSession | null }> {
+): Promise<{ queuedToken: string | null; sponsorship: SponsorPortalSession | null }> {
   const email = normalizeEmail(payload.email);
   const row = await first<SponsorshipEligibleRow>(
     db,
@@ -241,51 +256,82 @@ export async function requestSponsorPortalMagicLink(
   );
 
   if (!row) {
-    return { token: null, sponsorship: null };
+    return { queuedToken: null, sponsorship: null };
   }
 
-  const token = await issueSponsorPortalMagicLinkForSponsorship(db, row.id, payload);
-  return { token, sponsorship: toSponsorPortalSession(row) };
+  const capability = await queueSponsorPortalSignInCapability(row.id, row.contact_email!, payload);
+  return { queuedToken: capability.queuedToken, sponsorship: toSponsorPortalSession(row) };
 }
 
 /**
- * Issues a magic link token for a specific, already-known sponsorship
- * record — used both by requestSponsorPortalMagicLink (self-service
- * re-request) and by the stage-transition route when a sponsorship first
- * goes active at a qualifying tier (the sponsor-portal-access email).
+ * Queues a sign-in capability for a specific, already-known sponsorship.
+ * The returned marker is not a bearer credential; the outbox materializes
+ * the signed token only when it delivers an authorized server-authored URL.
  */
-export async function issueSponsorPortalMagicLinkForSponsorship(
-  db: DatabaseLike,
+export async function queueSponsorPortalSignInCapability(
   sponsorshipId: string,
-  payload: { ipHash?: string | null; userAgentHash?: string | null; ttlMinutes: number },
-): Promise<string> {
-  return insertMagicLinkRow(db, MAGIC_LINKS_TABLE, sponsorshipId, payload);
+  contactEmail: string,
+  payload: {
+    signingSecret: string;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+    ttlMinutes: number;
+  },
+): Promise<{ queuedToken: string }> {
+  const capability = await queueEmailAuthCapability({
+    signingSecret: payload.signingSecret,
+    purpose: "sponsor_portal_sign_in",
+    subjectId: sponsorshipId,
+    email: contactEmail,
+    ttlSeconds: payload.ttlMinutes * 60,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  return { queuedToken: capability.queuedToken };
 }
 
-export async function prepareSponsorPortalMagicLinkForSponsorship(
+export async function redeemSponsorPortalSignInCapability(
   db: DatabaseLike,
-  sponsorshipId: string,
-  payload: { ipHash?: string | null; userAgentHash?: string | null; ttlMinutes: number },
-) {
-  return prepareMagicLinkRow(db, MAGIC_LINKS_TABLE, sponsorshipId, payload);
-}
-
-export async function verifySponsorPortalMagicLink(
-  db: DatabaseLike,
-  payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
+  payload: {
+    token: string;
+    signingSecret: string;
+    sessionTtlHours: number;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+  },
 ): Promise<{ session: SponsorPortalSession; sessionId: string; expiresAt: string }> {
-  const row = await fetchMagicLinkRowByToken(db, MAGIC_LINKS_TABLE, payload.token);
-  if (!row) {
-    throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid sponsor portal magic link token");
-  }
-
-  await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, row, payload);
-
-  const sponsorship = await findActiveEventSponsorship(db, row.subjectId);
-  if (!sponsorship) {
+  const capability = await verifyEmailAuthCapabilityToken({
+    signingSecret: payload.signingSecret,
+    purpose: "sponsor_portal_sign_in",
+    token: payload.token,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  const sponsorship = await findActiveEventSponsorship(db, capability.subjectId);
+  if (!sponsorship || !sponsorship.contact_email) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This sponsorship is no longer active");
   }
+  await assertEmailAuthCapabilityEmail({
+    signingSecret: payload.signingSecret,
+    capability,
+    currentEmail: sponsorship.contact_email,
+  });
 
-  const { sessionId, expiresAt } = await issueSponsorPortalSession(db, sponsorship.id, payload.sessionTtlHours);
-  return { session: toSponsorPortalSession(sponsorship), sessionId, expiresAt };
+  const prepared = await prepareSessionRow(db, SESSIONS_TABLE, sponsorship.id, payload.sessionTtlHours);
+  const verifiedAt = nowIso();
+  const normalizedContactEmail = normalizeEmail(sponsorship.contact_email);
+  await commitEmailAuthRedemption(db, {
+    purpose: "sponsor_portal_sign_in",
+    capabilityId: capability.capabilityId,
+    actorType: "sponsor",
+    actorId: sponsorship.id,
+    action: "sponsor_portal_magic_link_verified",
+    entityType: "sponsor_portal_session",
+    entityId: prepared.sessionId,
+    details: { expiresAt: prepared.expiresAt },
+    createdAt: verifiedAt,
+    authorizationEvidence: sponsorSignInAuthorizationEvidence(sponsorship.id, normalizedContactEmail),
+    statements: [prepared.statement],
+  });
+  return { session: toSponsorPortalSession(sponsorship), sessionId: prepared.sessionId, expiresAt: prepared.expiresAt };
 }

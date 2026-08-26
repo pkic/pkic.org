@@ -7,20 +7,20 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventIdSchema, normalizedEmailSchema, successResponseSchema, tokenSchema } from "./api-common";
+import { emailAuthTokenSchema, eventIdSchema, normalizedEmailSchema, successResponseSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const sponsorPortalAuthRequestSchema = z.object({
   email: normalizedEmailSchema,
   // Accepts either the event's internal id or its public slug — resolved
   // server-side against both events.id and events.slug (see
-  // _lib/auth/sponsor-portal.ts's requestSponsorPortalMagicLink), since a
+  // _lib/auth/sponsor-portal.ts's queueSponsorPortalSignInCapabilityForEmail), since a
   // sponsor contact re-requesting a link only ever knows the public slug.
   eventId: z.string().trim().min(1),
 });
 
 export const sponsorPortalAuthVerifySchema = z.object({
-  token: tokenSchema,
+  token: emailAuthTokenSchema,
 });
 
 export const sponsorPortalSessionSchema = z.object({

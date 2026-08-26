@@ -6,14 +6,24 @@ import { onRequestPost as logout } from "../functions/api/v1/admin/auth/logout";
 import { onRequestPost as requestLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestGet as session } from "../functions/api/v1/admin/auth/session";
 import { onRequestPost as verifyLink } from "../functions/api/v1/admin/auth/verify-link";
-import { createContext, createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
+import {
+  createContext,
+  createTestRateLimiter,
+  deliveredEmailPayload,
+  seedEventAndAdmin,
+  queryAll,
+} from "./helpers/context";
 import {
   adminAuthSessionResponseSchema,
   adminSessionEstablishedResponseSchema,
 } from "../assets/shared/schemas/admin-auth";
 
-function extractTokenFromMagicLinkPayload(payloadJson: string): string {
-  const payload = JSON.parse(payloadJson) as { magicLinkUrl: string };
+async function extractTokenFromMagicLinkPayload(payloadJson: string): Promise<string> {
+  const stored = JSON.parse(payloadJson) as { magicLinkUrl: string; __authorizedCapabilityMarkers?: unknown[] };
+  expect(stored.magicLinkUrl).toMatch(/pkcq1_/);
+  expect(stored.__authorizedCapabilityMarkers).toHaveLength(1);
+  const payload = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, payloadJson);
   const url = new URL(payload.magicLinkUrl);
   return url.searchParams.get("token") as string;
 }
@@ -44,7 +54,7 @@ describe("admin magic-link auth", () => {
     const outboxRows = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
     expect(outboxRows).toHaveLength(1);
 
-    const token = extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
+    const token = await extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
 
     const verifyResponse = await verifyLink(
       createContext(
@@ -111,7 +121,7 @@ describe("admin magic-link auth", () => {
 
     expect(response.status).toBe(200);
 
-    const rows = await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM auth_magic_links");
+    const rows = await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM email_outbox");
     expect(Number(rows[0].total)).toBe(0);
   });
 
@@ -142,7 +152,6 @@ describe("admin magic-link auth", () => {
       ),
     ).rejects.toThrow();
 
-    expect(await queryAll(env.DB, "SELECT id FROM auth_magic_links")).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
     await env.DB.prepare("DROP TRIGGER reject_admin_auth_request_audit").run();
   });
@@ -166,7 +175,7 @@ describe("admin magic-link auth", () => {
       ),
     );
     const [outbox] = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
-    const token = extractTokenFromMagicLinkPayload(outbox.payload_json);
+    const token = await extractTokenFromMagicLinkPayload(outbox.payload_json);
     await env.DB.prepare(
       `CREATE TRIGGER reject_admin_auth_verify_audit BEFORE INSERT ON audit_log
        WHEN NEW.action = 'admin_magic_link_verified'
@@ -187,12 +196,67 @@ describe("admin magic-link auth", () => {
       );
     await expect(makeVerification()).rejects.toThrow();
     expect(
-      (await queryAll<{ used_at: string | null }>(env.DB, "SELECT used_at FROM auth_magic_links"))[0].used_at,
-    ).toBeNull();
+      await queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE action = 'admin_magic_link_verified'",
+      ),
+    ).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
 
     await env.DB.prepare("DROP TRIGGER reject_admin_auth_verify_audit").run();
     expect((await makeVerification()).status).toBe(200);
+  });
+
+  it("rolls back redemption when the primary email changes before the commit statements run", async () => {
+    await seedEventAndAdmin(env.DB);
+    const isolatedEnv = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(100),
+      IP_RATE_LIMITER: createTestRateLimiter(100),
+    };
+    await requestLink(
+      createContext(
+        isolatedEnv,
+        new Request("https://app.test/api/v1/admin/auth/request-link", {
+          method: "POST",
+          body: JSON.stringify({ email: "admin@pkic.org" }),
+          headers: { "content-type": "application/json" },
+        }),
+        {},
+      ),
+    );
+    const [outbox] = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
+    const token = await extractTokenFromMagicLinkPayload(outbox.payload_json);
+
+    const gate = gateNextBatch(env.DB);
+    const verificationContext = createContext(
+      isolatedEnv,
+      new Request("https://app.test/api/v1/admin/auth/verify-link", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+        headers: { "content-type": "application/json" },
+      }),
+      {},
+    );
+    verificationContext.set?.("requestDb", gate.db);
+    const staleRedemption = verifyLink(verificationContext);
+    await gate.reached;
+
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE email = 'admin@pkic.org'")
+      .bind("changed-during-redemption@example.test", "changed-during-redemption@example.test")
+      .run();
+    gate.release();
+    await expect(staleRedemption).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'admin_magic_link_verified'")).toHaveLength(
+      0,
+    );
+    expect(
+      await queryAll<{ email: string }>(
+        env.DB,
+        "SELECT email FROM users WHERE email = 'changed-during-redemption@example.test'",
+      ),
+    ).toHaveLength(1);
   });
 
   it("rate-limits repeated magic-link requests for the same email", async () => {
@@ -247,7 +311,7 @@ describe("admin magic-link auth", () => {
     );
 
     const outboxRows = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
-    const token = extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
+    const token = await extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
 
     await expect(
       verifyLink(
@@ -301,7 +365,7 @@ describe("admin magic-link auth", () => {
     );
 
     const outboxRows = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
-    const token = extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
+    const token = await extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
 
     const verifyResponse = await verifyLink(
       createContext(

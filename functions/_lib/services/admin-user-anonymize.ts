@@ -61,7 +61,6 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
     db
       .prepare("UPDATE permission_grants SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
       .bind(at, user.id),
-    db.prepare("DELETE FROM auth_magic_links WHERE user_id = ?").bind(user.id),
     db.prepare("DELETE FROM passkey_credentials WHERE user_id = ?").bind(user.id),
     db.prepare("DELETE FROM user_emails WHERE user_id = ?").bind(user.id),
     ...(await buildUserAccessOffboardingStatements(db, {

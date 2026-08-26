@@ -20,6 +20,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     userAgentHash: http.userAgentHash,
     ttlMinutes: http.magicLinkTtlMinutes,
     appBaseUrl: http.appBaseUrl,
+    signingSecret: http.secret,
   });
 
   if (result.outboxId) {

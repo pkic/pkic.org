@@ -308,9 +308,6 @@ describe("admin user deactivation", () => {
       env.DB.prepare(
         "INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 day'))",
       ).bind(crypto.randomUUID(), targetId, `refresh-${crypto.randomUUID()}`),
-      env.DB.prepare(
-        "INSERT INTO auth_magic_links (id, user_id, token_hash, expires_at, created_at, purpose) VALUES (?, ?, ?, datetime('now', '+1 hour'), datetime('now'), 'member')",
-      ).bind(crypto.randomUUID(), targetId, `magic-${crypto.randomUUID()}`),
     ]);
     const staffToken = await createAdminSession(env.DB, staffId, "identity-recovery-session");
 
@@ -322,16 +319,15 @@ describe("admin user deactivation", () => {
 
     expect(response.status).toBe(200);
     await expect(
-      queryAll<{ email: string; sessions: number; refresh: number; magic: number }>(
+      queryAll<{ email: string; sessions: number; refresh: number }>(
         env.DB,
         `SELECT u.email,
                 (SELECT COUNT(*) FROM sessions WHERE user_id = u.id AND revoked_at IS NULL) AS sessions,
-                (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = u.id AND revoked_at IS NULL) AS refresh,
-                (SELECT COUNT(*) FROM auth_magic_links WHERE user_id = u.id AND used_at IS NULL) AS magic
+                (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = u.id AND revoked_at IS NULL) AS refresh
            FROM users u WHERE u.id = ?`,
         [targetId],
       ),
-    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0, refresh: 0, magic: 0 }]);
+    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0, refresh: 0 }]);
   });
 
   it("invalidates a stale pending confirmation when an admin changes the primary email", async () => {
@@ -696,10 +692,6 @@ describe("admin user anonymization", () => {
         "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
       ).bind(crypto.randomUUID(), userId, "alias@example.test", "alias@example.test"),
       env.DB.prepare(
-        `INSERT INTO auth_magic_links (id, user_id, token_hash, expires_at, created_at)
-           VALUES (?, ?, ?, datetime('now', '+1 hour'), datetime('now'))`,
-      ).bind(crypto.randomUUID(), userId, `magic-${crypto.randomUUID()}`),
-      env.DB.prepare(
         `INSERT INTO passkey_credentials
              (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
            VALUES (?, ?, ?, 'public-key', 0, 'Personal security key', datetime('now'))`,
@@ -721,7 +713,6 @@ describe("admin user anonymization", () => {
     );
 
     expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toHaveLength(0);
-    expect(await queryAll(env.DB, "SELECT id FROM auth_magic_links WHERE user_id = ?", userId)).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id = ?", userId)).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", userId),

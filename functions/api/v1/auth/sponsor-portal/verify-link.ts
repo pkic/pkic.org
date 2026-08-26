@@ -7,7 +7,7 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import {
   serializeSponsorPortalSessionCookie,
   signSponsorPortalSessionToken,
-  verifySponsorPortalMagicLink,
+  redeemSponsorPortalSignInCapability,
 } from "../../../../_lib/auth/sponsor-portal";
 import { sponsorPortalAuthVerifySchema } from "../../../../../assets/shared/schemas/sponsor-portal";
 import type { AdminContext } from "../../../../_lib/db/context";
@@ -21,8 +21,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, sponsorPortalAuthVerifySchema);
   const http = await prepareMagicLinkVerificationHttp(c, SPONSOR_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
 
-  const verified = await verifySponsorPortalMagicLink(http.db, {
+  const verified = await redeemSponsorPortalSignInCapability(http.db, {
     token: body.token,
+    signingSecret: http.secret,
     sessionTtlHours: DEFAULT_SPONSOR_PORTAL_SESSION_TTL_HOURS,
     ipHash: http.ipHash,
     userAgentHash: http.userAgentHash,

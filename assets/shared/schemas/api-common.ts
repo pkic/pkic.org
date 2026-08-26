@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
 import { databaseIdSchema } from "./identifiers";
 
 /** Exact base response contract for successful mutations. Extend this for declared domain payloads. */
@@ -49,7 +50,7 @@ export const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
 export const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 export const termKeyPattern = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 export const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-export const tokenPattern = /^[A-Za-z0-9_.-]{16,512}$/;
+export const tokenCharactersPattern = /^[A-Za-z0-9_.-]+$/;
 export const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
 
 export function trimmedString(min: number, max: number): z.ZodString {
@@ -75,8 +76,14 @@ export const firstNameSchema = trimmedString(1, 80).regex(namePattern, "Contains
 export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains unsupported characters");
 export const organizationNameSchema = trimmedString(2, 160);
 export const jobTitleSchema = trimmedString(2, 120);
-export const tokenSchema = z.string().trim().regex(tokenPattern, "Invalid token format");
-export const magicLinkVerifySchema = z.object({ token: tokenSchema });
+export const tokenSchema = z.string().trim().min(16).max(512).regex(tokenCharactersPattern, "Invalid token format");
+export const emailAuthTokenSchema = z
+  .string()
+  .trim()
+  .min(16)
+  .max(EMAIL_AUTH_TOKEN_MAX_LENGTH)
+  .regex(tokenCharactersPattern, "Invalid token format");
+export const magicLinkVerifySchema = z.object({ token: emailAuthTokenSchema });
 
 /** Events use stable natural ids (often their initial slug), not generated UUID ids. */
 export const eventIdSchema = trimmedString(1, 200);

@@ -2,7 +2,7 @@ import {
   createIdentitySessionEstablishedResponse,
   prepareMagicLinkVerificationHttp,
 } from "../../../../_lib/auth/http-flow";
-import { publicPortalSession, verifyPortalMagicLink } from "../../../../_lib/auth/portal";
+import { publicPortalSession, redeemPortalSignInCapability } from "../../../../_lib/auth/portal";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { AdminContext } from "../../../../_lib/db/context";
 import type { DatabaseSessionLike } from "../../../../_lib/db/session";
@@ -16,8 +16,9 @@ const PORTAL_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE = "portal-auth-verify-link:i
 export const PortalAuthVerifyLink = openApiRoute(portalAuthVerifyRouteSchema, async (c: AdminContext, data) => {
   const http = await prepareMagicLinkVerificationHttp(c, PORTAL_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
   const db = http.db as DatabaseSessionLike;
-  const result = await verifyPortalMagicLink(db, c.env, {
+  const result = await redeemPortalSignInCapability(db, c.env, {
     token: data.body.token,
+    signingSecret: http.secret,
     ipHash: http.ipHash,
     userAgentHash: http.userAgentHash,
   });

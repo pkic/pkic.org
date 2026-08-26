@@ -1,4 +1,4 @@
-import { prepareAdminMagicLink } from "../auth/admin";
+import { queueAdminSignInCapability } from "../auth/admin";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
@@ -11,10 +11,11 @@ export async function requestAdminSignInLink(
     userAgentHash: string | null;
     ttlMinutes: number;
     appBaseUrl: string;
+    signingSecret: string;
   },
 ): Promise<{ outboxId: string | null; adminFound: boolean }> {
-  const magic = await prepareAdminMagicLink(db, payload);
-  if (!magic.token || !magic.admin || !magic.statement) {
+  const magic = await queueAdminSignInCapability(db, payload);
+  if (!magic.queuedToken || !magic.admin) {
     return { outboxId: null, adminFound: false };
   }
 
@@ -27,13 +28,13 @@ export async function requestAdminSignInLink(
     subject: "Your PKI Consortium admin sign-in link",
     data: {
       email: magic.admin.email,
-      magicLinkUrl: `${payload.appBaseUrl}/admin/?token=${encodeURIComponent(magic.token)}`,
+      magicLinkUrl: `${payload.appBaseUrl}/admin/?token=${encodeURIComponent(magic.queuedToken)}`,
       expiresInMinutes: payload.ttlMinutes,
     },
+    capabilityLinkValues: [magic.queuedToken],
   });
 
   await db.batch([
-    magic.statement,
     email.statement,
     prepareAuditLog(db, "admin", magic.admin.id, "admin_magic_link_requested", "admin_user", magic.admin.id, {
       email: magic.admin.email,

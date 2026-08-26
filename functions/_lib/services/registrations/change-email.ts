@@ -439,12 +439,12 @@ export async function prepareFinalizeEmailChange(
     ),
   );
   // A canonical login identifier changed. Invalidate every outstanding bearer
-  // session and login link so neither the former mailbox nor a stale browser
-  // can continue authenticating without proving control of the new address.
+  // session so neither the former mailbox nor a stale browser can continue
+  // authenticating without proving control of the new address. Signed email-
+  // auth capabilities are checked against the current email when used.
   stmts.push(
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
     db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
-    db.prepare("UPDATE auth_magic_links SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(now, user.id),
     prepareRotateUserRegistrationManageSecrets(db, user.id, now, registrationBefore.id),
   );
   if (params.rotateManageLink !== false) {

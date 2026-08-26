@@ -20,13 +20,10 @@
 -- assignments) can declare the FK in its own initial CREATE TABLE — no
 -- rebuild required anywhere in this schema.
 
--- Admin, member, and MCP OAuth magic links share auth_magic_links. Bind every
--- newly issued link to one verifier context so a user eligible for multiple
--- surfaces cannot exchange one flow's token through another. This remains an
--- open TEXT vocabulary rather than a CHECK constraint so adding another auth
--- flow never requires rebuilding the table. Existing NULL-purpose links fail
--- closed in the application and naturally expire.
-ALTER TABLE auth_magic_links ADD COLUMN purpose TEXT;
+-- Email sign-in capabilities are signed at delivery and redeemed exactly
+-- once through audit_log.idempotency_key. No usable credential or issued-link
+-- row is persisted, so the legacy pre-redemption table is no longer needed.
+DROP TABLE auth_magic_links;
 
 CREATE TABLE membership_categories (
   code         TEXT NOT NULL PRIMARY KEY,
@@ -2661,7 +2658,7 @@ INSERT INTO roles (id, name, description, is_system_role, single_holder_per_cont
 -- bound and no separate table-rebuild migration is needed.
 --
 -- credential_id stores the credential ID as base64url TEXT, in the clear —
--- unlike `sessions.token_hash`/`auth_magic_links.token_hash`, a WebAuthn
+-- unlike `sessions.token_hash`, a WebAuthn
 -- credential ID is not a bearer secret (security comes from the private key
 -- never leaving the authenticator, proven via signature); hashing it would
 -- only lose the ability to look it up for `excludeCredentials` at
@@ -3690,11 +3687,10 @@ You may revise and resubmit at any time.',
 --    consortium sponsorship goes active, cleared when it lapses.
 -- 2. `event_sponsor_attendee_tiers` — per-event config of which sponsor
 --    tiers get attendee-data access.
--- 3. `sponsor_portal_magic_links`/`sponsor_portal_sessions` — a sponsor
---    contact has no `users` row ("no separate account
---    required"), so the existing `auth_magic_links`/`sessions` tables
---    (both `user_id NOT NULL`) can't be reused the way member/admin auth
---    does. These are the same shape, scoped to `sponsorship_id` instead.
+-- 3. `sponsor_portal_sessions` — a sponsor contact has no `users` row ("no
+--    separate account required"), so the existing `sessions` table (with
+--    `user_id NOT NULL`) cannot be reused. Sessions are scoped to
+--    `sponsorship_id` instead.
 -- 4. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
 --    against anything already there). Keep the legacy source tables as a
@@ -3728,18 +3724,7 @@ CREATE TABLE event_sponsor_attendee_tiers (
   UNIQUE(event_id, tier_name)
 );
 
--- ── Sponsor portal auth (no `users` row — see header) ─────────────────────
-
-CREATE TABLE sponsor_portal_magic_links (
-  id              TEXT NOT NULL PRIMARY KEY,
-  sponsorship_id  TEXT NOT NULL REFERENCES sponsorships(id),
-  token_hash      TEXT NOT NULL UNIQUE,
-  expires_at      TEXT NOT NULL,
-  used_at         TEXT,
-  request_ip_hash TEXT,
-  user_agent_hash TEXT,
-  created_at      TEXT NOT NULL
-);
+-- ── Sponsor portal sessions (no `users` row — see header) ──────────────────
 
 CREATE TABLE sponsor_portal_sessions (
   id             TEXT NOT NULL PRIMARY KEY,
@@ -3751,6 +3736,19 @@ CREATE TABLE sponsor_portal_sessions (
 );
 
 CREATE INDEX idx_sponsor_portal_sessions_sponsorship ON sponsor_portal_sessions(sponsorship_id);
+
+-- The authenticated sponsor identity is the current contact mailbox. Any
+-- change to that mailbox revokes existing bearer sessions immediately, no
+-- matter which present or future management path performs the update.
+CREATE TRIGGER revoke_sponsor_portal_sessions_on_contact_email_change
+AFTER UPDATE OF contact_email ON sponsorships
+WHEN lower(trim(COALESCE(OLD.contact_email, ''))) <> lower(trim(COALESCE(NEW.contact_email, '')))
+BEGIN
+  UPDATE sponsor_portal_sessions
+     SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   WHERE sponsorship_id = NEW.id
+     AND revoked_at IS NULL;
+END;
 
 -- ── Migrate live `sponsors`/`sponsor_events` rows first ───────
 -- (must run before any future YAML-scan pass — see scripts/migrate-sponsors-yaml-to-d1.mjs

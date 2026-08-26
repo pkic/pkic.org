@@ -17,7 +17,11 @@ import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget
 import type { AuthAdmin } from "../functions/_lib/types";
 import { renderEmail } from "../functions/_lib/email/render";
 
-const NOTIFICATIONS = { appBaseUrl: "https://app.test", magicLinkTtlMinutes: 30 };
+const NOTIFICATIONS = {
+  appBaseUrl: "https://app.test",
+  magicLinkTtlMinutes: 30,
+  signingSecret: env.INTERNAL_SIGNING_SECRET!,
+};
 
 function isoDaysFromNow(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);

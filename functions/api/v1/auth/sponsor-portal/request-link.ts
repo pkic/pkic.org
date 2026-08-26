@@ -9,7 +9,7 @@
  */
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
-import { requestSponsorPortalMagicLink } from "../../../../_lib/auth/sponsor-portal";
+import { queueSponsorPortalSignInCapabilityForEmail } from "../../../../_lib/auth/sponsor-portal";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { logInfo } from "../../../../_lib/logging";
 import { sponsorPortalAuthRequestSchema } from "../../../../../assets/shared/schemas/sponsor-portal";
@@ -24,16 +24,17 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, sponsorPortalAuthRequestSchema);
   const http = await prepareMagicLinkRequestHttp(c, body.email, SPONSOR_MAGIC_LINK_REQUEST_RATE_LIMIT_NAMESPACE);
 
-  const magic = await requestSponsorPortalMagicLink(http.db, {
+  const magic = await queueSponsorPortalSignInCapabilityForEmail(http.db, {
     email: body.email,
     eventId: body.eventId,
     ipHash: http.ipHash,
     userAgentHash: http.userAgentHash,
     ttlMinutes: http.magicLinkTtlMinutes,
+    signingSecret: http.secret,
   });
 
-  if (magic.token && magic.sponsorship) {
-    const portalUrl = `${http.appBaseUrl}/sponsor-portal/?token=${encodeURIComponent(magic.token)}`;
+  if (magic.queuedToken && magic.sponsorship) {
+    const portalUrl = `${http.appBaseUrl}/sponsor-portal/?token=${encodeURIComponent(magic.queuedToken)}`;
     const outboxId = await queueEmail(http.db, {
       templateKey: "sponsor-portal-access",
       recipientEmail: magic.sponsorship.contactEmail,
@@ -46,6 +47,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         portalUrl,
         expiresInMinutes: http.magicLinkTtlMinutes,
       },
+      capabilityLinkValues: [portalUrl],
     });
     c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, outboxId));
   } else {

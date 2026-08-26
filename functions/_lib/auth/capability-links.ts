@@ -1,7 +1,12 @@
+import {
+  EMAIL_AUTH_RESOURCE_ID_MAX_LENGTH,
+  EMAIL_AUTH_TOKEN_MAX_LENGTH,
+} from "../../../assets/shared/constants/email-auth";
 import { first, run } from "../db/queries";
 import { AppError } from "../errors";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import type { DatabaseLike, Env } from "../types";
+import { base64UrlToBytes, bytesToBase64Url } from "./capability-payload";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -11,7 +16,9 @@ const QUEUED_TOKEN_PREFIX = "pkcq1_";
 const AUTHORIZED_MARKERS_FIELD = "__authorizedCapabilityMarkers";
 const SIGNING_DOMAIN = "pkic-public-capability:v1";
 const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
-const MAX_TOKEN_LENGTH = 1024;
+
+export type EmailAuthCapabilityPurpose =
+  "admin_sign_in" | "member_sign_in" | "portal_sign_in" | "sponsor_portal_sign_in" | "mcp_oauth_sign_in";
 
 export type CapabilityPurpose =
   | "registration_manage"
@@ -21,9 +28,10 @@ export type CapabilityPurpose =
   | "speaker_manage"
   | "meeting_guest_verify"
   | "member_join_verify"
-  | "member_join_apply";
+  | "member_join_apply"
+  | EmailAuthCapabilityPurpose;
 
-export type StatelessCapabilityPurpose = "member_join_verify" | "member_join_apply";
+export type StatelessCapabilityPurpose = "member_join_verify" | "member_join_apply" | EmailAuthCapabilityPurpose;
 
 const purposeCodes: Record<CapabilityPurpose, string> = {
   registration_manage: "rm",
@@ -34,6 +42,11 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   meeting_guest_verify: "mgv",
   member_join_verify: "mjv",
   member_join_apply: "mja",
+  admin_sign_in: "asi",
+  member_sign_in: "msi",
+  portal_sign_in: "psi",
+  sponsor_portal_sign_in: "ssi",
+  mcp_oauth_sign_in: "moi",
 };
 
 const purposesByCode = Object.fromEntries(
@@ -72,20 +85,6 @@ export function omitCapabilitySecrets<T extends object>(
   return sanitized as Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret" | "invitation_secret">;
 }
 
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function base64UrlToBytes(input: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]+$/.test(input)) throw new Error("Invalid base64url input");
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
 function encodeText(input: string): string {
   return bytesToBase64Url(encoder.encode(input));
 }
@@ -106,7 +105,7 @@ function signatureInput(purpose: CapabilityPurpose, encodedPayload: string, link
 }
 
 function parseToken(token: string, expectedPurpose: CapabilityPurpose): ParsedCapabilityToken | null {
-  if (!token.startsWith(TOKEN_PREFIX) || token.length > MAX_TOKEN_LENGTH) return null;
+  if (!token.startsWith(TOKEN_PREFIX) || token.length > EMAIL_AUTH_TOKEN_MAX_LENGTH) return null;
   const parts = token.slice(TOKEN_PREFIX.length).split(".");
   if (parts.length !== 2) return null;
   const [encodedPayload, signature] = parts;
@@ -120,7 +119,7 @@ function parseToken(token: string, expectedPurpose: CapabilityPurpose): ParsedCa
     if (
       purpose !== expectedPurpose ||
       !resourceId ||
-      resourceId.length > 512 ||
+      resourceId.length > EMAIL_AUTH_RESOURCE_ID_MAX_LENGTH ||
       !Number.isSafeInteger(expiresAt) ||
       expiresAt <= 0
     ) {
@@ -287,12 +286,25 @@ function capabilitySecretQuery(purpose: CapabilityPurpose): string {
       return "SELECT invitation_secret AS link_secret FROM event_occurrence_guests WHERE id = ?";
     case "member_join_verify":
     case "member_join_apply":
+    case "admin_sign_in":
+    case "member_sign_in":
+    case "portal_sign_in":
+    case "sponsor_portal_sign_in":
+    case "mcp_oauth_sign_in":
       throw new Error("Stateless capabilities do not have a database secret query");
   }
 }
 
 function isStatelessCapabilityPurpose(purpose: CapabilityPurpose): purpose is StatelessCapabilityPurpose {
-  return purpose === "member_join_verify" || purpose === "member_join_apply";
+  return (
+    purpose === "member_join_verify" ||
+    purpose === "member_join_apply" ||
+    purpose === "admin_sign_in" ||
+    purpose === "member_sign_in" ||
+    purpose === "portal_sign_in" ||
+    purpose === "sponsor_portal_sign_in" ||
+    purpose === "mcp_oauth_sign_in"
+  );
 }
 
 function statelessCapabilityLinkSecret(purpose: StatelessCapabilityPurpose): string {
@@ -304,6 +316,7 @@ export function signStatelessCapabilityToken(payload: {
   purpose: StatelessCapabilityPurpose;
   resourceId: string;
   ttlSeconds?: number;
+  nowSeconds?: number;
 }): Promise<string> {
   return signCapabilityToken({
     ...payload,

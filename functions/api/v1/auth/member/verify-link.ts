@@ -6,7 +6,7 @@
  * re-authenticate every few hours the way staff sessions do.
  */
 import { parseJsonBody } from "../../../../_lib/validation";
-import { verifyMemberMagicLink } from "../../../../_lib/auth/member";
+import { redeemMemberSignInCapability } from "../../../../_lib/auth/member";
 import { memberAuthVerifySchema } from "../../../../../assets/shared/schemas/member-auth";
 import type { AdminContext } from "../../../../_lib/db/context";
 import {
@@ -22,8 +22,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, memberAuthVerifySchema);
   const http = await prepareMagicLinkVerificationHttp(c, MEMBER_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
 
-  const verified = await verifyMemberMagicLink(http.db, {
+  const verified = await redeemMemberSignInCapability(http.db, {
     token: body.token,
+    signingSecret: http.secret,
     sessionTtlHours: resolveMemberSessionTtlHours(c.env.MEMBER_SESSION_TTL_HOURS),
     ipHash: http.ipHash,
     userAgentHash: http.userAgentHash,

@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import app from "../functions/router";
 import type { Env } from "../functions/_lib/types";
+import { signStatelessCapabilityToken, type EmailAuthCapabilityPurpose } from "../functions/_lib/auth/capability-links";
 import { resetDb } from "./helpers/reset-db";
-import { createTestRateLimiter, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertIndividualMember } from "./helpers/membership";
 
 const env = workerEnv as unknown as Env;
@@ -16,7 +17,7 @@ interface AuthPersona {
   requestBody: () => Record<string, string>;
   templateKey: string;
   linkProperty: "magicLinkUrl" | "portalUrl";
-  magicLinkTable: "auth_magic_links" | "sponsor_portal_magic_links";
+  capabilityPurpose: EmailAuthCapabilityPurpose;
   sessionTable: "sessions" | "sponsor_portal_sessions";
   cookieName: string;
   cookiePath: string;
@@ -33,7 +34,7 @@ const personas: AuthPersona[] = [
     requestBody: () => ({ email: "admin@pkic.org" }),
     templateKey: "admin_magic_link",
     linkProperty: "magicLinkUrl",
-    magicLinkTable: "auth_magic_links",
+    capabilityPurpose: "admin_sign_in",
     sessionTable: "sessions",
     cookieName: "pkic_admin_session",
     cookiePath: "/api/v1",
@@ -49,7 +50,7 @@ const personas: AuthPersona[] = [
     requestBody: () => ({ email: "member-parity@example.test" }),
     templateKey: "member_magic_link",
     linkProperty: "magicLinkUrl",
-    magicLinkTable: "auth_magic_links",
+    capabilityPurpose: "member_sign_in",
     sessionTable: "sessions",
     cookieName: "pkic_member_session",
     cookiePath: "/api/v1",
@@ -65,7 +66,7 @@ const personas: AuthPersona[] = [
     requestBody: () => ({ email: "sponsor-parity@example.test", eventId: sponsorEventId }),
     templateKey: "sponsor-portal-access",
     linkProperty: "portalUrl",
-    magicLinkTable: "sponsor_portal_magic_links",
+    capabilityPurpose: "sponsor_portal_sign_in",
     sessionTable: "sponsor_portal_sessions",
     cookieName: "pkic_sponsor_portal_session",
     cookiePath: "/api/v1/sponsor-portal",
@@ -112,10 +113,23 @@ async function requestToken(persona: AuthPersona, runtimeEnv: Env): Promise<stri
     "SELECT payload_json FROM email_outbox WHERE template_key = ? ORDER BY rowid DESC LIMIT 1",
     persona.templateKey,
   );
-  const payload = JSON.parse(row.payload_json) as Record<string, string>;
+  const stored = JSON.parse(row.payload_json) as Record<string, unknown>;
+  expect(stored[persona.linkProperty]).toMatch(/pkcq1_/);
+  expect(stored.__authorizedCapabilityMarkers).toHaveLength(1);
+  const payload = await deliveredEmailPayload<Record<string, string>>(env.DB, env, row.payload_json);
   const token = new URL(payload[persona.linkProperty]).searchParams.get("token");
   expect(token).toBeTruthy();
   return token!;
+}
+
+async function expiredToken(persona: AuthPersona, runtimeEnv: Env): Promise<string> {
+  return signStatelessCapabilityToken({
+    signingSecret: runtimeEnv.INTERNAL_SIGNING_SECRET!,
+    purpose: persona.capabilityPurpose,
+    resourceId: "expired",
+    ttlSeconds: 60,
+    nowSeconds: Math.floor(Date.now() / 1000) - 120,
+  });
 }
 
 async function expectError(response: Response, status: number, code: string): Promise<void> {
@@ -137,13 +151,8 @@ describe.each(personas)("$name auth HTTP-flow parity", (persona) => {
       "MAGIC_LINK_INVALID",
     );
 
-    const expiredToken = await requestToken(persona, runtimeEnv);
-    await env.DB.prepare(
-      `UPDATE ${persona.magicLinkTable}
-          SET expires_at = datetime('now', '-1 minute')
-        WHERE id = (SELECT id FROM ${persona.magicLinkTable} ORDER BY rowid DESC LIMIT 1)`,
-    ).run();
-    await expectError(await call(persona.verifyPath, { token: expiredToken }, runtimeEnv), 410, "MAGIC_LINK_EXPIRED");
+    const expired = await expiredToken(persona, runtimeEnv);
+    await expectError(await call(persona.verifyPath, { token: expired }, runtimeEnv), 410, "MAGIC_LINK_EXPIRED");
 
     const token = await requestToken(persona, runtimeEnv);
     const verifyResponse = await call(persona.verifyPath, { token }, runtimeEnv);

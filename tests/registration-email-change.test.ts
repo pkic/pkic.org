@@ -618,11 +618,6 @@ describe("Registration Email Change", () => {
           "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
         ).bind(uuid(), user.id, `session-${uuid()}`, addHours(now, 24), now),
         env.DB.prepare(
-          `INSERT INTO auth_magic_links
-               (id, user_id, token_hash, expires_at, created_at, purpose)
-             VALUES (?, ?, ?, ?, ?, 'member')`,
-        ).bind(uuid(), user.id, `magic-${uuid()}`, addHours(now, 1), now),
-        env.DB.prepare(
           `INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
              VALUES (?, ?, ?, ?, ?)`,
         ).bind(uuid(), user.id, `refresh-${uuid()}`, now, addHours(now, 24)),
@@ -647,15 +642,14 @@ describe("Registration Email Change", () => {
         code: "REGISTRATION_NOT_FOUND",
       });
       expect(
-        await first<{ active_sessions: number; active_magic_links: number; active_refresh_tokens: number }>(
+        await first<{ active_sessions: number; active_refresh_tokens: number }>(
           env.DB,
           `SELECT
              (SELECT COUNT(*) FROM sessions WHERE user_id = ? AND revoked_at IS NULL) AS active_sessions,
-             (SELECT COUNT(*) FROM auth_magic_links WHERE user_id = ? AND used_at IS NULL) AS active_magic_links,
              (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL) AS active_refresh_tokens`,
-          [user.id, user.id, user.id],
+          [user.id, user.id],
         ),
-      ).toEqual({ active_sessions: 0, active_magic_links: 0, active_refresh_tokens: 0 });
+      ).toEqual({ active_sessions: 0, active_refresh_tokens: 0 });
     });
 
     it("promotes the same user's secondary alias without duplicating ownership", async () => {

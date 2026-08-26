@@ -432,6 +432,16 @@ describe("consolidated pending migration upgrade", () => {
     ).toEqual({ name: "storage_deletion_outbox" });
     expect(
       db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('auth_magic_links', 'sponsor_portal_magic_links') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([]);
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sponsor_portal_sessions'").get(),
+    ).toEqual({ name: "sponsor_portal_sessions" });
+    expect(
+      db
         .prepare("PRAGMA table_info(application_documents)")
         .all()
         .map((column: any) => column.name),
