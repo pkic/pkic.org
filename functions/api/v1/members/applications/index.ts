@@ -1,12 +1,9 @@
 /**
  * POST /api/v1/members/applications
  *
- * Replaces POST /api/v1/forms (form_type=membership). Creates a
- * member_applications record directly in D1; no GitHub issue is filed.
- *
- * The old /api/v1/forms endpoint (functions/api/v1/forms.ts) is left in
- * place and untouched: the Hugo joinform shortcode still posts there until
- * the frontend is converted to call this endpoint.
+ * Creates a member_applications record directly in D1 and queues its email
+ * through the durable outbox. This is the only membership-application write
+ * path; there is no generic form fallback.
  */
 import { OpenAPIRoute } from "chanfana";
 import { getConfig } from "../../../../_lib/config";

@@ -1,8 +1,8 @@
 /**
  * Membership application form.
  *
- * Replaces the legacy native-POST-to-/api/v1/forms shortcode with a fetch-based
- * shell: category/name/email/organization/legal-agreement fields stay static
+ * Uses the canonical typed membership-application API. Category, name,
+ * email, organization, and legal-agreement fields stay static
  * Hugo markup (they aren't in form_fields and don't need staff editing), while
  * job title, LinkedIn, website, bios, reason, and working-group interest are
  * rendered generically from GET /api/v1/members/applications/form so staff can

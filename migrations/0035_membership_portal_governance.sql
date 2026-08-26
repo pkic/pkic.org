@@ -1896,9 +1896,9 @@ If you have any questions, just reply to this email.',
   (
     lower(hex(randomblob(16))), 'sponsorship-brochure', 1,
     'PKI Consortium sponsorship information',
-    'Hi {{contactName}},
+    'Hi {{contactNameText}},
 
-Thank you for your interest in sponsoring the PKI Consortium{{#eventName}} — {{eventName}}{{/eventName}}. Attached is our sponsorship brochure with tier details and benefits.
+Thank you for your interest in sponsoring the PKI Consortium{{#if eventNameText}} — {{eventNameText}}{{/if}}. Attached is our sponsorship brochure with tier details and benefits.
 
 Brochure: [{{brochureUrl}}]({{brochureUrl}})
 
@@ -1907,14 +1907,14 @@ A member of our team will follow up with you shortly to discuss next steps.',
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-new-inquiry', 1,
-    'New sponsorship inquiry: {{contactName}} ({{organizationName}})',
+    'New sponsorship inquiry',
     'A new sponsorship inquiry was submitted.
 
-- Contact: {{contactName}} <{{contactEmail}}>
-- Organization: {{organizationName}}
-- Sponsor type: {{sponsorType}}
-- Tier: {{tier}}
-- Notes: {{notes}}
+- Contact: {{contactNameText}} ({{contactEmailText}})
+- Organization: {{organizationNameText}}
+- Sponsor type: {{sponsorTypeText}}
+- Tier: {{tierText}}
+- Notes: {{notesText}}
 
 [View in admin]({{adminUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
@@ -3795,24 +3795,24 @@ INSERT OR IGNORE INTO email_template_versions
 VALUES
   (
     lower(hex(randomblob(16))), 'sponsorship-renewal-reminder-60', 1,
-    'Sponsorship renewal due in 60 days: {{organizationName}}',
-    'The {{tier}} sponsorship for {{organizationName}} renews on {{renewalDate}} (60 days from now).
+    'Sponsorship renewal due in 60 days',
+    'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (60 days from now).
 
 [View sponsorship]({{adminUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-renewal-reminder-30', 1,
-    'Sponsorship renewal due in 30 days: {{organizationName}}',
-    'The {{tier}} sponsorship for {{organizationName}} renews on {{renewalDate}} (30 days from now).
+    'Sponsorship renewal due in 30 days',
+    'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (30 days from now).
 
 [View sponsorship]({{adminUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-lapsed-staff', 1,
-    'Sponsorship lapsed: {{organizationName}}',
-    'The {{tier}} sponsorship for {{organizationName}} passed its renewal date ({{renewalDate}}) with no renewal recorded and has been automatically marked lapsed.
+    'Sponsorship lapsed',
+    'The {{tierText}} sponsorship for {{organizationNameText}} passed its renewal date ({{renewalDate}}) with no renewal recorded and has been automatically marked lapsed.
 
 [View sponsorship]({{adminUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
@@ -3820,17 +3820,17 @@ VALUES
   (
     lower(hex(randomblob(16))), 'sponsorship-active-confirmation', 1,
     'Your PKI Consortium sponsorship is now active',
-    'Hi {{contactName}},
+    'Hi {{contactNameText}},
 
-Your {{tier}} sponsorship for {{organizationName}} is now active{{#startDate}} as of {{startDate}}{{/startDate}}. Thank you for supporting the PKI Consortium.',
+Your {{tierText}} sponsorship for {{organizationNameText}} is now active{{#startDate}} as of {{startDate}}{{/startDate}}. Thank you for supporting the PKI Consortium.',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsor-portal-access', 1,
     'Access your sponsor portal',
-    'Hi {{contactName}},
+    'Hi {{contactNameText}},
 
-As a {{tier}} sponsor of {{eventName}}, you can view and export basic attendee information for attendees who agreed to share their details with sponsors.
+As a {{tierText}} sponsor of {{eventNameText}}, you can view and export basic attendee information for attendees who agreed to share their details with sponsors.
 
 [Access your sponsor portal]({{portalUrl}})
 

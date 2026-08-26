@@ -129,7 +129,7 @@ export const memberApplicationCreateRouteSchema = {
   tags: ["Members"],
   summary: "Submit a membership application",
   description:
-    "Creates a member_applications record and queues the application-received confirmation email. Replaces POST /api/v1/forms (form_type=membership).",
+    "Creates a member_applications record and queues the application-received confirmation email through the durable outbox.",
   request: {
     body: { content: { "application/json": { schema: memberApplicationCreateSchema } }, required: true },
   },

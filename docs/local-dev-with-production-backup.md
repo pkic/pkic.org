@@ -25,8 +25,7 @@ cp .dev.vars.example .dev.vars
 
 Open `.dev.vars` and set at least `INTERNAL_SIGNING_SECRET` to any random
 string. The other values in the example file are optional and only needed
-if you're testing email sending or the membership/sponsor-interest forms
-(which call out to GitHub).
+for the integrations you are testing, such as intercepted local email.
 
 ## 4. Make sure you're starting from clean local Miniflare state
 

@@ -11,7 +11,10 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // The local SendGrid interceptor and seeded D1 state are shared by the E2E
+  // files. Keep one worker so a test cannot clear or mutate another test's
+  // outbox/database while it is waiting for an assertion.
+  workers: 1,
   globalSetup: "./tests/e2e/global-setup.ts",
   webServer: {
     command: "sh scripts/e2e-start.sh",

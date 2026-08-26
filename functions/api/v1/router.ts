@@ -3,7 +3,6 @@ import { fromHono } from "chanfana";
 import { finalizeApiResponse, onRequest as middleware_l } from "./_middleware";
 import { handleError } from "../../_lib/http";
 import { GeoGet, onRequest as GeoGet_l } from "./geo";
-import { LegacyFormSubmissionPost } from "./forms";
 import { RouteGet } from "./index";
 import admin_Router from "./admin/router";
 import auth_Router from "./auth/router";
@@ -42,7 +41,6 @@ app.onError((error, c) => {
 app.use("*", middleware_l);
 openapi.get("/geo", GeoGet);
 app.on("HEAD", "/geo", GeoGet_l);
-openapi.post("/forms", LegacyFormSubmissionPost);
 openapi.get("/", RouteGet);
 openapi.route("/admin", admin_Router);
 openapi.route("/auth", auth_Router);

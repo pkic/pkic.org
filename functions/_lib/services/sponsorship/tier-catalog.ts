@@ -1,7 +1,10 @@
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
+import type { SponsorshipType } from "../../../../assets/shared/schemas/sponsorship";
 
-export type SponsorshipType = "consortium" | "event";
+export interface ActiveSponsorshipTier {
+  tier: string;
+}
 
 export async function isActiveSponsorshipTier(
   db: DatabaseLike,
@@ -23,7 +26,7 @@ export async function listActiveSponsorshipTierNames(
   db: DatabaseLike,
   sponsorType: SponsorshipType,
 ): Promise<string[]> {
-  const rows = await all<{ tier: string }>(
+  const rows = await all<ActiveSponsorshipTier>(
     db,
     `SELECT tier
      FROM sponsorship_tier_catalog

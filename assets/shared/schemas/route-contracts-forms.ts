@@ -22,22 +22,6 @@ import { databaseIdSchema } from "./identifiers";
 
 const formPlacementParamsSchema = formKeyParamsSchema.extend({ placementId: databaseIdSchema });
 
-/**
- * Legacy browser form endpoint. The payload intentionally remains dynamic
- * FormData because the public join and sponsor shortcodes submit configured
- * fields, while the endpoint preserves the browser redirect contract.
- */
-export const legacyFormSubmissionRouteSchema = {
-  tags: ["Legacy forms"],
-  summary: "Submit a legacy public form",
-  description:
-    "Accepts the join-membership and sponsor-interest browser forms and redirects to the trusted referring page with a success or error status.",
-  responses: {
-    "302": { description: "Redirect to the trusted referring page with the submission status." },
-    "400": { description: "Missing or untrusted request origin." },
-  },
-};
-
 const adminFormCreateResponses = {
   "201": {
     description: "Form created.",
