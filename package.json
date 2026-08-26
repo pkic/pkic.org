@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "HUGO_PARAMS_SKIPREMOTEFEEDS=true CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
+    "dev:intercepted": "sh scripts/e2e-start.sh",
     "dev:hugo": "HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo serve --configDir='' --baseURL=/",
     "build": "vite build",
     "build:preview": "CLOUDFLARE_ENV=preview vite build",
