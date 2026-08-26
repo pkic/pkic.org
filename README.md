@@ -99,16 +99,13 @@ Run the local seed flow to create admin/event data, forms/terms, and default ema
 pnpm run seed:local
 ```
 
-Run `seed:local` and `dev` from the same checkout because Wrangler's persistent
-local state belongs to that checkout:
+For ordinary interactive development, use:
 
 ```bash
-pnpm run seed:local
 pnpm run dev
 ```
 
-This is the ordinary interactive development workflow. It reuses the
-checkout's persistent local D1 state and its configured local email delivery.
+This reuses persistent local D1 state and configured local email delivery.
 
 For an isolated disposable database with SendGrid delivery captured by a local
 interceptor, use the separate command:
