@@ -23,7 +23,11 @@ import {
   materializeSeriesOccurrences,
   updateGroupEventSeries,
 } from "../functions/_lib/services/event-series";
-import { buildGroupEventsPageQuery } from "../functions/_lib/services/events/group-read-model";
+import {
+  buildGroupEventsPageQuery,
+  getGroupEvent,
+  listGroupEvents,
+} from "../functions/_lib/services/events/group-read-model";
 import { replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
@@ -31,7 +35,7 @@ import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_li
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -321,6 +325,49 @@ describe("group event sharing", () => {
     expect(
       (await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/occurrences`)).status,
     ).toBe(404);
+  });
+
+  it("does not return a shared event when its grant is revoked before list or detail evaluation", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const viewer = { userId: fixture.memberId };
+    const query = groupEventsListQuerySchema.parse({ limit: 20 });
+
+    const list = await listGroupEvents(
+      mutateBeforeNextBatch(env.DB, async () => {
+        await env.DB.prepare(
+          "DELETE FROM event_group_grants WHERE event_id = ? AND group_id = ? AND capability = 'register'",
+        )
+          .bind(fixture.eventId, fixture.granteeId)
+          .run();
+      }),
+      viewer,
+      fixture.granteeId,
+      query,
+    );
+    expect(list).toEqual({ events: [], total: 0 });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await expect(
+      getGroupEvent(
+        mutateBeforeNextStatement(env.DB, async () => {
+          await env.DB.prepare(
+            "DELETE FROM event_group_grants WHERE event_id = ? AND group_id = ? AND capability = 'register'",
+          )
+            .bind(fixture.eventId, fixture.granteeId)
+            .run();
+        }),
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_NOT_FOUND" });
   });
 
   it("does not let participant filters reveal inactive series while managers can request them explicitly", async () => {

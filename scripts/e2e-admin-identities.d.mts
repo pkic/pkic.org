@@ -5,6 +5,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "browser-presentation",
   "browser-waitlist",
   "meeting-guest",
+  "portal-event",
   "sponsor-portal",
   "votes",
 ];

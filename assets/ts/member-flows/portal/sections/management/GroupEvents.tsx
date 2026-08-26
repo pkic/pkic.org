@@ -1,20 +1,29 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
 } from "../../../../../shared/schemas/group-events";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
+import { GroupEventDetail } from "./GroupEventDetail";
+import { GroupEventEditor } from "./GroupEventEditor";
 import { ResourceCapabilities } from "./ResourceCapabilities";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
 
-export function GroupEvents({ groupId }: { groupId: string }) {
+function isStandaloneEvent(event: { seriesId: string | null; profileKey: string | null }): boolean {
+  return event.seriesId === null && event.profileKey !== "meeting" && event.profileKey !== "board_meeting";
+}
+
+export function GroupEvents({ groupId, canManage = false }: { groupId: string; canManage?: boolean }) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const tableActions = useRef<ApiTableActions | null>(null);
   const detail = useData(
     () =>
       selectedEventId
@@ -30,12 +39,41 @@ export function GroupEvents({ groupId }: { groupId: string }) {
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Events</div>
       <div class="card-body">
+        {canManage && (
+          <div class="mb-3">
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              aria-expanded={showCreate}
+              onClick={() => setShowCreate((shown) => !shown)}
+            >
+              {showCreate ? "Hide event editor" : "Create event"}
+            </button>
+          </div>
+        )}
+        {showCreate && (
+          <div class="card mb-3">
+            <div class="card-header fw-semibold">New group event</div>
+            <div class="card-body">
+              <GroupEventEditor
+                groupId={groupId}
+                event={null}
+                onSaved={async () => {
+                  setShowCreate(false);
+                  await tableActions.current?.reload();
+                }}
+                onCancel={() => setShowCreate(false)}
+              />
+            </div>
+          </div>
+        )}
         <ApiDataTable
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
           responseSchema={groupEventsListResponseSchema}
           resolve={(response) => response.events}
           resolvePage={(response) => response.page}
           paginate
+          actionsRef={tableActions}
           searchPlaceholder="Search events…"
           initialSort="next_occurrence_at"
           columns={[
@@ -83,17 +121,42 @@ export function GroupEvents({ groupId }: { groupId: string }) {
             if (detail.error) return <ErrorAlert error={detail.error} />;
             if (detail.data?.event.id !== event.id) return null;
             const selected = detail.data.event;
-            if (!selected.capabilities.includes("manage") || selected.ownerGroupId !== groupId) {
-              return <p class="small text-muted mb-0">No management actions are available for this event.</p>;
-            }
             return (
               <div class="p-3 bg-body-tertiary">
-                <ResourceSharingEditor
-                  kind="event"
+                <GroupEventDetail
+                  event={selected}
                   groupId={groupId}
-                  resourceId={selected.id}
-                  ownerGroupId={selected.ownerGroupId}
+                  onEdit={
+                    selected.capabilities.includes("manage") && isStandaloneEvent(selected)
+                      ? () => setEditingEventId(selected.id)
+                      : undefined
+                  }
                 />
+                {editingEventId === selected.id && (
+                  <div class="border-top mt-3 pt-3">
+                    <h6>Edit event</h6>
+                    <GroupEventEditor
+                      groupId={groupId}
+                      event={selected}
+                      onSaved={async () => {
+                        setEditingEventId(null);
+                        await detail.reload();
+                        await tableActions.current?.reload();
+                      }}
+                      onCancel={() => setEditingEventId(null)}
+                    />
+                  </div>
+                )}
+                {selected.capabilities.includes("manage") && selected.ownerGroupId === groupId && (
+                  <div class="border-top mt-3 pt-3">
+                    <ResourceSharingEditor
+                      kind="event"
+                      groupId={groupId}
+                      resourceId={selected.id}
+                      ownerGroupId={selected.ownerGroupId}
+                    />
+                  </div>
+                )}
               </div>
             );
           }}

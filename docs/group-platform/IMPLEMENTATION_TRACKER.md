@@ -186,6 +186,12 @@ Status: Complete
 Status: In progress
 
 - [x] Add controlled event profiles and per-event settings.
+      Evidence: active labels and descriptions come from the D1 profile catalog,
+      while the shared profile-key contract controls which profiles are valid
+      and which are meeting-series-only. The catalog remains controlled
+      reference data in this phase: adding a new profile key still requires a
+      reviewed schema/code change rather than an unrestricted administrator
+      feature-toggle builder.
 - [x] Add one owning group to portal-managed events.
 - [x] Replace unreleased meeting_series with shared event_series.
 - [x] Add authoritative recurring schedule and event occurrences.
@@ -575,7 +581,18 @@ Status: In progress
       EXPLAIN-confirmed idx_audit_log_scope use for page and count queries.
 - [x] Add nested form definition, submission, response, response-statistics,
       and placement-management routes.
-- [x] Add nested group event discovery and detail routes.
+- [x] Add nested group event discovery, detail, profile-catalog, standalone
+      create/update, and attendee-list routes.
+      Evidence: one live D1 authorization projection drives event list and
+      detail capabilities; registration is not advertised for a
+      `no_registration` event. Standalone creation derives group ownership from
+      the path, uses only active D1 profiles, and is deliberately limited to
+      `no_registration` until terms/forms/attendance configuration is moved.
+      Settings use optimistic concurrency plus same-batch resource and
+      standalone-event guards; meeting profiles and any event attached to a
+      series are rejected even when the UI is bypassed. Attendee search,
+      filtering, sorting, statistics, counting, and pagination remain in D1
+      behind `manage_attendance`.
 - [x] Add nested mailing-list discovery, preference, configuration-management,
       and resource-sharing routes.
       Evidence: participant subscription preferences remain a distinct
@@ -758,6 +775,13 @@ Status: In progress
       events, form placements, votes, and mailing lists; ownership and manage
       capability determine whether it is rendered, while the API remains the
       authorization authority.
+      Standalone event managers now use the same selected-group portal to load
+      the active D1 profile catalog, create a no-registration event, edit its
+      schedule/location/JSON-backed links, inspect attendee data, and manage
+      sharing. Meeting and board-meeting profiles remain series-only in both
+      the UI and API. A real Worker/D1 browser journey signs in through the
+      portal email capability, creates and edits a workshop, and verifies its
+      persisted owner, source mode, registration policy, link, and location.
       Identity-bound participant meeting entry is implemented, including an
       explicit shared-group `attend` grant test proving that `view`, `register`,
       and `manage` do not imply entry and that grant revocation fails closed.
@@ -772,10 +796,13 @@ Status: In progress
       members, and dual-capacity users; staff-only users do not call member
       notification APIs. The duplicate admin view and navigation item are gone,
       and the former admin hash route redirects to the portal.
-      Remaining gap: the group Events view still provides discovery, detail,
-      sharing, meeting management, and the canonical registration endpoint, but
-      not the full event create/update/attendee workflow. That workflow remains
-      in the admin application, so this parent item is intentionally open.
+      Remaining gap: portal event creation intentionally supports
+      no-registration standalone events only. The next vertical slice must move
+      dynamic registration forms, terms, attendance-day configuration, and the
+      participant registration experience together before optional, required,
+      invitation-only, or public policies are exposed. The corresponding full
+      admin event workflow therefore remains until that cutover is complete,
+      so this parent item is intentionally open.
 - [ ] Move remaining global management views into the portal.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
@@ -887,7 +914,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,003 backend tests pass with one skipped, 224 frontend tests
+      checkpoint: 2,012 backend tests pass with one skipped, 227 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -897,7 +924,14 @@ Status: In progress
       cutover, centralized management destinations, group creation, and category
       rule regressions were added. The final architecture state must pass the
       same complete gate again before handoff.
-- [ ] Run focused Playwright flows while iterating.
+- [x] Run focused Playwright flows while iterating.
+      Current evidence: the real Worker/D1 portal event journey and six
+      selected-group persona journeys pass together in one isolated seven-test
+      Playwright run. They cover actual email-capability sign-in, standalone
+      event create/edit persistence, member, direct chair, inherited manager,
+      local-only child participant, staff-only manager, and unauthorized
+      presentation contracts. The earlier guest meeting-entry browser journey
+      remains green as separate focused evidence.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,

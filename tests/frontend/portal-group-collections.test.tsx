@@ -273,6 +273,7 @@ describe("portal selected-group collections", () => {
                 ownerGroupId: GROUP_ID,
                 seriesId: null,
                 slug: "architecture-workshop",
+                basePath: "/events/2026/architecture-workshop/",
                 name: "Architecture workshop",
                 timezone: "Europe/Amsterdam",
                 startsAt: "2026-09-01T15:00:00.000Z",
@@ -283,6 +284,7 @@ describe("portal selected-group collections", () => {
                 location: "Online",
                 links: [],
                 nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+                updatedAt: "2026-08-01T00:00:00.000Z",
                 capabilities: ["view", "register"],
               },
             ],
@@ -363,6 +365,97 @@ describe("portal selected-group collections", () => {
         { path: `/api/v1/groups/${GROUP_ID}/votes`, limit: "50", sort: "-closes_at" },
       ]),
     );
+  });
+
+  it("shows attendee details and owner actions from the canonical event projection", async () => {
+    const requests: Array<{ url: URL; method: string }> = [];
+    const event = {
+      id: "architecture-workshop",
+      ownerGroupId: GROUP_ID,
+      seriesId: "70000000-0000-4000-8000-000000000001",
+      slug: "architecture-workshop",
+      basePath: "/events/2026/architecture-workshop/",
+      name: "Architecture workshop",
+      timezone: "Europe/Amsterdam",
+      startsAt: "2026-09-01T15:00:00.000Z",
+      endsAt: "2026-09-01T16:00:00.000Z",
+      profileKey: "workshop",
+      sourceMode: "hugo",
+      registrationPolicy: "optional",
+      location: "Online",
+      links: ["https://example.test/architecture-workshop"],
+      nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      capabilities: ["view", "register", "manage_attendance", "manage"],
+    } as const;
+    const page = { limit: 50, offset: 0, total: 1, hasMore: false };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push({ url, method: init.method ?? "GET" });
+        if (url.pathname.endsWith("/events")) return json({ events: [event], page });
+        if (url.pathname.endsWith(`/events/${event.id}/registrations`)) {
+          return json({
+            registrations: [
+              {
+                id: "90000000-0000-4000-8000-000000000001",
+                user_id: "90000000-0000-4000-8000-000000000002",
+                user_email: "member@example.test",
+                display_name: "Group Member",
+                referral_code: null,
+                status: "registered",
+                attendance_type: "virtual",
+                source_type: "direct",
+                rsvp_events_json: null,
+                has_bounced: false,
+                sponsor_consent: false,
+                custom_answers_json: null,
+                dayWaitlistSummary: null,
+                dayWaitlistCount: 0,
+                attendanceChangeHistory: [],
+                lastAttendanceChange: null,
+                created_at: "2026-08-01T00:00:00.000Z",
+                updated_at: "2026-08-01T00:00:00.000Z",
+              },
+            ],
+            page,
+            event: { id: event.id, slug: event.slug, name: event.name },
+            stats: {
+              byAttendanceType: { virtual: 1 },
+              attendanceStatusByType: { virtual: { accepted: 1, waitlisted: 0 } },
+              byStatus: { registered: 1 },
+              bouncedCount: 0,
+              consentCount: 1,
+            },
+          });
+        }
+        if (url.pathname.endsWith(`/events/${event.id}`)) return json({ event });
+        if (url.pathname.endsWith("/grants")) return json({ grants: [], page });
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(<GroupEvents groupId={GROUP_ID} />);
+    await settle();
+    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    await act(async () => {
+      details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    await settle();
+
+    expect(container.textContent).toContain("Registration");
+    expect(container.textContent).toContain("Open registration");
+    expect(container.textContent).toContain("Manage meeting series");
+    expect(container.textContent).toContain("Attendees");
+    expect(container.textContent).toContain("Group Member");
+    expect(container.querySelector('a[href="/events/2026/architecture-workshop/register/"]')).not.toBeNull();
+    expect(container.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
+    expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
   });
 
   it("updates a mailing-list preference through its selected group context", async () => {

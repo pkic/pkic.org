@@ -1,6 +1,7 @@
 import {
   EVENT_GUEST_POLICIES,
   EVENT_MEMBER_ELIGIBILITIES,
+  EVENT_PROFILE_LABELS,
   EVENT_PROFILE_KEYS,
   EVENT_REGISTRATION_POLICIES,
   type EventGuestPolicy,
@@ -21,14 +22,6 @@ export interface MeetingSeriesDraft {
   memberEligibility: EventMemberEligibility;
   guestPolicy: EventGuestPolicy;
 }
-
-const PROFILE_LABELS: Record<EventProfileKey, string> = {
-  meeting: "Meeting",
-  board_meeting: "Board meeting",
-  conference: "Conference",
-  workshop: "Workshop",
-  tutorial: "Tutorial",
-};
 
 const REGISTRATION_LABELS: Record<EventRegistrationPolicy, string> = {
   no_registration: "No registration",
@@ -100,7 +93,7 @@ export function MeetingSeriesFields({
         >
           {EVENT_PROFILE_KEYS.map((profile) => (
             <option key={profile} value={profile}>
-              {PROFILE_LABELS[profile]}
+              {EVENT_PROFILE_LABELS[profile]}
             </option>
           ))}
         </select>

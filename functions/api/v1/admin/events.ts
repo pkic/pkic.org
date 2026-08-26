@@ -4,6 +4,7 @@ import { requirePermission } from "../../../_lib/auth/permissions";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { createAdminEvent } from "../../../_lib/services/events";
 import { getAdminEventDetail } from "../../../_lib/services/events/admin-detail";
+import { initialEventSettings } from "../../../_lib/services/events/settings";
 import { listAdminEvents } from "../../../_lib/services/events/admin-list";
 import {
   adminEventCreateResponseSchema,
@@ -50,10 +51,6 @@ export const AdminEventsCreatePost = openApiRoute(adminEventCreateRouteSchema, a
   requirePermission(admin, "events:write");
   const body = data.body;
 
-  const settings: Record<string, unknown> = {};
-  if (body.venue) settings["venue"] = body.venue;
-  if (body.virtualUrl) settings["virtualUrl"] = body.virtualUrl;
-
   await createAdminEvent(
     requestDb(c),
     {
@@ -64,7 +61,7 @@ export const AdminEventsCreatePost = openApiRoute(adminEventCreateRouteSchema, a
       endsAt: body.endsAt ?? undefined,
       registrationMode: body.registrationMode,
       inviteLimitAttendee: body.inviteLimitAttendee,
-      settings,
+      settings: initialEventSettings(body),
     },
     admin.id,
   );

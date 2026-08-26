@@ -13,3 +13,36 @@ export function mutateBeforeNextBatch(db: DatabaseLike, mutation: () => Promise<
     },
   };
 }
+
+/** Runs one caller-owned mutation before the next single-statement read or write. */
+export function mutateBeforeNextStatement(db: DatabaseLike, mutation: () => Promise<unknown>): DatabaseLike {
+  let pending = mutation;
+  let applied = false;
+  const applyMutation = async (): Promise<void> => {
+    if (applied) return;
+    applied = true;
+    await pending();
+    pending = async () => undefined;
+  };
+  const wrap = (statement: StatementLike): StatementLike => ({
+    bind(...values: unknown[]): StatementLike {
+      return wrap(statement.bind(...values));
+    },
+    async run<T = Record<string, unknown>>() {
+      await applyMutation();
+      return statement.run<T>();
+    },
+    async all<T = Record<string, unknown>>() {
+      await applyMutation();
+      return statement.all<T>();
+    },
+    async first<T = Record<string, unknown>>(columnName?: string) {
+      await applyMutation();
+      return statement.first<T>(columnName);
+    },
+  });
+  return {
+    prepare: (sql: string) => wrap(db.prepare(sql)),
+    batch: (statements: StatementLike[]) => db.batch(statements),
+  };
+}

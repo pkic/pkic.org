@@ -108,3 +108,57 @@ export async function queryEventResourceManagementPage<T>(
   );
   return decodeOffsetPageResults<T>(pageResult, countResult);
 }
+
+/**
+ * Wraps every D1 operation in the same live event-management guard. This is
+ * intentionally used by multi-query read models whose page rows, aggregate
+ * statistics, and related projections must all stop together if a delegated
+ * capability or leadership role is revoked mid-request.
+ */
+export function guardEventResourceManagementDatabase(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  context: EventResourceManagementContext,
+  capability: EventResourceManagementCapability,
+): DatabaseLike {
+  const execute = (statements: StatementLike[]) =>
+    executeEventResourceManagementBatch(db, actor, context, capability, statements);
+  // `DatabaseLike` intentionally hides the D1 statement implementation. Keep
+  // the guarded facade for callers, but unwrap only facades created here when
+  // a multi-statement page is submitted to D1.
+  const guardedStatements = new WeakMap<StatementLike, StatementLike>();
+  return {
+    prepare(query: string): StatementLike {
+      let statement = db.prepare(query);
+      const guarded: StatementLike = {
+        bind(...values: unknown[]): StatementLike {
+          statement = statement.bind(...values);
+          guardedStatements.set(guarded, statement);
+          return guarded;
+        },
+        async run<T = Record<string, unknown>>(): Promise<D1StatementResult<T>> {
+          const [, result] = await execute([statement]);
+          return result as D1StatementResult<T>;
+        },
+        async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
+          const [, result] = await execute([statement]);
+          return { results: (result.results ?? []) as T[] };
+        },
+        async first<T = Record<string, unknown>>(columnName?: string): Promise<T | null> {
+          const { results } = await guarded.all<Record<string, unknown>>();
+          const row = results[0];
+          if (!row) return null;
+          return (columnName ? row[columnName] : row) as T;
+        },
+      };
+      guardedStatements.set(guarded, statement);
+      return guarded;
+    },
+    async batch(statements: StatementLike[]): Promise<D1StatementResult[]> {
+      const [, ...results] = await execute(
+        statements.map((statement) => guardedStatements.get(statement) ?? statement),
+      );
+      return results;
+    },
+  };
+}

@@ -53,9 +53,10 @@ import {
 } from "./[groupId]/forms/[placementId]";
 import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]/forms/[placementId]/submissions";
 import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
-import { GroupEventsList } from "./[groupId]/events/index";
-import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
-import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
+import { GroupEventsCreate, GroupEventsList } from "./[groupId]/events/index";
+import { GroupEventProfilesList } from "./[groupId]/events/profiles";
+import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
+import { GroupEventRegistrationCreate, GroupEventRegistrationsList } from "./[groupId]/events/[eventId]/registrations";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
 import { GroupStatsGet } from "./[groupId]/stats";
 import { GroupUserCatalogList } from "./[groupId]/user-catalog";
@@ -118,7 +119,11 @@ openapi.get("/:groupId/forms/:placementId/submissions", GroupFormSubmissionsList
 openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCreate);
 openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
 openapi.get("/:groupId/events", GroupEventsList);
+openapi.post("/:groupId/events", GroupEventsCreate);
+openapi.get("/:groupId/events/profiles", GroupEventProfilesList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
+openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
+openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
 openapi.get("/:groupId/votes", GroupVotesList);
 openapi.post("/:groupId/votes", GroupVoteCreate);
 openapi.get("/:groupId/votes/:voteId", GroupVoteGet);

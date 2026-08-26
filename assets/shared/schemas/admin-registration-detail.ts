@@ -2,15 +2,11 @@ import { z } from "zod";
 import { eventIdSchema } from "./api-common";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
+import { registrationRecordContextSchema } from "./registration-record";
 
 /** Joined display, attribution, and lifecycle fields common to admin registration projections. */
-export const adminRegistrationRecordContextSchema = z.object({
-  created_at: z.string(),
-  updated_at: z.string(),
-  user_email: z.string().nullable(),
-  display_name: z.string().nullable(),
-  referral_code: z.string().nullable(),
-});
+/** @deprecated Use registrationRecordContextSchema from registration-record. */
+export const adminRegistrationRecordContextSchema = registrationRecordContextSchema;
 
 export const adminRegistrationRsvpDaySchema = z.object({
   event_day_id: databaseIdSchema.nullable(),
@@ -21,7 +17,7 @@ export const adminRegistrationRsvpDaySchema = z.object({
   action_taken: z.string().nullable(),
 });
 
-export const adminRegistrationDetailSchema = adminRegistrationRecordContextSchema.extend({
+export const adminRegistrationDetailSchema = registrationRecordContextSchema.extend({
   id: databaseIdSchema,
   event_id: eventIdSchema,
   user_id: databaseIdSchema,

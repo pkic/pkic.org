@@ -3,7 +3,7 @@ import { adminEventStatsResponseSchema } from "../../../assets/shared/schemas/ad
 import { all } from "../db/queries";
 import type { DatabaseLike } from "../types";
 import type { EventRecord } from "./event-types";
-import { getAttendanceChangeStatistics, getAttendanceStatusByType } from "./registrations/admin-statistics";
+import { getAttendanceChangeStatistics, getAttendanceStatusByType } from "./registrations/attendance-statistics";
 
 /**
  * Builds the event dashboard read model. Querying and aggregation stay in

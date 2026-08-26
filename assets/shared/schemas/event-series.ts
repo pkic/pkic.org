@@ -17,6 +17,21 @@ import { eventGroupGrantSchemas } from "./resource-grants";
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
 export type EventProfileKey = z.infer<typeof eventProfileKeySchema>;
+/**
+ * Standalone events are not meeting series. Meetings and board meetings must
+ * be created through the meeting-series workflow so occurrences remain the
+ * source of truth.
+ */
+export const STANDALONE_EVENT_PROFILE_KEYS = ["conference", "workshop", "tutorial"] as const;
+export const standaloneEventProfileKeySchema = z.enum(STANDALONE_EVENT_PROFILE_KEYS);
+export type StandaloneEventProfileKey = z.infer<typeof standaloneEventProfileKeySchema>;
+export const EVENT_PROFILE_LABELS: Record<EventProfileKey, string> = {
+  meeting: "Meeting",
+  board_meeting: "Board meeting",
+  conference: "Conference",
+  workshop: "Workshop",
+  tutorial: "Tutorial",
+};
 export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
 
