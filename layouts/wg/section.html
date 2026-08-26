@@ -196,7 +196,7 @@
       <div class="col-lg-4">
         {{/* Chair/vice-chair are admin-assigned (Access Control → Working
              Groups/Chairs, backed by user_roles) and fetched client-side
-             from the public working-groups API — no more chair:/viceChair:
+             from the generic public group directory — no more chair:/viceChair:
              frontmatter to edit via a git commit. */}}
         {{ with .Params.wgID }}
         {{ partial "wg/chairs-app.html" (dict "slug" (. | lower) "label" $wgID "color" $color) }}

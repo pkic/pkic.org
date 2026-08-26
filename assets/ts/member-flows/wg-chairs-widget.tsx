@@ -5,9 +5,8 @@
  * required a git commit + rebuild to update — chairs are now assigned in
  * the admin portal (Access Control → Working Groups / Chairs, backed by
  * user_roles) and this widget fetches them client-side from the public
- * GET /api/v1/working-groups/:slug endpoint (members-directory.ts's
- * getWorkingGroupByIdOrSlug, extended to include chair/viceChair with
- * photo/LinkedIn/org-logo enrichment).
+ * generic GET /api/v1/groups/:slug/directory endpoint, with public
+ * photo/LinkedIn/organization enrichment.
  *
  * Two render modes, chosen via the mount's `data-mode` attribute — both use
  * the same person-card.html-style ring card, differing only in avatar size
@@ -28,7 +27,7 @@
  */
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import { workingGroupDetailSchema, type WorkingGroupDetail } from "../../shared/schemas/members-directory";
+import { groupDirectoryResponseSchema, type GroupDirectoryResponse } from "../../shared/schemas/group-directory";
 import { getJson } from "../shared/api-client";
 import { PublicPersonCard } from "./components/public-person-card";
 
@@ -36,7 +35,7 @@ const API_BASE_FALLBACK = "/api/v1";
 
 type Mode = "compact" | "card";
 
-function WgChairsWidget({
+export function WgChairsWidget({
   apiBase,
   slug,
   wgLabel,
@@ -51,16 +50,17 @@ function WgChairsWidget({
   mode: Mode;
   onReveal?: () => void;
 }) {
-  const [data, setData] = useState<WorkingGroupDetail | null>(null);
+  const [data, setData] = useState<GroupDirectoryResponse | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getJson(`${apiBase}/working-groups/${encodeURIComponent(slug)}`, workingGroupDetailSchema)
+    getJson(`${apiBase}/groups/${encodeURIComponent(slug)}/directory`, groupDirectoryResponseSchema)
       .then((response) => setData(response))
       .catch(() => setFailed(true));
   }, [apiBase, slug]);
 
-  const hasData = !failed && !!data && (!!data.chair || !!data.viceChair);
+  const leaders = data?.leadership ?? [];
+  const hasData = !failed && leaders.length > 0;
 
   useEffect(() => {
     if (hasData) onReveal?.();
@@ -71,17 +71,15 @@ function WgChairsWidget({
   const avatarSize = mode === "card" ? "small" : "default";
   const cards = (
     <>
-      {data!.chair && (
-        <PublicPersonCard person={data!.chair} role={`${wgLabel} Chair`} color={color} avatarSize={avatarSize} />
-      )}
-      {data!.viceChair && (
+      {leaders.map((assignment) => (
         <PublicPersonCard
-          person={data!.viceChair}
-          role={`${wgLabel} Vice Chair`}
+          key={`${assignment.sourceGroup?.id ?? "private-source"}:${assignment.roleId}:${assignment.person.name}`}
+          person={assignment.person}
+          role={`${wgLabel} ${assignment.roleId === "role-group_lead" ? "Chair" : "Vice Chair"}`}
           color={color}
           avatarSize={avatarSize}
         />
-      )}
+      ))}
     </>
   );
 
