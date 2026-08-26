@@ -1,5 +1,5 @@
 /** Vote-proposal commands; read models and conversion planning live beside this file. */
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first, run } from "../../db/queries";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { AppError } from "../../errors";
@@ -7,7 +7,7 @@ import type { AuthAdmin, AuthMember, DatabaseLike, StatementLike } from "../../t
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import {
   prepareEffectiveGroupPermissionAuthorizationGuard,
   requireEffectiveGroupPermission,
@@ -21,7 +21,11 @@ import {
 } from "./proposal-conversion";
 import { getProposalRowOrThrow, minEndorsersFor, toProposalSummary, type ProposalSummary } from "./proposal-read";
 import { resolveVoteOwnerGroup, type VoteSummary, type VoteType } from "./shared";
-import { ACTIVE_GROUP_VOTER_SQL, activeGroupVoterBindings } from "./voter-eligibility";
+import {
+  ACTIVE_GROUP_VOTER_SQL,
+  activeGroupVoterAuthorizationEvidence,
+  activeGroupVoterBindings,
+} from "./voter-eligibility";
 import { requireSupportedVoteProposalType, validateVoteWindow } from "./configuration";
 
 export {
@@ -190,22 +194,30 @@ async function withdrawEndorsementOnce(
   );
   if (!existing) return;
   const now = nowIso();
-  await db.batch([
-    prepareProposalTransitionGuard(db, proposal),
-    db
-      .prepare("DELETE FROM vote_proposal_endorsements WHERE proposal_id = ? AND endorser_user_id = ?")
-      .bind(proposalId, member.userId),
-    prepareAuditLog(
-      db,
-      "member",
-      member.userId,
-      "vote_proposal_endorsement_withdrawn",
-      "vote_proposal",
-      proposalId,
-      {},
-      now,
-    ),
-  ]);
+  try {
+    await db.batch([
+      prepareAuthorizationGuard(db, activeGroupVoterAuthorizationEvidence(member.userId, proposal.owner_group_id)),
+      prepareProposalTransitionGuard(db, proposal),
+      db
+        .prepare("DELETE FROM vote_proposal_endorsements WHERE proposal_id = ? AND endorser_user_id = ?")
+        .bind(proposalId, member.userId),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "vote_proposal_endorsement_withdrawn",
+        "vote_proposal",
+        proposalId,
+        {},
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "MEMBERSHIP_CHANGED", "Voting eligibility changed; reload and retry");
+    }
+    throw error;
+  }
 }
 
 export async function withdrawEndorsement(
@@ -237,12 +249,27 @@ export async function withdrawVoteProposal(
   if (row.status !== "open_for_endorsement") {
     throw new AppError(409, "NOT_WITHDRAWABLE", "Only an open proposal can be withdrawn");
   }
+  const now = nowIso();
   try {
     await db.batch([
+      prepareAuthorizationGuard(db, activeGroupVoterAuthorizationEvidence(member.userId, row.owner_group_id)),
       prepareProposalTransitionGuard(db, row),
-      db.prepare("UPDATE vote_proposals SET status = 'withdrawn', updated_at = ? WHERE id = ?").bind(nowIso(), row.id),
+      db.prepare("UPDATE vote_proposals SET status = 'withdrawn', updated_at = ? WHERE id = ?").bind(now, row.id),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "vote_proposal_withdrawn",
+        "vote_proposal",
+        row.id,
+        { status: { from: row.status, to: "withdrawn" } },
+        now,
+      ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "MEMBERSHIP_CHANGED", "Voting eligibility changed; reload and retry");
+    }
     if (!isStaleProposalTransition(error)) throw error;
     throw new AppError(409, "PROPOSAL_NOT_WITHDRAWABLE", "This proposal changed before it could be withdrawn");
   }

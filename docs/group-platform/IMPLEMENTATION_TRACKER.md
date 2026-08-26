@@ -627,7 +627,11 @@ Status: In progress
       working-group concept. Component tests cover every request shape and
       prove the catalog omits the type filter; no client-side eligibility,
       search, sorting, or pagination logic was introduced. The legacy backend
-      endpoint remains mounted temporarily only for unmigrated voting callers.
+      endpoint remains mounted temporarily for explicit compatibility only;
+      the last known production caller, the public leadership widget, now uses
+      the narrow generic `/api/v1/groups/:groupId/directory` projection.
+      That public contract exposes no internal counts or eligibility policy and
+      does not disclose the identity of a non-public inherited source group.
       An authenticated local browser run with synthetic data verified Community,
       Working Group, and Committee cards in the same view, Committee parent
       context, and the legacy hash-route redirect; no preview or production data
@@ -669,10 +673,12 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 1,963 backend tests
-      (one skipped), 195 frontend tests, and 79 tool tests. Mailing-list
-      management, group statistics, identity-bound participant meeting entry,
-      invitation delivery, and resource sharing remain open.
+      statistics/list requests; the complete check passes 1,982 backend tests
+      (one skipped), 199 frontend tests, and 80 tool tests. Mailing-list
+      management, group statistics, and resource-sharing management remain open.
+      Identity-bound participant meeting entry is implemented, including an
+      explicit shared-group `attend` grant test proving that `view`, `register`,
+      and `manage` do not imply entry and that grant revocation fails closed.
 - [ ] Move remaining global management views into the portal.
 - [ ] Replace hardcoded admin links in email, OAuth, and due-work paths.
 - [ ] Add temporary legacy redirects where needed.
@@ -728,7 +734,7 @@ Status: Pending
       fallout. Association compare-and-set conflicts and an indexed query plan
       are also covered. The focused platform and mounted endpoint selection
       passes 13 tests.
-- [ ] Run group authorization security tests.
+- [x] Run group authorization security tests.
       Current evidence: group joining reuses the canonical capacity, category,
       parent-membership, and IPR predicates before and inside the D1 batch.
       Race tests deactivate the group and revoke category eligibility after
@@ -742,9 +748,10 @@ Status: Pending
       aggregate revision and compare-and-set audit guard. Group-management,
       leadership, and category-rule authorization races now revoke access
       between preflight and batch execution and prove complete rollback. Voting
-      replacement and voting authorization races remain open.
+      authorization uses the same live evidence in request preflight and the
+      protected D1 batch. Voting races are tracked separately below.
 - [x] Run meeting-entry, terms, guest, and attendance security tests.
-      Current evidence: 25 focused meeting-entry and guest-delivery tests cover
+      Current evidence: 26 focused meeting-entry and event-sharing tests cover
       exact member-session binding,
       browser/mailbox guest verification primitives, challenge replay,
       occurrence scope, terms reuse and replacement, membership loss, expiry,
@@ -755,12 +762,19 @@ Status: Pending
       mounted route, atomic outbox, rate-limit, forwarding, revocation, cookie,
       and one-time-code behavior pass in both Worker integration tests and the
       focused Playwright journey.
-- [ ] Run voting replacement and race tests.
+- [x] Run voting replacement and race tests.
+      Evidence: the existing mounted and service tests cover concurrent Member
+      ballot replacement, vote close races, representative revocation, round
+      changes, and tally correctness. Proposal and endorsement withdrawal now
+      recheck live group voter eligibility inside the same D1 batch, guard the
+      exact mutation count before audit insertion, and return a bounded conflict
+      if eligibility changes. Deterministic mounted-route races prove the
+      endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
-- [ ] Run the complete pnpm run check gate.
+- [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,974 backend tests pass with one skipped, 197 frontend tests
-      pass, and 79 tooling tests pass. Type checks, ESLint, SQL projection,
+      checkpoint: 1,982 backend tests pass with one skipped, 199 frontend tests
+      pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
       combined run identified one 607-line test file; the meeting cases

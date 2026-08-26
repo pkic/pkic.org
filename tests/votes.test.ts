@@ -21,6 +21,7 @@ import {
   groupVoteProposalsListResponseSchema,
 } from "../assets/shared/schemas/group-vote-proposals";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import type { DatabaseLike } from "../functions/_lib/types";
 import { activeGroupMembershipAuthorizationEvidence } from "../functions/_lib/services/groups/access";
 import {
   approveVoteProposal,
@@ -62,6 +63,10 @@ import {
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
   return app.fetch(authorizedRequest(token, path, init), env, createExecutionContext());
+}
+
+async function callWithDb(db: DatabaseLike, token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return app.fetch(authorizedRequest(token, path, init), { ...env, DB: db }, createExecutionContext());
 }
 
 async function callAnonymous(path: string): Promise<Response> {
@@ -675,6 +680,118 @@ describe("canonical group voting", () => {
     expect(await queryAll(env.DB, "SELECT status FROM vote_proposals WHERE id = ?", proposal.id)).toEqual([
       { status: "withdrawn" },
     ]);
+  });
+
+  it("rejects endorsement withdrawal when voter eligibility is revoked before commit", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 3 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const token = await createMemberSession(
+      env.DB,
+      proposer.userId,
+      `withdraw-endorsement-race-${crypto.randomUUID()}`,
+    );
+    const createResponse = await call(token, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Endorsement withdrawal authorization race",
+        description: "Eligibility must still hold when the withdrawal commits.",
+        voteType: "motion",
+      }),
+    });
+    const proposal = groupVoteProposalCreateResponseSchema.parse(await createResponse.json()).proposal;
+    const endorsementPath = `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}/endorsement`;
+    expect((await call(token, endorsementPath, { method: "POST" })).status).toBe(200);
+
+    const auditBefore = await queryAll<{ count: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS count FROM audit_log WHERE entity_type = 'vote_proposal' AND entity_id = ?",
+      proposal.id,
+    );
+    const outboxBefore = await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox");
+    const gate = gateNextBatch(env.DB);
+    const pending = callWithDb(gate.db, token, endorsementPath, { method: "DELETE" });
+    await gate.reached;
+    await env.DB.prepare(
+      "UPDATE group_memberships SET left_at = '2099-01-01T00:00:00.000Z' WHERE group_id = ? AND user_id = ?",
+    )
+      .bind(TEST_GROUPS.pqc, proposer.userId)
+      .run();
+    gate.release();
+
+    const response = await pending;
+    expect(response.status, await response.clone().text()).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "MEMBERSHIP_CHANGED" } });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM vote_proposal_endorsements WHERE proposal_id = ? AND endorser_user_id = ?",
+        [proposal.id, proposer.userId],
+      ),
+    ).toHaveLength(1);
+    expect(await queryAll(env.DB, "SELECT status FROM vote_proposals WHERE id = ?", proposal.id)).toEqual([
+      { status: "open_for_endorsement" },
+    ]);
+    expect(
+      await queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM audit_log WHERE entity_type = 'vote_proposal' AND entity_id = ?",
+        proposal.id,
+      ),
+    ).toEqual(auditBefore);
+    expect(await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox")).toEqual(
+      outboxBefore,
+    );
+  });
+
+  it("rejects proposal withdrawal when voter eligibility is revoked before commit", async () => {
+    await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 3 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
+    const proposer = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, proposer.userId, [proposer.memberId]);
+    const token = await createMemberSession(env.DB, proposer.userId, `withdraw-proposal-race-${crypto.randomUUID()}`);
+    const createResponse = await call(token, `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Proposal withdrawal authorization race",
+        description: "Eligibility must still hold when the withdrawal commits.",
+        voteType: "motion",
+      }),
+    });
+    const proposal = groupVoteProposalCreateResponseSchema.parse(await createResponse.json()).proposal;
+
+    const auditBefore = await queryAll<{ count: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS count FROM audit_log WHERE entity_type = 'vote_proposal' AND entity_id = ?",
+      proposal.id,
+    );
+    const outboxBefore = await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox");
+    const path = `/api/v1/groups/${TEST_GROUPS.pqc}/vote-proposals/${proposal.id}`;
+    const gate = gateNextBatch(env.DB);
+    const pending = callWithDb(gate.db, token, path, { method: "DELETE" });
+    await gate.reached;
+    await env.DB.prepare(
+      "UPDATE group_memberships SET left_at = '2099-01-01T00:00:00.000Z' WHERE group_id = ? AND user_id = ?",
+    )
+      .bind(TEST_GROUPS.pqc, proposer.userId)
+      .run();
+    gate.release();
+
+    const response = await pending;
+    expect(response.status, await response.clone().text()).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "MEMBERSHIP_CHANGED" } });
+    expect(await queryAll(env.DB, "SELECT status FROM vote_proposals WHERE id = ?", proposal.id)).toEqual([
+      { status: "open_for_endorsement" },
+    ]);
+    expect(
+      await queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM audit_log WHERE entity_type = 'vote_proposal' AND entity_id = ?",
+        proposal.id,
+      ),
+    ).toEqual(auditBefore);
+    expect(await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox")).toEqual(
+      outboxBefore,
+    );
   });
 
   it("retracts proposal discovery when the owning group becomes inactive", async () => {
