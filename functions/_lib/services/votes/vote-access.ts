@@ -57,6 +57,22 @@ export function voteParticipationGroupPredicate(voteAlias: string, groupIdExpres
   return voteGroupCapabilityPredicate(voteAlias, groupIdExpression, VOTE_PARTICIPATION_GRANT_CAPABILITIES);
 }
 
+/** Indexed set of every active group whose members may participate in a vote. */
+export function voteParticipantGroupIdsQuery(voteAlias: string): string {
+  return `SELECT ${voteAlias}.owner_group_id AS group_id
+            FROM ${voteAlias}
+            JOIN groups active_owner_group ON active_owner_group.id = ${voteAlias}.owner_group_id
+           WHERE active_owner_group.active = 1
+          UNION
+          SELECT participant_grant.group_id
+            FROM ${voteAlias}
+            JOIN vote_group_grants participant_grant ON participant_grant.vote_id = ${voteAlias}.id
+            JOIN groups granted_group
+              ON granted_group.id = participant_grant.group_id
+             AND granted_group.active = 1
+           WHERE participant_grant.capability IN (${quoted(VOTE_PARTICIPATION_GRANT_CAPABILITIES)})`;
+}
+
 export function voteViewGroupPredicate(voteAlias: string, groupIdExpression: string): string {
   return voteGroupCapabilityPredicate(voteAlias, groupIdExpression, VOTE_VIEW_GRANT_CAPABILITIES);
 }

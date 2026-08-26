@@ -534,7 +534,19 @@ Status: In progress
       Evidence: `POST /api/v1/groups/:groupId/votes/:voteId/transitions`
       accepts the shared discriminated transition contract and returns the
       canonical vote mutation response plus its applied outcome.
-- [ ] Add nested vote statistics routes.
+- [x] Add nested vote statistics routes.
+      Evidence: the manager-only nested statistics resource distinguishes
+      people from Member-capacity electorates, computes current eligibility
+      and effective-ballot intersections in one guarded D1 batch, and keeps
+      historical ballots that no longer have current eligibility explicit
+      rather than publishing a misleading turnout percentage. Choice and
+      candidate counts remain withheld until close, no identities are returned,
+      and the portal loads the aggregate only when a manager requests it.
+      Mounted tests cover multi-organization capacities, per-person
+      deduplication, historical eligibility changes, motion and election
+      aggregates, exact shared-group management, authorization revocation,
+      and indexed production queries; focused frontend tests cover lazy loading
+      and every aggregate visibility state.
 - [x] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.
