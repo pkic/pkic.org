@@ -21,6 +21,7 @@ import { GroupEvents } from "./GroupEvents";
 import { GroupForms } from "./GroupForms";
 import { GroupMailingLists } from "./GroupMailingLists";
 import { GroupVotes } from "./GroupVotes";
+import { GroupStatistics } from "./GroupStatistics";
 import { groupContextNavigation } from "./group-context-navigation";
 
 const OVERVIEW_VIEW = "overview";
@@ -133,7 +134,15 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
               canParticipate={capabilities.includes("participate")}
             />
           )}
-          {view === "mailing-lists" && <GroupMailingLists key={group.id} groupId={group.id} />}
+          {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}
+          {view === "mailing-lists" && (
+            <GroupMailingLists
+              key={group.id}
+              groupId={group.id}
+              canManage={canManage}
+              canParticipate={capabilities.includes("participate")}
+            />
+          )}
           {view === "audit" && canManage && <GroupAuditLog key={group.id} groupId={group.id} />}
           {!views.some((item) => item.key === view) && (
             <ErrorAlert error="This group section is not available to your current identity." />

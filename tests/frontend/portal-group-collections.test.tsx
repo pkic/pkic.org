@@ -38,6 +38,189 @@ afterEach(() => {
 });
 
 describe("portal selected-group collections", () => {
+  it("shows the manager collection with server-side query parameters and no participant controls for staff-only managers", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return json({
+          mailingLists: [
+            {
+              id: "a0000000-0000-4000-8000-000000000001",
+              email: "architecture@lists.example.test",
+              label: "Architecture discussion",
+              purpose: "group",
+              groupId: GROUP_ID,
+              primaryDiscussion: true,
+              subscriptionDefault: "group_members",
+              postingPolicy: "members",
+              moderationPolicy: "moderated",
+              autoSyncCategories: null,
+              active: true,
+              archivedAt: null,
+              createdAt: "2026-08-01T00:00:00.000Z",
+              updatedAt: "2026-08-01T00:00:00.000Z",
+            },
+          ],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    await settle();
+
+    expect(container.textContent).toContain("Managed mailing lists");
+    expect(container.textContent).toContain("Architecture discussion");
+    expect(container.textContent).not.toContain("My mailing-list preferences");
+    expect(container.querySelector('select[aria-label^="Subscription preference"]')).toBeNull();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/management`,
+    });
+    expect(requests[0].searchParams.get("limit")).toBe("50");
+    expect(requests[0].searchParams.get("sort")).toBe("label");
+  });
+
+  it("renders the manager empty state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
+    await settle();
+    expect(container.textContent).toContain("No mailing lists are managed by this group.");
+  });
+
+  it("renders manager collection errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ message: "Not allowed" }), { status: 403 })),
+    );
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
+    await settle();
+    expect(container.textContent).toContain("HTTP 403");
+  });
+
+  it("creates, edits, and archives a fully configured group list without moving ownership", async () => {
+    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
+    const list = {
+      id: "a0000000-0000-4000-8000-000000000001",
+      email: "architecture@lists.example.test",
+      label: "Architecture discussion",
+      purpose: "group",
+      groupId: GROUP_ID,
+      primaryDiscussion: true,
+      subscriptionDefault: "group_members",
+      postingPolicy: "members",
+      moderationPolicy: "moderated",
+      autoSyncCategories: ["A"],
+      active: true,
+      archivedAt: null,
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    } as const;
+    const page = { limit: 50, offset: 0, total: 1, hasMore: false };
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ url, method, body });
+        if (method === "POST") return json({ mailingList: list });
+        if (method === "PATCH") return json({ mailingList: list });
+        if (method === "DELETE") return json({ success: true });
+        if (url.pathname.endsWith("/grants")) return json({ grants: [], page });
+        if (url.pathname === "/api/v1/groups") {
+          return json({ groups: [], page });
+        }
+        return json({ mailingLists: [list], page });
+      }),
+    );
+
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    await settle();
+    const button = (label: string) =>
+      Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === label);
+    await act(async () => {
+      button("Add mailing list")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const createForm = container.querySelector("form")!;
+    const email = createForm.querySelector<HTMLInputElement>('input[type="email"]')!;
+    const textInputs = createForm.querySelectorAll<HTMLInputElement>(
+      'input:not([type="email"]):not([type="checkbox"]):not([readonly])',
+    );
+    email.value = "consultation@lists.example.test";
+    email.dispatchEvent(new Event("input", { bubbles: true }));
+    textInputs[0].value = "Consultation list";
+    textInputs[0].dispatchEvent(new Event("input", { bubbles: true }));
+    textInputs[1].value = "members";
+    textInputs[1].dispatchEvent(new Event("input", { bubbles: true }));
+    textInputs[2].value = "moderated";
+    textInputs[2].dispatchEvent(new Event("input", { bubbles: true }));
+    textInputs[3].value = "A, H1";
+    textInputs[3].dispatchEvent(new Event("input", { bubbles: true }));
+    const selects = createForm.querySelectorAll<HTMLSelectElement>("select");
+    selects[0].value = "consultation";
+    selects[0].dispatchEvent(new Event("change", { bubbles: true }));
+    selects[1].value = "eligible_categories";
+    selects[1].dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    await act(async () => {
+      createForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    await settle();
+
+    expect(requests.find(({ method }) => method === "POST")).toMatchObject({
+      url: expect.objectContaining({ pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists` }),
+      body: {
+        email: "consultation@lists.example.test",
+        label: "Consultation list",
+        purpose: "consultation",
+        subscriptionDefault: "eligible_categories",
+        autoSyncCategories: ["A", "H1"],
+      },
+    });
+    expect(requests.find(({ method }) => method === "POST")?.body).not.toHaveProperty("groupId");
+
+    expect(button("Manage")).not.toBeUndefined();
+    await act(async () => {
+      button("Manage")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    const saveButton = button("Save changes");
+    expect(saveButton).not.toBeUndefined();
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
+
+    await settle();
+    expect(button("Archive")).not.toBeUndefined();
+    await act(async () => {
+      button("Archive")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(requests.some(({ method }) => method === "DELETE")).toBe(true);
+  });
+
   it("loads forms, events, and audit history through server-backed group collections", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(

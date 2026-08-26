@@ -10,3 +10,4 @@ export * from "./portal-context";
 export * from "./public-directory";
 export * from "./read-model";
 export * from "./self-participation";
+export * from "./statistics";

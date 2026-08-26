@@ -61,6 +61,16 @@ export type MailingListCreateInput = z.infer<typeof mailingListCreateSchema>;
 export const mailingListUpdateSchema = mailingListCreateSchema.partial();
 export type MailingListUpdateInput = z.infer<typeof mailingListUpdateSchema>;
 
+/**
+ * Group managers configure only the list itself. Ownership is derived from the
+ * selected group route and is deliberately not accepted from the request
+ * body, so a nested mutation cannot move a list between groups.
+ */
+export const groupMailingListCreateSchema = mailingListCreateSchema.omit({ groupId: true });
+export type GroupMailingListCreateInput = z.infer<typeof groupMailingListCreateSchema>;
+export const groupMailingListUpdateSchema = mailingListUpdateSchema.omit({ groupId: true });
+export type GroupMailingListUpdateInput = z.infer<typeof groupMailingListUpdateSchema>;
+
 export const mailingListIdParamsSchema = z.object({ id: databaseIdSchema });
 export const groupMailingListParamsSchema = groupReferenceParamsSchema.extend({ listId: databaseIdSchema });
 
@@ -78,6 +88,8 @@ export const effectiveMailingListSubscriptionsResponseSchema = paginatedResponse
 );
 export const groupMailingListSubscriptionsQuerySchema = mailingListsListQuerySchema.omit({ groupId: true });
 export type GroupMailingListSubscriptionsQuery = z.infer<typeof groupMailingListSubscriptionsQuerySchema>;
+export const groupMailingListManagementQuerySchema = groupMailingListSubscriptionsQuerySchema;
+export type GroupMailingListManagementQuery = z.infer<typeof groupMailingListManagementQuerySchema>;
 export const mailingListPreferenceMutationResponseSchema = successResponseSchema.extend({
   subscription: effectiveMailingListSubscriptionSchema,
 });
@@ -128,6 +140,57 @@ export const mailingListDeleteRouteSchema = {
   description: "The portal stops managing the list without deleting configuration or subscription history.",
   request: { params: mailingListIdParamsSchema },
   responses: { "200": { description: "Mailing list archived." } },
+};
+
+export const groupMailingListCreateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Create a mailing list owned by a group",
+  request: {
+    params: groupReferenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupMailingListCreateSchema } } },
+  },
+  responses: {
+    "201": {
+      description: "Group mailing list created.",
+      content: { "application/json": { schema: mailingListResponseSchema } },
+    },
+  },
+};
+
+export const groupMailingListUpdateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Update a group-owned mailing list",
+  request: {
+    params: groupMailingListParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupMailingListUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Group mailing list updated.",
+      content: { "application/json": { schema: mailingListResponseSchema } },
+    },
+  },
+};
+
+export const groupMailingListArchiveRouteSchema = {
+  tags: ["Groups"],
+  summary: "Archive a group-owned mailing list",
+  description: "Archives the configuration without deleting subscription history or the external list.",
+  request: { params: groupMailingListParamsSchema },
+  responses: { "200": { description: "Group mailing list archived." } },
+};
+
+export const groupMailingListManagementRouteSchema = {
+  tags: ["Groups"],
+  summary: "List mailing-list configurations managed by a group",
+  description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
+  request: { params: groupReferenceParamsSchema, query: groupMailingListManagementQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of group-owned mailing-list configurations.",
+      content: { "application/json": { schema: mailingListsListResponseSchema } },
+    },
+  },
 };
 
 export const mailingListSyncResponseSchema = z.object({

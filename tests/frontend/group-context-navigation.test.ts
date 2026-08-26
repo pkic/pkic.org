@@ -20,6 +20,8 @@ describe("selected-group capability navigation", () => {
       "meetings",
       "forms",
       "votes",
+      "stats",
+      "mailing-lists",
       "audit",
       "settings",
       "members",

@@ -1,13 +1,17 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  groupMembershipsListQuerySchema,
   groupJoinSchema,
   groupPortalContextResponseSchema,
   groupsListResponseSchema,
 } from "../assets/shared/schemas/groups";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import {
   assignLocalGroupLeadership,
+  buildGroupMembershipsPageQuery,
+  buildGroupsPageQuery,
   canManageGroup,
   createGroup,
   getVisibleGroup,
@@ -65,6 +69,43 @@ describe("group visibility", () => {
     expect(authenticatedPage.groups.some((group) => group.slug === "all-members")).toBe(true);
     expect(authenticatedPage.groups.some((group) => group.slug === "executive-council")).toBe(false);
     expect((await getVisibleGroup(env.DB, "all-members", { canReadAll: false, userId }))?.slug).toBe("all-members");
+  });
+
+  it("uses bounded group indexes for canonical group and membership pages", async () => {
+    const groupsQuery = buildGroupsPageQuery({
+      limit: 25,
+      offset: 0,
+      typeKey: "working_group",
+      active: true,
+    });
+    const groupsSql = buildOffsetPageSql(groupsQuery);
+    const groupPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${groupsSql.pageSql}`)
+      .bind(...groupsSql.bindings, groupsQuery.limit, groupsQuery.offset)
+      .all<{ detail: string }>();
+    const groupCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${groupsSql.countSql}`)
+      .bind(...groupsSql.countBindings)
+      .all<{ detail: string }>();
+    const groupDetails = [...groupPagePlan.results, ...groupCountPlan.results].map((row) => row.detail).join("\n");
+    expect(groupDetails).toMatch(/idx_groups_type_active/);
+    expect(groupDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(groupDetails).toMatch(/idx_groups_parent_active/);
+
+    const membershipsQuery = buildGroupMembershipsPageQuery(
+      "10000000-0000-4000-8000-000000000001",
+      groupMembershipsListQuerySchema.parse({ active: true, limit: 25 }),
+    );
+    const membershipsSql = buildOffsetPageSql(membershipsQuery);
+    const membershipPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${membershipsSql.pageSql}`)
+      .bind(...membershipsSql.bindings, membershipsQuery.limit, membershipsQuery.offset)
+      .all<{ detail: string }>();
+    const membershipCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${membershipsSql.countSql}`)
+      .bind(...membershipsSql.countBindings)
+      .all<{ detail: string }>();
+    const membershipDetails = [...membershipPagePlan.results, ...membershipCountPlan.results]
+      .map((row) => row.detail)
+      .join("\n");
+    expect(membershipDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(membershipDetails).not.toMatch(/SCAN group_memberships\b/);
   });
 });
 

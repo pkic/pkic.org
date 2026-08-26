@@ -14,8 +14,9 @@ import { useData } from "../../../../hooks/useData";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { GroupFormPlacementEditor } from "./GroupFormPlacementEditor";
+import { ResourceSharingEditor } from "./ResourceSharingEditor";
 
-type GroupFormTab = "respond" | "statistics" | "responses" | "definition" | "availability";
+type GroupFormTab = "respond" | "statistics" | "responses" | "definition" | "availability" | "sharing";
 
 export function GroupFormDetail({
   groupId,
@@ -59,6 +60,7 @@ export function GroupFormDetail({
       : []),
     ...(canManageDefinition ? [{ key: "definition", label: "Edit form" }] : []),
     ...(canManagePlacement ? [{ key: "availability", label: "Availability" }] : []),
+    ...(canManageDefinition ? [{ key: "sharing", label: "Sharing" }] : []),
   ];
   const activeTab = tabs.some((item) => item.key === tab) ? tab : (tabs[0]?.key as GroupFormTab | undefined);
 
@@ -110,6 +112,14 @@ export function GroupFormDetail({
       )}
       {activeTab === "availability" && (
         <GroupFormPlacementEditor groupId={groupId} placement={form.placement} onSaved={reload} />
+      )}
+      {activeTab === "sharing" && canManageDefinition && form.placement.ownerGroupId && (
+        <ResourceSharingEditor
+          kind="formPlacement"
+          groupId={groupId}
+          resourceId={form.placement.id}
+          ownerGroupId={form.placement.ownerGroupId}
+        />
       )}
     </div>
   );

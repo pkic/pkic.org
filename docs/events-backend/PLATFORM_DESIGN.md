@@ -45,7 +45,7 @@
 5. Communication
 
 - `email_template_versions`, `email_outbox`, `unsubscribes`.
-- Calendar handling: ICS attachments plus day-scoped inbound reply events; provider delivery status remains in the outbox.
+- Calendar handling: generated series/occurrence ICS views and day-scoped inbound reply events; provider delivery status remains in the outbox.
 
 6. Growth and Gamification
 

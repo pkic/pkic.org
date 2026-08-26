@@ -1,6 +1,6 @@
 # Group Platform Implementation Tracker
 
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 Branch: agent/group-centered-portal-architecture-20260824
 
@@ -519,9 +519,18 @@ Status: In progress
       accepts the shared discriminated transition contract and returns the
       canonical vote mutation response plus its applied outcome.
 - [ ] Add nested vote statistics routes.
-- [ ] Define the group-statistics metric contract, including whether activity
+- [x] Define the group-statistics metric contract, including whether activity
       and engagement are occurrence-, person-, capacity-, or Member-based,
       before exposing a misleading aggregate.
+      Evidence: `/api/v1/groups/:groupId/stats` explicitly separates distinct
+      people from Member-capacity rows, distinguishes current participation
+      from historical window overlap, and reports only attributable audited
+      actions plus capacity joins/leaves. It does not invent an engagement
+      score. UTC window validation is shared by the route and portal, every
+      aggregate runs in one D1 batch, service/API-key audit actors are excluded
+      from person counts, and exact management authority is rechecked in that
+      batch. Mounted tests cover schema validation, role isolation, a
+      leadership-revocation race, metric semantics, and indexed query plans.
 - [x] Add the nested group audit-log route.
       Evidence: the route requires effective local or inherited group
       management and reads exact scope_type/group scope_id rows only. Global,
@@ -534,7 +543,15 @@ Status: In progress
 - [x] Add nested form definition, submission, response, response-statistics,
       and placement-management routes.
 - [x] Add nested group event discovery and detail routes.
-- [x] Add nested mailing-list discovery and preference routes.
+- [x] Add nested mailing-list discovery, preference, configuration-management,
+      and resource-sharing routes.
+      Evidence: participant subscription preferences remain a distinct
+      projection, while staff-only, local, and inherited managers receive a
+      group-owned configuration page and create/update/archive commands.
+      Ownership comes from the selected group path and both ownership and live
+      management authority are rechecked in the D1 read/write batch. The
+      configuration list reuses the canonical D1 search/filter/sort/page
+      builder; its actual page and count statements are EXPLAIN-tested.
 - [x] Add /api/v1/groups/:groupId/meetings/series routes.
 - [x] Add series occurrence, guest, join, and attendance routes.
       Evidence: the mounted router exposes canonical series, occurrence,
@@ -673,9 +690,16 @@ Status: In progress
       Statistics are loaded only when selected, avoiding an unnecessary D1
       aggregate on every form detail view. Focused frontend regressions cover
       path-owned creation, shared-definition isolation, and placement-scoped
-      statistics/list requests; the complete check passes 1,982 backend tests
-      (one skipped), 199 frontend tests, and 80 tool tests. Mailing-list
-      management, group statistics, and resource-sharing management remain open.
+      statistics/list requests; the complete check passes 1,995 backend tests
+      (one skipped), 214 frontend tests, and 80 tool tests. Group statistics now
+      use a management-only portal view over the explicit people/capacity and
+      current/history contract. Mailing-list managers and participants share
+      one selected-group section while retaining separate configuration and
+      personal-preference projections. One reusable resource-sharing editor
+      consumes the shared capability catalogs and canonical grant routes for
+      events, form placements, votes, and mailing lists; ownership and manage
+      capability determine whether it is rendered, while the API remains the
+      authorization authority.
       Identity-bound participant meeting entry is implemented, including an
       explicit shared-group `attend` grant test proving that `view`, `register`,
       and `manage` do not imply entry and that grant revocation fails closed.
@@ -718,8 +742,15 @@ Status: Pending
       the canonical group projection now uses indexed per-group capacity,
       participant, and child counts instead of materializing aggregate tables
       for every selected-group detail request, while its page-count statement
-      omits those projections entirely;
-      the broader group architecture selection passes 43 tests.
+      omits those projections entirely; the canonical group and membership
+      production builders assert `idx_groups_type_active`,
+      `idx_group_memberships_group_active`, and `idx_groups_parent_active` use;
+      group statistics assert indexed group-membership windows and exact
+      group-scoped audit access without table scans; group-owned mailing-list
+      configuration asserts `idx_mailing_lists_group_active` for the actual
+      page and count builder. The focused group, statistics, mailing-list,
+      meeting-entry, and grant selection passes 67 tests, followed by 38 tests
+      after the read-time authorization guard was added.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and
@@ -773,7 +804,7 @@ Status: Pending
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 1,982 backend tests pass with one skipped, 199 frontend tests
+      checkpoint: 1,995 backend tests pass with one skipped, 214 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

@@ -12,6 +12,7 @@ import { GroupVoteCreateForm } from "./GroupVoteCreateForm";
 import { GroupVoteManagementControls } from "./GroupVoteManagementControls";
 import { GroupVoteProposals } from "./GroupVoteProposals";
 import { ResourceCapabilities } from "./ResourceCapabilities";
+import { ResourceSharingEditor } from "./ResourceSharingEditor";
 
 export function GroupVotes({
   groupId,
@@ -144,11 +145,21 @@ export function GroupVotes({
                 return (
                   <div class="p-3 bg-body-tertiary">
                     {detail.data.vote.capabilities.includes("manage") && (
-                      <GroupVoteManagementControls
-                        groupId={groupId}
-                        vote={detail.data.vote}
-                        onChanged={reloadSelectedVote}
-                      />
+                      <>
+                        {detail.data.vote.ownerGroupId === groupId && (
+                          <ResourceSharingEditor
+                            kind="vote"
+                            groupId={groupId}
+                            resourceId={detail.data.vote.id}
+                            ownerGroupId={detail.data.vote.ownerGroupId}
+                          />
+                        )}
+                        <GroupVoteManagementControls
+                          groupId={groupId}
+                          vote={detail.data.vote}
+                          onChanged={reloadSelectedVote}
+                        />
+                      </>
                     )}
                     <VoteDetails
                       vote={detail.data.vote}

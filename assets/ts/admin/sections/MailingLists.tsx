@@ -17,13 +17,13 @@ import {
   mailingListResponseSchema,
   type MailingListsListResponse,
 } from "../../../shared/schemas/mailing-lists";
-import { MailingListForm } from "./mailing-lists/MailingListForm";
+import { MailingListForm } from "../../components/mailing-lists/MailingListForm";
 import {
   emptyMailingListDraft,
   mailingListDraftToPayload,
   mailingListToDraft,
   type MailingListDraft,
-} from "./mailing-lists/model";
+} from "../../components/mailing-lists/model";
 
 type SortKey = "email" | "label" | "purpose" | "active";
 type SortDir = "asc" | "desc";
@@ -79,7 +79,7 @@ export function MailingLists() {
     try {
       await api("/api/v1/admin/mailing-lists", mailingListResponseSchema, {
         method: "POST",
-        body: JSON.stringify(mailingListDraftToPayload(newDraft)),
+        body: JSON.stringify(mailingListDraftToPayload(newDraft, "admin")),
       });
       toast("Mailing list added", "success");
       setNewDraft(emptyMailingListDraft());
@@ -97,7 +97,7 @@ export function MailingLists() {
     try {
       await api(`/api/v1/admin/mailing-lists/${id}`, mailingListResponseSchema, {
         method: "PATCH",
-        body: JSON.stringify(mailingListDraftToPayload(editDraft)),
+        body: JSON.stringify(mailingListDraftToPayload(editDraft, "admin")),
       });
       toast("Saved", "success");
       setEditingId(null);
@@ -154,7 +154,11 @@ export function MailingLists() {
       {showAdd && (
         <form onSubmit={createList} class="card border-0 shadow-sm mb-3">
           <div class="card-body">
-            <MailingListForm draft={newDraft} onChange={(patch) => setNewDraft((d) => ({ ...d, ...patch }))} />
+            <MailingListForm
+              draft={newDraft}
+              onChange={(patch) => setNewDraft((d) => ({ ...d, ...patch }))}
+              idPrefix="admin-mailing-list-create"
+            />
             <button type="submit" class="btn btn-success btn-sm mt-2" disabled={saving}>
               Save
             </button>
@@ -182,6 +186,7 @@ export function MailingLists() {
                     <MailingListForm
                       draft={editDraft}
                       onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))}
+                      idPrefix={`admin-mailing-list-${list.id}`}
                     />
                     <div class="mt-2 d-flex gap-2">
                       <button

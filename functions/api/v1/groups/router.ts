@@ -13,8 +13,13 @@ import { GroupMembershipEnd } from "./[groupId]/memberships/[membershipId]";
 import { GroupLeadershipAssign, GroupLeadershipList } from "./[groupId]/leadership/index";
 import { GroupLeadershipRevoke } from "./[groupId]/leadership/[userRoleId]";
 import { GroupCategoryRulesReplace } from "./[groupId]/category-rules";
-import { GroupMailingListSubscriptions } from "./[groupId]/mailing-lists/index";
-import { GroupMailingListPreferenceUpdate } from "./[groupId]/mailing-lists/[listId]";
+import { GroupMailingListCreate, GroupMailingListSubscriptions } from "./[groupId]/mailing-lists/index";
+import {
+  GroupMailingListArchive,
+  GroupMailingListPreferenceUpdate,
+  GroupMailingListUpdate,
+} from "./[groupId]/mailing-lists/[listId]";
+import { GroupMailingListManagementList } from "./[groupId]/mailing-lists/management";
 import { GroupAutomaticEnrollmentPreference } from "./[groupId]/automatic-enrollment";
 import { GroupMeetingSeriesCreate, GroupMeetingSeriesList } from "./[groupId]/meetings/series/index";
 import { GroupMeetingSeriesUpdate } from "./[groupId]/meetings/series/[seriesId]/index";
@@ -50,6 +55,7 @@ import { GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
 import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
+import { GroupStatsGet } from "./[groupId]/stats";
 import { GroupVotesList } from "./[groupId]/votes/index";
 import { GroupVoteGet } from "./[groupId]/votes/[voteId]/index";
 import { GroupVoteBallotsPost } from "./[groupId]/votes/[voteId]/ballots";
@@ -88,9 +94,14 @@ openapi.post("/:groupId/leadership", GroupLeadershipAssign);
 openapi.delete("/:groupId/leadership/:userRoleId", GroupLeadershipRevoke);
 openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
+openapi.get("/:groupId/mailing-lists/management", GroupMailingListManagementList);
+openapi.post("/:groupId/mailing-lists", GroupMailingListCreate);
 openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
+openapi.patch("/:groupId/mailing-lists/:listId", GroupMailingListUpdate);
+openapi.delete("/:groupId/mailing-lists/:listId", GroupMailingListArchive);
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
 openapi.get("/:groupId/audit-log", GroupAuditLogList);
+openapi.get("/:groupId/stats", GroupStatsGet);
 openapi.get("/:groupId/forms", GroupFormsList);
 openapi.post("/:groupId/forms", GroupFormCreate);
 openapi.get("/:groupId/forms/:placementId", GroupFormDefinitionGet);

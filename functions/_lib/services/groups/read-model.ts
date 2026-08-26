@@ -366,11 +366,7 @@ const MEMBERSHIP_SORT_EXPRESSIONS = {
   joined_at: "gm.joined_at",
 } satisfies Record<(typeof GROUP_MEMBERSHIP_SORT_COLUMNS)[number], string>;
 
-export async function listGroupMemberships(
-  db: DatabaseLike,
-  groupId: string,
-  query: GroupMembershipsListQuery,
-): Promise<{ memberships: GroupMembership[]; total: number }> {
+export function buildGroupMembershipsPageQuery(groupId: string, query: GroupMembershipsListQuery): OffsetPageQuery {
   const search = query.q
     ? buildD1TextSearchFilter(query.q, ["u.first_name", "u.last_name", "u.email", "o.name", "mca.category_code"])
     : null;
@@ -395,7 +391,7 @@ export async function listGroupMemberships(
     bindings.push(...search.bindings);
   }
   const fromSql = `${MEMBERSHIP_FROM} WHERE ${conditions.join(" AND ")}`;
-  const { rows, total } = await queryPage<MembershipRow>(db, {
+  return {
     source: {
       selectSql: `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
         u.first_name, u.last_name, u.email, o.name AS organization_name,
@@ -412,7 +408,15 @@ export async function listGroupMemberships(
     ),
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listGroupMemberships(
+  db: DatabaseLike,
+  groupId: string,
+  query: GroupMembershipsListQuery,
+): Promise<{ memberships: GroupMembership[]; total: number }> {
+  const { rows, total } = await queryPage<MembershipRow>(db, buildGroupMembershipsPageQuery(groupId, query));
   return { memberships: rows.map(mapMembership), total };
 }
 
