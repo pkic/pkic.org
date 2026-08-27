@@ -135,6 +135,12 @@ describe("portal resource sharing editor", () => {
     await settle();
     await settle();
 
+    // The picker is intentionally server-backed and asks only for the
+    // management projection; it never downloads the public group catalog.
+    expect(requests.find(({ url }) => url.pathname === "/api/v1/groups")?.url.searchParams.get("manageable")).toBe(
+      "true",
+    );
+
     const capabilitySelect = container.querySelector<HTMLSelectElement>(`select[aria-label="Capability"]`)!;
     expect([...capabilitySelect.options].map((option) => option.value)).toContain(selectedCapability);
     const groupSelect = container.querySelector<HTMLSelectElement>(`select[aria-label="Group"]`)!;
