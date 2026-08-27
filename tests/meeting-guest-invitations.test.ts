@@ -206,7 +206,7 @@ describe("external meeting guest invitations", () => {
         email: recipientEmail,
         name: "Browser Guest",
         affiliation: "External Organization",
-        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+        expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       },
       APP_BASE_URL,
     );
@@ -304,11 +304,11 @@ describe("external meeting guest invitations", () => {
     const input = {
       email: `rotation-race-${crypto.randomUUID()}@example.test`,
       name: "Rotation Race Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     };
     const invited = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, input, APP_BASE_URL);
     const staleToken = await queuedInvitationToken(invited.outboxId);
-    const racingDb = afterFirstMatchingRead(env.DB, "SELECT invitation_secret AS link_secret", async () => {
+    const racingDb = afterFirstMatchingRead(env.DB, "SELECT guest.invitation_secret AS link_secret", async () => {
       await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, input, APP_BASE_URL);
     });
 
@@ -326,6 +326,35 @@ describe("external meeting guest invitations", () => {
     ).toBe(0);
   });
 
+  it("does not materialize a queued invitation after its occurrence window closes", async () => {
+    const { admin, series, occurrence } = await fixture();
+    const invited = await inviteOccurrenceGuest(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      occurrence.id,
+      {
+        email: `schedule-expired-${crypto.randomUUID()}@example.test`,
+        name: "Schedule Expired Guest",
+        expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
+      },
+      APP_BASE_URL,
+    );
+    await env.DB.prepare("UPDATE event_occurrences SET starts_at = ?, ends_at = ? WHERE id = ?")
+      .bind(
+        new Date(Date.now() - 7_200_000).toISOString(),
+        new Date(Date.now() - 3_600_000).toISOString(),
+        occurrence.id,
+      )
+      .run();
+
+    await expect(queuedInvitationToken(invited.outboxId)).rejects.toMatchObject({
+      status: 410,
+      code: "CAPABILITY_RESOURCE_STALE",
+    });
+  });
+
   it("returns the documented gone response for an expired browser challenge", async () => {
     const { admin, series, occurrence } = await fixture();
     const invited = await inviteOccurrenceGuest(
@@ -337,7 +366,7 @@ describe("external meeting guest invitations", () => {
       {
         email: `expired-challenge-${crypto.randomUUID()}@example.test`,
         name: "Expired Challenge Guest",
-        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+        expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       },
       APP_BASE_URL,
     );
@@ -368,7 +397,7 @@ describe("external meeting guest invitations", () => {
     const input = {
       email,
       name: "Stale Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     };
     const first = await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, input, APP_BASE_URL);
     await inviteOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, input, APP_BASE_URL);
@@ -391,7 +420,7 @@ describe("external meeting guest invitations", () => {
       {
         email: `rate-limited-guest-${crypto.randomUUID()}@example.test`,
         name: "Rate Limited Guest",
-        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+        expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       },
       APP_BASE_URL,
     );
@@ -444,7 +473,7 @@ describe("external meeting guest invitations", () => {
           {
             email: `atomic-guest-${crypto.randomUUID()}@example.test`,
             name: "Atomic Guest",
-            expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+            expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
           },
           APP_BASE_URL,
         ),
@@ -465,7 +494,7 @@ describe("external meeting guest invitations", () => {
       {
         email: `atomic-challenge-${crypto.randomUUID()}@example.test`,
         name: "Atomic Challenge Guest",
-        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+        expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       },
       APP_BASE_URL,
     );
@@ -509,7 +538,7 @@ describe("external meeting guest invitations", () => {
       {
         email: `materialize-guest-${crypto.randomUUID()}@example.test`,
         name: "Materialize Guest",
-        expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+        expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       },
       APP_BASE_URL,
     );

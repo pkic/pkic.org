@@ -4192,11 +4192,30 @@ WHEN unixepoch(NEW.expires_at) <= unixepoch()
   OR NOT EXISTS (
     SELECT 1
       FROM event_occurrence_guests guest
+      JOIN event_series series ON series.id = guest.series_id
+      JOIN events event ON event.id = series.event_id
+      LEFT JOIN event_occurrences guest_occurrence
+        ON guest_occurrence.id = guest.occurrence_id
+       AND guest_occurrence.series_id = guest.series_id
      WHERE guest.id = NEW.guest_id
        AND guest.invitation_version = NEW.invitation_version
        AND guest.revoked_at IS NULL
        AND unixepoch(guest.expires_at) > unixepoch()
        AND unixepoch(NEW.expires_at) <= unixepoch(guest.expires_at)
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           ) IS NOT NULL
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           )
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch()
+       AND unixepoch(NEW.expires_at) <= unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           )
        AND EXISTS (
          SELECT 1
            FROM current_event_occurrence_subject_eligibility eligible
@@ -4251,6 +4270,11 @@ WHEN unixepoch(NEW.expires_at) <= unixepoch()
     SELECT 1
       FROM meeting_guest_browser_challenges challenge
       JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
+      JOIN event_series series ON series.id = guest.series_id
+      JOIN events event ON event.id = series.event_id
+      LEFT JOIN event_occurrences guest_occurrence
+        ON guest_occurrence.id = guest.occurrence_id
+       AND guest_occurrence.series_id = guest.series_id
      WHERE challenge.id = NEW.challenge_id
        AND challenge.guest_id = NEW.guest_id
        AND challenge.authorization_hash = NEW.authorization_hash
@@ -4260,6 +4284,20 @@ WHEN unixepoch(NEW.expires_at) <= unixepoch()
        AND guest.revoked_at IS NULL
        AND unixepoch(guest.expires_at) > unixepoch()
        AND unixepoch(NEW.expires_at) <= unixepoch(guest.expires_at)
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           ) IS NOT NULL
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           )
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch()
+       AND unixepoch(NEW.expires_at) <= unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           )
   )
 BEGIN
   SELECT RAISE(ABORT, 'MEETING_GUEST_SESSION_CONTEXT_CHANGED');
@@ -4358,6 +4396,17 @@ SELECT occurrence.id AS occurrence_id, event.id AS event_id,
  WHERE occurrence.status = 'scheduled'
    AND guest.revoked_at IS NULL
    AND unixepoch(guest.expires_at) > unixepoch()
+   AND unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE occurrence.starts_at END
+       ) IS NOT NULL
+   AND unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE occurrence.ends_at END
+       ) > unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE occurrence.starts_at END
+       )
+   AND unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE occurrence.ends_at END
+       ) > unixepoch()
    AND COALESCE(json_extract(event.settings_json, '$.guestPolicy'), 'none')
        IN ('occurrence_invitation', 'public_registration', 'invitation_only');
 

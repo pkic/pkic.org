@@ -1,10 +1,12 @@
 import { AppError } from "./errors";
 import type { AuthorizationEvidence } from "./db/authorization-guard";
-import type { EventRecord } from "./services/event-types";
 import type { DatabaseLike, StatementLike } from "./types";
 import { nowIso } from "./utils/time";
 
-export type InviteEventWindow = Pick<EventRecord, "starts_at" | "ends_at">;
+export interface InviteEventWindow {
+  starts_at: string | null;
+  ends_at: string | null;
+}
 
 function instant(value: string | null): number | null {
   if (!value) return null;
@@ -74,6 +76,29 @@ export function effectiveProposalSpeakerInviteExpirySql(speakerAlias = "ps", eve
   END`;
 }
 
+/**
+ * Effective external-guest deadline under the selected occurrence or current
+ * materialized series window. Schedule changes therefore take effect without
+ * rewriting guest rows.
+ */
+export function effectiveMeetingGuestInviteExpirySql(
+  guestAlias = "guest",
+  occurrenceAlias = "guest_occurrence",
+  eventAlias = "event",
+): string {
+  const startsAt = `CASE WHEN ${guestAlias}.occurrence_id IS NULL THEN ${eventAlias}.starts_at ELSE ${occurrenceAlias}.starts_at END`;
+  const endsAt = `CASE WHEN ${guestAlias}.occurrence_id IS NULL THEN ${eventAlias}.ends_at ELSE ${occurrenceAlias}.ends_at END`;
+  return `CASE
+    WHEN (${startsAt}) IS NULL OR (${endsAt}) IS NULL
+      OR unixepoch(${startsAt}) IS NULL OR unixepoch(${endsAt}) IS NULL
+      OR unixepoch(${endsAt}) <= unixepoch(${startsAt}) THEN NULL
+    WHEN ${guestAlias}.expires_at IS NULL THEN (${startsAt})
+    WHEN unixepoch(${guestAlias}.expires_at) IS NULL THEN NULL
+    WHEN unixepoch(${guestAlias}.expires_at) <= unixepoch(${endsAt}) THEN ${guestAlias}.expires_at
+    ELSE (${endsAt})
+  END`;
+}
+
 /** Applies the same event cap to existing rows and schedule changes in memory. */
 export function effectiveStoredInviteExpiry(event: InviteEventWindow, storedExpiresAt: string | null): string | null {
   const stored = instant(storedExpiresAt ?? event.starts_at);
@@ -105,6 +130,30 @@ export function eventInviteWindowEvidence(
             AND unixepoch(?) > unixepoch(?)
             AND unixepoch(?) <= unixepoch(ends_at)`,
     bindings: [eventId, event.starts_at, event.ends_at, expiresAt, now, expiresAt],
+  };
+}
+
+/** Rechecks an occurrence-scoped guest deadline in the invitation D1 batch. */
+export function eventOccurrenceInviteWindowEvidence(
+  seriesId: string,
+  occurrenceId: string,
+  occurrence: InviteEventWindow,
+  expiresAt: string,
+  now: string,
+): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+          FROM event_occurrences
+          WHERE id = ?
+            AND series_id = ?
+            AND starts_at IS ?
+            AND ends_at IS ?
+            AND unixepoch(starts_at) IS NOT NULL
+            AND unixepoch(ends_at) IS NOT NULL
+            AND unixepoch(ends_at) > unixepoch(starts_at)
+            AND unixepoch(?) > unixepoch(?)
+            AND unixepoch(?) <= unixepoch(ends_at)`,
+    bindings: [occurrenceId, seriesId, occurrence.starts_at, occurrence.ends_at, expiresAt, now, expiresAt],
   };
 }
 

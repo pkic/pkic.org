@@ -1,5 +1,6 @@
 import { first } from "../db/queries";
 import { AppError } from "../errors";
+import { effectiveMeetingGuestInviteExpirySql } from "../invite-validity";
 import type { DatabaseLike } from "../types";
 
 export interface MeetingGuest {
@@ -29,6 +30,19 @@ export interface MeetingGuestCapabilityRow extends MeetingGuestRow {
   invitation_secret: string;
 }
 
+export const EFFECTIVE_MEETING_GUEST_FROM = `FROM event_occurrence_guests guest
+  JOIN event_series series ON series.id = guest.series_id
+  JOIN events event ON event.id = series.event_id
+  LEFT JOIN event_occurrences guest_occurrence
+    ON guest_occurrence.id = guest.occurrence_id AND guest_occurrence.series_id = guest.series_id`;
+
+export function effectiveMeetingGuestColumns(includeSecret = false): string {
+  return `guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
+    guest.name, guest.affiliation,
+    ${effectiveMeetingGuestInviteExpirySql()} AS expires_at,
+    guest.revoked_at, guest.invitation_version${includeSecret ? ", guest.invitation_secret" : ""}`;
+}
+
 export function toMeetingGuest(row: MeetingGuestRow): MeetingGuest {
   return {
     guestId: row.id,
@@ -45,10 +59,9 @@ export function toMeetingGuest(row: MeetingGuestRow): MeetingGuest {
 export async function findMeetingGuest(db: DatabaseLike, guestId: string): Promise<MeetingGuestRow | null> {
   return first<MeetingGuestRow>(
     db,
-    `SELECT id, series_id, occurrence_id, normalized_email, name, affiliation,
-            expires_at, revoked_at, invitation_version
-       FROM event_occurrence_guests
-      WHERE id = ?`,
+    `SELECT ${effectiveMeetingGuestColumns()}
+       ${EFFECTIVE_MEETING_GUEST_FROM}
+      WHERE guest.id = ?`,
     [guestId],
   );
 }
@@ -60,10 +73,9 @@ export async function findMeetingGuestCapabilitySnapshot(
 ): Promise<MeetingGuestCapabilityRow | null> {
   return first<MeetingGuestCapabilityRow>(
     db,
-    `SELECT id, series_id, occurrence_id, normalized_email, name, affiliation,
-            expires_at, revoked_at, invitation_version, invitation_secret
-       FROM event_occurrence_guests
-      WHERE id = ?`,
+    `SELECT ${effectiveMeetingGuestColumns(true)}
+       ${EFFECTIVE_MEETING_GUEST_FROM}
+      WHERE guest.id = ?`,
     [guestId],
   );
 }

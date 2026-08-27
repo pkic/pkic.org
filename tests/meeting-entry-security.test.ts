@@ -444,7 +444,7 @@ describe("authenticated meeting entry", () => {
       email: `verified-guest-${crypto.randomUUID()}@example.test`,
       name: "Verified Guest",
       affiliation: "Guest Organization",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       seriesWide: true,
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
@@ -474,12 +474,39 @@ describe("authenticated meeting entry", () => {
     ).toEqual({ guest_id: guest.id, user_id: null });
   });
 
+  it("invalidates an established guest session when its occurrence window closes", async () => {
+    const { admin, series, occurrence } = await fixture();
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `schedule-expired-session-${crypto.randomUUID()}@example.test`,
+      name: "Schedule Expired Session Guest",
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
+    });
+    const verified = await verifiedGuestSession(guest.id, occurrence.id);
+    await env.DB.prepare("UPDATE event_occurrences SET starts_at = ?, ends_at = ? WHERE id = ?")
+      .bind(
+        new Date(Date.now() - 7_200_000).toISOString(),
+        new Date(Date.now() - 3_600_000).toISOString(),
+        occurrence.id,
+      )
+      .run();
+
+    await expect(
+      requireMeetingGuestFromRequest(
+        env.DB,
+        new Request("https://app.test/api/v1/meeting-guests/session", {
+          headers: { authorization: `Bearer ${verified.token}` },
+        }),
+        { INTERNAL_SIGNING_SECRET: SIGNING_SECRET },
+      ),
+    ).rejects.toMatchObject({ code: "AUTH_FORBIDDEN" });
+  });
+
   it("rejects a forwarded invitation when the second mailbox code is unavailable", async () => {
     const { admin, series, occurrence } = await fixture();
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `forwarded-${crypto.randomUUID()}@example.test`,
       name: "Forwarded Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     });
     const secret = await env.DB.prepare("SELECT invitation_secret FROM event_occurrence_guests WHERE id = ?")
       .bind(guest.id)
@@ -520,7 +547,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `route-guest-${crypto.randomUUID()}@example.test`,
       name: "Route Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       seriesWide: true,
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
@@ -573,7 +600,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `replay-${crypto.randomUUID()}@example.test`,
       name: "Replay Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
     await expect(
@@ -595,7 +622,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `revoked-${crypto.randomUUID()}@example.test`,
       name: "Revoked Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
       seriesWide: true,
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
@@ -626,7 +653,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `policy-${crypto.randomUUID()}@example.test`,
       name: "Policy Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
     const guestSubject = { kind: "guest" as const, guestId: guest.id, sessionId: verified.session.sessionId };
@@ -669,7 +696,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `legacy-${crypto.randomUUID()}@example.test`,
       name: "Legacy Policy Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
     expect(
@@ -682,10 +709,10 @@ describe("authenticated meeting entry", () => {
     ).toMatchObject({ name: "Legacy Policy Guest" });
   });
 
-  it("rejects stale invitation updates and challenge issuance after revocation", async () => {
+  it("rejects stale invitation updates and challenge issuance after revocation or an invalid schedule", async () => {
     const { admin, series, occurrence } = await fixture();
     const email = `race-${crypto.randomUUID()}@example.test`;
-    const expiresAt = new Date(Date.now() + 10_800_000).toISOString();
+    const expiresAt = new Date(Date.now() + 5_400_000).toISOString();
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email,
       name: "Original Guest",
@@ -725,6 +752,29 @@ describe("authenticated meeting entry", () => {
         .bind(guest.id)
         .first<number>("total"),
     ).toBe(0);
+
+    const scheduleGuest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `invalid-schedule-${crypto.randomUUID()}@example.test`,
+      name: "Invalid Schedule Guest",
+      expiresAt,
+      seriesWide: true,
+    });
+    const scheduleSecret = await env.DB.prepare("SELECT invitation_secret FROM event_occurrence_guests WHERE id = ?")
+      .bind(scheduleGuest.id)
+      .first<string>("invitation_secret");
+    const scheduleToken = await signCapabilityToken({
+      signingSecret: SIGNING_SECRET,
+      linkSecret: scheduleSecret!,
+      purpose: "meeting_guest_verify",
+      resourceId: scheduleGuest.id,
+      ttlSeconds: 3600,
+    });
+    const scheduleInvitation = await verifyMeetingGuestInvitationCapability(env.DB, scheduleToken, {
+      INTERNAL_SIGNING_SECRET: SIGNING_SECRET,
+    });
+    const scheduleChallenge = await prepareMeetingGuestBrowserChallenge(env.DB, scheduleInvitation, occurrence.id);
+    await env.DB.prepare("UPDATE events SET starts_at = NULL WHERE id = ?").bind(series.eventId).run();
+    await expect(scheduleChallenge.statement.run()).rejects.toThrow("MEETING_GUEST_CHALLENGE_CONTEXT_CHANGED");
   });
 
   it("keeps eligibility lookups indexed for member and guest entry", async () => {
@@ -732,7 +782,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
       email: `plan-${crypto.randomUUID()}@example.test`,
       name: "Plan Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     });
     const guestPlan = await env.DB.prepare(
       `EXPLAIN QUERY PLAN SELECT 1 FROM current_event_occurrence_subject_eligibility
@@ -766,7 +816,7 @@ describe("authenticated meeting entry", () => {
     const guest = await inviteTestOccurrenceGuest(env.DB, service, GROUP_ID, series.id, occurrence.id, {
       email: `service-${crypto.randomUUID()}@example.test`,
       name: "Service Guest",
-      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
     });
     expect(
       await env.DB.prepare(

@@ -57,7 +57,12 @@ export function MeetingOccurrenceDetail({
       )}
       {active === "guests" && (
         <div id={`${idPrefix}-guests-panel`} role="tabpanel" aria-labelledby={`${idPrefix}-guests`}>
-          <MeetingGuests base={base} occurrence={occurrence} timeZone={series.timezone} />
+          <MeetingGuests
+            base={base}
+            occurrence={occurrence}
+            seriesInviteWindow={series.inviteWindow}
+            timeZone={series.timezone}
+          />
         </div>
       )}
       {active === "attendance" && (

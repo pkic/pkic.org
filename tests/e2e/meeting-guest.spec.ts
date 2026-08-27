@@ -70,7 +70,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
             email: guestEmail,
             name: "E2E External Guest",
             affiliation: "E2E Guest Organization",
-            expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+            expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
           }),
         },
       );

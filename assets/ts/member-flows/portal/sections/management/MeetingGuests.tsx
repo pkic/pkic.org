@@ -5,31 +5,38 @@ import {
   eventOccurrenceGuestsListResponseSchema,
   type EventOccurrence,
 } from "../../../../../shared/schemas/event-series";
+import type { EventInviteWindow } from "../../../../../shared/schemas/event-invite-validity";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
-import { defaultFutureDate, isoDateTimeValue } from "./meeting-form-utils";
+import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
 
 export function MeetingGuests({
   base,
   occurrence,
+  seriesInviteWindow,
   timeZone,
 }: {
   base: string;
   occurrence: EventOccurrence;
+  seriesInviteWindow: EventInviteWindow;
   timeZone: string;
 }) {
   const actions = useRef<ApiTableActions | null>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [affiliation, setAffiliation] = useState("");
-  const [expiresAt, setExpiresAt] = useState(() => defaultFutureDate(30, 23, 59, timeZone));
+  const [expiresAt, setExpiresAt] = useState(() => localDateTimeValue(occurrence.startsAt, timeZone));
   const [seriesWide, setSeriesWide] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const endpoint = `${base}/occurrences/${encodeURIComponent(occurrence.id)}/guests`;
+  const effectiveWindow = seriesWide
+    ? seriesInviteWindow
+    : { startsAt: occurrence.startsAt, endsAt: occurrence.endsAt, timezone: timeZone };
+  const maximumExpiry = effectiveWindow.endsAt ? localDateTimeValue(effectiveWindow.endsAt, timeZone) : undefined;
 
   async function invite(event: Event): Promise<void> {
     event.preventDefault();
@@ -121,8 +128,12 @@ export function MeetingGuests({
             class="form-control form-control-sm"
             value={expiresAt}
             required
+            max={maximumExpiry}
             onInput={(e) => setExpiresAt(e.currentTarget.value)}
           />
+          <div class="form-text">
+            Defaults to the {seriesWide ? "series event" : "occurrence"} start and cannot extend beyond its end.
+          </div>
         </div>
         <div class="col-md-8 d-flex align-items-end">
           <div class="form-check mb-1">
@@ -131,7 +142,12 @@ export function MeetingGuests({
               type="checkbox"
               class="form-check-input"
               checked={seriesWide}
-              onChange={(e) => setSeriesWide(e.currentTarget.checked)}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                setSeriesWide(checked);
+                const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
+                if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
+              }}
             />
             <label class="form-check-label" for={`guest-series-wide-${occurrence.id}`}>
               Eligible for every occurrence in this series
@@ -171,14 +187,13 @@ export function MeetingGuests({
           { header: "Expires", cell: (guest) => fmt(guest.expiresAt) },
           {
             header: "Status",
-            cell: (guest) =>
-              guest.revokedAt ? "Revoked" : Date.parse(guest.expiresAt) <= Date.now() ? "Expired" : "Active",
+            cell: (guest) => (guest.revokedAt ? "Revoked" : guest.active ? "Active" : "Inactive"),
           },
           {
             header: "",
             className: "text-end",
             cell: (guest) =>
-              guest.revokedAt || Date.parse(guest.expiresAt) <= Date.now() ? null : (
+              !guest.active ? null : (
                 <button type="button" class="btn btn-sm btn-outline-danger" onClick={() => void revoke(guest.id)}>
                   Revoke
                 </button>

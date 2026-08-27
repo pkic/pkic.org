@@ -6,6 +6,8 @@ import { uuid } from "../utils/ids";
 import { addHours, addMinutes, nowIso } from "../utils/time";
 import { verifyCapabilityToken, verifyDatabaseCapability } from "./capability-links";
 import {
+  EFFECTIVE_MEETING_GUEST_FROM,
+  effectiveMeetingGuestColumns,
   findMeetingGuestCapabilitySnapshot,
   requireLiveMeetingGuest,
   toMeetingGuest,
@@ -181,14 +183,12 @@ export async function issueMeetingGuestSession(
   const challenge = assertUsableMeetingGuestChallenge(
     await first<MeetingGuestChallengeRow>(
       db,
-      `SELECT guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
-            guest.name, guest.affiliation, guest.expires_at, guest.revoked_at,
-            guest.invitation_version, challenge.id AS challenge_id, challenge.authorization_hash,
+      `SELECT ${effectiveMeetingGuestColumns()}, challenge.id AS challenge_id, challenge.authorization_hash,
             challenge.occurrence_id AS challenge_occurrence_id,
             challenge.expires_at AS challenge_expires_at, challenge.used_at AS challenge_used_at,
             challenge.invitation_version AS challenge_invitation_version
-       FROM meeting_guest_browser_challenges challenge
-       JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
+       ${EFFECTIVE_MEETING_GUEST_FROM}
+       JOIN meeting_guest_browser_challenges challenge ON challenge.guest_id = guest.id
       WHERE challenge.id = ? AND challenge.authorization_hash = ?`,
       [payload.challengeId, payload.authorizationHash],
     ),
@@ -216,14 +216,12 @@ export async function issueMeetingGuestSession(
     ) {
       const current = await first<MeetingGuestChallengeRow>(
         db,
-        `SELECT guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
-                guest.name, guest.affiliation, guest.expires_at, guest.revoked_at,
-                guest.invitation_version, challenge.id AS challenge_id, challenge.authorization_hash,
+        `SELECT ${effectiveMeetingGuestColumns()}, challenge.id AS challenge_id, challenge.authorization_hash,
                 challenge.occurrence_id AS challenge_occurrence_id,
                 challenge.expires_at AS challenge_expires_at, challenge.used_at AS challenge_used_at,
                 challenge.invitation_version AS challenge_invitation_version
-           FROM meeting_guest_browser_challenges challenge
-           JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
+           ${EFFECTIVE_MEETING_GUEST_FROM}
+           JOIN meeting_guest_browser_challenges challenge ON challenge.guest_id = guest.id
           WHERE challenge.id = ? AND challenge.authorization_hash = ?`,
         [payload.challengeId, payload.authorizationHash],
       );

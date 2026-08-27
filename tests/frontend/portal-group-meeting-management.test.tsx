@@ -3,6 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventOccurrence, GroupEventSeries } from "../../assets/shared/schemas/event-series";
+import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
 
@@ -54,6 +55,11 @@ describe("portal group meeting management", () => {
       providerType: null,
       providerConfigured: false,
       active: true,
+      inviteWindow: {
+        startsAt: "2026-09-01T13:00:00.000Z",
+        endsAt: "2026-09-08T14:00:00.000Z",
+        timezone: "Europe/Amsterdam",
+      },
       nextOccurrenceAt: "2026-09-01T13:00:00.000Z",
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-25T10:00:00.000Z",
@@ -218,6 +224,101 @@ describe("portal group meeting management", () => {
     expect(requests[0].body).toEqual({
       locationOverride: "Room 2",
       expectedUpdatedAt: occurrence.updatedAt,
+    });
+  });
+
+  it("defaults guest validity to the selected scope and submits the canonical shared contract", async () => {
+    const requests: Array<{ method: string; body?: Record<string, unknown> }> = [];
+    const occurrence: EventOccurrence = {
+      id: "80000000-0000-4000-8000-000000000004",
+      seriesId: "60000000-0000-4000-8000-000000000004",
+      startsAt: "2026-09-08T13:00:00.000Z",
+      endsAt: "2026-09-08T14:00:00.000Z",
+      status: "scheduled",
+      locationOverride: null,
+      location: "Online",
+      providerConfigured: true,
+      guestCount: 0,
+      joinConfirmedCount: 0,
+      attendanceVerifiedCount: 0,
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-25T10:00:00.000Z",
+    };
+    const seriesInviteWindow = {
+      startsAt: "2026-09-01T13:00:00.000Z",
+      endsAt: "2026-09-29T14:00:00.000Z",
+      timezone: "UTC",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
+        requests.push({ method, body });
+        if (method === "POST") {
+          return json({
+            guest: {
+              id: "90000000-0000-4000-8000-000000000004",
+              occurrenceId: occurrence.id,
+              seriesId: occurrence.seriesId,
+              seriesWide: body?.seriesWide,
+              userId: null,
+              email: body?.email,
+              name: body?.name,
+              affiliation: body?.affiliation,
+              expiresAt: body?.expiresAt,
+              active: true,
+              revokedAt: null,
+              createdAt: "2026-08-27T00:00:00.000Z",
+              updatedAt: "2026-08-27T00:00:00.000Z",
+            },
+          });
+        }
+        return json({ guests: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const container = mount(
+      <MeetingGuests
+        base="/api/v1/groups/test/meetings/series/test"
+        occurrence={occurrence}
+        seriesInviteWindow={seriesInviteWindow}
+        timeZone="UTC"
+      />,
+    );
+    await settle();
+
+    const expiry = container.querySelector<HTMLInputElement>(`#meeting-guest-expiry-${occurrence.id}`)!;
+    expect(expiry.value).toBe("2026-09-08T13:00");
+    expect(expiry.max).toBe("2026-09-08T14:00");
+    const seriesWide = container.querySelector<HTMLInputElement>(`#guest-series-wide-${occurrence.id}`)!;
+    seriesWide.checked = true;
+    void act(() => {
+      seriesWide.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(expiry.value).toBe("2026-09-01T13:00");
+    expect(expiry.max).toBe("2026-09-29T14:00");
+
+    const email = container.querySelector<HTMLInputElement>(`#meeting-guest-email-${occurrence.id}`)!;
+    email.value = "guest@example.test";
+    void act(() => {
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const name = container.querySelector<HTMLInputElement>(`#meeting-guest-name-${occurrence.id}`)!;
+    name.value = "External Guest";
+    void act(() => {
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    expect(requests.find((request) => request.method === "POST")?.body).toEqual({
+      email: "guest@example.test",
+      name: "External Guest",
+      affiliation: null,
+      expiresAt: "2026-09-01T13:00:00.000Z",
+      seriesWide: true,
     });
   });
 });
