@@ -936,8 +936,29 @@ Status: In progress
       attendee list, search, resend, and revoke without an admin API request.
       The complete repository gate passes 2,031 backend tests (one skipped),
       245 frontend tests, and 80 tool tests, with zero changed-code duplication.
+      Program-committee proposal management now uses the same selected-group
+      event context. Neutral shared contracts and components serve the portal
+      and the temporary admin adapter for detail, reviews, comments, accepted
+      abstract corrections, accepted-proposal cancellation, decision preview,
+      finalization, and proposal-scoped audit history. The group routes bind the
+      exact owning group, event, and proposal and enforce distinct event-scoped
+      read, score, manage, accepted-abstract-edit, and accepted-cancellation
+      permissions. Finalization rechecks live management authority and the exact
+      tuple in the same D1 batch as decision history, audit, participant
+      capacities, and durable outbox rows. Event statistics neither execute nor
+      return proposal aggregation without event-scoped proposal-read authority.
+      One content-type-aware email-literal abstraction protects public proposal,
+      speaker, attendee, invitation, cancellation, vote, and campaign values in
+      Markdown, HTML, text, and subject rendering. One shared campaign-data
+      merge also prevents configurable form keys from replacing canonical
+      event, identity, route, or management variables. A real Worker/D1 browser
+      journey completes the portal proposal workflow without an admin API
+      fallback. The complete repository gate now passes 2,098 backend tests
+      (one skipped), 255 frontend tests, and 80 tool tests, with zero duplicated
+      changed-code blocks.
       This parent item remains open for the other management areas and final
-      admin-shell retirement below, not for event registration setup.
+      admin-shell retirement below, not for event registration or proposal
+      decision management.
 - [ ] Move remaining global management views into the portal.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
@@ -1051,7 +1072,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,084 backend tests pass with one skipped, 252 frontend tests
+      checkpoint: 2,098 backend tests pass with one skipped, 255 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -1068,7 +1089,11 @@ Status: In progress
       event create/edit persistence, member, direct chair, inherited manager,
       local-only child participant, staff-only manager, and unauthorized
       presentation contracts. The earlier guest meeting-entry browser journey
-      remains green as separate focused evidence.
+      remains green as separate focused evidence. A separate real Worker/D1
+      journey signs in as an event program manager, reads proposals through the
+      selected-group API, edits an accepted abstract, previews and records a
+      final decision, and reads the resulting audit history without an admin API
+      fallback.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
@@ -1085,8 +1110,12 @@ Status: In progress
       round fixes plaintext provider URLs in audit details, guest-policy bypass
       on token use, and stale guest-token resurrection; it also enforces the
       policy at invitation time and restricts provider destinations to HTTPS.
-      A fresh final diff review remains required after the full architecture is
-      implemented.
+      Codex Security scan `cb0bbaeb-9453-4521-a1d1-af7defa1b360` then reviewed
+      all 49 production files in the exact proposal-management implementation
+      snapshot after resolving attendee campaign Markdown/HTML injection and
+      canonical-URL shadowing found during independent review. It completed with
+      full coverage and no remaining findings. A fresh final diff review remains
+      required after the rest of the architecture is implemented.
 - [ ] Audit every requirement in ARCHITECTURE.md against current evidence.
 
 ## 12. Pull-request handoff
