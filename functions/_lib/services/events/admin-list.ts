@@ -4,6 +4,7 @@ import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pag
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
+import { effectiveInviteExpirySql } from "../../invite-validity";
 import type { DatabaseLike } from "../../types";
 
 interface EventWithStats {
@@ -105,7 +106,11 @@ export function buildAdminEventStatsQuery(eventIds: readonly string[]) {
          SELECT i.event_id, COUNT(*) AS pending_invites
            FROM invites i
            JOIN page_events pe ON pe.event_id = i.event_id
-          WHERE i.status = 'sent' AND i.invite_type = 'attendee'
+           JOIN events e ON e.id = i.event_id
+          WHERE i.status = 'sent'
+            AND i.invite_type = 'attendee'
+            AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+            AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch()
           GROUP BY i.event_id
        )
        SELECT pe.event_id,

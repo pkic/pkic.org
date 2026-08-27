@@ -39,15 +39,13 @@ export function GroupEventInvitations({ groupId, event }: { groupId: string; eve
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState(() =>
-    event.startsAt ? instantToDateTimeLocal(event.startsAt, event.timezone) : "",
-  );
+  const [expiresAt, setExpiresAt] = useState("");
   const endpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}/invites`;
   const latestExpiry = event.endsAt ? instantToDateTimeLocal(event.endsAt, event.timezone) : undefined;
 
   useEffect(() => {
-    setExpiresAt(event.startsAt ? instantToDateTimeLocal(event.startsAt, event.timezone) : "");
-  }, [event.startsAt, event.timezone]);
+    setExpiresAt("");
+  }, [event.id]);
 
   async function runAction(invite: EventAttendeeInviteSummary, action: "resend" | "revoke"): Promise<void> {
     if (
@@ -62,10 +60,9 @@ export function GroupEventInvitations({ groupId, event }: { groupId: string; eve
     setMessage(null);
     try {
       if (action === "resend") {
-        if (!expiresAt) throw new Error("Set an invitation deadline before resending.");
         await postJson(
           `${endpoint}/${encodeURIComponent(invite.id)}/resend`,
-          { expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) },
+          expiresAt ? { expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) } : {},
           eventInviteResendResponseSchema,
         );
         setMessage(`Invitation resent to ${inviteeLabel(invite)}.`);
@@ -97,7 +94,7 @@ export function GroupEventInvitations({ groupId, event }: { groupId: string; eve
           onInput={(inputEvent) => setExpiresAt((inputEvent.target as HTMLInputElement).value)}
         />
         <div class="form-text">
-          Defaults to the event start and cannot be later than the event end
+          Leave blank to use the event start. A custom deadline cannot be later than the event end
           {latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""}.
         </div>
       </div>

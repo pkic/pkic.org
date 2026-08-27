@@ -96,6 +96,26 @@ describe("invite lifecycle aggregate", () => {
     ).toHaveLength(1);
   });
 
+  it("uses the event-start default when resending an expired invitation without a deadline", async () => {
+    const inviteId = await insertInvite(eventId, "declined");
+    await env.DB.prepare("UPDATE invites SET status = 'expired', expires_at = '2026-01-01T00:00:00.000Z' WHERE id = ?")
+      .bind(inviteId)
+      .run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+
+    const result = await resendEventInvite(env.DB, {
+      event,
+      inviteId,
+      actor: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
+      appBaseUrl: "https://app.test",
+    });
+
+    expect(result.expiresAt).toBe(event.starts_at);
+    await expect(
+      env.DB.prepare("SELECT status, expires_at FROM invites WHERE id = ?").bind(inviteId).first(),
+    ).resolves.toEqual({ status: "sent", expires_at: event.starts_at });
+  });
+
   it("rejects acceptance when the event window changes before commit", async () => {
     const inviteId = await insertInvite(eventId);
     const racingDb = mutateBeforeNextBatch(env.DB, async () => {

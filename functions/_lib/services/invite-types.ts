@@ -32,9 +32,36 @@ export interface InviteInviterInfo {
   organizationName: string | null;
 }
 
-export const INVITE_COLUMNS = `id, event_id, inviter_user_id, inviter_registration_id,
-  invitee_email, invitee_first_name, invitee_last_name, invite_type, link_secret,
-  status, decline_reason_code, decline_reason_note, unsubscribe_future,
-  reminder_count, last_communication_at, reminders_paused_until, max_uses,
-  used_count, source_type, expires_at, accepted_at, declined_at,
-  transition_revision, created_at`;
+const INVITE_COLUMN_NAMES = [
+  "id",
+  "event_id",
+  "inviter_user_id",
+  "inviter_registration_id",
+  "invitee_email",
+  "invitee_first_name",
+  "invitee_last_name",
+  "invite_type",
+  "link_secret",
+  "status",
+  "decline_reason_code",
+  "decline_reason_note",
+  "unsubscribe_future",
+  "reminder_count",
+  "last_communication_at",
+  "reminders_paused_until",
+  "max_uses",
+  "used_count",
+  "source_type",
+  "expires_at",
+  "accepted_at",
+  "declined_at",
+  "transition_revision",
+  "created_at",
+] as const;
+
+export const INVITE_COLUMNS = INVITE_COLUMN_NAMES.join(", ");
+
+/** Builds an explicit invite projection for joined D1 read models. */
+export function inviteColumnProjection(alias: string): string {
+  return INVITE_COLUMN_NAMES.map((column) => `${alias}.${column}`).join(", ");
+}

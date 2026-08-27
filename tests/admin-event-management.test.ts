@@ -159,12 +159,14 @@ describe("admin event management endpoints", () => {
     const unrelatedUserIds = Array.from({ length: 3 }, () => crypto.randomUUID());
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
-         VALUES (?, 'a-page-event', 'A page event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+        `INSERT INTO events
+           (id, slug, name, timezone, starts_at, ends_at, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'a-page-event', 'A page event', 'UTC', '2027-01-01T09:00:00.000Z', '2027-01-01T17:00:00.000Z', 'open', 5, '{}', datetime('now'), datetime('now'))`,
       ).bind(pageEventId),
       env.DB.prepare(
-        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
-         VALUES (?, 'z-unrelated-event', 'Z unrelated event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+        `INSERT INTO events
+           (id, slug, name, timezone, starts_at, ends_at, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'z-unrelated-event', 'Z unrelated event', 'UTC', '2027-01-01T09:00:00.000Z', '2027-01-01T17:00:00.000Z', 'open', 5, '{}', datetime('now'), datetime('now'))`,
       ).bind(unrelatedEventId),
       env.DB.prepare(
         `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
@@ -193,6 +195,11 @@ describe("admin event management endpoints", () => {
            (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
          VALUES (?, ?, 'page-invite@example.test', 'attendee', ?, 'sent', 'direct', datetime('now'))`,
       ).bind(crypto.randomUUID(), pageEventId, `page-invite-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO invites
+           (id, event_id, invitee_email, invite_type, link_secret, status, source_type, expires_at, created_at)
+         VALUES (?, ?, 'expired-page-invite@example.test', 'attendee', ?, 'sent', 'direct', '2026-01-01T00:00:00.000Z', datetime('now'))`,
+      ).bind(crypto.randomUUID(), pageEventId, `expired-page-invite-${crypto.randomUUID()}`),
       env.DB.prepare(
         `INSERT INTO invites
            (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)

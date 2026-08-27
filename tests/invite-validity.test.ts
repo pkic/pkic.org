@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import {
   effectiveInviteExpirySql,
   effectiveStoredInviteExpiry,
+  prepareExpireEffectiveEventInvites,
   resolveEventInviteExpiry,
 } from "../functions/_lib/invite-validity";
 import { resetDb } from "./helpers/reset-db";
@@ -104,5 +105,41 @@ describe("stored event invitation validity in D1", () => {
     await expect(
       queryAll(env.DB, "SELECT id FROM invites WHERE invitee_email = 'direct-schedule-race@example.test'"),
     ).resolves.toHaveLength(0);
+  });
+
+  it("retires legacy NULL and shortened-event deadlines using the event-derived deadline", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const inviteIds = [crypto.randomUUID(), crypto.randomUUID()];
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO invites
+             (id, event_id, invitee_email, invite_type, link_secret, status, source_type, expires_at, created_at)
+           VALUES (?, ?, 'derived-null-expiry@example.test', 'attendee', ?, 'sent', 'test', NULL, ?)`,
+      ).bind(inviteIds[0], eventId, crypto.randomUUID(), "2026-01-01T00:00:00.000Z"),
+      env.DB.prepare(
+        `INSERT INTO invites
+             (id, event_id, invitee_email, invite_type, link_secret, status, source_type, expires_at, created_at)
+           VALUES (?, ?, 'derived-capped-expiry@example.test', 'attendee', ?, 'sent', 'test', '2026-04-01T00:00:00.000Z', ?)`,
+      ).bind(inviteIds[1], eventId, crypto.randomUUID(), "2026-01-01T00:00:00.000Z"),
+    ]);
+    await env.DB.prepare("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?")
+      .bind("2026-02-01T08:00:00.000Z", "2026-02-01T18:00:00.000Z", eventId)
+      .run();
+
+    await env.DB.batch([
+      prepareExpireEffectiveEventInvites(env.DB, {
+        eventId,
+        inviteType: "attendee",
+        now: "2026-03-01T00:00:00.000Z",
+      }),
+    ]);
+
+    await expect(
+      queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM invites WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id",
+        [JSON.stringify(inviteIds.sort())],
+      ),
+    ).resolves.toEqual([{ status: "expired" }, { status: "expired" }]);
   });
 });

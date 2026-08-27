@@ -2,14 +2,20 @@ import { all, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { issueDatabaseCapability } from "./capability-links";
 import type { DatabaseLike } from "../types";
-import { INVITE_COLUMNS, type InviteRecord } from "./invite-types";
+import { inviteColumnProjection, type InviteRecord } from "./invite-types";
+import { effectiveInviteExpirySql } from "../invite-validity";
 
 export async function listPendingInviteReminders(db: DatabaseLike): Promise<InviteRecord[]> {
   return all<InviteRecord>(
     db,
-    `SELECT ${INVITE_COLUMNS} FROM invites
-     WHERE status = 'sent' AND reminder_count < 3 AND (expires_at IS NULL OR expires_at > ?)
-     ORDER BY created_at ASC`,
+    `SELECT ${inviteColumnProjection("i")}
+     FROM invites i
+     JOIN events e ON e.id = i.event_id
+     WHERE i.status = 'sent'
+       AND i.reminder_count < 3
+       AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+       AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?)
+     ORDER BY i.created_at ASC`,
     [nowIso()],
   );
 }

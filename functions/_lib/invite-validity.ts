@@ -1,6 +1,7 @@
 import { AppError } from "./errors";
 import type { AuthorizationEvidence } from "./db/authorization-guard";
 import type { EventRecord } from "./services/event-types";
+import type { DatabaseLike, StatementLike } from "./types";
 import { nowIso } from "./utils/time";
 
 export type InviteEventWindow = Pick<EventRecord, "starts_at" | "ends_at">;
@@ -147,6 +148,37 @@ export function activeInviteValidityEvidence(inviteId: string, now: string): Aut
             AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?)`,
     bindings: [inviteId, now],
   };
+}
+
+/**
+ * Retires invitations using the same effective deadline used by token
+ * validation, listing, recovery, and reminders. This must be committed with
+ * a newly-created invitation so a legacy NULL or overlong deadline cannot
+ * retain the partial unique index slot for an already-expired invite.
+ */
+export function prepareExpireEffectiveEventInvites(
+  db: DatabaseLike,
+  payload: { eventId: string; inviteType: "attendee" | "speaker"; now: string; inviteeEmail?: string },
+): StatementLike {
+  const emailClause = payload.inviteeEmail ? " AND invites.invitee_email = ?" : "";
+  return db
+    .prepare(
+      `UPDATE invites
+       SET status = 'expired'
+       WHERE invites.event_id = ?
+         AND invites.invite_type = ?
+         AND invites.status = 'sent'${emailClause}
+         AND EXISTS (
+           SELECT 1
+           FROM events e
+           WHERE e.id = invites.event_id
+             AND (
+               ${effectiveInviteExpirySql("invites", "e")} IS NULL
+               OR unixepoch(${effectiveInviteExpirySql("invites", "e")}) <= unixepoch(?)
+             )
+         )`,
+    )
+    .bind(payload.eventId, payload.inviteType, ...(payload.inviteeEmail ? [payload.inviteeEmail] : []), payload.now);
 }
 
 export function inviteExpirySeconds(expiresAt: string): number {

@@ -7,8 +7,10 @@ import { sha256Hex } from "../utils/crypto";
 import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../email/outbox-queue";
 import type { DatabaseLike, StatementLike } from "../types";
 import {
+  effectiveInviteExpirySql,
   eventInviteWindowEvidence,
   inviteExpirySeconds,
+  prepareExpireEffectiveEventInvites,
   resolveEventInviteExpiry,
   type InviteEventWindow,
 } from "../invite-validity";
@@ -154,14 +156,6 @@ export async function bulkCreateInvites(
   const batchResults = (await db.batch([
     db
       .prepare(
-        `UPDATE invites
-         SET status = 'expired'
-         WHERE event_id = ?1 AND invite_type = ?2 AND status = 'sent'
-           AND expires_at IS NOT NULL AND unixepoch(expires_at) <= unixepoch(?3)`,
-      )
-      .bind(payload.event.id, inviteType, now),
-    db
-      .prepare(
         `SELECT email FROM unsubscribes
          WHERE email IN (SELECT value FROM json_each(?1))
            AND channel = 'invites'
@@ -171,18 +165,24 @@ export async function bulkCreateInvites(
     db.prepare(ELIGIBILITY_QUERY[inviteType]).bind(emailsJson, payload.event.id),
     db
       .prepare(
-        `SELECT invitee_email FROM invites
-         WHERE event_id = ?1 AND invite_type = ?2 AND status = 'sent'
-           AND invitee_email IN (SELECT value FROM json_each(?3))`,
+        `SELECT i.invitee_email
+         FROM invites i
+         JOIN events e ON e.id = i.event_id
+         WHERE i.event_id = ?1
+           AND i.invite_type = ?2
+           AND i.status = 'sent'
+           AND i.invitee_email IN (SELECT value FROM json_each(?3))
+           AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+           AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?4)`,
       )
-      .bind(payload.event.id, inviteType, emailsJson),
+      .bind(payload.event.id, inviteType, emailsJson, now),
   ])) as Array<{ results?: Array<Record<string, string>> }>;
 
-  const unsubscribed = new Set((batchResults[1].results ?? []).map((row) => row.email));
+  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
   const ineligible = new Map(
-    (batchResults[2].results ?? []).map((row) => [row.normalized_email, row.reason ?? "invitee_ineligible"]),
+    (batchResults[1].results ?? []).map((row) => [row.normalized_email, row.reason ?? "invitee_ineligible"]),
   );
-  const alreadyInvited = new Set((batchResults[3].results ?? []).map((row) => row.invitee_email));
+  const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
   const classified = new Set<string>();
   const outcomes: BulkInviteOutcome[] = [];
   const toCreate: Array<{ outcomeIndex: number; email: string; invite: BulkInviteInput }> = [];
@@ -259,6 +259,7 @@ export async function bulkCreateInvites(
   const inviterChunks = chunkJsonRows(inviterRows);
   const statements = [
     prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+    prepareExpireEffectiveEventInvites(db, { eventId: payload.event.id, inviteType, now }),
     ...chunks.map((chunk) =>
       db
         .prepare(BULK_INVITE_INSERT_SQL)
@@ -300,7 +301,7 @@ export async function bulkCreateInvites(
   }
   const insertedIds = new Set(
     results
-      .slice(1, chunks.length + 1)
+      .slice(2, chunks.length + 2)
       .flatMap((result) => (result.results ?? []).map((row) => String((row as { id?: unknown }).id ?? ""))),
   );
   for (let index = 0; index < prepared.length; index += 1) {
@@ -321,11 +322,17 @@ export async function bulkCreateInvites(
   if (unresolvedEmails.length > 0) {
     const active = await db
       .prepare(
-        `SELECT invitee_email FROM invites
-         WHERE event_id = ?1 AND invite_type = ?2 AND status = 'sent'
-           AND invitee_email IN (SELECT value FROM json_each(?3))`,
+        `SELECT i.invitee_email
+         FROM invites i
+         JOIN events e ON e.id = i.event_id
+         WHERE i.event_id = ?1
+           AND i.invite_type = ?2
+           AND i.status = 'sent'
+           AND i.invitee_email IN (SELECT value FROM json_each(?3))
+           AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+           AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?4)`,
       )
-      .bind(payload.event.id, inviteType, JSON.stringify(unresolvedEmails))
+      .bind(payload.event.id, inviteType, JSON.stringify(unresolvedEmails), now)
       .all<{ invitee_email: string }>();
     for (const row of active.results) finalActive.add(row.invitee_email);
   }

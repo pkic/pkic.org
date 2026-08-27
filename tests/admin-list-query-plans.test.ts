@@ -7,6 +7,7 @@ import { buildAdminUsersPageQuery } from "../functions/_lib/services/admin-users
 import { buildAdminEventsPageQuery, buildAdminEventStatsQuery } from "../functions/_lib/services/events/admin-list";
 import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
 import { resetDb } from "./helpers/reset-db";
+import { seedEventAndAdmin } from "./helpers/context";
 
 async function explainOffsetPage(query: OffsetPageQuery) {
   const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
@@ -33,7 +34,8 @@ describe("admin list D1 query plans", () => {
   });
 
   it("aggregates a maximum-size event page through one JSON binding", async () => {
-    const eventIds = Array.from({ length: MAX_PAGE_LIMIT }, (_, index) => `event-${index}`);
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const eventIds = [eventId, ...Array.from({ length: MAX_PAGE_LIMIT - 1 }, (_, index) => `event-${index}`)];
     const pageQuery = buildAdminEventsPageQuery({ limit: MAX_PAGE_LIMIT, offset: 0 });
     expect(pageQuery.limit).toBe(200);
     await explainOffsetPage(pageQuery);
@@ -48,12 +50,22 @@ describe("admin list D1 query plans", () => {
       .bind(...statsQuery.bindings)
       .all();
     expect(plan.results.length).toBeGreaterThan(0);
+    expect(plan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n")).toContain(
+      "idx_invites_event_status",
+    );
     await expect(
       env.DB.prepare(statsQuery.sql)
         .bind(...statsQuery.bindings)
         .all(),
     ).resolves.toMatchObject({
-      results: [],
+      results: [
+        {
+          event_id: eventId,
+          total_registrations: 0,
+          confirmed_registrations: 0,
+          pending_invites: 0,
+        },
+      ],
     });
   });
 

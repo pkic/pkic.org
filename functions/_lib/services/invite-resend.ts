@@ -45,7 +45,11 @@ export async function resendEventInvite(
   if (invite.status === "revoked") throw new AppError(409, "INVITE_REVOKED", "Cannot resend a revoked invite");
 
   const now = nowIso();
-  const expiresAt = resolveEventInviteExpiry(payload.event, payload.expiresAt ?? invite.expires_at, now);
+  // Omission deliberately means the event start, exactly as it does for new
+  // invitations and reviewed previews. A resend may therefore reactivate a
+  // previously expired invitation after the organizer sets a future event
+  // schedule, without inheriting its stale historical deadline.
+  const expiresAt = resolveEventInviteExpiry(payload.event, payload.expiresAt, now);
   const linkSecret = newCapabilityLinkSecret();
   const subject =
     invite.invite_type === "attendee"

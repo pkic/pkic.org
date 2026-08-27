@@ -60,18 +60,15 @@ function InviteForm({ slug, inviteType, event }: { slug: string; inviteType: Inv
   const [previewStatus, setPreviewStatus] = useState("Preview required before sending.");
   const [sendStatus, setSendStatus] = useState("");
   const [sending, setSending] = useState(false);
-  const [expiresAt, setExpiresAt] = useState(() =>
-    event.starts_at ? instantToDateTimeLocal(event.starts_at, event.timezone) : "",
-  );
+  const [expiresAt, setExpiresAt] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const typeLabel = inviteType === "attendee" ? "attendee" : "speaker";
   const latestExpiry = event.ends_at ? instantToDateTimeLocal(event.ends_at, event.timezone) : undefined;
 
-  function resolvedExpiry(): string {
-    if (!expiresAt) throw new Error("Set an invitation deadline before previewing or sending.");
-    return dateTimeLocalToIso(expiresAt, event.timezone);
+  function resolvedExpiry(): string | undefined {
+    return expiresAt ? dateTimeLocalToIso(expiresAt, event.timezone) : undefined;
   }
 
   function handleParse() {
@@ -161,7 +158,6 @@ function InviteForm({ slug, inviteType, event }: { slug: string; inviteType: Inv
       setPreview(res);
       setPreviewToken(res.previewToken);
       setInviteDigest(res.inviteDigest);
-      setExpiresAt(instantToDateTimeLocal(res.inviteExpiresAt, event.timezone));
       setPreviewStatus("Review and confirm below.");
       if (iframeRef.current) {
         iframeRef.current.srcdoc = res.html;
@@ -297,7 +293,6 @@ function InviteForm({ slug, inviteType, event }: { slug: string; inviteType: Inv
           type="datetime-local"
           value={expiresAt}
           max={latestExpiry}
-          required
           onInput={(inputEvent) => {
             setExpiresAt((inputEvent.target as HTMLInputElement).value);
             setPreview(null);
@@ -308,7 +303,7 @@ function InviteForm({ slug, inviteType, event }: { slug: string; inviteType: Inv
           }}
         />
         <div class="form-text">
-          Defaults to the event start and cannot be later than the event end
+          Leave blank to use the event start. A custom deadline cannot be later than the event end
           {latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""}.
         </div>
       </div>
@@ -362,9 +357,7 @@ function InviteForm({ slug, inviteType, event }: { slug: string; inviteType: Inv
 
 function SpeakerInviteList({ slug, event }: { slug: string; event: EventDetail }) {
   const [statusFilter, setStatusFilter] = useState("");
-  const [expiresAt, setExpiresAt] = useState(() =>
-    event.starts_at ? instantToDateTimeLocal(event.starts_at, event.timezone) : "",
-  );
+  const [expiresAt, setExpiresAt] = useState("");
   const tableRef = useRef<ApiTableActions | null>(null);
   // The transitional admin endpoint is speaker-only; attendee lifecycle moved
   // to selected-group management.
@@ -372,10 +365,9 @@ function SpeakerInviteList({ slug, event }: { slug: string; event: EventDetail }
 
   async function handleResend(inviteId: string): Promise<void> {
     try {
-      if (!expiresAt) throw new Error("Set an invitation deadline before resending.");
       await api(`${endpoint}/${encodeURIComponent(inviteId)}/resend`, eventInviteResendResponseSchema, {
         method: "POST",
-        body: JSON.stringify({ expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) }),
+        body: JSON.stringify(expiresAt ? { expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) } : {}),
       });
       toast("Speaker invitation resent", "success");
       await tableRef.current?.reload();

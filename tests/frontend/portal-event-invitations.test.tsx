@@ -100,13 +100,13 @@ afterEach(() => {
 
 describe("portal event invitations", () => {
   it("uses only canonical group endpoints for server-side search, status filters, sorting, pagination, resend, and revoke", async () => {
-    const requests: Array<{ method: string; url: URL }> = [];
+    const requests: Array<{ method: string; url: URL; body: string | null }> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const url = urlOf(input);
         const method = init.method ?? "GET";
-        requests.push({ method, url });
+        requests.push({ method, url, body: typeof init.body === "string" ? init.body : null });
         if (method === "GET") return json(response());
         if (url.pathname.endsWith("/resend")) {
           return json({
@@ -167,6 +167,10 @@ describe("portal event invitations", () => {
         url: expect.objectContaining({ pathname: `${listPath}/${INVITE_ID}/resend` }),
       }),
     );
+    const resendRequest = requests.find(
+      (request) => request.method === "POST" && request.url.pathname.endsWith(`/${INVITE_ID}/resend`),
+    );
+    expect(resendRequest?.body).toBe("{}");
     expect(container.textContent).toContain("Invitation resent to Ada Lovelace.");
 
     const revoke = await waitForElement(() =>

@@ -112,6 +112,11 @@ describe("attendee invite — chunked bulk send", () => {
     const bulkBody = (await bulkRes.json()) as { success: boolean; created: unknown[] };
     expect(bulkBody.success).toBe(true);
     expect(bulkBody.created).toHaveLength(1);
+    await expect(
+      queryAll<{ expires_at: string }>(appEnv.DB, "SELECT expires_at FROM invites WHERE invitee_email = ?", [
+        "a@example.com",
+      ]),
+    ).resolves.toEqual([{ expires_at: "2026-12-01T08:00:00.000Z" }]);
   });
 
   it("bulk rejects a chunk when inviteDigest is omitted and chunk ≠ full list", async () => {
@@ -163,6 +168,38 @@ describe("attendee invite — chunked bulk send", () => {
     // One expiry transition + three classification reads + one atomic event-window guard,
     // two JSON invite inserts, and two JSON outbox inserts.
     expect(budgeted.budget.usedQueries()).toBe(9);
+  });
+
+  it("replaces an expired sent row instead of treating it as an active duplicate", async () => {
+    const event = (
+      await queryAll<{ id: string; starts_at: string; ends_at: string }>(
+        appEnv.DB,
+        "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
+        [EVENT_SLUG],
+      )
+    )[0];
+    const priorId = crypto.randomUUID();
+    await appEnv.DB.prepare(
+      `INSERT INTO invites
+           (id, event_id, invitee_email, invite_type, link_secret, status, source_type, expires_at, created_at)
+         VALUES (?, ?, 'replaced-expired@example.test', 'attendee', ?, 'sent', 'test', '2026-01-01T00:00:00.000Z', ?)`,
+    )
+      .bind(priorId, event.id, crypto.randomUUID(), "2026-01-01T00:00:00.000Z")
+      .run();
+
+    const outcomes = await bulkCreateAttendeesAdmin(appEnv.DB, {
+      event,
+      invites: [{ inviteeEmail: "replaced-expired@example.test" }],
+    });
+
+    expect(outcomes).toMatchObject([{ status: "created", email: "replaced-expired@example.test" }]);
+    await expect(
+      queryAll<{ id: string; status: string }>(
+        appEnv.DB,
+        "SELECT id, status FROM invites WHERE invitee_email = ? ORDER BY created_at, id",
+        ["replaced-expired@example.test"],
+      ),
+    ).resolves.toEqual([{ id: priorId, status: "expired" }, expect.objectContaining({ status: "sent" })]);
   });
 
   it("commits invite creation and its outbox intent atomically", async () => {

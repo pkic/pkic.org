@@ -12,6 +12,7 @@ import {
   effectiveInviteExpirySql,
   eventInviteWindowEvidence,
   inviteExpirySeconds,
+  prepareExpireEffectiveEventInvites,
   resolveEventInviteExpiry,
   type InviteEventWindow,
 } from "../invite-validity";
@@ -97,16 +98,6 @@ export async function createInvite(
   ]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const expiresAt = resolveEventInviteExpiry(event, payload.expiresAt, now);
-
-  await db
-    .prepare(
-      `UPDATE invites
-       SET status = 'expired'
-       WHERE event_id = ? AND invite_type = ? AND invitee_email = ? AND status = 'sent'
-         AND expires_at IS NOT NULL AND unixepoch(expires_at) <= unixepoch(?)`,
-    )
-    .bind(payload.eventId, payload.inviteType, inviteeEmail, now)
-    .run();
 
   if (await isUnsubscribed(db, inviteeEmail, payload.eventId)) {
     throw new AppError(409, "INVITEE_UNSUBSCRIBED", "Invitee has unsubscribed from future invitations");
@@ -236,6 +227,12 @@ export async function createInvite(
 
   const statements: StatementLike[] = [
     prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.eventId, event, expiresAt, now)),
+    prepareExpireEffectiveEventInvites(db, {
+      eventId: payload.eventId,
+      inviteType: payload.inviteType,
+      inviteeEmail,
+      now,
+    }),
     db
       .prepare(
         `INSERT INTO invites (
