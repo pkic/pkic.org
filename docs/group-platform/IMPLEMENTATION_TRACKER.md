@@ -52,10 +52,14 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
       Current evidence: the unreleased working-group collection contracts and
-      routes have been removed. Narrow compatibility exports remain only where
-      an existing admin consumer still uses the canonical mailing-list, vote,
-      registration, audit, or organization-content implementation; remove each
-      export with that consumer rather than creating a second contract.
+      routes have been removed. The obsolete admin event-management, form,
+      invitation, proposal, speaker, and registration aliases have now been
+      replaced at every caller by their canonical domain contracts; the
+      duplicate admin registration-detail schema module is removed. Narrow
+      compatibility exports remain only where an existing admin consumer still
+      uses a canonical mailing-list, vote, statistics, or organization-content
+      implementation; remove each export with that consumer rather than
+      creating a second contract.
 - [x] Prove empty-database migration application.
       Evidence: all 37 migrations, including 234 commands in 0035, applied to
       a fresh independent local D1 state under ScanDisk after the authenticated
@@ -581,6 +585,15 @@ Status: In progress
           attendance-management reauthorization. Authenticated group registration
           also proves strict identity binding, registration-policy enforcement,
           and the atomic D1 authorization guard.
+          The latest evaluator pass moves form-placement discovery, mailing-list
+          subscription discovery, mailing-list management, event-series reads,
+          and vote discovery onto one live membership/management evidence
+          constructor. Shared mailing-list managers can list and mutate only
+          resources carrying an effective `manage` grant, and both grant and
+          selected-group leadership are rechecked in the protected D1 batch.
+          Revocation-before-read and revocation-before-write regressions pass.
+          The parent remains open until the remaining specialized policy paths
+          and legacy domain adapters disappear with their portal cutovers.
 
 ## 9. Group-scoped REST API
 
@@ -1098,6 +1111,12 @@ Status: In progress
       after the read-time authorization guard was added. Event-day management
       now also asserts that its production attendance-count join uses indexed
       registration, day-attendance, and event-day lookups without a table scan.
+      Both full and least-privilege event-registration lists now share one
+      allowlisted sort-to-SQL mapping with qualified aliases; every supported
+      sort is executed through the production page/count builders and asserts
+      the event/status registration index without scanning the registration
+      table. The overall item remains open until the final critical-query
+      inventory is reconciled against current production builders.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and
@@ -1151,7 +1170,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,145 backend tests pass with one skipped, 263 frontend tests
+      checkpoint: 2,147 backend tests pass with one skipped, 263 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
