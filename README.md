@@ -19,8 +19,14 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 ## Adding a new member
 
 1. Create a `new-member-name.yaml` in the `data/members` folder.
-2. Create a `new-member-name.md` in the `content/members` folder.
-3. Add the logo in SVG format in the folder `assets/images/members`, the filename must correspondent with id of the member (e.g., `member.svg`)
+2. Add the member logo as an SVG in `assets/images/members`. The filename must match the member `id` (e.g., `member.svg`).
+
+The SVG must meet the following requirements:
+
+- **Responsive:** a valid `viewBox`, with no `width` or `height` attributes.
+- **Tightly cropped:** the `viewBox` should fit the artwork with no built-in whitespace (the site controls spacing).
+- **Fully vector:** no `<image>` tags and no embedded Base64 data.
+- **Clean:** no `<script>`, `<metadata>`, or editor-specific tags and namespaces (e.g., `sodipodi`, `inkscape`).
 
 ## Adding a new author
 
