@@ -232,8 +232,9 @@ Status: In progress
 - [x] Keep public workshop registration in the shared event-registration flow.
 - [x] Add rotatable, expiring guest invitation capabilities that authorize only
       browser-bound mailbox verification, never meeting entry by themselves.
-- [x] Make attendee and speaker invitation validity explicitly configurable,
-      defaulting to the event start and never extending beyond the event end.
+- [x] Make administrator-created attendee and speaker invitation validity
+      explicitly configurable, defaulting to the event start and never
+      extending beyond the event end.
       Evidence: one shared validity contract and effective-expiry SQL expression
       drive creation, resend, bulk replacement, reminder selection, and pending
       counts. Omitted deadlines resolve to the current event start. Legacy null
@@ -242,6 +243,12 @@ Status: In progress
       the final guarded D1 batch use the same predicate, so replacement cannot
       race with an event schedule or invitation change. Focused service, mounted
       route, query-plan, atomicity, and portal-component regressions are included.
+- [ ] Add the same explicit expiry selection to peer co-speaker nominations;
+      they currently use the safe event-bounded default but do not expose a
+      custom deadline.
+- [ ] Define and implement occurrence/event-bounded validity configuration for
+      external meeting-guest invitations without weakening their separate
+      mailbox verification and occurrence-entry checks.
 - [x] Make GET render only; require intentional POST before redirect.
 - [x] Display and snapshot name and affiliation.
 - [x] Reuse existing event terms and consent acceptance logic through one
@@ -631,6 +638,20 @@ Status: In progress
       series are rejected even when the UI is bypassed. Attendee search,
       filtering, sorting, statistics, counting, and pagination remain in D1
       behind `manage_attendance`.
+- [x] Add nested group proposal and speaker-management routes.
+      Evidence: proposal discovery/detail, reviews, comments, accepted-abstract
+      corrections, cancellation, decisions, audit history, speaker roster,
+      profile corrections, removals, reminders, headshots, and Gravatar import
+      use the exact owning group/event/proposal tuple. Reads and writes enforce
+      their distinct event-scoped permissions, while every write rechecks live
+      authority and tuple ownership in the same D1 batch. Neutral contracts and
+      reusable proposal/speaker components serve the portal and temporary admin
+      adapters. Presentation upload/download remains speaker-capability scoped,
+      requires a confirmed speaker on an accepted proposal, and no longer
+      returns private R2 storage keys through public presentation contracts.
+- [ ] Add canonical group co-speaker invitation/capability management; the
+      existing speaker roster management does not yet replace the remaining
+      token-based nomination flow.
 - [x] Add nested mailing-list discovery, preference, configuration-management,
       and resource-sharing routes.
       Evidence: participant subscription preferences remain a distinct
@@ -953,8 +974,8 @@ Status: In progress
       merge also prevents configurable form keys from replacing canonical
       event, identity, route, or management variables. A real Worker/D1 browser
       journey completes the portal proposal workflow without an admin API
-      fallback. The complete repository gate now passes 2,098 backend tests
-      (one skipped), 255 frontend tests, and 80 tool tests, with zero duplicated
+      fallback. The complete repository gate now passes 2,114 backend tests
+      (one skipped), 256 frontend tests, and 80 tool tests, with zero duplicated
       changed-code blocks.
       This parent item remains open for the other management areas and final
       admin-shell retirement below, not for event registration or proposal
@@ -1072,7 +1093,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,098 backend tests pass with one skipped, 255 frontend tests
+      checkpoint: 2,114 backend tests pass with one skipped, 256 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -1116,6 +1137,21 @@ Status: In progress
       canonical-URL shadowing found during independent review. It completed with
       full coverage and no remaining findings. A fresh final diff review remains
       required after the rest of the architecture is implemented.
+      Codex Security scan `262643f3-295d-4569-a8c0-089140250b09` reviewed the
+      proposal-speaker management diff and validated one low-severity stale
+      mailbox capability path. The shared outbox boundary now binds every
+      queued `speaker_manage` marker to the normalized recipient; delivery
+      rechecks that address in the same query that loads the speaker secret and
+      cancels legacy unbound rows. Every canonical email-change/anonymization
+      batch also rotates all speaker secrets and invitation generations.
+      Token-authenticated profile, decline, headshot, reminder-preference,
+      confirmation, and presentation writes compare that generation at commit,
+      closing both delivered-token and in-flight request races. Focused tests
+      cover old-address reuse, fresh delivery to the new address, all canonical
+      email-mutation paths, normal and bulk scheduling boundaries, and each
+      stale in-flight speaker mutation. An independent post-fix bypass review
+      found no remaining path for the original finding. This is round evidence;
+      a final whole-PR security diff review remains required.
 - [ ] Audit every requirement in ARCHITECTURE.md against current evidence.
 
 ## 12. Pull-request handoff

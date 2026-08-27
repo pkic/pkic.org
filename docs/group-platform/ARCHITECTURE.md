@@ -289,6 +289,8 @@ Canonical group routes use the following shape:
     /api/v1/groups/:groupId/memberships
     /api/v1/groups/:groupId/leadership
     /api/v1/groups/:groupId/events
+    /api/v1/groups/:groupId/events/:eventId/proposals
+    /api/v1/groups/:groupId/events/:eventId/proposals/:proposalId/speakers
     /api/v1/groups/:groupId/forms
     /api/v1/groups/:groupId/votes
     /api/v1/groups/:groupId/votes/:voteId/statistics
@@ -305,6 +307,12 @@ Canonical group routes use the following shape:
 Routes validate canonical shared contracts, resolve one authorization context,
 call one focused use case, and serialize the shared response. SQL, transitions,
 and external-delivery policy do not live in routes.
+
+Program-committee proposal and speaker management is event-scoped under the
+owning group. The neutral proposal/speaker contracts and UI components serve
+the group portal; temporary admin routes are adapters over the same services,
+not a second implementation. Speaker self-service remains a separate,
+resource-bound capability surface.
 
 Meeting endpoints are a profile-specific projection over the shared event
 series service. They do not introduce separate recurrence, pagination,
