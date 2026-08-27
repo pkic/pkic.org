@@ -251,9 +251,9 @@ export const applicationConcernResponseSchema = z.object({
 
 export const applicationConcernCreateRouteSchema = {
   tags: ["Members"],
-  summary: "Submit a consultation concern (A-G members only)",
+  summary: "Submit a consultation concern (voting-category members only)",
   description:
-    "Visible only to staff/processors, never to the applicant. Member-session gated; only A-G category members may submit.",
+    "Visible only to staff/processors, never to the applicant. Member-session gated; only members in a configured voting category may submit.",
   request: {
     params: memberApplicationIdParamsSchema,
     body: { content: { "application/json": { schema: applicationConcernCreateSchema } }, required: true },
@@ -263,9 +263,9 @@ export const applicationConcernCreateRouteSchema = {
       description: "Concern recorded.",
       content: { "application/json": { schema: applicationConcernResponseSchema } },
     },
-    "403": { description: "Only A-G category members may submit a concern." },
+    "403": { description: "Only members in a voting membership category may submit a concern." },
     "404": { description: "Application not found." },
-    "409": { description: "Application is not currently in consultation." },
+    "409": { description: "The application stage or the submitter's voting eligibility changed." },
   },
 };
 

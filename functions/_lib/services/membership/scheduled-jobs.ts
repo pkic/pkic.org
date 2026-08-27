@@ -217,7 +217,7 @@ const EC_AUTO_APPROVE_SELECTION_STATEMENTS = 2;
 /*
  * One approval reads the application/form/provisioning inputs and writes the
  * resulting membership, queue, event, and outbox command. The application
- * pipeline caps and deduplicates requested working groups, making 160 a
+ * pipeline caps and deduplicates requested groups, making 160 a
  * conservative whole-operation reserve. Do not start an approval unless the
  * reserve is available: deferral leaves the application untouched for this
  * lane's next independent cron invocation.

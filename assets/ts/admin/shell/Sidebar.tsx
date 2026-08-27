@@ -121,13 +121,6 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/duework", sec: "duework", label: "Due Work", icon: "duework" },
   { path: "/stats", sec: "stats", label: "Stats", icon: "stats" },
   { path: "/donations", sec: "donations", label: "Donations", icon: "donations" },
-  {
-    path: "/membership",
-    sec: "membership",
-    label: "Membership",
-    icon: "users",
-    children: [{ path: "/membership/settings", sec: "membership-settings", label: "Settings", icon: "duework" }],
-  },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
   {
     path: "/organizations",

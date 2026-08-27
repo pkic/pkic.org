@@ -3,7 +3,7 @@
  * (Phase 1 §1.5). Creates (or reuses) an organization, its shared
  * membership aggregate, N representative rows (or N individual aggregates
  * for an individual-only category), primary/secondary contact role grants,
- * and working-group membership.
+ * and group membership.
  *
  * Called identically by admin creation (admin-members.ts's
  * `createAdminMember`) and application-approval provisioning
@@ -15,7 +15,7 @@
  *
  * Atomicity: every write for the organization-tied path — organization,
  * domain, membership aggregate, category assignment, `member_since`,
- * representative rows, contact-role grants, and working-group memberships
+ * representative rows, contact-role grants, and group memberships
  * — is built as statements (never executed) and committed exactly once in
  * a single `db.batch()` at the end of `provisionOrganizationTiedMemberships`.
  * Everything that decides *what* to build (does the organization/aggregate
@@ -352,7 +352,7 @@ async function buildResolveOrCreateAggregateStatements(
 /**
  * Every write this function makes — organization, aggregate, category
  * assignment, `member_since`, representative rows, contact-role grants,
- * and working-group memberships — is built here without executing
+ * and group memberships — is built here without executing
  * anything, then committed exactly once via a single `db.batch()` at the
  * end of `provisionOrganizationTiedMemberships`. All decisions about
  * *what* to build (does the org/aggregate already exist, is a contact

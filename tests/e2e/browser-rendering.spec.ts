@@ -265,14 +265,20 @@ async function fillRegistrationStep3(page: Page, options?: { dietaryRestriction?
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function fillRegistrationStep4(page: Page, expectedEmail?: string): Promise<void> {
+async function fillRegistrationStep3WithoutQuestions(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Continue/i }).click();
+}
+
+async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectProfileDetails = true): Promise<void> {
   await expect(page.locator("[data-registration-review]")).toBeVisible();
   if (expectedEmail) {
     await expect(page.locator("[data-registration-review-email]")).toHaveText(expectedEmail);
     await expect(page.locator("label[for='registration-email-review-confirmed']")).toContainText(expectedEmail);
   }
   await expect(page.locator("[data-registration-review]")).toContainText("Contact");
-  await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
+  if (expectProfileDetails) {
+    await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
+  }
   await setNativeChecked(page, "#registration-email-review-confirmed");
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
@@ -389,86 +395,161 @@ async function signInAsAdmin(page: Page, scope: "browser-waitlist" | "browser-pr
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
 }
 
-async function setEventDayInPersonCapacity(
-  page: Page,
-  eventSlug: string,
-  dayDate: string,
-  capacity: number,
-): Promise<void> {
+async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string; slug: string; groupId: string }> {
+  const groupId = "20000000-0000-4000-8000-000000000001";
+  const slug = `e2e-waitlist-${Date.now()}-${test.info().workerIndex}`;
   const result = await page.evaluate(
-    async ({ eventSlug: slug, dayDate: date, capacity: nextCapacity }) => {
-      const headers = {
-        "content-type": "application/json",
+    async ({ groupId, slug }) => {
+      type ApiBody = {
+        event?: { id: string; updatedAt: string };
+        eventUpdatedAt?: string;
+        error?: unknown;
       };
-
-      const getResponse = await fetch(`/api/v1/admin/events/${slug}/days`, { headers, credentials: "same-origin" });
-      const getBody = (await getResponse.json()) as {
-        days?: Array<{
-          date: string;
-          label: string | null;
-          startsAt: string | null;
-          endsAt: string | null;
-          sortOrder: number;
-          attendanceOptions: Array<{ value: string; label: string; capacity?: number | null }>;
-        }>;
-      };
-
-      if (!getResponse.ok || !getBody.days) {
-        return { ok: false, getStatus: getResponse.status, putStatus: 0, reason: "get_failed" };
+      async function request(path: string, init: RequestInit): Promise<{ status: number; body: ApiBody }> {
+        const response = await fetch(path, {
+          ...init,
+          headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+          credentials: "same-origin",
+        });
+        const text = await response.text();
+        const body = (() => {
+          try {
+            return JSON.parse(text) as ApiBody;
+          } catch {
+            return { error: text };
+          }
+        })();
+        return { status: response.status, body };
       }
 
-      const days = getBody.days.map((day) => ({
-        date: day.date,
-        label: day.label ?? undefined,
-        startTime: day.startsAt
-          ? new Intl.DateTimeFormat("en-GB", {
-              timeZone: "Europe/Amsterdam",
-              hour: "2-digit",
-              minute: "2-digit",
-              hourCycle: "h23",
-            }).format(new Date(day.startsAt))
-          : undefined,
-        endTime: day.endsAt
-          ? new Intl.DateTimeFormat("en-GB", {
-              timeZone: "Europe/Amsterdam",
-              hour: "2-digit",
-              minute: "2-digit",
-              hourCycle: "h23",
-            }).format(new Date(day.endsAt))
-          : undefined,
-        sortOrder: day.sortOrder,
-        attendanceOptions: day.attendanceOptions.map((option) =>
-          option.value === "in_person" && day.date === date ? { ...option, capacity: nextCapacity } : option,
-        ),
-      }));
-
-      const putResponse = await fetch(`/api/v1/admin/events/${slug}/days`, {
-        method: "PUT",
-        headers,
-        credentials: "same-origin",
-        body: JSON.stringify({ days }),
+      const created = await request(`/api/v1/groups/${groupId}/events`, {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          name: `E2E waitlist event ${slug}`,
+          timezone: "Europe/Amsterdam",
+          startsAt: "2026-12-01T09:00:00.000Z",
+          endsAt: "2026-12-03T17:00:00.000Z",
+          profileKey: "workshop",
+          registrationPolicy: "no_registration",
+          inviteLimitAttendee: 5,
+        }),
       });
+      if (created.status !== 201 || !created.body?.event?.id) {
+        throw new Error(`Portal event creation failed (${created.status}): ${JSON.stringify(created.body)}`);
+      }
+      const eventId = created.body.event.id as string;
 
-      const putBody = (await putResponse.json()) as {
-        days?: Array<{ date: string; attendanceOptions: Array<{ value: string; capacity?: number | null }> }>;
-      };
-      const updatedCapacity = putBody.days
-        ?.find((day) => day.date === date)
-        ?.attendanceOptions.find((option) => option.value === "in_person")?.capacity;
+      const terms = await request(`/api/v1/groups/${groupId}/events/${eventId}/terms`, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: created.body.event.updatedAt,
+          configuration: {
+            attendee: [
+              { termKey: "privacy_policy", version: "1", required: true, displayText: "I agree to the privacy policy" },
+              {
+                termKey: "code_of_conduct",
+                version: "1",
+                required: true,
+                displayText: "I agree to the code of conduct",
+              },
+              {
+                termKey: "photos_and_videos",
+                version: "1",
+                required: true,
+                displayText: "I agree to photos and videos",
+              },
+            ],
+            speaker: [],
+            presentation: [],
+          },
+        }),
+      });
+      if (terms.status !== 200 || !terms.body?.eventUpdatedAt) {
+        throw new Error(`Portal event terms failed (${terms.status}): ${JSON.stringify(terms.body)}`);
+      }
 
-      return {
-        ok: putResponse.ok,
-        getStatus: getResponse.status,
-        putStatus: putResponse.status,
-        updatedCapacity: updatedCapacity ?? null,
-        reason: putResponse.ok ? null : "put_failed",
-      };
+      const days = await request(`/api/v1/groups/${groupId}/events/${eventId}/days`, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: terms.body.eventUpdatedAt,
+          configuration: {
+            days: [
+              {
+                date: "2026-12-01",
+                label: "Tuesday 1 December 2026",
+                startTime: "09:00",
+                endTime: "17:00",
+                sortOrder: 0,
+                attendanceOptions: [
+                  { value: "in_person", label: "In person", capacity: 1 },
+                  { value: "on_demand", label: "On demand" },
+                ],
+              },
+              {
+                date: "2026-12-02",
+                label: "Wednesday 2 December 2026",
+                startTime: "09:00",
+                endTime: "17:00",
+                sortOrder: 1,
+                attendanceOptions: [{ value: "on_demand", label: "On demand" }],
+              },
+              {
+                date: "2026-12-03",
+                label: "Thursday 3 December 2026",
+                startTime: "09:00",
+                endTime: "17:00",
+                sortOrder: 2,
+                attendanceOptions: [{ value: "on_demand", label: "On demand" }],
+              },
+            ],
+          },
+        }),
+      });
+      if (days.status !== 200 || !days.body?.eventUpdatedAt) {
+        throw new Error(`Portal event days failed (${days.status}): ${JSON.stringify(days.body)}`);
+      }
+
+      const settings = await request(`/api/v1/groups/${groupId}/events/${eventId}/registration-settings`, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: days.body.eventUpdatedAt,
+          registrationPolicy: "public",
+          formId: null,
+        }),
+      });
+      if (settings.status !== 200) {
+        throw new Error(
+          `Portal event registration settings failed (${settings.status}): ${JSON.stringify(settings.body)}`,
+        );
+      }
+      return { eventId, slug };
     },
-    { eventSlug, dayDate, capacity },
+    { groupId, slug },
   );
+  return { ...result, groupId };
+}
 
-  expect(result.ok, `admin day capacity update failed: ${JSON.stringify(result)}`).toBe(true);
-  expect(result.updatedCapacity).toBe(capacity);
+async function useStaticRegistrationPageForEvent(page: Page, eventSlug: string): Promise<void> {
+  const legacySlug = "pqc-conference-amsterdam-nl";
+  const legacyPrefix = `/events/2026/${legacySlug}/register`;
+  await page.route(
+    (url) => url.pathname === `${legacyPrefix}/` || url.pathname.startsWith(`${legacyPrefix}/`),
+    async (route) => {
+      const response = await route.fetch();
+      const html = (await response.text()).replaceAll(
+        `data-event-slug="${legacySlug}"`,
+        `data-event-slug="${eventSlug}"`,
+      );
+      await route.fulfill({ response, body: html });
+    },
+  );
+}
+
+function useStaticRegistrationShell(url: string, pageName: "confirm" | "manage"): string {
+  const shellUrl = new URL(url);
+  shellUrl.pathname = `/events/2026/pqc-conference-amsterdam-nl/register/${pageName}/`;
+  return shellUrl.toString();
 }
 
 test.describe("browser workflows", () => {
@@ -520,72 +601,64 @@ test.describe("browser workflows", () => {
     const screenshot = createScreenshotter(page);
 
     await signInAsAdmin(page, "browser-waitlist");
-    const eventSlug = "pqc-conference-amsterdam-nl";
-    const dayDate = "2026-12-01";
-    const restoredCapacity = 800;
+    const event = await createPortalWaitlistEvent(page);
+    await useStaticRegistrationPageForEvent(page, event.slug);
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    await fillRegistrationStep1(page, {
+      firstName: "Capacity",
+      lastName: "One",
+      email: "capacity-one@example.test",
+    });
+    await fillRegistrationStep2(page);
+    await fillRegistrationStep3WithoutQuestions(page);
+    await fillRegistrationStep4(page, "capacity-one@example.test", false);
 
-    try {
-      await setEventDayInPersonCapacity(page, eventSlug, dayDate, 1);
+    const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
+    const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
+    await page.goto(useStaticRegistrationShell(firstConfirmationUrl, "confirm"));
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-      await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-      await fillRegistrationStep1(page, {
-        firstName: "Capacity",
-        lastName: "One",
-        email: "capacity-one@example.test",
-      });
-      await fillRegistrationStep2(page);
-      await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page, "capacity-one@example.test");
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    await fillRegistrationStep1(page, {
+      firstName: "Capacity",
+      lastName: "Two",
+      email: "capacity-two@example.test",
+    });
+    await fillRegistrationStep2(page);
+    await fillRegistrationStep3WithoutQuestions(page);
+    await fillRegistrationStep4(page, "capacity-two@example.test", false);
 
-      const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
-      const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
-      await page.goto(firstConfirmationUrl);
-      await page.getByRole("button", { name: /Confirm my registration/i }).click();
-      await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
+    const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
+    const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
+    await page.goto(useStaticRegistrationShell(secondConfirmationUrl, "confirm"));
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByText(
+        "Your overall registration is confirmed, but one or more selected in-person days are still pending",
+      ),
+    ).toBeVisible();
+    await screenshot("01-partial-capacity-confirmed");
 
-      await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-      await fillRegistrationStep1(page, {
-        firstName: "Capacity",
-        lastName: "Two",
-        email: "capacity-two@example.test",
-      });
-      await fillRegistrationStep2(page);
-      await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page, "capacity-two@example.test");
+    const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
+    const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
+    const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
 
-      const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
-      const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
-      await page.goto(secondConfirmationUrl);
-      await page.getByRole("button", { name: /Confirm my registration/i }).click();
-      await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
-      await expect(
-        page.getByText(
-          "Your overall registration is confirmed, but one or more selected in-person days are still pending",
-        ),
-      ).toBeVisible();
-      await screenshot("01-partial-capacity-confirmed");
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=${event.slug}&token=${encodeURIComponent(secondManageToken)}`,
+    );
 
-      const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
-      const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
-      const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
+    await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
+    await expect(page.locator("[data-manage-status-banner]")).toContainText(
+      "Some day-specific entries still need attention.",
+    );
+    await expect(page.locator("[data-day-waitlist-section]")).toContainText(
+      "Tuesday 1 December 2026: Waiting for in-person seat",
+    );
+    await screenshot("02-partial-capacity-manage-friendly-state");
 
-      await page.goto(
-        `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(secondManageToken)}`,
-      );
-
-      await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
-      await expect(page.locator("[data-manage-status-banner]")).toContainText(
-        "Some day-specific entries still need attention.",
-      );
-      await expect(page.locator("[data-day-waitlist-section]")).toContainText(
-        "Tuesday 1 December 2026: Waiting for in-person seat",
-      );
-      await screenshot("02-partial-capacity-manage-friendly-state");
-
-      errorMonitor.assertClean();
-    } finally {
-      await setEventDayInPersonCapacity(page, eventSlug, dayDate, restoredCapacity);
-    }
+    errorMonitor.assertClean();
   });
 
   test("covers registration, invite acceptance, confirmation, manage updates, and invite decline", async ({ page }) => {

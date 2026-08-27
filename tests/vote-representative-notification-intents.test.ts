@@ -69,6 +69,30 @@ describe("durable vote representative notifications", () => {
     ).toHaveLength(0);
   });
 
+  it("uses the live D1 voting-category policy when snapshotting representatives", async () => {
+    const capacity = await createOrganizationCapacity(env.DB, { category: "H1" });
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+
+    const deniedVote = await createCanonicalVote(env.DB, admin, { eligibleCategories: ["H1"] });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT vote_id FROM vote_representative_notification_intents WHERE vote_id = ?",
+        deniedVote.id,
+      ),
+    ).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE membership_categories SET is_voting = 1 WHERE code = 'H1'").run();
+    const eligibleVote = await createCanonicalVote(env.DB, admin, { eligibleCategories: ["H1"] });
+    expect(
+      await queryAll<{ representative_user_id: string }>(
+        env.DB,
+        "SELECT representative_user_id FROM vote_representative_notification_intents WHERE vote_id = ?",
+        eligibleVote.id,
+      ),
+    ).toEqual([{ representative_user_id: capacity.userId }]);
+  });
+
   it("keeps the event-time snapshot after representation changes", async () => {
     const capacity = await createOrganizationCapacity(env.DB, { organizationName: "Snapshot Organization" });
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);

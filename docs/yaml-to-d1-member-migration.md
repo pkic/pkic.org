@@ -31,15 +31,10 @@ Confirm the source data is in place:
 
 ## Step 1 — Apply schema migrations
 
-The script writes into `organizations`' content columns (`migrations/
-0040_org_content_columns_and_contacts.sql`), `members.member_since`
-(`migrations/0049_member_since.sql`), `organization_domains` (`migrations/
-0041_membership_workflow.sql`), and the membership-aggregate/representative
-tables (`member_category_assignments`/`organization_representatives`,
-`migrations/0037_membership_aggregate.sql`), so every migration through at
-least this branch's current final migration must be applied first — check
-`ls migrations/` for the actual highest-numbered file, since this range is
-still undeployed and gets renumbered as it's rewritten:
+The script writes to the final organization, Member-capacity, representative,
+domain, category-assignment, and group-membership schema consolidated in the
+unreleased `migrations/0035_membership_portal_governance.sql`. Apply the
+complete local migration set before running it:
 
 ```bash
 pnpm run migrate:local
@@ -141,16 +136,18 @@ the current schema (one `members` aggregate row per organization, N
 pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM organizations"
 pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM members"
 pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM organization_representatives"
-pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM working_group_members"
+pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM group_memberships"
 ```
 
 `members` is now one aggregate row per organization plus one per org-less
 individual, **not** one row per representative — representatives live in
 `organization_representatives` instead. Verified end to end against the
 full real dataset (2026-08-17, after the `SQLITE_TOOBIG` fix above):
-`organizations` 374, `members` 417, `organization_representatives` 731,
-`organization_domains` 392, `member_category_assignments` 417, `user_roles`
-503, `working_group_members` 1418, `users` 844. These numbers drift as
+The historical 2026-08-17 pre-consolidation run reported `organizations` 374,
+`members` 417, `organization_representatives` 731, `organization_domains` 392,
+`member_category_assignments` 417, `user_roles` 503, and `users` 844. Its
+working-group row count came from the deleted intermediate table and is not a
+current-schema acceptance criterion. All counts drift as
 `data/members/*.yaml` and the roster CSVs change — don't trust this
 snapshot for a different run; cross-check against the generated `.sql`
 file's own statement tallies (`grep -oE "INSERT( OR IGNORE)? INTO [a-z_]+"
@@ -215,7 +212,7 @@ Four gaps closed in this pass, all in `scripts/migrate-members-yaml-to-d1.mjs`
 unless noted:
 
 1. **Org-less individuals (H5/H6/H7) with no domain-matched roster email are
-   no longer skipped entirely.** Previously the script created *nothing* for
+   no longer skipped entirely.** Previously the script created _nothing_ for
    these 16 people — no `users` row, no `members` row, nothing to attach a
    photo to. They now get a real row keyed on a deterministic, non-deliverable
    placeholder email (`unmatched-<slug>@members.invalid`, using the
@@ -226,8 +223,7 @@ unless noted:
    still go through the Interim Admin Tool as before, since an org-tied
    representative's record is meaningless without knowing which real person
    at the organization it is.
-2. **`members.member_since`** (migration `0049_member_since.sql`, formerly
-   numbered `0046` before Phase 1's migration rewrite) — the YAML
+2. **`members.member_since`** (now consolidated in migration `0035`) — the YAML
    `memberSince` key (org-tied) and each individual's own `memberSince` now
    land in D1 and are read back by the public directory (`GET /api/v1/members[/:id]`),
    the member self-service profile (`GET /api/v1/me`), and the admin
@@ -266,8 +262,7 @@ noted:
    `chris@ssl.com`, `ca.csv`-only) whose email domain matches an org's
    `organizationDomains` is now attributed to that org instead of becoming an
    orphaned "WG-only roster user."
-3. **`organizations.slug`** (migration `0050_organization_slug.sql`, formerly
-   numbered `0047` before Phase 1's migration rewrite) is now populated from
+3. **`organizations.slug`** (now consolidated in migration `0035`) is populated from
    each org-tied YAML file's `id:` key, backing a clean public profile URL
    (`/members/<slug>`) instead of the UUID-keyed `/members/profile/?id=<uuid>`.
 4. **Sponsorship data** (`sponsor.level`/`sponsor.since` and
@@ -281,7 +276,7 @@ noted:
 5. **`--logo-bucket` now defaults per environment** (`pkic-assets-preview`
    for `--preview`, `pkic-assets` for `--local`/`--production`) instead of
    always `pkic-assets` — running `--preview` without an explicit
-   `--logo-bucket` previously uploaded photos into the *production* bucket.
+   `--logo-bucket` previously uploaded photos into the _production_ bucket.
 
 Re-run `--dry-run` and check the fresh report for updated matched/unmatched
 counts — the domain-matching change (item 2) in particular will shift how
@@ -292,10 +287,9 @@ many "bare"/"WG-only" roster users remain after this pass.
 - `--local` targets `pkic-db-local` (`--env local --local` under the hood).
   Don't substitute `--preview`/`--production` unless you actually mean to
   touch those databases — no confirmation prompt gates that choice.
-- The unmatched org-tied representatives are **expected** to be left out —
-  they get added later one at a time via **Organizations → Add
-  organization** in the admin UI (`POST /api/v1/admin/members`), not by this
-  script.
+- The unmatched org-tied representatives are **expected** to be left out.
+  The current `POST /api/v1/admin/members` path is a temporary compatibility
+  adapter for staff reconciliation, not the canonical long-term workflow.
 - Only a minority of active representatives have a photo file on disk under
   `assets/images/members/<orgSlug>/` — the rest simply never had a photo
   uploaded to the Hugo site, unrelated to migration matching. Their

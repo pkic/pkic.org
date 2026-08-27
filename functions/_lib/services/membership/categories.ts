@@ -1,22 +1,28 @@
 /**
  * The managed membership category catalog (PR #1 review §1.5). The
- * canonical A-G/H1-H8 vocabulary and its individual/voting policy sets live
+ * canonical A-G/H1-H8 code vocabulary and structural individual policy live
  * in assets/shared/schemas/membership-categories.ts (isomorphic — the same
- * source the frontend and API contracts use); this module owns the
+ * source the frontend and API contracts use). Editable presentation and
+ * voting policy live in D1; this module owns the
  * category/aggregate-type compatibility policy built on top of it, plus a
  * read model for the `membership_categories` reference table (migration
  * 0035) for any caller that needs the DB-backed catalog directly rather
- * than the static list.
+ * than duplicating configuration in code.
  */
-import { all } from "../../db/queries";
+import { all, first } from "../../db/queries";
+import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import {
   MEMBERSHIP_CATEGORIES,
   isIndividualMembershipCategory,
   membershipCategoryCatalogEntrySchema,
   type MembershipCategoryCatalogEntry,
+  type MembershipCategoryUpdate,
 } from "../../../../assets/shared/schemas/membership-categories";
-import type { DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike } from "../../types";
+import { nowIso } from "../../utils/time";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 
 /**
  * Category/aggregate-type compatibility, enforced once here rather than
@@ -49,26 +55,179 @@ interface MembershipCategoryRow {
   label: string;
   description: string | null;
   display_order: number;
-  is_individual: number;
   is_voting: number;
+  revision: number;
+  updated_at: string;
+}
+
+const MEMBERSHIP_CATEGORY_COLUMNS = "code, label, description, display_order, is_voting, revision, updated_at";
+
+function toMembershipCategory(row: MembershipCategoryRow): MembershipCategoryCatalogEntry {
+  return membershipCategoryCatalogEntrySchema.parse({
+    code: row.code,
+    label: row.label,
+    description: row.description,
+    displayOrder: row.display_order,
+    isIndividual: isIndividualMembershipCategory(row.code),
+    isVoting: row.is_voting === 1,
+    revision: row.revision,
+    updatedAt: row.updated_at,
+  });
 }
 
 /** The DB-backed category reference table (consolidated migration 0035) — kept in parity with the shared TS vocabulary above by tests/membership-aggregate.test.ts. */
 export async function listMembershipCategories(db: DatabaseLike): Promise<MembershipCategoryCatalogEntry[]> {
   const rows = await all<MembershipCategoryRow>(
     db,
-    `SELECT code, label, description, display_order, is_individual, is_voting
+    `SELECT ${MEMBERSHIP_CATEGORY_COLUMNS}
        FROM membership_categories
       ORDER BY display_order, code`,
   );
-  return rows.map((row) =>
-    membershipCategoryCatalogEntrySchema.parse({
-      code: row.code,
-      label: row.label,
-      description: row.description,
-      displayOrder: row.display_order,
-      isIndividual: row.is_individual === 1,
-      isVoting: row.is_voting === 1,
-    }),
+  return rows.map(toMembershipCategory);
+}
+
+export async function getMembershipCategory(
+  db: DatabaseLike,
+  categoryCode: string,
+): Promise<MembershipCategoryCatalogEntry | null> {
+  const row = await first<MembershipCategoryRow>(
+    db,
+    `SELECT ${MEMBERSHIP_CATEGORY_COLUMNS} FROM membership_categories WHERE code = ?`,
+    [categoryCode],
   );
+  return row ? toMembershipCategory(row) : null;
+}
+
+export async function isVotingMembershipCategory(db: DatabaseLike, categoryCode: string): Promise<boolean> {
+  return Boolean(
+    await first<{ authorized: number }>(
+      db,
+      "SELECT 1 AS authorized FROM membership_categories WHERE code = ? AND is_voting = 1",
+      [categoryCode],
+    ),
+  );
+}
+
+const SAFE_SQL_COLUMN_REFERENCE = /^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/;
+
+/** Canonical D1 voting-policy predicate for trusted internal category-column references. */
+export function votingMembershipCategoryExistsSql(categoryCodeReference: string): string {
+  if (!SAFE_SQL_COLUMN_REFERENCE.test(categoryCodeReference)) {
+    throw new Error("Voting-category SQL requires a qualified column reference");
+  }
+  return `EXISTS (
+    SELECT 1
+      FROM membership_categories voting_membership_category
+     WHERE voting_membership_category.code = ${categoryCodeReference}
+       AND voting_membership_category.is_voting = 1
+  )`;
+}
+
+/**
+ * Canonical live authorization query for one exact user/Member capacity.
+ * Bind user id first and member id second. It covers both an individual
+ * membership owned by the user and an active organizational representation.
+ */
+export const ACTIVE_VOTING_MEMBER_CAPACITY_SELECT = `
+  SELECT 1
+    FROM members active_voting_member
+    JOIN users active_voting_user
+      ON active_voting_user.id = ?
+     AND active_voting_user.active = 1
+    JOIN member_category_assignments active_voting_category
+      ON active_voting_category.member_id = active_voting_member.id
+   WHERE active_voting_member.id = ?
+     AND active_voting_member.status = 'active'
+     AND ${votingMembershipCategoryExistsSql("active_voting_category.category_code")}
+     AND (
+       active_voting_member.user_id = active_voting_user.id
+       OR EXISTS (
+         SELECT 1
+           FROM organization_representatives active_voting_representative
+          WHERE active_voting_representative.member_id = active_voting_member.id
+            AND active_voting_representative.user_id = active_voting_user.id
+            AND active_voting_representative.left_at IS NULL
+            AND active_voting_representative.blocked_at IS NULL
+       )
+     )
+   LIMIT 1`;
+
+export async function isActiveVotingMemberCapacity(
+  db: DatabaseLike,
+  memberId: string,
+  userId: string,
+): Promise<boolean> {
+  return Boolean(await first<{ authorized: number }>(db, ACTIVE_VOTING_MEMBER_CAPACITY_SELECT, [userId, memberId]));
+}
+
+export async function updateMembershipCategory(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  categoryCode: string,
+  updates: MembershipCategoryUpdate,
+): Promise<MembershipCategoryCatalogEntry> {
+  const current = await getMembershipCategory(db, categoryCode);
+  if (!current) throw new AppError(404, "MEMBERSHIP_CATEGORY_NOT_FOUND", "Membership category not found");
+  if (current.revision !== updates.expectedRevision) {
+    throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership category changed; reload and retry");
+  }
+
+  const now = nowIso();
+  const next = {
+    label: updates.label ?? current.label,
+    description: updates.description === undefined ? current.description : updates.description,
+    displayOrder: updates.displayOrder ?? current.displayOrder,
+    isVoting: updates.isVoting ?? current.isVoting,
+  };
+  const { expectedRevision: _expectedRevision, ...changes } = updates;
+  try {
+    await db.batch([
+      preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]),
+      db
+        .prepare(
+          `UPDATE membership_categories
+              SET label = ?, description = ?, display_order = ?, is_voting = ?,
+                  revision = revision + 1, updated_at = ?
+            WHERE code = ? AND revision = ?`,
+        )
+        .bind(
+          next.label,
+          next.description,
+          next.displayOrder,
+          next.isVoting ? 1 : 0,
+          now,
+          categoryCode,
+          updates.expectedRevision,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actor.id,
+        "membership_category_updated",
+        "membership_category",
+        categoryCode,
+        changes,
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "MEMBERSHIP_CONFIGURATION_AUTHORIZATION_CHANGED",
+        "Membership-management permission changed while the category was being saved",
+      );
+    }
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership category changed; reload and retry");
+    }
+    throw error;
+  }
+
+  return {
+    ...current,
+    ...next,
+    revision: current.revision + 1,
+    updatedAt: now,
+  };
 }

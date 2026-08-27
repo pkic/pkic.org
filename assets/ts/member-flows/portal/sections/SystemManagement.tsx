@@ -4,6 +4,7 @@ import { portalHasGlobalPermission, portalSystemNavigationItems } from "../shell
 import { OrganizationContentReviews } from "./OrganizationContentReviews";
 import { SystemAuditLog } from "./SystemAuditLog";
 import { MembershipApplications } from "./membership-applications";
+import { MembershipConfiguration } from "./MembershipConfiguration";
 
 export function SystemManagement({
   session,
@@ -48,6 +49,8 @@ export function SystemManagement({
           canWrite={portalHasGlobalPermission(session, "membership:write")}
           canApprove={portalHasGlobalPermission(session, "membership:approve")}
         />
+      ) : selected.path === "/system/membership-settings" ? (
+        <MembershipConfiguration canWrite={portalHasGlobalPermission(session, "membership:write")} />
       ) : selected.path === "/system/organization-content-reviews" ? (
         <OrganizationContentReviews />
       ) : selected.path === "/system/audit-log" ? (

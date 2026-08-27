@@ -1,6 +1,6 @@
 /**
  * POST/DELETE /api/v1/portal/vote-proposals/:id/endorse — endorse a
- * proposal, or withdraw my own endorsement (A–G members only).
+ * proposal, or withdraw my own endorsement (voting-category members only).
  * Endorsing auto-converts the proposal to an active vote once the
  * endorsement threshold is reached.
  */

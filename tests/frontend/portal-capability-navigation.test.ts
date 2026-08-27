@@ -84,6 +84,11 @@ describe("portal capability-derived navigation", () => {
         section: "system",
         label: "Membership Applications",
       },
+      {
+        path: "/system/membership-settings",
+        section: "system",
+        label: "Membership Settings",
+      },
     ]);
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });

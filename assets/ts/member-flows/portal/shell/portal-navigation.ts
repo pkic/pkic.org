@@ -28,6 +28,12 @@ const SYSTEM_NAV_ITEMS = [
     permission: "membership:read",
   },
   {
+    path: "/system/membership-settings",
+    section: "system",
+    label: "Membership Settings",
+    permission: "membership:read",
+  },
+  {
     path: "/system/organization-content-reviews",
     section: "system",
     label: "Content Reviews",

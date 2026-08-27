@@ -1,6 +1,6 @@
 /**
  * POST/GET /api/v1/portal/vote-proposals — submit or list vote proposals
- * (A–G members only).
+ * (voting-category members only).
  */
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";

@@ -16,17 +16,20 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { updateMembershipSettings } from "../functions/_lib/services/membership-settings";
 import { runOnHoldReminders } from "../functions/_lib/services/membership/scheduled-jobs";
 import { updateMembershipApplication } from "../functions/_lib/services/membership/applications/management";
+import { submitApplicationConcern } from "../functions/_lib/services/membership/applications/queries";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { membershipApplicationsListResponseSchema } from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
 import type { Permission } from "../assets/shared/schemas/permissions";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -235,6 +238,71 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
       { slug: "pqc", name: "Post-Quantum Cryptography Working Group" },
       { slug: "retired-group", name: "retired-group" },
     ]);
+  });
+
+  it("uses the editable D1 voting policy for consultation concerns", async () => {
+    const { id } = await createApplication({ stage: "in_consultation" });
+    const userId = await insertUser("h1-member@example.test");
+    const organizationId = await insertOrganization(env.DB, "H1 Member Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "H1");
+    await addRepresentative(env.DB, memberId, userId);
+    const memberToken = await createMemberSession(env.DB, userId, "h1-concern-member-token");
+
+    const denied = await call(memberToken, `/api/v1/members/applications/${id}/concerns`, {
+      method: "POST",
+      body: JSON.stringify({ concernText: "This should initially be denied." }),
+    });
+    expect(denied.status).toBe(403);
+
+    await env.DB.prepare(
+      "UPDATE membership_categories SET is_voting = 1, revision = revision + 1 WHERE code = 'H1'",
+    ).run();
+    const accepted = await call(memberToken, `/api/v1/members/applications/${id}/concerns`, {
+      method: "POST",
+      body: JSON.stringify({ concernText: "This now follows the configured voting policy." }),
+    });
+    expect(accepted.status).toBe(201);
+    expect(
+      await queryAll<{ submitted_by_user_id: string; concern_text: string }>(
+        env.DB,
+        "SELECT submitted_by_user_id, concern_text FROM application_concerns WHERE application_id = ?",
+        id,
+      ),
+    ).toEqual([
+      {
+        submitted_by_user_id: userId,
+        concern_text: "This now follows the configured voting policy.",
+      },
+    ]);
+  });
+
+  it("rolls a concern back when voting eligibility changes before its D1 batch", async () => {
+    const { id } = await createApplication({ stage: "in_consultation" });
+    const userId = await insertUser("raced-concern-member@example.test");
+    const organizationId = await insertOrganization(env.DB, "Raced Concern Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "H1");
+    await addRepresentative(env.DB, memberId, userId);
+    await env.DB.prepare("UPDATE membership_categories SET is_voting = 1 WHERE code = 'H1'").run();
+
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE membership_categories SET is_voting = 0 WHERE code = 'H1'").run(),
+    );
+    await expect(
+      submitApplicationConcern(racedDb, {
+        applicationId: id,
+        submittedByUserId: userId,
+        submittedByMemberId: memberId,
+        concernText: "This must not survive the eligibility race.",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "CONCERN_ELIGIBILITY_CHANGED" });
+    expect(await queryAll(env.DB, "SELECT id FROM application_concerns WHERE application_id = ?", id)).toHaveLength(0);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'membership_application_concern_submitted' AND entity_id = ?",
+        id,
+      ),
+    ).toHaveLength(0);
   });
 
   it("records a member_application_events row for the edit, distinct from a stage transition (fromStage === toStage)", async () => {

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { booleanQueryFlagSchema, successResponseSchema, trimmedString } from "./api-common";
 import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
-import { membershipCategorySchema } from "./membership-categories";
+import { membershipCategorySelectionSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const MAILING_LIST_PURPOSES = ["all_members", "consultation", "group", "custom"] as const;
@@ -25,7 +25,7 @@ export const mailingListSchema = z.object({
   subscriptionDefault: mailingListSubscriptionDefaultSchema,
   postingPolicy: trimmedString(1, 80),
   moderationPolicy: trimmedString(1, 80),
-  autoSyncCategories: z.array(membershipCategorySchema).nullable(),
+  autoSyncCategories: membershipCategorySelectionSchema.nullable(),
   active: z.boolean(),
   archivedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -52,7 +52,7 @@ const mailingListMutableFieldsSchema = z.object({
   subscriptionDefault: mailingListSubscriptionDefaultSchema.optional(),
   postingPolicy: trimmedString(1, 80).optional(),
   moderationPolicy: trimmedString(1, 80).optional(),
-  autoSyncCategories: z.array(membershipCategorySchema).max(50).nullable().optional(),
+  autoSyncCategories: membershipCategorySelectionSchema.nullable().optional(),
   active: z.boolean().optional(),
 });
 /**

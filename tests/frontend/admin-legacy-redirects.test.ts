@@ -3,6 +3,7 @@ import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
+  ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
   legacyAdminRedirectTarget,
 } from "../../assets/ts/admin/shell/legacy-redirects";
@@ -30,6 +31,13 @@ describe("legacy admin route redirects", () => {
     );
     expect(legacyAdminRedirectTarget("/organizations/content-reviews?from=bookmark")).toBe(
       ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+    );
+  });
+
+  it("moves membership settings to system management in the portal", () => {
+    expect(legacyAdminRedirectTarget("/membership/settings")).toBe(ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/membership/settings?from=bookmark")).toBe(
+      ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
     );
   });
 });

@@ -140,10 +140,10 @@ Eligibility, automatic enrollment, and opt-out are independent policies:
 - opt-out records a user's explicit exclusion from future reconciliation.
 
 The initial controlled eligibility predicate is active membership category.
-For example, a CA coordination group may permit or automatically enroll only
-category A Members. These rules are data-driven and evaluated in a shared
-backend policy service, never hardcoded per endpoint or processed in the
-frontend.
+For example, a CA coordination group may initially permit or automatically
+enroll the seeded category A. The actual rule and category metadata remain
+D1-configured. These rules are evaluated in a shared backend policy service,
+never hardcoded per endpoint or processed in the frontend.
 
 ## Resource ownership and sharing
 
@@ -417,10 +417,10 @@ fresh database.
 
 ## Migration strategy
 
-Migration 0035 is pending in both preview and production as verified on
-2026-08-24. Branch-created group, meeting, and voting structures will therefore
-be corrected in that consolidated migration rather than followed by corrective
-migrations.
+Migration 0035 was last verified pending in both preview and production on
+2026-08-26 and must be reverified at handoff. Branch-created group, meeting,
+and voting structures are therefore corrected in that consolidated migration
+rather than followed by corrective migrations.
 
 Existing production tables evolve additively. Rebuilding members,
 organizations, forms, events, or consent tables requires a separately approved

@@ -12,7 +12,6 @@ import { stringifyJson, parseJsonSafe } from "../utils/json";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
-import { VOTING_CATEGORIES } from "./membership/applications/create";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
@@ -361,13 +360,6 @@ export async function getMyApplicationDetail(
     })),
     communications: communications.map((c) => ({ subject: c.subject, body: c.body, createdAt: c.created_at })),
   };
-}
-
-// ── Working group self-service ────────────────────────────────────
-
-/** True for A-G members — used by /api/v1/me/votes (currently a stub, see route) to at least gate on category shape. */
-export function isVotingCategory(category: string): boolean {
-  return VOTING_CATEGORIES.has(category);
 }
 
 // ── Notification preferences (Account Settings) ─────────

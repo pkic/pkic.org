@@ -1,5 +1,6 @@
 import type { AuthMember } from "../../types";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
+import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import { voteParticipantGroupIdsQuery } from "./vote-access";
 
 /**
@@ -15,6 +16,7 @@ export const ACTIVE_VOTER_MEMBERSHIP_SQL = `EXISTS (
   WHERE active_member.id = ?
     AND active_member.status = 'active'
     AND active_category.category_code = ?
+    AND ${votingMembershipCategoryExistsSql("active_category.category_code")}
     AND (
       active_member.user_id = ?
       OR EXISTS (
@@ -32,7 +34,7 @@ export function activeVoterMembershipBindings(member: AuthMember): unknown[] {
   return [member.userId, member.memberId, member.membershipCategory, member.userId, member.userId];
 }
 
-/** Any current A-G capacity held by a user in one exact group. */
+/** Any current voting-category capacity held by a user in one exact group. */
 export function activeGroupVoterSql(groupIdExpression = "?"): string {
   return `EXISTS (
   SELECT 1
@@ -42,13 +44,13 @@ export function activeGroupVoterSql(groupIdExpression = "?"): string {
    AND active_group_member.status = 'active'
   JOIN member_category_assignments active_group_category
     ON active_group_category.member_id = active_group_member.id
-   AND active_group_category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
   JOIN users active_group_user
     ON active_group_user.id = active_group_membership.user_id
    AND active_group_user.active = 1
   WHERE active_group_membership.user_id = ?
     AND active_group_membership.group_id = ${groupIdExpression}
     AND active_group_membership.left_at IS NULL
+    AND ${votingMembershipCategoryExistsSql("active_group_category.category_code")}
     AND EXISTS (
       SELECT 1 FROM groups active_voter_group
       WHERE active_voter_group.id = ${groupIdExpression}
@@ -113,6 +115,7 @@ export const VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY = `
        AND representative.blocked_at IS NULL
       JOIN users participant ON participant.id = membership.user_id AND participant.active = 1
      WHERE target_vote.electorate_mode = 'per_member'
+       AND ${votingMembershipCategoryExistsSql("category.category_code")}
        AND (
          target_vote.eligible_categories IS NULL
          OR EXISTS (
@@ -132,9 +135,9 @@ export const VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY = `
        AND represented_member.status = 'active'
       JOIN member_category_assignments category
         ON category.member_id = represented_member.id
-       AND category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
       JOIN users participant ON participant.id = membership.user_id AND participant.active = 1
      WHERE target_vote.electorate_mode = 'per_person'
+       AND ${votingMembershipCategoryExistsSql("category.category_code")}
        AND (
          target_vote.eligible_categories IS NULL
          OR EXISTS (

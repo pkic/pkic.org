@@ -15,7 +15,6 @@ import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
 import { Organizations } from "../sections/Organizations";
 import { Sponsorships } from "../sections/Sponsorships";
-import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -26,6 +25,7 @@ import {
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
+  ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
@@ -289,9 +289,10 @@ export function AdminShell() {
             <Route
               path="/membership/settings"
               component={() => (
-                <SectionWrapper title="Membership — Settings">
-                  <MembershipSettings />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET}
+                  message="Membership settings have moved to the portal."
+                />
               )}
             />
             <Route

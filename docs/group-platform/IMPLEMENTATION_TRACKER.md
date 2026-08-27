@@ -234,6 +234,18 @@ Status: In progress
 - [x] Support external guests scoped to one occurrence by default.
 - [x] Support explicit series-wide guest exceptions.
 - [x] Keep public workshop registration in the shared event-registration flow.
+- [ ] Provide public HTML registration and management shells for portal-created
+      events that opt into public, required, or optional registration.
+      Current evidence: portal creation stores a `source_mode = 'portal'` event
+      with no `base_path`; no Hugo content is generated and no Worker HTML route
+      serves its registration, confirmation, or management pages. The canonical
+      public APIs exist and the event-presentation service computes fallback
+      paths, but those paths do not prove that an HTML shell exists. Existing
+      Hugo-authored event pages remain unaffected. Close this only after choosing
+      a dynamic shell, an explicit content-publication workflow, or another
+      single canonical presentation path and browser-testing the actual public
+      URLs. Apply the same decision to public proposal and speaker pages before
+      enabling those workflows for portal-created events.
 - [x] Add rotatable, expiring guest invitation capabilities that authorize only
       browser-bound mailbox verification, never meeting entry by themselves.
 - [x] Make manager-created attendee and speaker invitation validity
@@ -1075,9 +1087,28 @@ Status: In progress
       category labels, D1 filtering, route removal, capability-derived controls,
       and absence of legacy requests. A real Worker/D1 browser journey verifies
       the public application, email confirmation, staff sign-in, portal review,
-      approval, organization provisioning, and welcome notification. Other
-      global management destinations remain, so this item is deliberately still
-      open.
+      approval, organization provisioning, and welcome notification.
+      Membership workflow configuration is the fourth permission-derived
+      System destination. The portal uses the canonical
+      `/api/v1/system/membership-settings` and
+      `/api/v1/system/membership-categories` collection and
+      `/:categoryCode` mutation contracts; the old
+      admin component and API are removed, and the old bookmark only redirects
+      to `/portal/#/system/membership-settings`. Reads and writes recheck live
+      `membership:read` and `membership:write` authority, mutations record the
+      user-backed actor, and revision compare-and-swap guards prevent stale
+      overwrites. `membership_categories.is_voting` is the single mutable D1
+      policy used by ballot eligibility, vote proposals, representative
+      notifications, consultation concerns, and voting statistics. Mounted
+      race tests prove that permission, revision, and voting-policy changes
+      roll back atomically. Structural category codes and individual-category
+      classification remain reference/migration invariants; category creation,
+      deletion, and merging are deliberately deferred because those operations
+      require a separate destructive-data design. A real Worker/D1 browser
+      journey changes workflow settings and category metadata through the
+      portal, persists both changes, and proves the legacy bookmark does not
+      call the removed admin endpoint. Other global management destinations
+      remain, so this item is deliberately still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
       used by admin sign-in, MCP OAuth, membership due work, organization content
@@ -1120,6 +1151,10 @@ Status: In progress
       indexed representative and contextual-role lookups without a table scan;
       write-time group-join eligibility proves indexed parent membership and
       category-rule lookups without a table scan or temporary B-tree;
+      the live voting-capacity predicate asserts primary-key/index lookups for
+      the exact user, Member, category assignment, D1 voting policy, and active
+      organizational representation without scanning any of those tables or
+      creating a temporary B-tree;
       the canonical group projection now uses indexed per-group capacity,
       participant, and child counts instead of materializing aggregate tables
       for every selected-group detail request, while its page-count statement
@@ -1199,7 +1234,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,151 backend tests pass with one skipped, 273 frontend tests
+      checkpoint: 2,165 backend tests pass with one skipped, 276 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -1224,6 +1259,10 @@ Status: In progress
       portal flow, renders D1 audit data through the canonical system API, and
       proves both direct portal navigation and the old admin bookmark redirect
       make no request to the removed admin audit endpoint.
+      The current seven-test browser checkpoint also covers membership-setting
+      and category updates, canonical group vote creation, member proposal
+      submission and moderation, waitlist transitions, and both portal and
+      compatibility proposal-detail paths.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
@@ -1297,4 +1336,15 @@ The final PR description must include, at minimum:
 - reuse one form across placements with isolated response sets;
 - share resources with view, participate, response-view, and management variants;
 - verify portal navigation for member, chair, parent leader, staff, and guest;
+- read membership workflow settings with `membership:read`, change them with
+  `membership:write`, and confirm a read-only user cannot save;
+- edit a category label, description, display order, and voting policy, then
+  confirm the change is visible after reload;
+- submit stale membership-setting and category revisions and confirm both are
+  rejected without overwriting the newer values;
+- enable and disable voting for a seeded non-voting category and confirm ballot,
+  proposal, notification, concern, and statistics eligibility changes
+  immediately;
+- verify `/api/v1/admin/membership-settings` returns 404 and the old admin
+  bookmark redirects without making a legacy API request;
 - verify legacy admin redirects and absence of duplicate admin workflows.

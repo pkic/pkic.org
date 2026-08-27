@@ -1,6 +1,6 @@
 # Group Platform Data Model
 
-Status: Accepted design, pending implementation
+Status: Accepted design; implementation in progress
 
 Database: Cloudflare D1 and SQLite
 

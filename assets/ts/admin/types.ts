@@ -28,7 +28,6 @@ import type {
 import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
 import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
-import type { membershipSettingsSchema } from "../../shared/schemas/membership-settings";
 import type {
   AdminOrganizationDetail as CanonicalAdminOrganizationDetail,
   AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
@@ -162,9 +161,6 @@ export type SponsorshipEvent = CanonicalSponsorshipEvent;
 
 // Interim Admin Tool — GET/POST /api/v1/admin/members
 export type AdminMemberSummary = CanonicalAdminMemberSummary;
-
-// GET/PATCH /api/v1/admin/membership-settings
-export type AdminMembershipSettings = z.infer<typeof membershipSettingsSchema>;
 
 // Voting system
 export type VoteCandidateSummary = CanonicalVoteCandidateSummary;

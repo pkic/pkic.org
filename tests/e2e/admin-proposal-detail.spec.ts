@@ -215,6 +215,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               userId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
               role: "speaker",
               status: "confirmed",
+              inviteExpiresAt: null,
               email: "speaker@pkic.org",
               firstName: "Sam",
               lastName: "Speaker",
@@ -288,6 +289,11 @@ test("renders the admin proposal detail workflow with submission answers and ope
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
+        event: {
+          startsAt: "2025-03-01T09:00:00.000Z",
+          endsAt: "2025-03-01T17:00:00.000Z",
+          timezone: "Europe/Amsterdam",
+        },
         proposal: {
           id: proposalId,
           event_id: "event-1",
@@ -317,6 +323,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
         },
         access: {
           eventPermissions: ["review", "finalize"],
+          canRead: true,
           canReview: true,
           canFinalize: true,
           canEditAcceptedAbstract: true,
@@ -478,7 +485,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
 
   await page.getByRole("tab", { name: "Decision" }).click();
   await page.getByLabel("Comment to speakers *").fill("The speaker is unavailable for the scheduled session.");
-  await page.getByLabel("I understand that all current speakers will be notified.").check();
+  await page.getByLabel("I understand that every speaker linked to this proposal will be notified.").check();
   await page.getByRole("button", { name: "Cancel accepted session" }).click();
   await expect(page.getByText("Session canceled", { exact: true })).toBeVisible();
   await expect(page.getByText("The speaker is unavailable for the scheduled session.")).toBeVisible();
@@ -533,6 +540,7 @@ test("offers an event-level presentation ZIP from the proposals overview", async
           event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference 2026" },
           access: {
             canReview: true,
+            canRead: true,
             canFinalize: true,
             canEditAcceptedAbstract: true,
             canCancelAcceptedProposal: true,

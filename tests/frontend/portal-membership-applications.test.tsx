@@ -37,6 +37,8 @@ const categories = [
     displayOrder: 60,
     isIndividual: false,
     isVoting: true,
+    revision: 0,
+    updatedAt: NOW,
   },
 ];
 

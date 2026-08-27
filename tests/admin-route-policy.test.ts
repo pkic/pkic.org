@@ -39,6 +39,13 @@ describe("admin route authorization policy", () => {
     });
   });
 
+  it("lets a retired module reach its missing route and return 404", () => {
+    expect(adminAuthorizationForRequest("/api/v1/admin/membership-settings", "GET")).toEqual({
+      kind: "delegated",
+      boundary: "retired admin API tombstone",
+    });
+  });
+
   it("enforces named read and write permissions for centrally governed modules", () => {
     expect(() => enforceAdminRouteAuthorization(actor(["admin:read"]), "/api/v1/admin/forms", "GET")).not.toThrow();
     expect(() => enforceAdminRouteAuthorization(actor(["admin:read"]), "/api/v1/admin/forms", "POST")).toThrowError(

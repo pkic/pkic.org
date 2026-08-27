@@ -71,7 +71,7 @@ describe("Managed mailing list configuration", () => {
       error: { code: "ADMIN_ROUTE_POLICY_MISSING" },
     });
   });
-  it("resolveAutoSyncListEmails returns both lists for a consultation category (A-G), only all_members for H-categories", async () => {
+  it("uses the independently configured mailing-list category audiences", async () => {
     const votingCategoryEmails = await resolveAutoSyncListEmails(env.DB as any, "A");
     expect(votingCategoryEmails.sort()).toEqual(["consultation@lists.pkic.org", "pkic@lists.pkic.org"].sort());
 

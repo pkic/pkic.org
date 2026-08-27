@@ -5,9 +5,8 @@
  * this phase's job is only to confirm they actually work end-to-end in a
  * real browser, not to build anything new.
  *
- * Screens covered, one test each: Organizations → Content Review,
- * Sponsorships + Events → Settings → Sponsor Tiers, Admin → Votes +
- * → Proposals, and the Users secondary-email panel
+ * Screens covered include the remaining sponsorship/event/user admin views,
+ * portal System content review, and canonical group Votes/Proposals management
  * (2026-07-27 follow-up).
  *
  * Fixture data (an approved org member, an approved individual member) goes
@@ -16,8 +15,8 @@
  * own fixtures — an application is created via the public endpoint, walked
  * through its real stage transitions by the signed-in admin, and approved,
  * which provisions a real organization + user. The member then signs in for
- * real via the portal's magic-link flow to produce the content-review /
- * vote-proposal submissions the admin screens under test actually moderate.
+ * real via the portal's magic-link flow to produce the content-review and
+ * vote-proposal submissions that the canonical portal workflows moderate.
  *
  * Admin auth happens exactly once for the whole file (`beforeAll`, saved as
  * `storageState` and reused by every test) rather than per-test: the local
@@ -211,39 +210,37 @@ test.describe("Admin browser-verification pass", () => {
 
   test.use({ storageState: ADMIN_AUTH_FILE });
 
-  test("votes: create a vote via the admin UI and manage its visibility/ballots", async ({ page }) => {
+  test("votes: create a vote via the group portal and manage its visibility/ballots", async ({ page }) => {
+    const groupId = "20000000-0000-4000-8000-000000000001";
     const title = `E2E Admin-created Vote ${Date.now()}`;
     const closesAt = new Date(Date.now() + 86_400_000);
     const closesAtLocal = closesAt.toISOString().slice(0, 16);
 
-    await page.goto("/admin/#/votes");
+    await page.goto(`/portal/#/groups/${groupId}/votes`);
     await page.getByRole("button", { name: "Create vote" }).click();
 
-    // Labels here aren't `<label for>`-linked to their inputs (no id on
-    // either side), so getByLabel can't resolve them — target by the
-    // label-then-input sibling structure instead.
-    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Create vote" }) });
-    await form.locator('div:has(> label:text-is("Title")) > input').fill(title);
-    await form.locator('div:has(> label:text-is("Closes at")) > input').fill(closesAtLocal);
-    await form.getByRole("button", { name: "Create vote" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Vote created" })).toBeVisible();
+    const form = page.locator("form").filter({ hasText: "Create vote" });
+    await form.getByLabel("Title").fill(title);
+    await form.getByLabel("Closes at").fill(closesAtLocal);
+    await form.getByRole("button", { name: "Create vote", exact: true }).click();
 
-    await page.locator(".list-group-item").filter({ hasText: title }).click();
-    const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: title }) });
+    const row = page.getByRole("row").filter({ hasText: title });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Details" }).click();
+    const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
-    // A blank "opens at" defaults to now, so the vote is immediately open —
-    // no cron/due-work run needed (matches votes-and-sponsor.spec.ts).
-    await expect(detail.locator("span.badge", { hasText: "open" })).toBeVisible();
 
-    await detail.locator("select").first().selectOption("public");
-    await detail.getByRole("button", { name: "Save" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Visibility updated" })).toBeVisible();
+    const visibility = detail.getByLabel("Visibility");
+    await visibility.selectOption("public");
+    await detail.getByRole("button", { name: "Save visibility" }).click();
+    await expect(visibility).toHaveValue("public");
 
-    await detail.getByRole("button", { name: "Load ballots" }).click();
-    await expect(detail.getByText("No ballots yet.")).toBeVisible();
+    await detail.getByRole("button", { name: "Load identifiable ballots" }).click();
+    await expect(detail.getByText("No ballots have been submitted.")).toBeVisible();
   });
 
   test("vote proposals: a real member submission is moderated (reject guard + approve bypass)", async ({ page }) => {
+    const groupId = "20000000-0000-4000-8000-000000000001";
     // page.evaluate needs a real document loaded first — storageState
     // restores the admin session cookie, but a brand-new page starts on
     // about:blank, where relative-URL fetches have nothing to resolve
@@ -251,67 +248,70 @@ test.describe("Admin browser-verification pass", () => {
     await page.goto("/admin/");
     await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
 
-    // Forum-scope proposal submission requires min_endorsers_for_ballot > 0
-    // (submitProposalRouteSchema's own description) — the "Approve (bypass
-    // endorsements)" admin action is what's under test, not the normal
-    // endorsement-collection path, so 1 is enough to allow submission.
-    const settingsStatus = await page.evaluate(async () => {
-      const res = await fetch("/api/v1/admin/membership-settings", {
+    // Member proposal submission requires the owning group's canonical
+    // min_endorsers_for_ballot policy to be enabled. Configure the group,
+    // not the retired workflow-settings endpoint.
+    const settingsStatus = await page.evaluate(async (groupId) => {
+      const current = await fetch(`/api/v1/groups/${groupId}?manageable=true`, {
+        credentials: "same-origin",
+      });
+      if (!current.ok) return current.status;
+      const currentBody = (await current.json()) as { group: { revision: number } };
+      const res = await fetch(`/api/v1/groups/${groupId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ forumVoteMinEndorsers: 1 }),
+        body: JSON.stringify({ expectedRevision: currentBody.group.revision, minEndorsersForBallot: 1 }),
       });
       return res.status;
-    });
+    }, groupId);
     expect(settingsStatus).toBe(200);
 
     const stamp = Date.now();
     const email = `e2e-proposer-${stamp}@e2e-vote-proposal-${stamp}.test`;
     await provisionApprovedMember(page, { email, name: "Proposer E2E", orgName: `E2E Proposer Org ${stamp}` });
+    await page.context().clearCookies();
     await signInToPortal(page, email);
 
     const title = `E2E Member Vote Proposal ${stamp}`;
-    const submitted = await page.evaluate(async (title) => {
-      const res = await fetch("/api/v1/portal/vote-proposals", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          title,
-          description: "An end-to-end test vote proposal.",
-          voteType: "motion",
-          scopeType: "forum",
-        }),
-      });
-      return { status: res.status, body: await res.text() };
-    }, title);
+    const submitted = await page.evaluate(
+      async ({ title, groupId }) => {
+        const res = await fetch("/api/v1/portal/vote-proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            title,
+            description: "An end-to-end test vote proposal.",
+            voteType: "motion",
+            ownerGroupId: groupId,
+          }),
+        });
+        return { status: res.status, body: await res.text() };
+      },
+      { title, groupId },
+    );
     expect(submitted.status, submitted.body).toBe(200);
 
-    await page.goto("/admin/#/votes");
-    await page.getByRole("button", { name: "proposals", exact: true }).click();
-    // A single open proposal auto-selects, putting its title on screen
-    // twice (list item + detail heading) — scope to the list item.
-    const listItem = page.locator(".list-group-item").filter({ hasText: title });
-    await expect(listItem).toBeVisible();
-    await listItem.click();
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto(`/portal/#/groups/${groupId}/votes`);
+    await page.getByRole("button", { name: "Proposals", exact: true }).click();
 
-    const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: title }) });
-    await expect(detail.getByText("Endorsements: 0 / 1")).toBeVisible();
+    const proposalRow = page.getByRole("row").filter({ hasText: title });
+    await expect(proposalRow).toBeVisible();
+    await proposalRow.getByRole("button", { name: "Details" }).click();
+    const detail = page.locator("div.p-3.bg-body-tertiary").filter({ hasText: title });
+    await expect(detail.getByText("0 of 1 required endorsements")).toBeVisible();
 
-    await detail.getByRole("button", { name: "Reject" }).click();
-    await expect(page.locator(".my-toast", { hasText: "A reason is required to reject" })).toBeVisible();
+    const reject = detail.getByRole("button", { name: "Reject proposal" });
+    await expect(reject).toBeDisabled();
+    page.once("dialog", (dialog) => dialog.accept());
+    await detail.getByRole("button", { name: "Approve and create vote" }).click();
+    await expect(proposalRow).toContainText(/converted to vote/i);
 
-    await detail.getByRole("button", { name: "Approve (bypass endorsements)" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Converted to an active vote" })).toBeVisible();
-
-    await page.getByRole("button", { name: "converted to vote", exact: true }).click();
-    await expect(page.locator(".list-group-item").filter({ hasText: title })).toBeVisible();
-
-    // The proposal's approval also created a real vote (Votes tab) — a
-    // second, independent confirmation the two screens are wired together.
-    await page.getByRole("button", { name: "votes", exact: true }).click();
-    await expect(page.locator(".list-group-item").filter({ hasText: title })).toBeVisible();
+    await page.getByRole("button", { name: "Votes", exact: true }).click();
+    await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible();
   });
 
   test("sponsorships: create an event sponsorship and advance its pipeline stage", async ({ page }) => {

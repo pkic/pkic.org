@@ -6,7 +6,7 @@ import { z } from "zod";
 import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
+import { membershipCategorySelectionSchema } from "./membership-categories";
 import { groupIdSchema } from "./groups";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
@@ -115,7 +115,7 @@ export const voteSummaryFieldsSchema = {
   ownerGroupName: z.string(),
   electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
-  eligibleCategories: z.array(z.string()).nullable(),
+  eligibleCategories: membershipCategorySelectionSchema.nullable(),
   opensAt: z.string(),
   closesAt: z.string(),
   currentRound: z.number(),
@@ -295,7 +295,7 @@ export const voteResultsRouteSchema = {
   },
 };
 
-// ── Vote proposals (authenticated A–G members) ───────────────────────
+// ── Vote proposals (authenticated voting-category members) ──────────
 
 export const proposalSummarySchema = z.object({
   id: databaseIdSchema,
@@ -305,7 +305,7 @@ export const proposalSummarySchema = z.object({
   ownerGroupId: groupIdSchema,
   ownerGroupName: z.string(),
   proposedByUserId: databaseIdSchema,
-  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable(),
+  eligibleCategories: membershipCategorySelectionSchema.nullable(),
   proposedOpensAt: z.string().nullable(),
   proposedClosesAt: z.string().nullable(),
   status: voteProposalStatusSchema,
@@ -321,7 +321,7 @@ const voteProposalInputShape = {
   title: z.string().trim().min(1).max(300),
   description: z.string().trim().min(1).max(10000),
   voteType: voteTypeSchema.exclude(["election"]),
-  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
+  eligibleCategories: membershipCategorySelectionSchema.nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
 };
@@ -347,7 +347,7 @@ export const submitProposalResponseSchema = z.object({ proposal: proposalSummary
 
 export const submitProposalRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Submit a vote proposal (A–G members only)",
+  summary: "Submit a vote proposal (voting-category members only)",
   description: "Available only when the owning group's minEndorsersForBallot policy is greater than zero.",
   request: {
     body: { content: { "application/json": { schema: submitProposalSchema } }, required: true },
@@ -413,7 +413,7 @@ export const proposalDetailRouteSchema = {
 
 export const endorseProposalRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Endorse a proposal (A–G members only)",
+  summary: "Endorse a proposal (voting-category members only)",
   description: "Auto-converts the proposal into an active vote once its endorsement threshold is reached.",
   request: { params: proposalIdParamsSchema },
   responses: {
