@@ -1,8 +1,6 @@
 import type {
   GroupMailingListCreateInput,
   GroupMailingListUpdateInput,
-  MailingListCreateInput,
-  MailingListUpdateInput,
 } from "../../../../assets/shared/schemas/mailing-lists";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
@@ -21,9 +19,11 @@ interface MailingListMutationOptions {
   auditScope?: AuditScope;
 }
 
+type MailingListCreateCommandInput = GroupMailingListCreateInput & { groupId: string };
+
 export async function createMailingList(
   db: DatabaseLike,
-  input: MailingListCreateInput,
+  input: MailingListCreateCommandInput,
   actorUserId: string,
   options: MailingListMutationOptions = {},
 ) {
@@ -86,7 +86,7 @@ export async function createMailingList(
 export async function updateMailingList(
   db: DatabaseLike,
   id: string,
-  input: MailingListUpdateInput,
+  input: GroupMailingListUpdateInput,
   actorUserId: string,
   options: MailingListMutationOptions = {},
 ) {
@@ -230,7 +230,7 @@ export async function archiveGroupMailingList(
   });
 }
 
-function addMailingListSetters(input: MailingListUpdateInput, setters: string[], values: unknown[]): void {
+function addMailingListSetters(input: GroupMailingListUpdateInput, setters: string[], values: unknown[]): void {
   const add = (column: string, value: unknown) => {
     setters.push(`${column} = ?`);
     values.push(value);

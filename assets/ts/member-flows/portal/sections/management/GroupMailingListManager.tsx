@@ -34,7 +34,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
     try {
       await postJson(
         `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`,
-        mailingListDraftToPayload(newDraft, "group"),
+        mailingListDraftToPayload(newDraft),
         mailingListResponseSchema,
       );
       setNewDraft(emptyMailingListDraft());
@@ -53,7 +53,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
     try {
       await patchJson(
         `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}`,
-        mailingListDraftToPayload(editDraft, "group"),
+        mailingListDraftToPayload(editDraft),
         mailingListResponseSchema,
       );
       setSelectedListId(null);
@@ -101,7 +101,6 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             <MailingListForm
               draft={newDraft}
               onChange={(patch) => setNewDraft((current) => ({ ...current, ...patch }))}
-              showGroupOwnership={false}
               idPrefix="group-mailing-list-create"
             />
             <div class="mt-3">
@@ -170,7 +169,6 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
                 <MailingListForm
                   draft={editDraft}
                   onChange={(patch) => setEditDraft((current) => ({ ...current, ...patch }))}
-                  showGroupOwnership={false}
                   idPrefix={`group-mailing-list-${list.id}`}
                 />
                 <div class="mt-3 d-flex gap-2">

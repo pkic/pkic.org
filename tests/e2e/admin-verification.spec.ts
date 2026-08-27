@@ -6,8 +6,8 @@
  * real browser, not to build anything new.
  *
  * Screens covered, one test each: Organizations → Content Review,
- * Mailing Lists, Sponsorships + Events → Settings → Sponsor
- * Tiers, Admin → Votes + → Proposals, and the Users secondary-email panel
+ * Sponsorships + Events → Settings → Sponsor Tiers, Admin → Votes +
+ * → Proposals, and the Users secondary-email panel
  * (2026-07-27 follow-up).
  *
  * Fixture data (an approved org member, an approved individual member) goes
@@ -218,39 +218,6 @@ test.describe("Admin browser-verification pass", () => {
   });
 
   test.use({ storageState: ADMIN_AUTH_FILE });
-
-  test("mailing lists: create, edit, and delete a list", async ({ page }) => {
-    page.on("dialog", (d) => d.accept());
-
-    const stamp = Date.now();
-    const email = `e2e-list-${stamp}@lists.pkic.org`;
-    const label = `E2E List ${stamp}`;
-    const editedLabel = `${label} (edited)`;
-
-    await page.goto("/admin/#/mailing-lists");
-    await page.getByRole("button", { name: "Add mailing list" }).click();
-
-    const addForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Save" }) });
-    await addForm.locator("input").nth(0).fill(email);
-    await addForm.locator("input").nth(1).fill(label);
-    await addForm.getByRole("button", { name: "Save" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Mailing list added" })).toBeVisible();
-
-    const row = page.locator("tr").filter({ hasText: email });
-    await expect(row).toBeVisible();
-    await expect(row.getByText(label, { exact: true })).toBeVisible();
-
-    await row.getByRole("button", { name: "Edit" }).click();
-    const editForm = page.locator("tr").filter({ has: page.getByRole("button", { name: "Save" }) });
-    await editForm.locator("input").nth(1).fill(editedLabel);
-    await editForm.getByRole("button", { name: "Save" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
-    await expect(page.locator("tr").filter({ hasText: email }).getByText(editedLabel, { exact: true })).toBeVisible();
-
-    await page.locator("tr").filter({ hasText: email }).getByRole("button", { name: "Delete" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Deleted" })).toBeVisible();
-    await expect(page.locator("tr").filter({ hasText: email })).toHaveCount(0);
-  });
 
   test("votes: create a vote via the admin UI and manage its visibility/ballots", async ({ page }) => {
     const title = `E2E Admin-created Vote ${Date.now()}`;

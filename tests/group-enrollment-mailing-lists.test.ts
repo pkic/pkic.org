@@ -9,7 +9,7 @@ import {
   setAutomaticEnrollmentOptOut,
   updateGroup,
 } from "../functions/_lib/services/groups";
-import { createMailingList, deleteMailingList } from "../functions/_lib/services/mailing-lists";
+import { createMailingList, deleteMailingList } from "../functions/_lib/services/mailing-list-management/commands";
 import {
   listEffectiveGroupMailingListSubscriptions,
   setMailingListPreference,

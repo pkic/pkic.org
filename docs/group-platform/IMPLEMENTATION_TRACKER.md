@@ -613,6 +613,16 @@ Status: In progress
       management authority are rechecked in the D1 read/write batch. The
       configuration list reuses the canonical D1 search/filter/sort/page
       builder; its actual page and count statements are EXPLAIN-tested.
+      The former global admin CRUD route, navigation item, component, sync
+      button, and client are removed. A Playwright journey covers a staff-only
+      group manager creating, editing, and archiving a list. It asserts
+      POST/PATCH/DELETE and management-list GET requests stay under
+      `/api/v1/groups/:groupId/mailing-lists` and never call `/api/v1/admin/*`.
+      Old bookmarks retain a single redirect to the selected-group portal;
+      provider synchronization remains owned by the scheduled service rather
+      than an orphaned UI endpoint. A focused frontend test covers that redirect.
+      The focused Playwright run passes against the real local Worker, migrated
+      D1 state, and intercepted sign-in email.
 - [x] Add /api/v1/groups/:groupId/meetings/series routes.
 - [x] Add series occurrence, guest, join, and attendance routes.
       Evidence: the mounted router exposes canonical series, occurrence,
@@ -793,6 +803,13 @@ Status: In progress
       the UI and API. A real Worker/D1 browser journey signs in through the
       portal email capability, creates and edits a workshop, and verifies its
       persisted owner, source mode, registration policy, link, and location.
+      Mailing-list management has equivalent browser coverage for staff-only
+      group create/edit/archive, exact group-scoped API paths, no admin API
+      fallback. A focused frontend test covers the legacy admin bookmark
+      redirect. The old global mailing-list CRUD surface is intentionally
+      removed; scheduled Google Groups synchronization remains a backend-owned
+      job. The focused Playwright run passes against the real local Worker,
+      migrated D1 state, and intercepted sign-in email.
       Eligible participants now register inside that same selected-group event
       detail. The portal derives identity from the verified session, renders an
       exact event form placement with its authored title and instructions,
@@ -966,7 +983,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,026 backend tests pass with one skipped, 237 frontend tests
+      checkpoint: 2,020 backend tests pass with one skipped, 238 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

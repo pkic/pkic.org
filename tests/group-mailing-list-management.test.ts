@@ -92,8 +92,11 @@ describe("group mailing-list management routes", () => {
       mailingLists: [{ id: createdBody.mailingList.id }],
     });
     const pageQuery = buildMailingListsPageQuery(
-      { ...groupMailingListManagementQuerySchema.parse({ q: "local", active: true }), groupId: group.id },
-      { requiredAuthorization: groupManagementCandidateAuthorizationEvidence(leader, "mailing_lists.group_id") },
+      groupMailingListManagementQuerySchema.parse({ q: "local", active: true }),
+      {
+        groupId: group.id,
+        requiredAuthorization: groupManagementCandidateAuthorizationEvidence(leader, "mailing_lists.group_id"),
+      },
     );
     const pageSql = buildOffsetPageSql(pageQuery);
     const plans = await Promise.all([

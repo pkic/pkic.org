@@ -16,13 +16,12 @@ afterEach(() => {
 });
 
 describe("shared mailing-list form model", () => {
-  it("serializes the complete global contract and preserves group ownership", () => {
+  it("serializes the complete group contract without a user-editable owner", () => {
     const draft = {
       ...emptyMailingListDraft(),
       email: "  architecture@example.test ",
       label: " Architecture ",
       purpose: "consultation" as const,
-      groupId: "10000000-0000-4000-8000-000000000001",
       primaryDiscussion: true,
       subscriptionDefault: "eligible_categories" as const,
       postingPolicy: "members",
@@ -31,11 +30,10 @@ describe("shared mailing-list form model", () => {
       active: false,
     };
 
-    expect(mailingListDraftToPayload(draft, "admin")).toEqual({
+    expect(mailingListDraftToPayload(draft)).toEqual({
       email: "architecture@example.test",
       label: "Architecture",
       purpose: "consultation",
-      groupId: "10000000-0000-4000-8000-000000000001",
       primaryDiscussion: true,
       subscriptionDefault: "eligible_categories",
       postingPolicy: "members",
@@ -51,10 +49,9 @@ describe("shared mailing-list form model", () => {
       email: "group@example.test",
       label: "Group list",
       purpose: "group" as const,
-      groupId: "attacker-selected-group-id",
     };
 
-    const payload = mailingListDraftToPayload(draft, "group");
+    const payload = mailingListDraftToPayload(draft);
     expect(payload).toMatchObject({
       email: "group@example.test",
       label: "Group list",
@@ -65,7 +62,7 @@ describe("shared mailing-list form model", () => {
 
   it("rejects categories outside the shared membership vocabulary", () => {
     expect(() =>
-      mailingListDraftToPayload({ ...emptyMailingListDraft(), autoSyncCategories: "not-a-category" }, "group"),
+      mailingListDraftToPayload({ ...emptyMailingListDraft(), autoSyncCategories: "not-a-category" }),
     ).toThrow();
   });
 
@@ -85,19 +82,9 @@ describe("shared mailing-list form model", () => {
       autoSyncCategories: "A",
       active: true,
     };
-    void act(() =>
-      render(
-        <MailingListForm
-          draft={draft}
-          onChange={vi.fn()}
-          showGroupOwnership={false}
-          ownershipLabel="Architecture group"
-        />,
-        container,
-      ),
-    );
+    void act(() => render(<MailingListForm draft={draft} onChange={vi.fn()} />, container));
 
-    expect(container.querySelector<HTMLInputElement>("input[readonly]")?.value).toBe("Architecture group");
+    expect(container.querySelector<HTMLInputElement>("input[readonly]")?.value).toBe("This group");
     expect(container.textContent).not.toContain("Group ID");
     expect(container.querySelector('input[type="email"]')).not.toBeNull();
     expect(container.querySelectorAll("select")).toHaveLength(2);

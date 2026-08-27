@@ -4,7 +4,6 @@ import type {
   SponsorshipCompany as CanonicalSponsorshipCompany,
   SponsorshipEvent as CanonicalSponsorshipEvent,
 } from "../../shared/schemas/admin-sponsorships";
-import type { MailingList as CanonicalMailingList } from "../../shared/schemas/mailing-lists";
 import type { AdminEmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/admin-email-templates";
 import type { LeadershipPosition as CanonicalLeadershipPosition } from "../../shared/schemas/leadership";
 import type {
@@ -172,9 +171,6 @@ export type OrganizationContentReviewSummary = CanonicalOrganizationContentRevie
 export type OrganizationContentReviewDiffEntry = CanonicalOrganizationContentReviewDiffEntry;
 
 export type OrganizationContentReviewDetail = CanonicalOrganizationContentReviewDetail;
-
-// Managed mailing list configuration
-export type MailingList = CanonicalMailingList;
 
 export type Sponsorship = CanonicalSponsorship;
 

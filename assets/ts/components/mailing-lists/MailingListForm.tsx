@@ -4,20 +4,11 @@ import type { MailingListDraft } from "./model";
 export interface MailingListFormProps {
   draft: MailingListDraft;
   onChange: (patch: Partial<MailingListDraft>) => void;
-  /** Global administration may edit ownership; group context must never expose it. */
-  showGroupOwnership?: boolean;
-  ownershipLabel?: string;
   idPrefix?: string;
 }
 
-/** Canonical mailing-list configuration form used by admin and group management. */
-export function MailingListForm({
-  draft,
-  onChange,
-  showGroupOwnership = true,
-  ownershipLabel,
-  idPrefix = "mailing-list",
-}: MailingListFormProps) {
+/** Canonical mailing-list configuration form used by group management. */
+export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: MailingListFormProps) {
   return (
     <div class="row g-2">
       <div class="col-sm-4">
@@ -64,33 +55,12 @@ export function MailingListForm({
           ))}
         </select>
       </div>
-      {showGroupOwnership ? (
-        <div class="col-sm-3">
-          <label class="form-label small" htmlFor={`${idPrefix}-group`}>
-            Group ID
-          </label>
-          <input
-            id={`${idPrefix}-group`}
-            class="form-control form-control-sm"
-            placeholder="Owning group ID"
-            value={draft.groupId}
-            required
-            onInput={(event) => onChange({ groupId: (event.target as HTMLInputElement).value })}
-          />
-        </div>
-      ) : (
-        <div class="col-sm-3">
-          <label class="form-label small" htmlFor={`${idPrefix}-ownership`}>
-            Ownership
-          </label>
-          <input
-            id={`${idPrefix}-ownership`}
-            class="form-control form-control-sm"
-            value={ownershipLabel ?? "This group"}
-            readOnly
-          />
-        </div>
-      )}
+      <div class="col-sm-3">
+        <label class="form-label small" htmlFor={`${idPrefix}-ownership`}>
+          Ownership
+        </label>
+        <input id={`${idPrefix}-ownership`} class="form-control form-control-sm" value="This group" readOnly />
+      </div>
       <div class="col-sm-3">
         <label class="form-label small" htmlFor={`${idPrefix}-subscription-default`}>
           Default subscription

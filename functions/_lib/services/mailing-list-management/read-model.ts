@@ -6,12 +6,7 @@ import {
 } from "../groups/governance";
 import type { AuthAdmin } from "../../types";
 import { isAuthorizationGuardFailure, type AuthorizationEvidence } from "../../db/authorization-guard";
-import {
-  buildOffsetPageStatements,
-  decodeOffsetPageResults,
-  queryPage,
-  type OffsetPageQuery,
-} from "../../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -21,7 +16,7 @@ import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./reco
 
 export function buildMailingListsPageQuery(
   query: MailingListsListQuery,
-  options: { requiredAuthorization?: AuthorizationEvidence } = {},
+  options: { groupId: string; requiredAuthorization?: AuthorizationEvidence },
 ): OffsetPageQuery {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
@@ -30,10 +25,8 @@ export function buildMailingListsPageQuery(
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
-  if (query.groupId) {
-    conditions.push("group_id = ?");
-    bindings.push(query.groupId);
-  }
+  conditions.push("group_id = ?");
+  bindings.push(options.groupId);
   if (query.purpose) {
     conditions.push("purpose = ?");
     bindings.push(query.purpose);
@@ -67,27 +60,18 @@ export function buildMailingListsPageQuery(
   };
 }
 
-export async function listMailingLists(
-  db: DatabaseLike,
-  query: MailingListsListQuery,
-  options: { requiredAuthorization?: AuthorizationEvidence } = {},
-) {
-  const { rows, total } = await queryPage<MailingListRow>(db, buildMailingListsPageQuery(query, options));
-  return { mailingLists: rows.map(toMailingList), total };
-}
-
 /** Lists only configurations currently manageable by the selected group actor. */
 export async function listGroupManagedMailingLists(
   db: DatabaseLike,
   actor: AuthAdmin,
   groupId: string,
-  query: Omit<MailingListsListQuery, "groupId">,
+  query: MailingListsListQuery,
 ) {
   await requireGroupManagement(db, actor, groupId);
-  const pageQuery = buildMailingListsPageQuery(
-    { ...query, groupId },
-    { requiredAuthorization: groupManagementCandidateAuthorizationEvidence(actor, "mailing_lists.group_id") },
-  );
+  const pageQuery = buildMailingListsPageQuery(query, {
+    groupId,
+    requiredAuthorization: groupManagementCandidateAuthorizationEvidence(actor, "mailing_lists.group_id"),
+  });
   try {
     const [, pageResult, countResult] = await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),

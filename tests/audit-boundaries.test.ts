@@ -57,15 +57,14 @@ describe("atomic service audit boundaries", () => {
     expect(await queryAll(env.DB, "SELECT id FROM events WHERE slug = 'rolled-back-event'")).toHaveLength(0);
   });
 
-  it("rolls back mailing-list creation when its audit insert fails", async () => {
+  it("rolls back group mailing-list creation when its audit insert fails", async () => {
     await rejectAuditAction("mailing_list_created");
-    const response = await call("/api/v1/admin/mailing-lists", {
+    const response = await call("/api/v1/groups/20000000-0000-4000-8000-000000000001/mailing-lists", {
       method: "POST",
       body: JSON.stringify({
         email: "audit-rollback@lists.pkic.org",
         label: "Audit rollback",
         purpose: "custom",
-        groupId: "20000000-0000-4000-8000-000000000001",
       }),
     });
     expect(response.status).toBe(500);

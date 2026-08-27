@@ -96,7 +96,7 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
       : readOrWrite(normalizedMethod, "users:read", "users:write");
     return { kind: "permission", permission };
   }
-  if (module === "email" || module === "forms" || module === "mailing-lists") {
+  if (module === "email" || module === "forms") {
     return {
       kind: "permission",
       permission: readOrWrite(normalizedMethod, "admin:read", "admin:write"),
