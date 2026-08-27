@@ -2,9 +2,8 @@
  * Semantic links into the currently supported staff-management surfaces.
  *
  * Keep route knowledge here instead of making services and notification
- * producers concatenate `/admin/#/...` independently. The admin shell is
- * still the active surface for these destinations; when a destination moves
- * to the portal, only this adapter and its compatibility tests should change.
+ * producers concatenate UI routes independently. Each destination moves here
+ * when its canonical management surface changes.
  */
 
 export const ADMIN_UI_PATH = "/admin/";
@@ -20,6 +19,12 @@ export type ManagementLink =
 
 function adminHashUrl(appBaseUrl: string, path: string): URL {
   const url = new URL(ADMIN_UI_PATH, appBaseUrl);
+  url.hash = `#${path.startsWith("/") ? path : `/${path}`}`;
+  return url;
+}
+
+function portalHashUrl(appBaseUrl: string, path: string): URL {
+  const url = new URL("/portal/", appBaseUrl);
   url.hash = `#${path.startsWith("/") ? path : `/${path}`}`;
   return url;
 }
@@ -41,7 +46,7 @@ export function buildManagementLink(appBaseUrl: string, link: ManagementLink): s
       return url.toString();
     }
     case "organization-content-reviews":
-      return adminHashUrl(appBaseUrl, "/organizations/content-reviews").toString();
+      return portalHashUrl(appBaseUrl, "/system/organization-content-reviews").toString();
     case "membership-application":
       return adminHashUrl(appBaseUrl, `/membership/applications/${encodeURIComponent(link.id)}`).toString();
     case "sponsorship-list":

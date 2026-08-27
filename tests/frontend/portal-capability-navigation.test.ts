@@ -5,7 +5,9 @@ import {
   portalCapacityFallbackPath,
   portalDefaultPath,
   portalHasGlobalPermission,
+  portalHasSystemManagement,
   portalNavigationItems,
+  portalSystemNavigationItems,
   portalActiveSection,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -40,6 +42,28 @@ describe("portal capability-derived navigation", () => {
     expect(portalHasGlobalPermission(contextualAudit, "audit:read")).toBe(false);
     expect(portalNavigationItems(contextualAudit).map((item) => item.label)).not.toContain("System");
     expect(portalCapacityFallbackPath(contextualAudit, "/system/audit-log")).toBe("/management");
+  });
+
+  it("shows only the system-management tabs granted to a staff identity", () => {
+    const contentReviewer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "organizations:content-review", contextType: null, contextId: null }],
+    });
+    expect(portalHasSystemManagement(contentReviewer)).toBe(true);
+    expect(portalNavigationItems(contentReviewer)).toContainEqual({
+      path: "/system/organization-content-reviews",
+      section: "system",
+      label: "System",
+    });
+    expect(portalSystemNavigationItems(contentReviewer)).toEqual([
+      {
+        path: "/system/organization-content-reviews",
+        section: "system",
+        label: "Content Reviews",
+      },
+    ]);
+    expect(portalCapacityFallbackPath(contentReviewer, "/system/organization-content-reviews")).toBeNull();
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {

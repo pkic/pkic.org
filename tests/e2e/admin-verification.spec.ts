@@ -33,6 +33,7 @@ import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { adminApplicationDetailSchema } from "../../assets/shared/schemas/admin-applications";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
+import { signInToPortal } from "./helpers/portal-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -143,7 +144,13 @@ async function provisionApprovedMember(
           membershipCategory: category,
           organizationName: orgName,
           joinToken,
-          answers: { reason: "This E2E member wants to contribute to the PKI community." },
+          answers: {
+            reason: "This E2E member wants to contribute to the PKI community.",
+            agrees_bylaws: true,
+            agrees_code_of_conduct: true,
+            agrees_ipr_policy: true,
+            warranted_authority: true,
+          },
         }),
       });
       const body = (await res.json()) as { applicationId?: string };
@@ -185,21 +192,6 @@ async function provisionApprovedMember(
   expect(approved.status, JSON.stringify(approved.body)).toBe(200);
 
   return { applicationId, organizationId: approved.body.organizationId, userId: approved.body.userId };
-}
-
-/** Signs a member in for real via the portal's magic-link flow. */
-async function memberLogin(page: Page, email: string): Promise<void> {
-  await page.goto("/portal/");
-  await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#portal-inp-email").fill(email);
-  const since = await outboxLength();
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
-  await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
-
-  const magicEmail = await waitForEmail(email, "sign-in", { since });
-  const magicUrl = extractUrlFromEmail(magicEmail, "/portal/");
-  await page.goto(magicUrl);
-  await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe("Admin browser-verification pass", () => {
@@ -277,7 +269,7 @@ test.describe("Admin browser-verification pass", () => {
     const stamp = Date.now();
     const email = `e2e-proposer-${stamp}@e2e-vote-proposal-${stamp}.test`;
     await provisionApprovedMember(page, { email, name: "Proposer E2E", orgName: `E2E Proposer Org ${stamp}` });
-    await memberLogin(page, email);
+    await signInToPortal(page, email);
 
     const title = `E2E Member Vote Proposal ${stamp}`;
     const submitted = await page.evaluate(async (title) => {
@@ -398,7 +390,19 @@ test.describe("Admin browser-verification pass", () => {
     await expect(savedRow.locator("input[type=checkbox]")).toBeChecked();
   });
 
-  test("organization content review: a real member edit is diffed and approved", async ({ page }) => {
+  test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
+    const canonicalRequests: string[] = [];
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/system/organization-content-reviews")) {
+        canonicalRequests.push(`${request.method()} ${pathname}`);
+      }
+      if (pathname.startsWith("/api/v1/admin/organizations/content-reviews")) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
+
     await page.goto("/admin/");
     await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
 
@@ -406,7 +410,8 @@ test.describe("Admin browser-verification pass", () => {
     const email = `e2e-content-review-${stamp}@e2e-content-review-${stamp}.test`;
     const orgName = `E2E Content Review Org ${stamp}`;
     await provisionApprovedMember(page, { email, name: "Content Reviewer E2E", orgName });
-    await memberLogin(page, email);
+    await page.context().clearCookies();
+    await signInToPortal(page, email);
 
     const newSlogan = `E2E updated slogan ${stamp}`;
     const editStatus = await page.evaluate(async (slogan) => {
@@ -420,13 +425,12 @@ test.describe("Admin browser-verification pass", () => {
     }, newSlogan);
     expect(editStatus).toBe(200);
 
-    await page.goto("/admin/#/organizations/content-reviews");
-    // A single pending review auto-selects, so its org name is already on
-    // screen twice (list item + detail heading) by the time this loads —
-    // scope to the list item specifically rather than a bare getByText.
-    const listItem = page.locator(".list-group-item").filter({ hasText: orgName });
-    await expect(listItem).toBeVisible({ timeout: 15_000 });
-    await listItem.click();
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto("/portal/#/system/organization-content-reviews");
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: orgName }).click();
 
     const detail = page.locator(".card").filter({ has: page.getByText(orgName) });
     await expect(detail.getByText("Slogan", { exact: true })).toBeVisible();
@@ -440,8 +444,21 @@ test.describe("Admin browser-verification pass", () => {
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
 
-    await page.getByRole("button", { name: "approved", exact: true }).click();
-    await expect(page.locator(".list-group-item").filter({ hasText: orgName })).toBeVisible();
+    await page.getByLabel("Review status").selectOption("approved");
+    await expect(page.getByRole("button", { name: orgName })).toBeVisible();
+    expect(canonicalRequests).toContain("GET /api/v1/system/organization-content-reviews");
+    expect(
+      canonicalRequests.some(
+        (request) =>
+          request.startsWith("POST /api/v1/system/organization-content-reviews/") && request.endsWith("/approve"),
+      ),
+    ).toBe(true);
+    expect(legacyRequests).toEqual([]);
+
+    await page.goto("/admin/#/organizations/content-reviews");
+    await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    expect(legacyRequests).toEqual([]);
   });
 
   test("users: secondary email panel", async ({ page }) => {

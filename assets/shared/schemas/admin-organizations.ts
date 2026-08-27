@@ -15,8 +15,6 @@ import { normalizedEmailSchema, successResponseSchema, trimmedString } from "./a
 import { linksSchema } from "./links";
 import { logoUploadResponseSchema } from "./images";
 import {
-  contentReviewStatusSchema,
-  organizationContentReviewSchema,
   organizationEditableContentSchema,
   organizationProfileExtendedFieldsSchema,
   organizationProfileSummaryFieldsSchema,
@@ -304,113 +302,6 @@ export const confirmSecondaryContactRouteSchema = {
     },
     "404": { description: "Organization not found." },
     "409": { description: "No pending nomination." },
-  },
-};
-
-// ── Organization content moderation queue ──────────────────────────
-
-export { CONTENT_REVIEW_STATUSES, contentReviewStatusSchema } from "./organization-profile";
-
-export const contentReviewSummarySchema = organizationContentReviewSchema.extend({
-  organizationName: z.string(),
-  submitterName: z.string(),
-  submitterEmail: z.string(),
-});
-
-export const ADMIN_CONTENT_REVIEW_SORT_COLUMNS = [
-  "organizationName",
-  "submitterName",
-  "status",
-  "submittedAt",
-] as const;
-
-export const contentReviewsListQuerySchema = listQuerySchema(ADMIN_CONTENT_REVIEW_SORT_COLUMNS).extend({
-  status: contentReviewStatusSchema.optional(),
-});
-export type ContentReviewsListQuery = z.infer<typeof contentReviewsListQuerySchema>;
-export const contentReviewsListResponseSchema = paginatedResponseSchema("reviews", contentReviewSummarySchema);
-
-export const contentReviewsListRouteSchema = {
-  tags: ["Organizations"],
-  summary: "List organization content moderation submissions",
-  description: "Defaults to status=pending — the moderation queue.",
-  request: { query: contentReviewsListQuerySchema },
-  responses: {
-    "200": {
-      description: "Reviews list.",
-      content: {
-        "application/json": { schema: contentReviewsListResponseSchema },
-      },
-    },
-  },
-};
-
-export const contentReviewDiffEntrySchema = z.object({
-  field: z.string(),
-  current: z.unknown(),
-  proposed: z.unknown(),
-});
-
-export const contentReviewDetailSchema = contentReviewSummarySchema.extend({
-  diff: z.array(contentReviewDiffEntrySchema),
-  logoStagingR2Key: z.string().nullable(),
-  currentLogoR2Key: z.string().nullable(),
-});
-export const contentReviewDetailResponseSchema = z.object({ review: contentReviewDetailSchema });
-/** Decision endpoints return the transitioned review record, not a recomputed moderation detail. */
-export const contentReviewDecisionResponseSchema = z.object({ review: organizationContentReviewSchema });
-
-export type OrganizationContentReviewSummary = z.infer<typeof contentReviewSummarySchema>;
-export type OrganizationContentReviewDiffEntry = z.infer<typeof contentReviewDiffEntrySchema>;
-export type OrganizationContentReviewDetail = z.infer<typeof contentReviewDetailSchema>;
-
-export const contentReviewIdParamsSchema = z.object({ id: databaseIdSchema });
-
-export const contentReviewGetRouteSchema = {
-  tags: ["Organizations"],
-  summary: "Review detail with a side-by-side diff",
-  request: { params: contentReviewIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Review detail.",
-      content: { "application/json": { schema: z.object({ review: contentReviewDetailSchema }) } },
-    },
-    "404": { description: "Review not found." },
-  },
-};
-
-export const contentReviewApproveRouteSchema = {
-  tags: ["Organizations"],
-  summary: "Approve a content submission — applies the changes live",
-  request: { params: contentReviewIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Approved review record.",
-      content: { "application/json": { schema: contentReviewDecisionResponseSchema } },
-    },
-    "404": { description: "Review not found." },
-    "409": { description: "Only a pending review can be approved." },
-  },
-};
-
-export const contentReviewRejectSchema = z.object({
-  reviewerNote: trimmedString(1, 2000),
-});
-
-export const contentReviewRejectRouteSchema = {
-  tags: ["Organizations"],
-  summary: "Reject a content submission",
-  request: {
-    params: contentReviewIdParamsSchema,
-    body: { content: { "application/json": { schema: contentReviewRejectSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Rejected review record.",
-      content: { "application/json": { schema: contentReviewDecisionResponseSchema } },
-    },
-    "404": { description: "Review not found." },
-    "409": { description: "Only a pending review can be rejected." },
   },
 };
 

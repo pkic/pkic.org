@@ -14,7 +14,6 @@ import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
 import { Organizations } from "../sections/Organizations";
-import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
 import { Sponsorships } from "../sections/Sponsorships";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
@@ -27,6 +26,7 @@ import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
+  ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
@@ -243,9 +243,10 @@ export function AdminShell() {
             <Route
               path="/organizations/content-reviews"
               component={() => (
-                <SectionWrapper title="Organizations — Content Review">
-                  <OrganizationContentReviews />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET}
+                  message="Organization content reviews have moved to the portal."
+                />
               )}
             />
             <Route

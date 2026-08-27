@@ -3,6 +3,7 @@ import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
+  ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
   legacyAdminRedirectTarget,
 } from "../../assets/ts/admin/shell/legacy-redirects";
 
@@ -21,5 +22,14 @@ describe("legacy admin route redirects", () => {
   it("moves mailing-list management to the group-centered portal", () => {
     expect(legacyAdminRedirectTarget("/mailing-lists")).toBe(ADMIN_MAILING_LISTS_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/mailing-lists?from=bookmark")).toBe(ADMIN_MAILING_LISTS_REDIRECT_TARGET);
+  });
+
+  it("moves organization content moderation to system management in the portal", () => {
+    expect(legacyAdminRedirectTarget("/organizations/content-reviews")).toBe(
+      ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+    );
+    expect(legacyAdminRedirectTarget("/organizations/content-reviews?from=bookmark")).toBe(
+      ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+    );
   });
 });

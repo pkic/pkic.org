@@ -10,7 +10,7 @@ import { Groups } from "../sections/Groups";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
-import { SystemAuditLog } from "../sections/SystemAuditLog";
+import { SystemManagement } from "../sections/SystemManagement";
 import { Management } from "../sections/management/Management";
 import { GroupEventProposals } from "../sections/management/GroupEventProposals";
 import type { PortalSession } from "../types";
@@ -19,7 +19,7 @@ import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,
   portalDefaultPath,
-  portalHasGlobalPermission,
+  portalHasSystemManagement,
 } from "./portal-navigation";
 
 function SectionWrapper({ title, children }: { title: string; children: ComponentChildren }) {
@@ -73,12 +73,12 @@ export function PortalShell() {
               )}
             />
           )}
-          {portalHasGlobalPermission(portalSession.value, "audit:read") && (
+          {portalHasSystemManagement(portalSession.value) && (
             <Route
-              path="/system/audit-log"
-              component={() => (
-                <SectionWrapper title="System Audit Log">
-                  <SystemAuditLog />
+              path="/system/:view?"
+              component={({ params }: { params: { view?: string } }) => (
+                <SectionWrapper title="System">
+                  <SystemManagement session={portalSession.value} view={params.view} />
                 </SectionWrapper>
               )}
             />

@@ -42,9 +42,6 @@ import type {
   AdminOrganizationDetail as CanonicalAdminOrganizationDetail,
   AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
   AdminOrganizationSummary as CanonicalAdminOrganizationSummary,
-  OrganizationContentReviewDetail as CanonicalOrganizationContentReviewDetail,
-  OrganizationContentReviewDiffEntry as CanonicalOrganizationContentReviewDiffEntry,
-  OrganizationContentReviewSummary as CanonicalOrganizationContentReviewSummary,
 } from "../../shared/schemas/admin-organizations";
 import type {
   AdminEmailOutboxResponse as CanonicalAdminEmailOutboxResponse,
@@ -164,13 +161,6 @@ export type AdminOrganizationSummary = CanonicalAdminOrganizationSummary;
 export type AdminOrganizationRepresentative = CanonicalAdminOrganizationRepresentative;
 
 export type AdminOrganizationDetail = CanonicalAdminOrganizationDetail;
-
-// Organization content moderation queue
-export type OrganizationContentReviewSummary = CanonicalOrganizationContentReviewSummary;
-
-export type OrganizationContentReviewDiffEntry = CanonicalOrganizationContentReviewDiffEntry;
-
-export type OrganizationContentReviewDetail = CanonicalOrganizationContentReviewDetail;
 
 export type Sponsorship = CanonicalSponsorship;
 

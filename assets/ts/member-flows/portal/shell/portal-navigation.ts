@@ -20,11 +20,15 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   label: "Management",
 };
 
-const SYSTEM_AUDIT_NAV_ITEM: PortalNavItem = {
-  path: "/system/audit-log",
-  section: "system",
-  label: "System",
-};
+const SYSTEM_NAV_ITEMS = [
+  {
+    path: "/system/organization-content-reviews",
+    section: "system",
+    label: "Content Reviews",
+    permission: "organizations:content-review",
+  },
+  { path: "/system/audit-log", section: "system", label: "Audit Log", permission: "audit:read" },
+] as const;
 
 const ACCOUNT_NAV_ITEM: PortalNavItem = { path: "/account", section: "account", label: "Account Settings" };
 
@@ -36,7 +40,7 @@ const CAPACITY_ROUTE_PATHS = new Set([
   ...MEMBER_NAV_ITEMS.map((item) => item.path),
   ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
   MANAGEMENT_NAV_ITEM.path,
-  SYSTEM_AUDIT_NAV_ITEM.path,
+  ...SYSTEM_NAV_ITEMS.map((item) => item.path),
   ACCOUNT_NAV_ITEM.path,
 ]);
 
@@ -50,11 +54,22 @@ export function portalHasGlobalPermission(session: PortalSession | null, permiss
   );
 }
 
+export function portalSystemNavigationItems(session: PortalSession | null): PortalNavItem[] {
+  return SYSTEM_NAV_ITEMS.filter((item) => portalHasGlobalPermission(session, item.permission)).map(
+    ({ path, section, label }) => ({ path, section, label }),
+  );
+}
+
+export function portalHasSystemManagement(session: PortalSession | null): boolean {
+  return portalSystemNavigationItems(session).length > 0;
+}
+
 export function portalNavigationItems(session: PortalSession | null): PortalNavItem[] {
+  const systemHome = portalSystemNavigationItems(session)[0];
   return [
     ...(session?.member ? MEMBER_NAV_ITEMS : []),
     ...(session?.admin ? [MANAGEMENT_NAV_ITEM] : []),
-    ...(portalHasGlobalPermission(session, "audit:read") ? [SYSTEM_AUDIT_NAV_ITEM] : []),
+    ...(systemHome ? [{ ...systemHome, label: "System" }] : []),
     ...(session?.member || session?.admin ? [ACCOUNT_NAV_ITEM] : []),
   ];
 }
@@ -76,7 +91,7 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
   if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute && !isSystemRoute && !isSelectedGroupRoute) return null;
   if (portalNavigationItems(session).some((item) => item.path === location)) return null;
   if (isManagementRoute && session?.admin) return null;
-  if (isSystemRoute && portalHasGlobalPermission(session, "audit:read")) return null;
+  if (isSystemRoute && portalHasSystemManagement(session)) return null;
   if (isSelectedGroupRoute && (session?.member || session?.admin)) return null;
   return portalDefaultPath(session);
 }

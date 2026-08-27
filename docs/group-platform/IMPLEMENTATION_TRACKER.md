@@ -1047,8 +1047,22 @@ Status: In progress
       sorting, counting, and pagination in D1. Mounted tests cover global and
       contextual permission separation plus removal of the old API, and a real
       Worker/D1 browser journey proves the portal path and redirect make no
-      legacy audit request. Other global management destinations remain, so
-      this item is deliberately still open.
+      legacy audit request. Organization-content moderation is the second
+      permission-derived System destination. One neutral shared schema now owns
+      its list, detail, decision, route, and paginated response contracts; the
+      portal consumes a canonical `/api/v1/system/organization-content-reviews`
+      API guarded by the live global `organizations:content-review` permission.
+      Search, status, sorting, counting, and pagination remain in D1, and the
+      existing atomic moderation service records an attributable user-backed
+      reviewer. The old admin component, API handlers, route mounts, service
+      adapter, and transport aliases are removed. Notification links and old
+      bookmarks lead to the portal rather than retaining a second consumer.
+      Mounted backend and frontend tests prove permission boundaries, decision
+      behavior, schema validation, D1 filtering, error and empty rendering, and
+      absence of admin API requests. A real Worker/D1 browser journey completes
+      a review through the portal and verifies the old bookmark redirect. Other
+      global management destinations remain, so this item is deliberately still
+      open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
       used by admin sign-in, MCP OAuth, membership due work, organization content
@@ -1170,7 +1184,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,147 backend tests pass with one skipped, 263 frontend tests
+      checkpoint: 2,148 backend tests pass with one skipped, 268 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

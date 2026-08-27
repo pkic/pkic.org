@@ -137,14 +137,6 @@ export const NAV_ITEMS: NavItem[] = [
     sec: "organizations",
     label: "Organizations",
     icon: "organizations",
-    children: [
-      {
-        path: "/organizations/content-reviews",
-        sec: "organizations-content-reviews",
-        label: "Content Review",
-        icon: "organizations",
-      },
-    ],
   },
   { path: "/sponsorships", sec: "sponsorships", label: "Sponsorships", icon: "donations" },
   { path: "/leadership", sec: "leadership", label: "Leadership", icon: "leadership" },

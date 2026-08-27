@@ -15,20 +15,19 @@ import {
   toReviewSummary,
   type ReviewRow,
 } from "./model";
-import type { AuthAdmin, DatabaseLike } from "../../types";
-import { adminDatabaseUserId } from "../../auth/admin-identity";
+import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { serializeOrganizationContentValue } from "./fields";
-import type { ContentReviewsListQuery } from "../../../../assets/shared/schemas/admin-organizations";
+import type { OrganizationContentReviewsListQuery } from "../../../../assets/shared/schemas/organization-content-reviews";
 
-interface AdminReviewRow extends ReviewRow {
+interface ContentReviewRow extends ReviewRow {
   organization_name: string;
   submitter_first_name: string | null;
   submitter_last_name: string | null;
   submitter_email: string;
 }
 
-const ADMIN_REVIEW_SELECT = `
+const CONTENT_REVIEW_SELECT = `
   SELECT r.id, r.organization_id, r.submitted_by_user_id, r.proposed_changes_json,
          r.logo_staging_r2_key, r.status, r.reviewer_user_id, r.reviewer_note,
          r.submitted_at, r.reviewed_at, r.transition_revision, r.created_at,
@@ -39,11 +38,11 @@ const ADMIN_REVIEW_SELECT = `
   JOIN users u ON u.id = r.submitted_by_user_id
 `;
 
-function submitterName(row: AdminReviewRow): string {
+function submitterName(row: ContentReviewRow): string {
   return [row.submitter_first_name, row.submitter_last_name].filter(Boolean).join(" ") || row.submitter_email;
 }
 
-function toAdminReviewSummary(row: AdminReviewRow) {
+function toContentReviewSummary(row: ContentReviewRow) {
   return {
     ...toReviewSummary(row),
     organizationName: row.organization_name,
@@ -52,7 +51,7 @@ function toAdminReviewSummary(row: AdminReviewRow) {
   };
 }
 
-export async function listContentReviews(db: DatabaseLike, params: ContentReviewsListQuery) {
+export async function listContentReviews(db: DatabaseLike, params: OrganizationContentReviewsListQuery) {
   const status = params.status ?? "pending";
   const conditions = ["r.status = ?"];
   const bindings: unknown[] = [status];
@@ -81,18 +80,18 @@ export async function listContentReviews(db: DatabaseLike, params: ContentReview
     "r.submitted_at ASC",
     "r.id ASC",
   );
-  const { rows, total } = await queryPage<AdminReviewRow>(db, {
-    sql: `${ADMIN_REVIEW_SELECT} ${where}`,
+  const { rows, total } = await queryPage<ContentReviewRow>(db, {
+    sql: `${CONTENT_REVIEW_SELECT} ${where}`,
     bindings,
     orderBy,
     limit: params.limit,
     offset: params.offset,
   });
-  return { reviews: rows.map(toAdminReviewSummary), total };
+  return { reviews: rows.map(toContentReviewSummary), total };
 }
 
 export async function getContentReviewDetail(db: DatabaseLike, reviewId: string) {
-  const row = await first<AdminReviewRow>(db, `${ADMIN_REVIEW_SELECT} WHERE r.id = ?`, [reviewId]);
+  const row = await first<ContentReviewRow>(db, `${CONTENT_REVIEW_SELECT} WHERE r.id = ?`, [reviewId]);
   if (!row) throw new AppError(404, "NOT_FOUND", "Review not found");
 
   const orgRow = await first<Record<string, unknown>>(
@@ -115,7 +114,7 @@ export async function getContentReviewDetail(db: DatabaseLike, reviewId: string)
     }));
 
   return {
-    ...toAdminReviewSummary(row),
+    ...toContentReviewSummary(row),
     diff,
     hasLogoChange: Boolean(row.logo_staging_r2_key),
     logoStagingR2Key: row.logo_staging_r2_key,
@@ -137,9 +136,9 @@ export interface ContentReviewDecisionResult {
 export async function approveContentReview(
   db: DatabaseLike,
   reviewId: string,
-  admin: AuthAdmin,
+  reviewer: UserBackedAuthAdmin,
 ): Promise<ContentReviewDecisionResult> {
-  const row = await first<AdminReviewRow>(db, `${ADMIN_REVIEW_SELECT} WHERE r.id = ?`, [reviewId]);
+  const row = await first<ContentReviewRow>(db, `${CONTENT_REVIEW_SELECT} WHERE r.id = ?`, [reviewId]);
   if (!row) throw new AppError(404, "NOT_FOUND", "Review not found");
   if (row.status !== "pending") throw new AppError(409, "NOT_PENDING", "Only a pending review can be approved");
 
@@ -157,7 +156,7 @@ export async function approveContentReview(
   }
 
   const now = nowIso();
-  const reviewerUserId = adminDatabaseUserId(admin);
+  const reviewerUserId = reviewer.id;
   if (row.logo_staging_r2_key) {
     setClauses.push("logo_r2_key = ?");
     values.push(row.logo_staging_r2_key);
@@ -191,7 +190,7 @@ export async function approveContentReview(
       prepareAuditLog(
         db,
         "admin",
-        admin.id,
+        reviewer.id,
         "organization_content_review_approved",
         "organization",
         row.organization_id,
@@ -236,15 +235,15 @@ export interface ContentReviewRejectResult {
 export async function rejectContentReview(
   db: DatabaseLike,
   reviewId: string,
-  admin: AuthAdmin,
+  reviewer: UserBackedAuthAdmin,
   reviewerNote: string,
 ): Promise<ContentReviewRejectResult> {
-  const row = await first<AdminReviewRow>(db, `${ADMIN_REVIEW_SELECT} WHERE r.id = ?`, [reviewId]);
+  const row = await first<ContentReviewRow>(db, `${CONTENT_REVIEW_SELECT} WHERE r.id = ?`, [reviewId]);
   if (!row) throw new AppError(404, "NOT_FOUND", "Review not found");
   if (row.status !== "pending") throw new AppError(409, "NOT_PENDING", "Only a pending review can be rejected");
 
   const now = nowIso();
-  const reviewerUserId = adminDatabaseUserId(admin);
+  const reviewerUserId = reviewer.id;
   const queued = prepareQueueEmailStatement(
     db,
     {
@@ -273,7 +272,7 @@ export async function rejectContentReview(
       prepareAuditLog(
         db,
         "admin",
-        admin.id,
+        reviewer.id,
         "organization_content_review_rejected",
         "organization_content_review",
         reviewId,
