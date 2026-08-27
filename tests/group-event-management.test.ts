@@ -129,15 +129,23 @@ async function createGroupEvent(fixture: Fixture): Promise<{ id: string; updated
       endsAt: "2027-04-12T17:00:00.000Z",
       profileKey: "workshop",
       registrationPolicy: "no_registration",
+      inviteLimitAttendee: 5,
       location: "Online",
       links: ["https://example.test/register"],
     }),
   });
   expect(response.status, await response.clone().text()).toBe(201);
   const body = (await response.json()) as {
-    event: { id: string; updatedAt: string; sourceMode: string; location: string; capabilities: string[] };
+    event: {
+      id: string;
+      updatedAt: string;
+      sourceMode: string;
+      inviteLimitAttendee: number;
+      location: string;
+      capabilities: string[];
+    };
   };
-  expect(body.event).toMatchObject({ sourceMode: "portal", location: "Online" });
+  expect(body.event).toMatchObject({ sourceMode: "portal", inviteLimitAttendee: 5, location: "Online" });
   expect(body.event.capabilities).not.toContain("register");
   return body.event;
 }
@@ -167,6 +175,7 @@ describe("group event management routes", () => {
         method: "PATCH",
         body: JSON.stringify({
           expectedUpdatedAt: created.updatedAt,
+          inviteLimitAttendee: 0,
           location: "Hybrid",
           links: ["https://example.test/register", "https://example.test/agenda"],
         }),
@@ -177,6 +186,7 @@ describe("group event management routes", () => {
       event: {
         id: created.id,
         registrationPolicy: "no_registration",
+        inviteLimitAttendee: 0,
         location: "Hybrid",
         links: ["https://example.test/register", "https://example.test/agenda"],
       },

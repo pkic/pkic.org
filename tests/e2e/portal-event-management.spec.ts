@@ -26,6 +26,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByLabel("End date").fill("2027-06-10T17:00");
   await page.getByLabel("Timezone").fill("Europe/Amsterdam");
   await page.getByLabel("Event profile").selectOption("workshop");
+  await page.getByLabel("Peer invitation limit").fill("7");
   await page.getByLabel("Location").fill("Amsterdam and online");
   await page.getByLabel("Event resource URL").fill("https://example.test/portal-workshop");
   await page.getByRole("button", { name: "Add profile link" }).click();
@@ -108,6 +109,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   await page.getByRole("button", { name: "Edit event" }).click();
   const editor = page.getByRole("heading", { name: "Edit event" }).locator("..");
+  await expect(editor.getByLabel("Peer invitation limit")).toHaveValue("7");
+  await editor.getByLabel("Peer invitation limit").fill("9");
   await editor.getByLabel("Location").fill("Rotterdam and online");
   await editor.getByRole("button", { name: "Save event" }).click();
   await expect(
@@ -130,6 +133,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       ownerGroupId: GROUP_ID,
       sourceMode: "portal",
       registrationPolicy: "optional",
+      inviteLimitAttendee: 9,
       location: "Rotterdam and online",
     }),
   );

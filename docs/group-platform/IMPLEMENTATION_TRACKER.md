@@ -798,11 +798,15 @@ Status: In progress
       authorization authority.
       Standalone event managers now use the same selected-group portal to load
       the active D1 profile catalog, create a no-registration event, edit its
-      schedule/location/JSON-backed links, inspect attendee data, and manage
-      sharing. Meeting and board-meeting profiles remain series-only in both
-      the UI and API. A real Worker/D1 browser journey signs in through the
-      portal email capability, creates and edits a workshop, and verifies its
-      persisted owner, source mode, registration policy, link, and location.
+      schedule/location/JSON-backed links and attendee peer-invitation limit,
+      inspect attendee data, and manage sharing. The shared event contract
+      defines that limit once for portal, admin, and sync consumers; zero
+      explicitly disables peer invitations while manager invitations remain a
+      separate workflow. Meeting and board-meeting profiles remain series-only
+      in both the UI and API. A real Worker/D1 browser journey signs in through
+      the portal email capability, creates and edits a workshop, and verifies
+      its persisted owner, source mode, registration policy, invite limit, link,
+      and location.
       Mailing-list management has equivalent browser coverage for staff-only
       group create/edit/archive, exact group-scoped API paths, no admin API
       fallback. A focused frontend test covers the legacy admin bookmark

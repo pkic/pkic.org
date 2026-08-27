@@ -40,6 +40,7 @@ const responseEvent: GroupEvent = {
   profileKey: "workshop",
   sourceMode: "portal",
   registrationPolicy: "no_registration",
+  inviteLimitAttendee: 5,
   location: "Online",
   links: ["https://example.test/architecture-workshop"],
   nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
@@ -118,6 +119,7 @@ describe("portal event management", () => {
     ).toEqual(["conference", "workshop"]);
     expect(create.textContent).toContain("Configured workshop profile");
     expect(create.textContent).not.toContain("D1 meeting label");
+    expect(create.querySelector<HTMLInputElement>("#group-event-peer-invite-limit-new")?.value).toBe("5");
 
     const name = create.querySelector<HTMLInputElement>("#group-event-name-new")!;
     name.value = "Architecture workshop";
@@ -134,12 +136,17 @@ describe("portal event management", () => {
         name: "Architecture workshop",
         profileKey: "workshop",
         registrationPolicy: "no_registration",
+        inviteLimitAttendee: 5,
         links: [],
       },
     });
     expect(onSaved).toHaveBeenCalledWith(responseEvent);
 
     const edit = mount(<GroupEventEditor groupId={GROUP_ID} event={responseEvent} onSaved={onSaved} />);
+    const inviteLimit = edit.querySelector<HTMLInputElement>(`#group-event-peer-invite-limit-${responseEvent.id}`)!;
+    inviteLimit.value = "8";
+    inviteLimit.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
     await act(async () => {
       edit.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
@@ -148,6 +155,7 @@ describe("portal event management", () => {
       url: expect.objectContaining({ pathname: `/api/v1/groups/${GROUP_ID}/events/${responseEvent.id}/settings` }),
       body: {
         expectedUpdatedAt: responseEvent.updatedAt,
+        inviteLimitAttendee: 8,
         links: responseEvent.links,
         location: responseEvent.location,
       },

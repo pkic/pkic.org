@@ -50,6 +50,9 @@ export const eventCustomSettingsSchema = z
     }
   });
 
+/** Zero disables attendee peer invitations; positive values bound each registered participant. */
+export const attendeeInviteLimitSchema = z.number().int().min(0).max(50);
+
 /**
  * Shared event configuration. Individual route families compose this base
  * with their own policy dialect rather than duplicating the common fields.
@@ -81,7 +84,7 @@ export const eventSettingsSchema = z.object({
     .nullable()
     .optional(),
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
-  inviteLimitAttendee: z.number().int().positive().max(50).optional(),
+  inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
   settings: eventCustomSettingsSchema.optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
 });
@@ -95,7 +98,7 @@ export const eventCreateSchema = z.object({
   startsAt: z.iso.datetime().nullable().optional(),
   endsAt: z.iso.datetime().nullable().optional(),
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).default("invite_or_open"),
-  inviteLimitAttendee: z.number().int().positive().max(50).default(5),
+  inviteLimitAttendee: attendeeInviteLimitSchema.default(5),
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
 });

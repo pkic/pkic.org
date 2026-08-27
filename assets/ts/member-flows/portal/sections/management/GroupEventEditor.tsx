@@ -30,6 +30,7 @@ interface EventDraft {
   endsAt: string;
   profileKey: StandaloneEventProfileKey;
   registrationPolicy: EventRegistrationPolicy;
+  inviteLimitAttendee: number;
   location: string;
   links: string[];
 }
@@ -74,6 +75,7 @@ function initialDraft(event: GroupEvent | null): EventDraft {
     endsAt: localDateTime(event?.endsAt ?? null, timezone),
     profileKey,
     registrationPolicy: event?.registrationPolicy ?? "no_registration",
+    inviteLimitAttendee: event?.inviteLimitAttendee ?? 5,
     location: event?.location ?? "",
     links: event?.links ?? [],
   };
@@ -153,6 +155,7 @@ export function GroupEventEditor({
           endsAt,
           profileKey: standaloneEventProfileKeySchema.parse(draft.profileKey),
           registrationPolicy: "no_registration",
+          inviteLimitAttendee: draft.inviteLimitAttendee,
           location: fieldValue(draft.location),
           links: draft.links,
         });
@@ -172,6 +175,7 @@ export function GroupEventEditor({
         timezone: draft.timezone,
         startsAt,
         endsAt,
+        inviteLimitAttendee: draft.inviteLimitAttendee,
         location: fieldValue(draft.location),
         links: draft.links,
       });
@@ -289,6 +293,25 @@ export function GroupEventEditor({
             disabled={saving}
             onInput={(inputEvent) => update("location", (inputEvent.target as HTMLInputElement).value)}
           />
+        </div>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold" for={`group-event-peer-invite-limit-${event?.id ?? "new"}`}>
+          Peer invitation limit
+        </label>
+        <input
+          id={`group-event-peer-invite-limit-${event?.id ?? "new"}`}
+          class="form-control"
+          type="number"
+          min="0"
+          max="50"
+          value={draft.inviteLimitAttendee}
+          disabled={saving}
+          onInput={(inputEvent) => update("inviteLimitAttendee", Number((inputEvent.target as HTMLInputElement).value))}
+        />
+        <div class="form-text">
+          Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer
+          invitations. Manager invitations are configured separately.
         </div>
       </div>
       <div>

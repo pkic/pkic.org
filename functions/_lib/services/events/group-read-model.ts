@@ -38,6 +38,7 @@ interface GroupEventRow {
   profile_key: GroupEvent["profileKey"];
   source_mode: GroupEvent["sourceMode"];
   registration_policy: GroupEvent["registrationPolicy"];
+  invite_limit_attendee: number;
   location: string | null;
   links_json: string | null;
   next_occurrence_at: string | null;
@@ -61,6 +62,7 @@ const EVENT_SELECT = `SELECT event.id AS event_id, event.owner_group_id, series.
   event.slug AS event_slug, event.base_path AS event_base_path, event.name AS event_name, event.timezone AS event_timezone,
   event.starts_at AS event_starts_at, event.ends_at AS event_ends_at,
   event.profile_key, event.source_mode, event.registration_mode AS registration_policy,
+  event.invite_limit_attendee,
   ${EVENT_LOCATION} AS location, event.links_json, next_occurrence.next_occurrence_at,
   event.created_at AS event_created_at, event.updated_at AS event_updated_at,
   GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities`;
@@ -91,6 +93,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
     profileKey: row.profile_key,
     sourceMode: row.source_mode,
     registrationPolicy: row.registration_policy,
+    inviteLimitAttendee: row.invite_limit_attendee,
     location: row.location,
     links: parseLinksJson(row.links_json),
     nextOccurrenceAt: row.next_occurrence_at,

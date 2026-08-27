@@ -4,7 +4,12 @@ import {
   eventAttendanceRegistrationsListResponseSchema,
   eventAttendanceRegistrationsQuerySchema,
 } from "./event-registrations";
-import { eventCreateSchema, eventProfileCatalogResponseSchema, eventSettingsSchema } from "./event-management";
+import {
+  attendeeInviteLimitSchema,
+  eventCreateSchema,
+  eventProfileCatalogResponseSchema,
+  eventSettingsSchema,
+} from "./event-management";
 import { eventFormsResponseSchema, formDefinitionCreateSchema, formPlacementSchema } from "./forms";
 import {
   eventDaysReplaceResponseSchema,
@@ -58,6 +63,7 @@ export const groupEventSchema = z.object({
   profileKey: eventProfileKeySchema.nullable(),
   sourceMode: eventSourceModeSchema.nullable(),
   registrationPolicy: eventRegistrationPolicySchema,
+  inviteLimitAttendee: attendeeInviteLimitSchema,
   location: z.string().nullable(),
   links: linksSchema,
   nextOccurrenceAt: z.string().nullable(),

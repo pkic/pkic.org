@@ -24,6 +24,7 @@ import { groupIdSchema } from "./groups";
 import { proposalRecommendationSchema } from "./proposal-reviews";
 import { proposalAdminStatusFilterSchema } from "./proposal-status";
 import {
+  attendeeInviteLimitSchema,
   eventCreateSchema,
   eventCustomSettingsSchema,
   eventSettingsSchema,
@@ -287,7 +288,7 @@ export const adminEventSyncSchema = z.object({
     startsAt: z.iso.datetime().optional(),
     endsAt: z.iso.datetime().optional(),
     registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
-    inviteLimitAttendee: z.number().int().positive().max(50).optional(),
+    inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
     frontend: z.object({ routes: frontendRoutesSchema }).optional(),
     settings: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
   }),
