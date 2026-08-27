@@ -843,8 +843,14 @@ Status: In progress
       event reporting remain available. A real Worker/D1 browser journey now
       creates the event, terms, optional registration policy, exact form and
       custom field, and attendance days entirely through the portal, then
-      verifies the persisted setup. The complete repository gate passes 2,024
-      backend tests (one skipped), 236 frontend tests, and 80 tool tests.
+      verifies the persisted setup. A focused Codex Security review reproduced
+      a stale-placement race between the event and form aggregates; one shared
+      snapshot guard now rechecks every mutable placement attribute in the D1
+      batch before either deactivation or reactivation. Deterministic tests
+      prove both races return a bounded conflict while preserving the moved
+      placement, event policy, and audit history. The complete repository gate
+      passes 2,026 backend tests (one skipped), 237 frontend tests, and 80 tool
+      tests.
       This parent item remains open for the other management areas and final
       admin-shell retirement below, not for event registration setup.
 - [ ] Move remaining global management views into the portal.
@@ -960,7 +966,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,024 backend tests pass with one skipped, 237 frontend tests
+      checkpoint: 2,026 backend tests pass with one skipped, 237 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

@@ -21,7 +21,7 @@ import {
 } from "../event-series/management";
 import { EVENT_COLUMNS, type EventRecord } from "../events";
 import { prepareManagedForm } from "../forms/management";
-import { prepareFormPlacement } from "../forms/placements";
+import { prepareFormPlacement, prepareFormPlacementSnapshotGuard } from "../forms/placements";
 
 interface RegistrationFormRow {
   placement_id: string;
@@ -312,27 +312,36 @@ export async function replaceGroupEventRegistrationSettings(
     statements.push(formDefinitionGuard(db, context.groupId, formId));
   }
   if (current && (formId === null || (formId !== undefined && current.form.id !== formId))) {
+    statements.push(prepareFormPlacementSnapshotGuard(db, current.placement));
     statements.push(
       db
-        .prepare("UPDATE form_placements SET active = 0, updated_at = ? WHERE id = ? AND active = 1")
-        .bind(now, current.placement.id),
+        .prepare("UPDATE form_placements SET active = 0, updated_at = ? WHERE id = ? AND active = 1 AND updated_at = ?")
+        .bind(now, current.placement.id, current.placement.updatedAt),
     );
   }
   if (formId !== undefined && formId !== null && (!current || current.form.id !== formId)) {
-    const existingPlacement = await first<{ id: string }>(
+    const existingPlacement = await first<RegistrationFormRow>(
       db,
-      `SELECT id FROM form_placements
-        WHERE form_id = ? AND context_type = 'event' AND context_ref = ?
-          AND audience = 'attendee'`,
-      [formId, event.id],
+      `${REGISTRATION_FORM_SELECT}
+        WHERE placement.form_id = ? AND placement.context_type = 'event' AND placement.context_ref = ?
+          AND placement.audience = 'attendee' AND placement.active = 0
+          AND placement.owner_group_id = ?`,
+      [formId, event.id, context.groupId],
     );
     if (existingPlacement) {
+      const existing = mapRegistrationForm(existingPlacement).placement;
+      statements.push(prepareFormPlacementSnapshotGuard(db, existing));
       statements.push(
         db
-          .prepare("UPDATE form_placements SET active = 1, owner_group_id = ?, updated_at = ? WHERE id = ?")
-          .bind(context.groupId, now, existingPlacement.id),
+          .prepare(
+            "UPDATE form_placements SET active = 1, updated_at = ? WHERE id = ? AND active = 0 AND updated_at = ?",
+          )
+          .bind(now, existing.id, existing.updatedAt),
       );
-      selected = { form: candidate!, placement: { ...selected!.placement, id: existingPlacement.id } };
+      selected = {
+        form: candidate!,
+        placement: { ...existing, active: true, updatedAt: now },
+      };
     } else {
       const placement = prepareFormPlacement(
         db,

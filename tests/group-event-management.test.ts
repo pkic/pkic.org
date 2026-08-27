@@ -13,9 +13,10 @@ import {
 import { replaceGroupEventRegistrationSettings } from "../functions/_lib/services/events/registration-settings";
 import { getGroupEvent, listGroupEvents } from "../functions/_lib/services/events/group-read-model";
 import { CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL } from "../functions/_lib/services/event-days";
+import { createManagedFormPlacement, updateGroupFormPlacement } from "../functions/_lib/services/forms";
 import { createGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
-import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";
+import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
@@ -83,6 +84,38 @@ function request(token: string, path: string, init: RequestInit = {}): Promise<R
   headers.set("authorization", `Bearer ${token}`);
   if (init.body) headers.set("content-type", "application/json");
   return callApi(env, path, { ...init, headers });
+}
+
+/** Runs a permitted placement move after registration settings read its current placement. */
+function movePlacementAfterRead(db: DatabaseLike, mutation: () => Promise<unknown>): DatabaseLike {
+  let moved = false;
+  const wrap = (sql: string, statement: StatementLike) => {
+    const wrapBound = (bound: StatementLike): StatementLike => ({
+      bind(...values: unknown[]) {
+        return wrapBound(bound.bind(...values));
+      },
+      async run<T = Record<string, unknown>>() {
+        return bound.run<T>();
+      },
+      async all<T = Record<string, unknown>>() {
+        const result = await bound.all<T>();
+        if (!moved && sql.includes("ORDER BY placement.created_at ASC")) {
+          moved = true;
+          await mutation();
+        }
+        return result;
+      },
+      async first<T = Record<string, unknown>>(columnName?: string) {
+        return bound.first<T>(columnName);
+      },
+    });
+    return wrapBound(statement);
+  };
+  return {
+    prepare: (sql: string) =>
+      sql.includes("ORDER BY placement.created_at ASC") ? wrap(sql, db.prepare(sql)) : db.prepare(sql),
+    batch: (statements) => db.batch(statements),
+  };
 }
 
 async function createGroupEvent(fixture: Fixture): Promise<{ id: string; updatedAt: string }> {
@@ -827,6 +860,154 @@ describe("group event management routes", () => {
       await env.DB.prepare("SELECT active FROM form_placements WHERE id = ?").bind(formBody.form.placement.id).first(),
     ).toEqual({ active: 0 });
     expect(noFormRevision.eventUpdatedAt).not.toBe(formBody.eventUpdatedAt);
+  });
+
+  it("rejects a stale settings read and preserves a repurposed placement", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    await env.DB.prepare(
+      `INSERT INTO event_terms
+         (id, event_id, audience_type, term_key, version, required, active, display_text, created_at)
+       VALUES (?, ?, 'attendee', 'terms', '1', 1, 1, 'I agree', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), created.id)
+      .run();
+
+    const form = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings/form`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          key: `event-attendee-race-${crypto.randomUUID()}`,
+          purpose: "event_registration",
+          title: "Repurposed attendee form",
+          status: "active",
+          fields: [],
+        }),
+      },
+    );
+    expect(form.status, await form.clone().text()).toBe(201);
+    const formBody = (await form.json()) as {
+      form: { form: { id: string }; placement: { id: string } };
+      eventUpdatedAt: string;
+    };
+
+    const racingDb = movePlacementAfterRead(env.DB, () =>
+      updateGroupFormPlacement(env.DB, fixture.ownerLeader, fixture.ownerGroupId, formBody.form.placement.id, {
+        contextType: "group",
+        contextRef: fixture.ownerGroupId,
+        audience: "group_member",
+      }),
+    );
+    await expect(
+      replaceGroupEventRegistrationSettings(
+        racingDb,
+        fixture.ownerLeader,
+        fixture.ownerGroupId,
+        created.id,
+        formBody.eventUpdatedAt,
+        "optional",
+        null,
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_REGISTRATION_SETTINGS_CHANGED" });
+
+    expect(
+      await env.DB.prepare("SELECT context_type, context_ref, audience, active FROM form_placements WHERE id = ?")
+        .bind(formBody.form.placement.id)
+        .first(),
+    ).toEqual({
+      context_type: "group",
+      context_ref: fixture.ownerGroupId,
+      audience: "group_member",
+      active: 1,
+    });
+  });
+
+  it("rolls back when an inactive replacement placement is repurposed before reactivation", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    await env.DB.prepare(
+      `INSERT INTO event_terms
+         (id, event_id, audience_type, term_key, version, required, active, display_text, created_at)
+       VALUES (?, ?, 'attendee', 'terms', '1', 1, 1, 'I agree', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), created.id)
+      .run();
+
+    const activeFormResponse = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings/form`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          key: `event-attendee-active-${crypto.randomUUID()}`,
+          purpose: "event_registration",
+          title: "Active attendee form",
+          status: "active",
+          fields: [],
+        }),
+      },
+    );
+    expect(activeFormResponse.status, await activeFormResponse.clone().text()).toBe(201);
+    const activeFormBody = (await activeFormResponse.json()) as { eventUpdatedAt: string };
+
+    const inactiveFormId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO forms
+         (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
+       VALUES (?, ?, 'community', ?, 'event_registration', 'active', 'Inactive attendee form', NULL,
+               datetime('now'), datetime('now'))`,
+    )
+      .bind(inactiveFormId, `event-attendee-inactive-${crypto.randomUUID()}`, fixture.ownerGroupId)
+      .run();
+    const inactivePlacement = await createManagedFormPlacement(env.DB, fixture.ownerLeader.id, inactiveFormId, {
+      ownerGroupId: fixture.ownerGroupId,
+      contextType: "event",
+      contextRef: created.id,
+      audience: "attendee",
+      active: false,
+    });
+
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      updateGroupFormPlacement(env.DB, fixture.ownerLeader, fixture.ownerGroupId, inactivePlacement.id, {
+        contextType: "group",
+        contextRef: fixture.ownerGroupId,
+        audience: "group_member",
+      }),
+    );
+    await expect(
+      replaceGroupEventRegistrationSettings(
+        racingDb,
+        fixture.ownerLeader,
+        fixture.ownerGroupId,
+        created.id,
+        activeFormBody.eventUpdatedAt,
+        "optional",
+        inactiveFormId,
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_REGISTRATION_SETTINGS_CHANGED" });
+
+    expect(
+      await env.DB.prepare("SELECT context_type, context_ref, audience, active FROM form_placements WHERE id = ?")
+        .bind(inactivePlacement.id)
+        .first(),
+    ).toEqual({
+      context_type: "group",
+      context_ref: fixture.ownerGroupId,
+      audience: "group_member",
+      active: 0,
+    });
+    expect(await env.DB.prepare("SELECT registration_mode FROM events WHERE id = ?").bind(created.id).first()).toEqual({
+      registration_mode: "no_registration",
+    });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM audit_log WHERE action = 'event_registration_settings_updated' AND entity_id = ?",
+      )
+        .bind(created.id)
+        .first(),
+    ).toEqual({ count: 0 });
   });
 
   it("requires exact event management and rolls back stale or revoked registration settings", async () => {
