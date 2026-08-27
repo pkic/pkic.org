@@ -358,6 +358,45 @@ describe("admin event management endpoints", () => {
     });
   });
 
+  it("keeps portal-owned registration authoring in the owning group context", async () => {
+    await setupAdmin();
+    await env.DB.prepare("UPDATE events SET owner_group_id = ?, source_mode = 'portal' WHERE slug = 'pqc-2026'")
+      .bind("20000000-0000-4000-8000-000000000001")
+      .run();
+
+    const detailResponse = await callAdmin("/api/v1/admin/events/pqc-2026");
+    expect(detailResponse.status).toBe(200);
+    const detail = (await detailResponse.json()) as { event: Record<string, unknown> };
+    expect(detail.event).toMatchObject({
+      ownerGroupId: "20000000-0000-4000-8000-000000000001",
+      sourceMode: "portal",
+    });
+
+    const settingsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ registrationMode: "open" }),
+    });
+    expect(settingsResponse.status).toBe(403);
+    await expect(settingsResponse.json()).resolves.toMatchObject({
+      error: { code: "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP" },
+    });
+
+    const formResponse = await callAdmin("/api/v1/admin/events/pqc-2026/forms", {
+      method: "POST",
+      body: JSON.stringify({
+        key: "portal-event-form",
+        purpose: "event_registration",
+        title: "Portal event form",
+        status: "active",
+        fields: [],
+      }),
+    });
+    expect(formResponse.status).toBe(403);
+    await expect(formResponse.json()).resolves.toMatchObject({
+      error: { code: "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP" },
+    });
+  });
+
   it("rejects duplicate configurable session types case-insensitively", async () => {
     await setupAdmin();
 

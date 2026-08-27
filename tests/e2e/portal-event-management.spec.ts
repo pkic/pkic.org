@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   groupEventDaysResponseSchema,
+  groupEventRegistrationSettingsResponseSchema,
   groupEventTermsResponseSchema,
   groupEventsListResponseSchema,
 } from "../../assets/shared/schemas/group-events";
@@ -54,6 +55,38 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await registrationSetup.getByRole("button", { name: "Save terms" }).click();
   expect((await termsSaved).status()).toBe(200);
 
+  const policySection = registrationSetup.locator("details").filter({ hasText: "Policy and registration questions" });
+  await policySection.getByLabel("Registration policy").selectOption("optional");
+  const registrationSettingsSaved = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
+      response.url().endsWith("/registration-settings") &&
+      response.request().method() === "PUT",
+  );
+  await policySection.getByRole("button", { name: "Save registration settings" }).click();
+  expect((await registrationSettingsSaved).status()).toBe(200);
+
+  await policySection.getByRole("button", { name: "Create registration form" }).click();
+  const formEditor = policySection.locator(".card").filter({ hasText: "New registration form" });
+  const formKey = `workshop-registration-${unique}`;
+  await formEditor.getByLabel("Key").fill(formKey);
+  await expect(formEditor.getByLabel("Key")).toHaveValue(formKey);
+  await formEditor.getByLabel("Title").fill("Workshop registration questions");
+  await expect(formEditor.getByLabel("Key")).toHaveValue(formKey);
+  await formEditor.getByPlaceholder("field_key").fill("participation_goal");
+  await formEditor.getByPlaceholder("Field label").fill("What do you want to learn?");
+  const formCreated = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
+      response.url().endsWith("/registration-settings/form") &&
+      response.request().method() === "POST",
+  );
+  await formEditor.getByRole("button", { name: "Create form" }).click();
+  expect((await formCreated).status()).toBe(201);
+  await expect(policySection.getByLabel("Registration questions", { exact: true })).toContainText(
+    "Workshop registration questions",
+  );
+
   registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await registrationSetup.getByText("Attendance days", { exact: true }).click();
   await registrationSetup.getByRole("button", { name: "Add day" }).click();
@@ -96,20 +129,24 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       slug: eventSlug,
       ownerGroupId: GROUP_ID,
       sourceMode: "portal",
-      registrationPolicy: "no_registration",
+      registrationPolicy: "optional",
       location: "Rotterdam and online",
     }),
   );
 
   const configuration = await page.evaluate(
     async ({ groupId, eventId }) => {
-      const [terms, days] = await Promise.all([
+      const [terms, days, registrationSettings] = await Promise.all([
         fetch(`/api/v1/groups/${groupId}/events/${eventId}/terms`, { credentials: "same-origin" }),
         fetch(`/api/v1/groups/${groupId}/events/${eventId}/days`, { credentials: "same-origin" }),
+        fetch(`/api/v1/groups/${groupId}/events/${eventId}/registration-settings`, {
+          credentials: "same-origin",
+        }),
       ]);
       return {
         terms: { status: terms.status, body: await terms.json() },
         days: { status: days.status, body: await days.json() },
+        registrationSettings: { status: registrationSettings.status, body: await registrationSettings.json() },
       };
     },
     { groupId: GROUP_ID, eventId: groupEventsListResponseSchema.parse(stored.body).events[0].id },
@@ -125,4 +162,12 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40 }],
     }),
   ]);
+  expect(configuration.registrationSettings.status, JSON.stringify(configuration.registrationSettings.body)).toBe(200);
+  expect(groupEventRegistrationSettingsResponseSchema.parse(configuration.registrationSettings.body)).toMatchObject({
+    registrationPolicy: "optional",
+    form: {
+      placement: { contextType: "event", audience: "attendee", active: true },
+      form: { title: "Workshop registration questions" },
+    },
+  });
 });

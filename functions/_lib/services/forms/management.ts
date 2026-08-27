@@ -16,9 +16,14 @@ import { defaultFormAudience, prepareFormPlacement } from "./placements";
 type FormScope =
   | { type: "global"; ref: null }
   | { type: "event"; ref: string; eventSlug: string }
-  | { type: "group"; ref: string; groupId: string };
+  | {
+      type: "group";
+      ref: string;
+      groupId: string;
+      placement?: { contextType: "event"; contextRef: string; audience: string };
+    };
 
-interface ManagedFormMutationOptions {
+export interface ManagedFormMutationOptions {
   authorizationGuards?: StatementLike[];
   auditScope?: AuditScope;
   auditAction?: string;
@@ -34,16 +39,20 @@ interface CreatedManagedFormIdentity extends ManagedFormIdentity {
   placementId: string;
 }
 
+export interface PreparedManagedForm extends CreatedManagedFormIdentity {
+  statements: StatementLike[];
+}
+
 export type ManagedFormRemovalAction = "archived" | "deleted";
 
-/** Atomically creates the form aggregate, its fields, and its audit event. */
-export async function createManagedForm(
+/** Prepares a form aggregate so another domain command can commit it atomically. */
+export async function prepareManagedForm(
   db: DatabaseLike,
   actorId: string,
   scope: FormScope,
   input: FormDefinitionCreateInput,
   options: ManagedFormMutationOptions = {},
-): Promise<CreatedManagedFormIdentity> {
+): Promise<PreparedManagedForm> {
   const id = uuid();
   const now = nowIso();
   const auditAction =
@@ -68,40 +77,66 @@ export async function createManagedForm(
     id,
     {
       ownerGroupId: scope.type === "group" ? scope.groupId : null,
-      contextType: scope.type === "event" ? "event" : scope.type === "group" ? "group" : "installation",
-      contextRef: scope.ref,
-      audience: defaultFormAudience(input.purpose),
+      contextType:
+        scope.type === "event"
+          ? "event"
+          : scope.type === "group"
+            ? (scope.placement?.contextType ?? "group")
+            : "installation",
+      contextRef: scope.type === "group" ? (scope.placement?.contextRef ?? scope.ref) : scope.ref,
+      audience:
+        scope.type === "group"
+          ? (scope.placement?.audience ?? defaultFormAudience(input.purpose))
+          : defaultFormAudience(input.purpose),
       active: input.status === "active",
     },
     now,
   );
 
-  await db.batch([
-    ...(options.authorizationGuards ?? []),
-    db
-      .prepare(
-        `INSERT INTO forms
+  return {
+    id,
+    key: input.key,
+    updated_at: now,
+    placementId: placement.id,
+    statements: [
+      ...(options.authorizationGuards ?? []),
+      db
+        .prepare(
+          `INSERT INTO forms
            (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        input.key,
-        persistedScopeType,
-        scope.ref,
-        input.purpose,
-        input.status,
-        input.title,
-        input.description ?? null,
-        now,
-        now,
-      ),
-    ...fieldStatements,
-    placement.statement,
-    prepareAuditLog(db, "admin", actorId, auditAction, "form", id, auditDetails, now, null, options.auditScope),
-  ]);
+        )
+        .bind(
+          id,
+          input.key,
+          persistedScopeType,
+          scope.ref,
+          input.purpose,
+          input.status,
+          input.title,
+          input.description ?? null,
+          now,
+          now,
+        ),
+      ...fieldStatements,
+      placement.statement,
+      prepareAuditLog(db, "admin", actorId, auditAction, "form", id, auditDetails, now, null, options.auditScope),
+    ],
+  };
+}
 
-  return { id, key: input.key, updated_at: now, placementId: placement.id };
+/** Atomically creates the form aggregate, its fields, and its audit event. */
+export async function createManagedForm(
+  db: DatabaseLike,
+  actorId: string,
+  scope: FormScope,
+  input: FormDefinitionCreateInput,
+  options: ManagedFormMutationOptions = {},
+): Promise<CreatedManagedFormIdentity> {
+  const prepared = await prepareManagedForm(db, actorId, scope, input, options);
+  await db.batch(prepared.statements);
+
+  return { id: prepared.id, key: prepared.key, updated_at: prepared.updated_at, placementId: prepared.placementId };
 }
 
 /** Atomically updates metadata, reconciles stable fields, and audits the aggregate change. */

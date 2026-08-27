@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { EventDaysEditor } from "./EventDaysEditor";
+import { EventRegistrationSettingsEditor } from "./EventRegistrationSettingsEditor";
 import { EventTermsEditor } from "./EventTermsEditor";
 
 export function GroupEventConfiguration({
@@ -23,13 +24,23 @@ export function GroupEventConfiguration({
     <section class="border-top pt-3" aria-label={`Configure ${event.name} registration`}>
       <h6>Registration setup</h6>
       <p class="small text-muted">
-        Configure terms and optional per-day attendance choices here. The registration form and policy are enabled in
-        the next setup step.
+        Configure the registration policy, optional custom questions, required terms, and per-day attendance choices.
       </p>
       <details class="card mb-3" open>
         <summary class="card-header fw-semibold">Terms and conditions</summary>
         <div class="card-body">
           <EventTermsEditor groupId={groupId} event={event} expectedUpdatedAt={updatedAt} onRevision={recordRevision} />
+        </div>
+      </details>
+      <details class="card mb-3" open>
+        <summary class="card-header fw-semibold">Policy and registration questions</summary>
+        <div class="card-body">
+          <EventRegistrationSettingsEditor
+            groupId={groupId}
+            eventId={event.id}
+            expectedUpdatedAt={updatedAt}
+            onRevision={recordRevision}
+          />
         </div>
       </details>
       <details class="card mb-3">

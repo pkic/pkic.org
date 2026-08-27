@@ -5,6 +5,7 @@ import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { resolveHeroImageSource } from "../../utils/hero-image-url";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog, prepareScopedAuditLogAfterOneChange, type AuditScope } from "../audit";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { getEventBySlug, type EventRecord } from "../events";
 import { getAdminEventDetail } from "./admin-detail";
 
@@ -85,6 +86,7 @@ export interface EventSettingsMutationInput {
   links?: readonly string[];
   auditScope?: AuditScope;
   auditDetails?: unknown;
+  authorizationGuards?: StatementLike[];
 }
 
 /**
@@ -105,6 +107,7 @@ export function buildEventSettingsMutationStatements(
     input.allowedHeroImageHosts,
   );
   const statements: StatementLike[] = [
+    ...(input.authorizationGuards ?? []),
     db
       .prepare(
         `UPDATE events
@@ -194,15 +197,37 @@ export async function updateEventSettings(
   },
 ) {
   const event = await getEventBySlug(db, input.eventSlug);
-  await db.batch(
-    buildEventSettingsMutationStatements(db, {
-      event,
-      actorId: input.actorId,
-      settings: input.settings,
-      appBaseUrl: input.appBaseUrl,
-      allowedHeroImageHosts: input.allowedHeroImageHosts,
-    }),
-  );
+  const registrationMutation =
+    Object.prototype.hasOwnProperty.call(input.settings, "registrationMode") ||
+    Object.prototype.hasOwnProperty.call(input.settings, "registrationFormKey");
+  try {
+    await db.batch(
+      buildEventSettingsMutationStatements(db, {
+        event,
+        actorId: input.actorId,
+        settings: input.settings,
+        appBaseUrl: input.appBaseUrl,
+        allowedHeroImageHosts: input.allowedHeroImageHosts,
+        authorizationGuards: registrationMutation
+          ? [
+              prepareAuthorizationGuard(db, {
+                sql: "SELECT 1 FROM events WHERE id = ? AND COALESCE(source_mode, '') <> 'portal'",
+                bindings: [event.id],
+              }),
+            ]
+          : undefined,
+      }),
+    );
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        403,
+        "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP",
+        "Registration policy and attendee forms for portal-owned events must be managed from the owning group.",
+      );
+    }
+    throw error;
+  }
 
   // Return the same normalized projection as the admin detail GET route. This
   // keeps PATCH consumers on one response contract instead of exposing the

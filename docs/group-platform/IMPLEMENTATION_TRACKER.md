@@ -829,14 +829,24 @@ Status: In progress
       members, and dual-capacity users; staff-only users do not call member
       notification APIs. The duplicate admin view and navigation item are gone,
       and the former admin hash route redirects to the portal.
-      Remaining gap: portal event creation intentionally starts with a
-      no-registration standalone event. Terms and attendance days now belong to
-      the portal, but the next vertical slice must add the exact attendee form
-      placement and guarded registration-policy activation. Until those final
-      setup controls exist, a real browser registration journey cannot create
-      its own registration-enabled fixture entirely through the product UI.
-      Legacy admin form/policy authoring therefore remains temporarily, so this
-      parent item is intentionally open.
+      Event registration setup now also belongs to the selected-group portal.
+      A group manager can keep registration disabled, enable registration with
+      no custom questions, select an existing group-owned attendee form through
+      a server-searched and paginated catalog, or create and edit the exact
+      event placement with the shared form-definition editor. Registration can
+      be enabled only while at least one active required attendee term exists;
+      the same revision-checked D1 batch protects policy, placement, terms, and
+      group-scoped audit writes from stale updates and authorization races.
+      Group-owned form definitions are reusable without creating an implicit
+      group-wide placement. The remaining admin view is read-only for these
+      portal-owned registration settings while proposal-form management and
+      event reporting remain available. A real Worker/D1 browser journey now
+      creates the event, terms, optional registration policy, exact form and
+      custom field, and attendance days entirely through the portal, then
+      verifies the persisted setup. The complete repository gate passes 2,024
+      backend tests (one skipped), 236 frontend tests, and 80 tool tests.
+      This parent item remains open for the other management areas and final
+      admin-shell retirement below, not for event registration setup.
 - [ ] Move remaining global management views into the portal.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useId, useState } from "preact/hooks";
 import {
   FORM_FIELD_TYPES,
   FORM_PURPOSES,
@@ -222,6 +222,7 @@ export function FormDefinitionEditor({
   onCancel: () => void;
   onError?: (message: string) => void;
 }) {
+  const fieldIdPrefix = useId();
   const [draft, setDraft] = useState<FormDraft>(() => detailToDraft(detail, purposes));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -272,22 +273,34 @@ export function FormDefinitionEditor({
     <form onSubmit={(e) => void save(e)}>
       <div class="row g-2 mb-3">
         <div class="col-md-3">
-          <label class="form-label small fw-semibold">Key</label>
+          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-key`}>
+            Key
+          </label>
           <input
+            id={`${fieldIdPrefix}-key`}
             class="form-control form-control-sm mono"
             value={draft.key}
             disabled={mode === "edit"}
             required
             pattern="[a-z][a-z0-9-]*"
-            onInput={(e) => setDraft({ ...draft, key: (e.target as HTMLInputElement).value })}
+            onInput={(e) => {
+              const value = e.currentTarget.value;
+              setDraft((current) => ({ ...current, key: value }));
+            }}
           />
         </div>
         <div class="col-md-3">
-          <label class="form-label small fw-semibold">Purpose</label>
+          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-purpose`}>
+            Purpose
+          </label>
           <select
+            id={`${fieldIdPrefix}-purpose`}
             class="form-select form-select-sm"
             value={draft.purpose}
-            onChange={(e) => setDraft({ ...draft, purpose: (e.target as HTMLSelectElement).value as FormPurpose })}
+            onChange={(e) => {
+              const value = e.currentTarget.value as FormPurpose;
+              setDraft((current) => ({ ...current, purpose: value }));
+            }}
             disabled={mode === "edit"}
           >
             {purposes.map((purpose) => (
@@ -298,20 +311,32 @@ export function FormDefinitionEditor({
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label small fw-semibold">Title</label>
+          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-title`}>
+            Title
+          </label>
           <input
+            id={`${fieldIdPrefix}-title`}
             class="form-control form-control-sm"
             value={draft.title}
             required
-            onInput={(e) => setDraft({ ...draft, title: (e.target as HTMLInputElement).value })}
+            onInput={(e) => {
+              const value = e.currentTarget.value;
+              setDraft((current) => ({ ...current, title: value }));
+            }}
           />
         </div>
         <div class="col-md-2">
-          <label class="form-label small fw-semibold">Status</label>
+          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-status`}>
+            Status
+          </label>
           <select
+            id={`${fieldIdPrefix}-status`}
             class="form-select form-select-sm"
             value={draft.status}
-            onChange={(e) => setDraft({ ...draft, status: (e.target as HTMLSelectElement).value as FormStatus })}
+            onChange={(e) => {
+              const value = e.currentTarget.value as FormStatus;
+              setDraft((current) => ({ ...current, status: value }));
+            }}
           >
             {FORM_STATUSES.map((status) => (
               <option key={status} value={status}>
@@ -323,12 +348,18 @@ export function FormDefinitionEditor({
       </div>
 
       <div class="mb-3">
-        <label class="form-label small fw-semibold">Description</label>
+        <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-description`}>
+          Description
+        </label>
         <textarea
+          id={`${fieldIdPrefix}-description`}
           class="form-control form-control-sm"
           rows={2}
           value={draft.description}
-          onInput={(e) => setDraft({ ...draft, description: (e.target as HTMLTextAreaElement).value })}
+          onInput={(e) => {
+            const value = e.currentTarget.value;
+            setDraft((current) => ({ ...current, description: value }));
+          }}
         />
       </div>
 

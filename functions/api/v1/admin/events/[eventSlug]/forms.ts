@@ -21,6 +21,8 @@ import {
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
+import { AppError } from "../../../../../_lib/errors";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../../../_lib/db/authorization-guard";
 
 export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -41,13 +43,35 @@ export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (
 export const AdminEventFormsCreate = openApiRoute(adminEventFormCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
-
-  const form = await createManagedForm(
-    requestDb(c),
-    admin.id,
-    { type: "event", ref: event.id, eventSlug: event.slug },
-    data.body,
-  );
+  const registrationForm = data.body.purpose === "event_registration";
+  let form: Awaited<ReturnType<typeof createManagedForm>>;
+  try {
+    form = await createManagedForm(
+      requestDb(c),
+      admin.id,
+      { type: "event", ref: event.id, eventSlug: event.slug },
+      data.body,
+      registrationForm
+        ? {
+            authorizationGuards: [
+              prepareAuthorizationGuard(requestDb(c), {
+                sql: "SELECT 1 FROM events WHERE id = ? AND COALESCE(source_mode, '') <> 'portal'",
+                bindings: [event.id],
+              }),
+            ],
+          }
+        : undefined,
+    );
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        403,
+        "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP",
+        "Attendee forms for portal-owned events must be created and managed from the owning group.",
+      );
+    }
+    throw error;
+  }
   return json(
     adminFormCreateResponseSchema.parse({
       success: true,

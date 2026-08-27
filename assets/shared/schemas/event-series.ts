@@ -34,6 +34,7 @@ export const EVENT_PROFILE_LABELS: Record<EventProfileKey, string> = {
 };
 export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
+export type EventSourceMode = z.infer<typeof eventSourceModeSchema>;
 
 export const EVENT_REGISTRATION_POLICIES = [
   "no_registration",
@@ -44,6 +45,13 @@ export const EVENT_REGISTRATION_POLICIES = [
 ] as const;
 export const eventRegistrationPolicySchema = z.enum(EVENT_REGISTRATION_POLICIES);
 export type EventRegistrationPolicy = z.infer<typeof eventRegistrationPolicySchema>;
+export const EVENT_REGISTRATION_POLICY_LABELS = {
+  no_registration: "No registration",
+  optional: "Optional registration",
+  invitation_only: "Invitation only",
+  required: "Registration required",
+  public: "Public registration",
+} as const satisfies Record<EventRegistrationPolicy, string>;
 export const EVENT_GUEST_POLICIES = ["none", "occurrence_invitation", "public_registration"] as const;
 export const eventGuestPolicySchema = z.enum(EVENT_GUEST_POLICIES);
 export type EventGuestPolicy = z.infer<typeof eventGuestPolicySchema>;

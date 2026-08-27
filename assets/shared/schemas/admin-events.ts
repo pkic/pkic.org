@@ -19,6 +19,8 @@ import {
 } from "./pagination";
 import { attendanceTypeSchema, dayDateSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
+import { eventSourceModeSchema } from "./event-series";
+import { groupIdSchema } from "./groups";
 import { proposalRecommendationSchema } from "./proposal-reviews";
 import { proposalAdminStatusFilterSchema } from "./proposal-status";
 import {
@@ -107,6 +109,9 @@ export const adminEventDetailSchema = z.object({
   hero_image_url: z.string().nullable(),
   location: z.string().nullable(),
   session_types: z.array(z.object({ label: z.string(), requiresPresentation: z.boolean() })).nullable(),
+  /** Source and ownership determine which portal or admin surface owns authoring. */
+  ownerGroupId: groupIdSchema.nullable().default(null),
+  sourceMode: eventSourceModeSchema.nullable().default(null),
   settings: z.record(z.string(), z.unknown()),
 });
 export type AdminEventDetail = z.infer<typeof adminEventDetailSchema>;

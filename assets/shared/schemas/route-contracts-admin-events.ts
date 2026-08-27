@@ -73,6 +73,7 @@ export const adminEventSettingsPatchRouteSchema = {
     },
     "400": { description: "Invalid event settings payload." },
     "401": { description: "Admin authorization required." },
+    "403": { description: "Portal-owned registration settings must be managed from the owning group." },
     "404": { description: "Event not found." },
   },
 };

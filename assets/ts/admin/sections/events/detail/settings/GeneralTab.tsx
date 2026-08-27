@@ -27,6 +27,7 @@ function formLinkValue(settings: Record<string, unknown>, purpose: FormLinkPurpo
 }
 
 export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (event: EventDetail) => void }) {
+  const portalOwnsRegistration = event.sourceMode === "portal";
   const [name, setName] = useState(event.name ?? "");
   const [timezone, setTimezone] = useState(event.timezone ?? "UTC");
   const [startsAt, setStartsAt] = useState(toLocalDateTime(event.starts_at));
@@ -66,7 +67,7 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
         const body: Record<string, unknown> = {
           name: name.trim(),
           timezone: timezone.trim() || "UTC",
-          registrationMode: mode,
+          ...(portalOwnsRegistration ? {} : { registrationMode: mode }),
           startsAt: toIso(startsAt),
           endsAt: toIso(endsAt),
           venue: venue.trim() || null,
@@ -74,7 +75,9 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
           heroImageUrl: heroImageUrl.trim() || null,
           location: location.trim() || null,
           sessionTypes: sessionTypes.filter((sessionType) => sessionType.label.trim()),
-          registrationFormKey: registrationFormMode === "none" ? null : registrationFormKey.trim() || null,
+          ...(portalOwnsRegistration
+            ? {}
+            : { registrationFormKey: registrationFormMode === "none" ? null : registrationFormKey.trim() || null }),
           proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null,
           inviteLimitAttendee: inviteLimit,
         };
@@ -105,6 +108,7 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
       onUpdated,
       proposalFormKey,
       proposalFormMode,
+      portalOwnsRegistration,
       registrationFormKey,
       registrationFormMode,
       retentionDays,
@@ -262,19 +266,21 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
         </button>
       </div>
       <div class="row g-2 mb-3">
-        <EventFormLinkSelect
-          eventSlug={event.slug}
-          purpose="event_registration"
-          label="Registration form"
-          value={registrationFormKey}
-          disabled={saving}
-          autoSelectFirst={registrationFormMode === "unset"}
-          help="Choose the form this event should use for registrations."
-          onChange={(value) => {
-            setRegistrationFormKey(value);
-            setRegistrationFormMode(value ? "explicit" : "none");
-          }}
-        />
+        {!portalOwnsRegistration && (
+          <EventFormLinkSelect
+            eventSlug={event.slug}
+            purpose="event_registration"
+            label="Registration form"
+            value={registrationFormKey}
+            disabled={saving}
+            autoSelectFirst={registrationFormMode === "unset"}
+            help="Choose the form this event should use for registrations."
+            onChange={(value) => {
+              setRegistrationFormKey(value);
+              setRegistrationFormMode(value ? "explicit" : "none");
+            }}
+          />
+        )}
         <EventFormLinkSelect
           eventSlug={event.slug}
           purpose="proposal_submission"
@@ -290,18 +296,20 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
         />
       </div>
       <div class="row g-2 mb-3">
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Registration Mode</label>
-          <select
-            class="form-select form-select-sm"
-            value={mode}
-            onChange={(event) => setMode((event.target as HTMLSelectElement).value)}
-          >
-            <option value="open">Open</option>
-            <option value="invite_or_open">Invite or Open</option>
-            <option value="invite_only">Invite Only</option>
-          </select>
-        </div>
+        {!portalOwnsRegistration && (
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Registration Mode</label>
+            <select
+              class="form-select form-select-sm"
+              value={mode}
+              onChange={(event) => setMode((event.target as HTMLSelectElement).value)}
+            >
+              <option value="open">Open</option>
+              <option value="invite_or_open">Invite or Open</option>
+              <option value="invite_only">Invite Only</option>
+            </select>
+          </div>
+        )}
         <div class="col-md-3">
           <label class="form-label small fw-semibold">Invite Limit / Attendee</label>
           <input

@@ -33,7 +33,7 @@ export {
 
 export { listAdminForms, type AdminFormSummaryRow } from "./list";
 
-export { createManagedForm, removeManagedForm, updateManagedForm } from "./management";
+export { createManagedForm, prepareManagedForm, removeManagedForm, updateManagedForm } from "./management";
 export type { ManagedFormRemovalAction } from "./management";
 
 export {

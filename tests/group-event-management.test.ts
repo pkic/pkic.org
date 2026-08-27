@@ -10,6 +10,7 @@ import {
   replaceGroupManagedEventDays,
   replaceGroupManagedEventTerms,
 } from "../functions/_lib/services/events/group-configuration";
+import { replaceGroupEventRegistrationSettings } from "../functions/_lib/services/events/registration-settings";
 import { getGroupEvent, listGroupEvents } from "../functions/_lib/services/events/group-read-model";
 import { CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL } from "../functions/_lib/services/event-days";
 import { createGroup } from "../functions/_lib/services/groups";
@@ -697,6 +698,224 @@ describe("group event management routes", () => {
       await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(created.id).first<{ name: string }>(),
     ).toEqual({
       name: "Group workshop",
+    });
+  });
+
+  it("keeps registration disabled without a form, then creates an exact group-owned attendee placement", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+
+    const invalidPolicy = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ expectedUpdatedAt: created.updatedAt, registrationPolicy: "open" }),
+      },
+    );
+    expect(invalidPolicy.status).toBe(400);
+
+    const missingTerms = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ expectedUpdatedAt: created.updatedAt, registrationPolicy: "optional" }),
+      },
+    );
+    expect(missingTerms.status, await missingTerms.clone().text()).toBe(422);
+
+    await env.DB.prepare(
+      `INSERT INTO event_terms
+         (id, event_id, audience_type, term_key, version, required, content_ref, active, display_text, created_at)
+       VALUES (?, ?, 'attendee', 'terms', '1', 1, 'https://example.test/terms', 1, 'I agree', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), created.id)
+      .run();
+
+    const noForm = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ expectedUpdatedAt: created.updatedAt, registrationPolicy: "optional" }),
+      },
+    );
+    expect(noForm.status, await noForm.clone().text()).toBe(200);
+    expect(await noForm.json()).toMatchObject({ registrationPolicy: "optional", form: null });
+    const noFormRevision = (await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+    ).then((response) => response.json())) as { eventUpdatedAt: string };
+
+    const removeRequiredTerms = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/terms`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: noFormRevision.eventUpdatedAt,
+          configuration: { attendee: [], speaker: [], presentation: [] },
+        }),
+      },
+    );
+    expect(removeRequiredTerms.status, await removeRequiredTerms.clone().text()).toBe(422);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM event_terms WHERE event_id = ? AND audience_type = 'attendee' AND active = 1 AND required = 1",
+      )
+        .bind(created.id)
+        .first(),
+    ).toEqual({ count: 1 });
+
+    const form = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings/form`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          key: `event-attendee-${crypto.randomUUID()}`,
+          purpose: "event_registration",
+          title: "Workshop attendee questions",
+          status: "active",
+          fields: [{ key: "topic", label: "Topic", fieldType: "text", required: true, sortOrder: 0 }],
+        }),
+      },
+    );
+    expect(form.status, await form.clone().text()).toBe(201);
+    const formBody = (await form.json()) as {
+      form: { form: { id: string }; placement: { id: string; contextType: string; contextRef: string } };
+      eventUpdatedAt: string;
+    };
+    expect(formBody.form.placement).toMatchObject({ contextType: "event", contextRef: created.id });
+    expect(
+      await env.DB.prepare("SELECT scope_type, scope_ref FROM forms WHERE id = ?").bind(formBody.form.form.id).first(),
+    ).toEqual({ scope_type: "community", scope_ref: fixture.ownerGroupId });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM form_placements WHERE form_id = ?")
+        .bind(formBody.form.form.id)
+        .first(),
+    ).toEqual({ count: 1 });
+    expect(
+      await env.DB.prepare("SELECT context_type, context_ref, audience FROM form_placements WHERE form_id = ?")
+        .bind(formBody.form.form.id)
+        .first(),
+    ).toEqual({ context_type: "event", context_ref: created.id, audience: "attendee" });
+
+    const catalog = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings/forms?q=Workshop&limit=1`,
+    );
+    expect(catalog.status, await catalog.clone().text()).toBe(200);
+    expect(await catalog.json()).toMatchObject({ forms: [{ id: formBody.form.form.id }], page: { total: 1 } });
+
+    const remove = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: formBody.eventUpdatedAt,
+          registrationPolicy: "optional",
+          formId: null,
+        }),
+      },
+    );
+    expect(remove.status, await remove.clone().text()).toBe(200);
+    expect(await remove.json()).toMatchObject({ form: null, registrationPolicy: "optional" });
+    expect(
+      await env.DB.prepare("SELECT active FROM form_placements WHERE id = ?").bind(formBody.form.placement.id).first(),
+    ).toEqual({ active: 0 });
+    expect(noFormRevision.eventUpdatedAt).not.toBe(formBody.eventUpdatedAt);
+  });
+
+  it("requires exact event management and rolls back stale or revoked registration settings", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    await env.DB.prepare(
+      `INSERT INTO event_terms
+         (id, event_id, audience_type, term_key, version, required, active, display_text, created_at)
+       VALUES (?, ?, 'attendee', 'terms', '1', 1, 1, 'I agree', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), created.id)
+      .run();
+
+    const denied = await request(
+      fixture.granteeLeaderToken,
+      `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/registration-settings`,
+    );
+    expect(denied.status).toBe(403);
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "view",
+    });
+    expect(
+      (
+        await request(
+          fixture.granteeLeaderToken,
+          `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/registration-settings`,
+        )
+      ).status,
+    ).toBe(403);
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "register",
+    });
+    expect(
+      (
+        await request(
+          fixture.granteeLeaderToken,
+          `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/registration-settings`,
+        )
+      ).status,
+    ).toBe(403);
+
+    const current = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+    );
+    const currentBody = (await current.json()) as { eventUpdatedAt: string };
+    const first = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ expectedUpdatedAt: currentBody.eventUpdatedAt, registrationPolicy: "required" }),
+      },
+    );
+    expect(first.status, await first.clone().text()).toBe(200);
+    const firstBody = (await first.json()) as { eventUpdatedAt: string };
+    const stale = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ expectedUpdatedAt: currentBody.eventUpdatedAt, registrationPolicy: "public" }),
+      },
+    );
+    expect(stale.status, await stale.clone().text()).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "EVENT_REGISTRATION_SETTINGS_CHANGED" } });
+    expect(await env.DB.prepare("SELECT registration_mode FROM events WHERE id = ?").bind(created.id).first()).toEqual({
+      registration_mode: "required",
+    });
+
+    await expect(
+      replaceGroupEventRegistrationSettings(
+        mutateBeforeNextBatch(env.DB, async () => {
+          await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
+            .bind(fixture.ownerLeader.id)
+            .run();
+        }),
+        fixture.ownerLeader,
+        fixture.ownerGroupId,
+        created.id,
+        firstBody.eventUpdatedAt,
+        "optional",
+        null,
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_REGISTRATION_SETTINGS_CHANGED" });
+    expect(await env.DB.prepare("SELECT registration_mode FROM events WHERE id = ?").bind(created.id).first()).toEqual({
+      registration_mode: "required",
     });
   });
 });

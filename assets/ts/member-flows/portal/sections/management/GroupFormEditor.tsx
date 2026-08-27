@@ -5,7 +5,11 @@ import {
   type GroupFormDefinitionCreateInput,
   type GroupFormDefinitionUpdateInput,
 } from "../../../../../shared/schemas/group-forms";
-import type { FormDefinitionCreateInput, FormDefinitionUpdateInput } from "../../../../../shared/schemas/forms";
+import type {
+  FormDefinitionCreateInput,
+  FormDefinitionUpdateInput,
+  FormPurpose,
+} from "../../../../../shared/schemas/forms";
 import { FormDefinitionEditor, type EditableFormDetail } from "../../../../components/forms/FormDefinitionEditor";
 import { patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
@@ -14,12 +18,14 @@ export function GroupFormEditor({
   groupId,
   placementId,
   detail,
+  purposes = ["survey", "feedback"],
   onSaved,
   onCancel,
 }: {
   groupId: string;
   placementId?: string;
   detail: EditableFormDetail | null;
+  purposes?: readonly FormPurpose[];
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
 }) {
@@ -49,7 +55,7 @@ export function GroupFormEditor({
     <FormDefinitionEditor
       mode={mode}
       detail={detail}
-      purposes={["survey", "feedback"]}
+      purposes={purposes}
       onSave={save}
       onSaved={() => void onSaved()}
       onCancel={onCancel}

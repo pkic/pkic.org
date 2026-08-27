@@ -2,6 +2,7 @@ import type {
   EventDaysReplaceInput,
   EventTermsReplaceInput,
 } from "../../../../assets/shared/schemas/event-configuration";
+import type { EventRegistrationPolicy } from "../../../../assets/shared/schemas/event-series";
 import { first } from "../../db/queries";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
@@ -20,6 +21,7 @@ interface ConfigurableEvent {
   id: string;
   timezone: string;
   updatedAt: string;
+  registrationPolicy: EventRegistrationPolicy;
 }
 
 async function requireConfigurableGroupEvent(
@@ -30,7 +32,8 @@ async function requireConfigurableGroupEvent(
 ): Promise<{ event: ConfigurableEvent; context: EventResourceManagementContext; guardedDb: DatabaseLike }> {
   const event = await first<ConfigurableEvent>(
     db,
-    `SELECT event.id, event.timezone, event.updated_at AS updatedAt
+    `SELECT event.id, event.timezone, event.updated_at AS updatedAt,
+            event.registration_mode AS registrationPolicy
        FROM events event
        LEFT JOIN event_series series ON series.event_id = event.id
       WHERE event.id = ?
@@ -99,6 +102,13 @@ export async function replaceGroupManagedEventTerms(
   input: EventTermsReplaceInput,
 ) {
   const { event, context, guardedDb } = await requireConfigurableGroupEvent(db, actor, groupIdOrSlug, eventId);
+  if (event.registrationPolicy !== "no_registration" && !input.attendee.some((term) => term.required)) {
+    throw new AppError(
+      422,
+      "EVENT_REGISTRATION_TERMS_REQUIRED",
+      "Enabled registration requires at least one required attendee term",
+    );
+  }
   try {
     const { updatedAt } = await replaceConfiguredEventTerms(guardedDb, event.id, input, {
       actorId: actor.id,

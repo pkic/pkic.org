@@ -27,6 +27,8 @@ export async function getAdminEventDetail(db: DatabaseLike, eventSlug: string) {
     hero_image_url: (settings.heroImageUrl as string | null) ?? null,
     location: (settings.location as string | null) ?? null,
     session_types: resolveEventSessionTypes(event.settings_json),
+    ownerGroupId: event.owner_group_id ?? null,
+    sourceMode: event.source_mode ?? null,
     settings,
   };
 }

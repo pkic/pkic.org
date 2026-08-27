@@ -3,6 +3,7 @@ import {
   EVENT_MEMBER_ELIGIBILITIES,
   EVENT_PROFILE_LABELS,
   EVENT_PROFILE_KEYS,
+  EVENT_REGISTRATION_POLICY_LABELS,
   EVENT_REGISTRATION_POLICIES,
   type EventGuestPolicy,
   type EventMemberEligibility,
@@ -22,14 +23,6 @@ export interface MeetingSeriesDraft {
   memberEligibility: EventMemberEligibility;
   guestPolicy: EventGuestPolicy;
 }
-
-const REGISTRATION_LABELS: Record<EventRegistrationPolicy, string> = {
-  no_registration: "No registration",
-  optional: "Optional registration",
-  invitation_only: "Invitation only",
-  required: "Registration required",
-  public: "Public registration",
-};
 
 const ELIGIBILITY_LABELS: Record<EventMemberEligibility, string> = {
   owner_group: "Owning group",
@@ -179,7 +172,7 @@ export function MeetingSeriesFields({
         >
           {EVENT_REGISTRATION_POLICIES.map((policy) => (
             <option key={policy} value={policy}>
-              {REGISTRATION_LABELS[policy]}
+              {EVENT_REGISTRATION_POLICY_LABELS[policy]}
             </option>
           ))}
         </select>

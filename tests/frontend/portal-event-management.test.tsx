@@ -167,6 +167,15 @@ describe("portal event management", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ pathname: url.pathname, method, body });
+        if (url.pathname.endsWith("/registration-settings/forms")) {
+          return json({
+            forms: [],
+            page: { limit: 25, offset: 0, total: 0, count: 0, hasMore: false },
+          });
+        }
+        if (url.pathname.endsWith("/registration-settings")) {
+          return json({ eventUpdatedAt: revision, registrationPolicy: "no_registration", form: null });
+        }
         if (url.pathname.endsWith("/terms")) {
           if (method === "PUT") {
             revision = "2026-08-01T00:00:01.000Z";
@@ -251,5 +260,139 @@ describe("portal event management", () => {
         configuration: { days: [] },
       },
     });
+  });
+
+  it("enables registration without custom questions and creates an exact attendee form through shared contracts", async () => {
+    const requests: Array<{ pathname: string; method: string; body?: unknown }> = [];
+    let revision = responseEvent.updatedAt;
+    let form: {
+      placement: {
+        id: string;
+        formId: string;
+        ownerGroupId: string;
+        contextType: "event";
+        contextRef: string;
+        audience: string;
+        active: boolean;
+        opensAt: null;
+        closesAt: null;
+        createdAt: string;
+        updatedAt: string;
+      };
+      form: { id: string; key: string; title: string; description: null };
+    } | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ pathname: url.pathname, method, body });
+        if (url.pathname.endsWith("/registration-settings/forms")) {
+          return json({
+            forms: form ? [form.form] : [],
+            page: { limit: 25, offset: 0, total: form ? 1 : 0, count: form ? 1 : 0, hasMore: false },
+          });
+        }
+        if (url.pathname.endsWith("/registration-settings/form") && method === "POST") {
+          revision = "2026-08-01T00:00:02.000Z";
+          form = {
+            placement: {
+              id: "30000000-0000-4000-8000-000000000001",
+              formId: "30000000-0000-4000-8000-000000000002",
+              ownerGroupId: GROUP_ID,
+              contextType: "event",
+              contextRef: responseEvent.id,
+              audience: "attendee",
+              active: true,
+              opensAt: null,
+              closesAt: null,
+              createdAt: revision,
+              updatedAt: revision,
+            },
+            form: {
+              id: "30000000-0000-4000-8000-000000000002",
+              key: "workshop-registration",
+              title: "Workshop registration",
+              description: null,
+            },
+          };
+          return json({ eventUpdatedAt: revision, registrationPolicy: "optional", form });
+        }
+        if (url.pathname.endsWith("/registration-settings")) {
+          if (method === "PUT") {
+            revision = "2026-08-01T00:00:01.000Z";
+            return json({ eventUpdatedAt: revision, registrationPolicy: "optional", form: null });
+          }
+          return json({ eventUpdatedAt: revision, registrationPolicy: "no_registration", form: null });
+        }
+        if (url.pathname.endsWith("/terms")) {
+          return json({ eventUpdatedAt: revision, terms: { attendee: [], speaker: [], presentation: [] } });
+        }
+        if (url.pathname.endsWith("/days")) return json({ eventUpdatedAt: revision, days: [] });
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    const onUpdated = vi.fn();
+    const container = mount(<GroupEventDetail event={responseEvent} groupId={GROUP_ID} onUpdated={onUpdated} />);
+    await settle();
+
+    const policy = container.querySelector<HTMLSelectElement>(`#event-registration-policy-${responseEvent.id}`)!;
+    policy.value = "optional";
+    policy.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent === "Save registration settings")!
+        .click();
+    });
+    await settle();
+    expect(
+      requests.find(({ pathname, method }) => pathname.endsWith("/registration-settings") && method === "PUT"),
+    ).toMatchObject({
+      body: {
+        expectedUpdatedAt: responseEvent.updatedAt,
+        registrationPolicy: "optional",
+        formId: null,
+      },
+    });
+
+    Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent === "Create registration form")!
+      .click();
+    await settle();
+    const editor = Array.from(container.querySelectorAll<HTMLElement>(".card")).find(
+      (card) => card.querySelector<HTMLElement>(":scope > .card-header")?.textContent === "New registration form",
+    )!;
+    const definitionInputs = editor.querySelectorAll<HTMLInputElement>(".row.g-2.mb-3 input");
+    await act(async () => {
+      definitionInputs[0].value = "workshop-registration";
+      definitionInputs[0].dispatchEvent(new InputEvent("input", { bubbles: true }));
+      definitionInputs[1].value = "Workshop registration";
+      definitionInputs[1].dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+    await settle();
+    await act(async () => {
+      editor.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(
+      requests.find(({ pathname, method }) => pathname.endsWith("/registration-settings/form") && method === "POST"),
+      container.textContent ?? "",
+    ).toMatchObject({
+      body: {
+        key: "workshop-registration",
+        purpose: "event_registration",
+        title: "Workshop registration",
+        status: "active",
+        fields: [],
+      },
+    });
+    expect(container.textContent).toContain("Workshop registration");
+    expect(onUpdated).toHaveBeenCalledTimes(2);
   });
 });
