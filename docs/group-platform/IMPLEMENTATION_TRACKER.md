@@ -234,18 +234,25 @@ Status: In progress
 - [x] Support external guests scoped to one occurrence by default.
 - [x] Support explicit series-wide guest exceptions.
 - [x] Keep public workshop registration in the shared event-registration flow.
-- [ ] Provide public HTML registration and management shells for portal-created
+- [x] Provide public HTML registration and management shells for portal-created
       events that opt into public, required, or optional registration.
-      Current evidence: portal creation stores a `source_mode = 'portal'` event
-      with no `base_path`; no Hugo content is generated and no Worker HTML route
-      serves its registration, confirmation, or management pages. The canonical
-      public APIs exist and the event-presentation service computes fallback
-      paths, but those paths do not prove that an HTML shell exists. Existing
-      Hugo-authored event pages remain unaffected. Close this only after choosing
-      a dynamic shell, an explicit content-publication workflow, or another
-      single canonical presentation path and browser-testing the actual public
-      URLs. Apply the same decision to public proposal and speaker pages before
-      enabling those workflows for portal-created events.
+      Evidence: portal creation now persists an immutable platform-derived
+      `base_path`; later schedule edits do not invalidate URLs already delivered
+      by email. One shared path contract drives registration, confirmation,
+      self-management, proposal, speaker, presentation, and invitation-decline
+      URLs in both the Worker and browser boot code. Static Hugo-authored pages
+      remain first in precedence. When no static page exists, the Worker serves
+      the same noindex, data-free Hugo-built shell for every syntactically valid
+      flow path, while the canonical API remains responsible for event,
+      capability, and eligibility validation. This avoids both a D1 lookup and
+      an event-existence oracle in the presentation route. Requests sent to the
+      static-assets binding are rebuilt as same-origin path-only requests, so
+      capability query strings, cookies, authorization, and route hints cannot
+      leak into the asset boundary. Focused service and browser tests cover all
+      eight shells, static-page precedence, unknown and hostile paths, HEAD and
+      error responses, stable portal URLs, source-mode isolation from legacy
+      route overrides, portal event creation/configuration, and the real
+      registration, confirmation, and self-management journey.
 - [x] Add rotatable, expiring guest invitation capabilities that authorize only
       browser-bound mailbox verification, never meeting entry by themselves.
 - [x] Make manager-created attendee and speaker invitation validity
@@ -1237,7 +1244,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,161 backend tests pass with one skipped, 276 frontend tests
+      checkpoint: 2,169 backend tests pass with one skipped, 277 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -1266,7 +1273,12 @@ Status: In progress
       The current seven-test browser checkpoint also covers membership-setting
       and category updates, canonical group vote creation, member proposal
       submission and moderation, waitlist transitions, and both portal and
-      compatibility proposal-detail paths.
+      compatibility proposal-detail paths. The public-shell round adds focused
+      real Worker/D1 journeys that create and configure a standalone portal
+      event, load all eight public flow shells, render the registration form,
+      and follow an actual waitlist registration through emailed confirmation
+      and self-management URLs. These are focused checks; the complete
+      Playwright gate remains pending below.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,

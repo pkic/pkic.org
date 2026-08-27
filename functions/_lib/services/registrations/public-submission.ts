@@ -13,7 +13,7 @@ import { buildRegistrationIcs } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
-import { buildEventEmailVariables, getEventBySlug, updateEventBasePath } from "../events";
+import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
 import { registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
@@ -78,7 +78,7 @@ export async function submitEventRegistration(
   metadata: EventRegistrationSubmissionMetadata,
 ): Promise<PublicRegistrationSubmissionResult> {
   const event = await getEventBySlug(db, metadata.eventSlug);
-  await updateEventBasePath(db, event.id, metadata.eventBasePath);
+  await recordHugoEventBasePath(db, event, metadata.eventBasePath);
 
   let invite: InviteRecord | null = null;
   if (body.inviteToken) {

@@ -21,10 +21,13 @@ export const eventProfileCatalogResponseSchema = z.object({
 
 /**
  * Settings that are stored in dedicated event columns or in the canonical
- * event settings JSON. Custom settings may not shadow them.
+ * event settings JSON. Custom settings may not shadow them. Frontend routes
+ * remain publication metadata for Hugo-authored events and are never a
+ * generic portal-event setting.
  */
 export const EVENT_MANAGED_SETTING_KEYS = [
   "forms",
+  "frontend",
   "heroImageUrl",
   "location",
   "proposal",

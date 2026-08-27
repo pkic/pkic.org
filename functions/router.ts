@@ -20,6 +20,7 @@ import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
 import members_Router from "./members/router";
+import events_Router from "./events/router";
 import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
@@ -82,6 +83,7 @@ openapi.route("/api", api_Router);
 openapi.route("/donate", donate_Router);
 openapi.route("/r", r_Router);
 openapi.route("/members", members_Router);
+app.route("/events", events_Router);
 
 // Build the MCP fetch handler after OpenAPI routes are registered.
 const fetchWithMcp = createMcpWorkerFetch({ app, openApiSchema: openapi.schema });

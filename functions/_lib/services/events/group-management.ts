@@ -6,7 +6,7 @@ import type {
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLog } from "../audit";
 import { getGroup, prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups";
-import { getEventById, prepareEventCreateStatement } from "../events";
+import { deriveEventBasePath, getEventById, prepareEventCreateStatement } from "../events";
 import {
   listEventAttendanceRegistrations,
   type EventAttendanceRegistrationsListResult,
@@ -48,6 +48,7 @@ export async function createGroupManagedEvent(
     ownerGroupId: group.id,
     profileKey: input.profileKey,
     sourceMode: "portal",
+    basePath: deriveEventBasePath({ slug: input.slug, base_path: null, starts_at: input.startsAt ?? null }),
     links: input.links,
   });
   try {

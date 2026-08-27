@@ -174,4 +174,28 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       form: { title: "Workshop registration questions" },
     },
   });
+
+  const publicShells = [
+    ["register/", "data-event-registration"],
+    ["register/confirm/", "data-event-registration-confirm"],
+    ["register/manage/", "data-event-registration-manage"],
+    ["propose/", "data-event-proposal"],
+    ["propose/manage/", "data-event-proposal-manage"],
+    ["propose/speaker/", "data-event-speaker-manage"],
+    ["propose/presentation/", "data-event-speaker-presentation"],
+    ["invite/decline/", "data-invite-decline"],
+  ] as const;
+  for (const [suffix, marker] of publicShells) {
+    const response = await page.request.get(`/events/2027/${eventSlug}/${suffix}`);
+    expect(response.status(), suffix).toBe(200);
+    expect(response.headers()["cache-control"], suffix).toContain("no-store");
+    expect(await response.text(), suffix).toContain(marker);
+  }
+
+  const unknownPage = await page.request.get(`/events/2027/${eventSlug}/unknown/`);
+  expect(unknownPage.status()).toBe(404);
+
+  await page.goto(`/events/2027/${eventSlug}/register/`);
+  await expect(page.locator("[data-event-registration]")).toBeVisible();
+  await expect(page.getByLabel("First name")).toBeVisible();
 });

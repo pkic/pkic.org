@@ -62,7 +62,7 @@ function showConfirmedPanel(
   email: string,
   organizationName: string,
   shareUrl: string | null | undefined,
-  manageUrl: string | null | undefined,
+  manageUrl: string,
   manageToken: string | null | undefined,
   eventSlug: string,
 ): void {
@@ -102,12 +102,6 @@ function showConfirmedPanel(
     bodyContent = <p class="event-flow-success-body">{interpolate(successBody, firstName, eventName)}</p>;
   }
 
-  const effectiveManageUrl =
-    manageUrl ??
-    (manageToken
-      ? `/events/${encodeURIComponent(eventSlug)}/register/manage/?event=${encodeURIComponent(eventSlug)}&token=${encodeURIComponent(manageToken)}`
-      : null);
-
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
   const donateRef = createRef<HTMLDivElement>();
@@ -115,35 +109,33 @@ function showConfirmedPanel(
   render(
     <SuccessPanel icon={icon} title={title}>
       {bodyContent}
-      {effectiveManageUrl && (
-        <div class="alert alert-light mt-3">
-          <p class="mb-2">
-            <strong>Next steps</strong>
-          </p>
-          {hasPartialDayWaitlist ? (
-            <>
-              <p class="small mb-2">
-                Review your confirmed and pending days, then decide whether to keep this registration, change attendance
-                for a day, or cancel entirely.
-              </p>
-              <div class="d-flex gap-2 flex-wrap">
-                <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>
-                  Review or change registration
-                </a>
-              </div>
-            </>
-          ) : (
+      <div class="alert alert-light mt-3">
+        <p class="mb-2">
+          <strong>Next steps</strong>
+        </p>
+        {hasPartialDayWaitlist ? (
+          <>
+            <p class="small mb-2">
+              Review your confirmed and pending days, then decide whether to keep this registration, change attendance
+              for a day, or cancel entirely.
+            </p>
             <div class="d-flex gap-2 flex-wrap">
-              <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>
-                Manage registration
-              </a>
-              <a class="btn btn-sm btn-outline-secondary" href={`${effectiveManageUrl}#manage-headshot-file`}>
-                Upload headshot
+              <a class="btn btn-sm btn-outline-primary" href={manageUrl}>
+                Review or change registration
               </a>
             </div>
-          )}
-        </div>
-      )}
+          </>
+        ) : (
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-sm btn-outline-primary" href={manageUrl}>
+              Manage registration
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" href={`${manageUrl}#manage-headshot-file`}>
+              Upload headshot
+            </a>
+          </div>
+        )}
+      </div>
       {shareUrl && <div ref={shareRef} />}
       <div ref={donateRef} />
     </SuccessPanel>,

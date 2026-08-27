@@ -1,4 +1,5 @@
 import { parseQueryContext } from "../shared/query-context";
+import { parseEventFlowPath } from "../../shared/event-flow-paths";
 
 // Re-export setStatus from form-helpers so existing `import { setStatus } from "./boot"`
 // statements continue to work.
@@ -7,9 +8,9 @@ export { setStatus } from "../shared/form/helpers";
 export interface FlowBoot {
   root: HTMLElement;
   eventSlug: string;
-  /** Relative URL of the event page as set by Hugo (e.g. "/events/2026/my-event/").
-   *  Sent to the API as `X-Event-Base-Path` so the backend can store the
-   *  canonical base path without hardcoding any directory structure. */
+  /** Canonical relative event root derived from authored markup or the shared
+   *  runtime path grammar. Hugo pages may send it as `X-Event-Base-Path` for
+   *  legacy publication discovery; portal routes are server-owned. */
   eventPagePath: string | null;
   apiBase: string;
   query: ReturnType<typeof parseQueryContext>;
@@ -24,7 +25,8 @@ export function bootstrap(selector: string): FlowBoot | null {
   }
 
   const query = parseQueryContext(window.location.search);
-  const eventSlug = root.dataset.eventSlug ?? query.eventSlug;
+  const pathContext = parseEventFlowPath(window.location.pathname);
+  const eventSlug = root.dataset.eventSlug?.trim() || pathContext?.eventSlug || query.eventSlug;
   if (!eventSlug) {
     root.textContent = "Missing event configuration.";
     return null;
@@ -37,8 +39,8 @@ export function bootstrap(selector: string): FlowBoot | null {
     return null;
   }
 
-  const rawPagePath = root.dataset.eventPagePath?.trim() ?? null;
-  // Accept only same-origin relative paths (must start with "/") to prevent fraud.
+  const rawPagePath = root.dataset.eventPagePath?.trim() || pathContext?.eventBasePath || null;
+  // Accept only a same-origin relative path.
   const eventPagePath = rawPagePath && rawPagePath.startsWith("/") ? rawPagePath : null;
 
   return {

@@ -59,6 +59,8 @@ export interface EventUpsertPayload {
   ownerGroupId?: string;
   profileKey?: string;
   sourceMode?: "hugo" | "portal" | "integration";
+  /** Stable platform-owned route root for portal-created events. */
+  basePath?: string | null;
   links?: readonly string[];
 }
 
@@ -89,7 +91,7 @@ export function prepareEventCreateStatement(
           id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
           registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at,
           owner_group_id, profile_key, source_mode, links_json
-        ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         eventId,
@@ -98,6 +100,7 @@ export function prepareEventCreateStatement(
         payload.timezone,
         payload.startsAt ?? null,
         payload.endsAt ?? null,
+        payload.basePath ?? null,
         payload.registrationMode ?? "invite_or_open",
         payload.inviteLimitAttendee ?? 50,
         payload.inviteLimitSpeakerNomination ?? 10,
@@ -184,23 +187,30 @@ export async function createAdminEvent(
 const BASE_PATH_RE = /^\/[a-zA-Z0-9/_\-.]+\/$/;
 
 /**
- * Records the canonical frontend base path for an event, sent by Hugo via
- * the X-Event-Base-Path request header on the first registration or proposal
- * submission.
+ * Records the compatibility frontend base path for a Hugo-authored event,
+ * sent by its published page on the first registration or proposal submission.
  *
- * Only updates if the provided path is valid (relative, same-origin) and the
- * event does not already have a base_path recorded, so it cannot be overwritten
- * by a manipulated browser request after the fact.
+ * Portal-owned paths are platform-derived and must never trust an anonymous
+ * browser header. The guarded update also preserves the first valid Hugo path.
  */
-export async function updateEventBasePath(
+export async function recordHugoEventBasePath(
   db: DatabaseLike,
-  eventId: string,
+  event: Pick<EventRecord, "id" | "source_mode">,
   rawPath: string | null | undefined,
 ): Promise<void> {
+  if (event.source_mode === "portal") return;
   if (!rawPath) return;
   const path = rawPath.trim();
   if (!BASE_PATH_RE.test(path)) return; // reject malformed or external paths
-  await run(db, "UPDATE events SET base_path = ? WHERE id = ? AND base_path IS NULL", [path, eventId]);
+  await run(
+    db,
+    `UPDATE events
+        SET base_path = ?
+      WHERE id = ?
+        AND base_path IS NULL
+        AND COALESCE(source_mode, '') <> 'portal'`,
+    [path, event.id],
+  );
 }
 
 function buildReplaceEventTermsStatements(

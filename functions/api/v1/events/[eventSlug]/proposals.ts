@@ -1,7 +1,7 @@
 import type { ValidatedData } from "chanfana";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
-import { getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
+import { getEventBySlug, getRequiredTerms, recordHugoEventBasePath } from "../../../../_lib/services/events";
 import { validateCustomAnswersForSubmission } from "../../../../_lib/services/forms";
 import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/invites";
@@ -22,9 +22,9 @@ async function handleProposalCreate(
   const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  // Record the Hugo page URL sent by the browser so base_path is always the
-  // real event page location, not a hardcoded pattern.
-  await updateEventBasePath(c.env.DB, event.id, c.req.raw.headers.get("x-event-base-path"));
+  // Hugo publication pages may record their real path. Portal-owned routes
+  // are platform-derived and the shared service ignores this browser header.
+  await recordHugoEventBasePath(c.env.DB, event, c.req.raw.headers.get("x-event-base-path"));
 
   let acceptedInvite: InviteRecord | null = null;
   if (body.inviteToken) {

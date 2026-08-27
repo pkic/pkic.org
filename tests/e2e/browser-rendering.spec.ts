@@ -530,28 +530,6 @@ async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string;
   return { ...result, groupId };
 }
 
-async function useStaticRegistrationPageForEvent(page: Page, eventSlug: string): Promise<void> {
-  const legacySlug = "pqc-conference-amsterdam-nl";
-  const legacyPrefix = `/events/2026/${legacySlug}/register`;
-  await page.route(
-    (url) => url.pathname === `${legacyPrefix}/` || url.pathname.startsWith(`${legacyPrefix}/`),
-    async (route) => {
-      const response = await route.fetch();
-      const html = (await response.text()).replaceAll(
-        `data-event-slug="${legacySlug}"`,
-        `data-event-slug="${eventSlug}"`,
-      );
-      await route.fulfill({ response, body: html });
-    },
-  );
-}
-
-function useStaticRegistrationShell(url: string, pageName: "confirm" | "manage"): string {
-  const shellUrl = new URL(url);
-  shellUrl.pathname = `/events/2026/pqc-conference-amsterdam-nl/register/${pageName}/`;
-  return shellUrl.toString();
-}
-
 test.describe("browser workflows", () => {
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
     await setupPage(page);
@@ -602,8 +580,7 @@ test.describe("browser workflows", () => {
 
     await signInAsAdmin(page, "browser-waitlist");
     const event = await createPortalWaitlistEvent(page);
-    await useStaticRegistrationPageForEvent(page, event.slug);
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    await page.goto(`/events/2026/${event.slug}/register/`);
     await fillRegistrationStep1(page, {
       firstName: "Capacity",
       lastName: "One",
@@ -615,11 +592,11 @@ test.describe("browser workflows", () => {
 
     const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
     const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
-    await page.goto(useStaticRegistrationShell(firstConfirmationUrl, "confirm"));
+    await page.goto(firstConfirmationUrl);
     await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    await page.goto(`/events/2026/${event.slug}/register/`);
     await fillRegistrationStep1(page, {
       firstName: "Capacity",
       lastName: "Two",
@@ -631,7 +608,7 @@ test.describe("browser workflows", () => {
 
     const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
     const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
-    await page.goto(useStaticRegistrationShell(secondConfirmationUrl, "confirm"));
+    await page.goto(secondConfirmationUrl);
     await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
     await expect(
@@ -643,11 +620,7 @@ test.describe("browser workflows", () => {
 
     const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
     const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
-    const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
-
-    await page.goto(
-      `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=${event.slug}&token=${encodeURIComponent(secondManageToken)}`,
-    );
+    await page.goto(secondManageUrl);
 
     await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
     await expect(page.locator("[data-manage-status-banner]")).toContainText(
