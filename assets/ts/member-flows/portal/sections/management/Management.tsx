@@ -24,6 +24,7 @@ import { GroupForms } from "./GroupForms";
 import { GroupMailingLists } from "./GroupMailingLists";
 import { GroupVotes } from "./GroupVotes";
 import { GroupStatistics } from "./GroupStatistics";
+import { ProposalPrograms } from "./ProposalPrograms";
 import { groupContextNavigation } from "./group-context-navigation";
 
 const OVERVIEW_VIEW = "overview";
@@ -98,6 +99,7 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
       {!groupId && (
         <>
           <p class="text-muted mb-0">Select a group to manage its resources and participation.</p>
+          <ProposalPrograms />
           <GroupCreateForm onCreated={(created) => navigate(`/groups/${encodeURIComponent(created.id)}/settings`)} />
         </>
       )}

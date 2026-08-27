@@ -56,6 +56,10 @@ export const groupLabelSchema = z.object({
 });
 export type GroupLabel = z.infer<typeof groupLabelSchema>;
 
+/** Canonical compact group identity for cross-resource catalogues. */
+export const groupSummarySchema = groupLabelSchema.pick({ id: true, slug: true, name: true });
+export type GroupSummary = z.infer<typeof groupSummarySchema>;
+
 export const groupSchema = z.object({
   ...groupLabelSchema.shape,
   parentGroup: groupLabelSchema.nullable(),

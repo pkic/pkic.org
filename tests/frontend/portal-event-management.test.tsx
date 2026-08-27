@@ -45,6 +45,7 @@ const responseEvent: GroupEvent = {
   links: ["https://example.test/architecture-workshop"],
   nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
   updatedAt: "2026-08-01T00:00:00.000Z",
+  proposalAccess: null,
   capabilities: ["view", "manage"],
 };
 

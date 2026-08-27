@@ -29,6 +29,7 @@ const EVENT: GroupEvent = {
   links: [],
   nextOccurrenceAt: null,
   updatedAt: "2026-08-01T12:00:00.000Z",
+  proposalAccess: null,
   capabilities: ["view", "manage"],
 };
 
@@ -232,6 +233,7 @@ describe("portal event invitations", () => {
       links: [],
       nextOccurrenceAt: null,
       updatedAt: "2026-08-01T12:00:00.000Z",
+      proposalAccess: null,
       capabilities: ["view"],
     };
     vi.stubGlobal(

@@ -578,8 +578,8 @@ compatibility path without fabricated attribution.
 
 ## Mailing lists
 
-The unreleased mailing_lists table uses nullable group_id -> groups.id and
-permits multiple rows per group. A partial unique index permits at most one
+The unreleased mailing_lists table requires group_id -> groups.id and permits
+multiple rows per group. A partial unique index permits at most one
 active, unarchived primary discussion list for a group. Lists are archived
 rather than deleted so provider sync and audit history remain attributable.
 

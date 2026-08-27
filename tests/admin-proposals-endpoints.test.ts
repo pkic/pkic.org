@@ -1039,9 +1039,9 @@ describe("admin proposal endpoints", () => {
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:cancel_accepted"]);
     const adminToken = await createAdminSession(env.DB, adminId, `proposal-cancellation-read-${proposalId}`);
-    await seedProposalSpeaker(proposalId, { status: "confirmed" });
-    await seedProposalSpeaker(proposalId, { status: "invited" });
-    await seedProposalSpeaker(proposalId, { status: "declined" });
+    const confirmedSpeaker = await seedProposalSpeaker(proposalId, { status: "confirmed" });
+    const invitedSpeaker = await seedProposalSpeaker(proposalId, { status: "invited" });
+    const declinedSpeaker = await seedProposalSpeaker(proposalId, { status: "declined" });
     await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
     await env.DB.prepare(
       `INSERT INTO proposal_decision_history (
@@ -1090,6 +1090,31 @@ describe("admin proposal endpoints", () => {
     );
     expect(outbox).toHaveLength(3);
     expect(outbox.every((row) => row.template_key === "proposal_canceled")).toBe(true);
+    const recipientRows = await queryAll<{ recipient_user_id: string; recipient_email: string }>(
+      env.DB,
+      `SELECT recipient_user_id, recipient_email
+         FROM email_outbox
+        WHERE idempotency_key LIKE 'proposal-canceled:%'
+        ORDER BY recipient_user_id`,
+    );
+    expect(recipientRows.map((row) => row.recipient_user_id)).toEqual(
+      [confirmedSpeaker.speakerId, invitedSpeaker.speakerId, declinedSpeaker.speakerId].sort(),
+    );
+    expect(recipientRows.every((row) => row.recipient_email.endsWith("@example.test"))).toBe(true);
+    expect(
+      await queryAll<{ user_id: string; role: string; status: string }>(
+        env.DB,
+        `SELECT user_id, role, status
+           FROM effective_event_participant_roles
+          WHERE event_id = ? AND user_id IN (?, ?, ?) AND role = 'speaker'
+          ORDER BY user_id`,
+        [eventId, confirmedSpeaker.speakerId, invitedSpeaker.speakerId, declinedSpeaker.speakerId],
+      ),
+    ).toEqual(
+      [confirmedSpeaker.speakerId, invitedSpeaker.speakerId, declinedSpeaker.speakerId]
+        .sort()
+        .map((userId) => ({ user_id: userId, role: "speaker", status: "inactive" })),
+    );
     expect(JSON.parse(outbox[0].payload_json).cancellationCommentText).toContain("\\[untrusted link\\]");
 
     const detailResponse = await callAdminProposalDetail(adminToken, proposalId);

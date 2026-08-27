@@ -3,6 +3,7 @@ import type { AuthAdmin, DatabaseLike } from "../types";
 
 export interface ProposalAccess {
   eventPermissions: string[];
+  canRead: boolean;
   canReview: boolean;
   canFinalize: boolean;
   canEditAcceptedAbstract: boolean;
@@ -33,6 +34,7 @@ export async function getProposalAccessForEvent(
 
   return {
     eventPermissions,
+    canRead: hasPermission(actor, "proposals:read", context),
     canReview: hasPermission(actor, "proposals:score", context),
     canFinalize: hasPermission(actor, "proposals:manage", context),
     canEditAcceptedAbstract: hasPermission(actor, "proposals:edit_accepted_abstract", context),

@@ -11,6 +11,7 @@ import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
 import { Management } from "../sections/management/Management";
+import { GroupEventProposals } from "../sections/management/GroupEventProposals";
 import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
 import {
@@ -60,6 +61,16 @@ export function PortalShell() {
     <Router hook={useHashLocation}>
       <PortalNavigationShell session={portalSession.value} displayName={displayName}>
         <Switch>
+          {hasAdminCapacity && (
+            <Route
+              path="/groups/:groupId/events/:eventId/proposals"
+              component={({ params }: { params: { groupId: string; eventId: string } }) => (
+                <SectionWrapper title="Proposal Program">
+                  <GroupEventProposals groupId={params.groupId} eventId={params.eventId} />
+                </SectionWrapper>
+              )}
+            />
+          )}
           {(hasAdminCapacity || hasMemberCapacity) && (
             <Route
               path="/groups/:groupId/:view?"

@@ -1,15 +1,11 @@
-export interface FilterOption<Value extends string = string> {
-  value: Value;
-  label: string;
-}
+import { FilterSelect as SharedFilterSelect, type FilterOption } from "../../components/FilterSelect";
 
+export type { FilterOption };
+
+/** @deprecated Import from the shared components directory. */
 export function FilterSelect<Value extends string>({
-  label,
-  ariaLabel,
-  value,
-  options,
-  onChange,
   className = "form-select form-select-sm adm-filter-select",
+  ...props
 }: {
   label?: string;
   ariaLabel?: string;
@@ -18,27 +14,5 @@ export function FilterSelect<Value extends string>({
   onChange: (value: Value) => void;
   className?: string;
 }) {
-  const select = (
-    <select
-      aria-label={ariaLabel ?? label}
-      class={className}
-      value={value}
-      onChange={(event) => onChange((event.target as HTMLSelectElement).value as Value)}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-
-  return label ? (
-    <div>
-      <label class="form-label small mb-1">{label}</label>
-      {select}
-    </div>
-  ) : (
-    select
-  );
+  return <SharedFilterSelect {...props} className={className} />;
 }

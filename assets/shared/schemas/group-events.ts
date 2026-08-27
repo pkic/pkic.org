@@ -31,6 +31,7 @@ import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendeeRegistrationParticipationSchema, registrationSubmissionResponseSchema } from "./registration";
 import { eventGroupGrantSchemas } from "./resource-grants";
+import { proposalAccessSchema } from "./event-proposals";
 import {
   eventAttendeeInvitesListResponseSchema,
   eventInvitesListQuerySchema,
@@ -75,6 +76,8 @@ export const groupEventSchema = z.object({
   nextOccurrenceAt: z.string().nullable(),
   updatedAt: z.string(),
   capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
+  /** Event-scoped proposal authority; never implies a generic event or group grant. */
+  proposalAccess: proposalAccessSchema.nullable().default(null),
 });
 export type GroupEvent = z.infer<typeof groupEventSchema>;
 

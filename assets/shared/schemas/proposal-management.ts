@@ -202,7 +202,7 @@ export const finalizeProposalResponseSchema = successResponseSchema.extend({
   minReviewsRequired: z.number().int().nonnegative(),
 });
 
-export const adminProposalPatchSchema = z
+export const proposalPatchSchema = z
   .object({
     title: proposalTitleSchema.optional(),
     abstract: proposalAbstractSchema.optional(),
@@ -211,16 +211,23 @@ export const adminProposalPatchSchema = z
     message: "Provide a title or abstract to update",
   });
 
-export const adminProposalEditableSchema = z.object({
+export const proposalEditableSchema = z.object({
   id: databaseIdSchema,
   title: z.string(),
   abstract: z.string(),
   updated_at: z.string(),
 });
 
-export const adminProposalPatchResponseSchema = z.object({
-  proposal: adminProposalEditableSchema,
+export const proposalPatchResponseSchema = z.object({
+  proposal: proposalEditableSchema,
 });
+
+/** @deprecated Use proposalPatchSchema. */
+export const adminProposalPatchSchema = proposalPatchSchema;
+/** @deprecated Use proposalEditableSchema. */
+export const adminProposalEditableSchema = proposalEditableSchema;
+/** @deprecated Use proposalPatchResponseSchema. */
+export const adminProposalPatchResponseSchema = proposalPatchResponseSchema;
 
 export const cancelAcceptedProposalSchema = z.object({
   comment: z.string().trim().min(1).max(5_000),

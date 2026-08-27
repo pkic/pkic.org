@@ -22,6 +22,7 @@ import {
   type ProposalDecisionEventSnapshot,
 } from "./proposal-decisions/snapshot";
 import { isRegistrationTransitionConflict } from "./registrations/transition-guard";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 
 interface AcceptedProposal {
   id: string;
@@ -80,6 +81,7 @@ export async function cancelAcceptedProposal(
   proposalId: string,
   comment: string,
   appBaseUrl: string,
+  authorization?: ProposalWriteAuthorization,
 ): Promise<CanceledAcceptedProposal> {
   const actorUserId = requireAdminDatabaseUserId(actor);
   const normalizedComment = comment.trim();
@@ -240,7 +242,7 @@ export async function cancelAcceptedProposal(
   }
 
   try {
-    await db.batch(statements);
+    await db.batch(withProposalWriteContextGuard(authorization, statements));
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(

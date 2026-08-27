@@ -56,6 +56,21 @@ import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submis
 import { GroupEventsCreate, GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventProfilesList } from "./[groupId]/events/profiles";
 import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
+import { GroupEventProposalsList } from "./[groupId]/events/[eventId]/proposals";
+import {
+  GroupEventProposalDetailGet,
+  GroupEventProposalPatch,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]";
+import {
+  GroupEventProposalReviewsList,
+  GroupEventProposalReviewUpsert,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]/reviews";
+import { GroupEventProposalReviewPatch } from "./[groupId]/events/[eventId]/proposals/[proposalId]/reviews/[reviewId]";
+import {
+  GroupEventProposalCommentsList,
+  GroupEventProposalCommentCreate,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]/comments";
+import { GroupEventProposalCancel } from "./[groupId]/events/[eventId]/proposals/[proposalId]/cancel";
 import {
   GroupEventRegistrationAdmitPost,
   GroupEventRegistrationCreate,
@@ -143,6 +158,15 @@ openapi.post("/:groupId/events", GroupEventsCreate);
 openapi.get("/:groupId/events/profiles", GroupEventProfilesList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
+openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
+openapi.get("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalDetailGet);
+openapi.patch("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalPatch);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/cancel", GroupEventProposalCancel);
+openapi.get("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewsList);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewUpsert);
+openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/reviews/:reviewId", GroupEventProposalReviewPatch);
+openapi.get("/:groupId/events/:eventId/proposals/:proposalId/comments", GroupEventProposalCommentsList);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/comments", GroupEventProposalCommentCreate);
 openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
 openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);
 openapi.patch(

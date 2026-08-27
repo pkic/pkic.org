@@ -7,6 +7,9 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLogWhen } from "../audit";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "../proposal-write-authorization";
+import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import {
   assertReviewWritable,
   auditState,
@@ -27,6 +30,7 @@ export async function upsertProposalReview(
   actor: AuthAdmin,
   proposalId: string,
   payload: ProposalReviewUpsert,
+  authorization?: ProposalWriteAuthorization,
 ): Promise<ProposalReview> {
   const reviewerUserId = requireAdminDatabaseUserId(actor);
   const context = await getReviewContext(db, actor, proposalId);
@@ -50,43 +54,51 @@ export async function upsertProposalReview(
   if (!existing) {
     const reviewId = uuid();
     try {
-      const [inserted, , selected] = await db.batch([
-        db
-          .prepare(
-            `INSERT INTO proposal_reviews (
+      const results = await db.batch(
+        withProposalWriteContextGuard(authorization, [
+          preparePermissionsAuthorizationGuard(db, actor, [
+            { permission: "proposals:score", context: { type: "event", id: context.eventId } },
+          ]),
+          db
+            .prepare(
+              `INSERT INTO proposal_reviews (
                id, proposal_id, reviewer_user_id, review_round, recommendation, score,
                reviewer_comment, applicant_note, created_at, updated_at
              )
              SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
              WHERE EXISTS ${REVIEW_WRITABLE_PROPOSAL_SQL}`,
-          )
-          .bind(
-            reviewId,
-            proposalId,
-            reviewerUserId,
-            context.reviewRound,
-            payload.recommendation,
-            payload.score,
-            payload.reviewerComment ?? null,
-            payload.applicantNote ?? null,
-            now,
-            now,
-            ...reviewWritableProposalBindings(proposalId, context.reviewRound),
-          ),
-        prepareAuditLogWhen(db, {
-          actorType: "admin",
-          actorId: actor.id,
-          action: "proposal_review_upserted",
-          entityType: "proposal_review",
-          entityId: reviewId,
-          scope: { type: "proposal", id: proposalId },
-          details: changes,
-          createdAt: now,
-          conditionSql: "SELECT 1 WHERE changes() = 1",
-          conditionBindings: [],
-        }),
-        prepareReviewById(db, reviewId),
-      ]);
+            )
+            .bind(
+              reviewId,
+              proposalId,
+              reviewerUserId,
+              context.reviewRound,
+              payload.recommendation,
+              payload.score,
+              payload.reviewerComment ?? null,
+              payload.applicantNote ?? null,
+              now,
+              now,
+              ...reviewWritableProposalBindings(proposalId, context.reviewRound),
+            ),
+          prepareAuditLogWhen(db, {
+            actorType: "admin",
+            actorId: actor.id,
+            action: "proposal_review_upserted",
+            entityType: "proposal_review",
+            entityId: reviewId,
+            scope: { type: "proposal", id: proposalId },
+            details: changes,
+            createdAt: now,
+            conditionSql: "SELECT 1 WHERE changes() = 1",
+            conditionBindings: [],
+          }),
+          prepareReviewById(db, reviewId),
+        ]),
+      );
+      const offset = authorization?.contextGuard ? 1 : 0;
+      const inserted = results[offset + 1];
+      const selected = results[offset + 3];
       if ((inserted.meta?.changes ?? 0) !== 1) {
         assertReviewWritable(await getReviewContext(db, actor, proposalId));
         throw new AppError(409, "PROPOSAL_REVIEW_CONFLICT", "Proposal review changed while it was being saved");
@@ -95,10 +107,17 @@ export async function upsertProposalReview(
       if (!review) throw new AppError(500, "PROPOSAL_REVIEW_CREATE_FAILED", "Unable to load the created review");
       return review;
     } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(
+          409,
+          "PROPOSAL_REVIEW_AUTHORIZATION_CHANGED",
+          "Review access changed while the review was being saved",
+        );
+      }
       if (!isReviewOwnerConflict(error)) throw error;
       throw new AppError(409, "PROPOSAL_REVIEW_CONFLICT", "A review was created concurrently; reload and retry");
     }
   }
 
-  return saveExistingProposalReview(db, actor, proposalId, context, existing, nextState, changes);
+  return saveExistingProposalReview(db, actor, proposalId, context, existing, nextState, changes, authorization);
 }

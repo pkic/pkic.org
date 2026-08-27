@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   eventIdSchema,
   eventSlugParamsSchema,
@@ -10,19 +9,13 @@ import {
   trimmedString,
   versionPattern,
 } from "./api-common";
-import {
-  listQuerySchema,
-  paginatedResponseSchema,
-  searchableListQuerySchema,
-  sortColumnSchema,
-  sortColumnSchemaWithDefault,
-} from "./pagination";
+import { z } from "zod";
+import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { attendanceTypeSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { eventSourceModeSchema } from "./event-series";
 import { groupIdSchema } from "./groups";
-import { proposalRecommendationSchema } from "./proposal-reviews";
-import { proposalAdminStatusFilterSchema } from "./proposal-status";
+import { EVENT_PROPOSALS_SORT_COLUMNS, eventProposalsListQuerySchema } from "./event-proposals";
 import {
   attendeeInviteLimitSchema,
   eventCreateSchema,
@@ -57,25 +50,12 @@ import {
 } from "./event-registrations";
 import { eventRegistrationAdmitSchema } from "./event-registration-detail";
 
-export const EVENT_PROPOSALS_SORT_COLUMNS = [
-  "submittedAt",
-  "score",
-  "reviews",
-  "title",
-  "proposer",
-  "type",
-  "status",
-  "decision",
-  "recommendations",
-] as const;
-
-export const adminEventProposalsQuerySchema = listQuerySchema(EVENT_PROPOSALS_SORT_COLUMNS).extend({
-  sort: sortColumnSchemaWithDefault(EVENT_PROPOSALS_SORT_COLUMNS, "-submittedAt"),
-  status: proposalAdminStatusFilterSchema.optional(),
-  recommendation: proposalRecommendationSchema.optional(),
+/** Legacy admin-only extension for auditing soft-deleted proposal records. */
+export const adminEventProposalsQuerySchema = eventProposalsListQuerySchema.extend({
   deleted: z.literal("1").optional(),
 });
 export type AdminEventProposalsQuery = z.infer<typeof adminEventProposalsQuerySchema>;
+export { EVENT_PROPOSALS_SORT_COLUMNS };
 
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
 export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);

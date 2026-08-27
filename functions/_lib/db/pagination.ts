@@ -16,6 +16,8 @@ interface OffsetPageQueryBase {
 }
 
 export interface OffsetPageSource {
+  /** Optional CTE prefix shared by the page and count statements. */
+  withSql?: string;
   /** Projection used by the page statement. */
   selectSql: string;
   /**
@@ -74,11 +76,12 @@ export function buildOffsetPageSql(query: OffsetPageQuery): OffsetPageSql {
   if (query.source && query.bindings) {
     throw new Error("Offset page query bindings belong in source when source is used");
   }
+  const sourceWithSql = query.source?.withSql ? `${withoutTrailingSemicolon(query.source.withSql)}\n` : "";
   const baseSql = query.source
-    ? `${withoutTrailingSemicolon(query.source.selectSql)}\n${withoutTrailingSemicolon(query.source.fromSql)}`
+    ? `${sourceWithSql}${withoutTrailingSemicolon(query.source.selectSql)}\n${withoutTrailingSemicolon(query.source.fromSql)}`
     : withoutTrailingSemicolon(query.sql as string);
   const countSql = query.source
-    ? `${query.source.countSelectSql ?? "SELECT COUNT(*) AS total"}\n${withoutTrailingSemicolon(
+    ? `${sourceWithSql}${query.source.countSelectSql ?? "SELECT COUNT(*) AS total"}\n${withoutTrailingSemicolon(
         query.source.countFromSql ?? query.source.fromSql,
       )}`
     : `SELECT COUNT(*) AS total FROM (${baseSql}) AS query_page_rows`;

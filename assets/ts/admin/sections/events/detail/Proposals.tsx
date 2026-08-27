@@ -1,329 +1,42 @@
-import { useRef, useState, useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
-import { Badge } from "../../../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
-import { FilterSelect } from "../../../components/FilterSelect";
 import { Tabs } from "../../../../components/Tabs";
-import { fmt } from "../../../ui";
-import type { EventDetail, ProposalSummary } from "../../../types";
+import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
+import type { EventDetail } from "../../../types";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 import { Invites } from "./Invites";
-import {
-  adminEventProposalsResponseSchema,
-  type ProposalStats,
-} from "../../../../../shared/schemas/admin-event-proposals";
-import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../../../shared/schemas/proposal-status";
-import { PROPOSAL_RECOMMENDATIONS, type ProposalRecommendation } from "../../../../../shared/schemas/proposal-reviews";
-
-// ─── Proposals list ───────────────────────────────────────────────────────────
-
-type RecommendationFilter = "" | ProposalRecommendation;
-
-function formatAverageScore(score: number | null): string {
-  if (score == null) return "—";
-  return score.toFixed(1).replace(/\.0$/, "");
-}
-
-function recommendationSummary(p: ProposalSummary) {
-  const entries = [
-    ["accept", "Accept", Number(p.recommendation_accept_count ?? 0)],
-    ["needs-work", "Needs work", Number(p.recommendation_needs_work_count ?? 0)],
-    ["reject", "Reject", Number(p.recommendation_reject_count ?? 0)],
-  ] as const;
-  const visible = entries.filter(([, , count]) => count > 0);
-  if (visible.length === 0) return <span class="text-muted small">—</span>;
-
-  return (
-    <div class="d-flex gap-1 flex-wrap">
-      {visible.map(([status, label, count]) => (
-        <Badge key={status} status={status} label={`${label} ${count}`} />
-      ))}
-    </div>
-  );
-}
-
-const FILTER_STORAGE_KEY = (slug: string) => `adm_proposal_filters_${slug}`;
-
-const VALID_STATUSES = new Set<string>(["", ...PROPOSAL_ADMIN_STATUS_FILTERS]);
-const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", ...PROPOSAL_RECOMMENDATIONS]);
-const PROPOSAL_FILTER_LABELS: Record<string, string> = {
-  active: "Active (excludes withdrawn/rejected/spam)",
-  under_review: "Under Review",
-  "needs-work": "Needs Work",
-};
-
-function proposalFilterLabel(value: string): string {
-  return PROPOSAL_FILTER_LABELS[value] ?? value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
-}
-
-function loadSavedFilters(slug: string): { status: string; recommendation: RecommendationFilter } {
-  try {
-    const raw = sessionStorage.getItem(FILTER_STORAGE_KEY(slug));
-    if (!raw) return { status: "active", recommendation: "" };
-    const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed !== "object" || parsed === null) return { status: "", recommendation: "" };
-    const { status, recommendation } = parsed as Record<string, unknown>;
-    return {
-      status: typeof status === "string" && VALID_STATUSES.has(status) ? status : "",
-      recommendation:
-        typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
-          ? (recommendation as RecommendationFilter)
-          : "",
-    };
-  } catch {
-    return { status: "", recommendation: "" };
-  }
-}
 
 function ProposalsList({ slug }: { slug: string }) {
-  const saved = loadSavedFilters(slug);
-  const [statusFilter, setStatusFilter] = useState(saved.status || "active");
-  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(saved.recommendation);
-  const [stats, setStats] = useState<ProposalStats | null>(null);
   const [, navigate] = useHashLocation();
-  const tableRef = useRef<ApiTableActions | null>(null);
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(
-        FILTER_STORAGE_KEY(slug),
-        JSON.stringify({ status: statusFilter, recommendation: recommendationFilter }),
-      );
-    } catch {
-      // sessionStorage unavailable
-    }
-  }, [slug, statusFilter, recommendationFilter]);
-
-  const submitted = stats?.byStatus?.submitted ?? 0;
-  const underReview = stats?.byStatus?.under_review ?? 0;
-  const accepted = stats?.byStatus?.accepted ?? 0;
-  const rejected = stats?.byStatus?.rejected ?? 0;
-  const needsWork = stats?.byStatus?.["needs-work"] ?? 0;
-  const withdrawn = stats?.byStatus?.withdrawn ?? 0;
-  const acceptRecommended = stats?.byRecommendation?.accept ?? 0;
-  const needsWorkRecommended = stats?.byRecommendation?.["needs-work"] ?? 0;
-  const rejectRecommended = stats?.byRecommendation?.reject ?? 0;
 
   return (
-    <div>
-      {stats && (
-        <div class="adm-mini-stats mb-3">
-          <span class="adm-mini-stat">
-            <strong>{stats.total}</strong> total
-          </span>
-          {submitted > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{submitted}</strong> submitted
-            </span>
-          )}
-          {underReview > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{underReview}</strong> under review
-            </span>
-          )}
-          {accepted > 0 && (
-            <span class="adm-mini-stat">
-              <strong class="text-success">{accepted}</strong> accepted
-            </span>
-          )}
-          {needsWork > 0 && (
-            <span class="adm-mini-stat">
-              <strong class="text-warning">{needsWork}</strong> needs work
-            </span>
-          )}
-          {rejected > 0 && (
-            <span class="adm-mini-stat">
-              <strong class="text-danger">{rejected}</strong> rejected
-            </span>
-          )}
-          {withdrawn > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{withdrawn}</strong> withdrawn
-            </span>
-          )}
-          <span class="adm-mini-stat-sep" />
-          <span class="adm-mini-stat">
-            <strong>{stats.reviewedCount}</strong> reviewed
-          </span>
-          {stats.unreviewedCount > 0 && (
-            <span class="adm-mini-stat">
-              <strong class="text-warning">{stats.unreviewedCount}</strong> no reviews
-            </span>
-          )}
-          <span class="adm-mini-stat">
-            <strong class="text-success">{acceptRecommended}</strong> accept recs
-          </span>
-          <span class="adm-mini-stat">
-            <strong class="text-warning">{needsWorkRecommended}</strong> needs work recs
-          </span>
-          <span class="adm-mini-stat">
-            <strong class="text-danger">{rejectRecommended}</strong> reject recs
-          </span>
+    <EventProposalsTable
+      endpoint={`/api/v1/admin/events/${encodeURIComponent(slug)}/proposals`}
+      storageKey={`adm_proposal_filters_${slug}`}
+      onSelect={(proposal) => navigate(`/events/${slug}/proposal/${proposal.id}`)}
+      toolbarPrefix={() => (
+        <div class="btn-group" role="group" aria-label="Download event presentations">
+          <a
+            class="btn btn-sm btn-outline-secondary"
+            href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download`}
+            title="Download the current presentation for every accepted proposal"
+          >
+            ↓ Current presentations
+          </a>
+          <a
+            class="btn btn-sm btn-outline-secondary"
+            href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download?versions=all`}
+            title="Download every retained presentation version for accepted proposals"
+          >
+            All versions
+          </a>
         </div>
       )}
-
-      <ApiDataTable
-        endpoint={`/api/v1/admin/events/${slug}/proposals`}
-        responseSchema={adminEventProposalsResponseSchema}
-        resolve={(d) => d.proposals}
-        resolvePage={(d) => d.page}
-        onData={(d) => setStats(d.stats)}
-        paginate
-        initialSort="-submittedAt"
-        searchPlaceholder="Search proposals / reviews…"
-        params={{
-          ...(statusFilter && { status: statusFilter }),
-          ...(recommendationFilter && { recommendation: recommendationFilter }),
-        }}
-        actionsRef={tableRef}
-        toolbar={({ resetPage }) => (
-          <>
-            <div class="btn-group" role="group" aria-label="Download event presentations">
-              <a
-                class="btn btn-sm btn-outline-secondary"
-                href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download`}
-                title="Download the current presentation for every accepted proposal"
-              >
-                ↓ Current presentations
-              </a>
-              <a
-                class="btn btn-sm btn-outline-secondary"
-                href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download?versions=all`}
-                title="Download every retained presentation version for accepted proposals"
-              >
-                All versions
-              </a>
-            </div>
-            <FilterSelect
-              value={statusFilter}
-              options={[
-                { value: "", label: "All statuses" },
-                ...PROPOSAL_ADMIN_STATUS_FILTERS.map((status) => ({
-                  value: status,
-                  label: proposalFilterLabel(status),
-                })),
-              ]}
-              onChange={(value) => {
-                setStatusFilter(value);
-                resetPage();
-              }}
-            />
-            <select
-              class="form-select form-select-sm adm-filter-select"
-              value={recommendationFilter}
-              onChange={(e) => {
-                setRecommendationFilter((e.target as HTMLSelectElement).value as RecommendationFilter);
-                resetPage();
-              }}
-            >
-              <option value="">All recommendations</option>
-              {PROPOSAL_RECOMMENDATIONS.map((recommendation) => (
-                <option key={recommendation} value={recommendation}>
-                  {proposalFilterLabel(recommendation)}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        columns={[
-          {
-            header: "Title",
-            cell: (p) => <span class="small">{p.title}</span>,
-            className: "adm-cell-title",
-            sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
-          },
-          {
-            header: "Proposer",
-            cell: (p) => {
-              const proposer =
-                [p.proposer_first_name, p.proposer_last_name].filter(Boolean).join(" ") || p.proposer_email;
-              return (
-                <>
-                  <span class="small">{proposer}</span>
-                  {proposer !== p.proposer_email && (
-                    <>
-                      <br />
-                      <span class="text-muted small adm-cell-sub-email">{p.proposer_email}</span>
-                    </>
-                  )}
-                </>
-              );
-            },
-            sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
-          },
-          {
-            header: { label: "Type", className: "text-center" },
-            cell: (p) => p.proposal_type,
-            className: "small text-center",
-            sort: { asc: "type", desc: "-type", defaultDirection: "asc" },
-          },
-          {
-            header: { label: "Status", className: "text-center" },
-            cell: (p) => <Badge status={p.status} />,
-            className: "text-center",
-            sort: { asc: "status", desc: "-status", defaultDirection: "asc" },
-          },
-          {
-            header: { label: "Decision", className: "text-center" },
-            cell: (p) =>
-              p.decision_status ? <Badge status={p.decision_status} /> : <span class="text-muted small">—</span>,
-            className: "text-center",
-            sort: { asc: "decision", desc: "-decision", defaultDirection: "asc" },
-          },
-          {
-            header: { label: "Avg Score", className: "text-end" },
-            cell: (p) => formatAverageScore(p.average_review_score),
-            className: "mono text-end",
-            sort: { asc: "score", desc: "-score" },
-          },
-          {
-            header: { label: "Recommendations", className: "text-center" },
-            cell: (p) => recommendationSummary(p),
-            className: "text-center",
-            sort: { asc: "recommendations", desc: "-recommendations" },
-          },
-          {
-            header: { label: "Reviews", className: "text-end" },
-            cell: (p) => p.review_count,
-            className: "mono text-end",
-            sort: { asc: "reviews", desc: "-reviews" },
-          },
-          {
-            header: "Submitted",
-            cell: (p) => fmt(p.submitted_at),
-            className: "mono small",
-            sort: { asc: "submittedAt", desc: "-submittedAt" },
-          },
-          {
-            header: "",
-            cell: (p) => (
-              <div class="d-flex gap-1 align-items-center">
-                <span class="btn btn-sm btn-outline-secondary">Review →</span>
-                <a
-                  class="btn btn-sm btn-outline-secondary"
-                  href={`#/events/${slug}/proposal/${p.id}`}
-                  target="_blank"
-                  rel="noopener"
-                  title="Open in new tab"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  ↗
-                </a>
-              </div>
-            ),
-          },
-        ]}
-        empty="No proposals found"
-        rowKey={(p) => p.id}
-        onRowClick={(p) => navigate(`/events/${slug}/proposal/${p.id}`)}
-      />
-    </div>
+    />
   );
 }
 
-// ─── Proposals compositor ─────────────────────────────────────────────────────
-
+/** Admin adapter for the shared event-proposal catalogue. */
 export function Proposals({ slug, event, subTab }: { slug: string; event: EventDetail; subTab?: string }) {
   const [, navigate] = useHashLocation();
   const tab = subTab === "invites" || subTab === "email" || subTab === "responses" ? subTab : "proposals";

@@ -66,6 +66,29 @@ describe("shared D1 offset pagination", () => {
     expect(fake.boundValues).toEqual([["active", 1, 0], ["active"]]);
   });
 
+  it("shares a CTE prefix between page and lean count statements", async () => {
+    const fake = fakeDatabase([{ results: [{ id: "row-1" }] }, { results: [{ total: 1 }] }]);
+
+    await queryPage<{ id: string }>(fake.db, {
+      source: {
+        withSql: "WITH scoped AS (SELECT id FROM records WHERE state = ?)",
+        selectSql: "SELECT scoped.id, expensive.payload",
+        fromSql: "FROM scoped LEFT JOIN expensive ON expensive.id = scoped.id",
+        countSelectSql: "SELECT COUNT(*) AS total",
+        countFromSql: "FROM scoped",
+        bindings: ["active"],
+      },
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(fake.preparedSql).toEqual([
+      "WITH scoped AS (SELECT id FROM records WHERE state = ?)\nSELECT scoped.id, expensive.payload\nFROM scoped LEFT JOIN expensive ON expensive.id = scoped.id\nLIMIT ? OFFSET ?",
+      "WITH scoped AS (SELECT id FROM records WHERE state = ?)\nSELECT COUNT(*) AS total\nFROM scoped",
+    ]);
+    expect(fake.boundValues).toEqual([["active", 1, 0], ["active"]]);
+  });
+
   it("supports a lean count source while retaining one canonical page predicate", async () => {
     const fake = fakeDatabase([{ results: [{ id: "row-1" }] }, { results: [{ total: 1 }] }]);
 

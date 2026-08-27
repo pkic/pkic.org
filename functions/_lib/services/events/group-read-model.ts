@@ -24,6 +24,7 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 import { liveEventResourceContextAccess } from "../event-series/read-access";
+import { getProposalAccessForEvent } from "../../auth/proposal-access";
 
 interface GroupEventRow {
   event_id: string;
@@ -102,6 +103,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
       row.registration_policy === "no_registration"
         ? effectiveCapabilities.filter((capability) => capability !== "register")
         : effectiveCapabilities,
+    proposalAccess: null,
   });
 }
 
@@ -208,5 +210,6 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
   if (!event.capabilities.includes("view")) {
     throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
   }
-  return groupEventDetailResponseSchema.parse({ event });
+  const proposalAccess = viewer.admin ? await getProposalAccessForEvent(db, event.id, viewer.admin) : null;
+  return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess } });
 }

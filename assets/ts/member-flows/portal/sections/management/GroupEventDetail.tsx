@@ -6,9 +6,14 @@ import { GroupEventRegistrations } from "./GroupEventRegistrations";
 import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventInvitations } from "./GroupEventInvitations";
+import { GroupEventProposals } from "./GroupEventProposals";
 
 function label(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function canReadProposalProgram(event: GroupEvent): boolean {
+  return event.proposalAccess?.canRead === true;
 }
 
 export function GroupEventDetail({
@@ -93,6 +98,8 @@ export function GroupEventDetail({
       )}
 
       {canManage && <GroupEventInvitations groupId={groupId} event={event} />}
+
+      {canReadProposalProgram(event) && <GroupEventProposals groupId={groupId} eventId={event.id} />}
 
       {event.capabilities.includes("manage_attendance") && (
         <div class="border-top pt-3">

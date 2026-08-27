@@ -46,6 +46,7 @@ const event: GroupEvent = {
   links: [],
   nextOccurrenceAt: null,
   updatedAt: "2026-08-01T00:00:00.000Z",
+  proposalAccess: null,
   capabilities: ["view", "register"],
 };
 

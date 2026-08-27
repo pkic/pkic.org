@@ -192,6 +192,23 @@ Status: In progress
       reference data in this phase: adding a new profile key still requires a
       reviewed schema/code change rather than an unrestricted administrator
       feature-toggle builder.
+- [x] Permit explicitly authorized program-committee corrections to an
+      accepted proposal abstract without weakening ordinary proposal locks.
+      Evidence: `proposals:edit_accepted_abstract` is an event-scoped,
+      field-specific permission. The canonical edit service separately requires
+      `proposals:manage` for accepted title changes, requires both permissions
+      when both fields change, and rechecks the exact permissions and proposal
+      revision in the atomic D1 batch. The group-portal route and shared UI are
+      tracked as part of the portal-management cutover below.
+- [x] Permit explicitly authorized cancellation of an accepted proposal with a
+      required reason and notification to its complete speaker roster.
+      Evidence: `proposals:cancel_accepted` is event-scoped. The canonical
+      command preserves the accepted decision history, changes the operational
+      status to canceled, deactivates proposal capacities, cancels obsolete
+      queued messages, queues a dedicated notification for every speaker record
+      including inactive or declined records, and commits audit and outbox state
+      in the same guarded D1 batch. The group-portal route and shared UI are
+      tracked as part of the portal-management cutover below.
 - [x] Add one owning group to portal-managed events.
 - [x] Replace unreleased meeting_series with shared event_series.
 - [x] Add authoritative recurring schedule and event occurrences.
@@ -215,6 +232,16 @@ Status: In progress
 - [x] Keep public workshop registration in the shared event-registration flow.
 - [x] Add rotatable, expiring guest invitation capabilities that authorize only
       browser-bound mailbox verification, never meeting entry by themselves.
+- [x] Make attendee and speaker invitation validity explicitly configurable,
+      defaulting to the event start and never extending beyond the event end.
+      Evidence: one shared validity contract and effective-expiry SQL expression
+      drive creation, resend, bulk replacement, reminder selection, and pending
+      counts. Omitted deadlines resolve to the current event start. Legacy null
+      or overlong expiries are bounded by the event, and shortening an event
+      makes stale invitations logically expired. Duplicate classification and
+      the final guarded D1 batch use the same predicate, so replacement cannot
+      race with an event schedule or invitation change. Focused service, mounted
+      route, query-plan, atomicity, and portal-component regressions are included.
 - [x] Make GET render only; require intentional POST before redirect.
 - [x] Display and snapshot name and affiliation.
 - [x] Reuse existing event terms and consent acceptance logic through one
@@ -1024,7 +1051,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,020 backend tests pass with one skipped, 238 frontend tests
+      checkpoint: 2,084 backend tests pass with one skipped, 252 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
