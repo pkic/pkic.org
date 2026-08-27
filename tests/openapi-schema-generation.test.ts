@@ -54,8 +54,8 @@ describe("OpenAPI schema generation", () => {
       spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].patch,
     ).toBeDefined();
     expect(
-      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"].patch,
-    ).toBeDefined();
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"],
+    ).toBeUndefined();
     expect(
       spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/open-manage"].post,
     ).toBeDefined();

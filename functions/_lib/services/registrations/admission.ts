@@ -1,6 +1,7 @@
 import { all } from "../../db/queries";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { sha256Hex } from "../../utils/crypto";
@@ -30,6 +31,8 @@ interface AdmissionPayload {
   reason: string;
   actorUserId: string;
   appBaseUrl: string;
+  commitBatch?: (statements: StatementLike[]) => Promise<D1StatementResult[]>;
+  requireActiveWaitlist?: boolean;
 }
 
 interface BuiltAdmission {
@@ -58,6 +61,32 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   for (const dayDate of admittedDayDates) {
     if (!dayByDate.has(dayDate)) {
       throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${dayDate}' is not configured for this event`);
+    }
+  }
+
+  if (payload.requireActiveWaitlist) {
+    const activeWaitlistRows = await all<{ day_date: string }>(
+      db,
+      `SELECT ed.day_date
+         FROM event_day_waitlist_entries waitlist
+         JOIN event_days ed ON ed.id = waitlist.event_day_id
+        WHERE waitlist.registration_id = ?
+          AND ed.event_id = ?
+          AND (
+            waitlist.status = 'waiting'
+            OR (waitlist.status = 'offered'
+                AND (waitlist.offer_expires_at IS NULL OR waitlist.offer_expires_at > ?))
+          )`,
+      [registration.id, payload.event.id, nowIso()],
+    );
+    const activeWaitlistDates = new Set(activeWaitlistRows.map((row) => row.day_date));
+    const unavailableDay = admittedDayDates.find((dayDate) => !activeWaitlistDates.has(dayDate));
+    if (unavailableDay) {
+      throw new AppError(
+        409,
+        "REGISTRATION_DAY_NOT_WAITLISTED",
+        `Day '${unavailableDay}' is not actively waitlisted for this registration`,
+      );
     }
   }
 
@@ -101,6 +130,25 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   });
   const statements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
+    ...(payload.requireActiveWaitlist
+      ? admittedDayDates.map((dayDate) =>
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1
+                    FROM event_day_waitlist_entries waitlist
+                    JOIN event_days ed ON ed.id = waitlist.event_day_id
+                   WHERE waitlist.registration_id = ?
+                     AND ed.event_id = ?
+                     AND ed.day_date = ?
+                     AND (
+                       waitlist.status = 'waiting'
+                       OR (waitlist.status = 'offered'
+                           AND (waitlist.offer_expires_at IS NULL
+                                OR waitlist.offer_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')))
+                     )`,
+            bindings: [registration.id, payload.event.id, dayDate],
+          }),
+        )
+      : []),
     ...waitlist.guardStatements,
     db
       .prepare(
@@ -230,7 +278,10 @@ export async function admitRegistration(
   try {
     return await withDayCapacityRetry(async () => {
       const built = await buildAdmission(db, payload);
-      if (built.statements.length) await db.batch(built.statements);
+      if (built.statements.length) {
+        if (payload.commitBatch) await payload.commitBatch(built.statements);
+        else await db.batch(built.statements);
+      }
       return {
         registration: built.registration,
         admittedDayDates: built.admittedDayDates,
@@ -239,6 +290,13 @@ export async function admitRegistration(
     });
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (payload.requireActiveWaitlist && isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "REGISTRATION_DAY_WAITLIST_CHANGED",
+        "The selected day is no longer actively waitlisted. Reload and retry.",
+      );
+    }
     throw error;
   }
 }

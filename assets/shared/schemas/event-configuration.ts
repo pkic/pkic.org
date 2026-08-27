@@ -104,18 +104,21 @@ export const eventDaysReplaceSchema = z
   });
 export type EventDaysReplaceInput = z.infer<typeof eventDaysReplaceSchema>;
 
-export const eventDaysResponseSchema = z.object({
-  days: z.array(
-    z.object({
-      id: z.string(),
-      date: z.string(),
-      label: z.string().nullable(),
-      startsAt: z.string().nullable(),
-      endsAt: z.string().nullable(),
-      sortOrder: z.number(),
-      attendanceOptions: z.array(eventAttendanceOptionSchema),
-      attendanceCounts: z.record(z.string(), z.number()),
-    }),
-  ),
+/** Canonical configured event-day projection shared by management and attendance views. */
+export const eventDayResponseSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  label: z.string().nullable(),
+  startsAt: z.string().nullable(),
+  endsAt: z.string().nullable(),
+  sortOrder: z.number(),
+  attendanceOptions: z.array(eventAttendanceOptionSchema),
+  attendanceCounts: z.record(z.string(), z.number()),
 });
+export type EventDayResponse = z.infer<typeof eventDayResponseSchema>;
+
+export const eventDaysResponseSchema = z.object({
+  days: z.array(eventDayResponseSchema),
+});
+export type EventDay = EventDayResponse;
 export const eventDaysReplaceResponseSchema = successResponseSchema.extend({ skipped: z.array(z.string()) });

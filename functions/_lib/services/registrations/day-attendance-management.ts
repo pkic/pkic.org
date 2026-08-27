@@ -1,29 +1,35 @@
-import type { AdminManageDayAttendanceInput } from "../../../../assets/shared/schemas/admin-events";
-import { requirePermission } from "../../auth/permissions";
+import type { EventRegistrationDayAttendanceChange } from "../../../../assets/shared/schemas/event-registration-detail";
 import { AppError } from "../../errors";
-import type { AuthAdmin, DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import { deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays } from "../event-days";
-import { getEventBySlug } from "../events";
+import type { EventRecord } from "../events";
 import { getRegistrationByIdForEvent } from "./queries";
 import { updateRegistrationByIdWithNotification } from "./update";
 
-export async function updateAdminRegistrationDayAttendance(
+export async function updateRegistrationDayAttendance(
   db: DatabaseLike,
-  actor: AuthAdmin,
   input: {
-    eventSlug: string;
+    event: EventRecord;
     registrationId: string;
-    change: AdminManageDayAttendanceInput;
+    change: EventRegistrationDayAttendanceChange;
     appBaseUrl: string;
+    actorUserId: string;
+    commitBatch?: (statements: StatementLike[]) => Promise<D1StatementResult[]>;
   },
 ): Promise<{ outboxId: string | null }> {
-  const event = await getEventBySlug(db, input.eventSlug);
-  requirePermission(actor, "events:manage", { type: "event", id: event.id });
+  const event = input.event;
   // Keep this aggregate snapshot from before the day-roster read and pass it
-  // through to the transition guard below. If another admin changes any day
+  // through to the transition guard below. If another manager changes any day
   // after this point, that update advances transition_revision and this stale
   // plan fails with REGISTRATION_CHANGED instead of replacing their roster.
   const registration = await getRegistrationByIdForEvent(db, event.id, input.registrationId);
+  if (registration.status === "cancelled") {
+    throw new AppError(
+      409,
+      "REGISTRATION_CANCELLED",
+      "Cancelled registrations cannot be changed through attendance management",
+    );
+  }
 
   const [eventDays, current] = await Promise.all([
     listEventDays(db, event.id),
@@ -56,7 +62,7 @@ export async function updateAdminRegistrationDayAttendance(
       attendanceType: deriveEventAttendanceType(dayAttendance) ?? registration.attendance_type,
       dayAttendance,
       forceWaitlistDayDates: input.change.action === "waitlist" ? input.change.dayDates : undefined,
-      auditActor: { type: "admin", id: actor.id, action: "registration_day_attendance_updated" },
+      auditActor: { type: "admin", id: input.actorUserId, action: "registration_day_attendance_updated" },
       notification: {
         event,
         appBaseUrl: input.appBaseUrl,
@@ -64,8 +70,9 @@ export async function updateAdminRegistrationDayAttendance(
         subject: `Registration updated for ${event.name}`,
       },
     },
-    actor.id,
+    input.actorUserId,
     registration,
+    input.commitBatch,
   );
   return { outboxId: result.outboxId };
 }

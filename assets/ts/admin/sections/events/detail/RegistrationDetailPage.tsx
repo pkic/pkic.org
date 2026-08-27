@@ -11,13 +11,11 @@ import {
   adminRegistrationDetailResponseSchema,
   type AdminRegistrationDetailResponse,
 } from "../../../../../shared/schemas/admin-registration-detail";
-import { eventDaysResponseSchema } from "../../../../../shared/schemas/event-configuration";
 import {
   adminRegistrationOpenManageResponseSchema,
   adminRegistrationResendConfirmationResponseSchema,
   badgeRegenerationQueuedResponseSchema,
 } from "../../../../../shared/schemas/route-contracts-admin-registrations";
-import { DayAttendancePanel } from "./registration-detail/DayAttendancePanel";
 import {
   BadgeRolePanel,
   RegistrationAuditLogSection,
@@ -45,13 +43,8 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     [slug, regId],
   );
 
-  const { data: daysData } = useData(() => api(`/api/v1/admin/events/${slug}/days`, eventDaysResponseSchema), [slug]);
-
   const reg = data?.registration;
   const form = data?.form ?? null;
-  const dayAttendance = data?.dayAttendance ?? [];
-  const dayWaitlist = data?.dayWaitlist ?? [];
-  const eventDays = daysData?.days ?? [];
 
   async function handleResend() {
     setResendStatus("Sending…");
@@ -161,23 +154,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
             <div class="small text-muted mb-1">Registered</div>
             <div class="mono small">{fmt(reg.created_at)}</div>
           </div>
-        </div>
-      </div>
-
-      {/* Day attendance */}
-      <div class="card mb-3">
-        <div class="card-header">
-          <h6 class="mb-0">Day Attendance and Waitlist</h6>
-        </div>
-        <div class="card-body">
-          <DayAttendancePanel
-            dayAttendance={dayAttendance}
-            dayWaitlist={dayWaitlist}
-            eventDays={eventDays}
-            slug={slug}
-            regId={regId}
-            onReload={() => void reload()}
-          />
         </div>
       </div>
 

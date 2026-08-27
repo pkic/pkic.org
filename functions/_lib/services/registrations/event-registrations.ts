@@ -18,6 +18,7 @@ import {
   type EventRegistrationsQuery,
 } from "../../../../assets/shared/schemas/event-registrations";
 import type { DatabaseLike } from "../../types";
+import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
 
 interface RegistrationRow {
   id: string;
@@ -284,7 +285,7 @@ export async function listEventRegistrations(
 
   const [statRows, bouncedCountRow, consentCountRow, attendanceStatusByType] = await Promise.all([
     // Aggregate stats always cover all registrations for the event (unfiltered)
-    all<{ attendance_type: string; status: string; count: number }>(
+    all<EventRegistrationStatsRow>(
       db,
       `SELECT attendance_type, status, COUNT(*) AS count
        FROM registrations WHERE event_id = ?
@@ -308,16 +309,7 @@ export async function listEventRegistrations(
     getAttendanceStatusByType(db, eventId),
   ]);
 
-  const byAttendanceType: Record<string, number> = {};
-  const byStatus: Record<string, number> = {};
-  for (const row of statRows) {
-    // Only include confirmed/registered rows in the attendance-type totals
-    if (row.status === "registered") {
-      byAttendanceType[row.attendance_type] = (byAttendanceType[row.attendance_type] ?? 0) + Number(row.count);
-    }
-    // Keep the full per-status totals
-    byStatus[row.status] = (byStatus[row.status] ?? 0) + Number(row.count);
-  }
+  const { byAttendanceType, byStatus } = aggregateEventRegistrationStats(statRows);
 
   return {
     registrations: registrations.map((registration) => eventRegistrationSummarySchema.parse(registration)),

@@ -1,4 +1,4 @@
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import type { ChangeRegistrationEmailParams } from "./change-email";
 import { prepareRegistrationEmailChange } from "./change-email";
 import { dayWaitlistOfferUnavailableError, isDayWaitlistOfferUnavailable, withDayCapacityRetry } from "./day-waitlist";
@@ -49,9 +49,10 @@ async function commitUpdateWithNotification(
   db: DatabaseLike,
   built: RegistrationUpdatePlan,
   payload: RegistrationUpdatePayload & { notification: UpdateNotification },
+  commitBatch: (statements: StatementLike[]) => Promise<D1StatementResult[]> = (statements) => db.batch(statements),
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   if (!built.notificationChanged) {
-    await db.batch(built.statements);
+    await commitBatch(built.statements);
     return { registration: built.registration, outboxId: null, outboxIds: [] };
   }
   const idempotencyKey =
@@ -69,7 +70,7 @@ async function commitUpdateWithNotification(
     dayAttendance: built.dayAttendance,
     dayWaitlist: built.dayWaitlist,
   });
-  await db.batch([...built.statements, email.statement]);
+  await commitBatch([...built.statements, email.statement]);
   return { registration: built.registration, outboxId: email.outboxId, outboxIds: [email.outboxId] };
 }
 
@@ -171,6 +172,7 @@ export async function updateRegistrationByIdWithNotification(
   payload: { eventId: string; registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
   changedBy: string,
   registrationSnapshot?: RegistrationRecord,
+  commitBatch?: (statements: StatementLike[]) => Promise<D1StatementResult[]>,
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   return executeRegistrationUpdate(
     db,
@@ -180,7 +182,7 @@ export async function updateRegistrationByIdWithNotification(
         ? Promise.resolve(registrationSnapshot)
         : getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
-    (built) => commitUpdateWithNotification(db, built, payload),
+    (built) => commitUpdateWithNotification(db, built, payload, commitBatch),
   );
 }
 

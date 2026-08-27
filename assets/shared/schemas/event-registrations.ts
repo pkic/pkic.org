@@ -74,3 +74,45 @@ export const eventRegistrationsListResponseSchema = paginatedResponseSchema(
   stats: eventRegistrationsStatsSchema,
 });
 export type EventRegistrationsListResponse = z.infer<typeof eventRegistrationsListResponseSchema>;
+
+/**
+ * Least-privilege attendee list used by selected-group attendance managers.
+ * Referral, form-answer, RSVP payload, delivery, and sponsor-consent fields
+ * deliberately remain exclusive to the full administrator read model above.
+ */
+export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema.pick({
+  q: true,
+  limit: true,
+  offset: true,
+  sort: true,
+  status: true,
+});
+export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRegistrationsQuerySchema>;
+
+export const eventAttendanceRegistrationSummarySchema = registrationRecordContextSchema
+  .pick({ created_at: true, updated_at: true, user_email: true, display_name: true })
+  .extend({
+    id: z.string(),
+    user_id: z.string(),
+    status: eventRegistrationStatusSchema,
+    attendance_type: z.string().nullable(),
+    dayWaitlistSummary: z.string().nullable(),
+    dayWaitlistCount: z.number(),
+  });
+export type EventAttendanceRegistrationSummary = z.infer<typeof eventAttendanceRegistrationSummarySchema>;
+
+export const eventAttendanceRegistrationsStatsSchema = eventRegistrationsStatsSchema.pick({
+  byAttendanceType: true,
+  attendanceStatusByType: true,
+  byStatus: true,
+});
+export type EventAttendanceRegistrationsStats = z.infer<typeof eventAttendanceRegistrationsStatsSchema>;
+
+export const eventAttendanceRegistrationsListResponseSchema = paginatedResponseSchema(
+  "registrations",
+  eventAttendanceRegistrationSummarySchema,
+).extend({
+  event: eventSummarySchema,
+  stats: eventAttendanceRegistrationsStatsSchema,
+});
+export type EventAttendanceRegistrationsListResponse = z.infer<typeof eventAttendanceRegistrationsListResponseSchema>;

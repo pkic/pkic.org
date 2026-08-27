@@ -42,7 +42,7 @@ const EVENT_DAYS_LIST_SQL = `SELECT id, event_id, day_date, label, starts_at, en
 
 /**
  * Parses the attendance options for a day from its JSON column.
- * Falls back to a legacy default (in_person + on_demand) using the
+ * Falls back to the legacy core options using the
  * in_person_capacity column when no options have been configured.
  */
 export function resolveAttendanceOptions(
@@ -58,9 +58,10 @@ export function resolveAttendanceOptions(
       // fall through to legacy default
     }
   }
-  // Legacy default: in-person (capped) + on-demand (unlimited)
+  // Legacy default: the three core modes, with capacity applying only in person.
   return [
     { value: "in_person", label: "In-person", capacity: day.in_person_capacity ?? null },
+    { value: "virtual", label: "Virtual", capacity: null },
     { value: "on_demand", label: "On-demand", capacity: null },
   ];
 }
@@ -227,6 +228,13 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     const day = dayMap.get(selection.dayDate);
     if (!day) {
       throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${selection.dayDate}' is not configured for this event`);
+    }
+    if (!resolveAttendanceOptions(day).some((option) => option.value === selection.attendanceType)) {
+      throw new AppError(
+        400,
+        "DAY_ATTENDANCE_TYPE_NOT_CONFIGURED",
+        `Attendance type '${selection.attendanceType}' is not configured for day '${selection.dayDate}'`,
+      );
     }
 
     nextByDayId.set(day.id, selection.attendanceType);

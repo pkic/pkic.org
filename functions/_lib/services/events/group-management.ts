@@ -1,4 +1,4 @@
-import type { EventRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
+import type { EventAttendanceRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
 import type {
   GroupEventCreateInput,
   GroupEventSettingsUpdateInput,
@@ -7,7 +7,10 @@ import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLog } from "../audit";
 import { getGroup, prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups";
 import { getEventById, prepareEventCreateStatement } from "../events";
-import { listEventRegistrations, type EventRegistrationsListResult } from "../registrations/event-registrations";
+import {
+  listEventAttendanceRegistrations,
+  type EventAttendanceRegistrationsListResult,
+} from "../registrations/event-attendance-registrations";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import { initialEventSettings, buildEventSettingsMutationStatements } from "./settings";
@@ -160,22 +163,21 @@ export async function updateGroupManagedEventSettings(
 }
 
 /**
- * The attendee list deliberately reuses the canonical registration read model
- * and its shared server-side query contract. Attendance data requires the
- * stricter event capability, not merely general group management.
+ * The attendee list reuses the shared server-side list primitives while
+ * keeping administrator-only registration data outside this projection.
  */
 export async function listGroupManagedEventRegistrations(
   db: DatabaseLike,
   actor: AuthAdmin,
   groupIdOrSlug: string,
   eventId: string,
-  query: EventRegistrationsQuery,
-): Promise<{ event: { id: string; slug: string; name: string }; result: EventRegistrationsListResult }> {
+  query: EventAttendanceRegistrationsQuery,
+): Promise<{ event: { id: string; slug: string; name: string }; result: EventAttendanceRegistrationsListResult }> {
   const event = await getEventById(db, eventId);
   const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, event.id, "manage_attendance");
   return {
     event: { id: event.id, slug: event.slug, name: event.name },
-    result: await listEventRegistrations(
+    result: await listEventAttendanceRegistrations(
       guardEventResourceManagementDatabase(db, actor, context, "manage_attendance"),
       event.id,
       query,

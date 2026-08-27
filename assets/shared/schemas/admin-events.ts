@@ -17,7 +17,7 @@ import {
   sortColumnSchema,
   sortColumnSchemaWithDefault,
 } from "./pagination";
-import { attendanceTypeSchema, dayDateSchema, inviteeSchema } from "./registration";
+import { attendanceTypeSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { eventSourceModeSchema } from "./event-series";
 import { groupIdSchema } from "./groups";
@@ -54,6 +54,7 @@ import {
   type EventRegistrationsQuery,
   type EventRegistrationsStats,
 } from "./event-registrations";
+import { eventRegistrationAdmitSchema } from "./event-registration-detail";
 
 export const EVENT_PROPOSALS_SORT_COLUMNS = [
   "submittedAt",
@@ -374,17 +375,8 @@ export const adminWaitlistPromotionResponseSchema = successResponseSchema.extend
   dayRegistrationOffers: z.number().int().nonnegative(),
   affectedRegistrations: z.array(z.string()),
 });
-export const adminRegistrationAdmitSchema = z.object({
-  mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
-  reason: trimmedString(3, 1000),
-  dayDates: z.array(dayDateSchema).min(1).max(31).optional(),
-});
-
-export const adminManageDayAttendanceSchema = z.object({
-  action: z.enum(["in_person", "virtual", "on_demand", "remove", "waitlist"]),
-  dayDates: z.array(dayDateSchema).min(1).max(31),
-});
-export type AdminManageDayAttendanceInput = z.infer<typeof adminManageDayAttendanceSchema>;
+/** @deprecated Use eventRegistrationAdmitSchema from event-registration-detail. */
+export const adminRegistrationAdmitSchema = eventRegistrationAdmitSchema;
 
 const campaignFilterSchema = z.object({
   audience: z.enum(["attendees", "speakers"]),

@@ -1,18 +1,30 @@
-import { eventRegistrationsListResponseSchema } from "../../../../../shared/schemas/event-registrations";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { useRef, useState } from "preact/hooks";
+import { eventAttendanceRegistrationsListResponseSchema } from "../../../../../shared/schemas/event-registrations";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
+import { GroupEventRegistrationAttendance } from "./GroupEventRegistrationAttendance";
 
 export function GroupEventRegistrations({ groupId, eventId }: { groupId: string; eventId: string }) {
+  const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
+  const [managementMessage, setManagementMessage] = useState<string | null>(null);
+  const tableActions = useRef<ApiTableActions | null>(null);
+
   return (
     <div>
       <h6 class="small fw-semibold">Attendees</h6>
+      {managementMessage && (
+        <div class="alert alert-success small py-2" role="status" aria-live="polite">
+          {managementMessage}
+        </div>
+      )}
       <ApiDataTable
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`}
-        responseSchema={eventRegistrationsListResponseSchema}
+        responseSchema={eventAttendanceRegistrationsListResponseSchema}
         resolve={(response) => response.registrations}
         resolvePage={(response) => response.page}
         paginate
+        actionsRef={tableActions}
         searchPlaceholder="Search attendees…"
         initialSort="display_name"
         columns={[
@@ -42,9 +54,40 @@ export function GroupEventRegistrations({ groupId, eventId }: { groupId: string;
             className: "text-nowrap",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
+          {
+            header: "",
+            className: "text-end",
+            cell: (registration) => (
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                aria-expanded={selectedRegistrationId === registration.id}
+                onClick={() =>
+                  setSelectedRegistrationId((current) => (current === registration.id ? null : registration.id))
+                }
+              >
+                {selectedRegistrationId === registration.id ? "Hide" : "Manage attendance"}
+              </button>
+            ),
+          },
         ]}
         empty="No registrations for this event."
         rowKey={(registration) => registration.id}
+        detailRow={(registration) =>
+          selectedRegistrationId === registration.id ? (
+            <div class="p-3 bg-body-tertiary">
+              <GroupEventRegistrationAttendance
+                groupId={groupId}
+                eventId={eventId}
+                registrationId={registration.id}
+                onUpdated={async (message) => {
+                  setManagementMessage(message);
+                  await tableActions.current?.reload();
+                }}
+              />
+            </div>
+          ) : null
+        }
       />
     </div>
   );

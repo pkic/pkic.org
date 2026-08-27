@@ -56,7 +56,13 @@ import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submis
 import { GroupEventsCreate, GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventProfilesList } from "./[groupId]/events/profiles";
 import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
-import { GroupEventRegistrationCreate, GroupEventRegistrationsList } from "./[groupId]/events/[eventId]/registrations";
+import {
+  GroupEventRegistrationAdmitPost,
+  GroupEventRegistrationCreate,
+  GroupEventRegistrationDayAttendancePatch,
+  GroupEventRegistrationDetailGet,
+  GroupEventRegistrationsList,
+} from "./[groupId]/events/[eventId]/registrations";
 import { GroupEventRegistrationConfigGet } from "./[groupId]/events/[eventId]/registration-config";
 import { GroupEventDaysGet, GroupEventDaysPut } from "./[groupId]/events/[eventId]/days";
 import { GroupEventTermsGet, GroupEventTermsPut } from "./[groupId]/events/[eventId]/terms";
@@ -133,6 +139,12 @@ openapi.get("/:groupId/events/profiles", GroupEventProfilesList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
 openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
+openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);
+openapi.patch(
+  "/:groupId/events/:eventId/registrations/:registrationId/day-attendance",
+  GroupEventRegistrationDayAttendancePatch,
+);
+openapi.post("/:groupId/events/:eventId/registrations/:registrationId/admit", GroupEventRegistrationAdmitPost);
 openapi.get("/:groupId/events/:eventId/registration-config", GroupEventRegistrationConfigGet);
 openapi.get("/:groupId/events/:eventId/days", GroupEventDaysGet);
 openapi.put("/:groupId/events/:eventId/days", GroupEventDaysPut);

@@ -14,4 +14,9 @@ export {
 export { forceRegistrationStatus } from "./force-status";
 export { changeRegistrationEmail, finalizeEmailChange } from "./change-email";
 export { admitRegistration } from "./admission";
+export {
+  admitGroupManagedEventRegistration,
+  getGroupManagedEventRegistration,
+  updateGroupManagedEventRegistrationDayAttendance,
+} from "./group-attendee-management";
 export { updateManagedRegistration } from "./manage-update";

@@ -868,6 +868,28 @@ Status: In progress
       placement, event policy, and audit history. The complete repository gate
       passes 2,026 backend tests (one skipped), 237 frontend tests, and 80 tool
       tests.
+      Per-day attendee management now also belongs to the selected-group portal.
+      Managers with the exact `manage_attendance` capability can inspect a
+      least-privilege attendee projection, change only configured day attendance,
+      return accepted in-person days to the day waitlist, and admit explicitly
+      selected actively waitlisted days. The live event grant, registration
+      revision, capacity state, and each selected waitlist row are rechecked in
+      the same D1 batch as attendance, audit, and outbox writes. Cancelled
+      registrations cannot be restored through this workflow. The list keeps
+      form answers, referral data, raw RSVP payloads, delivery state, and sponsor
+      consent outside the group boundary while reusing the shared server-side
+      search, sorting, pagination, and statistics reducer. The duplicate admin
+      day-attendance panel, service adapter, route, and contract are removed;
+      the separate admin-only VIP admission remains until that higher-risk action
+      has a deliberate portal design. Focused backend regressions pass 145 tests,
+      the focused component suite passes 2 tests, and a real Worker/D1 Playwright
+      journey changes one attendee from accepted to waitlisted and back through
+      group routes without any admin API request. All static, build, frontend
+      (240), tools (80), architecture, formatting, and zero-duplication gates
+      pass. The complete backend run passed 2,024 tests with one skipped and one
+      unrelated Google Groups batching assertion; its isolated 27-test suite
+      passed immediately afterward, documenting the nondeterministic failure
+      without misreporting the complete run as green.
       This parent item remains open for the other management areas and final
       admin-shell retirement below, not for event registration setup.
 - [ ] Move remaining global management views into the portal.

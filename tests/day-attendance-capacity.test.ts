@@ -11,7 +11,7 @@ import {
   updateRegistrationById,
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
-import { updateAdminRegistrationDayAttendance } from "../functions/_lib/services/registrations/admin-day-attendance";
+import { updateRegistrationDayAttendance } from "../functions/_lib/services/registrations/day-attendance-management";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { buildCreateRegistration } from "../functions/_lib/services/registrations/create";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
@@ -438,16 +438,13 @@ describe("day attendance capacity", () => {
     const admin = (
       await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1")
     )[0];
-    await updateAdminRegistrationDayAttendance(
-      env.DB,
-      { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
-      {
-        eventSlug: event.slug,
-        registrationId: attendee.registration.id,
-        change: { action: "in_person", dayDates: ["2026-12-01"] },
-        appBaseUrl: "https://example.test",
-      },
-    );
+    await updateRegistrationDayAttendance(env.DB, {
+      event,
+      registrationId: attendee.registration.id,
+      change: { action: "in_person", dayDates: ["2026-12-01"] },
+      appBaseUrl: "https://example.test",
+      actorUserId: admin.id,
+    });
     const beforeOverride = await queryAll<{ status: string }>(
       env.DB,
       "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-admin-return'",
@@ -464,16 +461,13 @@ describe("day attendance capacity", () => {
       appBaseUrl: "https://example.test",
     });
 
-    await updateAdminRegistrationDayAttendance(
-      env.DB,
-      { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
-      {
-        eventSlug: event.slug,
-        registrationId: attendee.registration.id,
-        change: { action: "waitlist", dayDates: ["2026-12-01"] },
-        appBaseUrl: "https://example.test",
-      },
-    );
+    await updateRegistrationDayAttendance(env.DB, {
+      event,
+      registrationId: attendee.registration.id,
+      change: { action: "waitlist", dayDates: ["2026-12-01"] },
+      appBaseUrl: "https://example.test",
+      actorUserId: admin.id,
+    });
 
     const [registration] = await queryAll<{ capacity_exempt_in_person: number }>(
       env.DB,
@@ -976,21 +970,22 @@ describe("day attendance capacity", () => {
       env.DB,
       "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
     );
-    const actor = { identityType: "user" as const, id: admin.id, email: admin.email, role: "admin" };
     const gate = gateNextBatch(env.DB);
-    const stale = updateAdminRegistrationDayAttendance(gate.db, actor, {
-      eventSlug: event.slug,
+    const stale = updateRegistrationDayAttendance(gate.db, {
+      event,
       registrationId: created.registration.id,
       change: { action: "in_person", dayDates: ["2026-12-01"] },
       appBaseUrl: "https://example.test",
+      actorUserId: admin.id,
     });
     await gate.reached;
 
-    await updateAdminRegistrationDayAttendance(env.DB, actor, {
-      eventSlug: event.slug,
+    await updateRegistrationDayAttendance(env.DB, {
+      event,
       registrationId: created.registration.id,
       change: { action: "in_person", dayDates: ["2026-12-02"] },
       appBaseUrl: "https://example.test",
+      actorUserId: admin.id,
     });
     gate.release();
 

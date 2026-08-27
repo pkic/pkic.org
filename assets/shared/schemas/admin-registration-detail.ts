@@ -1,53 +1,14 @@
-import { z } from "zod";
-import { eventIdSchema } from "./api-common";
-import { activeFormSummarySchema } from "./forms";
-import { databaseIdSchema } from "./identifiers";
-import { registrationRecordContextSchema } from "./registration-record";
+/** @deprecated Use the domain-neutral event-registration-detail contracts. */
+export {
+  eventRegistrationDetailSchema as adminRegistrationDetailSchema,
+  eventRegistrationDayAttendanceSchema as adminRegistrationDayAttendanceSchema,
+  eventRegistrationDayWaitlistSchema as adminRegistrationDayWaitlistSchema,
+  eventRegistrationDetailResponseSchema as adminRegistrationDetailResponseSchema,
+  eventRegistrationRsvpDaySchema as adminRegistrationRsvpDaySchema,
+} from "./event-registration-detail";
 
-/** Joined display, attribution, and lifecycle fields common to admin registration projections. */
-/** @deprecated Use registrationRecordContextSchema from registration-record. */
-export const adminRegistrationRecordContextSchema = registrationRecordContextSchema;
+/** @deprecated Use the domain-neutral event-registration-detail response type. */
+export type { EventRegistrationDetailResponse as AdminRegistrationDetailResponse } from "./event-registration-detail";
 
-export const adminRegistrationRsvpDaySchema = z.object({
-  event_day_id: databaseIdSchema.nullable(),
-  day_date: z.string().nullable(),
-  status: z.string(),
-  received_at: z.string(),
-  ics_uid: z.string(),
-  action_taken: z.string().nullable(),
-});
-
-export const adminRegistrationDetailSchema = registrationRecordContextSchema.extend({
-  id: databaseIdSchema,
-  event_id: eventIdSchema,
-  user_id: databaseIdSchema,
-  status: z.string(),
-  cancellation_reason_code: z.string().nullable(),
-  attendance_type: z.string(),
-  source_type: z.string(),
-  rsvp_status: z.string().nullable(),
-  rsvpByDay: z.array(adminRegistrationRsvpDaySchema),
-  customAnswers: z.record(z.string(), z.unknown()).nullable(),
-});
-
-export const adminRegistrationDayAttendanceSchema = z.object({
-  dayDate: z.string(),
-  attendanceType: z.string(),
-  label: z.string().nullable(),
-});
-
-export const adminRegistrationDayWaitlistSchema = z.object({
-  dayDate: z.string(),
-  status: z.string(),
-  priorityLane: z.string(),
-  offerExpiresAt: z.string().nullable(),
-});
-
-export const adminRegistrationDetailResponseSchema = z.object({
-  registration: adminRegistrationDetailSchema,
-  form: activeFormSummarySchema.nullable(),
-  dayAttendance: z.array(adminRegistrationDayAttendanceSchema),
-  dayWaitlist: z.array(adminRegistrationDayWaitlistSchema),
-});
-
-export type AdminRegistrationDetailResponse = z.infer<typeof adminRegistrationDetailResponseSchema>;
+/** @deprecated Use registrationRecordContextSchema directly. */
+export { registrationRecordContextSchema as adminRegistrationRecordContextSchema } from "./registration-record";
