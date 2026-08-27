@@ -1,5 +1,5 @@
 /**
- * admin-invite-chunked-bulk.test.ts
+ * group-event-invite-chunked-bulk.test.ts
  *
  * Verifies the recipient-bound chunked-send protocol for large CSV uploads.
  *
@@ -16,42 +16,28 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { createAdminSession } from "./helpers/auth";
-import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { queryAll } from "./helpers/context";
 import app from "../functions/router";
 import { handleError } from "../functions/_lib/http";
 import { bulkCreateAttendeeInvites, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
+import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 
 const appEnv = env as unknown as AppEnv;
 
-const EVENT_SLUG = "pqc-2026";
-let RAW_TOKEN = "chunked-bulk-test-token";
-
-async function seedRequiredTemplates(adminId: string): Promise<void> {
-  for (const [key, content, subject] of [
-    ["email_layout", "{{{body_html}}}", null],
-    ["attendee_invite", "Join: {{registrationUrl}}", "Invite to {{eventName}}"],
-  ] as [string, string, string | null][]) {
-    const v = await createTemplateVersion(appEnv.DB, {
-      templateKey: key,
-      content,
-      subjectTemplate: subject,
-      createdByUserId: adminId,
-    });
-    await activateTemplateVersion(appEnv.DB, { templateKey: key, version: v.version });
-  }
-}
+let rawToken = "";
+let basePath = "";
+let eventSlug = "";
 
 function makeRequest(action: "preview" | "bulk", body: unknown): Request {
-  return new Request(`https://app.test/api/v1/admin/events/${EVENT_SLUG}/invites/attendees/${action}`, {
+  return new Request(`https://app.test${basePath}/attendees/${action}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${RAW_TOKEN}`,
+      authorization: `Bearer ${rawToken}`,
     },
     body: JSON.stringify(body),
   });
@@ -70,11 +56,15 @@ describe("attendee invite — chunked bulk send", () => {
 
   beforeEach(async () => {
     await resetDb();
-    await seedEventAndAdmin(appEnv.DB);
-    const row = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
-    adminId = row.id;
-    RAW_TOKEN = await createAdminSession(appEnv.DB, adminId, RAW_TOKEN);
-    await seedRequiredTemplates(adminId);
+    const fixture = await createGroupEventInvitationFixture(appEnv.DB, "chunked-bulk", {
+      startsAt: "2026-12-01T08:00:00.000Z",
+      endsAt: "2026-12-04T18:00:00.000Z",
+    });
+    adminId = fixture.actor.id;
+    rawToken = fixture.token;
+    basePath = fixture.basePath;
+    eventSlug = fixture.eventSlug;
+    await seedWorkflowEmailTemplates(appEnv.DB, adminId);
   });
 
   it("preview response includes recipient-bound send batches", async () => {
@@ -182,7 +172,7 @@ describe("attendee invite — chunked bulk send", () => {
       await queryAll<{ id: string; starts_at: string; ends_at: string }>(
         appEnv.DB,
         "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
-        [EVENT_SLUG],
+        [eventSlug],
       )
     )[0];
     const budgeted = createD1QueryBudgetedDatabase(appEnv.DB, 9);
@@ -213,7 +203,7 @@ describe("attendee invite — chunked bulk send", () => {
       await queryAll<{ id: string; starts_at: string; ends_at: string }>(
         appEnv.DB,
         "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
-        [EVENT_SLUG],
+        [eventSlug],
       )
     )[0];
     const priorId = crypto.randomUUID();
@@ -245,7 +235,7 @@ describe("attendee invite — chunked bulk send", () => {
       await queryAll<{ id: string; starts_at: string; ends_at: string }>(
         appEnv.DB,
         "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
-        [EVENT_SLUG],
+        [eventSlug],
       )
     )[0];
     let batchCall = 0;
@@ -290,7 +280,7 @@ describe("attendee invite — chunked bulk send", () => {
       await queryAll<{ id: string; starts_at: string; ends_at: string }>(
         appEnv.DB,
         "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
-        [EVENT_SLUG],
+        [eventSlug],
       )
     )[0];
     const racingDb = mutateBeforeNextBatch(appEnv.DB, async () => {
@@ -323,7 +313,7 @@ describe("attendee invite — chunked bulk send", () => {
       await queryAll<{ id: string; starts_at: string; ends_at: string }>(
         appEnv.DB,
         "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
-        [EVENT_SLUG],
+        [eventSlug],
       )
     )[0];
     const create = () =>
@@ -357,7 +347,7 @@ describe("attendee invite — chunked bulk send", () => {
       await queryAll<{ id: string; starts_at: string; ends_at: string }>(
         appEnv.DB,
         "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
-        [EVENT_SLUG],
+        [eventSlug],
       )
     )[0];
     const makePeerInvite = (email: string) =>

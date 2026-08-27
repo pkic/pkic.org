@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
@@ -39,5 +40,15 @@ describe("legacy admin route redirects", () => {
     expect(legacyAdminRedirectTarget("/membership/settings?from=bookmark")).toBe(
       ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
     );
+  });
+
+  it("moves event invitation bookmarks to selected-group management", () => {
+    expect(legacyAdminRedirectTarget("/events/example/proposals/invites")).toBe(
+      ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+    );
+    expect(legacyAdminRedirectTarget("/events/example/registrations/invites?from=bookmark")).toBe(
+      ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+    );
+    expect(legacyAdminRedirectTarget("/events/example/proposals")).toBeNull();
   });
 });

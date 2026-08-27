@@ -113,12 +113,6 @@ export type ProposalSpeaker = CanonicalAdminProposalSpeaker;
 
 export type ProposalAccess = CanonicalProposalAccess;
 
-export interface AdminInviteEntry {
-  email: string;
-  firstName?: string;
-  lastName?: string;
-}
-
 export type InviteRecord = CanonicalInviteRecord;
 
 export type AdminEmailOutboxRow = CanonicalAdminEmailOutboxRow;

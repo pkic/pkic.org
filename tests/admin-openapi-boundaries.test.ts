@@ -54,9 +54,11 @@ describe("admin OpenAPI mutation boundaries", () => {
     expect(
       spec.paths["/api/v1/admin/organizations/{id}/logo"].delete.responses["200"].content["application/json"].schema,
     ).toMatchObject({ required: ["success"] });
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/{inviteId}/resend"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/{inviteId}/resend"]).toBeUndefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/speakers/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/send"].post).toBeDefined();
   });
@@ -95,20 +97,8 @@ describe("admin OpenAPI mutation boundaries", () => {
     await expect(logo.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 
-  it("rejects malformed invite and campaign mutation bodies at the mounted contracts", async () => {
+  it("rejects malformed campaign mutation bodies at the mounted contracts", async () => {
     await setupAdmin();
-
-    const attendeePreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/attendees/preview", {
-      method: "POST",
-      body: JSON.stringify({ invites: [] }),
-    });
-    expect(attendeePreview.status).toBe(400);
-
-    const speakerPreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
-      method: "POST",
-      body: JSON.stringify({ invites: [] }),
-    });
-    expect(speakerPreview.status).toBe(400);
 
     const campaignPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
       method: "POST",
@@ -126,14 +116,9 @@ describe("admin OpenAPI mutation boundaries", () => {
       }),
     });
     expect(campaignSend.status).toBe(400);
-
-    const resend = await callAdmin("/api/v1/admin/events/pqc-2026/invites/not-a-database-id/resend", {
-      method: "POST",
-    });
-    expect(resend.status).toBe(400);
   });
 
-  it("returns validated invite and campaign previews through the mounted routes", async () => {
+  it("returns validated campaign previews and leaves the retired invite API unmounted", async () => {
     await setupAdmin();
     const [{ id: adminId }] = await queryAll<{ id: string }>(
       env.DB,
@@ -141,16 +126,11 @@ describe("admin OpenAPI mutation boundaries", () => {
     );
     await seedWorkflowEmailTemplates(env.DB, adminId);
 
-    const invitePreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/attendees/preview", {
+    const retiredInvitePreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/attendees/preview", {
       method: "POST",
       body: JSON.stringify({ invites: [{ email: "preview@example.test", firstName: "Preview" }] }),
     });
-    expect(invitePreview.status).toBe(200);
-    await expect(invitePreview.json()).resolves.toMatchObject({
-      success: true,
-      recipientCount: 1,
-      inviteDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
-    });
+    expect(retiredInvitePreview.status).toBe(404);
 
     const campaignPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
       method: "POST",

@@ -4,8 +4,8 @@ import { requireGroupEventProposalContext, prepareGroupEventProposalContextGuard
 import { getEventById, buildEventEmailVariables } from "../events";
 import { registrationPageUrl, proposalPageUrl, inviteDeclineUrl } from "../frontend-links";
 import { resolveEventInviteExpiry } from "../../invite-validity";
-import { requireValidEventInviteRecipientBatch, type EventInviteType } from "../admin-invite-preview";
-import { buildEventInvitePreview } from "../admin-invite-preview-email";
+import { requireValidEventInviteRecipientBatch, type EventInviteType } from "../event-invite-preview";
+import { buildEventInvitePreview } from "../event-invite-preview-email";
 import { buildEventInviteRecipientVariables } from "../event-invite-email-variables";
 import { bulkCreateAttendeeInvites, bulkCreateSpeakerInvites } from "../invites";
 import type { BulkInviteOutcome } from "../invite-bulk";

@@ -1,18 +1,8 @@
-/**
- * GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05).
- *
- * Was manually parsing new URL() with no Chanfana schema, and computed a
- * limit+1-and-slice hasMore *in addition to* a redundant separate COUNT(*)
- * (P6M-CC-03). Now wraps the route in openApiRoute with a validated
- * data.query, and the page query + real COUNT(*) share the same WHERE
- * filters and run concurrently.
- */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { createAdminSession } from "./helpers/auth";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 
 async function call(token: string, path: string): Promise<Response> {
   return app.fetch(
@@ -43,17 +33,17 @@ async function insertInvite(
     .run();
 }
 
-describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
-  let adminToken: string;
+describe("GET /api/v1/groups/:groupId/events/:eventId/invites/speakers", () => {
+  let token: string;
   let eventId: string;
+  let basePath: string;
 
   beforeEach(async () => {
     await resetDb();
-    ({ eventId } = await seedEventAndAdmin(env.DB));
-    const adminRow = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
-    )[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-invites-list-token");
+    const fixture = await createGroupEventInvitationFixture(env.DB, "speaker-list");
+    eventId = fixture.eventId;
+    token = fixture.token;
+    basePath = `${fixture.basePath}/speakers`;
 
     await insertInvite(eventId, { email: "a@invite.test", createdAt: "2026-01-01T00:00:00.000Z" });
     await insertInvite(eventId, { email: "b@invite.test", createdAt: "2026-01-02T00:00:00.000Z" });
@@ -66,7 +56,7 @@ describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
   });
 
   it("bounds results with limit/offset via data.query and returns a real page envelope", async () => {
-    const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?limit=2&offset=0&sort=created_at");
+    const response = await call(token, `${basePath}?limit=2&offset=0&sort=created_at`);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       invites: Array<{ inviteeEmail: string; inviteType: string }>;
@@ -78,7 +68,7 @@ describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
   });
 
   it("filters by status", async () => {
-    const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?status=accepted");
+    const response = await call(token, `${basePath}?status=accepted`);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { invites: Array<{ inviteeEmail: string }>; page: { total: number } };
     expect(body.invites.map((i) => i.inviteeEmail)).toEqual(["c@invite.test"]);
@@ -86,12 +76,12 @@ describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
   });
 
   it("rejects an invalid limit", async () => {
-    const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?limit=0");
+    const response = await call(token, `${basePath}?limit=0`);
     expect(response.status).toBe(400);
   });
 
   it("rejects unknown filters instead of silently returning unfiltered data", async () => {
-    const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?status=unexpected");
+    const response = await call(token, `${basePath}?status=unexpected`);
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("VALIDATION_ERROR");

@@ -1,10 +1,8 @@
 import { useHashLocation } from "wouter/use-hash-location";
 import { Tabs } from "../../../../components/Tabs";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
-import type { EventDetail } from "../../../types";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
-import { Invites } from "./Invites";
 
 function ProposalsList({ slug }: { slug: string }) {
   const [, navigate] = useHashLocation();
@@ -37,9 +35,9 @@ function ProposalsList({ slug }: { slug: string }) {
 }
 
 /** Admin adapter for the shared event-proposal catalogue. */
-export function Proposals({ slug, event, subTab }: { slug: string; event: EventDetail; subTab?: string }) {
+export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "invites" || subTab === "email" || subTab === "responses" ? subTab : "proposals";
+  const tab = subTab === "email" || subTab === "responses" ? subTab : "proposals";
 
   return (
     <div>
@@ -47,7 +45,6 @@ export function Proposals({ slug, event, subTab }: { slug: string; event: EventD
         items={[
           { key: "proposals", label: "Overview" },
           { key: "responses", label: "Responses" },
-          { key: "invites", label: "Speaker Invites" },
           { key: "email", label: "Email" },
         ]}
         active={tab}
@@ -55,7 +52,6 @@ export function Proposals({ slug, event, subTab }: { slug: string; event: EventD
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="proposal_submission" />}
-      {tab === "invites" && <Invites slug={slug} event={event} inviteType="speaker" />}
       {tab === "email" && <EventEmail slug={slug} audience="speakers" />}
     </div>
   );

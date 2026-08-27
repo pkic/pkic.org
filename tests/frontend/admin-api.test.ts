@@ -102,7 +102,7 @@ describe("admin API client", () => {
     );
 
     await expect(
-      api("/api/v1/admin/events/event/invites/attendees/bulk", eventInviteBulkResponseSchema),
+      api("/api/v1/groups/group/events/event/invites/attendees/bulk", eventInviteBulkResponseSchema),
     ).resolves.toEqual({
       success: true,
       created: [{ email: "a@example.test" }],

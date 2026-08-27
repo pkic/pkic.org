@@ -7,15 +7,27 @@ Base path: `/api/v1`
 - `POST /admin/auth/verify-link`
 
 ## Admin event management
+
 - `POST /admin/events/sync-from-hugo`
 - `PATCH /admin/events/:eventSlug/settings`
-- `POST /admin/events/:eventSlug/invites/attendees/bulk`
-- `POST /admin/events/:eventSlug/invites/speakers/bulk`
 - `GET /admin/events/:eventSlug/registrations`
 - `GET /admin/events/:eventSlug/proposals`
 - `POST /admin/events/sync-from-hugo` supports optional `event.frontend.routes`:
 - `registration`, `registrationConfirm`, `proposal`, `registrationManage`, `proposalManage`
 - Route metadata is stored in `events.settings_json.frontend.routes`.
+
+## Group event invitation management
+
+- `GET /groups/:groupId/events/:eventId/invites`
+- `POST /groups/:groupId/events/:eventId/invites/attendees/preview`
+- `POST /groups/:groupId/events/:eventId/invites/attendees/bulk`
+- `GET /groups/:groupId/events/:eventId/invites/speakers`
+- `POST /groups/:groupId/events/:eventId/invites/speakers/preview`
+- `POST /groups/:groupId/events/:eventId/invites/speakers/bulk`
+- `POST /groups/:groupId/events/:eventId/invites/:inviteId/resend`
+- `POST /groups/:groupId/events/:eventId/invites/:inviteId/revoke`
+- `POST /groups/:groupId/events/:eventId/invites/speakers/:inviteId/resend`
+- `POST /groups/:groupId/events/:eventId/invites/speakers/:inviteId/revoke`
 
 ## Proposal review
 - `GET /admin/proposals/:proposalId/reviews`

@@ -1,50 +1,8 @@
 import { z } from "zod";
 import { adminEventCampaignPreviewSchema, adminEventCampaignSendSchema } from "./admin-events";
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
-import {
-  eventBulkAttendeeInvitesPreviewSchema,
-  eventBulkSpeakerInvitesPreviewSchema,
-  eventInvitePreviewResponseSchema,
-} from "./event-invite-bulk";
 
 const previewTokenSchema = adminEventCampaignSendSchema.shape.previewToken;
-
-export const adminAttendeeInvitePreviewResponseSchema = eventInvitePreviewResponseSchema;
-export const adminSpeakerInvitePreviewResponseSchema = eventInvitePreviewResponseSchema;
-
-export const adminAttendeeInvitePreviewRouteSchema = {
-  tags: ["Admin events", "Invites"],
-  summary: "Preview attendee invites",
-  description: "Render an attendee invitation preview and issue a short-lived bulk-send token.",
-  request: {
-    params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: eventBulkAttendeeInvitesPreviewSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Attendee invite preview.",
-      content: { "application/json": { schema: adminAttendeeInvitePreviewResponseSchema } },
-    },
-    "400": { description: "Invalid invite preview payload." },
-  },
-};
-
-export const adminSpeakerInvitePreviewRouteSchema = {
-  ...adminAttendeeInvitePreviewRouteSchema,
-  summary: "Preview speaker invites",
-  description: "Render a speaker invitation preview and issue a short-lived bulk-send token.",
-  request: {
-    params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: eventBulkSpeakerInvitesPreviewSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Speaker invite preview.",
-      content: { "application/json": { schema: adminSpeakerInvitePreviewResponseSchema } },
-    },
-    "400": { description: "Invalid invite preview payload." },
-  },
-};
 
 export const adminEventCampaignPreviewResponseSchema = successResponseSchema.extend({
   recipientCount: z.number().int().nonnegative(),

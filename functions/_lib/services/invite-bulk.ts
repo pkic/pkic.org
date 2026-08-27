@@ -365,8 +365,3 @@ export function bulkCreateAttendeeInvites(
 export function bulkCreateSpeakerInvites(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkSpeakerOutcome[]> {
   return bulkCreateInvites(db, "speaker", payload);
 }
-
-/** @deprecated Import the domain-neutral bulk invite helper instead. */
-export const bulkCreateAttendeesAdmin = bulkCreateAttendeeInvites;
-/** @deprecated Import the domain-neutral bulk invite helper instead. */
-export const bulkCreateSpeakersAdmin = bulkCreateSpeakerInvites;

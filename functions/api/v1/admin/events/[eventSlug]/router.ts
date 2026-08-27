@@ -17,7 +17,6 @@ import { AdminEventsEventSlugSettingsPatch } from "./settings";
 import { AdminEventsEventSlugSponsorTiersGet, AdminEventsEventSlugSponsorTiersPut } from "./sponsor-tiers";
 import { AdminEventsEventSlugStatsGet } from "./stats";
 import emails_Router from "./emails/router";
-import invites_Router from "./invites/router";
 import permissions_Router from "./permissions/router";
 import registrations_Router from "./registrations/router";
 import waitlist_Router from "./waitlist/router";
@@ -38,7 +37,7 @@ function isSelfGatedEventPath(path: string, eventSlug: string): boolean {
 
 /**
  * Context-aware gate for the /admin/events/:eventSlug/**
- * management surface (registrations, invites, waitlist, settings, emails,
+ * management surface (registrations, waitlist, settings, emails,
  * days, forms, terms, promoters, stats) — requires events:read (GET) or
  * events:write (writes), globally or scoped to this event. Global admins
  * pass unconditionally via requirePermission's role='admin' bypass, so
@@ -87,7 +86,6 @@ openapi.get("/sponsor-tiers", AdminEventsEventSlugSponsorTiersGet);
 openapi.put("/sponsor-tiers", AdminEventsEventSlugSponsorTiersPut);
 openapi.get("/stats", AdminEventsEventSlugStatsGet);
 openapi.route("/emails", emails_Router);
-openapi.route("/invites", invites_Router);
 openapi.route("/permissions", permissions_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.route("/waitlist", waitlist_Router);

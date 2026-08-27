@@ -3,11 +3,11 @@ import {
   computeEventInviteDigest,
   signEventInvitePreviewToken,
   verifyEventInvitePreviewToken,
-} from "../functions/_lib/services/admin-invite-preview";
+} from "../functions/_lib/services/event-invite-preview";
 
 const INVITE_EXPIRES_AT = "2026-12-01T08:00:00.000Z";
 
-describe("admin invite preview token", () => {
+describe("event invite preview token", () => {
   it("verifies a valid preview token", async () => {
     const secret = "test-secret";
     const invites = [{ email: "alex@example.com", firstName: "Alex", lastName: "Morgan" }];

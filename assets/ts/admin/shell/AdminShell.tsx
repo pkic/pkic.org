@@ -23,6 +23,7 @@ import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
@@ -98,6 +99,24 @@ export function AdminShell() {
                 <SectionWrapper title="Registration">
                   <RegistrationDetailPage slug={params.slug} regId={params.regId} />
                 </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/events/:slug/proposals/invites"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET}
+                  message="Speaker invitations have moved to the selected-group portal."
+                />
+              )}
+            />
+            <Route
+              path="/events/:slug/registrations/invites"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET}
+                  message="Attendee invitations have moved to the selected-group portal."
+                />
               )}
             />
             <Route

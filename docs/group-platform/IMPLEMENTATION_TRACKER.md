@@ -258,10 +258,11 @@ Status: In progress
       makes stale invitations logically expired. Duplicate classification and
       the final guarded D1 batch use the same predicate, so replacement cannot
       race with an event schedule or invitation change. The selected-group
-      portal, temporary admin adapter, resend actions, and peer attendee/speaker
-      nomination route all reuse this contract and command boundary. Focused
-      service, mounted route, query-plan, atomicity, and portal-component
-      regressions are included.
+      portal, resend actions, and peer attendee/speaker nomination route all
+      reuse this contract and command boundary. The duplicate admin invitation
+      UI and API have been removed rather than kept as a compatibility
+      implementation. Focused service, mounted route, query-plan, atomicity,
+      and portal-component regressions are included.
 - [x] Add the same explicit expiry selection to peer speaker nominations.
       Evidence: the existing peer route extends the shared invite-validity
       schema and delegates to the same event-bounded bulk command; omitted,
@@ -1009,7 +1010,7 @@ Status: In progress
       the group projection excludes inviter internals, decline notes, and
       unsubscribe state. Exact event-management authorization is guarded for
       both reads and same-batch writes. One shared composer and neutral schemas
-      drive both invitation types and the temporary admin adapter. Preview
+      drive both invitation types in the selected-group event context. Preview
       confirmation signs every independently sendable ordered recipient batch
       over its actor, event, invitation type, effective expiry, and digest; the
       bulk command recomputes the digest before any write, rejecting recipient
@@ -1018,10 +1019,12 @@ Status: In progress
       capabilities to the current secret generation, and delivery fails closed
       when an invite is revoked, expired, accepted, declined, or superseded.
       The unreleased consolidated migration includes the query-plan-verified
-      event/type/created index. The obsolete admin-only bulk form is removed;
-      the admin view renders the shared composer as a compatibility adapter.
-      A real Worker/D1 browser journey creates, previews, sends, searches,
-      resends, and revokes an attendee invitation without an admin API request.
+      event/type/created index. The obsolete admin-only bulk form, invitation
+      list, resend/revoke handlers, route contracts, and event-detail tabs are
+      removed. Old attendee and speaker invitation bookmarks redirect to the
+      selected-group portal instead of retaining a second consumer. Real
+      Worker/D1 browser journeys create, preview, send, search, resend, and
+      revoke attendee and speaker invitations without an admin API request.
       Focused tests cover the corresponding speaker lifecycle, large-list
       batching, preview-token substitution attacks, permission boundaries,
       accessible controls, and text-safe recipient rendering.
@@ -1234,16 +1237,17 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,165 backend tests pass with one skipped, 276 frontend tests
+      checkpoint: 2,161 backend tests pass with one skipped, 276 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
-      dependency architecture, API-contract, zero-duplication, formatting,
+      dependency architecture, API-contract, changed-scope duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
       combined run identified one 607-line test file; the meeting cases
       were separated into a focused file. The complete composite gate was then
       rerun successfully after the selected-group authorization, account
-      cutover, centralized management destinations, group creation, and category
-      rule regressions were added. The final architecture state must pass the
-      same complete gate again before handoff.
+      cutover, centralized management destinations, group creation, category
+      rule regressions, and removal of the duplicate admin invitation surface
+      were added. The final architecture state must pass the same complete gate
+      again before handoff.
 - [x] Run focused Playwright flows while iterating.
       Current evidence: the real Worker/D1 portal event journey and six
       selected-group persona journeys pass together in one isolated seven-test
@@ -1347,4 +1351,8 @@ The final PR description must include, at minimum:
   immediately;
 - verify `/api/v1/admin/membership-settings` returns 404 and the old admin
   bookmark redirects without making a legacy API request;
+- create, preview, send, search, resend, and revoke attendee and speaker
+  invitations from the selected-group event view;
+- verify the retired admin event-invitation APIs return 404 and old attendee
+  and speaker invitation bookmarks redirect without making a legacy request;
 - verify legacy admin redirects and absence of duplicate admin workflows.

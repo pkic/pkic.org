@@ -1,21 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
-import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
-import { createGroup } from "../functions/_lib/services/groups";
-import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
-import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { listGroupEventSpeakerInvites } from "../functions/_lib/services/events/group-invite-management";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
-
-async function createActor(): Promise<UserBackedAuthAdmin> {
-  const id = await insertUser(env.DB, `bulk-manager-${crypto.randomUUID()}@example.test`);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
-  return { identityType: "user", id, email: `bulk-manager-${id}@example.test`, role: "admin" };
-}
+import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
+import { createGroup } from "../functions/_lib/services/groups";
 
 async function request(token: string, path: string, body?: unknown): Promise<Response> {
   return callApi(env, path, {
@@ -29,28 +20,9 @@ describe("group event bulk invitations", () => {
   beforeEach(resetDb);
 
   it("uses only nested group routes for preview, attendee creation, and speaker lifecycle", async () => {
-    const actor = await createActor();
-    await seedWorkflowEmailTemplates(env.DB, actor.id);
-    const group = await createGroup(env.DB, actor, {
-      typeKey: "working_group",
-      name: `Bulk invitation group ${crypto.randomUUID()}`,
-      visibility: "authenticated",
-      eligibilityMode: "open",
-    });
-    const created = await createGroupManagedEvent(env.DB, actor, group.id, {
-      name: "Bulk invitations",
-      slug: `bulk-invitations-${crypto.randomUUID()}`,
-      timezone: "UTC",
-      startsAt: "2027-04-01T09:00:00.000Z",
-      endsAt: "2027-04-01T17:00:00.000Z",
-      profileKey: "workshop",
-      registrationPolicy: "no_registration",
-      inviteLimitAttendee: 5,
-      location: "Online",
-      links: [],
-    });
-    const token = await createAdminSession(env.DB, actor.id, `bulk-invite-${crypto.randomUUID()}`);
-    const base = `/api/v1/groups/${group.id}/events/${created.eventId}/invites`;
+    const fixture = await createGroupEventInvitationFixture(env.DB, "bulk-invitations");
+    await seedWorkflowEmailTemplates(env.DB, fixture.actor.id);
+    const { actor, token, basePath: base } = fixture;
 
     const attendeePreview = await request(token, `${base}/attendees/preview`, {
       invites: [{ email: "attendee@example.test", firstName: "Attendee" }],
@@ -124,11 +96,11 @@ describe("group event bulk invitations", () => {
     });
     const racingDb = mutateBeforeNextBatch(env.DB, async () => {
       await env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?")
-        .bind(otherGroup.id, created.eventId)
+        .bind(otherGroup.id, fixture.eventId)
         .run();
     });
     await expect(
-      listGroupEventSpeakerInvites(racingDb, actor, group.id, created.eventId, {
+      listGroupEventSpeakerInvites(racingDb, actor, fixture.groupId, fixture.eventId, {
         limit: 50,
         offset: 0,
         sort: "-created_at",

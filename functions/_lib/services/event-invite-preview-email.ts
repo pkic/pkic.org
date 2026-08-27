@@ -8,7 +8,7 @@ import {
   signEventInvitePreviewToken,
   type EventInvitePreviewInput,
   type EventInviteType,
-} from "./admin-invite-preview";
+} from "./event-invite-preview";
 import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
 import type { DatabaseLike } from "../types";
 import { resolveEventInviteExpiry } from "../invite-validity";
