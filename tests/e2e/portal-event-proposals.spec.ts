@@ -111,6 +111,37 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
   await page.getByRole("button", { name: /Profile reminder/ }).click();
   await expect(page.getByText("Profile reminder sent", { exact: true })).toBeVisible();
 
+  const coSpeakerEmail = `portal-co-speaker-${unique}@pkic.org`;
+  const coSpeakerDeadline = "2027-09-10T15:30";
+  const coSpeakerInviteResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/${event.id}/proposals/${proposalId}/speakers`),
+  );
+  const speakerPanel = page.getByLabel("Proposal speakers");
+  await speakerPanel.getByLabel("Email address").fill(coSpeakerEmail);
+  await speakerPanel.getByLabel("First name").fill("Portal");
+  await speakerPanel.getByLabel("Last name").fill("Co Speaker");
+  await speakerPanel.getByLabel("Proposal role").selectOption("co_speaker");
+  await speakerPanel.getByLabel("Invitation deadline").fill(coSpeakerDeadline);
+  await speakerPanel.getByRole("button", { name: "Invite co-speaker" }).click();
+  const invitation = (await coSpeakerInviteResponse).json() as Promise<{
+    email: string;
+    expiresAt: string;
+    role: string;
+    queued: boolean;
+  }>;
+  await expect(speakerPanel.locator("strong").filter({ hasText: /^Portal Co Speaker$/ })).toBeVisible();
+  await expect(speakerPanel.getByText(coSpeakerEmail, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Invitation queued for ${coSpeakerEmail}`, { exact: true })).toBeVisible();
+  await expect(invitation).resolves.toEqual({
+    success: true,
+    email: coSpeakerEmail,
+    role: "co_speaker",
+    expiresAt: "2027-09-10T13:30:00.000Z",
+    queued: true,
+  });
+
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(meRequests).toEqual(expect.arrayContaining(["GET /api/v1/me/proposal-programs"]));
   expect(groupRequests).toEqual(
@@ -119,6 +150,7 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*$/),
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/audit-log$/),
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers$/),
+      expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers$/),
       expect.stringMatching(/^PATCH \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers\/.*$/),
       expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers\/.*\/remind$/),
     ]),

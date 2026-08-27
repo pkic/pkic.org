@@ -26,6 +26,9 @@ interface ProposalDetailRow {
   decision_note: string | null;
   decision_decided_at: string | null;
   event_settings_json: string;
+  event_starts_at: string | null;
+  event_ends_at: string | null;
+  event_timezone: string;
 }
 
 export async function getProposalDetailData(db: DatabaseLike, proposalId: string) {
@@ -37,6 +40,7 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
        sp.canceled_at, sp.cancellation_comment,
        u.email AS proposer_email, u.first_name AS proposer_first_name,
        u.last_name AS proposer_last_name, e.settings_json AS event_settings_json,
+       e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, e.timezone AS event_timezone,
        (SELECT COUNT(*) FROM proposal_reviews pr
         WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) AS review_count,
        pd.final_status AS decision_status, pd.decision_note,
@@ -53,6 +57,11 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
   const proposalForm = await getActiveFormByPurpose(db, proposal.event_id, "proposal_submission");
   return {
     eventId: proposal.event_id,
+    event: {
+      startsAt: proposal.event_starts_at,
+      endsAt: proposal.event_ends_at,
+      timezone: proposal.event_timezone,
+    },
     proposal: {
       id: proposal.id,
       event_id: proposal.event_id,

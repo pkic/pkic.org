@@ -5,6 +5,7 @@ import { act } from "preact/test-utils";
 import { AcceptedProposalCancellationPanel } from "../../assets/ts/components/proposals/AcceptedProposalCancellationPanel";
 import { ProposalReviewsPanel } from "../../assets/ts/components/proposals/ProposalReviewsPanel";
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
+import { ProposalCoSpeakerInviteForm } from "../../assets/ts/components/proposals/ProposalCoSpeakerInviteForm";
 import type { ProposalReview } from "../../assets/shared/schemas/proposal-reviews";
 
 let container: HTMLElement | null = null;
@@ -195,5 +196,64 @@ describe("shared proposal management components", () => {
     });
 
     expect(requests.some((url) => url.includes("/reviews") || url.includes("/comments"))).toBe(false);
+  });
+
+  it("queues a canonical co-speaker invitation with the selected role and bounded deadline", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const onInvited = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: true,
+              email: "speaker@example.test",
+              role: "panelist",
+              expiresAt: "2027-01-01T12:00:00.000Z",
+              queued: true,
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+        );
+      }),
+    );
+    const root = mount(
+      <ProposalCoSpeakerInviteForm
+        endpoint="/api/v1/groups/group-1/events/event-1/proposals/proposal-1/speakers"
+        proposalId="proposal-1"
+        event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
+        onInvited={onInvited}
+      />,
+    );
+
+    const email = root.querySelector<HTMLInputElement>('input[type="email"]')!;
+    const role = root.querySelector<HTMLSelectElement>("select")!;
+    const deadline = root.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+    expect(deadline.max).toBe("2027-01-01T17:00");
+    await act(() => {
+      email.value = "SPEAKER@example.test";
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+      role.value = "panelist";
+      role.dispatchEvent(new Event("change", { bubbles: true }));
+      deadline.value = "2027-01-01T12:00";
+      deadline.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe("/api/v1/groups/group-1/events/event-1/proposals/proposal-1/speakers");
+    expect(requests[0].url).not.toContain("/api/v1/admin");
+    expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({
+      email: "speaker@example.test",
+      role: "panelist",
+      expiresAt: "2027-01-01T12:00:00.000Z",
+    });
+    expect(onInvited).toHaveBeenCalledOnce();
+    expect(email.value).toBe("");
   });
 });

@@ -14,6 +14,7 @@ export const proposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
   declinedAt: z.string().nullable(),
   declineReason: z.string().nullable(),
   termsAcceptedAt: z.string().nullable(),
+  inviteExpiresAt: z.iso.datetime().nullable(),
   addedAt: z.string(),
   biography: z.string().nullable(),
   profileComplete: z.boolean(),

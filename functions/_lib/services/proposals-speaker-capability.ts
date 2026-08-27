@@ -8,6 +8,7 @@ import {
   proposalSpeakerEffectiveProfileColumns,
   type ProposalSpeakerUserProfile,
 } from "./proposal-speakers";
+import { effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 
 export interface SpeakerWithContext {
   speaker: ProposalSpeakerRecord;
@@ -50,6 +51,8 @@ export async function getSpeakerByManageToken(
     ps_decline_reason: string | null;
     ps_created_at: string;
     ps_invite_generation: number;
+    ps_invite_expires_at: string | null;
+    ps_invite_expired: number;
     sp_id: string;
     sp_event_id: string;
     sp_proposer_user_id: string;
@@ -97,6 +100,15 @@ export async function getSpeakerByManageToken(
        ps.decline_reason  AS ps_decline_reason,
        ps.created_at      AS ps_created_at,
        ps.invite_generation AS ps_invite_generation,
+       ps.invite_expires_at AS ps_invite_expires_at,
+       CASE
+         WHEN ps.status IN ('invited', 'pending')
+           AND (
+             ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NULL
+             OR unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) <= unixepoch('now')
+           )
+         THEN 1 ELSE 0
+       END AS ps_invite_expired,
        sp.id              AS sp_id,
        sp.event_id        AS sp_event_id,
        sp.proposer_user_id AS sp_proposer_user_id,
@@ -125,6 +137,7 @@ export async function getSpeakerByManageToken(
        ps.profile_overrides_json AS ps_profile_overrides_json
      FROM proposal_speakers ps
      JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
+     JOIN events e                ON e.id  = sp.event_id
      JOIN users u              ON u.id  = ps.user_id
      WHERE ps.id = ?`,
     [verified.resourceId],
@@ -132,6 +145,9 @@ export async function getSpeakerByManageToken(
 
   if (!row) {
     throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "Invalid or expired speaker token");
+  }
+  if (row.ps_invite_expired === 1) {
+    throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
   }
 
   return {
@@ -148,6 +164,7 @@ export async function getSpeakerByManageToken(
       decline_reason: row.ps_decline_reason,
       created_at: row.ps_created_at,
       invite_generation: row.ps_invite_generation,
+      invite_expires_at: row.ps_invite_expires_at,
     },
     proposal: {
       id: row.sp_id,

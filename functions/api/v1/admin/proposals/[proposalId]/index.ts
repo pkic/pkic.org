@@ -27,6 +27,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   return json(
     adminProposalDetailResponseSchema.parse({
+      event: detail.event,
       proposal: detail.proposal,
       access,
       form: detail.form,

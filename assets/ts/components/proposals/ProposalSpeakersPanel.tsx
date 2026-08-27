@@ -10,6 +10,8 @@ import {
   buildReplacementProposerOptions,
   type ProposalSpeakerEndpointConfig,
 } from "./ProposalSpeakerCard";
+import { ProposalCoSpeakerInviteForm } from "./ProposalCoSpeakerInviteForm";
+import type { EventInviteWindow } from "../../../shared/schemas/event-invite-validity";
 
 export function ProposalSpeakersPanel({
   endpoint,
@@ -20,6 +22,8 @@ export function ProposalSpeakersPanel({
   onReload,
   notify,
   endpoints,
+  inviteEndpoint,
+  inviteWindow,
 }: {
   endpoint: string;
   proposalId: string;
@@ -29,6 +33,8 @@ export function ProposalSpeakersPanel({
   onReload?: () => void | Promise<void>;
   notify?: (message: string, type: ToastType) => void;
   endpoints: ProposalSpeakerEndpointConfig;
+  inviteEndpoint?: string;
+  inviteWindow?: EventInviteWindow;
 }) {
   const [speakerOverrides, setSpeakerOverrides] = useState<Record<string, Partial<ProposalSpeaker>>>({});
   const roster = useData(() => getJson(`${endpoint}/speakers`, proposalSpeakersResponseSchema), [endpoint]);
@@ -55,6 +61,18 @@ export function ProposalSpeakersPanel({
         </button>
       </div>
       <div class="card-body">
+        {access.canFinalize && inviteEndpoint && inviteWindow && (
+          <ProposalCoSpeakerInviteForm
+            endpoint={inviteEndpoint}
+            proposalId={proposalId}
+            event={inviteWindow}
+            notify={notify}
+            onInvited={async () => {
+              await roster.reload();
+              await onReload?.();
+            }}
+          />
+        )}
         {speakers.length === 0 ? (
           <p class="text-muted fst-italic mb-0">No speakers assigned yet.</p>
         ) : (

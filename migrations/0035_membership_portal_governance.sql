@@ -121,6 +121,19 @@ CREATE INDEX idx_email_outbox_expired_lease
 -- for the same generation share one outbox idempotency key.
 ALTER TABLE proposal_speakers ADD COLUMN invite_generation INTEGER NOT NULL DEFAULT 0;
 
+-- Co-speaker invitation eligibility is bounded by the owning event. NULL is
+-- retained only for pre-branch rows and is interpreted as the event start by
+-- the shared domain policy; every new or renewed invitation stores the
+-- resolved deadline explicitly.
+ALTER TABLE proposal_speakers ADD COLUMN invite_expires_at TEXT;
+
+DROP INDEX idx_proposal_speakers_speaker_invite_reminder_due;
+CREATE INDEX idx_proposal_speakers_speaker_invite_reminder_due
+  ON proposal_speakers(COALESCE(speaker_invite_last_communication_at, created_at), id,
+                       invite_expires_at, speaker_invite_reminder_count,
+                       speaker_invite_reminders_paused_until)
+  WHERE status = 'invited' AND role <> 'proposer';
+
 -- A proposal manager may curate a co-speaker's profile for this proposal, but
 -- the proposer-management capability must never rewrite that person's
 -- account-wide profile or headshot. Keep these overrides on the speaker roster

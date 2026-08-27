@@ -18,7 +18,7 @@ import {
   verifyStatelessCapabilityToken,
 } from "./capability-token";
 import type { CapabilityPurpose, CapabilityVerifyResult } from "./capability-token";
-import { effectiveInviteExpirySql } from "../invite-validity";
+import { effectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { normalizeEmail } from "../validation";
 
 const encoder = new TextEncoder();
@@ -133,6 +133,9 @@ export function queuedCapabilityToken(
   linkSecretFingerprint?: string,
   expiresAtSeconds?: number,
 ): string {
+  if (purpose === "speaker_manage" && linkSecretFingerprint === undefined) {
+    throw new Error("Queued speaker capabilities must be bound to the current link secret");
+  }
   if (linkSecretFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint)) {
     throw new Error("Queued capability secret fingerprint is invalid");
   }
@@ -207,7 +210,16 @@ async function loadCapabilityLinkSecret(
       ? `SELECT ps.manage_link_secret AS link_secret
            FROM proposal_speakers ps
            JOIN users u ON u.id = ps.user_id
-          WHERE ps.id = ? AND u.normalized_email = ?`
+           JOIN session_proposals sp ON sp.id = ps.proposal_id
+           JOIN events e ON e.id = sp.event_id
+          WHERE ps.id = ? AND u.normalized_email = ?
+            AND (
+              ps.status = 'confirmed'
+              OR (ps.status = 'invited' AND
+                ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NOT NULL
+                AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) > unixepoch()
+              )
+            )`
       : capabilitySecretQuery(purpose, allowInactiveInvite),
     recipientBoundSpeaker ? [resourceId, expectedRecipientNormalizedEmail] : [resourceId],
   );

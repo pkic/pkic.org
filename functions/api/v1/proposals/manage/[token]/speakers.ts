@@ -40,8 +40,17 @@ export async function handleCoSpeakerInvite(c: any, body: z.infer<typeof coSpeak
     firstName: body.firstName,
     lastName: body.lastName,
     role: body.role,
+    expiresAt: body.expiresAt,
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, invited.outboxId));
 
-  return json(coSpeakerInviteResponseSchema.parse({ success: true, email: invited.email, role: body.role }));
+  return json(
+    coSpeakerInviteResponseSchema.parse({
+      success: true,
+      email: invited.email,
+      role: body.role,
+      expiresAt: invited.expiresAt,
+      queued: invited.queued,
+    }),
+  );
 }

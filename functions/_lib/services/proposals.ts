@@ -213,6 +213,16 @@ export async function getProposalByManageToken(
   return proposal;
 }
 
+export async function getProposalById(db: DatabaseLike, proposalId: string): Promise<ProposalRecord> {
+  const proposal = await first<ProposalRecord>(
+    db,
+    `SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ? AND deleted_at IS NULL`,
+    [proposalId],
+  );
+  if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
+  return proposal;
+}
+
 export async function updateProposalByManageToken(
   db: DatabaseLike,
   payload: {

@@ -60,6 +60,20 @@ export function effectiveInviteExpirySql(inviteAlias = "i", eventAlias = "e"): s
   END`;
 }
 
+/** SQL expression for proposal-speaker invitation eligibility. */
+export function effectiveProposalSpeakerInviteExpirySql(speakerAlias = "ps", eventAlias = "e"): string {
+  return `CASE
+    WHEN ${eventAlias}.starts_at IS NULL OR ${eventAlias}.ends_at IS NULL
+      OR unixepoch(${eventAlias}.starts_at) IS NULL OR unixepoch(${eventAlias}.ends_at) IS NULL
+      OR unixepoch(${eventAlias}.ends_at) <= unixepoch(${eventAlias}.starts_at) THEN NULL
+    WHEN ${speakerAlias}.invite_expires_at IS NULL THEN ${eventAlias}.starts_at
+    WHEN unixepoch(${speakerAlias}.invite_expires_at) IS NULL THEN NULL
+    WHEN unixepoch(${speakerAlias}.invite_expires_at) <= unixepoch(${eventAlias}.ends_at)
+      THEN ${speakerAlias}.invite_expires_at
+    ELSE ${eventAlias}.ends_at
+  END`;
+}
+
 /** Applies the same event cap to existing rows and schedule changes in memory. */
 export function effectiveStoredInviteExpiry(event: InviteEventWindow, storedExpiresAt: string | null): string | null {
   const stored = instant(storedExpiresAt ?? event.starts_at);

@@ -28,9 +28,11 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
-import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
+import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
+import { nowIso } from "../utils/time";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -83,6 +85,17 @@ export async function submitProposal(
   input: ProposalSubmissionInput,
 ): Promise<ProposalSubmissionResult> {
   const statements: StatementLike[] = input.formRevisionGuard && !input.formDefinition ? [input.formRevisionGuard] : [];
+  const inviteNow = nowIso();
+  const coSpeakerExpiresAt =
+    input.body.speakers.length > 0 ? resolveEventInviteExpiry(input.event, undefined, inviteNow) : null;
+  if (coSpeakerExpiresAt) {
+    statements.push(
+      prepareAuthorizationGuard(
+        db,
+        eventInviteWindowEvidence(input.event.id, input.event, coSpeakerExpiresAt, inviteNow),
+      ),
+    );
+  }
   const proposerWrite = await buildFindOrCreateUserStatement(db, profileWrite(input.body.proposer));
   if (proposerWrite.statement) statements.push(proposerWrite.statement);
   const proposer = proposerWrite.user;
@@ -132,6 +145,7 @@ export async function submitProposal(
       proposalId: created.proposal.id,
       userId: userWrite.user.id,
       role: speaker.role,
+      inviteExpiresAt: coSpeakerExpiresAt,
       proposalContext,
     });
     statements.push(...preparedSpeaker.statements);

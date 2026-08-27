@@ -179,6 +179,9 @@ export function ProposalSpeakerCard({
               {speaker.declinedAt && (
                 <span class="small text-danger">✗ Declined {formatDateTime(speaker.declinedAt)}</span>
               )}
+              {speaker.status === "invited" && speaker.inviteExpiresAt && (
+                <span class="small text-muted">Invitation expires {formatDateTime(speaker.inviteExpiresAt)}</span>
+              )}
             </div>
             {speaker.declineReason && <div class="small text-muted mt-1">Decline reason: {speaker.declineReason}</div>}
             {!editing && speaker.biography && (

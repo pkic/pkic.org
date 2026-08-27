@@ -1,7 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
-import { createProposal } from "../functions/_lib/services/proposals";
+import { createProposal, getProposalById } from "../functions/_lib/services/proposals";
+import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
+import { getEventById } from "../functions/_lib/services/events";
+import { preparePermissionsAuthorizationGuard } from "../functions/_lib/auth/permissions";
 import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
 import { removeProposalSpeakerByManager } from "../functions/_lib/services/proposal-speaker-removal";
 import { sendProposalSpeakerReminders } from "../functions/_lib/services/proposal-reminders";
@@ -16,6 +19,7 @@ import {
   cancelAcceptedProposalResponseSchema,
   finalizeProposalResponseSchema,
   proposalPatchResponseSchema,
+  coSpeakerInviteResponseSchema,
 } from "../assets/shared/schemas/proposal-management";
 import { proposalDecisionPreviewResponseSchema } from "../assets/shared/schemas/proposal-decisions";
 import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
@@ -281,6 +285,352 @@ describe("group event proposal routes", () => {
     expect(
       (await routeAt(fixture, fixture.otherGroupId, fixture.eventId, "/" + fixture.proposalId + "/speakers")).status,
     ).toBe(404);
+  });
+
+  it("invites a co-speaker through the exact group proposal boundary with an event-bounded deadline", async () => {
+    const fixture = await setupFixture();
+    const response = await route(fixture, "/" + fixture.proposalId + "/speakers", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "new-program-speaker@example.test",
+        firstName: "New",
+        lastName: "Speaker",
+        role: "panelist",
+        expiresAt: "2027-01-01T12:00:00.000Z",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(coSpeakerInviteResponseSchema.parse(await response.json())).toEqual({
+      success: true,
+      email: "new-program-speaker@example.test",
+      role: "panelist",
+      expiresAt: "2027-01-01T12:00:00.000Z",
+      queued: true,
+    });
+    await expect(
+      queryAll<{ invite_expires_at: string; actor_id: string; actor_type: string }>(
+        env.DB,
+        `SELECT ps.invite_expires_at, al.actor_id, al.actor_type
+           FROM proposal_speakers ps
+           JOIN users u ON u.id = ps.user_id
+           JOIN audit_log al ON al.entity_id = ps.id AND al.action = 'co_speaker_invited'
+          WHERE ps.proposal_id = ? AND u.normalized_email = ?`,
+        [fixture.proposalId, "new-program-speaker@example.test"],
+      ),
+    ).resolves.toEqual([
+      {
+        invite_expires_at: "2027-01-01T12:00:00.000Z",
+        actor_id: fixture.reviewerId,
+        actor_type: "admin",
+      },
+    ]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", ["new-program-speaker@example.test"]),
+    ).resolves.toHaveLength(1);
+
+    const scoreOnly = await scopedToken(fixture, ["proposals:score"]);
+    expect(
+      (
+        await route(
+          fixture,
+          "/" + fixture.proposalId + "/speakers",
+          { method: "POST", body: JSON.stringify({ email: "score-only@example.test", role: "speaker" }) },
+          scoreOnly,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await routeAt(fixture, fixture.otherGroupId, fixture.eventId, "/" + fixture.proposalId + "/speakers", {
+          method: "POST",
+          body: JSON.stringify({ email: "wrong-group@example.test", role: "speaker" }),
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it("defaults co-speaker validity to event start and rejects deadlines beyond the event", async () => {
+    const fixture = await setupFixture();
+    const defaultResponse = await route(fixture, "/" + fixture.proposalId + "/speakers", {
+      method: "POST",
+      body: JSON.stringify({ email: "default-expiry@example.test", role: "speaker" }),
+    });
+    expect(defaultResponse.status).toBe(200);
+    expect(coSpeakerInviteResponseSchema.parse(await defaultResponse.json()).expiresAt).toBe(
+      "2027-01-01T09:00:00.000Z",
+    );
+
+    const invalidResponse = await route(fixture, "/" + fixture.proposalId + "/speakers", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "overlong-expiry@example.test",
+        role: "speaker",
+        expiresAt: "2027-01-02T00:00:00.000Z",
+      }),
+    });
+    expect(invalidResponse.status).toBe(400);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["overlong-expiry@example.test"]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("keeps active invitations idempotent and renews an expired invitation with a new generation", async () => {
+    const fixture = await setupFixture();
+    const email = "renewed-program-speaker@example.test";
+    const firstResponse = await route(fixture, "/" + fixture.proposalId + "/speakers", {
+      method: "POST",
+      body: JSON.stringify({ email, role: "speaker", expiresAt: "2027-01-01T12:00:00.000Z" }),
+    });
+    expect(firstResponse.status).toBe(200);
+    const [firstSpeaker] = await queryAll<{
+      id: string;
+      invite_expires_at: string;
+      invite_generation: number;
+      manage_link_secret: string;
+    }>(
+      env.DB,
+      `SELECT ps.id, ps.invite_expires_at, ps.invite_generation, ps.manage_link_secret
+       FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
+       WHERE ps.proposal_id = ? AND u.normalized_email = ?`,
+      [fixture.proposalId, email],
+    );
+
+    const duplicateResponse = await route(fixture, "/" + fixture.proposalId + "/speakers", {
+      method: "POST",
+      body: JSON.stringify({ email, role: "speaker", expiresAt: "2027-01-01T13:00:00.000Z" }),
+    });
+    expect(duplicateResponse.status).toBe(200);
+    await expect(duplicateResponse.json()).resolves.toMatchObject({
+      queued: false,
+      expiresAt: "2027-01-01T12:00:00.000Z",
+    });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET invite_expires_at = ? WHERE id = ?")
+      .bind("2020-01-01T00:00:00.000Z", firstSpeaker.id)
+      .run();
+    const renewalResponse = await route(fixture, "/" + fixture.proposalId + "/speakers", {
+      method: "POST",
+      body: JSON.stringify({ email, role: "speaker", expiresAt: "2027-01-01T15:00:00.000Z" }),
+    });
+    const renewalBody = await renewalResponse.json();
+    expect(renewalResponse.status, JSON.stringify(renewalBody)).toBe(200);
+    expect(renewalBody).toMatchObject({
+      queued: true,
+      expiresAt: "2027-01-01T15:00:00.000Z",
+    });
+    await expect(
+      queryAll<{
+        invite_expires_at: string;
+        invite_generation: number;
+        manage_link_secret: string;
+      }>(
+        env.DB,
+        "SELECT invite_expires_at, invite_generation, manage_link_secret FROM proposal_speakers WHERE id = ?",
+        [firstSpeaker.id],
+      ),
+    ).resolves.toEqual([
+      {
+        invite_expires_at: "2027-01-01T15:00:00.000Z",
+        invite_generation: firstSpeaker.invite_generation + 1,
+        manage_link_secret: expect.not.stringMatching(firstSpeaker.manage_link_secret),
+      },
+    ]);
+    await expect(
+      queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ?", [
+        email,
+      ]),
+    ).resolves.toEqual([{ count: 2 }]);
+  });
+
+  it("does not resurrect an invitation that is declined after duplicate-invite preflight", async () => {
+    const fixture = await setupFixture();
+    const email = "concurrently-declined-program-speaker@example.test";
+    expect(
+      (
+        await route(fixture, "/" + fixture.proposalId + "/speakers", {
+          method: "POST",
+          body: JSON.stringify({ email, role: "speaker" }),
+        })
+      ).status,
+    ).toBe(200);
+    const [speaker] = await queryAll<{ id: string; manage_link_secret: string; invite_generation: number }>(
+      env.DB,
+      `SELECT ps.id, ps.manage_link_secret, ps.invite_generation
+         FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
+        WHERE ps.proposal_id = ? AND u.normalized_email = ?`,
+      [fixture.proposalId, email],
+    );
+    const [proposal, event] = await Promise.all([
+      getProposalById(env.DB, fixture.proposalId),
+      getEventById(env.DB, fixture.eventId),
+    ]);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE proposal_speakers SET status = 'declined', declined_at = datetime('now') WHERE id = ?")
+        .bind(speaker.id)
+        .run(),
+    );
+
+    await expect(
+      inviteProposalSpeaker(racingDb, {
+        proposal,
+        event,
+        appBaseUrl: "https://app.test",
+        email,
+        role: "speaker",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+    await expect(
+      queryAll<{ status: string; manage_link_secret: string; invite_generation: number }>(
+        env.DB,
+        "SELECT status, manage_link_secret, invite_generation FROM proposal_speakers WHERE id = ?",
+        [speaker.id],
+      ),
+    ).resolves.toEqual([
+      {
+        status: "declined",
+        manage_link_secret: speaker.manage_link_secret,
+        invite_generation: speaker.invite_generation,
+      },
+    ]);
+    await expect(
+      queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ?", [
+        email,
+      ]),
+    ).resolves.toEqual([{ count: 1 }]);
+  });
+
+  it("does not downgrade a speaker confirmed after expired-renewal preflight", async () => {
+    const fixture = await setupFixture();
+    const email = "concurrently-confirmed-program-speaker@example.test";
+    expect(
+      (
+        await route(fixture, "/" + fixture.proposalId + "/speakers", {
+          method: "POST",
+          body: JSON.stringify({ email, role: "speaker" }),
+        })
+      ).status,
+    ).toBe(200);
+    const [speaker] = await queryAll<{ id: string; manage_link_secret: string; invite_generation: number }>(
+      env.DB,
+      `SELECT ps.id, ps.manage_link_secret, ps.invite_generation
+         FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
+        WHERE ps.proposal_id = ? AND u.normalized_email = ?`,
+      [fixture.proposalId, email],
+    );
+    await env.DB.prepare("UPDATE proposal_speakers SET invite_expires_at = ? WHERE id = ?")
+      .bind("2020-01-01T00:00:00.000Z", speaker.id)
+      .run();
+    const [proposal, event] = await Promise.all([
+      getProposalById(env.DB, fixture.proposalId),
+      getEventById(env.DB, fixture.eventId),
+    ]);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE proposal_speakers SET status = 'confirmed', confirmed_at = datetime('now') WHERE id = ?")
+        .bind(speaker.id)
+        .run(),
+    );
+
+    await expect(
+      inviteProposalSpeaker(racingDb, {
+        proposal,
+        event,
+        appBaseUrl: "https://app.test",
+        email,
+        role: "speaker",
+        expiresAt: "2027-01-01T15:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+    await expect(
+      queryAll<{
+        status: string;
+        manage_link_secret: string;
+        invite_generation: number;
+        invite_expires_at: string;
+      }>(
+        env.DB,
+        `SELECT status, manage_link_secret, invite_generation, invite_expires_at
+           FROM proposal_speakers WHERE id = ?`,
+        [speaker.id],
+      ),
+    ).resolves.toEqual([
+      {
+        status: "confirmed",
+        manage_link_secret: speaker.manage_link_secret,
+        invite_generation: speaker.invite_generation,
+        invite_expires_at: "2020-01-01T00:00:00.000Z",
+      },
+    ]);
+    await expect(
+      queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ?", [
+        email,
+      ]),
+    ).resolves.toEqual([{ count: 1 }]);
+  });
+
+  it("rolls back co-speaker creation when proposal management is revoked after preflight", async () => {
+    const fixture = await setupFixture();
+    const actor = await proposalManager(fixture);
+    const [proposal, event] = await Promise.all([
+      getProposalById(env.DB, fixture.proposalId),
+      getEventById(env.DB, fixture.eventId),
+    ]);
+    const racingDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, actor));
+    await expect(
+      inviteProposalSpeaker(racingDb, {
+        proposal,
+        event,
+        appBaseUrl: "https://app.test",
+        email: "revoked-before-invite@example.test",
+        role: "speaker",
+        authorization: { contextGuard: proposalContextGuard(racingDb, fixture) },
+        permissionGuard: preparePermissionsAuthorizationGuard(racingDb, actor, [
+          { permission: "proposals:manage", context: { type: "event", id: fixture.eventId } },
+        ]),
+        auditActor: { type: "admin", id: actor.id },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["revoked-before-invite@example.test"]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", ["revoked-before-invite@example.test"]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back co-speaker creation when the event window changes after preflight", async () => {
+    const fixture = await setupFixture();
+    const actor = await proposalManager(fixture);
+    const [proposal, event] = await Promise.all([
+      getProposalById(env.DB, fixture.proposalId),
+      getEventById(env.DB, fixture.eventId),
+    ]);
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE events SET starts_at = ?, ends_at = ?, updated_at = datetime('now') WHERE id = ?")
+        .bind("2027-01-02T09:00:00.000Z", "2027-01-02T17:00:00.000Z", fixture.eventId)
+        .run();
+    });
+    await expect(
+      inviteProposalSpeaker(racingDb, {
+        proposal,
+        event,
+        appBaseUrl: "https://app.test",
+        email: "rescheduled-before-invite@example.test",
+        role: "speaker",
+        authorization: { contextGuard: proposalContextGuard(racingDb, fixture) },
+        permissionGuard: preparePermissionsAuthorizationGuard(racingDb, actor, [
+          { permission: "proposals:manage", context: { type: "event", id: fixture.eventId } },
+        ]),
+        auditActor: { type: "admin", id: actor.id },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["rescheduled-before-invite@example.test"]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", [
+        "rescheduled-before-invite@example.test",
+      ]),
+    ).resolves.toHaveLength(0);
   });
 
   it("rolls back a mounted group speaker patch when its audit record fails", async () => {

@@ -212,6 +212,32 @@ describe("admin due-work read model", () => {
     expect(payload.items.map((item) => item.title)).toEqual(["Bulk Cleanup 000", "Bulk Cleanup 001"]);
   });
 
+  it("uses the bounded co-speaker invitation reminder index", async () => {
+    const plan = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN
+       SELECT ps.id
+       FROM proposal_speakers ps INDEXED BY idx_proposal_speakers_speaker_invite_reminder_due
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN events e ON e.id = sp.event_id
+       WHERE ps.status = 'invited'
+         AND ps.role <> 'proposer'
+         AND ps.speaker_invite_reminder_count < ?
+         AND COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) <= ?
+       ORDER BY COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) ASC, ps.id ASC
+       LIMIT ?`,
+    )
+      .bind(3, "2026-08-27T00:00:00.000Z", 100)
+      .all<{ detail: string }>();
+    expect(
+      plan.results.some((row) => row.detail.includes("idx_proposal_speakers_speaker_invite_reminder_due")),
+      JSON.stringify(plan.results),
+    ).toBe(true);
+    expect(
+      plan.results.some((row) => row.detail.includes("USE TEMP B-TREE")),
+      JSON.stringify(plan.results),
+    ).toBe(false);
+  });
+
   it("rejects an unallowlisted sort instead of interpolating it", async () => {
     expect((await call("/api/v1/admin/due-work?sort=recipient_email")).status).toBe(400);
   });

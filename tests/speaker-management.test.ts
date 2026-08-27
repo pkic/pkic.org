@@ -51,6 +51,7 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
 import { setSpeakerPresentationReminderPreference } from "../functions/_lib/services/speaker-presentation-reminder-preferences";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
+import { presentationUploadRequest } from "../assets/shared/presentation-upload";
 
 function mountedSpeakerRoute(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -72,7 +73,7 @@ class FakeUploadsBucket {
     key: string,
     value: string | ArrayBuffer | ReadableStream,
     options?: Record<string, unknown>,
-  ): Promise<void> {
+  ): Promise<{ size: number }> {
     let body: ArrayBuffer;
 
     if (typeof value === "string") {
@@ -87,6 +88,7 @@ class FakeUploadsBucket {
       (options?.httpMetadata as { contentType?: string } | undefined)?.contentType ?? "application/octet-stream";
 
     this.objects.set(key, { body, contentType });
+    return { size: body.byteLength };
   }
 
   async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
@@ -196,6 +198,99 @@ describe("speaker self-management endpoints", () => {
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("SPEAKER_TOKEN_NOT_FOUND");
+  });
+
+  it("rejects an expired unconfirmed co-speaker invitation capability", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await expect(
+      queryAll<{ invite_expires_at: string | null }>(
+        env.DB,
+        "SELECT invite_expires_at FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ invite_expires_at: "2026-12-01T08:00:00.000Z" }]);
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET invite_expires_at = '2020-01-01T00:00:00.000Z' WHERE proposal_id = ? AND user_id = ?",
+    )
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+
+    const response = await speakerGet(
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+        token: speakerManageToken,
+      }),
+    );
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "SPEAKER_INVITATION_EXPIRED" } });
+  });
+
+  it("keeps self-management available after a speaker confirms before the invitation deadline", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const confirmation = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm",
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+    expect(confirmation.status).toBe(200);
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET invite_expires_at = '2020-01-01T00:00:00.000Z' WHERE proposal_id = ? AND user_id = ?",
+    )
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+
+    const response = await speakerGet(
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+        token: speakerManageToken,
+      }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("allows a confirmed speaker to upload a presentation after the invitation deadline", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE session_proposals SET status = 'accepted', updated_at = datetime('now') WHERE id = ?",
+      ).bind(proposalId),
+      env.DB.prepare(
+        "UPDATE proposal_speakers SET status = 'confirmed', confirmed_at = datetime('now'), invite_expires_at = '2020-01-01T00:00:00.000Z' WHERE proposal_id = ? AND user_id = ?",
+      ).bind(proposalId, coSpeakerUserId),
+    ]);
+
+    const upload = presentationUploadRequest(
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "presentation.pdf", { type: "application/pdf" }),
+    );
+    const bucket = new FakeUploadsBucket();
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/presentation`, {
+        method: "PUT",
+        body: upload.body,
+        headers: upload.headers,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll<{ proposal_id: string }>(
+        env.DB,
+        "SELECT proposal_id FROM presentation_versions WHERE proposal_id = ? AND is_current = 1",
+        proposalId,
+      ),
+    ).resolves.toEqual([{ proposal_id: proposalId }]);
   });
 
   it("validates speaker participation actions through the mounted shared contract", async () => {

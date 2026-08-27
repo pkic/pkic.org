@@ -22,6 +22,8 @@ import {
   proposalSpeakerPatchSchema,
   proposalSpeakerRemovalRequestSchema,
   proposalSpeakerRemovalResponseSchema,
+  coSpeakerInviteResponseSchema,
+  coSpeakerInviteSchema,
 } from "./proposal-management";
 import { proposalDecisionPreviewResponseSchema } from "./proposal-decisions";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
@@ -267,6 +269,24 @@ export const groupEventProposalSpeakersRouteSchema = {
       content: { "application/json": { schema: proposalSpeakersResponseSchema } },
     },
     ...proposalRouteErrors,
+  },
+};
+
+export const groupEventProposalSpeakerInviteRouteSchema = {
+  tags: ["Groups"],
+  summary: "Invite a co-speaker to a group-owned proposal",
+  description:
+    "Creates an event-bounded proposal-speaker invitation, renews it after expiry or decline, or idempotently returns the existing active invitation.",
+  request: {
+    params: groupEventProposalParamsSchema,
+    body: { required: true, content: { "application/json": { schema: coSpeakerInviteSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Co-speaker invitation state, including whether a new delivery was queued.",
+      content: { "application/json": { schema: coSpeakerInviteResponseSchema } },
+    },
+    ...proposalSpeakerWriteErrors,
   },
 };
 

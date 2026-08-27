@@ -455,6 +455,31 @@ describe("runReminderCycle", () => {
     await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
   });
 
+  it("does not select an expired co-speaker invitation for reminders", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "expired-cospeaker@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "submitted",
+      speakerStatus: "invited",
+      speakerRole: "co_speaker",
+    });
+    await db
+      .prepare("UPDATE proposal_speakers SET invite_expires_at = ? WHERE id = ?")
+      .bind("2020-01-01T00:00:00.000Z", speakerRowId)
+      .run();
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+    expect(result.speakerInviteRemindersQueued).toBe(0);
+    expect(result.preview.coSpeakerInvites).toHaveLength(0);
+    await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
+  });
+
   it("skips co-speaker reminder when proposal is rejected", async () => {
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();

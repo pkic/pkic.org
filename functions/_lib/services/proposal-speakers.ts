@@ -1,8 +1,13 @@
 import { AppError } from "../errors";
-import { first } from "../db/queries";
+import { prepareAuthorizationGuard } from "../db/authorization-guard";
+import { first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
-import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "./capability-links";
+import {
+  newCapabilityLinkSecret,
+  queuedCapabilityTokenBoundToSecret,
+  signCapabilityToken,
+} from "../auth/capability-links";
 import { prepareProposalRoleCapacityForSpeakerChange, proposalParticipantStatus } from "./proposal-role-capacity";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
@@ -20,6 +25,7 @@ import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
+import { effectiveStoredInviteExpiry, type InviteEventWindow } from "../invite-validity";
 
 export interface ProposalSpeakerRecord {
   id: string;
@@ -34,6 +40,55 @@ export interface ProposalSpeakerRecord {
   decline_reason: string | null;
   created_at: string;
   invite_generation: number;
+  invite_expires_at: string | null;
+}
+
+/**
+ * Creates a delivery-time-bound speaker manage marker. Callers that already
+ * selected the secret from their roster query should pass it to keep bulk
+ * reminder/finalization paths set-based. Legacy rows with a missing secret
+ * are initialized conditionally and then re-read so concurrent issuers use
+ * the same stored generation.
+ */
+export async function queuedSpeakerManageToken(
+  db: DatabaseLike,
+  speakerId: string,
+  selectedLinkSecret?: string | null,
+  options?: { ttlSeconds?: number; expiresAtSeconds?: number },
+): Promise<string> {
+  let linkSecret = selectedLinkSecret ?? null;
+  if (!linkSecret) {
+    const existing = await first<{ manage_link_secret: string | null }>(
+      db,
+      "SELECT manage_link_secret FROM proposal_speakers WHERE id = ?",
+      [speakerId],
+    );
+    linkSecret = existing?.manage_link_secret ?? null;
+  }
+  if (!linkSecret) {
+    const generated = newCapabilityLinkSecret();
+    await run(
+      db,
+      `UPDATE proposal_speakers
+          SET manage_link_secret = ?
+        WHERE id = ? AND manage_link_secret IS NULL`,
+      [generated, speakerId],
+    );
+    const initialized = await first<{ manage_link_secret: string | null }>(
+      db,
+      "SELECT manage_link_secret FROM proposal_speakers WHERE id = ?",
+      [speakerId],
+    );
+    linkSecret = initialized?.manage_link_secret ?? null;
+  }
+  if (!linkSecret) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
+  return queuedCapabilityTokenBoundToSecret(
+    "speaker_manage",
+    speakerId,
+    linkSecret,
+    options?.ttlSeconds,
+    options?.expiresAtSeconds,
+  );
 }
 
 export async function buildAddProposalSpeaker(
@@ -43,13 +98,19 @@ export async function buildAddProposalSpeaker(
     userId: string;
     role: ProposalSpeakerRole;
     signingSecret?: string;
+    inviteExpiresAt?: string | null;
+    renewExpiredInvitation?: { event: InviteEventWindow; now: string };
     proposalContext?: { event_id: string; status: string; updated_at?: string };
   },
 ): Promise<{
   manageToken: string;
   speakerId: string;
   inviteGeneration: number;
+  inviteExpiresAt: string | null;
+  renewedInvitation: boolean;
   alreadyPresent: boolean;
+  speakerStatements: StatementLike[];
+  capacityStatements: StatementLike[];
   statements: StatementLike[];
 }> {
   const isProposer = payload.role === "proposer";
@@ -59,23 +120,32 @@ export async function buildAddProposalSpeaker(
     role: ProposalSpeakerRole;
     status: string;
     invite_generation: number;
+    invite_expires_at: string | null;
   }>(
     db,
-    `SELECT id, manage_link_secret, role, status, invite_generation
+    `SELECT id, manage_link_secret, role, status, invite_generation, invite_expires_at
      FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?`,
     [payload.proposalId, payload.userId],
   );
   const speakerId =
     existingSpeaker?.id ?? (await sha256Hex(`proposal-speaker\0${payload.proposalId}\0${payload.userId}`)).slice(0, 32);
   const reinvitingDeclinedSpeaker = existingSpeaker?.status === "declined";
+  const existingInviteExpiry = payload.renewExpiredInvitation
+    ? effectiveStoredInviteExpiry(payload.renewExpiredInvitation.event, existingSpeaker?.invite_expires_at ?? null)
+    : null;
+  const renewingExpiredSpeaker =
+    existingSpeaker?.status === "invited" &&
+    existingInviteExpiry !== null &&
+    Date.parse(existingInviteExpiry) <= Date.parse(payload.renewExpiredInvitation!.now);
+  const renewingInvitation = reinvitingDeclinedSpeaker || renewingExpiredSpeaker;
   const manageLinkSecret =
-    reinvitingDeclinedSpeaker || !existingSpeaker?.manage_link_secret
+    renewingInvitation || !existingSpeaker?.manage_link_secret
       ? newCapabilityLinkSecret()
       : existingSpeaker.manage_link_secret;
-  const inviteGeneration = (existingSpeaker?.invite_generation ?? 0) + (existingSpeaker?.status === "declined" ? 1 : 0);
+  const inviteGeneration = (existingSpeaker?.invite_generation ?? 0) + (renewingInvitation ? 1 : 0);
   const status = isProposer ? "confirmed" : "invited";
   const sourceRevisionAdvance: 0 | 1 =
-    !existingSpeaker || existingSpeaker.role !== payload.role || existingSpeaker.status === "declined" ? 1 : 0;
+    !existingSpeaker || existingSpeaker.role !== payload.role || reinvitingDeclinedSpeaker ? 1 : 0;
   const now = nowIso();
   const confirmedAt = isProposer ? now : null;
   const proposal =
@@ -85,6 +155,14 @@ export async function buildAddProposalSpeaker(
       "SELECT event_id, status FROM session_proposals WHERE id = ?",
       [payload.proposalId],
     ));
+  const event = proposal
+    ? await first<{ starts_at: string | null }>(db, "SELECT starts_at FROM events WHERE id = ?", [proposal.event_id])
+    : null;
+  const inviteExpiresAt = isProposer
+    ? null
+    : !existingSpeaker || renewingInvitation
+      ? (payload.inviteExpiresAt ?? event?.starts_at ?? null)
+      : existingSpeaker.invite_expires_at;
 
   const proposalWriteGuard =
     payload.proposalContext?.updated_at === undefined
@@ -102,35 +180,87 @@ export async function buildAddProposalSpeaker(
           ],
         };
 
-  const statements: StatementLike[] = [
+  const speakerStateGuard = existingSpeaker
+    ? prepareAuthorizationGuard(db, {
+        sql: `SELECT 1
+              FROM proposal_speakers
+             WHERE id = ? AND proposal_id = ? AND user_id = ?
+               AND role = ? AND status = ? AND invite_generation = ?
+               AND manage_link_secret IS ? AND invite_expires_at IS ?`,
+        bindings: [
+          existingSpeaker.id,
+          payload.proposalId,
+          payload.userId,
+          existingSpeaker.role,
+          existingSpeaker.status,
+          existingSpeaker.invite_generation,
+          existingSpeaker.manage_link_secret,
+          existingSpeaker.invite_expires_at,
+        ],
+      })
+    : prepareAuthorizationGuard(db, {
+        sql: `SELECT 1
+              WHERE NOT EXISTS (
+                SELECT 1 FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?
+              )`,
+        bindings: [payload.proposalId, payload.userId],
+      });
+
+  const speakerStatements: StatementLike[] = [
+    speakerStateGuard,
     db
       .prepare(
         `INSERT INTO proposal_speakers
-           (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at, invite_generation)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+           (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at, invite_generation,
+            invite_expires_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
          ${proposalWriteGuard.sql}
          ON CONFLICT(proposal_id, user_id) DO UPDATE SET
            role = excluded.role,
-           status = CASE WHEN proposal_speakers.status = 'declined' THEN 'invited' ELSE proposal_speakers.status END,
+           status = CASE
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN 'invited'
+             ELSE proposal_speakers.status
+           END,
            manage_link_secret = CASE
-             WHEN proposal_speakers.status = 'declined' THEN excluded.manage_link_secret
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN excluded.manage_link_secret
              ELSE COALESCE(proposal_speakers.manage_link_secret, excluded.manage_link_secret)
            END,
            confirmed_at = COALESCE(proposal_speakers.confirmed_at, excluded.confirmed_at),
            invite_generation = CASE
-             WHEN proposal_speakers.status = 'declined' THEN proposal_speakers.invite_generation + 1
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN excluded.invite_generation
              ELSE proposal_speakers.invite_generation
            END,
+           invite_expires_at = CASE
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN excluded.invite_expires_at
+             ELSE proposal_speakers.invite_expires_at
+           END,
+           declined_at = CASE
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN NULL
+             ELSE proposal_speakers.declined_at
+           END,
+           decline_reason = CASE
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN NULL
+             ELSE proposal_speakers.decline_reason
+           END,
            speaker_invite_reminder_count = CASE
-             WHEN proposal_speakers.status = 'declined' THEN 0
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN 0
              ELSE proposal_speakers.speaker_invite_reminder_count
            END,
            speaker_invite_last_communication_at = CASE
-             WHEN proposal_speakers.status = 'declined' THEN excluded.created_at
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN excluded.created_at
              ELSE proposal_speakers.speaker_invite_last_communication_at
            END,
            speaker_invite_reminders_paused_until = CASE
-             WHEN proposal_speakers.status = 'declined' THEN NULL
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN NULL
              ELSE proposal_speakers.speaker_invite_reminders_paused_until
            END`,
       )
@@ -144,11 +274,13 @@ export async function buildAddProposalSpeaker(
         confirmedAt,
         now,
         inviteGeneration,
+        inviteExpiresAt,
         ...proposalWriteGuard.bindings,
       ),
   ];
+  const capacityStatements: StatementLike[] = [];
   if (proposal) {
-    statements.push(
+    capacityStatements.push(
       ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: proposal.event_id,
         userId: payload.userId,
@@ -167,13 +299,17 @@ export async function buildAddProposalSpeaker(
         purpose: "speaker_manage",
         resourceId: speakerId,
       })
-    : queuedCapabilityToken("speaker_manage", speakerId);
+    : await queuedSpeakerManageToken(db, speakerId, manageLinkSecret);
   return {
     manageToken,
     speakerId,
     inviteGeneration,
+    inviteExpiresAt,
+    renewedInvitation: renewingInvitation,
     alreadyPresent: Boolean(existingSpeaker),
-    statements,
+    speakerStatements,
+    capacityStatements,
+    statements: [...speakerStatements, ...capacityStatements],
   };
 }
 
@@ -337,13 +473,13 @@ export async function prepareProposalSpeakerRoleChange(
 }
 
 export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: string, userId: string): Promise<string> {
-  const speaker = await first<{ id: string }>(
+  const speaker = await first<{ id: string; manage_link_secret: string | null }>(
     db,
-    "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    "SELECT id, manage_link_secret FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
     [proposalId, userId],
   );
   if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
-  return queuedCapabilityToken("speaker_manage", speaker.id);
+  return queuedSpeakerManageToken(db, speaker.id, speaker.manage_link_secret);
 }
 
 export interface ProposalSpeakerUserProfile {
@@ -367,6 +503,7 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
   confirmed_at: string | null;
   declined_at: string | null;
   terms_accepted_at: string | null;
+  invite_expires_at: string | null;
   decline_reason: string | null;
   created_at: string;
 }
@@ -404,7 +541,8 @@ export function proposalSpeakerEffectiveHeadshotColumns(userAlias = "u", speaker
 }
 
 export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
-  ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
+  ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.invite_expires_at,
+  ps.decline_reason, ps.created_at,
   u.email,
   ${proposalSpeakerEffectiveProfileColumns()},
   ${proposalSpeakerEffectiveHeadshotColumns()}`;

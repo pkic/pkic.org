@@ -88,6 +88,7 @@ export function toProposalSpeaker(
     declinedAt: speaker.declined_at,
     declineReason: speaker.decline_reason,
     termsAcceptedAt: speaker.terms_accepted_at,
+    inviteExpiresAt: speaker.invite_expires_at,
     addedAt: speaker.created_at,
     biography: speaker.biography,
     links: parseLinksJson(speaker.links_json),

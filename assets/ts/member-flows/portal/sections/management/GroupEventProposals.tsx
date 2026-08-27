@@ -233,6 +233,8 @@ function GroupEventProposalDetail({
                 assetPath: (speakerProposalId, userId, asset) =>
                   portalSpeakerAssetPath(proposalEndpoint(groupId, eventId, speakerProposalId), userId, asset),
               }}
+              inviteEndpoint={`${base}/speakers`}
+              inviteWindow={detail.data.event}
             />
           )}
 

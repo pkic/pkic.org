@@ -38,6 +38,7 @@ export const GroupEventProposalDetailGet = openApiRoute(
     ]);
     return json(
       eventProposalDetailResponseSchema.parse({
+        event: detail.event,
         proposal: detail.proposal,
         access,
         form: detail.form,

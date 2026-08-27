@@ -7,6 +7,7 @@ import { listQuerySchema, paginatedResponseSchema, sortColumnSchemaWithDefault }
 import { proposalSessionTypesSchema } from "./proposal-management";
 import { proposalRecommendationSchema } from "./proposal-reviews";
 import { proposalAdminStatusFilterSchema, proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
+import { eventInviteWindowSchema } from "./event-invite-validity";
 
 /** Canonical server-side list dialect for program proposal catalogues. */
 export const EVENT_PROPOSALS_SORT_COLUMNS = [
@@ -85,6 +86,7 @@ export const eventProposalDetailSchema = eventProposalCoreSchema
   });
 
 export const eventProposalDetailResponseSchema = z.object({
+  event: eventInviteWindowSchema,
   proposal: eventProposalDetailSchema,
   access: proposalAccessSchema,
   form: activeFormSummarySchema.nullable(),

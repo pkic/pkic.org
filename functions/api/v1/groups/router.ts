@@ -74,7 +74,10 @@ import { GroupEventProposalCancel } from "./[groupId]/events/[eventId]/proposals
 import { GroupEventProposalFinalizePreview } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize-preview";
 import { GroupEventProposalFinalize } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize";
 import { GroupEventProposalAuditLogList } from "./[groupId]/events/[eventId]/proposals/[proposalId]/audit-log";
-import { GroupEventProposalSpeakersGet } from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers";
+import {
+  GroupEventProposalSpeakerInvitePost,
+  GroupEventProposalSpeakersGet,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers";
 import {
   GroupEventProposalSpeakerDelete,
   GroupEventProposalSpeakerPatch,
@@ -182,6 +185,7 @@ openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize-preview",
 openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize", GroupEventProposalFinalize);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId/audit-log", GroupEventProposalAuditLogList);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId/speakers", GroupEventProposalSpeakersGet);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/speakers", GroupEventProposalSpeakerInvitePost);
 openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId", GroupEventProposalSpeakerPatch);
 openapi.delete("/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId", GroupEventProposalSpeakerDelete);
 openapi.post(

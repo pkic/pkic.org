@@ -9,6 +9,7 @@ import { openApiRoute } from "../../../../../../../../_lib/openapi/route";
 import { queuedCapabilityToken } from "../../../../../../../../_lib/services/capability-links";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../../../../_lib/services/frontend-links";
 import { finalizeProposalWithNotifications } from "../../../../../../../../_lib/services/proposal-decisions";
+import { queuedSpeakerManageToken } from "../../../../../../../../_lib/services/proposal-speakers";
 import {
   prepareGroupEventProposalContextGuard,
   requireGroupEventProposalContext,
@@ -42,7 +43,11 @@ export const GroupEventProposalFinalize = openApiRoute(
       {
         appBaseUrl,
         resolveSpeakerManageUrl: async (speaker, event) =>
-          speakerManagePageUrl(appBaseUrl, event, queuedCapabilityToken("speaker_manage", speaker.speaker_id)),
+          speakerManagePageUrl(
+            appBaseUrl,
+            event,
+            await queuedSpeakerManageToken(db, speaker.speaker_id, speaker.manage_link_secret),
+          ),
         resolveProposalManageUrl: async (event, resourceId) =>
           proposalManagePageUrl(appBaseUrl, event, queuedCapabilityToken("proposal_manage", resourceId)),
       },

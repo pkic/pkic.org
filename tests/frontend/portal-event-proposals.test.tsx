@@ -67,6 +67,7 @@ function speaker(userId: string, role: "proposer" | "speaker" = "speaker") {
     confirmedAt: "2026-08-01T00:00:00.000Z",
     declinedAt: null,
     declineReason: null,
+    inviteExpiresAt: null,
     termsAcceptedAt: null,
     addedAt: "2026-08-01T00:00:00.000Z",
     biography: "A speaker biography.",
@@ -113,6 +114,11 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
       }
       if (url === `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`) {
         return json({
+          event: {
+            startsAt: "2026-09-01T09:00:00.000Z",
+            endsAt: "2026-09-01T17:00:00.000Z",
+            timezone: "UTC",
+          },
           proposal: { ...proposal(), details: null, canceled_at: null, cancellation_comment: null },
           access: detailAccess,
           form: null,

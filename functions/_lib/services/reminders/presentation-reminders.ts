@@ -2,7 +2,6 @@ import { all } from "../../db/queries";
 import { emailPlainText } from "../../email/plain-text";
 import { speakerPresentationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
-import { queuedCapabilityToken } from "../capability-links";
 import {
   daysUntil,
   presentationReminderSubject,
@@ -12,7 +11,7 @@ import {
 } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState, prepareSpeakerReminderRecipientGuard } from "./shared";
 import type { DatabaseLike } from "../../types";
-import { proposalSpeakerEffectiveProfileColumns } from "../proposal-speakers";
+import { proposalSpeakerEffectiveProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 
 export async function runPresentationReminders(
@@ -37,7 +36,7 @@ export async function runPresentationReminders(
       ? await all<DuePresentationRow>(
           db,
           `SELECT
-         ps.id AS speaker_id, ps.proposal_id, ps.user_id,
+         ps.id AS speaker_id, ps.proposal_id, ps.user_id, ps.manage_link_secret,
          u.email, u.normalized_email,
          ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
          sp.title AS proposal_title, sp.event_id,
@@ -101,34 +100,36 @@ export async function runPresentationReminders(
   );
 
   if (!dryRun && duePresentation.length > 0) {
-    const emailRows = preparedRows.map(({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => {
-      const uploadUrl = speakerPresentationPageUrl(
-        appBaseUrl,
-        event,
-        queuedCapabilityToken("speaker_manage", row.speaker_id),
-      );
-      return {
-        eventId: row.event_id,
-        recipientEmail: row.email,
-        recipientUserId: row.user_id,
-        templateKey: "presentation_upload_request",
-        subject,
-        capabilityLinkValues: [uploadUrl],
-        data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
-          proposalId: row.proposal_id,
-          speakerUserId: row.user_id,
-          firstName: emailPlainText(row.first_name ?? ""),
-          proposalTitle: emailPlainText(row.proposal_title),
-          uploadUrl,
-          deadline: effectiveDeadline ?? "",
-          isReminder: true,
-          reminderCount: String(reminderNumber),
-          daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
-          __subjectOverride: subject,
-        },
-      };
-    });
+    const emailRows = await Promise.all(
+      preparedRows.map(async ({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => {
+        const uploadUrl = speakerPresentationPageUrl(
+          appBaseUrl,
+          event,
+          await queuedSpeakerManageToken(db, row.speaker_id, row.manage_link_secret),
+        );
+        return {
+          eventId: row.event_id,
+          recipientEmail: row.email,
+          recipientUserId: row.user_id,
+          templateKey: "presentation_upload_request",
+          subject,
+          capabilityLinkValues: [uploadUrl],
+          data: {
+            ...buildEventEmailVariables(event, appBaseUrl),
+            proposalId: row.proposal_id,
+            speakerUserId: row.user_id,
+            firstName: emailPlainText(row.first_name ?? ""),
+            proposalTitle: emailPlainText(row.proposal_title),
+            uploadUrl,
+            deadline: effectiveDeadline ?? "",
+            isReminder: true,
+            reminderCount: String(reminderNumber),
+            daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
+            __subjectOverride: subject,
+          },
+        };
+      }),
+    );
 
     const queuedCount = await batchQueueEmailsAndUpdateState(
       db,

@@ -158,6 +158,72 @@ describe("proposal resend-manage-link endpoint", () => {
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
   });
 
+  it("does not recover an expired pending speaker invitation but keeps confirmed speaker recovery available", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+    const now = nowIso();
+    const proposerId = crypto.randomUUID();
+    const expiredSpeakerId = crypto.randomUUID();
+    const confirmedSpeakerId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    await run(
+      env.DB,
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'recovery-owner@example.test', 'recovery-owner@example.test', 'user', 1, ?, ?),
+              (?, 'expired-speaker@example.test', 'expired-speaker@example.test', 'user', 1, ?, ?),
+              (?, 'confirmed-speaker@example.test', 'confirmed-speaker@example.test', 'user', 1, ?, ?)`,
+      [proposerId, now, now, expiredSpeakerId, now, now, confirmedSpeakerId, now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO session_proposals (
+         id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+         manage_link_secret, submitted_at, updated_at
+       ) VALUES (?, ?, ?, 'submitted', 'talk', 'Speaker recovery', 'Abstract', ?, ?, ?)`,
+      [proposalId, eventId, proposerId, "stable-proposal-secret", now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO proposal_speakers (
+         id, proposal_id, user_id, role, status, manage_link_secret, invite_expires_at, created_at
+       ) VALUES (?, ?, ?, 'speaker', 'invited', ?, '2026-08-26T00:00:00.000Z', ?),
+                (?, ?, ?, 'speaker', 'confirmed', ?, '2026-08-26T00:00:00.000Z', ?)`,
+      [
+        crypto.randomUUID(),
+        proposalId,
+        expiredSpeakerId,
+        "expired-speaker-secret",
+        now,
+        crypto.randomUUID(),
+        proposalId,
+        confirmedSpeakerId,
+        "confirmed-speaker-secret",
+        now,
+      ],
+    );
+    const testEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret };
+
+    for (const [email, ip] of [
+      ["expired-speaker@example.test", "203.0.113.44"],
+      ["confirmed-speaker@example.test", "203.0.113.45"],
+    ] as const) {
+      const response = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": ip },
+        body: JSON.stringify({ email }),
+      });
+      expect(response.status).toBe(200);
+    }
+
+    await expect(
+      queryAll<{ recipient_email: string }>(
+        env.DB,
+        "SELECT recipient_email FROM email_outbox WHERE template_key = 'co_speaker_invite' ORDER BY recipient_email",
+      ),
+    ).resolves.toEqual([{ recipient_email: "confirmed-speaker@example.test" }]);
+  });
+
   it("rejects an expired proposal management capability", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const now = nowIso();

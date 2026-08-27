@@ -3,6 +3,7 @@ import { attendeeRegistrationClosesAt, type DueInviteRow } from "../reminders-su
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { stringifyJson } from "../../utils/json";
+import { effectiveProposalSpeakerInviteExpirySql } from "../../invite-validity";
 
 export interface SpeakerReminderRecipientSnapshot {
   speakerId: string;
@@ -28,6 +29,48 @@ export function prepareSpeakerReminderRecipientGuard(
                   OR u.normalized_email != json_extract(candidate.value, '$.normalizedEmail')
             )`,
     bindings: [stringifyJson(snapshots)],
+  });
+}
+
+export interface CoSpeakerInviteReminderSnapshot extends SpeakerReminderRecipientSnapshot {
+  proposalId: string;
+  proposalStatus: string;
+  eventId: string;
+  eventStartsAt: string | null;
+  eventEndsAt: string | null;
+  inviteExpiresAt: string | null;
+}
+
+/** Rechecks recipient, proposal state, and the event-bounded invitation deadline in one D1 batch. */
+export function prepareCoSpeakerInviteReminderGuard(
+  db: DatabaseLike,
+  snapshots: CoSpeakerInviteReminderSnapshot[],
+  now: string,
+): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1
+            WHERE NOT EXISTS (
+              SELECT 1
+                FROM json_each(?) candidate
+                LEFT JOIN proposal_speakers ps
+                  ON ps.id = json_extract(candidate.value, '$.speakerId')
+                LEFT JOIN session_proposals sp ON sp.id = ps.proposal_id
+                LEFT JOIN events e ON e.id = sp.event_id
+                LEFT JOIN users u ON u.id = ps.user_id
+               WHERE ps.id IS NULL
+                  OR ps.user_id != json_extract(candidate.value, '$.userId')
+                  OR ps.proposal_id != json_extract(candidate.value, '$.proposalId')
+                  OR ps.status != 'invited'
+                  OR ps.invite_expires_at IS NOT json_extract(candidate.value, '$.inviteExpiresAt')
+                  OR u.normalized_email != json_extract(candidate.value, '$.normalizedEmail')
+                  OR sp.status != json_extract(candidate.value, '$.proposalStatus')
+                  OR e.id != json_extract(candidate.value, '$.eventId')
+                  OR e.starts_at IS NOT json_extract(candidate.value, '$.eventStartsAt')
+                  OR e.ends_at IS NOT json_extract(candidate.value, '$.eventEndsAt')
+                  OR ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NULL
+                  OR unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) <= unixepoch(?)
+            )`,
+    bindings: [stringifyJson(snapshots), now],
   });
 }
 

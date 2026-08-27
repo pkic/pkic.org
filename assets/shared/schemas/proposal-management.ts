@@ -291,11 +291,14 @@ export const coSpeakerInviteSchema = z.object({
   firstName: firstNameSchema.optional(),
   lastName: lastNameSchema.optional(),
   role: speakerRoleSchema.exclude(["proposer"]).default("speaker"),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 export const coSpeakerInviteResponseSchema = successResponseSchema.extend({
   email: normalizedEmailSchema,
   role: speakerRoleSchema,
+  expiresAt: z.iso.datetime(),
+  queued: z.boolean(),
 });
 
 export const coSpeakerInviteRouteSchema = {
@@ -307,7 +310,7 @@ export const coSpeakerInviteRouteSchema = {
   },
   responses: {
     "200": {
-      description: "Co-speaker invitation sent.",
+      description: "Co-speaker invitation state, including whether a new delivery was queued.",
       content: { "application/json": { schema: coSpeakerInviteResponseSchema } },
     },
     "400": { description: "Proposal is closed or the request is invalid." },

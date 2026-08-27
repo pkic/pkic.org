@@ -523,13 +523,13 @@ async function main(): Promise<void> {
 
     await withLoadingButton(inviteBtn, async () => {
       try {
-        await postJson(
+        const invited = await postJson(
           `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}/speakers`,
           { email, firstName, lastName, role },
           coSpeakerInviteResponseSchema,
         );
         if (csStatus) {
-          csStatus.textContent = `Invite sent to ${email}.`;
+          csStatus.textContent = invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`;
           csStatus.className = "mt-2 small text-success";
         }
         const emailEl = q<HTMLInputElement>("#cs-email", boot.root);
