@@ -1,5 +1,6 @@
 import { all, first } from "../db/queries";
 import { prepareQueueEmailStatement } from "../email/outbox";
+import { emailPlainText } from "../email/plain-text";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
@@ -7,7 +8,7 @@ import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAudit
 import { buildEventEmailVariables, getEventById } from "./events";
 import { speakerManagePageUrl, speakerPresentationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
-import { buildProposalInviteEmailContext } from "./proposal-invite-email-context";
+import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import {
   proposalSpeakerEffectiveHeadshotExpression,
   proposalSpeakerEffectiveProfileColumns,
@@ -122,8 +123,8 @@ export async function sendAdminProposalSpeakerReminders(
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           proposalId: proposal.id,
           speakerUserId: speaker.user_id,
-          firstName: speaker.first_name ?? "",
-          proposalTitle: proposal.title,
+          firstName: emailPlainText(speaker.first_name ?? ""),
+          proposalTitle: emailPlainText(proposal.title),
           ...(payload.kind === "profile"
             ? {
                 profileUrl: actionUrl,
@@ -205,8 +206,8 @@ export async function remindProposalSpeakerByProposer(
             ...buildEventEmailVariables(event, payload.appBaseUrl),
             proposalId: payload.proposal.id,
             speakerUserId: speaker.user_id,
-            firstName: speaker.first_name ?? "",
-            proposalTitle: inviteContext.proposalTitle,
+            firstName: emailPlainText(speaker.first_name ?? ""),
+            proposalTitle: emailPlainText(inviteContext.proposalTitle),
             profileUrl: manageUrl,
             hasHeadshot: speaker.headshot_r2_key ? "true" : "",
             hasBio: speaker.biography ? "true" : "",
@@ -215,13 +216,12 @@ export async function remindProposalSpeakerByProposer(
             ...buildEventEmailVariables(event, payload.appBaseUrl),
             proposalId: payload.proposal.id,
             speakerUserId: speaker.user_id,
-            firstName: speaker.first_name ?? "",
-            lastName: speaker.last_name ?? "",
-            proposerFirstName: proposer?.first_name ?? "",
-            invitedByDisplay: inviteContext.invitedByDisplay,
-            proposalTitle: inviteContext.proposalTitle,
-            proposalAbstract: inviteContext.proposalAbstract,
-            speakerLineupText: inviteContext.speakerLineupText,
+            firstName: emailPlainText(speaker.first_name ?? ""),
+            lastName: emailPlainText(speaker.last_name ?? ""),
+            ...proposalInviteEmailTextVariables({
+              ...inviteContext,
+              inviterFirstName: proposer?.first_name ?? inviteContext.inviterFirstName,
+            }),
             manageUrl,
             isReminder: true,
           },

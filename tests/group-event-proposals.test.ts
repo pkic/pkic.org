@@ -9,13 +9,18 @@ import { proposalCommentsListResponseSchema } from "../assets/shared/schemas/pro
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 import {
   cancelAcceptedProposalResponseSchema,
+  finalizeProposalResponseSchema,
   proposalPatchResponseSchema,
 } from "../assets/shared/schemas/proposal-management";
+import { proposalDecisionPreviewResponseSchema } from "../assets/shared/schemas/proposal-decisions";
 import app from "../functions/router";
 import { createAdminSession } from "./helpers/auth";
+import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 
 interface Fixture {
   ownerGroupId: string;
@@ -23,6 +28,7 @@ interface Fixture {
   eventId: string;
   otherEventId: string;
   proposalId: string;
+  proposerUserId: string;
   reviewerId: string;
   reviewerToken: string;
 }
@@ -104,6 +110,7 @@ async function setupFixture(): Promise<Fixture> {
     eventId: event.eventId,
     otherEventId: otherEvent.eventId,
     proposalId: proposal.id,
+    proposerUserId: author.id,
     reviewerId: reviewer.id,
     reviewerToken: await createAdminSession(env.DB, reviewer.id, "proposal-route-" + crypto.randomUUID()),
   };
@@ -115,7 +122,18 @@ function route(
   init: RequestInit = {},
   token = fixture.reviewerToken,
 ): Promise<Response> {
-  const path = "/api/v1/groups/" + fixture.ownerGroupId + "/events/" + fixture.eventId + "/proposals" + suffix;
+  return routeAt(fixture, fixture.ownerGroupId, fixture.eventId, suffix, init, token);
+}
+
+function routeAt(
+  fixture: Fixture,
+  groupId: string,
+  eventId: string,
+  suffix = "",
+  init: RequestInit = {},
+  token = fixture.reviewerToken,
+): Promise<Response> {
+  const path = "/api/v1/groups/" + groupId + "/events/" + eventId + "/proposals" + suffix;
   const headers = new Headers(init.headers);
   headers.set("authorization", "Bearer " + token);
   if (init.body) headers.set("content-type", "application/json");
@@ -127,6 +145,47 @@ function route(
       waitUntil: () => {},
     } as any,
   );
+}
+
+async function scopedToken(
+  fixture: Fixture,
+  permissions: readonly string[],
+  options: { scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
+): Promise<string> {
+  const actor = await user("proposal-route-scoped-actor");
+  for (const permission of permissions) await grant(actor.id, fixture.eventId, permission);
+  return createAdminSession(env.DB, actor.id, "proposal-route-scoped-" + crypto.randomUUID(), undefined, {
+    scopes: options.scopes,
+    scopeRestricted: options.scopeRestricted,
+  });
+}
+
+async function addCurrentRoundReviews(fixture: Fixture, count: number): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    const reviewer = await user(`proposal-route-reviewer-${index}`);
+    await env.DB.prepare(
+      `INSERT INTO proposal_reviews
+         (id, proposal_id, reviewer_user_id, review_round, recommendation, score, reviewer_comment, created_at, updated_at)
+       VALUES (?, ?, ?, 1, 'accept', ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), fixture.proposalId, reviewer.id, 8 + index, `Review ${index}`)
+      .run();
+  }
+}
+
+async function addProposalSpeaker(
+  fixture: Fixture,
+  status: "confirmed" | "declined",
+  role: "speaker" | "proposer" = "speaker",
+): Promise<string> {
+  const speaker = await user(`proposal-route-speaker-${status}`);
+  await env.DB.prepare(
+    `INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), fixture.proposalId, speaker.id, role, status)
+    .run();
+  return speaker.id;
 }
 
 describe("group event proposal routes", () => {
@@ -363,9 +422,356 @@ describe("group event proposal routes", () => {
         `SELECT status
            FROM effective_event_participant_roles
           WHERE event_id = ? AND user_id IN (${speakerIds.map(() => "?").join(", ")}) AND role = 'speaker'
-          ORDER BY user_id`,
+        ORDER BY user_id`,
         [fixture.eventId, ...speakerIds],
       ),
     ).resolves.toEqual(speakerIds.map(() => ({ status: "inactive" })));
+  });
+
+  it("keeps decision preview/finalize and audit behind their distinct event permissions", async () => {
+    const fixture = await setupFixture();
+    const readOnlyToken = await scopedToken(fixture, ["proposals:read"]);
+    const reviewerToken = await scopedToken(fixture, ["proposals:read", "proposals:score"]);
+    const genericToken = await scopedToken(fixture, ["events:read"]);
+    const scopeRestrictedToken = await scopedToken(fixture, ["proposals:manage"], {
+      scopes: ["proposals:read"],
+      scopeRestricted: true,
+    });
+
+    expect(
+      (
+        await route(
+          fixture,
+          "/" + fixture.proposalId + "/finalize-preview",
+          {
+            method: "POST",
+            body: JSON.stringify({ finalStatus: "accepted" }),
+          },
+          readOnlyToken,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await route(
+          fixture,
+          "/" + fixture.proposalId + "/finalize-preview",
+          {
+            method: "POST",
+            body: JSON.stringify({ finalStatus: "accepted" }),
+          },
+          reviewerToken,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await route(
+          fixture,
+          "/" + fixture.proposalId + "/finalize-preview",
+          {
+            method: "POST",
+            body: JSON.stringify({ finalStatus: "accepted" }),
+          },
+          scopeRestrictedToken,
+        )
+      ).status,
+    ).toBe(403);
+    expect((await route(fixture, "/" + fixture.proposalId + "/audit-log", {}, readOnlyToken)).status).toBe(403);
+    expect((await route(fixture, "/" + fixture.proposalId + "/audit-log", {}, reviewerToken)).status).toBe(200);
+    expect((await route(fixture, "/" + fixture.proposalId + "/audit-log", {}, genericToken)).status).toBe(403);
+
+    expect(
+      (
+        await routeAt(
+          fixture,
+          fixture.otherGroupId,
+          fixture.eventId,
+          "/" + fixture.proposalId + "/audit-log",
+          {},
+          fixture.reviewerToken,
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("previews and finalizes a group-bound proposal without mutating during preview", async () => {
+    const fixture = await setupFixture();
+    await addCurrentRoundReviews(fixture, 2);
+    await env.DB.prepare(
+      `INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
+       VALUES (?, ?, ?, 'proposer', 'confirmed', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), fixture.proposalId, fixture.proposerUserId)
+      .run();
+    const confirmedSpeakerId = await addProposalSpeaker(fixture, "confirmed");
+    const declinedSpeakerId = await addProposalSpeaker(fixture, "declined");
+    await seedWorkflowEmailTemplates(env.DB, fixture.reviewerId);
+
+    const previewResponse = await route(fixture, "/" + fixture.proposalId + "/finalize-preview", {
+      method: "POST",
+      body: JSON.stringify({ finalStatus: "accepted", presentationDeadline: "2027-03-01T00:00:00.000Z" }),
+    });
+    expect(previewResponse.status).toBe(200);
+    const preview = proposalDecisionPreviewResponseSchema.parse(await previewResponse.json());
+    expect(preview.messages.some((message) => message.templateKey === "proposal_decision")).toBe(true);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [fixture.proposalId]),
+    ).resolves.toHaveLength(0);
+
+    const finalizeResponse = await route(fixture, "/" + fixture.proposalId + "/finalize", {
+      method: "POST",
+      body: JSON.stringify({ finalStatus: "accepted", presentationDeadline: "2027-03-01T00:00:00.000Z" }),
+    });
+    expect(finalizeResponse.status).toBe(200);
+    const finalized = finalizeProposalResponseSchema.parse(await finalizeResponse.json());
+    expect(finalized).toMatchObject({ reviewCount: 2, minReviewsRequired: 2 });
+
+    await expect(
+      queryAll<{ status: string; presentation_deadline: string | null }>(
+        env.DB,
+        "SELECT status, presentation_deadline FROM session_proposals WHERE id = ?",
+        [fixture.proposalId],
+      ),
+    ).resolves.toEqual([{ status: "accepted", presentation_deadline: "2027-03-01T00:00:00.000Z" }]);
+    await expect(
+      queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? ORDER BY created_at DESC",
+        [fixture.proposalId],
+      ),
+    ).resolves.toEqual(expect.arrayContaining([{ action: "proposal_decision_recorded" }]));
+    const outbox = await queryAll<{ recipient_user_id: string | null; template_key: string }>(
+      env.DB,
+      "SELECT recipient_user_id, template_key FROM email_outbox WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?)",
+      [fixture.proposalId],
+    );
+    expect(outbox).toEqual(
+      expect.arrayContaining([{ recipient_user_id: fixture.proposerUserId, template_key: "proposal_decision" }]),
+    );
+    expect(outbox.some((row) => row.template_key === "speaker_profile_request")).toBe(true);
+    expect(
+      outbox.some(
+        (row) => row.recipient_user_id === confirmedSpeakerId && row.template_key === "speaker_profile_request",
+      ),
+    ).toBe(true);
+    expect(
+      outbox.some(
+        (row) => row.recipient_user_id === confirmedSpeakerId && row.template_key === "presentation_upload_request",
+      ),
+    ).toBe(true);
+    expect(outbox.some((row) => row.recipient_user_id === declinedSpeakerId)).toBe(false);
+  });
+
+  it("renders public proposal and speaker fields literally in decision email previews", async () => {
+    const fixture = await setupFixture();
+    const maliciousTitle = '[review](https://attacker.invalid/link) <img src="https://attacker.invalid/pixel.gif">';
+    await env.DB.batch([
+      env.DB.prepare("UPDATE session_proposals SET title = ? WHERE id = ?").bind(maliciousTitle, fixture.proposalId),
+      env.DB.prepare("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?").bind(
+        "<script>alert(1)</script>",
+        "[speaker](https://attacker.invalid/name)",
+        fixture.proposerUserId,
+      ),
+      env.DB.prepare(
+        `INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
+           VALUES (?, ?, ?, 'proposer', 'confirmed', datetime('now'))`,
+      ).bind(crypto.randomUUID(), fixture.proposalId, fixture.proposerUserId),
+    ]);
+    await seedWorkflowEmailTemplates(env.DB, fixture.reviewerId);
+
+    const response = await route(fixture, "/" + fixture.proposalId + "/finalize-preview", {
+      method: "POST",
+      body: JSON.stringify({ finalStatus: "accepted" }),
+    });
+    expect(response.status).toBe(200);
+    const preview = proposalDecisionPreviewResponseSchema.parse(await response.json());
+    const decision = preview.messages.find((message) => message.templateKey === "proposal_decision");
+    expect(decision).toBeDefined();
+    expect(decision!.text).toContain("attacker.invalid");
+    expect(decision!.html).not.toMatch(
+      /<(?:a|img|script)\b[^>]*(?:href|src)?=["']?https:\/\/attacker\.invalid|<script\b/i,
+    );
+  });
+
+  it("enforces needs-work notes and the current-round quorum through the group route", async () => {
+    const fixture = await setupFixture();
+    const missingNote = await route(fixture, "/" + fixture.proposalId + "/finalize", {
+      method: "POST",
+      body: JSON.stringify({ finalStatus: "needs-work" }),
+    });
+    expect(missingNote.status).toBe(400);
+
+    const belowQuorum = await route(fixture, "/" + fixture.proposalId + "/finalize", {
+      method: "POST",
+      body: JSON.stringify({ finalStatus: "needs-work", decisionNote: "Please revise the examples." }),
+    });
+    expect(belowQuorum.status).toBe(409);
+    await expect(belowQuorum.json()).resolves.toMatchObject({
+      error: { code: "PROPOSAL_REVIEW_THRESHOLD_NOT_MET" },
+    });
+
+    await addCurrentRoundReviews(fixture, 2);
+    const response = await route(fixture, "/" + fixture.proposalId + "/finalize", {
+      method: "POST",
+      body: JSON.stringify({ finalStatus: "needs-work", decisionNote: "Please revise the examples." }),
+    });
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [fixture.proposalId]),
+    ).resolves.toEqual([{ status: "needs-work" }]);
+    await expect(
+      queryAll<{ final_status: string; decision_note: string }>(
+        env.DB,
+        "SELECT final_status, decision_note FROM proposal_decisions WHERE proposal_id = ?",
+        [fixture.proposalId],
+      ),
+    ).resolves.toEqual([{ final_status: "needs-work", decision_note: "Please revise the examples." }]);
+  });
+
+  it("rolls back group finalization when the proposal authorization changes before the D1 batch", async () => {
+    const fixture = await setupFixture();
+    await addCurrentRoundReviews(fixture, 2);
+    const actor = await user("proposal-route-racing-actor");
+    await grant(actor.id, fixture.eventId, "proposals:manage");
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        "UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ? AND permission = 'proposals:manage'",
+      )
+        .bind(actor.id)
+        .run(),
+    );
+    const { finalizeProposalWithNotifications } = await import("../functions/_lib/services/proposal-decisions");
+    const { prepareGroupEventProposalContextGuard } = await import("../functions/_lib/services/proposal-group-context");
+    const context = {
+      groupId: fixture.ownerGroupId,
+      eventId: fixture.eventId,
+      proposalId: fixture.proposalId,
+    };
+    const authActor: AuthAdmin = {
+      identityType: "user",
+      id: actor.id,
+      email: actor.email,
+      role: "user",
+      grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
+    };
+
+    await expect(
+      finalizeProposalWithNotifications(
+        racingDb,
+        {
+          proposalId: fixture.proposalId,
+          actor: authActor,
+          finalStatus: "accepted",
+          minReviewsRequired: 2,
+        },
+        {
+          appBaseUrl: "https://app.test",
+          resolveSpeakerManageUrl: async () => "https://app.test/speaker",
+          resolveProposalManageUrl: async () => "https://app.test/proposal",
+        },
+        { contextGuard: prepareGroupEventProposalContextGuard(env.DB, context) },
+      ),
+    ).rejects.toMatchObject({ code: "PROPOSAL_FINALIZATION_AUTHORIZATION_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [fixture.proposalId]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_decision_recorded' AND entity_id = ?", [
+        fixture.proposalId,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rejects group finalization when the owning group changes before the D1 batch", async () => {
+    const fixture = await setupFixture();
+    await addCurrentRoundReviews(fixture, 2);
+    const actor = await user("proposal-route-owner-racing-actor");
+    await grant(actor.id, fixture.eventId, "proposals:manage");
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?")
+        .bind(fixture.otherGroupId, fixture.eventId)
+        .run(),
+    );
+    const { finalizeProposalWithNotifications } = await import("../functions/_lib/services/proposal-decisions");
+    const { prepareGroupEventProposalContextGuard } = await import("../functions/_lib/services/proposal-group-context");
+    const authActor: AuthAdmin = {
+      identityType: "user",
+      id: actor.id,
+      email: actor.email,
+      role: "user",
+      grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
+    };
+
+    await expect(
+      finalizeProposalWithNotifications(
+        racingDb,
+        {
+          proposalId: fixture.proposalId,
+          actor: authActor,
+          finalStatus: "accepted",
+          minReviewsRequired: 2,
+        },
+        {
+          appBaseUrl: "https://app.test",
+          resolveSpeakerManageUrl: async () => "https://app.test/speaker",
+          resolveProposalManageUrl: async () => "https://app.test/proposal",
+        },
+        {
+          contextGuard: prepareGroupEventProposalContextGuard(env.DB, {
+            groupId: fixture.ownerGroupId,
+            eventId: fixture.eventId,
+            proposalId: fixture.proposalId,
+          }),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "PROPOSAL_FINALIZATION_AUTHORIZATION_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [fixture.proposalId]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_decision_recorded' AND entity_id = ?", [
+        fixture.proposalId,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back the group decision, outbox, and audit atomically when audit insertion fails", async () => {
+    const fixture = await setupFixture();
+    await addCurrentRoundReviews(fixture, 2);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_group_proposal_decision_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_decision_recorded'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced group proposal audit failure');
+         END`,
+    ).run();
+
+    try {
+      const response = await route(fixture, "/" + fixture.proposalId + "/finalize", {
+        method: "POST",
+        body: JSON.stringify({ finalStatus: "accepted" }),
+      });
+      expect(response.status).toBe(500);
+      await expect(
+        queryAll<{ status: string; presentation_deadline: string | null }>(
+          env.DB,
+          "SELECT status, presentation_deadline FROM session_proposals WHERE id = ?",
+          [fixture.proposalId],
+        ),
+      ).resolves.toEqual([{ status: "submitted", presentation_deadline: null }]);
+      await expect(
+        queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [fixture.proposalId]),
+      ).resolves.toHaveLength(0);
+      await expect(
+        queryAll(env.DB, "SELECT id FROM proposal_decision_history WHERE proposal_id = ?", [fixture.proposalId]),
+      ).resolves.toHaveLength(0);
+      await expect(
+        queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id = ?", [fixture.eventId]),
+      ).resolves.toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_group_proposal_decision_audit").run();
+    }
   });
 });

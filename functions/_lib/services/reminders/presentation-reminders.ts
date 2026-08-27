@@ -1,4 +1,5 @@
 import { all } from "../../db/queries";
+import { emailPlainText } from "../../email/plain-text";
 import { speakerPresentationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import { queuedCapabilityToken } from "../capability-links";
@@ -115,8 +116,8 @@ export async function runPresentationReminders(
           ...buildEventEmailVariables(event, appBaseUrl),
           proposalId: row.proposal_id,
           speakerUserId: row.user_id,
-          firstName: row.first_name ?? "",
-          proposalTitle: row.proposal_title,
+          firstName: emailPlainText(row.first_name ?? ""),
+          proposalTitle: emailPlainText(row.proposal_title),
           uploadUrl,
           deadline: effectiveDeadline ?? "",
           isReminder: true,

@@ -22,8 +22,8 @@ import {
   adminProposalSpeakerPatchResponseSchema,
   adminProposalSpeakersResponseSchema,
   adminProposalSpeakerReminderResponseSchema,
-  proposalDecisionPreviewResponseSchema,
 } from "./admin-event-proposals";
+import { proposalDecisionPreviewResponseSchema } from "./proposal-decisions";
 import {
   proposalCommentCreateResponseSchema,
   proposalCommentCreateSchema,

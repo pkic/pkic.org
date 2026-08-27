@@ -1,10 +1,11 @@
 import { first } from "../db/queries";
+import { emailPlainText } from "../email/plain-text";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
 import type { DatabaseLike } from "../types";
 import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
-import { buildProposalInviteEmailContext } from "./proposal-invite-email-context";
+import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 interface SpeakerManageLinkMatch {
@@ -77,12 +78,9 @@ export async function queueProposalSpeakerManageLinkRecovery(
       capabilityLinkValues: [manageUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
-        firstName: speaker.first_name ?? "",
-        lastName: speaker.last_name ?? "",
-        invitedByDisplay: context.invitedByDisplay,
-        proposalTitle: context.proposalTitle,
-        proposalAbstract: context.proposalAbstract,
-        speakerLineupText: context.speakerLineupText,
+        firstName: emailPlainText(speaker.first_name ?? ""),
+        lastName: emailPlainText(speaker.last_name ?? ""),
+        ...proposalInviteEmailTextVariables(context),
         manageUrl,
         isReminder: true,
       },

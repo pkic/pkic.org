@@ -6,8 +6,10 @@ import {
 import { proposalProgramsListResponseSchema } from "../../../../../shared/schemas/proposal-programs";
 import {
   cancelAcceptedProposalResponseSchema,
+  finalizeProposalResponseSchema,
   proposalPatchResponseSchema,
 } from "../../../../../shared/schemas/proposal-management";
+import { proposalDecisionPreviewResponseSchema } from "../../../../../shared/schemas/proposal-decisions";
 import { isProposalDecidableStatus } from "../../../../../shared/schemas/proposal-status";
 import { proposalReviewWriteResponseSchema } from "../../../../../shared/schemas/proposal-reviews";
 import { FormAnswerTable } from "../../../../components/forms/FormResponseViews";
@@ -15,6 +17,8 @@ import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { AcceptedProposalCancellationPanel } from "../../../../components/proposals/AcceptedProposalCancellationPanel";
+import { ProposalAuditLog } from "../../../../components/proposals/ProposalAuditLog";
+import { ProposalDecisionPanel } from "../../../../components/proposals/ProposalDecisionPanel";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
 import { ProposalInternalCommentsPanel } from "../../../../components/proposals/ProposalInternalCommentsPanel";
 import { ProposalReviewsPanel } from "../../../../components/proposals/ProposalReviewsPanel";
@@ -191,6 +195,21 @@ function GroupEventProposalDetail({
             </div>
           )}
 
+          {access.canFinalize && (
+            <ProposalDecisionPanel
+              proposal={proposal}
+              reviewCount={proposal.review_count}
+              minReviewsRequired={minReviewsRequired}
+              onPreview={(input) => postJson(`${base}/finalize-preview`, input, proposalDecisionPreviewResponseSchema)}
+              onFinalize={async (input) => {
+                await postJson(`${base}/finalize`, input, finalizeProposalResponseSchema);
+              }}
+              onFinalized={() => void detail.reload()}
+              formatDate={fmt}
+              notify={toast}
+            />
+          )}
+
           <AcceptedProposalCancellationPanel
             proposal={proposal}
             canCancel={access.canCancelAcceptedProposal}
@@ -207,6 +226,17 @@ function GroupEventProposalDetail({
             }}
             onError={(error) => toast((error as Error).message, "error")}
           />
+
+          {access.canReview && (
+            <div class="card">
+              <div class="card-header">
+                <h6 class="mb-0">Audit log</h6>
+              </div>
+              <div class="card-body p-0">
+                <ProposalAuditLog endpoint={`${base}/audit-log`} />
+              </div>
+            </div>
+          )}
         </div>
 
         <aside class="col-lg-4">

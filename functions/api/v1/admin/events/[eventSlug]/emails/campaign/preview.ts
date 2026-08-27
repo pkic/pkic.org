@@ -13,6 +13,7 @@ import {
   registrationManagePageUrl,
   registrationPageUrl,
 } from "../../../../../../../_lib/services/frontend-links";
+import { buildPersonalCampaignTemplateData } from "../../../../../../../_lib/services/admin-email-campaign/template-data";
 import {
   chunkRecipients,
   assertCampaignBroadcastSafety,
@@ -83,15 +84,12 @@ export const AdminEventsEventSlugEmailsCampaignPreviewPost = openApiRoute(
       body.filter.audience === "attendees"
         ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
         : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
-    const sampleData: Record<string, unknown> = {
+    const sampleData = buildPersonalCampaignTemplateData(sample, {
       ...buildEventEmailVariables(event, appBaseUrl),
-      firstName: sample?.firstName || "Member",
-      lastName: sample?.lastName || "",
       recipientCount: uniqueRecipients.length,
       audience: body.filter.audience,
       ...routeVars,
-      ...(sample?.templateData ?? {}),
-    };
+    });
     if (body.filter.audience === "attendees") {
       sampleData.manageUrl = registrationManagePageUrl(appBaseUrl, event, "preview-token");
     }

@@ -12,7 +12,11 @@ import {
   proposalPatchSchema,
   cancelAcceptedProposalResponseSchema,
   cancelAcceptedProposalSchema,
+  finalizeProposalResponseSchema,
+  finalizeProposalSchema,
 } from "./proposal-management";
+import { proposalDecisionPreviewResponseSchema } from "./proposal-decisions";
+import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import {
   proposalCommentCreateResponseSchema,
   proposalCommentCreateSchema,
@@ -108,6 +112,59 @@ export const groupEventProposalCancelRouteSchema = {
       content: { "application/json": { schema: cancelAcceptedProposalResponseSchema } },
     },
     "409": jsonErrorResponse("The proposal is not accepted or changed while cancellation was being saved."),
+    ...proposalRouteErrors,
+  },
+};
+
+export const groupEventProposalFinalizePreviewRouteSchema = {
+  tags: ["Groups"],
+  summary: "Preview a proposal decision and its notifications",
+  description: "Renders the decision notification plan without changing proposal state or queueing email.",
+  request: {
+    params: groupEventProposalParamsSchema,
+    body: { required: true, content: { "application/json": { schema: finalizeProposalSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "The rendered decision notification preview.",
+      content: { "application/json": { schema: proposalDecisionPreviewResponseSchema } },
+    },
+    "409": jsonErrorResponse("The proposal is not currently decidable."),
+    ...proposalRouteErrors,
+  },
+};
+
+export const groupEventProposalFinalizeRouteSchema = {
+  tags: ["Groups"],
+  summary: "Record a proposal decision",
+  description:
+    "Records the decision, preserves decision and review history, reconciles participant capacity, and queues notifications atomically.",
+  request: {
+    params: groupEventProposalParamsSchema,
+    body: { required: true, content: { "application/json": { schema: finalizeProposalSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "The recorded proposal decision and review-threshold evidence.",
+      content: { "application/json": { schema: finalizeProposalResponseSchema } },
+    },
+    "409": jsonErrorResponse(
+      "The proposal, group context, or authorization changed while the decision was being saved.",
+    ),
+    ...proposalRouteErrors,
+  },
+};
+
+export const groupEventProposalAuditLogRouteSchema = {
+  tags: ["Groups"],
+  summary: "List proposal audit evidence",
+  description: "Audit filtering, search, sort order, and pagination are executed in D1 for the exact proposal scope.",
+  request: { params: groupEventProposalParamsSchema, query: scopedAuditLogListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of proposal audit evidence.",
+      content: { "application/json": { schema: scopedAuditLogResponseSchema } },
+    },
     ...proposalRouteErrors,
   },
 };

@@ -10,6 +10,7 @@ import {
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
 import app from "../functions/router";
+import { renderEmail } from "../functions/_lib/email/render";
 
 function mountedAppFetch(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -131,6 +132,63 @@ describe("proposal participants", () => {
         "admin@pkic.org",
       ),
     ).resolves.toEqual([{ first_name: null, organization_name: null }]);
+  });
+
+  it("renders public proposal and participant fields literally while retaining trusted management links", async () => {
+    await seedEventAndAdmin(env.DB);
+    const attackerUrl = "https://attacker.invalid/proposal";
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceType: "direct",
+          proposer: {
+            firstName: "Lead",
+            lastName: "Reviewer",
+            email: "literal-proposer@example.test",
+            organizationName: "<script>alert(1)</script>",
+            jobTitle: "Engineer",
+            role: "proposer",
+          },
+          proposal: {
+            type: "talk",
+            title: `[Review](${attackerUrl})`,
+            abstract:
+              'A sufficiently detailed abstract with <img src="https://attacker.invalid/pixel.gif"> that must remain literal in every email.',
+          },
+          speakers: [
+            {
+              firstName: "Guest",
+              lastName: "Speaker",
+              email: "literal-speaker@example.test",
+              organizationName: '<img src="https://attacker.invalid/org.gif">',
+              role: "speaker",
+              bio: "A sufficiently detailed biography for the invited speaker security regression test.",
+            },
+          ],
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    const queued = await queryAll<{ template_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, payload_json FROM email_outbox WHERE template_key IN ('proposal_submitted', 'co_speaker_invite') ORDER BY template_key",
+    );
+    expect(queued).toHaveLength(2);
+    for (const row of queued) {
+      const rendered = await renderEmail(
+        "{{firstName}} {{lastName}} {{proposerFirstName}} {{invitedByDisplay}}\n\n{{proposalTitle}}\n\n{{proposalAbstract}}\n\n{{speakerLineupText}}\n\n[Manage]({{manageUrl}})",
+        JSON.parse(row.payload_json) as Record<string, unknown>,
+        "<!doctype html><html><body>{{{body_html}}}</body></html>",
+      );
+      expect(rendered.text).toContain("attacker.invalid");
+      expect(rendered.html).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
+      expect(rendered.html).not.toContain("<script>");
+      expect(rendered.html).toMatch(/<a\b[^>]*href=["']https:\/\/app\.test\//i);
+    }
   });
 
   it("supports panel participants and stores user links", async () => {

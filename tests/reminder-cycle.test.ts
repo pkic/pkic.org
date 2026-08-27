@@ -21,6 +21,7 @@ import { runInviteReminders } from "../functions/_lib/services/reminders/invite-
 import type { Env } from "../functions/_lib/types";
 import { listDueWork } from "../functions/_lib/services/due-work-read-model";
 import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";
+import { renderEmail } from "../functions/_lib/email/render";
 
 const db = (env as unknown as Env).DB;
 
@@ -272,8 +273,9 @@ describe("runReminderCycle", () => {
       "SELECT payload_json FROM email_outbox WHERE template_key = 'attendee_invite'",
     );
     expect(outbox).toHaveLength(1);
-    const payload = JSON.parse(outbox[0].payload_json) as Record<string, string>;
-    expect(payload.inviterName).toContain("Bob Inviter");
+    const payload = JSON.parse(outbox[0].payload_json) as Record<string, unknown>;
+    const rendered = await renderEmail("{{inviterName}}", payload, "{{{body_html}}}");
+    expect(rendered.text).toContain("Bob Inviter");
   });
 
   it("does not queue or timestamp an invite reminder after the event schedule changes", async () => {

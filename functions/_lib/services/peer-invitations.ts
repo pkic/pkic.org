@@ -13,6 +13,7 @@ import { createReferralCode } from "./referrals";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
+import { emailPlainText } from "../email/plain-text";
 
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
 
@@ -139,9 +140,9 @@ export async function createPeerInvitations(
         linkSecretFingerprint,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: invite.inviteeFirstName ?? "",
-          lastName: invite.inviteeLastName ?? "",
-          inviterName,
+          firstName: emailPlainText(invite.inviteeFirstName ?? ""),
+          lastName: emailPlainText(invite.inviteeLastName ?? ""),
+          inviterName: emailPlainText(inviterName),
           [primaryKey]: primaryUrl,
           declineUrl,
         },

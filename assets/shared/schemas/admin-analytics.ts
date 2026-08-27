@@ -141,7 +141,7 @@ export const adminEventStatsResponseSchema = z.object({
     attendee: inviteStatsSchema,
     speaker: inviteStatsSchema,
   }),
-  proposals: z.object({ byStatus: countMapSchema, total: z.number() }),
+  proposals: z.object({ byStatus: countMapSchema, total: z.number() }).nullable(),
   rsvp: z.object({
     total: z.number(),
     byStatus: countMapSchema,

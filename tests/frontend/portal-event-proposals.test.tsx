@@ -48,7 +48,7 @@ function proposal() {
   };
 }
 
-function stubFetch(calls: string[]): void {
+function stubFetch(calls: string[], detailAccess = access): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -60,7 +60,7 @@ function stubFetch(calls: string[]): void {
             {
               group: { id: GROUP_ID, slug: "working-group", name: "Working Group" },
               event: { id: EVENT_ID, slug: "event", name: "Program Event", startsAt: null },
-              access,
+              access: detailAccess,
             },
           ],
           page: { limit: 25, offset: 0, total: 1, hasMore: false },
@@ -69,7 +69,7 @@ function stubFetch(calls: string[]): void {
       if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals?`)) {
         return json({
           event: { id: EVENT_ID, slug: "event", name: "Program Event" },
-          access,
+          access: detailAccess,
           proposals: [proposal()],
           stats: {
             byStatus: { submitted: 1 },
@@ -84,11 +84,49 @@ function stubFetch(calls: string[]): void {
       if (url === `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`) {
         return json({
           proposal: { ...proposal(), details: null, canceled_at: null, cancellation_comment: null },
-          access,
+          access: detailAccess,
           form: null,
           minReviewsRequired: 2,
           sessionTypes: [],
         });
+      }
+      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/audit-log`)) {
+        return json({
+          auditLog: [
+            {
+              id: "audit-1",
+              created_at: "2026-08-21T12:00:00.000Z",
+              actor_type: "admin",
+              actor_id: "reviewer-1",
+              actor_display: "Reviewer",
+              action: "proposal_decision_recorded",
+              entity_type: "proposal",
+              entity_id: PROPOSAL_ID,
+              details: { finalStatus: "accepted" },
+            },
+          ],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }
+      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/reviews`)) {
+        return json({
+          proposalId: PROPOSAL_ID,
+          reviews: [],
+          myReview: null,
+          summary: {
+            totalReviews: 0,
+            averageScore: null,
+            acceptCount: 0,
+            needsWorkCount: 0,
+            rejectCount: 0,
+            minReviewsRequired: 2,
+            quorumMet: false,
+          },
+          page: { limit: 25, offset: 0, total: 0, hasMore: false },
+        });
+      }
+      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/comments`)) {
+        return json({ comments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
       }
       return json({ error: { code: "UNEXPECTED", message: url } }, 500);
     }),
@@ -130,5 +168,28 @@ describe("group event proposal portal", () => {
     expect(container.textContent).not.toContain("Reviews");
     expect(calls.some((url) => url.includes("/reviews"))).toBe(false);
     expect(calls.some((url) => url.includes("/comments"))).toBe(false);
+    expect(calls.some((url) => url.includes("/audit-log"))).toBe(false);
+    expect(calls.some((url) => url.includes("/finalize"))).toBe(false);
+  });
+
+  it("shows audit only to reviewers and never renders decision controls without finalize access", async () => {
+    const calls: string[] = [];
+    stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />, container!));
+    await settle();
+    await settle();
+    const row = container.querySelector<HTMLTableRowElement>("tbody tr");
+    await act(async () => row?.click());
+    await settle();
+    await settle();
+
+    expect(container.textContent).toContain("Reviews");
+    expect(container.textContent).toContain("Audit log");
+    expect(container.textContent).not.toContain("Final decision");
+    expect(calls.some((url) => url.includes("/finalize-preview"))).toBe(false);
+    expect(calls.some((url) => url.includes("/finalize"))).toBe(false);
+    expect(calls.some((url) => url.includes("/audit-log"))).toBe(true);
   });
 });

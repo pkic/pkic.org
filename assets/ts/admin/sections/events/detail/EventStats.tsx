@@ -168,9 +168,11 @@ export function EventStats({ slug }: { slug: string }) {
         <div class="col-6 col-md-4 col-xl-2">
           <StatCard label="Total registrations" value={s.registrations?.total ?? 0} note="all statuses" />
         </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <StatCard label="Proposals" value={s.proposals?.total ?? 0} note="all proposal statuses" />
-        </div>
+        {s.proposals && (
+          <div class="col-6 col-md-4 col-xl-2">
+            <StatCard label="Proposals" value={s.proposals.total} note="all proposal statuses" />
+          </div>
+        )}
         <div class="col-6 col-md-4 col-xl-2">
           <StatCard label="Sponsor consent" value={consentGranted} note={`${consentPct}% of ${consentTotal}`} />
         </div>

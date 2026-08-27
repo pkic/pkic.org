@@ -1,5 +1,5 @@
-import { escapeMarkdownText } from "../email/markdown";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
+import { emailPlainText } from "../email/plain-text";
 import { getProposalAccessForEvent } from "../auth/proposal-access";
 import { requireAdminDatabaseUserId } from "../auth/admin-identity";
 import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
@@ -157,10 +157,10 @@ export async function cancelAcceptedProposal(
           ...buildEventEmailVariables(event, appBaseUrl),
           proposalId: proposal.id,
           speakerUserId: speaker.user_id,
-          firstNameText: escapeMarkdownText(speaker.first_name ?? speakerName(speaker)),
-          proposalTitleText: escapeMarkdownText(proposal.title),
-          eventNameText: escapeMarkdownText(event.name),
-          cancellationCommentText: escapeMarkdownText(normalizedComment),
+          firstNameText: emailPlainText(speaker.first_name ?? speakerName(speaker)),
+          proposalTitleText: emailPlainText(proposal.title),
+          eventNameText: emailPlainText(event.name),
+          cancellationCommentText: emailPlainText(normalizedComment),
         },
       },
       recipientCondition,

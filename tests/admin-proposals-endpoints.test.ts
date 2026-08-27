@@ -26,6 +26,7 @@ import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { editAdminProposal } from "../functions/_lib/services/proposal-admin-edit";
 import { cancelAcceptedProposal } from "../functions/_lib/services/proposal-cancellation";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { renderEmail } from "../functions/_lib/email/render";
 
 const proposalDetails = {
   audience: "Operators",
@@ -1055,9 +1056,9 @@ describe("admin proposal endpoints", () => {
       .bind(proposalId)
       .run();
 
-    const response = await callAdminProposalCancel(editor.token, proposalId, {
-      comment: "The speaker is unavailable; [untrusted link](https://example.invalid).",
-    });
+    const cancellationComment =
+      'The speaker is unavailable; [untrusted link](https://example.invalid) <img src="https://example.invalid/pixel.gif">.';
+    const response = await callAdminProposalCancel(editor.token, proposalId, { comment: cancellationComment });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -1075,7 +1076,7 @@ describe("admin proposal endpoints", () => {
     ]);
     expect(proposal).toEqual({
       status: "canceled",
-      cancellation_comment: "The speaker is unavailable; [untrusted link](https://example.invalid).",
+      cancellation_comment: cancellationComment,
       canceled_by_user_id: editor.userId,
     });
     await expect(
@@ -1115,7 +1116,23 @@ describe("admin proposal endpoints", () => {
         .sort()
         .map((userId) => ({ user_id: userId, role: "speaker", status: "inactive" })),
     );
-    expect(JSON.parse(outbox[0].payload_json).cancellationCommentText).toContain("\\[untrusted link\\]");
+    const queuedPayload = JSON.parse(outbox[0].payload_json) as Record<string, unknown>;
+    const markdownEmail = await renderEmail(
+      "{{cancellationCommentText}}",
+      queuedPayload,
+      "<!doctype html><html><body>{{{body_html}}}</body></html>",
+      "markdown",
+    );
+    const htmlEmail = await renderEmail(
+      "<p>{{cancellationCommentText}}</p>",
+      queuedPayload,
+      "<!doctype html><html><body>{{{body_html}}}</body></html>",
+      "html",
+    );
+    for (const rendered of [markdownEmail, htmlEmail]) {
+      expect(rendered.html).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/example\.invalid/i);
+      expect(rendered.text).toContain("example.invalid");
+    }
 
     const detailResponse = await callAdminProposalDetail(adminToken, proposalId);
     expect(detailResponse.status).toBe(200);

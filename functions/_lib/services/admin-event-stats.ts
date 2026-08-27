@@ -12,6 +12,7 @@ import { getAttendanceChangeStatistics, getAttendanceStatusByType } from "./regi
 export async function getAdminEventStats(
   db: DatabaseLike,
   event: Pick<EventRecord, "id" | "slug" | "name">,
+  options: { includeProposalStats: boolean },
 ): Promise<AdminEventStatsResponse> {
   const [
     regStatusRows,
@@ -184,11 +185,13 @@ export async function getAdminEventStats(
       [event.id],
     ),
     // Proposal counts by status
-    all<{ status: string; count: number }>(
-      db,
-      `SELECT status, COUNT(*) AS count FROM session_proposals WHERE event_id = ? GROUP BY status`,
-      [event.id],
-    ),
+    options.includeProposalStats
+      ? all<{ status: string; count: number }>(
+          db,
+          `SELECT status, COUNT(*) AS count FROM session_proposals WHERE event_id = ? GROUP BY status`,
+          [event.id],
+        )
+      : Promise.resolve([]),
     // RSVP (calendar reply) counts by response status
     all<{ response_status: string; count: number }>(
       db,
@@ -274,10 +277,12 @@ export async function getAdminEventStats(
         declineReasons: speakerDeclineRows,
       },
     },
-    proposals: {
-      byStatus: toMap(proposalStatusRows),
-      total: proposalTotal,
-    },
+    proposals: options.includeProposalStats
+      ? {
+          byStatus: toMap(proposalStatusRows),
+          total: proposalTotal,
+        }
+      : null,
     rsvp: {
       byStatus: Object.fromEntries(rsvpByStatusRows.map((r) => [r.response_status, r.count])),
       byProvider: Object.fromEntries(rsvpByProviderRows.map((r) => [r.provider, r.count])),

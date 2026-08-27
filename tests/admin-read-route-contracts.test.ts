@@ -10,7 +10,9 @@ import { adminUserDetailResponseSchema } from "../assets/shared/schemas/admin-us
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { createProposal } from "../functions/_lib/services/proposals";
 
 async function setupAdmin(): Promise<{ token: string; userId: string }> {
   await seedEventAndAdmin(env.DB);
@@ -92,5 +94,44 @@ describe("admin read route OpenAPI contracts", () => {
     const user = await call(token, `/api/v1/admin/users/${userId}`);
     expect(user.status).toBe(200);
     expect(adminUserDetailResponseSchema.parse(await user.json()).user.id).toBe(userId);
+  });
+
+  it("does not expose proposal statistics through generic event-read access", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const readerId = await insertUser(env.DB, `event-stats-reader-${crypto.randomUUID()}@example.test`);
+    const authorId = await insertUser(env.DB, `event-stats-author-${crypto.randomUUID()}@example.test`);
+    await createProposal(env.DB, {
+      eventId,
+      proposerUserId: authorId,
+      proposalType: "talk",
+      title: "Protected proposal statistics",
+      abstract: "A sufficiently detailed proposal abstract used to verify event statistics authorization.",
+    });
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, eventId, readerId)
+      .run();
+    const token = await createAdminSession(env.DB, readerId, `event-stats-${crypto.randomUUID()}`);
+
+    const eventOnlyResponse = await call(token, "/api/v1/admin/events/pqc-2026/stats");
+    expect(eventOnlyResponse.status).toBe(200);
+    expect(adminEventStatsResponseSchema.parse(await eventOnlyResponse.json()).proposals).toBeNull();
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'proposals:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, eventId, readerId)
+      .run();
+    const proposalResponse = await call(token, "/api/v1/admin/events/pqc-2026/stats");
+    expect(proposalResponse.status).toBe(200);
+    expect(adminEventStatsResponseSchema.parse(await proposalResponse.json()).proposals).toMatchObject({
+      byStatus: { submitted: 1 },
+      total: 1,
+    });
   });
 });

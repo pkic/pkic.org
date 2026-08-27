@@ -2,6 +2,7 @@
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first, run } from "../../db/queries";
 import { prepareQueueEmailStatement } from "../../email/outbox";
+import { emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { AuthAdmin, AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -346,7 +347,11 @@ export async function rejectVoteProposal(
           recipientUserId: row.proposed_by_user_id,
           messageType: "transactional",
           subject: `Your vote proposal was not approved: ${row.title}`,
-          data: { proposerName, proposalTitle: row.title, rejectionReason: reason },
+          data: {
+            proposerName: emailPlainText(proposerName),
+            proposalTitle: emailPlainText(row.title),
+            rejectionReason: emailPlainText(reason),
+          },
         },
         now,
       )

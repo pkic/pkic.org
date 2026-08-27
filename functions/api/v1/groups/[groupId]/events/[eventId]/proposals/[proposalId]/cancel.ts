@@ -3,7 +3,7 @@ import { cancelAcceptedProposalResponseSchema } from "../../../../../../../../..
 import { requireUserBackedAdminFromRequest } from "../../../../../../../../_lib/auth/admin";
 import { resolveAppBaseUrl } from "../../../../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../../../../_lib/db/context";
-import { processOutboxByIdBackground } from "../../../../../../../../_lib/email/outbox";
+import { processSelectedOutboxBackground } from "../../../../../../../../_lib/email/outbox";
 import { json } from "../../../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../../../_lib/openapi/route";
 import { cancelAcceptedProposal } from "../../../../../../../../_lib/services/proposal-cancellation";
@@ -34,7 +34,9 @@ export const GroupEventProposalCancel = openApiRoute(
       { contextGuard: prepareGroupEventProposalContextGuard(db, context) },
     );
     const { outboxIds, ...response } = canceled;
-    for (const outboxId of outboxIds) c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+    if (outboxIds.length > 0) {
+      c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, outboxIds));
+    }
     return json(cancelAcceptedProposalResponseSchema.parse({ success: true, ...response }));
   },
 );

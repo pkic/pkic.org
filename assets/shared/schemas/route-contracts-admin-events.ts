@@ -121,7 +121,8 @@ export const adminEventStatsRouteSchema = {
   request: { params: eventSlugParamsSchema },
   responses: {
     "200": {
-      description: "Event registration, attendance, waitlist, invitation, proposal, and RSVP statistics.",
+      description:
+        "Event registration, attendance, waitlist, invitation, and RSVP statistics. Proposal totals are included only when the caller also has proposals:read for this event.",
       content: { "application/json": { schema: adminEventStatsResponseSchema } },
     },
     "401": { description: "Admin authorization required." },

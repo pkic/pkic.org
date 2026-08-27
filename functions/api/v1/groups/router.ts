@@ -71,6 +71,9 @@ import {
   GroupEventProposalCommentCreate,
 } from "./[groupId]/events/[eventId]/proposals/[proposalId]/comments";
 import { GroupEventProposalCancel } from "./[groupId]/events/[eventId]/proposals/[proposalId]/cancel";
+import { GroupEventProposalFinalizePreview } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize-preview";
+import { GroupEventProposalFinalize } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize";
+import { GroupEventProposalAuditLogList } from "./[groupId]/events/[eventId]/proposals/[proposalId]/audit-log";
 import {
   GroupEventRegistrationAdmitPost,
   GroupEventRegistrationCreate,
@@ -162,6 +165,9 @@ openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalDetailGet);
 openapi.patch("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalPatch);
 openapi.post("/:groupId/events/:eventId/proposals/:proposalId/cancel", GroupEventProposalCancel);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize-preview", GroupEventProposalFinalizePreview);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize", GroupEventProposalFinalize);
+openapi.get("/:groupId/events/:eventId/proposals/:proposalId/audit-log", GroupEventProposalAuditLogList);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewsList);
 openapi.post("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewUpsert);
 openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/reviews/:reviewId", GroupEventProposalReviewPatch);

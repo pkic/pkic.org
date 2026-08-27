@@ -1,10 +1,11 @@
 import { prepareQueueEmailStatement } from "../email/outbox";
+import { emailPlainText } from "../email/plain-text";
 import type { DatabaseLike, StatementLike } from "../types";
 import { sha256Hex } from "../utils/crypto";
 import type { EventRecord } from "./events";
 import { buildEventEmailVariables } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
-import { buildProposalInviteEmailContext } from "./proposal-invite-email-context";
+import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { buildAddProposalSpeaker, formatInvitePerson } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
@@ -67,6 +68,7 @@ async function inviteProposalSpeakerOnce(
   const speakerLineupText = preparedSpeaker.alreadyPresent
     ? context.speakerLineupText
     : [context.speakerLineupText, pendingLine].filter(Boolean).join("\n");
+  const inviteEmailText = proposalInviteEmailTextVariables({ ...context, speakerLineupText });
   const manageUrl = speakerManagePageUrl(payload.appBaseUrl, payload.event, preparedSpeaker.manageToken);
   const idempotencyKey = `proposal_speaker_invite:${preparedSpeaker.speakerId}:${preparedSpeaker.inviteGeneration}`;
   const queued = prepareQueueEmailStatement(db, {
@@ -84,13 +86,9 @@ async function inviteProposalSpeakerOnce(
       ...buildEventEmailVariables(payload.event, payload.appBaseUrl),
       proposalId: payload.proposal.id,
       speakerUserId: preparedUser.user.id,
-      firstName: preparedUser.user.first_name ?? "",
-      lastName: preparedUser.user.last_name ?? "",
-      proposerFirstName: context.inviterFirstName ?? "",
-      invitedByDisplay: context.invitedByDisplay,
-      proposalTitle: context.proposalTitle,
-      proposalAbstract: context.proposalAbstract,
-      speakerLineupText,
+      firstName: emailPlainText(preparedUser.user.first_name ?? ""),
+      lastName: emailPlainText(preparedUser.user.last_name ?? ""),
+      ...inviteEmailText,
       manageUrl,
     },
   });

@@ -1,10 +1,11 @@
 import { all } from "../../db/queries";
+import { emailPlainText } from "../../email/plain-text";
 import { speakerManagePageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import { queuedCapabilityToken } from "../capability-links";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState } from "./shared";
-import { buildProposalInviteEmailContextMap } from "../proposal-invite-email-context";
+import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "../proposal-invite-email-context";
 import type { DatabaseLike } from "../../types";
 import { proposalSpeakerEffectiveProfileColumns } from "../proposal-speakers";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "../proposal-status-policy";
@@ -108,13 +109,17 @@ export async function runCoSpeakerInviteReminders(
         capabilityLinkValues: [manageUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: row.first_name ?? "",
-          lastName: row.last_name ?? "",
-          proposerFirstName: row.proposer_first_name ?? "",
-          invitedByDisplay: ctx?.invitedByDisplay ?? "",
-          proposalTitle: ctx?.proposalTitle ?? "",
-          proposalAbstract: ctx?.proposalAbstract ?? "",
-          speakerLineupText: ctx?.speakerLineupText ?? "",
+          firstName: emailPlainText(row.first_name ?? ""),
+          lastName: emailPlainText(row.last_name ?? ""),
+          ...(ctx
+            ? proposalInviteEmailTextVariables({ ...ctx, inviterFirstName: row.proposer_first_name ?? "" })
+            : {
+                proposerFirstName: emailPlainText(row.proposer_first_name ?? ""),
+                invitedByDisplay: emailPlainText(""),
+                proposalTitle: emailPlainText(row.proposal_title),
+                proposalAbstract: emailPlainText(""),
+                speakerLineupText: emailPlainText(""),
+              }),
           manageUrl,
           isReminder: true,
           reminderCount: String(reminderNumber),

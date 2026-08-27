@@ -1,5 +1,7 @@
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
+import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -21,6 +23,7 @@ import { prepareProposalRoleCapacityForProposalStatus } from "../proposal-role-c
 import { isRegistrationTransitionConflict, registrationChangedError } from "../registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "../event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "../proposal-speaker-roster-revision";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "../proposal-write-authorization";
 
 interface RecordedDecisionSnapshot {
   review_round: number;
@@ -30,6 +33,7 @@ interface RecordedDecisionSnapshot {
 export async function recordProposalDecision(
   db: DatabaseLike,
   input: RecordProposalDecisionInput,
+  authorization?: ProposalWriteAuthorization,
 ): Promise<RecordedProposalDecision> {
   const decisionMakerUserId = requireAdminDatabaseUserId(input.actor);
   if (input.finalStatus === "needs-work" && !input.decisionNote?.trim()) {
@@ -163,7 +167,10 @@ export async function recordProposalDecision(
           input.minReviewsRequired,
         );
 
-  const statements: StatementLike[] = [
+  const mutationStatements: StatementLike[] = [
+    preparePermissionsAuthorizationGuard(db, input.actor, [
+      { permission: "proposals:manage", context: { type: "event", id: context.event_id } },
+    ]),
     recordCurrentDecision,
     prepareAuditLogAfterOneChange(
       db,
@@ -238,7 +245,7 @@ export async function recordProposalDecision(
   ];
 
   if (input.finalStatus === "rejected") {
-    statements.push(
+    mutationStatements.push(
       prepareCancelProposalEmails(
         db,
         {
@@ -254,7 +261,7 @@ export async function recordProposalDecision(
   }
 
   for (const userId of input.presentationReminderUserIds ?? []) {
-    statements.push(
+    mutationStatements.push(
       db
         .prepare(
           `UPDATE proposal_speakers
@@ -266,7 +273,7 @@ export async function recordProposalDecision(
   }
   for (const [index, prepared] of preparedEmails.entries()) {
     const notification = (input.notifications ?? [])[index];
-    statements.push(
+    mutationStatements.push(
       prepared.statement,
       prepareAuditLogWhen(db, {
         actorType: "admin",
@@ -285,15 +292,16 @@ export async function recordProposalDecision(
       }),
     );
   }
-  statements.push(
+  mutationStatements.push(
     db
       .prepare("SELECT review_round, review_count FROM proposal_decisions WHERE id = ? AND proposal_id = ?")
       .bind(decisionId, input.proposalId),
   );
 
   try {
-    const results = await db.batch(statements);
-    if ((results[0].meta?.changes ?? 0) !== 1) {
+    const results = await db.batch(withProposalWriteContextGuard(authorization, mutationStatements));
+    const leadingGuardCount = 1 + Number(authorization?.contextGuard !== undefined);
+    if ((results[leadingGuardCount].meta?.changes ?? 0) !== 1) {
       return throwProposalDecisionConflict(
         db,
         input.proposalId,
@@ -313,6 +321,13 @@ export async function recordProposalDecision(
       outboxIds: preparedEmails.map(({ id }) => id),
     };
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_FINALIZATION_AUTHORIZATION_CHANGED",
+        "Proposal authorization changed while the decision was being saved",
+      );
+    }
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }

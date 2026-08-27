@@ -14,6 +14,7 @@ import {
   joinVotingGroup,
   seedVotingAdmin,
 } from "./helpers/voting";
+import { renderEmail } from "../functions/_lib/email/render";
 
 describe("durable vote representative notifications", () => {
   let admin: Awaited<ReturnType<typeof seedVotingAdmin>>["admin"];
@@ -90,9 +91,13 @@ describe("durable vote representative notifications", () => {
   });
 
   it("drains an immutable snapshot after the vote has already closed and remains idempotent", async () => {
-    const capacity = await createOrganizationCapacity(env.DB);
+    const capacity = await createOrganizationCapacity(env.DB, {
+      organizationName: '[Organization](https://attacker.invalid/org) <img src="https://attacker.invalid/org.gif">',
+    });
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
-    const vote = await createCanonicalVote(env.DB, admin);
+    const vote = await createCanonicalVote(env.DB, admin, {
+      title: '[Vote](https://attacker.invalid/vote) <script src="https://attacker.invalid/vote.js"></script>',
+    });
     await env.DB.prepare("UPDATE votes SET status = 'closed' WHERE id = ?").bind(vote.id).run();
 
     const first = await runVotesDueWork(env.DB, env, 10);
@@ -105,6 +110,21 @@ describe("durable vote representative notifications", () => {
         "SELECT template_key, recipient_user_id FROM email_outbox WHERE idempotency_key LIKE 'member-vote-representative-notify:%'",
       ),
     ).toEqual([{ template_key: "member-vote-representative-notify", recipient_user_id: capacity.userId }]);
+    const [queued] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE idempotency_key LIKE 'member-vote-representative-notify:%'",
+    );
+    const payload = JSON.parse(queued.payload_json) as Record<string, unknown>;
+    for (const contentType of ["markdown", "html"] as const) {
+      const rendered = await renderEmail(
+        "{{representativeName}} {{organizationName}} {{voteTitle}}",
+        payload,
+        "<!doctype html><html><body>{{{body_html}}}</body></html>",
+        contentType,
+      );
+      expect(rendered.html).not.toMatch(/<(?:a|img|script)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
+      expect(rendered.text).toContain("attacker.invalid");
+    }
   });
 
   it("rolls back a scheduled opening when its notification snapshot fails", async () => {

@@ -5,6 +5,7 @@ import {
 import { getProposalAccessForEvent } from "../auth/proposal-access";
 import { first } from "../db/queries";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
+import { emailPlainText } from "../email/plain-text";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
@@ -217,10 +218,10 @@ async function removeProposalSpeaker(
         capabilityLinkValues: [manageUrl],
         data: {
           ...buildEventEmailVariables(event, input.appBaseUrl),
-          firstName: replacement.first_name ?? "",
+          firstName: emailPlainText(replacement.first_name ?? ""),
           proposalId: context.proposal_id,
           speakerUserId: replacement.user_id,
-          proposalTitle: context.proposal_title,
+          proposalTitle: emailPlainText(context.proposal_title),
           manageUrl,
         },
       },

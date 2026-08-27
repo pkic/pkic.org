@@ -20,6 +20,11 @@ import {
   type ProposalAccess,
   type ProposalStats,
 } from "./event-proposals";
+import {
+  proposalDecisionPreviewMessageSchema,
+  proposalDecisionPreviewResponseSchema,
+  type ProposalDecisionPreviewResponse,
+} from "./proposal-decisions";
 
 /** @deprecated Use the neutral event-proposal contracts. */
 export {
@@ -86,24 +91,8 @@ export type AdminProposalSpeakerPatchResponse = z.infer<typeof adminProposalSpea
 
 export { proposalSessionTypeSchema } from "./proposal-management";
 
-export const proposalDecisionPreviewMessageSchema = z.object({
-  id: z.string(),
-  templateKey: z.string(),
-  recipientEmail: z.string(),
-  recipientLabel: z.string(),
-  subject: z.string(),
-  html: z.string(),
-  text: z.string(),
-  templateMissing: z.boolean(),
-});
-
-export const proposalDecisionPreviewResponseSchema = successResponseSchema.extend({
-  recipientCount: z.number().int().nonnegative(),
-  emailCount: z.number().int().nonnegative(),
-  layoutMissing: z.boolean(),
-  missingTemplateKeys: z.array(z.string()),
-  messages: z.array(proposalDecisionPreviewMessageSchema),
-});
-
 export const proposalReminderResponseSchema = z.object({ queued: z.number() });
-export type ProposalDecisionPreviewResponse = z.infer<typeof proposalDecisionPreviewResponseSchema>;
+/** @deprecated Use the neutral proposal-decision preview contracts. */
+export { proposalDecisionPreviewMessageSchema, proposalDecisionPreviewResponseSchema };
+/** @deprecated Use the neutral proposal-decision preview contract type. */
+export type { ProposalDecisionPreviewResponse };

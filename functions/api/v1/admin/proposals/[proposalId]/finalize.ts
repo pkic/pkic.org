@@ -4,7 +4,7 @@ import { adminProposalFinalizeRouteSchema } from "../../../../../../assets/share
 import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { json } from "../../../../../_lib/http";
 import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
@@ -39,8 +39,8 @@ export async function onRequestPost(
     },
   );
   const { outboxIds, ...finalizedResponse } = finalized;
-  for (const outboxId of outboxIds) {
-    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+  if (outboxIds.length > 0) {
+    c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, outboxIds));
   }
 
   return json(finalizeProposalResponseSchema.parse({ success: true, ...finalizedResponse, minReviewsRequired }));

@@ -1,5 +1,6 @@
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
 import { first } from "../../db/queries";
+import { emailMarkdownText, emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { buildEventEmailVariables, resolveEventSessionTypes } from "../events";
@@ -82,12 +83,12 @@ export async function buildProposalDecisionEmailPlan(
           proposalId: proposal.id,
           speakerUserId: speaker.user_id,
           eventName: event.name,
-          firstName: speaker.first_name ?? "",
-          lastName: speaker.last_name ?? "",
-          proposalTitle: proposal.title,
+          firstName: emailPlainText(speaker.first_name ?? ""),
+          lastName: emailPlainText(speaker.last_name ?? ""),
+          proposalTitle: emailPlainText(proposal.title),
           manageUrl: proposalManageUrl,
           finalStatus: payload.finalStatus,
-          decisionNote: payload.decisionNote ?? "",
+          decisionNote: emailMarkdownText(payload.decisionNote ?? ""),
         },
       });
     }
@@ -106,8 +107,8 @@ export async function buildProposalDecisionEmailPlan(
         ...eventVariables,
         proposalId: proposal.id,
         speakerUserId: speaker.user_id,
-        firstName: speaker.first_name ?? "",
-        proposalTitle: proposal.title,
+        firstName: emailPlainText(speaker.first_name ?? ""),
+        proposalTitle: emailPlainText(proposal.title),
         profileUrl: manageUrl,
         hasHeadshot: speaker.headshot_r2_key ? "true" : "",
         hasBio: speaker.biography ? "true" : "",
@@ -126,8 +127,8 @@ export async function buildProposalDecisionEmailPlan(
         ...eventVariables,
         proposalId: proposal.id,
         speakerUserId: speaker.user_id,
-        firstName: speaker.first_name ?? "",
-        proposalTitle: proposal.title,
+        firstName: emailPlainText(speaker.first_name ?? ""),
+        proposalTitle: emailPlainText(proposal.title),
         uploadUrl: manageUrl,
         deadline: payload.presentationDeadline ?? proposal.presentation_deadline ?? "",
       },

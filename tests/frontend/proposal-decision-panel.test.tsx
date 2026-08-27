@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { ProposalDecisionPanel } from "../../assets/ts/admin/sections/events/detail/proposal-detail/ProposalDecisionPanel";
@@ -26,6 +26,14 @@ const proposal: ProposalDetailRecord = {
   decision_note: "Please clarify the implementation plan.",
   decision_decided_at: "2026-08-02T00:00:00.000Z",
   details: null,
+};
+
+const editableProposal: ProposalDetailRecord = {
+  ...proposal,
+  status: "submitted",
+  decision_status: null,
+  decision_note: null,
+  decision_decided_at: null,
 };
 
 let container: HTMLElement | null = null;
@@ -83,5 +91,105 @@ describe("proposal decision panel", () => {
 
     expect(container.textContent).toContain("Decision recorded:");
     expect(container.querySelector("form")).toBeNull();
+  });
+
+  it("previews before confirming and finalizing the selected decision", async () => {
+    const requests: Array<{ url: string; method: string; body: string | null }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
+        if (url.endsWith("/finalize-preview")) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              recipientCount: 1,
+              emailCount: 1,
+              layoutMissing: false,
+              missingTemplateKeys: [],
+              messages: [
+                {
+                  id: "proposal-decision:user-1",
+                  templateKey: "proposal_decision",
+                  recipientEmail: "proposer@example.test",
+                  recipientLabel: "Proposal Owner",
+                  subject: "Proposal update",
+                  html: "<p>Accepted</p>",
+                  text: "Accepted",
+                  templateMissing: false,
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            success: true,
+            decisionId: "decision-1",
+            reviewRound: 1,
+            reviewCount: 2,
+            minReviewsRequired: 2,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(
+        <ProposalDecisionPanel
+          proposalId="proposal-1"
+          proposal={editableProposal}
+          reviewCount={2}
+          minReviewsRequired={2}
+          loading={false}
+          onSaved={() => {}}
+        />,
+        container!,
+      ),
+    );
+
+    const select = container.querySelector("select") as HTMLSelectElement;
+    await act(() => {
+      select.value = "accepted";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const previewButton = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Preview emails"),
+    ) as HTMLButtonElement;
+    await act(() => previewButton.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      url: "/api/v1/admin/proposals/proposal-1/finalize-preview",
+      method: "POST",
+    });
+    expect(container.textContent).toContain("Email preview");
+    const recordButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(recordButton.disabled).toBe(true);
+
+    const confirmation = container.querySelector("#proposal-decision-preview-confirm") as HTMLInputElement;
+    await act(() => {
+      confirmation.checked = true;
+      confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(recordButton.disabled).toBe(false);
+    await act(() => recordButton.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      url: "/api/v1/admin/proposals/proposal-1/finalize",
+      method: "POST",
+    });
+    vi.unstubAllGlobals();
   });
 });
