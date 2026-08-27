@@ -5,9 +5,9 @@ import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../../../types";
 import { useData } from "../../../../../hooks/useData";
 import {
-  ADMIN_EVENT_REGISTRATION_STATUSES,
-  adminEventRegistrationStatusLabel,
-} from "../../../../../../shared/schemas/admin-events";
+  EVENT_REGISTRATION_STATUSES,
+  eventRegistrationStatusLabel,
+} from "../../../../../../shared/schemas/event-registrations";
 import { AuditLogTable } from "../../../../components/AuditLogTable";
 import { badgeRoleInfoSchema } from "../../../../../../shared/schemas/route-contracts-admin-registrations";
 import { adminRegistrationUpdateResponseSchema } from "../../../../../../shared/schemas/route-contracts-admin-registrations";
@@ -251,9 +251,9 @@ export function RegistrationForceStatusPanel({
           value={selected}
           onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
         >
-          {ADMIN_EVENT_REGISTRATION_STATUSES.map((status) => (
+          {EVENT_REGISTRATION_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {adminEventRegistrationStatusLabel(status)}
+              {eventRegistrationStatusLabel(status)}
             </option>
           ))}
         </select>

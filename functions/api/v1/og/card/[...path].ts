@@ -16,6 +16,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 import { dispatchRequestMethod, json } from "../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
+import { getStaticAssetsBinding } from "../../../../_lib/static-assets";
 import type { Env } from "../../../../_lib/types";
 import { readBoundedStream } from "../../../../_lib/utils/bounded-stream";
 
@@ -85,13 +86,9 @@ export function parseOgCardRequest(request: Request): OgCardRequest | null {
   return { pagePath: rawPath === "index" ? "" : rawPath, contentHash };
 }
 
-function assetBinding(env: Env): Env["ASSETS"] | undefined {
-  return env.ASSETS ?? env.ASSETS_PUBLIC;
-}
-
 /** Read the build-generated marker that authorizes this exact render/cache fill. */
 export async function publishedOgCardVersion(env: Env, origin: string, pagePath: string): Promise<string | null> {
-  const assets = assetBinding(env);
+  const assets = getStaticAssetsBinding(env);
   if (!assets) return null;
   const targetPath = pagePath ? `/${pagePath}/og-card.html` : "/og-card.html";
   const response = await assets.fetch(new Request(new URL(targetPath, origin)));
@@ -128,7 +125,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   // 2. A miss is authorized by the version marker in the static render target.
-  if (!assetBinding(c.env)) {
+  if (!getStaticAssetsBinding(c.env)) {
     return json({ error: { code: "SERVICE_UNAVAILABLE", message: "Static assets not available" } }, 503);
   }
   if ((await publishedOgCardVersion(c.env, origin, pagePath)) !== contentHash) {

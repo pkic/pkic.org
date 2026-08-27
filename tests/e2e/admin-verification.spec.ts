@@ -5,9 +5,8 @@
  * this phase's job is only to confirm they actually work end-to-end in a
  * real browser, not to build anything new.
  *
- * Screens covered, one test each: Organizations → Content Review,
- * Sponsorships + Events → Settings → Sponsor Tiers, Admin → Votes +
- * → Proposals, and the Users secondary-email panel
+ * Screens covered include the remaining sponsorship/event/user admin views,
+ * portal System content review, and canonical group Votes/Proposals management
  * (2026-07-27 follow-up).
  *
  * Fixture data (an approved org member, an approved individual member) goes
@@ -16,8 +15,8 @@
  * own fixtures — an application is created via the public endpoint, walked
  * through its real stage transitions by the signed-in admin, and approved,
  * which provisions a real organization + user. The member then signs in for
- * real via the portal's magic-link flow to produce the content-review /
- * vote-proposal submissions the admin screens under test actually moderate.
+ * real via the portal's magic-link flow to produce the content-review and
+ * vote-proposal submissions that the canonical portal workflows moderate.
  *
  * Admin auth happens exactly once for the whole file (`beforeAll`, saved as
  * `storageState` and reused by every test) rather than per-test: the local
@@ -31,8 +30,9 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { adminApplicationDetailSchema } from "../../assets/shared/schemas/admin-applications";
+import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
+import { signInToPortal } from "./helpers/portal-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -143,7 +143,13 @@ async function provisionApprovedMember(
           membershipCategory: category,
           organizationName: orgName,
           joinToken,
-          answers: { reason: "This E2E member wants to contribute to the PKI community." },
+          answers: {
+            reason: "This E2E member wants to contribute to the PKI community.",
+            agrees_bylaws: true,
+            agrees_code_of_conduct: true,
+            agrees_ipr_policy: true,
+            warranted_authority: true,
+          },
         }),
       });
       const body = (await res.json()) as { applicationId?: string };
@@ -157,7 +163,7 @@ async function provisionApprovedMember(
   for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
     const status = await page.evaluate(
       async ({ applicationId, toStage }) => {
-        const res = await fetch(`/api/v1/admin/applications/${applicationId}/stage`, {
+        const res = await fetch(`/api/v1/system/membership-applications/${applicationId}/stage`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -175,7 +181,7 @@ async function provisionApprovedMember(
   }
 
   const approved = await page.evaluate(async (applicationId) => {
-    const res = await fetch(`/api/v1/admin/applications/${applicationId}/approve`, {
+    const res = await fetch(`/api/v1/system/membership-applications/${applicationId}/approve`, {
       method: "POST",
       credentials: "same-origin",
     });
@@ -185,21 +191,6 @@ async function provisionApprovedMember(
   expect(approved.status, JSON.stringify(approved.body)).toBe(200);
 
   return { applicationId, organizationId: approved.body.organizationId, userId: approved.body.userId };
-}
-
-/** Signs a member in for real via the portal's magic-link flow. */
-async function memberLogin(page: Page, email: string): Promise<void> {
-  await page.goto("/portal/");
-  await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#portal-inp-email").fill(email);
-  const since = await outboxLength();
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
-  await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
-
-  const magicEmail = await waitForEmail(email, "sign-in", { since });
-  const magicUrl = extractUrlFromEmail(magicEmail, "/portal/");
-  await page.goto(magicUrl);
-  await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe("Admin browser-verification pass", () => {
@@ -219,39 +210,37 @@ test.describe("Admin browser-verification pass", () => {
 
   test.use({ storageState: ADMIN_AUTH_FILE });
 
-  test("votes: create a vote via the admin UI and manage its visibility/ballots", async ({ page }) => {
+  test("votes: create a vote via the group portal and manage its visibility/ballots", async ({ page }) => {
+    const groupId = "20000000-0000-4000-8000-000000000001";
     const title = `E2E Admin-created Vote ${Date.now()}`;
     const closesAt = new Date(Date.now() + 86_400_000);
     const closesAtLocal = closesAt.toISOString().slice(0, 16);
 
-    await page.goto("/admin/#/votes");
+    await page.goto(`/portal/#/groups/${groupId}/votes`);
     await page.getByRole("button", { name: "Create vote" }).click();
 
-    // Labels here aren't `<label for>`-linked to their inputs (no id on
-    // either side), so getByLabel can't resolve them — target by the
-    // label-then-input sibling structure instead.
-    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Create vote" }) });
-    await form.locator('div:has(> label:text-is("Title")) > input').fill(title);
-    await form.locator('div:has(> label:text-is("Closes at")) > input').fill(closesAtLocal);
-    await form.getByRole("button", { name: "Create vote" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Vote created" })).toBeVisible();
+    const form = page.locator("form").filter({ hasText: "Create vote" });
+    await form.getByLabel("Title").fill(title);
+    await form.getByLabel("Closes at").fill(closesAtLocal);
+    await form.getByRole("button", { name: "Create vote", exact: true }).click();
 
-    await page.locator(".list-group-item").filter({ hasText: title }).click();
-    const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: title }) });
+    const row = page.getByRole("row").filter({ hasText: title });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Details" }).click();
+    const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
-    // A blank "opens at" defaults to now, so the vote is immediately open —
-    // no cron/due-work run needed (matches votes-and-sponsor.spec.ts).
-    await expect(detail.locator("span.badge", { hasText: "open" })).toBeVisible();
 
-    await detail.locator("select").first().selectOption("public");
-    await detail.getByRole("button", { name: "Save" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Visibility updated" })).toBeVisible();
+    const visibility = detail.getByLabel("Visibility");
+    await visibility.selectOption("public");
+    await detail.getByRole("button", { name: "Save visibility" }).click();
+    await expect(visibility).toHaveValue("public");
 
-    await detail.getByRole("button", { name: "Load ballots" }).click();
-    await expect(detail.getByText("No ballots yet.")).toBeVisible();
+    await detail.getByRole("button", { name: "Load identifiable ballots" }).click();
+    await expect(detail.getByText("No ballots have been submitted.")).toBeVisible();
   });
 
   test("vote proposals: a real member submission is moderated (reject guard + approve bypass)", async ({ page }) => {
+    const groupId = "20000000-0000-4000-8000-000000000001";
     // page.evaluate needs a real document loaded first — storageState
     // restores the admin session cookie, but a brand-new page starts on
     // about:blank, where relative-URL fetches have nothing to resolve
@@ -259,67 +248,70 @@ test.describe("Admin browser-verification pass", () => {
     await page.goto("/admin/");
     await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
 
-    // Forum-scope proposal submission requires min_endorsers_for_ballot > 0
-    // (submitProposalRouteSchema's own description) — the "Approve (bypass
-    // endorsements)" admin action is what's under test, not the normal
-    // endorsement-collection path, so 1 is enough to allow submission.
-    const settingsStatus = await page.evaluate(async () => {
-      const res = await fetch("/api/v1/admin/membership-settings", {
+    // Member proposal submission requires the owning group's canonical
+    // min_endorsers_for_ballot policy to be enabled. Configure the group,
+    // not the retired workflow-settings endpoint.
+    const settingsStatus = await page.evaluate(async (groupId) => {
+      const current = await fetch(`/api/v1/groups/${groupId}?manageable=true`, {
+        credentials: "same-origin",
+      });
+      if (!current.ok) return current.status;
+      const currentBody = (await current.json()) as { group: { revision: number } };
+      const res = await fetch(`/api/v1/groups/${groupId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ forumVoteMinEndorsers: 1 }),
+        body: JSON.stringify({ expectedRevision: currentBody.group.revision, minEndorsersForBallot: 1 }),
       });
       return res.status;
-    });
+    }, groupId);
     expect(settingsStatus).toBe(200);
 
     const stamp = Date.now();
     const email = `e2e-proposer-${stamp}@e2e-vote-proposal-${stamp}.test`;
     await provisionApprovedMember(page, { email, name: "Proposer E2E", orgName: `E2E Proposer Org ${stamp}` });
-    await memberLogin(page, email);
+    await page.context().clearCookies();
+    await signInToPortal(page, email);
 
     const title = `E2E Member Vote Proposal ${stamp}`;
-    const submitted = await page.evaluate(async (title) => {
-      const res = await fetch("/api/v1/portal/vote-proposals", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          title,
-          description: "An end-to-end test vote proposal.",
-          voteType: "motion",
-          scopeType: "forum",
-        }),
-      });
-      return { status: res.status, body: await res.text() };
-    }, title);
+    const submitted = await page.evaluate(
+      async ({ title, groupId }) => {
+        const res = await fetch("/api/v1/portal/vote-proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            title,
+            description: "An end-to-end test vote proposal.",
+            voteType: "motion",
+            ownerGroupId: groupId,
+          }),
+        });
+        return { status: res.status, body: await res.text() };
+      },
+      { title, groupId },
+    );
     expect(submitted.status, submitted.body).toBe(200);
 
-    await page.goto("/admin/#/votes");
-    await page.getByRole("button", { name: "proposals", exact: true }).click();
-    // A single open proposal auto-selects, putting its title on screen
-    // twice (list item + detail heading) — scope to the list item.
-    const listItem = page.locator(".list-group-item").filter({ hasText: title });
-    await expect(listItem).toBeVisible();
-    await listItem.click();
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto(`/portal/#/groups/${groupId}/votes`);
+    await page.getByRole("button", { name: "Proposals", exact: true }).click();
 
-    const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: title }) });
-    await expect(detail.getByText("Endorsements: 0 / 1")).toBeVisible();
+    const proposalRow = page.getByRole("row").filter({ hasText: title });
+    await expect(proposalRow).toBeVisible();
+    await proposalRow.getByRole("button", { name: "Details" }).click();
+    const detail = page.locator("div.p-3.bg-body-tertiary").filter({ hasText: title });
+    await expect(detail.getByText("0 of 1 required endorsements")).toBeVisible();
 
-    await detail.getByRole("button", { name: "Reject" }).click();
-    await expect(page.locator(".my-toast", { hasText: "A reason is required to reject" })).toBeVisible();
+    const reject = detail.getByRole("button", { name: "Reject proposal" });
+    await expect(reject).toBeDisabled();
+    page.once("dialog", (dialog) => dialog.accept());
+    await detail.getByRole("button", { name: "Approve and create vote" }).click();
+    await expect(proposalRow).toContainText(/converted to vote/i);
 
-    await detail.getByRole("button", { name: "Approve (bypass endorsements)" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Converted to an active vote" })).toBeVisible();
-
-    await page.getByRole("button", { name: "converted to vote", exact: true }).click();
-    await expect(page.locator(".list-group-item").filter({ hasText: title })).toBeVisible();
-
-    // The proposal's approval also created a real vote (Votes tab) — a
-    // second, independent confirmation the two screens are wired together.
-    await page.getByRole("button", { name: "votes", exact: true }).click();
-    await expect(page.locator(".list-group-item").filter({ hasText: title })).toBeVisible();
+    await page.getByRole("button", { name: "Votes", exact: true }).click();
+    await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible();
   });
 
   test("sponsorships: create an event sponsorship and advance its pipeline stage", async ({ page }) => {
@@ -398,7 +390,19 @@ test.describe("Admin browser-verification pass", () => {
     await expect(savedRow.locator("input[type=checkbox]")).toBeChecked();
   });
 
-  test("organization content review: a real member edit is diffed and approved", async ({ page }) => {
+  test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
+    const canonicalRequests: string[] = [];
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/system/organization-content-reviews")) {
+        canonicalRequests.push(`${request.method()} ${pathname}`);
+      }
+      if (pathname.startsWith("/api/v1/admin/organizations/content-reviews")) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
+
     await page.goto("/admin/");
     await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
 
@@ -406,7 +410,8 @@ test.describe("Admin browser-verification pass", () => {
     const email = `e2e-content-review-${stamp}@e2e-content-review-${stamp}.test`;
     const orgName = `E2E Content Review Org ${stamp}`;
     await provisionApprovedMember(page, { email, name: "Content Reviewer E2E", orgName });
-    await memberLogin(page, email);
+    await page.context().clearCookies();
+    await signInToPortal(page, email);
 
     const newSlogan = `E2E updated slogan ${stamp}`;
     const editStatus = await page.evaluate(async (slogan) => {
@@ -420,13 +425,12 @@ test.describe("Admin browser-verification pass", () => {
     }, newSlogan);
     expect(editStatus).toBe(200);
 
-    await page.goto("/admin/#/organizations/content-reviews");
-    // A single pending review auto-selects, so its org name is already on
-    // screen twice (list item + detail heading) by the time this loads —
-    // scope to the list item specifically rather than a bare getByText.
-    const listItem = page.locator(".list-group-item").filter({ hasText: orgName });
-    await expect(listItem).toBeVisible({ timeout: 15_000 });
-    await listItem.click();
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto("/portal/#/system/organization-content-reviews");
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: orgName }).click();
 
     const detail = page.locator(".card").filter({ has: page.getByText(orgName) });
     await expect(detail.getByText("Slogan", { exact: true })).toBeVisible();
@@ -440,8 +444,21 @@ test.describe("Admin browser-verification pass", () => {
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
 
-    await page.getByRole("button", { name: "approved", exact: true }).click();
-    await expect(page.locator(".list-group-item").filter({ hasText: orgName })).toBeVisible();
+    await page.getByLabel("Review status").selectOption("approved");
+    await expect(page.getByRole("button", { name: orgName })).toBeVisible();
+    expect(canonicalRequests).toContain("GET /api/v1/system/organization-content-reviews");
+    expect(
+      canonicalRequests.some(
+        (request) =>
+          request.startsWith("POST /api/v1/system/organization-content-reviews/") && request.endsWith("/approve"),
+      ),
+    ).toBe(true);
+    expect(legacyRequests).toEqual([]);
+
+    await page.goto("/admin/#/organizations/content-reviews");
+    await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    expect(legacyRequests).toEqual([]);
   });
 
   test("users: secondary email panel", async ({ page }) => {
@@ -489,6 +506,17 @@ test.describe("Admin browser-verification pass", () => {
   // `window.confirm`, which this test dismisses programmatically the same
   // way the "mailing lists" and "working groups" tests above dismiss theirs.
   test("applications: Approve & run onboarding click-through runs full onboarding", async ({ page }) => {
+    const canonicalRequests: string[] = [];
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/system/membership-applications")) {
+        canonicalRequests.push(`${request.method()} ${pathname}`);
+      }
+      if (pathname.startsWith("/api/v1/admin/applications")) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
     page.on("dialog", (d) => d.accept());
     await page.goto("/admin/");
     await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
@@ -505,8 +533,12 @@ test.describe("Admin browser-verification pass", () => {
     });
 
     const since = await outboxLength();
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
 
-    await page.goto("/admin/#/membership/applications");
+    await page.goto("/portal/#/system/membership-applications");
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Membership Applications" })).toHaveAttribute("aria-current", "page");
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter is sufficient here because every earlier fixture has
     // already moved out of ec_review.
@@ -533,20 +565,20 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
     await expect(page.getByText("No further transitions from this stage.")).toBeVisible();
 
-    // Independent confirmation 1/2: re-fetch the application from the admin
+    // Independent confirmation 1/3: re-fetch the application from the System
     // API (not the same optimistic UI state the toast/badge above already
     // reflect) — durably approved with an event recording the transition.
     const refetched = await page.evaluate(async (id) => {
-      const res = await fetch(`/api/v1/admin/applications/${id}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/system/membership-applications/${id}`, { credentials: "same-origin" });
       const body = await res.json();
       return { status: res.status, body };
     }, applicationId);
     expect(refetched.status).toBe(200);
-    const refetchedBody = adminApplicationDetailSchema.parse(refetched.body);
+    const refetchedBody = membershipApplicationDetailSchema.parse(refetched.body);
     expect(refetchedBody.stage).toBe("approved");
     expect(refetchedBody.events.some((e) => e.toStage === "approved")).toBe(true);
 
-    // Independent confirmation 2/2: onboarding provisioning
+    // Independent confirmation 2/3: onboarding provisioning
     // (approveApplication -> provisionOrganizationMembership) really ran —
     // a real user now exists, linked to a real organization matching the
     // application's organizationName, not just the application row's own
@@ -562,6 +594,11 @@ test.describe("Admin browser-verification pass", () => {
     const provisionedUser = usersLookup.body.users.find((u) => u.email === email);
     expect(provisionedUser, JSON.stringify(usersLookup.body)).toBeTruthy();
     expect(provisionedUser?.membership?.organizationName).toBe(orgName);
+
+    expect(canonicalRequests).toContain(`GET /api/v1/system/membership-applications`);
+    expect(canonicalRequests).toContain(`GET /api/v1/system/membership-applications/${applicationId}`);
+    expect(canonicalRequests).toContain(`POST /api/v1/system/membership-applications/${applicationId}/approve`);
+    expect(legacyRequests).toEqual([]);
 
     // Independent confirmation 3/3: the onboarding welcome email — one of
     // approveApplication's own outbox side effects — actually landed,

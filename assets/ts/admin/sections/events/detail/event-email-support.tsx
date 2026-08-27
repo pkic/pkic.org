@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
-import type { AdminEventRegistrationStatusFilter } from "../../../../../shared/schemas/admin-events";
+import type { EventRegistrationStatusFilter } from "../../../../../shared/schemas/event-registrations";
 import type { AttendanceType } from "../../../../../shared/schemas/registration";
 import { api } from "../../../api";
 import { adminEventEmailSupportDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
@@ -79,7 +79,7 @@ export interface CampaignPayload {
   batchSize: number;
   filter: {
     audience: "attendees" | "speakers";
-    attendeeStatus?: AdminEventRegistrationStatusFilter;
+    attendeeStatus?: EventRegistrationStatusFilter;
     attendanceType?: "all" | AttendanceType;
     dayDate?: string;
     dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";

@@ -18,9 +18,9 @@ import {
   proposalCommentCreateResponseSchema,
   proposalCommentsListResponseSchema,
 } from "../assets/shared/schemas/proposal-comments";
-import { adminProposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
+import { proposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
-import { editAdminProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
+import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
 import { buildAdminEventProposalsPageQuery } from "../functions/_lib/services/admin-event-proposals";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { editAdminProposal } from "../functions/_lib/services/proposal-admin-edit";
@@ -669,7 +669,7 @@ describe("admin proposal endpoints", () => {
     };
 
     await expect(
-      editAdminProposalSpeaker(
+      editProposalSpeaker(
         racingDb,
         { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
         proposalId,
@@ -918,7 +918,7 @@ describe("admin proposal endpoints", () => {
 
     const response = await callAdminProposalPatch(adminToken, proposalId, { title: "Updated Endpoint Proposal" });
     expect(response.status).toBe(200);
-    const payload = adminProposalPatchResponseSchema.parse(await response.json());
+    const payload = proposalPatchResponseSchema.parse(await response.json());
     expect(payload.proposal.title).toBe("Updated Endpoint Proposal");
     const [audit] = await queryAll<{ details_json: string }>(
       env.DB,
@@ -941,7 +941,7 @@ describe("admin proposal endpoints", () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = adminProposalPatchResponseSchema.parse(await response.json());
+    const payload = proposalPatchResponseSchema.parse(await response.json());
     expect(payload.proposal.abstract).toContain("corrected by the program committee");
     expect(payload.proposal.title).toBe("Endpoint Proposal");
   });

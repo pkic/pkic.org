@@ -8,7 +8,7 @@ import { adminProposalSpeakerGravatarPostRouteSchema } from "../../../../../../.
 import { downloadGravatar, gravatarHash } from "../../../../../../../_lib/utils/gravatar";
 import {
   adminProposalSpeakerHeadshotUrl,
-  getAdminProposalSpeakerHeadshot,
+  getProposalSpeakerHeadshot,
 } from "../../../../../../../_lib/services/admin-proposal-speaker-headshot";
 import { requireAdminProposalSpeakerPermission } from "../../../../../../../_lib/services/admin-proposal-speaker-access";
 import { requireUserHeadshotBucket } from "../../../../../../../_lib/services/user-headshot";
@@ -19,7 +19,7 @@ type Data = ValidatedData<typeof adminProposalSpeakerGravatarPostRouteSchema>;
 async function onPost(c: AdminContext, data: Data): Promise<Response> {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const speaker = await getAdminProposalSpeakerHeadshot(db, data.params.proposalId, data.params.userId);
+  const speaker = await getProposalSpeakerHeadshot(db, data.params.proposalId, data.params.userId);
   await requireAdminProposalSpeakerPermission(db, admin, speaker.proposal_event_id, "manage");
   const image = await downloadGravatar(speaker.email);
   if (!image) return json({ error: { code: "NO_GRAVATAR", message: "No Gravatar found for this email address" } }, 404);
@@ -47,7 +47,7 @@ async function onPost(c: AdminContext, data: Data): Promise<Response> {
       },
     },
   });
-  const updated = await getAdminProposalSpeakerHeadshot(db, data.params.proposalId, data.params.userId);
+  const updated = await getProposalSpeakerHeadshot(db, data.params.proposalId, data.params.userId);
   return json({
     success: true,
     r2Key,

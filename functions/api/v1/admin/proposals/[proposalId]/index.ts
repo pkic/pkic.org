@@ -12,7 +12,7 @@ import { getConfig } from "../../../../../_lib/config";
 import { getAdminProposalDetailData } from "../../../../../_lib/services/proposal-admin-detail";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api-common";
-import { adminProposalDetailResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
+import { eventProposalDetailResponseSchema } from "../../../../../../assets/shared/schemas/event-proposals";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -26,7 +26,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
 
   return json(
-    adminProposalDetailResponseSchema.parse({
+    eventProposalDetailResponseSchema.parse({
       event: detail.event,
       proposal: detail.proposal,
       access,
@@ -47,7 +47,7 @@ export const AdminProposalsProposalIdGet = openApiRoute(
     responses: {
       "200": {
         description: "Proposal details visible to the authenticated actor.",
-        content: { "application/json": { schema: adminProposalDetailResponseSchema } },
+        content: { "application/json": { schema: eventProposalDetailResponseSchema } },
       },
       "401": { description: "Missing or invalid authentication." },
       "404": { description: "Proposal not found." },

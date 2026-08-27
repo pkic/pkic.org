@@ -9,8 +9,8 @@ import {
 } from "./api-common";
 import {
   proposalSpeakerPatchSchema,
-  adminProposalPatchResponseSchema,
-  adminProposalPatchSchema,
+  proposalPatchResponseSchema,
+  proposalPatchSchema,
   cancelAcceptedProposalResponseSchema,
   cancelAcceptedProposalSchema,
   finalizeProposalResponseSchema,
@@ -19,10 +19,10 @@ import {
   proposalSpeakerRemovalResponseSchema,
 } from "./proposal-management";
 import {
-  adminProposalSpeakerPatchResponseSchema,
-  adminProposalSpeakersResponseSchema,
-  adminProposalSpeakerReminderResponseSchema,
-} from "./admin-event-proposals";
+  proposalSpeakerPatchResponseSchema,
+  proposalSpeakersResponseSchema,
+  proposalSpeakerReminderResponseSchema,
+} from "./proposal-speakers";
 import { proposalDecisionPreviewResponseSchema } from "./proposal-decisions";
 import {
   proposalCommentCreateResponseSchema,
@@ -85,7 +85,7 @@ export const adminProposalPatchRouteSchema = {
     body: {
       content: {
         "application/json": {
-          schema: adminProposalPatchSchema,
+          schema: proposalPatchSchema,
         },
       },
       required: true,
@@ -94,7 +94,7 @@ export const adminProposalPatchRouteSchema = {
   responses: {
     "200": {
       description: "Updated proposal details.",
-      content: { "application/json": { schema: adminProposalPatchResponseSchema } },
+      content: { "application/json": { schema: proposalPatchResponseSchema } },
     },
     "400": { description: "Invalid proposal patch payload." },
     "401": { description: "Admin authorization required." },
@@ -342,7 +342,7 @@ export const adminProposalSpeakersRouteSchema = {
   responses: {
     "200": {
       description: "Proposal speaker roster with completeness summary.",
-      content: { "application/json": { schema: adminProposalSpeakersResponseSchema } },
+      content: { "application/json": { schema: proposalSpeakersResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks review permission for this proposal." },
@@ -365,7 +365,7 @@ export const adminProposalSpeakerPatchRouteSchema = {
   responses: {
     "200": {
       description: "Updated proposal speaker.",
-      content: { "application/json": { schema: adminProposalSpeakerPatchResponseSchema } },
+      content: { "application/json": { schema: proposalSpeakerPatchResponseSchema } },
     },
     "400": { description: "Invalid speaker patch." },
     "401": { description: "Admin authorization required." },
@@ -412,7 +412,7 @@ export const adminProposalSpeakerReminderRouteSchema = {
   responses: {
     "200": {
       description: "Reminder queued.",
-      content: { "application/json": { schema: adminProposalSpeakerReminderResponseSchema } },
+      content: { "application/json": { schema: proposalSpeakerReminderResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks proposal management permission." },

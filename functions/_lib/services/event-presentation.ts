@@ -1,4 +1,5 @@
 import { parseJsonSafe } from "../utils/json";
+import { buildEventFlowPath } from "../../../assets/shared/event-flow-paths";
 import { proposalSessionTypeSchema } from "../../../assets/shared/schemas/proposal-management";
 import { AppError } from "../errors";
 import type { EventRecord } from "./event-types";
@@ -94,7 +95,7 @@ export interface EventEmailVariables {
   eventUrl: string;
 }
 
-function getEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "starts_at">): string {
+export function deriveEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "starts_at">): string {
   if (event.base_path) return event.base_path;
   if (event.starts_at) {
     const year = event.starts_at.substring(0, 4);
@@ -106,16 +107,16 @@ function getEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "start
 function defaultFrontendPaths(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at">,
 ): Omit<EventFrontendRoutes, "usedFallback" | "fallbackKeys"> {
-  const base = getEventBasePath(event);
+  const base = deriveEventBasePath(event);
   return {
-    registrationPath: `${base}register/`,
-    registrationConfirmPath: `${base}register/confirm/`,
-    proposalPath: `${base}propose/`,
-    registrationManagePath: `${base}register/manage/`,
-    proposalManagePath: `${base}propose/manage/`,
-    speakerManagePath: `${base}propose/speaker/`,
-    speakerPresentationPath: `${base}propose/presentation/`,
-    inviteDeclinePath: `${base}invite/decline/`,
+    registrationPath: buildEventFlowPath(base, "registration"),
+    registrationConfirmPath: buildEventFlowPath(base, "registrationConfirm"),
+    proposalPath: buildEventFlowPath(base, "proposal"),
+    registrationManagePath: buildEventFlowPath(base, "registrationManage"),
+    proposalManagePath: buildEventFlowPath(base, "proposalManage"),
+    speakerManagePath: buildEventFlowPath(base, "speakerManage"),
+    speakerPresentationPath: buildEventFlowPath(base, "speakerPresentation"),
+    inviteDeclinePath: buildEventFlowPath(base, "inviteDecline"),
   };
 }
 
@@ -130,11 +131,17 @@ function normalizeFrontendPath(value: string | undefined, basePath?: string): st
 }
 
 export function resolveEventFrontendRoutes(
-  event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
+  event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json"> &
+    Partial<Pick<EventRecord, "source_mode">>,
 ): EventFrontendRoutes {
-  const basePath = getEventBasePath(event);
+  const basePath = deriveEventBasePath(event);
   const defaults = defaultFrontendPaths(event);
-  const routes = parseJsonSafe<EventSettings>(event.settings_json, {}).frontend?.routes ?? {};
+  // Portal routes are platform-owned and immutable. Custom frontend paths are
+  // publication metadata for Hugo-authored events only.
+  const routes =
+    event.source_mode === "portal"
+      ? {}
+      : (parseJsonSafe<EventSettings>(event.settings_json, {}).frontend?.routes ?? {});
   const configured: Record<keyof EventSettingsRoutes, string | null> = {
     registration: normalizeFrontendPath(routes.registration, basePath),
     registrationConfirm: normalizeFrontendPath(routes.registrationConfirm, basePath),
@@ -169,7 +176,7 @@ export function resolveSponsorsImageUrl(
 ): string | null {
   const settings = parseJsonSafe<{ sponsorsImageUrl?: string | null }>(event.settings_json, {});
   if ("sponsorsImageUrl" in settings) return settings.sponsorsImageUrl?.trim() || null;
-  return `${siteBaseUrl}${getEventBasePath(event)}sponsors.jpg`;
+  return `${siteBaseUrl}${deriveEventBasePath(event)}sponsors.jpg`;
 }
 
 export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): string | null {
@@ -186,14 +193,14 @@ export function resolveEventVirtualUrl(
   siteBaseUrl: string,
 ): string | null {
   const explicit = parseJsonSafe<EventSettings>(event.settings_json, {}).virtualUrl?.trim();
-  return explicit || `${siteBaseUrl}${getEventBasePath(event)}virtual/`;
+  return explicit || `${siteBaseUrl}${deriveEventBasePath(event)}virtual/`;
 }
 
 export function resolveEventUrl(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at">,
   siteBaseUrl: string,
 ): string {
-  return `${siteBaseUrl}${getEventBasePath(event)}`;
+  return `${siteBaseUrl}${deriveEventBasePath(event)}`;
 }
 
 export function buildEventEmailVariables(event: EventEmailSource, siteBaseUrl: string): EventEmailVariables {

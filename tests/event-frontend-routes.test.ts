@@ -57,6 +57,21 @@ describe("event frontend routes and hydration contracts", () => {
     expect(withBasePath.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/manage/");
   });
 
+  it("keeps portal routes platform-owned when legacy frontend overrides exist", () => {
+    const portal = resolveEventFrontendRoutes({
+      slug: "portal-event",
+      base_path: "/events/2027/portal-event/",
+      starts_at: "2028-12-01T08:00:00.000Z",
+      source_mode: "portal",
+      settings_json: JSON.stringify({
+        frontend: { routes: { registration: "/attacker-controlled/", proposalManage: "/stale-path/" } },
+      }),
+    });
+
+    expect(portal.registrationPath).toBe("/events/2027/portal-event/register/");
+    expect(portal.proposalManagePath).toBe("/events/2027/portal-event/propose/manage/");
+  });
+
   it("falls back to starts_at year when base_path is null", () => {
     const withYear = resolveEventFrontendRoutes({
       slug: "pqc-conference-amsterdam-nl",

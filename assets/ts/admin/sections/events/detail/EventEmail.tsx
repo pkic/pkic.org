@@ -20,11 +20,11 @@ import {
   useDays,
 } from "./event-email-support";
 import {
-  ADMIN_EVENT_REGISTRATION_STATUS_FILTERS,
-  adminEventRegistrationStatusLabel,
-  adminEventRegistrationStatusFilterSchema,
-  type AdminEventRegistrationStatusFilter,
-} from "../../../../../shared/schemas/admin-events";
+  EVENT_REGISTRATION_STATUS_FILTERS,
+  eventRegistrationStatusLabel,
+  eventRegistrationStatusFilterSchema,
+  type EventRegistrationStatusFilter,
+} from "../../../../../shared/schemas/event-registrations";
 import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
 import { adminEmailTemplateCatalog, getAdminEmailTemplateEditorVersion } from "../../../services/catalogs";
 
@@ -48,7 +48,7 @@ export function EventEmail({
   const [audience] = useState<"attendees" | "speakers">(defaultAudience);
 
   // attendee filters
-  const [attendeeStatus, setAttendeeStatus] = useState<AdminEventRegistrationStatusFilter>("registered");
+  const [attendeeStatus, setAttendeeStatus] = useState<EventRegistrationStatusFilter>("registered");
   const [attendanceType, setAttendanceType] = useState("all");
   const [dayFilter, setDayFilter] = useState("");
   const [dayWaitlistStatus, setDayWaitlistStatus] = useState("all");
@@ -349,12 +349,12 @@ export function EventEmail({
               class="form-select form-select-sm"
               value={attendeeStatus}
               onChange={(e) =>
-                setAttendeeStatus(adminEventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
+                setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
               }
             >
-              {ADMIN_EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
+              {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
                 <option key={status} value={status}>
-                  {status === "all" ? "All" : adminEventRegistrationStatusLabel(status)}
+                  {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
                 </option>
               ))}
             </select>

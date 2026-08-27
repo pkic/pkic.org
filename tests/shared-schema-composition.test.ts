@@ -5,13 +5,11 @@ import {
   userRoleResponseSchema,
 } from "../assets/shared/schemas/access-control";
 import {
-  adminEventRegistrationSummarySchema,
-  adminEventRegistrationsListResponseSchema,
-} from "../assets/shared/schemas/admin-events";
-import {
-  adminRegistrationDetailSchema,
-  adminRegistrationRecordContextSchema,
-} from "../assets/shared/schemas/admin-registration-detail";
+  eventRegistrationSummarySchema,
+  eventRegistrationsListResponseSchema,
+} from "../assets/shared/schemas/event-registrations";
+import { eventRegistrationDetailSchema } from "../assets/shared/schemas/event-registration-detail";
+import { registrationRecordContextSchema } from "../assets/shared/schemas/registration-record";
 import { adminOrganizationLogoPutRouteSchema } from "../assets/shared/schemas/admin-organizations";
 import {
   sponsorshipCreateSchema,
@@ -68,14 +66,14 @@ describe("canonical shared schema composition", () => {
 
   it("uses one event identity contract across event workflow responses", () => {
     expect(adminEventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
-    expect(adminEventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);
+    expect(eventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(adminEventStatsResponseSchema.shape.event).toBe(eventSummarySchema);
 
     const valid = { id: ID, slug: "pqc-2026", name: "PQC Conference 2026" };
     expect(eventSummarySchema.parse(valid)).toEqual(valid);
     for (const schema of [
       adminEventProposalsResponseSchema.shape.event,
-      adminEventRegistrationsListResponseSchema.shape.event,
+      eventRegistrationsListResponseSchema.shape.event,
       adminEventStatsResponseSchema.shape.event,
     ]) {
       expect(schema.safeParse({ ...valid, id: "" }).success).toBe(false);
@@ -165,8 +163,8 @@ describe("canonical shared schema composition", () => {
 
   it("uses one registration record context in list and detail projections", () => {
     for (const field of ["created_at", "updated_at", "user_email", "display_name", "referral_code"] as const) {
-      expect(adminEventRegistrationSummarySchema.shape[field]).toBe(adminRegistrationRecordContextSchema.shape[field]);
-      expect(adminRegistrationDetailSchema.shape[field]).toBe(adminRegistrationRecordContextSchema.shape[field]);
+      expect(eventRegistrationSummarySchema.shape[field]).toBe(registrationRecordContextSchema.shape[field]);
+      expect(eventRegistrationDetailSchema.shape[field]).toBe(registrationRecordContextSchema.shape[field]);
     }
 
     const recordContext = {
@@ -176,10 +174,10 @@ describe("canonical shared schema composition", () => {
       display_name: "Ada Lovelace",
       referral_code: null,
     };
-    expect(adminRegistrationRecordContextSchema.parse(recordContext)).toEqual(recordContext);
-    expect(adminRegistrationRecordContextSchema.safeParse({ ...recordContext, created_at: 123 }).success).toBe(false);
+    expect(registrationRecordContextSchema.parse(recordContext)).toEqual(recordContext);
+    expect(registrationRecordContextSchema.safeParse({ ...recordContext, created_at: 123 }).success).toBe(false);
 
-    const summary = adminEventRegistrationSummarySchema.parse({
+    const summary = eventRegistrationSummarySchema.parse({
       ...recordContext,
       id: ID,
       user_id: SECOND_ID,
@@ -197,7 +195,7 @@ describe("canonical shared schema composition", () => {
     });
     expect(summary.display_name).toBe("Ada Lovelace");
 
-    const detail = adminRegistrationDetailSchema.parse({
+    const detail = eventRegistrationDetailSchema.parse({
       ...recordContext,
       id: ID,
       event_id: SECOND_ID,
@@ -306,7 +304,7 @@ describe("canonical shared schema composition", () => {
 
   it("keeps the composed registration list envelope valid", () => {
     expect(
-      adminEventRegistrationsListResponseSchema.safeParse({
+      eventRegistrationsListResponseSchema.safeParse({
         registrations: [],
         page: { limit: 25, offset: 0, hasMore: false, total: 0 },
         event: { id: ID, slug: "event", name: "Event" },

@@ -10,6 +10,7 @@ import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import app from "../functions/router";
+import { createGroup } from "../functions/_lib/services/groups";
 
 interface VerifyAdminPayload {
   token: string;
@@ -105,8 +106,22 @@ describe("full workflow", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const adminUser = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+      await queryAll<{ id: string; email: string }>(
+        env.DB,
+        "SELECT id, email FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+      )
     )[0];
+    const ownerGroup = await createGroup(
+      env.DB,
+      { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin" },
+      {
+        typeKey: "working_group",
+        name: `Full workflow ${crypto.randomUUID()}`,
+        visibility: "authenticated",
+        eligibilityMode: "open",
+      },
+    );
+    await env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?").bind(ownerGroup.id, eventId).run();
     await seedRequiredEmailTemplates(adminUser.id);
 
     const fetchMock = vi.fn().mockResolvedValue(
@@ -166,8 +181,9 @@ describe("full workflow", () => {
       const speakerInvites = [
         { email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" },
       ];
+      const speakerInvitationBase = `/api/v1/groups/${ownerGroup.id}/events/${eventId}/invites/speakers`;
       const speakerPreviewResponse = await app.fetch(
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+        new Request(`https://app.test${speakerInvitationBase}/preview`, {
           method: "POST",
           headers: { "content-type": "application/json", cookie: adminSessionCookie },
           body: JSON.stringify({ invites: speakerInvites }),
@@ -181,7 +197,7 @@ describe("full workflow", () => {
         inviteDigest: string;
       };
       const speakerInviteResponse = await app.fetch(
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
+        new Request(`https://app.test${speakerInvitationBase}/bulk`, {
           method: "POST",
           headers: {
             "content-type": "application/json",

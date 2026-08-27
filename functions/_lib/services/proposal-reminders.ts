@@ -260,9 +260,6 @@ export async function sendProposalSpeakerReminders(
   return { outboxIds };
 }
 
-/** @deprecated Use the transport-neutral proposal speaker reminder service. */
-export const sendAdminProposalSpeakerReminders = sendProposalSpeakerReminders;
-
 export async function remindProposalSpeakerByProposer(
   db: DatabaseLike,
   payload: { proposal: ProposalRecord; userId: string; appBaseUrl: string },

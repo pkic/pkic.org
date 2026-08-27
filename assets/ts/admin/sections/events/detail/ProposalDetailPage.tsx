@@ -14,10 +14,10 @@ import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
 import { buildReplacementProposerOptions, SpeakerCard } from "./proposal-detail/SpeakerCard";
 import { isProposalDecidableStatus, proposalFlagResponseSchema } from "../../../../../shared/schemas/proposal-status";
-import { adminProposalPatchResponseSchema } from "../../../../../shared/schemas/proposal-management";
+import { proposalPatchResponseSchema } from "../../../../../shared/schemas/proposal-management";
 import { useProposalSubresources } from "./proposal-detail/useProposalSubresources";
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
-import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
+import { eventProposalDetailResponseSchema } from "../../../../../shared/schemas/event-proposals";
 import { adminProposalOpenManageResponseSchema } from "../../../../../shared/schemas/route-contracts-admin-proposals";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
@@ -29,7 +29,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
-    async () => api(`/api/v1/admin/proposals/${proposalId}`, adminProposalDetailResponseSchema),
+    async () => api(`/api/v1/admin/proposals/${proposalId}`, eventProposalDetailResponseSchema),
     [proposalId],
   );
 
@@ -159,7 +159,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     e.preventDefault();
     setSavingAbstract(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}`, adminProposalPatchResponseSchema, {
+      await api(`/api/v1/admin/proposals/${proposalId}`, proposalPatchResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ abstract: abstractDraft }),
       });

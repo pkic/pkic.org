@@ -16,14 +16,10 @@ export const eventInvitesListQuerySchema = searchableListQuerySchema(eventInvite
 });
 export type EventInvitesListQuery = z.infer<typeof eventInvitesListQuerySchema>;
 
-/** Transitional admin contract: speaker invitations remain managed by the event admin surface. */
-export const adminEventSpeakerInvitesListQuerySchema = eventInvitesListQuerySchema.omit({ type: true });
-export type AdminEventSpeakerInvitesListQuery = z.infer<typeof adminEventSpeakerInvitesListQuerySchema>;
-
 /**
- * The event-invite projection is shared by the admin compatibility endpoint
- * and selected-group management. `actions` is server-derived so clients do
- * not duplicate invite state-transition rules.
+ * The event-invite projection is shared by selected-group invitation views.
+ * `actions` is server-derived so clients do not duplicate invite
+ * state-transition rules.
  */
 export const eventInviteSummarySchema = z.object({
   id: databaseIdSchema,

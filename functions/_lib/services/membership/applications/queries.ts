@@ -5,13 +5,15 @@
  * stage machine, this file owns everything that reads an application back
  * or records something against it without changing its stage.
  */
-import { all, first, run } from "../../../db/queries";
+import { all, first } from "../../../db/queries";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
+import { ACTIVE_VOTING_MEMBER_CAPACITY_SELECT, isActiveVotingMemberCapacity } from "../categories";
 
 export interface MemberApplicationRow {
   id: string;
@@ -236,7 +238,7 @@ export interface ApplicationConcernRow {
 
 export async function submitApplicationConcern(
   db: DatabaseLike,
-  params: { applicationId: string; submittedByUserId: string; concernText: string },
+  params: { applicationId: string; submittedByUserId: string; submittedByMemberId: string; concernText: string },
 ): Promise<ApplicationConcernRow> {
   const application = await getMemberApplicationById(db, params.applicationId);
   if (!application) {
@@ -245,15 +247,58 @@ export async function submitApplicationConcern(
   if (application.stage !== "in_consultation") {
     throw new AppError(409, "APPLICATION_NOT_IN_CONSULTATION", "Concerns can only be submitted during consultation");
   }
+  if (!(await isActiveVotingMemberCapacity(db, params.submittedByMemberId, params.submittedByUserId))) {
+    throw new AppError(
+      403,
+      "PERMISSION_REQUIRED",
+      "Only members in a voting membership category may submit a consultation concern",
+    );
+  }
 
   const id = uuid();
   const now = nowIso();
-  await run(
-    db,
-    `INSERT INTO application_concerns (id, application_id, submitted_by_user_id, concern_text, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, params.applicationId, params.submittedByUserId, params.concernText, now],
-  );
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO application_concerns
+             (id, application_id, submitted_by_user_id, concern_text, created_at)
+           SELECT ?, application.id, ?, ?, ?
+             FROM member_applications application
+            WHERE application.id = ?
+              AND application.stage = 'in_consultation'
+              AND EXISTS (${ACTIVE_VOTING_MEMBER_CAPACITY_SELECT})`,
+        )
+        .bind(
+          id,
+          params.submittedByUserId,
+          params.concernText,
+          now,
+          params.applicationId,
+          params.submittedByUserId,
+          params.submittedByMemberId,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        params.submittedByUserId,
+        "membership_application_concern_submitted",
+        "membership_application",
+        params.applicationId,
+        { concernId: id },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "CONCERN_ELIGIBILITY_CHANGED",
+        "The application or your voting eligibility changed; reload and retry",
+      );
+    }
+    throw error;
+  }
   return {
     id,
     application_id: params.applicationId,

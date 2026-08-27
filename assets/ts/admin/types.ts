@@ -17,42 +17,29 @@ import type {
   UserRoleAssignment as CanonicalUserRoleAssignment,
 } from "../../shared/schemas/access-control";
 import type {
-  AdminApplicationCommunication as CanonicalAdminApplicationCommunication,
-  AdminApplicationConcern as CanonicalAdminApplicationConcern,
-  AdminApplicationDetail as CanonicalAdminApplicationDetail,
-  AdminApplicationDocument as CanonicalAdminApplicationDocument,
-  AdminApplicationEcDecision as CanonicalAdminApplicationEcDecision,
-  AdminApplicationEvent as CanonicalAdminApplicationEvent,
-  AdminApplicationSummary as CanonicalAdminApplicationSummary,
-} from "../../shared/schemas/admin-applications";
-import type {
-  AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
-  AdminEventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   AdminEventTeamListItem as CanonicalEventPermission,
   AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import type {
+  EventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
+  EventRegistrationSummary as CanonicalRegistration,
+} from "../../shared/schemas/event-registrations";
 import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
 import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
-import type { membershipSettingsSchema } from "../../shared/schemas/membership-settings";
 import type {
   AdminOrganizationDetail as CanonicalAdminOrganizationDetail,
   AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
   AdminOrganizationSummary as CanonicalAdminOrganizationSummary,
-  OrganizationContentReviewDetail as CanonicalOrganizationContentReviewDetail,
-  OrganizationContentReviewDiffEntry as CanonicalOrganizationContentReviewDiffEntry,
-  OrganizationContentReviewSummary as CanonicalOrganizationContentReviewSummary,
 } from "../../shared/schemas/admin-organizations";
 import type {
   AdminEmailOutboxResponse as CanonicalAdminEmailOutboxResponse,
   AdminEmailOutboxRow as CanonicalAdminEmailOutboxRow,
 } from "../../shared/schemas/admin-email-outbox";
-import type {
-  AdminEventProposalSummary as CanonicalAdminEventProposalSummary,
-  AdminProposalSpeaker as CanonicalAdminProposalSpeaker,
-  ProposalAccess as CanonicalProposalAccess,
-} from "../../shared/schemas/admin-event-proposals";
+import type { EventProposalSummary as CanonicalAdminEventProposalSummary } from "../../shared/schemas/event-proposals";
+import type { ProposalAccess as CanonicalProposalAccess } from "../../shared/schemas/event-proposals";
+import type { ProposalSpeaker as CanonicalAdminProposalSpeaker } from "../../shared/schemas/proposal-speakers";
 import type { FormFieldDefinition as CanonicalFormFieldDefinition } from "../../shared/schemas/forms";
 import type {
   AdminFormSubmission as CanonicalAdminFormSubmission,
@@ -126,12 +113,6 @@ export type ProposalSpeaker = CanonicalAdminProposalSpeaker;
 
 export type ProposalAccess = CanonicalProposalAccess;
 
-export interface AdminInviteEntry {
-  email: string;
-  firstName?: string;
-  lastName?: string;
-}
-
 export type InviteRecord = CanonicalInviteRecord;
 
 export type AdminEmailOutboxRow = CanonicalAdminEmailOutboxRow;
@@ -165,13 +146,6 @@ export type AdminOrganizationRepresentative = CanonicalAdminOrganizationRepresen
 
 export type AdminOrganizationDetail = CanonicalAdminOrganizationDetail;
 
-// Organization content moderation queue
-export type OrganizationContentReviewSummary = CanonicalOrganizationContentReviewSummary;
-
-export type OrganizationContentReviewDiffEntry = CanonicalOrganizationContentReviewDiffEntry;
-
-export type OrganizationContentReviewDetail = CanonicalOrganizationContentReviewDetail;
-
 export type Sponsorship = CanonicalSponsorship;
 
 // GET /api/v1/admin/sponsorships/companies — grouped/paginated in D1.
@@ -181,19 +155,6 @@ export type SponsorshipEvent = CanonicalSponsorshipEvent;
 
 // Interim Admin Tool — GET/POST /api/v1/admin/members
 export type AdminMemberSummary = CanonicalAdminMemberSummary;
-
-// GET /api/v1/admin/applications
-export type AdminApplicationSummary = CanonicalAdminApplicationSummary;
-
-export type AdminApplicationEvent = CanonicalAdminApplicationEvent;
-export type AdminApplicationCommunication = CanonicalAdminApplicationCommunication;
-export type AdminApplicationConcern = CanonicalAdminApplicationConcern;
-export type AdminApplicationEcDecision = CanonicalAdminApplicationEcDecision;
-export type AdminApplicationDocument = CanonicalAdminApplicationDocument;
-export type AdminApplicationDetail = CanonicalAdminApplicationDetail;
-
-// GET/PATCH /api/v1/admin/membership-settings
-export type AdminMembershipSettings = z.infer<typeof membershipSettingsSchema>;
 
 // Voting system
 export type VoteCandidateSummary = CanonicalVoteCandidateSummary;

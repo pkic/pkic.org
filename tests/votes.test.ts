@@ -24,6 +24,10 @@ import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { activeGroupMembershipAuthorizationEvidence } from "../functions/_lib/services/groups/access";
 import {
+  ACTIVE_VOTER_MEMBERSHIP_SQL,
+  activeVoterMembershipBindings,
+} from "../functions/_lib/services/votes/voter-eligibility";
+import {
   approveVoteProposal,
   buildGroupVoteProposalsPageQuery,
   buildGroupVotesPageQuery,
@@ -378,6 +382,56 @@ describe("canonical group voting", () => {
         { member_id: capacityB.memberId, user_id: capacityA.userId, choice: "opposed" },
       ].sort((left, right) => left.member_id.localeCompare(right.member_id)),
     );
+  });
+
+  it("uses the editable D1 category policy for both per-Member and per-person ballots", async () => {
+    const capacity = await createOrganizationCapacity(env.DB, { category: "H1" });
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const member = await resolveAuthMember(env.DB, capacity.userId);
+    const memberVote = await createCanonicalVote(env.DB, admin);
+
+    await expect(submitBallot(env.DB, member, memberVote.id, capacity.memberId, "in_favor", null)).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "MEMBER_BALLOT_NOT_AUTHORIZED",
+    );
+
+    await env.DB.prepare(
+      "UPDATE membership_categories SET is_voting = 1, revision = revision + 1 WHERE code = 'H1'",
+    ).run();
+    await submitBallot(env.DB, member, memberVote.id, capacity.memberId, "in_favor", null);
+
+    const personVote = await createCanonicalVote(env.DB, admin, { electorateMode: "per_person" });
+    await submitBallot(env.DB, member, personVote.id, null, "opposed", null);
+    expect(
+      await queryAll<{ vote_id: string; member_id: string | null }>(
+        env.DB,
+        "SELECT vote_id, member_id FROM vote_ballots WHERE vote_id IN (?, ?) ORDER BY vote_id",
+        memberVote.id,
+        personVote.id,
+      ),
+    ).toHaveLength(2);
+
+    await env.DB.prepare(
+      "UPDATE membership_categories SET is_voting = 0, revision = revision + 1 WHERE code = 'H1'",
+    ).run();
+    const visible = await listVisibleVotesForMember(env.DB, member, { limit: 20, offset: 0 });
+    expect(visible.votes.find((vote) => vote.id === personVote.id)?.canCastBallot).toBe(false);
+  });
+
+  it("rechecks the D1 voting-category policy in the ballot UPSERT", async () => {
+    const capacity = await createOrganizationCapacity(env.DB, { category: "A" });
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin);
+    const member = await resolveAuthMember(env.DB, capacity.userId);
+    const gate = gateNextRun(env.DB);
+    const pending = submitBallot(gate.db, member, vote.id, capacity.memberId, "in_favor", null);
+    await gate.reached;
+    await env.DB.prepare(
+      "UPDATE membership_categories SET is_voting = 0, revision = revision + 1 WHERE code = 'A'",
+    ).run();
+    gate.release();
+
+    await expect(pending).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "VOTE_CHANGED");
+    expect(await queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).toHaveLength(0);
   });
 
   it("rejects selecting a Member that the caller cannot represent in a participating group", async () => {
@@ -1371,6 +1425,31 @@ describe("canonical group voting", () => {
       1,
     );
     expect(ballotPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_ballots_member_round/);
+
+    const votingCapacity = await createOrganizationCapacity(env.DB, {
+      category: "A",
+      email: "voting-policy-plan@example.test",
+    });
+    const votingMember = await resolveAuthMember(env.DB, votingCapacity.userId, crypto.randomUUID());
+    const votingPolicyPlan = await queryAll<{ detail: string }>(
+      env.DB,
+      `EXPLAIN QUERY PLAN SELECT 1 WHERE ${ACTIVE_VOTER_MEMBERSHIP_SQL}`,
+      activeVoterMembershipBindings(votingMember),
+    );
+    const votingPolicyDetails = votingPolicyPlan.map((row) => row.detail).join("\n");
+    expect(votingPolicyDetails).toMatch(/SEARCH active_member USING INDEX sqlite_autoindex_members_1/);
+    expect(votingPolicyDetails).toMatch(/SEARCH active_user USING INDEX sqlite_autoindex_users_1/);
+    expect(votingPolicyDetails).toMatch(/SEARCH active_category USING (?:COVERING )?INDEX/);
+    expect(votingPolicyDetails).toMatch(
+      /SEARCH voting_membership_category USING INDEX sqlite_autoindex_membership_categories_1/,
+    );
+    expect(votingPolicyDetails).toMatch(
+      /SEARCH active_rep USING INDEX (?:sqlite_autoindex_organization_representatives_2|idx_organization_representatives_member_active)/,
+    );
+    expect(votingPolicyDetails).not.toMatch(
+      /SCAN (?:members|users|member_category_assignments|membership_categories|organization_representatives)\b/,
+    );
+    expect(votingPolicyDetails).not.toMatch(/USE TEMP B-TREE/);
   });
 
   it("rechecks vote-management authorization for visibility updates", async () => {

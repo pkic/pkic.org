@@ -1,6 +1,6 @@
 /**
- * POST /api/v1/portal/votes/:id/ballots — cast a ballot (A–G
- * only; H members may not vote). ip_hash mirrors consent.ts's pattern
+ * POST /api/v1/portal/votes/:id/ballots — cast a ballot through a
+ * D1-configured voting category. ip_hash mirrors consent.ts's pattern
  * (HMAC over the request IP with INTERNAL_SIGNING_SECRET) — recorded for
  * audit purposes only, never displayed.
  */

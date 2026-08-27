@@ -390,10 +390,3 @@ export async function editProposalSpeaker(
   if (!updated) throw new AppError(500, "PROPOSAL_SPEAKER_UPDATE_FAILED", "Unable to load the updated speaker");
   return { success: true, speaker: toProposalSpeaker(updated, appBaseUrl, proposalId) };
 }
-
-/** @deprecated Use the transport-neutral proposal speaker service. */
-export const toAdminProposalSpeaker = toProposalSpeaker;
-/** @deprecated Use the transport-neutral proposal speaker service. */
-export const getAdminProposalSpeakerRoster = getProposalSpeakerRoster;
-/** @deprecated Use the transport-neutral proposal speaker service. */
-export const editAdminProposalSpeaker = editProposalSpeaker;

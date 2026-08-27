@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import {
   FORM_FIELD_TYPES,
   FORM_PURPOSES,
@@ -226,11 +226,17 @@ export function FormDefinitionEditor({
   const [draft, setDraft] = useState<FormDraft>(() => detailToDraft(detail, purposes));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const draftSource = `${mode}:${detail?.form.key ?? ""}`;
+  const previousDraftSource = useRef(draftSource);
 
   useEffect(() => {
+    // The initial state already reflects the initial props. Avoid a redundant
+    // post-paint reset that can erase input typed immediately after mounting.
+    if (previousDraftSource.current === draftSource) return;
+    previousDraftSource.current = draftSource;
     setDraft(detailToDraft(detail, purposes));
     setError("");
-  }, [detail?.form.key, mode]);
+  }, [detail, draftSource, purposes]);
 
   function updateField(index: number, patch: Partial<FieldDraft>) {
     setDraft((current) => ({

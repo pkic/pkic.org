@@ -1,6 +1,13 @@
 import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 
-export function portalSessionFixture(capacities: { admin?: boolean; member?: boolean }): PortalSession {
+interface PortalSessionFixtureOptions {
+  admin?: boolean;
+  member?: boolean;
+  adminRole?: string;
+  grants?: Array<{ permission: string; contextType: string | null; contextId: string | null }>;
+}
+
+export function portalSessionFixture(capacities: PortalSessionFixtureOptions): PortalSession {
   const identity = { id: "00000000-0000-4000-8000-000000000001", email: "person@example.test" };
   return {
     success: true,
@@ -9,9 +16,9 @@ export function portalSessionFixture(capacities: { admin?: boolean; member?: boo
       ? {
           admin: {
             ...identity,
-            role: "admin",
+            role: capacities.adminRole ?? "admin",
             scopes: [],
-            grants: [],
+            grants: capacities.grants ?? [],
             expiresAt: "2026-08-26T00:00:00.000Z",
           },
         }

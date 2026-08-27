@@ -5,7 +5,8 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import app from "../functions/router";
 import { normalizeHttpOrSameOriginUrl } from "../assets/shared/schemas/urls";
 import type { Env } from "../functions/_lib/types";
-import { adminEventSettingsSchema, adminEventUpdateResponseSchema } from "../assets/shared/schemas/admin-events";
+import { eventSettingsSchema } from "../assets/shared/schemas/event-management";
+import { adminEventUpdateResponseSchema } from "../assets/shared/schemas/admin-events";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 
 describe("event hero image URL handling", () => {
@@ -73,13 +74,11 @@ describe("event hero image URL handling", () => {
   });
 
   it("rejects custom settings that try to overwrite dedicated settings", () => {
-    expect(
-      adminEventSettingsSchema.safeParse({ settings: { heroImageUrl: "https://evil.test/hero.png" } }).success,
-    ).toBe(false);
-    expect(adminEventSettingsSchema.safeParse({ settings: { forms: { event_registration: "evil" } } }).success).toBe(
+    expect(eventSettingsSchema.safeParse({ settings: { heroImageUrl: "https://evil.test/hero.png" } }).success).toBe(
       false,
     );
-    expect(adminEventSettingsSchema.parse({ settings: { attendeePortalEnabled: true } }).settings).toEqual({
+    expect(eventSettingsSchema.safeParse({ settings: { forms: { event_registration: "evil" } } }).success).toBe(false);
+    expect(eventSettingsSchema.parse({ settings: { attendeePortalEnabled: true } }).settings).toEqual({
       attendeePortalEnabled: true,
     });
   });

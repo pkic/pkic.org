@@ -12,7 +12,6 @@ import { insertOrganization } from "./helpers/membership";
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  VOTING_CATEGORIES,
 } from "../assets/shared/schemas/membership-categories";
 import {
   getOrCreateOrganizationMemberAggregate,
@@ -23,20 +22,20 @@ import { AppError } from "../functions/_lib/errors";
 
 interface MembershipCategoryRow {
   code: string;
-  is_individual: number;
   is_voting: number;
 }
+
+// Initial migration seed only. Runtime voting policy is mutable in D1 and is
+// covered by the mounted vote and membership-configuration suites.
+const INITIAL_SEEDED_VOTING_CATEGORIES = new Set(["A", "B", "C", "D", "E", "F", "G"]);
 
 beforeEach(async () => {
   await resetDb();
 });
 
 describe("membership_categories seed table", () => {
-  it("matches the canonical shared contract exactly — same codes, same individual/voting flags", async () => {
-    const rows = await queryAll<MembershipCategoryRow>(
-      env.DB,
-      "SELECT code, is_individual, is_voting FROM membership_categories",
-    );
+  it("matches the migration's initial category-code and voting-policy seed", async () => {
+    const rows = await queryAll<MembershipCategoryRow>(env.DB, "SELECT code, is_voting FROM membership_categories");
     const byCode = new Map(rows.map((r) => [r.code, r]));
 
     expect(new Set(byCode.keys())).toEqual(new Set(MEMBERSHIP_CATEGORIES));
@@ -44,14 +43,13 @@ describe("membership_categories seed table", () => {
     for (const code of MEMBERSHIP_CATEGORIES) {
       const row = byCode.get(code);
       expect(row, `membership_categories is missing seed row for ${code}`).toBeDefined();
-      expect(row!.is_individual === 1, `is_individual mismatch for ${code}`).toBe(
-        INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(code),
-      );
-      expect(row!.is_voting === 1, `is_voting mismatch for ${code}`).toBe(VOTING_CATEGORIES.has(code));
+      expect(row!.is_voting === 1, `is_voting mismatch for ${code}`).toBe(INITIAL_SEEDED_VOTING_CATEGORIES.has(code));
     }
+    const columns = await queryAll<{ name: string }>(env.DB, "PRAGMA table_info(membership_categories)");
+    expect(columns.map((column) => column.name)).not.toContain("is_individual");
   });
 
-  it("listMembershipCategories reads the same catalog through the service function", async () => {
+  it("derives individual policy from the shared contract while reading D1 configuration", async () => {
     const entries = await listMembershipCategories(env.DB);
     const byCode = new Map(entries.map((e) => [e.code, e]));
 
@@ -61,7 +59,7 @@ describe("membership_categories seed table", () => {
       const entry = byCode.get(code);
       expect(entry, `listMembershipCategories is missing ${code}`).toBeDefined();
       expect(entry!.isIndividual).toBe(INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(code));
-      expect(entry!.isVoting).toBe(VOTING_CATEGORIES.has(code));
+      expect(entry!.isVoting).toBe(INITIAL_SEEDED_VOTING_CATEGORIES.has(code));
     }
   });
 });

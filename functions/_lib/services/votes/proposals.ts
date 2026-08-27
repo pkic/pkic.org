@@ -64,7 +64,11 @@ export async function submitVoteProposal(
     activeGroupVoterBindings(member.userId, ownerGroupId),
   );
   if (!eligible) {
-    throw new AppError(403, "NOT_AN_ELIGIBLE_GROUP_VOTER", "An active A-G capacity in the owning group is required");
+    throw new AppError(
+      403,
+      "NOT_AN_ELIGIBLE_GROUP_VOTER",
+      "An active voting-category capacity in the owning group is required",
+    );
   }
   if ((await minEndorsersFor(db, ownerGroupId)) <= 0) {
     throw new AppError(
@@ -133,7 +137,11 @@ async function endorseVoteProposalOnce(
     activeGroupVoterBindings(member.userId, row.owner_group_id),
   );
   if (!eligible) {
-    throw new AppError(403, "NOT_AN_ELIGIBLE_GROUP_VOTER", "An active A-G capacity in the owning group is required");
+    throw new AppError(
+      403,
+      "NOT_AN_ELIGIBLE_GROUP_VOTER",
+      "An active voting-category capacity in the owning group is required",
+    );
   }
 
   const existing = await first<{ id: string }>(

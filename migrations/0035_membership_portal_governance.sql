@@ -8,12 +8,14 @@
 
 -- Section: Membership category reference table
 --
--- The A-G/H1-H8 category list is already centralized in code
--- (assets/shared/schemas/membership-categories.ts) and imported everywhere
--- it's used. This adds a `membership_categories` reference table so
--- category codes are a real DB-enforced vocabulary via FK — not a CHECK
--- constraint (categories are an evolvable product vocabulary, not a durable
--- structural invariant) and not a bare TEXT column (PR #1 review).
+-- The structural A-G/H1-H8 category-code vocabulary and individual-category
+-- classification are centralized in the shared schema. This reference table
+-- makes those codes FK-backed while D1 remains the single source of truth for
+-- editable labels, descriptions, ordering, and voting policy. Codes use an FK,
+-- not a CHECK constraint, so a future reviewed category migration does not
+-- require rebuilding members or organizations (PR #1 review). Individual
+-- classification is deliberately not stored here: all membership workflows
+-- derive it from the shared structural vocabulary, avoiding a second source.
 --
 -- Created first, before any dependent table, so every later table that
 -- references a category code (member_applications, member_category_
@@ -30,30 +32,30 @@ CREATE TABLE membership_categories (
   label        TEXT NOT NULL,
   description  TEXT,
   display_order INTEGER NOT NULL,
-  is_individual INTEGER NOT NULL DEFAULT 0 CHECK (is_individual IN (0, 1)),
-  -- org-less categories (H5/H6/H7) — mirrors INDIVIDUAL_MEMBERSHIP_CATEGORIES
-  is_voting     INTEGER NOT NULL DEFAULT 0 CHECK (is_voting IN (0, 1))
-  -- consortium and group voting rights (A-G only) — mirrors VOTING_CATEGORIES
+  is_voting     INTEGER NOT NULL DEFAULT 0 CHECK (is_voting IN (0, 1)),
+  -- configurable consortium and group voting rights; D1 is the policy source
+  revision      INTEGER NOT NULL DEFAULT 0,
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 INSERT INTO membership_categories
-  (code, label, description, display_order, is_individual, is_voting)
+  (code, label, description, display_order, is_voting)
 VALUES
-  ('A', 'Certification Authorities and Trust Service Providers', 'Included on a trust list maintained by the PKI Consortium.', 10, 0, 1),
-  ('B', 'Trust list supervisory entities', 'Entities that supervise and maintain a list contained in a PKI Consortium trust list.', 20, 0, 1),
-  ('C', 'Industry regulators and supervisory bodies', NULL, 30, 0, 1),
-  ('D', 'Conformity assessment bodies and auditors', NULL, 40, 0, 1),
-  ('E', 'Standards developing organizations', NULL, 50, 0, 1),
-  ('F', 'PKI or cryptographic software and device providers', NULL, 60, 0, 1),
-  ('G', 'Relying-party software providers', NULL, 70, 0, 1),
-  ('H1', 'Government entities with a general PKI or cryptography interest', 'For entities that do not fall under category C.', 80, 0, 0),
-  ('H2', 'PKI or cryptography consultancy organizations', NULL, 90, 0, 0),
-  ('H3', 'PKI or cryptography research organizations', NULL, 100, 0, 0),
-  ('H4', 'Universities with PKI or cryptography programs', NULL, 110, 0, 0),
-  ('H5', 'PhD students researching PKI or cryptography', 'Requires an institutional or university email address.', 120, 1, 0),
-  ('H6', 'Unaffiliated independent PKI or cryptography consultants', 'For qualified consultants who are not affiliated with any organization.', 130, 1, 0),
-  ('H7', 'Unaffiliated independent PKI or cryptography researchers', 'For qualified researchers who are not affiliated with any organization.', 140, 1, 0),
-  ('H8', 'Private PKI operators', 'Organizations operating a private PKI governed by formal policies and practices.', 150, 0, 0);
+  ('A', 'Certification Authorities and Trust Service Providers', 'Included on a trust list maintained by the PKI Consortium.', 10, 1),
+  ('B', 'Trust list supervisory entities', 'Entities that supervise and maintain a list contained in a PKI Consortium trust list.', 20, 1),
+  ('C', 'Industry regulators and supervisory bodies', NULL, 30, 1),
+  ('D', 'Conformity assessment bodies and auditors', NULL, 40, 1),
+  ('E', 'Standards developing organizations', NULL, 50, 1),
+  ('F', 'PKI or cryptographic software and device providers', NULL, 60, 1),
+  ('G', 'Relying-party software providers', NULL, 70, 1),
+  ('H1', 'Government entities with a general PKI or cryptography interest', 'For entities that do not fall under category C.', 80, 0),
+  ('H2', 'PKI or cryptography consultancy organizations', NULL, 90, 0),
+  ('H3', 'PKI or cryptography research organizations', NULL, 100, 0),
+  ('H4', 'Universities with PKI or cryptography programs', NULL, 110, 0),
+  ('H5', 'PhD students researching PKI or cryptography', 'Requires an institutional or university email address.', 120, 0),
+  ('H6', 'Unaffiliated independent PKI or cryptography consultants', 'For qualified consultants who are not affiliated with any organization.', 130, 0),
+  ('H7', 'Unaffiliated independent PKI or cryptography researchers', 'For qualified researchers who are not affiliated with any organization.', 140, 0),
+  ('H8', 'Private PKI operators', 'Organizations operating a private PKI governed by formal policies and practices.', 150, 0);
 
 -- Engagement is part of several aggregate transactions. Retried or concurrent
 -- requests must not award the same domain action more than once. A nullable
@@ -95,6 +97,9 @@ CREATE UNIQUE INDEX uq_audit_log_idempotency_key
 
 CREATE INDEX idx_audit_log_scope
   ON audit_log(scope_type, scope_id, created_at DESC, id);
+
+CREATE INDEX idx_audit_log_created_at
+  ON audit_log(created_at DESC, id);
 
 -- Domain retries must not enqueue duplicate external side effects. Callers
 -- that can identify a one-shot notification provide this nullable key and a
@@ -1042,7 +1047,7 @@ CREATE INDEX idx_member_application_events_app ON member_application_events(appl
 -- so its provisioning/email/audit/Google-Groups writes in the same batch
 -- never commit either, without needing per-statement claim-token chaining.
 -- Scoped to `from_stage != 'approved'` (a real transition into approved) so
--- it does NOT also reject updateAdminApplication's own
+-- it does NOT also reject updateMembershipApplication's own
 -- from_stage = to_stage = 'approved' marker event, which records a details
 -- edit on an application that's already approved without representing a
 -- second approval.
@@ -2550,8 +2555,8 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
   ('role-group_deputy_lead', 'group_deputy_lead', 'Acts with the same group-management capabilities as a group lead', 1, datetime('now'), datetime('now')),
   ('role-event_organizer', 'event_organizer', 'Full management of a specific event', 1, datetime('now'), datetime('now')),
   ('role-program_committee', 'program_committee', 'Proposal review and agenda setting for a specific event', 1, datetime('now'), datetime('now')),
-  ('role-member', 'member', 'Authenticated PKIC member (A-G)', 1, datetime('now'), datetime('now')),
-  ('role-interested_parties', 'interested_parties', 'Authenticated PKIC member (H) - no voting rights', 1, datetime('now'), datetime('now')),
+  ('role-member', 'member', 'Legacy authenticated member classification', 1, datetime('now'), datetime('now')),
+  ('role-interested_parties', 'interested_parties', 'Legacy interested-party classification', 1, datetime('now'), datetime('now')),
   ('role-event_moderator', 'event_moderator', 'Event-scoped proposal review, no finalize (backfilled from event_permissions.moderator)', 1, datetime('now'), datetime('now')),
   ('role-event_volunteer', 'event_volunteer', 'Historical placeholder, no permissions (backfilled from event_permissions.volunteer)', 1, datetime('now'), datetime('now'));
 
@@ -3034,7 +3039,7 @@ CREATE INDEX idx_google_groups_enrollment_intents_pending
 -- ── Membership workflow settings ───────────────────────────────────
 -- Single configurable row (id is always 'default') rather than a generic
 -- key-value table — every setting is a distinct, typed field the
--- consultation/EC batch jobs and the admin settings screen both read
+-- consultation/EC batch jobs and the system portal both read
 -- directly, and there is exactly one workflow-wide configuration, not a
 -- per-entity one.
 CREATE TABLE membership_settings (
@@ -3046,7 +3051,7 @@ CREATE TABLE membership_settings (
   ec_email_recipients           TEXT NOT NULL DEFAULT 'ec@lists.pkic.org',
   cc_applicant_emails           TEXT NOT NULL DEFAULT 'members@pkic.org',
   auto_reminder_on_holds        INTEGER NOT NULL DEFAULT 1 CHECK (auto_reminder_on_holds IN (0, 1)),
-  default_group_vote_min_endorsers INTEGER NOT NULL DEFAULT 0,
+  revision                      INTEGER NOT NULL DEFAULT 0,
   updated_at                    TEXT NOT NULL,
   updated_by_user_id            TEXT,
   FOREIGN KEY(updated_by_user_id) REFERENCES users(id)
@@ -4189,11 +4194,30 @@ WHEN unixepoch(NEW.expires_at) <= unixepoch()
   OR NOT EXISTS (
     SELECT 1
       FROM event_occurrence_guests guest
+      JOIN event_series series ON series.id = guest.series_id
+      JOIN events event ON event.id = series.event_id
+      LEFT JOIN event_occurrences guest_occurrence
+        ON guest_occurrence.id = guest.occurrence_id
+       AND guest_occurrence.series_id = guest.series_id
      WHERE guest.id = NEW.guest_id
        AND guest.invitation_version = NEW.invitation_version
        AND guest.revoked_at IS NULL
        AND unixepoch(guest.expires_at) > unixepoch()
        AND unixepoch(NEW.expires_at) <= unixepoch(guest.expires_at)
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           ) IS NOT NULL
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           )
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch()
+       AND unixepoch(NEW.expires_at) <= unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           )
        AND EXISTS (
          SELECT 1
            FROM current_event_occurrence_subject_eligibility eligible
@@ -4248,6 +4272,11 @@ WHEN unixepoch(NEW.expires_at) <= unixepoch()
     SELECT 1
       FROM meeting_guest_browser_challenges challenge
       JOIN event_occurrence_guests guest ON guest.id = challenge.guest_id
+      JOIN event_series series ON series.id = guest.series_id
+      JOIN events event ON event.id = series.event_id
+      LEFT JOIN event_occurrences guest_occurrence
+        ON guest_occurrence.id = guest.occurrence_id
+       AND guest_occurrence.series_id = guest.series_id
      WHERE challenge.id = NEW.challenge_id
        AND challenge.guest_id = NEW.guest_id
        AND challenge.authorization_hash = NEW.authorization_hash
@@ -4257,6 +4286,20 @@ WHEN unixepoch(NEW.expires_at) <= unixepoch()
        AND guest.revoked_at IS NULL
        AND unixepoch(guest.expires_at) > unixepoch()
        AND unixepoch(NEW.expires_at) <= unixepoch(guest.expires_at)
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           ) IS NOT NULL
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE guest_occurrence.starts_at END
+           )
+       AND unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           ) > unixepoch()
+       AND unixepoch(NEW.expires_at) <= unixepoch(
+             CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE guest_occurrence.ends_at END
+           )
   )
 BEGIN
   SELECT RAISE(ABORT, 'MEETING_GUEST_SESSION_CONTEXT_CHANGED');
@@ -4355,6 +4398,17 @@ SELECT occurrence.id AS occurrence_id, event.id AS event_id,
  WHERE occurrence.status = 'scheduled'
    AND guest.revoked_at IS NULL
    AND unixepoch(guest.expires_at) > unixepoch()
+   AND unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE occurrence.starts_at END
+       ) IS NOT NULL
+   AND unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE occurrence.ends_at END
+       ) > unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.starts_at ELSE occurrence.starts_at END
+       )
+   AND unixepoch(
+         CASE WHEN guest.occurrence_id IS NULL THEN event.ends_at ELSE occurrence.ends_at END
+       ) > unixepoch()
    AND COALESCE(json_extract(event.settings_json, '$.guestPolicy'), 'none')
        IN ('occurrence_invitation', 'public_registration', 'invitation_only');
 

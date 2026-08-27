@@ -8,9 +8,9 @@ import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../components/forms/FormResponseViews";
 import {
-  adminRegistrationDetailResponseSchema,
-  type AdminRegistrationDetailResponse,
-} from "../../../../../shared/schemas/admin-registration-detail";
+  eventRegistrationDetailResponseSchema,
+  type EventRegistrationDetailResponse,
+} from "../../../../../shared/schemas/event-registration-detail";
 import {
   adminRegistrationOpenManageResponseSchema,
   adminRegistrationResendConfirmationResponseSchema,
@@ -38,8 +38,8 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   const [openingManage, setOpeningManage] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
-  const { data, loading, error, reload } = useData<AdminRegistrationDetailResponse>(
-    async () => api(`/api/v1/admin/events/${slug}/registrations/${regId}`, adminRegistrationDetailResponseSchema),
+  const { data, loading, error, reload } = useData<EventRegistrationDetailResponse>(
+    async () => api(`/api/v1/admin/events/${slug}/registrations/${regId}`, eventRegistrationDetailResponseSchema),
     [slug, regId],
   );
 

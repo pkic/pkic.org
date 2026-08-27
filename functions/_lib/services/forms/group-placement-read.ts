@@ -13,12 +13,12 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import {
-  type GroupResourceViewer,
+  buildLiveAccessibleGroupResourceIdsCte,
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
   isResourceGrantCapability,
-  resolveGroupResourceContextAccess,
-  visibleResourceGrantCapabilitiesForContext,
+  liveGroupResourceContextAccess,
+  type GroupResourceViewer,
 } from "../resource-grants";
 import { getFormDefinitionByPlacement } from "./read";
 
@@ -44,6 +44,8 @@ interface GroupFormPlacementRow {
   placement_updated_at: string;
   accepting_responses: number;
   granted_capabilities: string | null;
+  member_access: number;
+  manager_access: number;
 }
 
 function grantedCapabilities(row: Pick<GroupFormPlacementRow, "granted_capabilities">): FormGroupCapability[] {
@@ -53,11 +55,7 @@ function grantedCapabilities(row: Pick<GroupFormPlacementRow, "granted_capabilit
   );
 }
 
-function mapGroupFormPlacement(
-  row: GroupFormPlacementRow,
-  groupId: string,
-  access: { member: boolean; manager: boolean },
-): GroupFormPlacementSummary {
+function mapGroupFormPlacement(row: GroupFormPlacementRow, groupId: string): GroupFormPlacementSummary {
   const definition = getResourceGrantDefinition("formPlacement");
   return groupFormPlacementSummarySchema.parse({
     form: {
@@ -84,8 +82,8 @@ function mapGroupFormPlacement(
     },
     capabilities: effectiveResourceCapabilitiesForContext(definition, {
       owner: row.owner_group_id === groupId,
-      member: access.member,
-      manager: access.manager,
+      member: row.member_access === 1,
+      manager: row.manager_access === 1,
       grantedCapabilities: grantedCapabilities(row),
     }),
     acceptingResponses: row.accepting_responses === 1,
@@ -112,26 +110,14 @@ export async function listGroupFormPlacements(
   groupId: string,
   query: GroupFormsListQuery,
 ): Promise<{ forms: GroupFormPlacementSummary[]; total: number }> {
-  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
-  if (!access.member && !access.manager) return { forms: [], total: 0 };
-  const visibleGrants = visibleResourceGrantCapabilitiesForContext(
-    getResourceGrantDefinition("formPlacement"),
-    "view_definition",
-    access,
-  );
-  const conditions = [
-    `(
-      (placement.owner_group_id = ? AND ? = 1)
-      ${visibleGrants.length > 0 ? `OR grant_row.capability IN (${visibleGrants.map(() => "?").join(", ")})` : ""}
-    )`,
-    "placement.active = ?",
-  ];
-  const bindings: unknown[] = [
+  const accessiblePlacements = buildLiveAccessibleGroupResourceIdsCte(
+    "formPlacement",
     groupId,
-    access.member || access.manager ? 1 : 0,
-    ...visibleGrants,
-    query.active === "true" ? 1 : 0,
-  ];
+    liveGroupResourceContextAccess(viewer, groupId),
+    "view_definition",
+  );
+  const conditions = ["placement.active = ?"];
+  const bindings: unknown[] = [...accessiblePlacements.bindings, groupId, query.active === "true" ? 1 : 0];
   if (query.purpose) {
     conditions.push("form.purpose = ?");
     bindings.push(query.purpose);
@@ -161,16 +147,19 @@ export async function listGroupFormPlacements(
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
-  const sql = `${FORM_PLACEMENT_SELECT}
-    FROM form_placements placement
+  const sql = `WITH ${accessiblePlacements.sql}
+    ${FORM_PLACEMENT_SELECT}, group_access.member_access, group_access.manager_access
+    FROM accessible_resource accessible
+    JOIN form_placements placement ON placement.id = accessible.resource_id
     JOIN forms form ON form.id = placement.form_id
+    CROSS JOIN group_access
     LEFT JOIN form_placement_group_grants grant_row
       ON grant_row.placement_id = placement.id AND grant_row.group_id = ?
     WHERE ${conditions.join(" AND ")}
     GROUP BY placement.id`;
   const page = await queryPage<GroupFormPlacementRow>(db, {
     sql,
-    bindings: [groupId, ...bindings],
+    bindings,
     orderBy: resolveMappedOrderBy(
       query.sort,
       {
@@ -186,7 +175,7 @@ export async function listGroupFormPlacements(
     limit: query.limit,
     offset: query.offset,
   });
-  return { forms: page.rows.map((row) => mapGroupFormPlacement(row, groupId, access)), total: page.total };
+  return { forms: page.rows.map((row) => mapGroupFormPlacement(row, groupId)), total: page.total };
 }
 
 export async function getGroupFormDefinition(
@@ -195,23 +184,28 @@ export async function getGroupFormDefinition(
   groupId: string,
   placementId: string,
 ) {
-  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
+  const accessiblePlacements = buildLiveAccessibleGroupResourceIdsCte(
+    "formPlacement",
+    groupId,
+    liveGroupResourceContextAccess(viewer, groupId),
+    "view_definition",
+  );
   const row = await first<GroupFormPlacementRow>(
     db,
-    `${FORM_PLACEMENT_SELECT}
-       FROM form_placements placement
+    `WITH ${accessiblePlacements.sql}
+     ${FORM_PLACEMENT_SELECT}, group_access.member_access, group_access.manager_access
+       FROM accessible_resource accessible
+       JOIN form_placements placement ON placement.id = accessible.resource_id
        JOIN forms form ON form.id = placement.form_id
+       CROSS JOIN group_access
        LEFT JOIN form_placement_group_grants grant_row
          ON grant_row.placement_id = placement.id AND grant_row.group_id = ?
       WHERE placement.id = ?
       GROUP BY placement.id`,
-    [groupId, placementId],
+    [...accessiblePlacements.bindings, groupId, placementId],
   );
   if (!row) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
-  const summary = mapGroupFormPlacement(row, groupId, access);
-  if (!summary.capabilities.includes("view_definition")) {
-    throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
-  }
+  const summary = mapGroupFormPlacement(row, groupId);
   const definition = await getFormDefinitionByPlacement(db, placementId);
   if (!definition) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
   return groupFormDefinitionResponseSchema.parse({ ...summary, fields: definition.fields });

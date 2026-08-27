@@ -20,12 +20,11 @@ import {
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
   isResourceGrantCapability,
+  liveGroupResourceContextAccess,
   type GroupResourceContextAccess,
   type GroupResourceViewer,
   type LiveGroupResourceContextAccess,
 } from "../resource-grants";
-import { activeGroupMembershipAuthorizationEvidence } from "../groups/access";
-import { groupManagementAuthorizationEvidence } from "../groups/governance";
 import {
   closedVoteResult,
   toVoteSummary,
@@ -111,15 +110,6 @@ function mapGroupVote(row: GroupVoteRow, groupId: string, nowMs: number): GroupV
   });
 }
 
-function liveGroupVoteAccess(viewer: GroupResourceViewer, groupId: string): LiveGroupResourceContextAccess {
-  return {
-    memberEvidence: activeGroupMembershipAuthorizationEvidence(viewer.userId, groupId),
-    managerEvidence: viewer.admin
-      ? groupManagementAuthorizationEvidence(viewer.admin, [groupId])
-      : { sql: "SELECT 1 WHERE 0", bindings: [] },
-  };
-}
-
 async function resolveGroupVote(
   db: DatabaseLike,
   viewer: GroupResourceViewer,
@@ -129,7 +119,7 @@ async function resolveGroupVote(
   const accessibleVotes = buildLiveAccessibleGroupResourceIdsCte(
     "vote",
     groupId,
-    liveGroupVoteAccess(viewer, groupId),
+    liveGroupResourceContextAccess(viewer, groupId),
     "view",
   );
   const row = await first<GroupVoteRow>(
@@ -221,7 +211,7 @@ export async function listGroupVotes(
 ): Promise<{ votes: GroupVote[]; total: number }> {
   const page = await queryPage<GroupVoteRow>(
     db,
-    buildGroupVotesPageQuery(groupId, liveGroupVoteAccess(viewer, groupId), query),
+    buildGroupVotesPageQuery(groupId, liveGroupResourceContextAccess(viewer, groupId), query),
   );
   const nowMs = Date.now();
   return { votes: page.rows.map((row) => mapGroupVote(row, groupId, nowMs)), total: page.total };

@@ -6,8 +6,8 @@ interface TableNameRow {
 
 // `roles` / `role_permissions` are system reference data —
 // built-in roles "ship with the portal" and are seeded once by migration
-// consolidated migration 0035, not per-test business data (unlike e.g. `working_groups`, which
-// tests already re-seed themselves when they need it). Wiping them on every
+// consolidated migration 0035, not per-test business data (unlike ordinary
+// groups that a test creates for its own scenario). Wiping them on every
 // resetDb() would break the FK from `user_roles.role_id` for any test that
 // grants a built-in role (e.g. via POST .../events/:slug/permissions)
 // without every such test re-inserting all nine built-in roles itself.
@@ -15,7 +15,7 @@ interface TableNameRow {
 // configuration row seeded once by the migration — the same class of
 // system reference data as roles/role_permissions above, not per-test
 // business data. Every membership-workflow code path (stage transitions,
-// scheduled jobs, the admin settings endpoint) expects this row to always
+// scheduled jobs, the system settings endpoint) expects this row to always
 // exist; wiping it on every resetDb() would require every such test to
 // re-seed it itself.
 // `mailing_lists` (consolidated migration 0035) is the same class of system
@@ -27,13 +27,16 @@ interface TableNameRow {
 // Google Groups sync for pkic@/consultation@, the same failure mode
 // membership_settings' exclusion already guards against.
 // `membership_categories` (consolidated migration 0035) is the same class of system
-// reference data too — its 15 rows (A-G/H1-H8) are seeded once by the
+// reference data too — its 15 category codes (A-G/H1-H8) are seeded once by the
 // migration, and member_category_assignments.category_code/
 // member_applications.membership_category both carry a FOREIGN KEY into
 // it (members.member_type no longer does — it's a plain
 // 'individual'/'organization' discriminator, migration 0000's original
 // meaning; category lives solely in member_category_assignments as of
-// consolidated migration 0035). Wiping membership_categories on every resetDb() would
+// consolidated migration 0035). Labels, ordering, and voting policy remain
+// runtime-editable; resetDb() restores their migration baseline so one test
+// cannot leak configuration into another. Wiping membership_categories on
+// every resetDb() would
 // fail every test's first insert of a categorized application/aggregate
 // with a FK constraint error.
 // `sponsorship_tier_catalog` and `sponsorship_tier_config` are likewise
@@ -53,6 +56,8 @@ const EXCLUDED_TABLES = new Set([
   "event_profiles",
   "sponsorship_tier_catalog",
   "sponsorship_tier_config",
+  "_test_membership_category_baseline",
+  "_test_membership_settings_baseline",
 ]);
 
 const SEEDED_GROUP_IDS = [
@@ -118,14 +123,89 @@ async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
 }
 
 /**
- * `membership_settings` is excluded from wiping (see above) but its
- * `updated_by_user_id` FK can point at a `users` row from a previous test,
- * which would otherwise block that table's DELETE below. Cleared first,
- * before the generic table-clearing pass, so the singleton row itself
- * survives but never holds a dangling actor reference.
+ * Capture the migration's actual category seed once for this test database.
+ * Keeping this fixture in D1 prevents resetDb() from duplicating migration
+ * labels, ordering, or voting defaults in TypeScript.
  */
-async function clearMembershipSettingsActorReference(): Promise<void> {
-  await env.DB.prepare(`UPDATE membership_settings SET updated_by_user_id = NULL WHERE id = 'default'`).run();
+async function ensureMembershipCategoryBaseline(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS _test_membership_category_baseline (
+         code TEXT NOT NULL PRIMARY KEY,
+         label TEXT NOT NULL,
+         description TEXT,
+         display_order INTEGER NOT NULL,
+         is_voting INTEGER NOT NULL
+       )`,
+    ),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO _test_membership_category_baseline
+         (code, label, description, display_order, is_voting)
+       SELECT code, label, description, display_order, is_voting
+         FROM membership_categories`,
+    ),
+  ]);
+}
+
+/** Capture the migration-owned singleton rather than mirroring its defaults in TypeScript. */
+async function ensureMembershipSettingsBaseline(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS _test_membership_settings_baseline (
+         id TEXT NOT NULL PRIMARY KEY,
+         consultation_window_days INTEGER NOT NULL,
+         ec_review_window_days INTEGER NOT NULL,
+         on_hold_response_deadline_days INTEGER NOT NULL,
+         consultation_email_recipients TEXT NOT NULL,
+         ec_email_recipients TEXT NOT NULL,
+         cc_applicant_emails TEXT NOT NULL,
+         auto_reminder_on_holds INTEGER NOT NULL,
+         revision INTEGER NOT NULL,
+         updated_at TEXT NOT NULL,
+         updated_by_user_id TEXT
+       )`,
+    ),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO _test_membership_settings_baseline
+         (id, consultation_window_days, ec_review_window_days, on_hold_response_deadline_days,
+          consultation_email_recipients, ec_email_recipients, cc_applicant_emails,
+          auto_reminder_on_holds, revision, updated_at, updated_by_user_id)
+       SELECT id, consultation_window_days, ec_review_window_days, on_hold_response_deadline_days,
+              consultation_email_recipients, ec_email_recipients, cc_applicant_emails,
+              auto_reminder_on_holds, revision, updated_at, updated_by_user_id
+         FROM membership_settings`,
+    ),
+  ]);
+}
+
+/** Restore mutable reference/configuration rows before clearing their actors and consumers. */
+async function resetMembershipConfiguration(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE membership_settings
+          SET consultation_window_days = (SELECT consultation_window_days FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              ec_review_window_days = (SELECT ec_review_window_days FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              on_hold_response_deadline_days = (SELECT on_hold_response_deadline_days FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              consultation_email_recipients = (SELECT consultation_email_recipients FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              ec_email_recipients = (SELECT ec_email_recipients FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              cc_applicant_emails = (SELECT cc_applicant_emails FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              auto_reminder_on_holds = (SELECT auto_reminder_on_holds FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              revision = (SELECT revision FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              updated_at = (SELECT updated_at FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id),
+              updated_by_user_id = (SELECT updated_by_user_id FROM _test_membership_settings_baseline baseline WHERE baseline.id = membership_settings.id)
+        WHERE id IN (SELECT id FROM _test_membership_settings_baseline)`,
+    ),
+    env.DB.prepare(
+      `UPDATE membership_categories
+          SET label = (SELECT label FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+              description = (SELECT description FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+              display_order = (SELECT display_order FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+              is_voting = (SELECT is_voting FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+              revision = 0,
+              updated_at = '1970-01-01T00:00:00.000Z'
+        WHERE code IN (SELECT code FROM _test_membership_category_baseline)`,
+    ),
+  ]);
 }
 
 /** Test isolation may delete history, while production code remains unable to do so. */
@@ -187,7 +267,9 @@ export async function resetDb(): Promise<void> {
   const historyDeleteTriggerSql = await suspendHistoryDeleteTrigger();
   const mailingListDeleteTriggerSql = await suspendMailingListDeleteTrigger();
   try {
-    await clearMembershipSettingsActorReference();
+    await ensureMembershipCategoryBaseline();
+    await ensureMembershipSettingsBaseline();
+    await resetMembershipConfiguration();
     const tableNames = await listResettableTables();
     await clearTablesWithRetry(tableNames);
     await clearTestMailingLists();

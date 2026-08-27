@@ -1,9 +1,5 @@
 import { MAILING_LIST_SORT_COLUMNS, type MailingListsListQuery } from "../../../../assets/shared/schemas/mailing-lists";
-import {
-  groupManagementCandidateAuthorizationEvidence,
-  prepareGroupManagementAuthorizationGuard,
-  requireGroupManagement,
-} from "../groups/governance";
+import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import type { AuthAdmin } from "../../types";
 import { isAuthorizationGuardFailure, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
@@ -13,20 +9,35 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
+import {
+  buildLiveAccessibleGroupResourceIdsCte,
+  liveGroupResourceContextAccess,
+  type AccessibleGroupResourceIdsCte,
+} from "../resource-grants";
 
 export function buildMailingListsPageQuery(
   query: MailingListsListQuery,
-  options: { groupId: string; requiredAuthorization?: AuthorizationEvidence },
+  options: {
+    groupId?: string;
+    requiredAuthorization?: AuthorizationEvidence;
+    accessibleResources?: AccessibleGroupResourceIdsCte;
+  },
 ): OffsetPageQuery {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
+  if (options.accessibleResources) {
+    bindings.push(...options.accessibleResources.bindings);
+  } else if (options.groupId) {
+    conditions.push("mailing_lists.group_id = ?");
+    bindings.push(options.groupId);
+  } else {
+    throw new Error("A group or accessible resource set is required for mailing-list pages");
+  }
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
   if (search) {
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
-  conditions.push("group_id = ?");
-  bindings.push(options.groupId);
   if (query.purpose) {
     conditions.push("purpose = ?");
     bindings.push(query.purpose);
@@ -41,7 +52,11 @@ export function buildMailingListsPageQuery(
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   return {
-    sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where}`,
+    sql: `${options.accessibleResources ? `WITH ${options.accessibleResources.sql} ` : ""}
+      SELECT ${MAILING_LIST_COLUMNS}
+        FROM mailing_lists
+        ${options.accessibleResources ? "JOIN accessible_resource ON accessible_resource.resource_id = mailing_lists.id" : ""}
+        ${where}`,
     bindings,
     orderBy: resolveMappedOrderBy(
       query.sort,
@@ -69,8 +84,12 @@ export async function listGroupManagedMailingLists(
 ) {
   await requireGroupManagement(db, actor, groupId);
   const pageQuery = buildMailingListsPageQuery(query, {
-    groupId,
-    requiredAuthorization: groupManagementCandidateAuthorizationEvidence(actor, "mailing_lists.group_id"),
+    accessibleResources: buildLiveAccessibleGroupResourceIdsCte(
+      "mailingList",
+      groupId,
+      liveGroupResourceContextAccess({ userId: actor.id, admin: actor }, groupId),
+      "manage",
+    ),
   });
   try {
     const [, pageResult, countResult] = await db.batch([

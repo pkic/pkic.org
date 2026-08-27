@@ -2,7 +2,7 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { EventAttendeeInviteSummary } from "../../assets/shared/schemas/event-invites";
+import type { EventAttendeeInviteSummary, EventInviteSummary } from "../../assets/shared/schemas/event-invites";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupEventDetail";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
@@ -59,6 +59,32 @@ function invite(overrides: Partial<EventAttendeeInviteSummary> = {}): EventAtten
     acceptedAt: null,
     declinedAt: null,
     createdAt: "2026-08-01T12:00:00.000Z",
+    actions: { resend: true, revoke: true },
+    ...overrides,
+  };
+}
+
+function speakerInvite(overrides: Partial<EventInviteSummary> = {}): EventInviteSummary {
+  return {
+    id: INVITE_ID,
+    inviteeEmail: "speaker@example.test",
+    inviteeFirstName: "Ada",
+    inviteeLastName: "Lovelace",
+    inviteType: "speaker",
+    status: "sent",
+    declineReasonCode: null,
+    declineReasonNote: null,
+    unsubscribeFuture: 0,
+    reminderCount: 0,
+    sourceType: "staff",
+    expiresAt: "2026-09-01T12:00:00.000Z",
+    acceptedAt: null,
+    declinedAt: null,
+    createdAt: "2026-08-01T12:00:00.000Z",
+    inviterUserId: null,
+    inviterEmail: null,
+    inviterFirstName: null,
+    inviterLastName: null,
     actions: { resend: true, revoke: true },
     ...overrides,
   };
@@ -278,6 +304,75 @@ describe("portal event invitations", () => {
       expect.arrayContaining([
         `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites/attendees/preview`,
         `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites/attendees/bulk`,
+      ]),
+    );
+    expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
+  });
+
+  it("creates speaker invitations through the canonical group endpoint without admin fallback", async () => {
+    const requests: Array<{ method: string; url: URL }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = urlOf(input);
+        const method = init.method ?? "GET";
+        requests.push({ method, url });
+        if (method === "GET")
+          return json({
+            invites: [speakerInvite()],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          });
+        if (url.pathname.endsWith("/preview")) {
+          return json({
+            success: true,
+            subject: "Speaker invitation",
+            html: "<p>Preview</p>",
+            text: "Preview",
+            previewToken: "p".repeat(32),
+            inviteDigest: "a".repeat(64),
+            inviteExpiresAt: EVENT.startsAt,
+            previewExpiresAt: "2026-11-30T12:00:00.000Z",
+            recipientCount: 1,
+            sendBatches: [{ offset: 0, count: 1, previewToken: "p".repeat(32), inviteDigest: "a".repeat(64) }],
+          });
+        }
+        if (url.pathname.endsWith("/bulk")) {
+          return json({ success: true, created: [{ email: "speaker-new@example.test" }], endorsed: [], skipped: [] });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} inviteType="speaker" />);
+    await settle();
+    const composer = container.querySelector('[aria-label="Send speaker invitations"]')!;
+    const textarea = composer.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "New Speaker <speaker-new@example.test>";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    const parse = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Parse",
+    )!;
+    await act(async () => parse.click());
+    await settle();
+    const preview = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Preview email",
+    )!;
+    await act(async () => preview.click());
+    await settle();
+    const confirm = await waitForElement(() => composer.querySelector<HTMLInputElement>('input[type="checkbox"]'));
+    confirm.checked = true;
+    confirm.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    const send = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Send speaker invites",
+    )!;
+    await act(async () => send.click());
+    await settle();
+    expect(requests.map((request) => request.url.pathname)).toEqual(
+      expect.arrayContaining([
+        `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites/speakers/preview`,
+        `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites/speakers/bulk`,
       ]),
     );
     expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/admin/"))).toBe(true);

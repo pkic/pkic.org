@@ -75,9 +75,13 @@ describe("atomic service audit boundaries", () => {
 
   it("rolls back membership-setting changes when their audit insert fails", async () => {
     await rejectAuditAction("membership_settings_updated");
-    const response = await call("/api/v1/admin/membership-settings", {
+    const [current] = await queryAll<{ revision: number }>(
+      env.DB,
+      "SELECT revision FROM membership_settings WHERE id = 'default'",
+    );
+    const response = await call("/api/v1/system/membership-settings", {
       method: "PATCH",
-      body: JSON.stringify({ consultationWindowDays: 31 }),
+      body: JSON.stringify({ expectedRevision: current.revision, consultationWindowDays: 31 }),
     });
     expect(response.status).toBe(500);
     const [settings] = await queryAll<{ consultation_window_days: number }>(

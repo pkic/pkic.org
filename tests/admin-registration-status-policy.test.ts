@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { adminEventCampaignPreviewSchema } from "../assets/shared/schemas/admin-events";
 import {
-  ADMIN_EVENT_REGISTRATION_STATUSES,
-  adminEventCampaignPreviewSchema,
-  adminEventRegistrationStatusSchema,
-  adminEventRegistrationsQuerySchema,
-} from "../assets/shared/schemas/admin-events";
+  EVENT_REGISTRATION_STATUSES,
+  eventRegistrationStatusSchema,
+  eventRegistrationsQuerySchema,
+} from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationDayAttendanceChangeSchema } from "../assets/shared/schemas/event-registration-detail";
 import {
   ADMIN_REGISTRATION_FORCE_STATUSES,
@@ -13,11 +13,11 @@ import {
 
 describe("admin registration status policy", () => {
   it("uses the same statuses for listing and forced updates", () => {
-    expect(ADMIN_REGISTRATION_FORCE_STATUSES).toBe(ADMIN_EVENT_REGISTRATION_STATUSES);
+    expect(ADMIN_REGISTRATION_FORCE_STATUSES).toBe(EVENT_REGISTRATION_STATUSES);
 
-    for (const status of ADMIN_EVENT_REGISTRATION_STATUSES) {
-      expect(adminEventRegistrationStatusSchema.parse(status)).toBe(status);
-      expect(adminEventRegistrationsQuerySchema.parse({ status }).status).toBe(status);
+    for (const status of EVENT_REGISTRATION_STATUSES) {
+      expect(eventRegistrationStatusSchema.parse(status)).toBe(status);
+      expect(eventRegistrationsQuerySchema.parse({ status }).status).toBe(status);
       expect(adminRegistrationUpdateSchema.parse({ action: "force_status", status })).toEqual({
         action: "force_status",
         status,
@@ -26,7 +26,7 @@ describe("admin registration status policy", () => {
   });
 
   it("does not conflate day-level waitlisting with registration status", () => {
-    expect(adminEventRegistrationStatusSchema.safeParse("waitlisted").success).toBe(false);
+    expect(eventRegistrationStatusSchema.safeParse("waitlisted").success).toBe(false);
     expect(adminRegistrationUpdateSchema.safeParse({ action: "force_status", status: "waitlisted" }).success).toBe(
       false,
     );

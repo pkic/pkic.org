@@ -13,6 +13,7 @@ import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpsCapabilityUrlSchema } from "./urls";
 import { eventGroupGrantSchemas } from "./resource-grants";
+import { eventInviteValiditySchema, eventInviteWindowSchema } from "./event-invite-validity";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
@@ -109,6 +110,7 @@ export const eventSeriesSchema = z.object({
   providerType: eventProviderTypeSchema.nullable(),
   providerConfigured: z.boolean(),
   active: z.boolean(),
+  inviteWindow: eventInviteWindowSchema,
   nextOccurrenceAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -222,18 +224,20 @@ export const eventOccurrenceGuestSchema = z.object({
   name: z.string(),
   affiliation: z.string().nullable(),
   expiresAt: z.string(),
+  active: z.boolean(),
   revokedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type EventOccurrenceGuest = z.infer<typeof eventOccurrenceGuestSchema>;
-export const eventOccurrenceGuestInviteSchema = z.object({
-  email: normalizedEmailSchema,
-  name: trimmedString(1, 200),
-  affiliation: trimmedString(0, 200).nullable().optional(),
-  expiresAt: z.iso.datetime(),
-  seriesWide: z.boolean().optional(),
-});
+export const eventOccurrenceGuestInviteSchema = z
+  .object({
+    email: normalizedEmailSchema,
+    name: trimmedString(1, 200),
+    affiliation: trimmedString(0, 200).nullable().optional(),
+    seriesWide: z.boolean().optional(),
+  })
+  .extend(eventInviteValiditySchema.shape);
 export const eventOccurrenceGuestsListQuerySchema = listQuerySchema(["name", "email", "created_at"] as const).extend({
   active: booleanQueryFlagSchema.optional(),
 });

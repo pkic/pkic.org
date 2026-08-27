@@ -4,7 +4,13 @@ import type { DatabaseLike, Env } from "../types";
 import { constantTimeEqual } from "../utils/crypto";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import { nowIso } from "../utils/time";
-import { toMeetingGuest, type MeetingGuest, type MeetingGuestRow } from "./meeting-guest-record";
+import {
+  EFFECTIVE_MEETING_GUEST_FROM,
+  effectiveMeetingGuestColumns,
+  toMeetingGuest,
+  type MeetingGuest,
+  type MeetingGuestRow,
+} from "./meeting-guest-record";
 import {
   assertSessionActive,
   getBearerToken,
@@ -131,18 +137,17 @@ export async function requireMeetingGuestFromRequest(
   }
   const row = await first<MeetingGuestSessionRow>(
     db,
-    `SELECT guest.id, guest.series_id, guest.occurrence_id, guest.normalized_email,
-            guest.name, guest.affiliation, guest.expires_at, guest.revoked_at,
-            guest.invitation_version, session.id AS session_id,
+    `SELECT ${effectiveMeetingGuestColumns()}, session.id AS session_id,
             session.expires_at AS session_expires_at, session.revoked_at AS session_revoked_at,
             session.authorization_hash AS session_authorization_hash,
             challenge.authorization_hash AS challenge_authorization_hash,
             challenge.invitation_version AS challenge_invitation_version,
             challenge.used_at AS challenge_used_at,
             challenge.occurrence_id AS challenge_occurrence_id
-       FROM meeting_guest_sessions session
-       JOIN meeting_guest_browser_challenges challenge ON challenge.id = session.challenge_id
-       JOIN event_occurrence_guests guest ON guest.id = session.guest_id AND guest.id = challenge.guest_id
+       ${EFFECTIVE_MEETING_GUEST_FROM}
+       JOIN meeting_guest_sessions session ON session.guest_id = guest.id
+       JOIN meeting_guest_browser_challenges challenge
+         ON challenge.id = session.challenge_id AND challenge.guest_id = guest.id
       WHERE session.id = ? AND session.guest_id = ?`,
     [verified.claims.sid, verified.claims.sub],
   );

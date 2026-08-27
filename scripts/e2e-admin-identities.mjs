@@ -7,6 +7,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "meeting-guest",
   "portal-event",
   "portal-mailing-lists",
+  "portal-system-audit",
   "sponsor-portal",
   "votes",
 ]);

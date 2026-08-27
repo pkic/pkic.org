@@ -115,7 +115,6 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   let eventSlug: string;
   const userId = crypto.randomUUID();
   const registrationId = crypto.randomUUID();
-  const inviteId = crypto.randomUUID();
   const permId = crypto.randomUUID();
   const proposalId = crypto.randomUUID();
   const grantId = crypto.randomUUID();
@@ -136,16 +135,12 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ["GET /api/v1/admin/users", () => callApp(anonGet("https://app.test/api/v1/admin/users"))],
     ["GET /api/v1/admin/stats", () => callApp(anonGet("https://app.test/api/v1/admin/stats"))],
     ["GET /api/v1/admin/donations", () => callApp(anonGet("https://app.test/api/v1/admin/donations"))],
-    ["GET /api/v1/admin/audit-log", () => callApp(anonGet("https://app.test/api/v1/admin/audit-log"))],
+    ["GET /api/v1/system/audit-log", () => callApp(anonGet("https://app.test/api/v1/system/audit-log"))],
     ["GET /api/v1/admin/email-templates", () => callApp(anonGet("https://app.test/api/v1/admin/email-templates"))],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
     [
       "GET /api/v1/admin/events/:slug/registrations",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/invites",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/invites`)),
     ],
     [
       "GET /api/v1/admin/events/:slug/forms",
@@ -256,22 +251,6 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     [
       "POST /api/v1/admin/events/:slug/emails/campaign/send",
       () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/emails/campaign/send`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/invites/:inviteId/resend",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/invites/${inviteId}/resend`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/invites/attendees/bulk",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/invites/attendees/bulk`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/invites/attendees/preview",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/invites/attendees/preview`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/invites/speakers/bulk",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/invites/speakers/bulk`)),
     ],
     [
       "POST /api/v1/admin/events/:slug/registrations/:registrationId/admit",

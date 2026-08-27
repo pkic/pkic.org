@@ -14,6 +14,7 @@ import {
 import { first } from "../../db/queries";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
+import { effectiveMeetingGuestInviteExpirySql } from "../../invite-validity";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
@@ -41,7 +42,9 @@ const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrenc
   (SELECT COUNT(*) FROM event_occurrence_guests guest
     WHERE guest.series_id = occurrence.series_id
       AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
-      AND guest.revoked_at IS NULL AND guest.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS guest_count,
+      AND guest.revoked_at IS NULL
+      AND ${effectiveMeetingGuestInviteExpirySql("guest", "occurrence", "event")}
+          > strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS guest_count,
   (SELECT COUNT(*) FROM event_occurrence_join_confirmations confirmation
     WHERE confirmation.occurrence_id = occurrence.id) AS join_confirmed_count,
   (SELECT COUNT(*) FROM event_occurrence_join_confirmations confirmation
@@ -49,7 +52,8 @@ const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrenc
       AND confirmation.attendance_verified_at IS NOT NULL) AS attendance_verified_count,
   occurrence.created_at, occurrence.updated_at`;
 const OCCURRENCE_FROM = `FROM event_occurrences occurrence
-  JOIN event_series series ON series.id = occurrence.series_id`;
+  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN events event ON event.id = series.event_id`;
 
 const SORT_EXPRESSIONS = {
   starts_at: "occurrence.starts_at",
@@ -151,7 +155,6 @@ export function buildSeriesOccurrencesPageQuery(
     sql: `WITH ${accessibleEvents.sql}
       ${OCCURRENCE_SELECT}
       ${OCCURRENCE_FROM}
-      JOIN events event ON event.id = series.event_id
       JOIN accessible_resource accessible ON accessible.resource_id = event.id
       CROSS JOIN group_access
       WHERE ${conditions.join(" AND ")}

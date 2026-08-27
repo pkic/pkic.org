@@ -1,12 +1,12 @@
 import {
   APPLICATION_DOCUMENT_ALLOWED_MIME_TYPES,
   APPLICATION_DOCUMENT_SORT_KEYS,
-  adminApplicationDocumentSchema,
-  adminApplicationDocumentsListResponseSchema,
+  staffApplicationDocumentSchema,
+  staffApplicationDocumentsListResponseSchema,
   applicationDocumentSchema,
   applicationDocumentsListResponseSchema,
   type ApplicationDocumentsListQuery,
-  type AdminApplicationDocument,
+  type StaffApplicationDocument,
   type ApplicationDocument,
 } from "../../../../../assets/shared/schemas/application-documents";
 import {
@@ -77,8 +77,8 @@ function toApplicationDocument(row: ApplicationDocumentListRow): ApplicationDocu
   });
 }
 
-function toAdminApplicationDocument(row: ApplicationDocumentListRow): AdminApplicationDocument {
-  return adminApplicationDocumentSchema.parse({
+function toStaffApplicationDocument(row: ApplicationDocumentListRow): StaffApplicationDocument {
+  return staffApplicationDocumentSchema.parse({
     ...toApplicationDocument(row),
     uploadedByEmail: row.uploaded_by_email,
   });
@@ -133,14 +133,14 @@ export async function listApplicationDocuments(
   });
 }
 
-export async function listAdminApplicationDocuments(
+export async function listStaffApplicationDocuments(
   db: DatabaseLike,
   applicationId: string,
   query: ApplicationDocumentsListQuery,
-): Promise<{ documents: AdminApplicationDocument[]; page: PageInfo }> {
+): Promise<{ documents: StaffApplicationDocument[]; page: PageInfo }> {
   const result = await queryApplicationDocuments(db, applicationId, query);
-  return adminApplicationDocumentsListResponseSchema.parse({
-    documents: result.rows.map(toAdminApplicationDocument),
+  return staffApplicationDocumentsListResponseSchema.parse({
+    documents: result.rows.map(toStaffApplicationDocument),
     page: result.page,
   });
 }

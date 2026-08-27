@@ -29,8 +29,6 @@ export { resendEventInvite } from "./invite-resend";
 export {
   bulkCreateAttendeeInvites,
   bulkCreateSpeakerInvites,
-  bulkCreateAttendeesAdmin,
-  bulkCreateSpeakersAdmin,
   type BulkAttendeeOutcome,
   type BulkSpeakerOutcome,
   bulkCreateInvites,

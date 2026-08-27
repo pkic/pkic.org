@@ -5,7 +5,6 @@ import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { Dashboard } from "../sections/Dashboard";
 import { Stats } from "../sections/Stats";
-import { AuditLog } from "../sections/AuditLog";
 import { Donations } from "../sections/Donations";
 import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
@@ -15,16 +14,21 @@ import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
 import { Organizations } from "../sections/Organizations";
-import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
 import { Sponsorships } from "../sections/Sponsorships";
-import { Applications } from "../sections/Applications";
-import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
-import { ADMIN_ACCOUNT_REDIRECT_TARGET, ADMIN_MAILING_LISTS_REDIRECT_TARGET } from "./legacy-redirects";
+import {
+  ADMIN_ACCOUNT_REDIRECT_TARGET,
+  ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+  ADMIN_MAILING_LISTS_REDIRECT_TARGET,
+  ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
+  ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
+  ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+} from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
   return (
@@ -40,13 +44,6 @@ function PortalRedirect({ target, message }: { target: string; message: string }
     window.location.assign(target);
   }, [target]);
   return <p>{message}</p>;
-}
-
-function MembershipApplicationRoute({ applicationId }: { applicationId: string }) {
-  const [, navigate] = useHashLocation();
-  return (
-    <Applications initialApplicationId={applicationId} onBackFromInitial={() => navigate("/membership/applications")} />
-  );
 }
 
 export function AdminShell() {
@@ -102,6 +99,24 @@ export function AdminShell() {
                 <SectionWrapper title="Registration">
                   <RegistrationDetailPage slug={params.slug} regId={params.regId} />
                 </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/events/:slug/proposals/invites"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET}
+                  message="Speaker invitations have moved to the selected-group portal."
+                />
+              )}
+            />
+            <Route
+              path="/events/:slug/registrations/invites"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET}
+                  message="Attendee invitations have moved to the selected-group portal."
+                />
               )}
             />
             <Route
@@ -240,9 +255,10 @@ export function AdminShell() {
             <Route
               path="/organizations/content-reviews"
               component={() => (
-                <SectionWrapper title="Organizations — Content Review">
-                  <OrganizationContentReviews />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET}
+                  message="Organization content reviews have moved to the portal."
+                />
               )}
             />
             <Route
@@ -265,33 +281,37 @@ export function AdminShell() {
             <Route
               path="/membership"
               component={() => (
-                <SectionWrapper title="Membership — Applications">
-                  <Applications />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET}
+                  message="Membership application review has moved to the portal."
+                />
               )}
             />
             <Route
               path="/membership/applications/:applicationId"
               component={({ params }: { params: { applicationId: string } }) => (
-                <SectionWrapper title="Membership — Application">
-                  <MembershipApplicationRoute applicationId={params.applicationId} />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={`${ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET}/${encodeURIComponent(params.applicationId)}`}
+                  message="Membership application review has moved to the portal."
+                />
               )}
             />
             <Route
               path="/membership/applications"
               component={() => (
-                <SectionWrapper title="Membership — Applications">
-                  <Applications />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET}
+                  message="Membership application review has moved to the portal."
+                />
               )}
             />
             <Route
               path="/membership/settings"
               component={() => (
-                <SectionWrapper title="Membership — Settings">
-                  <MembershipSettings />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET}
+                  message="Membership settings have moved to the portal."
+                />
               )}
             />
             <Route
@@ -313,9 +333,10 @@ export function AdminShell() {
             <Route
               path="/auditlog"
               component={() => (
-                <SectionWrapper title="Audit Log">
-                  <AuditLog />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_AUDIT_LOG_REDIRECT_TARGET}
+                  message="The system audit log has moved to the portal."
+                />
               )}
             />
             <Route

@@ -10,12 +10,58 @@ import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invite-creation";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import {
+  createGroupEventSeries,
+  createSeriesOccurrence,
+  inviteOccurrenceGuest,
+  listOccurrenceGuests,
+} from "../functions/_lib/services/event-series";
+import { insertUser } from "./helpers/membership";
+import type { AuthAdmin } from "../functions/_lib/types";
 
 const EVENT = {
   starts_at: "2027-03-10T09:00:00.000Z",
   ends_at: "2027-03-10T17:00:00.000Z",
 };
 const NOW = "2027-03-01T12:00:00.000Z";
+const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+
+async function seedMeetingWindow() {
+  const adminId = await insertUser(env.DB, `meeting-validity-${crypto.randomUUID()}@example.test`);
+  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
+  const admin: AuthAdmin = {
+    identityType: "user",
+    id: adminId,
+    email: "meeting-validity@example.test",
+    role: "admin",
+  };
+  const startsAt = "2099-04-01T09:00:00.000Z";
+  const endsAt = "2099-04-01T10:00:00.000Z";
+  const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
+    eventName: "Guest validity meeting",
+    eventSlug: `guest-validity-${crypto.randomUUID()}`,
+    profileKey: "meeting",
+    policy: {
+      registrationPolicy: "no_registration",
+      memberEligibility: "owner_group",
+      guestPolicy: "occurrence_invitation",
+    },
+    startsAt,
+    recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+    timezone: "UTC",
+    durationMinutes: 60,
+    providerType: null,
+  });
+  const occurrence = await createSeriesOccurrence(
+    env.DB,
+    admin,
+    GROUP_ID,
+    series.id,
+    { startsAt, endsAt },
+    "meeting-validity-encryption-secret-0000000000000",
+  );
+  return { admin, series, occurrence };
+}
 
 describe("event invitation validity", () => {
   it("defaults to the event start and preserves an earlier explicit deadline", () => {
@@ -141,5 +187,132 @@ describe("stored event invitation validity in D1", () => {
         [JSON.stringify(inviteIds.sort())],
       ),
     ).resolves.toEqual([{ status: "expired" }, { status: "expired" }]);
+  });
+});
+
+describe("meeting guest invitation validity in D1", () => {
+  beforeEach(resetDb);
+
+  it("defaults at issue time and caps occurrence and series-wide validity under the live meeting window", async () => {
+    const { admin, series, occurrence } = await seedMeetingWindow();
+    const occurrenceDefault = await inviteOccurrenceGuest(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      occurrence.id,
+      { email: `default-window-${crypto.randomUUID()}@example.test`, name: "Default Window Guest" },
+      "https://app.test",
+    );
+    expect(occurrenceDefault.guest.expiresAt).toBe(occurrence.startsAt);
+    expect(occurrenceDefault.guest.active).toBe(true);
+
+    const seriesDefault = await inviteOccurrenceGuest(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      occurrence.id,
+      {
+        email: `series-window-${crypto.randomUUID()}@example.test`,
+        name: "Series Window Guest",
+        seriesWide: true,
+      },
+      "https://app.test",
+    );
+    expect(seriesDefault.guest.expiresAt).toBe(occurrence.startsAt);
+    expect(seriesDefault.guest.active).toBe(true);
+
+    for (const seriesWide of [false, true]) {
+      await expect(
+        inviteOccurrenceGuest(
+          env.DB,
+          admin,
+          GROUP_ID,
+          series.id,
+          occurrence.id,
+          {
+            email: `overlong-${seriesWide}-${crypto.randomUUID()}@example.test`,
+            name: "Overlong Window Guest",
+            expiresAt: new Date(Date.parse(occurrence.endsAt) + 1).toISOString(),
+            seriesWide,
+          },
+          "https://app.test",
+        ),
+      ).rejects.toMatchObject({ code: "INVITE_EXPIRY_AFTER_EVENT" });
+    }
+
+    const shortenedEnd = new Date(Date.parse(occurrence.startsAt) + 15 * 60_000).toISOString();
+    await env.DB.prepare("UPDATE event_occurrences SET ends_at = ? WHERE id = ?")
+      .bind(shortenedEnd, occurrence.id)
+      .run();
+    const listed = await listOccurrenceGuests(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      limit: 20,
+      offset: 0,
+    });
+    // Moving the end earlier cannot extend a default that was already resolved
+    // to the original start when the capability was issued.
+    expect(listed.guests.find((guest) => guest.id === occurrenceDefault.guest.id)?.expiresAt).toBe(occurrence.startsAt);
+
+    await env.DB.prepare("UPDATE events SET starts_at = NULL, ends_at = NULL WHERE id = ?").bind(series.eventId).run();
+    const withoutSeriesWindow = await listOccurrenceGuests(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      limit: 20,
+      offset: 0,
+    });
+    expect(withoutSeriesWindow.guests.find((guest) => guest.id === seriesDefault.guest.id)).toMatchObject({
+      expiresAt: occurrence.startsAt,
+      active: false,
+    });
+  });
+
+  it("rolls back the guest and outbox when its occurrence window changes before commit", async () => {
+    const { admin, series, occurrence } = await seedMeetingWindow();
+    const email = `window-race-${crypto.randomUUID()}@example.test`;
+    const expiresAt = new Date(Date.parse(occurrence.startsAt) + 30 * 60_000).toISOString();
+    const shortenedEnd = new Date(Date.parse(occurrence.startsAt) + 15 * 60_000).toISOString();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE event_occurrences SET ends_at = ? WHERE id = ?").bind(shortenedEnd, occurrence.id).run(),
+    );
+    await expect(
+      inviteOccurrenceGuest(
+        racingDb,
+        admin,
+        GROUP_ID,
+        series.id,
+        occurrence.id,
+        { email, name: "Window Race Guest", expiresAt },
+        "https://app.test",
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_GUEST_WINDOW_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM event_occurrence_guests WHERE normalized_email = ?", [email]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", [email]),
+    ).resolves.toHaveLength(0);
+
+    const seriesFixture = await seedMeetingWindow();
+    const seriesEmail = `series-window-race-${crypto.randomUUID()}@example.test`;
+    const seriesExpiresAt = new Date(Date.parse(seriesFixture.occurrence.startsAt) + 30 * 60_000).toISOString();
+    const seriesShortenedEnd = new Date(Date.parse(seriesFixture.occurrence.startsAt) + 15 * 60_000).toISOString();
+    const seriesRacingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE events SET ends_at = ? WHERE id = ?")
+        .bind(seriesShortenedEnd, seriesFixture.series.eventId)
+        .run(),
+    );
+    await expect(
+      inviteOccurrenceGuest(
+        seriesRacingDb,
+        seriesFixture.admin,
+        GROUP_ID,
+        seriesFixture.series.id,
+        seriesFixture.occurrence.id,
+        { email: seriesEmail, name: "Series Window Race Guest", expiresAt: seriesExpiresAt, seriesWide: true },
+        "https://app.test",
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_GUEST_WINDOW_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM event_occurrence_guests WHERE normalized_email = ?", [seriesEmail]),
+    ).resolves.toHaveLength(0);
   });
 });

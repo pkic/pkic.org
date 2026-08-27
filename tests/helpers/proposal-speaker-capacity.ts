@@ -11,6 +11,7 @@ import {
 } from "../../functions/_lib/services/registrations";
 import { findOrCreateUser } from "../../functions/_lib/services/users";
 import { issueDatabaseCapability } from "../../functions/_lib/services/capability-links";
+import { createGroup } from "../../functions/_lib/services/groups";
 
 export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   eventId: string;
@@ -18,7 +19,20 @@ export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   adminSessionToken: string;
 }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
-  const adminUser = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+  const adminUser = (
+    await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1")
+  )[0];
+  const group = await createGroup(
+    env.DB,
+    { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin" },
+    {
+      typeKey: "working_group",
+      name: `Proposal speaker fixture ${crypto.randomUUID()}`,
+      visibility: "authenticated",
+      eligibilityMode: "open",
+    },
+  );
+  await env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?").bind(group.id, eventId).run();
   await seedWorkflowEmailTemplates(env.DB, adminUser.id);
   const adminSessionToken = await createAdminSession(env.DB, adminUser.id, "test-admin-token");
   return { eventId, adminUserId: adminUser.id, adminSessionToken };
@@ -30,9 +44,16 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
   coSpeakerUserId: string;
   proposalManageToken: string;
 }> {
+  const event = (
+    await queryAll<{ id: string; owner_group_id: string }>(
+      env.DB,
+      "SELECT id, owner_group_id FROM events WHERE slug = 'pqc-2026' LIMIT 1",
+    )
+  )[0];
+  const invitationBase = `/api/v1/groups/${event.owner_group_id}/events/${event.id}/invites/speakers`;
   const invites = [{ email: "speaker@example.test", firstName: "Speaker", lastName: "Test", sourceType: "direct" }];
   const previewResponse = await app.fetch(
-    new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+    new Request(`https://app.test${invitationBase}/preview`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
       body: JSON.stringify({ invites }),
@@ -42,7 +63,7 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
   );
   const preview = (await previewResponse.json()) as { previewToken: string; inviteDigest: string };
   const inviteResponse = await app.fetch(
-    new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
+    new Request(`https://app.test${invitationBase}/bulk`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
       body: JSON.stringify({ invites, previewToken: preview.previewToken, inviteDigest: preview.inviteDigest }),

@@ -68,12 +68,32 @@ async function createPublicGroupEvent(page: Page, unique: string): Promise<{ id:
   return { id: event.id, slug, name };
 }
 
-test("a selected-group manager manages an attendee invitation without admin APIs", async ({ page }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-event"));
-  const unique = `${Date.now()}-${test.info().workerIndex}`;
+async function createSpeakerEvent(page: Page, unique: string): Promise<{ id: string; slug: string; name: string }> {
   const event = await createPublicGroupEvent(page, unique);
-  const inviteeEmail = `portal-invitee-${unique}@pkic.org`;
+  const current = expectStatus(await api(page, `/api/v1/groups/${GROUP_ID}/events/${event.id}`, "GET"), 200).event as {
+    updatedAt: string;
+  };
+  expectStatus(
+    await api(page, `/api/v1/groups/${GROUP_ID}/events/${event.id}/terms`, "PUT", {
+      expectedUpdatedAt: current.updatedAt,
+      configuration: {
+        attendee: [{ termKey: "e2e-invitation-terms", version: "1.0", required: true, displayText: "E2E terms" }],
+        speaker: [{ termKey: "e2e-speaker-terms", version: "1.0", required: true, displayText: "E2E speaker terms" }],
+        presentation: [],
+      },
+    }),
+    200,
+  );
+  return event;
+}
 
+async function manageInvitation(
+  page: Page,
+  event: { id: string; name: string; slug: string },
+  type: "attendee" | "speaker",
+  inviteeName: string,
+  inviteeEmail: string,
+): Promise<void> {
   const adminRequests: string[] = [];
   const groupInviteRequests: string[] = [];
   page.on("request", (request) => {
@@ -95,17 +115,18 @@ test("a selected-group manager manages an attendee invitation without admin APIs
   await eventRow.getByRole("button", { name: "Details" }).click();
 
   const detail = page.getByRole("region", { name: `${event.name} details` });
-  await expect(detail.getByRole("heading", { name: "Attendee invitations" })).toBeVisible();
-  const invitations = detail.getByRole("region", { name: "Attendee invitations" });
-  await invitations.getByRole("textbox", { name: /Paste emails and names/i }).fill(`Portal Invitee <${inviteeEmail}>`);
+  const label = type === "attendee" ? "Attendee" : "Speaker";
+  await expect(detail.getByRole("heading", { name: `${label} invitations` })).toBeVisible();
+  const invitations = detail.getByRole("region", { name: `${label} invitations` });
+  await invitations.getByRole("textbox", { name: /Paste emails and names/i }).fill(`${inviteeName} <${inviteeEmail}>`);
   await invitations.getByRole("button", { name: "Parse" }).click();
   await invitations.getByRole("button", { name: "Preview email" }).click();
   await expect(invitations.getByText("Review and confirm below.")).toBeVisible();
   await invitations.getByRole("checkbox").check();
   const created = page.waitForResponse(
-    (response) => response.url().endsWith("/invites/attendees/bulk") && response.request().method() === "POST",
+    (response) => response.url().endsWith(`/invites/${type}s/bulk`) && response.request().method() === "POST",
   );
-  await invitations.getByRole("button", { name: "Send attendee invites" }).click();
+  await invitations.getByRole("button", { name: `Send ${label.toLowerCase()} invites` }).click();
   expect((await created).status()).toBe(200);
   await expect(invitations.getByText("Sent 1 invites")).toBeVisible();
 
@@ -121,9 +142,9 @@ test("a selected-group manager manages an attendee invitation without admin APIs
       response.url().endsWith("/resend") &&
       response.request().method() === "POST",
   );
-  await inviteRow.getByRole("button", { name: `Resend invitation to Portal Invitee` }).click();
+  await inviteRow.getByRole("button", { name: `Resend invitation to ${inviteeName}` }).click();
   expect((await resent).status()).toBe(200);
-  await expect(detail.getByText(`Invitation resent to Portal Invitee.`)).toBeVisible();
+  await expect(detail.getByText(`Invitation resent to ${inviteeName}.`)).toBeVisible();
 
   page.once("dialog", (dialog) => void dialog.accept());
   const revoked = page.waitForResponse(
@@ -132,19 +153,39 @@ test("a selected-group manager manages an attendee invitation without admin APIs
       response.url().endsWith("/revoke") &&
       response.request().method() === "POST",
   );
-  await inviteRow.getByRole("button", { name: `Revoke invitation for Portal Invitee` }).click();
+  await inviteRow.getByRole("button", { name: `Revoke invitation for ${inviteeName}` }).click();
   expect((await revoked).status()).toBe(200);
-  await expect(detail.getByText(`Invitation revoked for Portal Invitee.`)).toBeVisible();
+  await expect(detail.getByText(`Invitation revoked for ${inviteeName}.`)).toBeVisible();
   await expect(inviteRow.getByText("Revoked", { exact: true })).toBeVisible();
 
   expect(adminRequests, "portal invitation lifecycle must not call admin APIs").toEqual([]);
   expect(groupInviteRequests).toEqual(
     expect.arrayContaining([
-      expect.stringMatching(/^GET .*\/api\/v1\/groups\/.*\/events\/.*\/invites\?.*q=/),
-      expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/attendees\/preview$/),
-      expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/attendees\/bulk$/),
+      expect.stringMatching(
+        new RegExp(
+          `^GET .*\\/api\\/v1\\/groups\\/.*\\/events\\/.*\\/invites${type === "speaker" ? "\\/speakers" : ""}\\?.*q=`,
+        ),
+      ),
+      expect.stringMatching(
+        new RegExp(`^POST .*\\/api\\/v1\\/groups\\/.*\\/events\\/.*\\/invites\\/${type}s\\/preview$`),
+      ),
+      expect.stringMatching(new RegExp(`^POST .*\\/api\\/v1\\/groups\\/.*\\/events\\/.*\\/invites\\/${type}s\\/bulk$`)),
       expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/.*\/resend$/),
       expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/.*\/revoke$/),
     ]),
   );
+}
+
+test("a selected-group manager manages an attendee invitation without admin APIs", async ({ page }) => {
+  await signInToPortal(page, e2eAdminEmail("portal-event"));
+  const unique = `${Date.now()}-${test.info().workerIndex}`;
+  const event = await createPublicGroupEvent(page, unique);
+  await manageInvitation(page, event, "attendee", "Portal Invitee", `portal-invitee-${unique}@pkic.org`);
+});
+
+test("a selected-group manager manages a speaker invitation without admin APIs", async ({ page }) => {
+  await signInToPortal(page, e2eAdminEmail("portal-mailing-lists"));
+  const unique = `${Date.now()}-${test.info().workerIndex}`;
+  const event = await createSpeakerEvent(page, unique);
+  await manageInvitation(page, event, "speaker", "Portal Speaker", `portal-speaker-${unique}@pkic.org`);
 });

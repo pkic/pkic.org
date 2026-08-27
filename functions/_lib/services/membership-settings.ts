@@ -1,14 +1,17 @@
 /**
  * Membership workflow settings — a single configurable row
  * (consolidated migration 0035 seeds `id = 'default'`), read by the consultation/EC
- * batch jobs (membership-scheduled-jobs.ts) and the admin settings screen.
+ * batch jobs (membership-scheduled-jobs.ts) and the system portal.
  */
+import type { MembershipSettingsUpdate } from "../../../assets/shared/schemas/membership-settings";
 import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import { adminDatabaseUserId } from "../auth/admin-identity";
+import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import type { AuthAdmin, DatabaseLike } from "../types";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 
 export interface MembershipSettingsRow {
   id: string;
@@ -19,6 +22,7 @@ export interface MembershipSettingsRow {
   ec_email_recipients: string;
   cc_applicant_emails: string;
   auto_reminder_on_holds: number;
+  revision: number;
   updated_at: string;
   updated_by_user_id: string | null;
 }
@@ -26,7 +30,7 @@ export interface MembershipSettingsRow {
 const MEMBERSHIP_SETTINGS_COLUMNS =
   "id, consultation_window_days, ec_review_window_days, on_hold_response_deadline_days, " +
   "consultation_email_recipients, ec_email_recipients, cc_applicant_emails, auto_reminder_on_holds, " +
-  "updated_at, updated_by_user_id";
+  "revision, updated_at, updated_by_user_id";
 
 export async function getMembershipSettings(db: DatabaseLike): Promise<MembershipSettingsRow> {
   const row = await first<MembershipSettingsRow>(
@@ -43,15 +47,9 @@ export async function getMembershipSettings(db: DatabaseLike): Promise<Membershi
   return row;
 }
 
-export interface MembershipSettingsUpdateInput {
-  consultationWindowDays?: number;
-  ecReviewWindowDays?: number;
-  onHoldResponseDeadlineDays?: number;
-  consultationEmailRecipients?: string;
-  ecEmailRecipients?: string;
-  ccApplicantEmails?: string;
-  autoReminderOnHolds?: boolean;
-}
+export type MembershipSettingsUpdateInput = Omit<MembershipSettingsUpdate, "expectedRevision"> & {
+  expectedRevision?: number;
+};
 
 export async function updateMembershipSettings(
   db: DatabaseLike,
@@ -59,6 +57,10 @@ export async function updateMembershipSettings(
   actor: AuthAdmin | null,
 ): Promise<MembershipSettingsRow> {
   const current = await getMembershipSettings(db);
+  const expectedRevision = updates.expectedRevision ?? current.revision;
+  if (current.revision !== expectedRevision) {
+    throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership settings changed; reload and retry");
+  }
   const now = nowIso();
   const actorUserId = actor ? adminDatabaseUserId(actor) : null;
 
@@ -72,6 +74,7 @@ export async function updateMembershipSettings(
     cc_applicant_emails: updates.ccApplicantEmails ?? current.cc_applicant_emails,
     auto_reminder_on_holds:
       updates.autoReminderOnHolds === undefined ? current.auto_reminder_on_holds : updates.autoReminderOnHolds ? 1 : 0,
+    revision: current.revision + 1,
     updated_at: now,
     updated_by_user_id: actorUserId,
   };
@@ -81,8 +84,8 @@ export async function updateMembershipSettings(
       `UPDATE membership_settings
        SET consultation_window_days = ?, ec_review_window_days = ?, on_hold_response_deadline_days = ?,
            consultation_email_recipients = ?, ec_email_recipients = ?, cc_applicant_emails = ?,
-           auto_reminder_on_holds = ?, updated_at = ?, updated_by_user_id = ?
-       WHERE id = 'default'`,
+           auto_reminder_on_holds = ?, revision = revision + 1, updated_at = ?, updated_by_user_id = ?
+       WHERE id = 'default' AND revision = ?`,
     )
     .bind(
       next.consultation_window_days,
@@ -94,24 +97,46 @@ export async function updateMembershipSettings(
       next.auto_reminder_on_holds,
       now,
       actorUserId,
+      expectedRevision,
     );
-  await db.batch([
-    update,
-    ...(actor
-      ? [
-          prepareAuditLog(
-            db,
-            "admin",
-            actor.id,
-            "membership_settings_updated",
-            "membership_settings",
-            "default",
-            updates,
-            now,
-          ),
-        ]
-      : []),
-  ]);
+  const { expectedRevision: _expectedRevision, ...changes } = updates;
+
+  if (!actor) {
+    const result = await update.run();
+    if (result.meta?.changes !== 1) {
+      throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership settings changed; reload and retry");
+    }
+    return next;
+  }
+
+  try {
+    await db.batch([
+      preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]),
+      update,
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actor.id,
+        "membership_settings_updated",
+        "membership_settings",
+        "default",
+        changes,
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "MEMBERSHIP_CONFIGURATION_AUTHORIZATION_CHANGED",
+        "Membership-management permission changed while the settings were being saved",
+      );
+    }
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership settings changed; reload and retry");
+    }
+    throw error;
+  }
 
   return next;
 }

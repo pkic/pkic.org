@@ -1,5 +1,5 @@
-import { adminRegistrationDetailResponseSchema } from "../../../../assets/shared/schemas/admin-registration-detail";
-import type { AdminRegistrationDetailResponse } from "../../../../assets/shared/schemas/admin-registration-detail";
+import { eventRegistrationDetailResponseSchema } from "../../../../assets/shared/schemas/event-registration-detail";
+import type { EventRegistrationDetailResponse } from "../../../../assets/shared/schemas/event-registration-detail";
 import {
   eventRegistrationAttendanceDetailResponseSchema,
   eventRegistrationAttendanceDetailSchema,
@@ -21,8 +21,8 @@ export interface AdminRegistrationDetailRow {
   user_id: string;
   status: string;
   cancellation_reason_code: string | null;
-  attendance_type: AdminRegistrationDetailResponse["registration"]["attendance_type"];
-  source_type: AdminRegistrationDetailResponse["registration"]["source_type"];
+  attendance_type: EventRegistrationDetailResponse["registration"]["attendance_type"];
+  source_type: EventRegistrationDetailResponse["registration"]["source_type"];
   created_at: string;
   updated_at: string;
   user_email: string | null;
@@ -101,7 +101,7 @@ export async function getRegistrationNormalizedEmail(
 
 export function toAdminRegistrationDetail(
   registration: AdminRegistrationDetailRow,
-): AdminRegistrationDetailResponse["registration"] {
+): EventRegistrationDetailResponse["registration"] {
   return {
     id: registration.id,
     event_id: registration.event_id,
@@ -116,7 +116,7 @@ export function toAdminRegistrationDetail(
     display_name: registration.display_name,
     referral_code: registration.referral_code,
     rsvp_status: registration.rsvp_status,
-    rsvpByDay: parseJsonSafe<AdminRegistrationDetailResponse["registration"]["rsvpByDay"]>(
+    rsvpByDay: parseJsonSafe<EventRegistrationDetailResponse["registration"]["rsvpByDay"]>(
       registration.rsvp_by_day_json,
       [],
     ),
@@ -128,7 +128,7 @@ export async function getAdminRegistrationDetail(
   db: DatabaseLike,
   eventId: string,
   registrationId: string,
-): Promise<AdminRegistrationDetailResponse | null> {
+): Promise<EventRegistrationDetailResponse | null> {
   const registration = await fetchAdminRegistrationWithDetails(db, eventId, registrationId);
   if (!registration) return null;
 
@@ -138,7 +138,7 @@ export async function getAdminRegistrationDetail(
   ]);
   const registrationForm = await getActiveFormByPurpose(db, eventId, "event_registration");
 
-  return adminRegistrationDetailResponseSchema.parse({
+  return eventRegistrationDetailResponseSchema.parse({
     registration: toAdminRegistrationDetail(registration),
     form:
       registrationForm == null

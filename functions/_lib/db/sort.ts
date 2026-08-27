@@ -1,7 +1,7 @@
 /**
  * Shared `ORDER BY` whitelist helper for admin list endpoints' `?sort=`
  * query param (e.g. `sort=name` / `sort=-name` for descending) — generalizes
- * the pattern `admin-applications.ts`'s `resolveApplicationsOrderBy`
+ * the pattern `membership-application-management.ts`'s `resolveApplicationsOrderBy`
  * originated, so each list service doesn't hand-roll its own copy. Column
  * names are never interpolated from the request without passing through
  * `allowedColumns` first, so this is the only thing standing between

@@ -45,8 +45,10 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/users/{userId}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/bulk"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/bulk"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"]).toBeUndefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/bulk"].post).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/speakers/bulk"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/waitlist/promote"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].get).toBeDefined();

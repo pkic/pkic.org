@@ -24,6 +24,8 @@ export interface EventSeriesRow {
   provider_type: EventSeries["providerType"];
   provider_data_json: string | null;
   active: number;
+  event_starts_at: string | null;
+  event_ends_at: string | null;
   next_occurrence_at: string | null;
   created_at: string;
   updated_at: string;
@@ -34,6 +36,7 @@ export const EVENT_SERIES_SELECT = `SELECT series.id, series.event_id, event.own
   event.registration_mode AS registration_policy, event.settings_json,
   series.starts_at, series.recurrence_rule, series.timezone, series.duration_minutes, series.location,
   series.provider_type, series.provider_data_json, series.active,
+  event.starts_at AS event_starts_at, event.ends_at AS event_ends_at,
   (SELECT MIN(next_occurrence.starts_at) FROM event_occurrences next_occurrence
     WHERE next_occurrence.series_id = series.id
       AND next_occurrence.status = 'scheduled'
@@ -71,6 +74,7 @@ export function toEventSeries(row: EventSeriesRow): EventSeries {
     providerType: row.provider_type,
     providerConfigured: row.provider_data_json !== null,
     active: row.active === 1,
+    inviteWindow: { startsAt: row.event_starts_at, endsAt: row.event_ends_at, timezone: row.timezone },
     nextOccurrenceAt: row.next_occurrence_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -123,6 +127,7 @@ export interface EventGuestRow {
   invitation_secret: string;
   invitation_version: number;
   expires_at: string;
+  active: number;
   revoked_at: string | null;
   created_at: string;
   updated_at: string;
@@ -139,6 +144,7 @@ export function toEventGuest(row: EventGuestRow) {
     name: row.name,
     affiliation: row.affiliation,
     expiresAt: row.expires_at,
+    active: row.active === 1,
     revokedAt: row.revoked_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

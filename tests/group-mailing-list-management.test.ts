@@ -10,6 +10,7 @@ import {
   createGroupMailingList,
   updateGroupMailingList,
 } from "../functions/_lib/services/mailing-list-management/commands";
+import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
 import { createGroup, updateGroup } from "../functions/_lib/services/groups";
 import {
   assignLocalGroupLeadership,
@@ -19,7 +20,7 @@ import {
   buildMailingListsPageQuery,
   listGroupManagedMailingLists,
 } from "../functions/_lib/services/mailing-list-management/read-model";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
@@ -27,7 +28,7 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
-async function actor(email: string, role = "user"): Promise<AuthAdmin> {
+async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   return { identityType: "user", id, email, role };
@@ -283,6 +284,80 @@ describe("group mailing-list management routes", () => {
     expect(await queryAll<{ label: string }>(env.DB, "SELECT label FROM mailing_lists WHERE id = ?", [listId])).toEqual(
       [{ label: "Owned list" }],
     );
+  });
+
+  it("uses the shared manage grant for a grantee group's list page and mutations", async () => {
+    const staff = await actor(`mailing-list-shared-owner-${crypto.randomUUID()}@example.test`, "admin");
+    const owner = await createGroup(env.DB, staff, {
+      typeKey: "working_group",
+      name: `Shared mailing-list owner ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const grantee = await createGroup(env.DB, staff, {
+      typeKey: "working_group",
+      name: `Shared mailing-list grantee ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const leader = await actor(`mailing-list-shared-leader-${crypto.randomUUID()}@example.test`);
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
+       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), leader.id, grantee.id)
+      .run();
+    const list = await createGroupMailingList(env.DB, staff, owner.id, {
+      email: `shared-${crypto.randomUUID()}@lists.example.test`,
+      label: "Shared discussion",
+      purpose: "group",
+    });
+    await grantResourceToGroup(env.DB, staff, owner.id, "mailingList", list.id, {
+      granteeGroupId: grantee.id,
+      capability: "manage",
+    });
+
+    const leaderToken = await token(leader.id);
+    const page = await callApi(env, `/api/v1/groups/${grantee.id}/mailing-lists/management?limit=20`, {
+      headers: { authorization: `Bearer ${leaderToken}` },
+    });
+    expect(page.status, await page.clone().text()).toBe(200);
+    expect((await page.json()) as { mailingLists: Array<{ id: string }> }).toMatchObject({
+      mailingLists: [{ id: list.id }],
+    });
+
+    const updated = await jsonRequest(
+      `/api/v1/groups/${grantee.id}/mailing-lists/${list.id}`,
+      "PATCH",
+      { label: "Shared discussion updated" },
+      leaderToken,
+    );
+    expect(updated.status, await updated.clone().text()).toBe(200);
+    expect(mailingListResponseSchema.parse(await updated.json()).mailingList.label).toBe("Shared discussion updated");
+
+    await expect(
+      updateGroupMailingList(
+        mutateBeforeNextBatch(env.DB, () =>
+          env.DB.prepare(
+            "DELETE FROM mailing_list_group_grants WHERE mailing_list_id = ? AND group_id = ? AND capability = 'manage'",
+          )
+            .bind(list.id, grantee.id)
+            .run(),
+        ),
+        leader,
+        grantee.id,
+        list.id,
+        { label: "Must not race through" },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "MAILING_LIST_AUTHORIZATION_CHANGED" });
+    const revoked = await jsonRequest(
+      `/api/v1/groups/${grantee.id}/mailing-lists/${list.id}`,
+      "PATCH",
+      { label: "Must not update" },
+      leaderToken,
+    );
+    expect(revoked.status).toBe(404);
+    expect(
+      await queryAll<{ label: string }>(env.DB, "SELECT label FROM mailing_lists WHERE id = ?", [list.id]),
+    ).toEqual([{ label: "Shared discussion updated" }]);
   });
 
   it("rejects invalid group-list input at the shared request schema", async () => {

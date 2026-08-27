@@ -4,12 +4,12 @@ import {
   adminProposalSpeakerPatchRouteSchema,
 } from "../../../../../../../assets/shared/schemas/route-contracts";
 import { proposalSpeakerRemovalResponseSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
-import { adminProposalSpeakerPatchResponseSchema } from "../../../../../../../assets/shared/schemas/admin-event-proposals";
+import { proposalSpeakerPatchResponseSchema } from "../../../../../../../assets/shared/schemas/proposal-speakers";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { resolveAppBaseUrl } from "../../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { json } from "../../../../../../_lib/http";
-import { editAdminProposalSpeaker } from "../../../../../../_lib/services/proposal-speaker-admin";
+import { editProposalSpeaker } from "../../../../../../_lib/services/proposal-speaker-admin";
 import { removeAdminProposalSpeaker } from "../../../../../../_lib/services/proposal-speaker-removal";
 
 export async function onRequestPatch(
@@ -19,8 +19,8 @@ export async function onRequestPatch(
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   return json(
-    adminProposalSpeakerPatchResponseSchema.parse(
-      await editAdminProposalSpeaker(
+    proposalSpeakerPatchResponseSchema.parse(
+      await editProposalSpeaker(
         db,
         admin,
         data.params.proposalId,

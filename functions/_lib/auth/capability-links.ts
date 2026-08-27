@@ -18,7 +18,11 @@ import {
   verifyStatelessCapabilityToken,
 } from "./capability-token";
 import type { CapabilityPurpose, CapabilityVerifyResult } from "./capability-token";
-import { effectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
+import {
+  effectiveInviteExpirySql,
+  effectiveMeetingGuestInviteExpirySql,
+  effectiveProposalSpeakerInviteExpirySql,
+} from "../invite-validity";
 import { normalizeEmail } from "../validation";
 
 const encoder = new TextEncoder();
@@ -182,8 +186,20 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
       return "SELECT manage_link_secret AS link_secret FROM session_proposals WHERE id = ?";
     case "speaker_manage":
       return "SELECT manage_link_secret AS link_secret FROM proposal_speakers WHERE id = ?";
-    case "meeting_guest_verify":
-      return "SELECT invitation_secret AS link_secret FROM event_occurrence_guests WHERE id = ?";
+    case "meeting_guest_verify": {
+      const effectiveExpiry = effectiveMeetingGuestInviteExpirySql();
+      return `SELECT guest.invitation_secret AS link_secret
+                FROM event_occurrence_guests guest
+                JOIN event_series series ON series.id = guest.series_id
+                JOIN events event ON event.id = series.event_id
+           LEFT JOIN event_occurrences guest_occurrence
+                  ON guest_occurrence.id = guest.occurrence_id
+                 AND guest_occurrence.series_id = guest.series_id
+               WHERE guest.id = ?
+                 AND guest.revoked_at IS NULL
+                 AND ${effectiveExpiry} IS NOT NULL
+                 AND unixepoch(${effectiveExpiry}) > unixepoch()`;
+    }
     case "member_join_verify":
     case "member_join_apply":
     case "admin_sign_in":

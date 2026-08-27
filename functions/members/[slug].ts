@@ -17,16 +17,13 @@
  * `location.pathname` when there's no `?id=` query string.
  */
 import { first } from "../_lib/db/queries";
+import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { DatabaseLike, Env } from "../_lib/types";
 
 // The two real static sub-paths under public/members/ — must never be
 // shadowed by an organization-slug lookup even though they match this
 // route's single-segment `/:slug` pattern.
 const RESERVED_SLUGS = new Set(["profile", "independent"]);
-
-function assetBinding(env: Env): Env["ASSETS_PUBLIC"] {
-  return env.ASSETS ?? env.ASSETS_PUBLIC;
-}
 
 /**
  * Registered as a single catch-all (`functions/members/router.ts`'s
@@ -41,7 +38,7 @@ function assetBinding(env: Env): Env["ASSETS_PUBLIC"] {
 export async function onRequestGet(c: any): Promise<Response> {
   const pathname = new URL(c.req.raw.url).pathname;
   const rest = pathname.replace(/^\/members\/?/, "").replace(/\/$/, "");
-  const binding = assetBinding(c.env as Env);
+  const binding = getStaticAssetsBinding(c.env as Env);
   const isCandidateSlug = rest.length > 0 && !rest.includes("/") && !rest.includes(".");
 
   // Anything that isn't a single bare path segment (no slash, no dot) is

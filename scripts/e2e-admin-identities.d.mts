@@ -7,6 +7,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "meeting-guest",
   "portal-event",
   "portal-mailing-lists",
+  "portal-system-audit",
   "sponsor-portal",
   "votes",
 ];

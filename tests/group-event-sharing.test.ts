@@ -594,7 +594,7 @@ describe("group event sharing", () => {
       {
         email: `list-race-${crypto.randomUUID()}@example.test`,
         name: "List Race Guest",
-        expiresAt: "2027-01-11T10:00:00.000Z",
+        expiresAt: "2027-01-10T10:30:00.000Z",
       },
       "https://app.test",
     );
@@ -736,11 +736,22 @@ describe("group event sharing", () => {
       body: JSON.stringify({
         email: `delegated-guest-${crypto.randomUUID()}@example.test`,
         name: "Delegated Guest",
-        expiresAt: "2099-02-01T12:00:00.000Z",
       }),
     });
     expect(guestInvite.status, await guestInvite.clone().text()).toBe(201);
-    const guestId = (await guestInvite.json<{ guest: { id: string } }>()).guest.id;
+    const invitedGuest = (await guestInvite.json<{ guest: { id: string; expiresAt: string } }>()).guest;
+    expect(invitedGuest.expiresAt).toBe("2099-02-01T10:00:00.000Z");
+    const guestId = invitedGuest.id;
+    const overlongGuest = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`, {
+      method: "POST",
+      body: JSON.stringify({
+        email: `overlong-guest-${crypto.randomUUID()}@example.test`,
+        name: "Overlong Guest",
+        expiresAt: "2099-02-01T11:00:00.001Z",
+      }),
+    });
+    expect(overlongGuest.status).toBe(400);
+    expect(await overlongGuest.json()).toMatchObject({ error: { code: "INVITE_EXPIRY_AFTER_EVENT" } });
     expect((await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`)).status).toBe(200);
     const guestRevoke = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests/${guestId}`, {
       method: "DELETE",

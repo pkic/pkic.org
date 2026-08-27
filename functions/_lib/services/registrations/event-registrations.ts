@@ -5,12 +5,10 @@
 import { all, first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { getAttendanceStatusByType } from "./attendance-statistics";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import {
-  EVENT_REGISTRATIONS_SORT_COLUMNS,
   eventRegistrationSummarySchema,
   eventRegistrationsStatsSchema,
   type EventRegistrationSummary,
@@ -19,6 +17,7 @@ import {
 } from "../../../../assets/shared/schemas/event-registrations";
 import type { DatabaseLike } from "../../types";
 import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
+import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
 
 interface RegistrationRow {
   id: string;
@@ -70,12 +69,7 @@ const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration",
 
 export function buildEventRegistrationsPageQuery(eventId: string, params: EventRegistrationsQuery) {
   const search = (params.q ?? "").trim();
-  const orderBy = resolveOrderBy(
-    params.sort,
-    EVENT_REGISTRATIONS_SORT_COLUMNS,
-    "ORDER BY r.created_at DESC",
-    "r.id ASC",
-  );
+  const orderBy = resolveEventRegistrationOrderBy(params.sort);
   const attendanceChangeFilter = params.attendance_change;
 
   const conditions: string[] = ["r.event_id = ?"];

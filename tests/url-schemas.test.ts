@@ -8,7 +8,7 @@ import {
   sanitizeLegacyHttpUrl,
   sameOriginPathSchema,
 } from "../assets/shared/schemas/urls";
-import { applicationEditableAnswersSchema } from "../assets/shared/schemas/admin-applications";
+import { applicationEditableAnswersSchema } from "../assets/shared/schemas/membership-application-management";
 import { donationPromoterResponseSchema } from "../assets/shared/schemas/donation";
 import { proposalCreateResponseSchema } from "../assets/shared/schemas/proposal-management";
 import { registrationConfirmResponseSchema } from "../assets/shared/schemas/registration";

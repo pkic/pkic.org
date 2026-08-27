@@ -31,6 +31,8 @@ const categories: Category[] = [
     displayOrder: 10,
     isIndividual: false,
     isVoting: true,
+    revision: 0,
+    updatedAt: "2026-08-27T00:00:00.000Z",
   },
   {
     code: "H6",
@@ -39,6 +41,8 @@ const categories: Category[] = [
     displayOrder: 60,
     isIndividual: true,
     isVoting: false,
+    revision: 0,
+    updatedAt: "2026-08-27T00:00:00.000Z",
   },
 ];
 

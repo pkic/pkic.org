@@ -16,7 +16,7 @@
  * "Earliest joined_at" is a display/listing tie-break, not a claim that
  * the picked organization is the "correct" one for every purpose — a
  * business-logic decision that depends on *all* of a user's affiliations
- * (e.g. working-group category eligibility) must check every membership,
+ * (e.g. group category eligibility) must check every membership,
  * not rely on this deterministic-but-arbitrary pick. See
  * group membership eligibility checks, which use
  * `findEligibleMemberById`'s full `activeMemberships` list instead of this

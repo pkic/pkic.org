@@ -6,6 +6,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import { canMemberAccessGroupResource } from "../resource-grants/access";
+import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import {
   closedVoteResult,
   getCandidatesForVotes,
@@ -116,6 +117,7 @@ async function loadEligibleMemberBallots(
       AND ballot.round = vote.current_round
      WHERE vote.electorate_mode = 'per_member'
        AND ${filter.sql}
+       AND ${votingMembershipCategoryExistsSql("category.category_code")}
        AND (
          vote.eligible_categories IS NULL
          OR EXISTS (
@@ -162,7 +164,6 @@ async function loadPersonBallotStatuses(
       AND represented_member.status = 'active'
      JOIN member_category_assignments category
        ON category.member_id = represented_member.id
-      AND category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
      LEFT JOIN vote_ballots ballot
        ON ballot.vote_id = vote.id
       AND ballot.user_id = ?
@@ -170,6 +171,7 @@ async function loadPersonBallotStatuses(
       AND ballot.round = vote.current_round
      WHERE vote.electorate_mode = 'per_person'
        AND ${filter.sql}
+       AND ${votingMembershipCategoryExistsSql("category.category_code")}
        AND (
          vote.eligible_categories IS NULL
          OR EXISTS (

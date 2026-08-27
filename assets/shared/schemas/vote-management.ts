@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { groupIdSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
-import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
+import { membershipCategorySelectionSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import {
   publicDetailLevelSchema,
@@ -26,7 +26,7 @@ export const voteCreateInputSchema = z.object({
   ownerGroupId: groupIdSchema,
   electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
-  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
+  eligibleCategories: membershipCategorySelectionSchema.nullable().optional(),
   opensAt: z.iso.datetime({ offset: true }).optional(),
   closesAt: z.iso.datetime({ offset: true }),
   candidates: z.array(voteCandidateInputSchema).max(50).optional(),

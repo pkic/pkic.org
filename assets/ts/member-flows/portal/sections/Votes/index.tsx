@@ -7,10 +7,9 @@
  * backend changes needed — both endpoint groups were already fully live
  * and tested, this is a pure frontend build.
  *
- * H-category members can see everything here but the backend rejects
- * every ballot/proposal/endorsement path for them with no exceptions,
- * this component mirrors that client-side only to avoid a
- * pointless round trip, never as the actual gate.
+ * Ballot, proposal, and endorsement eligibility comes from the current D1
+ * membership-category policy. This component only switches tabs and is never
+ * an authorization gate.
  *
  * Split into feature components (PR #1 review, Phase 8) — see VotesList,
  * ProposalsList, and their card/form sub-components in this directory.

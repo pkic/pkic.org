@@ -22,9 +22,9 @@ import {
   adminFormsListResponseSchema,
 } from "../../../../../shared/schemas/admin-forms";
 import {
-  ADMIN_EVENT_REGISTRATION_STATUSES,
-  adminEventRegistrationStatusLabel,
-} from "../../../../../shared/schemas/admin-events";
+  EVENT_REGISTRATION_STATUSES,
+  eventRegistrationStatusLabel,
+} from "../../../../../shared/schemas/event-registrations";
 import { loadEventAttendanceOptions } from "./eventAttendance";
 import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
@@ -348,9 +348,9 @@ export function EventFormResponses({
           <option value="">All statuses</option>
           {purpose === "event_registration" ? (
             <>
-              {ADMIN_EVENT_REGISTRATION_STATUSES.map((status) => (
+              {EVENT_REGISTRATION_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {adminEventRegistrationStatusLabel(status)}
+                  {eventRegistrationStatusLabel(status)}
                 </option>
               ))}
             </>

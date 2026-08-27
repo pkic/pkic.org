@@ -8,16 +8,15 @@ import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { fmt, toast } from "../../../ui";
-import type { EventDetail, Registration, RegistrationAttendanceChange } from "../../../types";
-import { Invites } from "./Invites";
+import type { Registration, RegistrationAttendanceChange } from "../../../types";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 import {
-  ADMIN_EVENT_REGISTRATION_STATUSES,
-  adminEventRegistrationStatusLabel,
-  adminEventRegistrationsListResponseSchema,
-  type AdminEventRegistrationsListResponse,
-} from "../../../../../shared/schemas/admin-events";
+  EVENT_REGISTRATION_STATUSES,
+  eventRegistrationStatusLabel,
+  eventRegistrationsListResponseSchema,
+  type EventRegistrationsListResponse,
+} from "../../../../../shared/schemas/event-registrations";
 import { adminWaitlistPromotionResponseSchema } from "../../../../../shared/schemas/admin-events";
 
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
@@ -43,7 +42,7 @@ function attendanceJourneyLabel(history: RegistrationAttendanceChange[]): string
   return path.map(attendanceTypeLabel).join(" → ");
 }
 
-type RegistrationStats = AdminEventRegistrationsListResponse["stats"];
+type RegistrationStats = EventRegistrationsListResponse["stats"];
 
 // ─── Registration list ────────────────────────────────────────────────────────
 
@@ -234,7 +233,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
       )}
       <ApiDataTable
         endpoint={`/api/v1/admin/events/${slug}/registrations`}
-        responseSchema={adminEventRegistrationsListResponseSchema}
+        responseSchema={eventRegistrationsListResponseSchema}
         resolve={(data) => data.registrations}
         resolvePage={(data) => data.page}
         onData={(data) => setStats(data.stats)}
@@ -253,9 +252,9 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
               value={statusFilter}
               options={[
                 { value: "", label: "All statuses" },
-                ...ADMIN_EVENT_REGISTRATION_STATUSES.map((status) => ({
+                ...EVENT_REGISTRATION_STATUSES.map((status) => ({
                   value: status,
-                  label: adminEventRegistrationStatusLabel(status),
+                  label: eventRegistrationStatusLabel(status),
                 })),
               ]}
               onChange={(value) => {
@@ -321,9 +320,9 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
 // ─── Registrations compositor ─────────────────────────────────────────────────
 
-export function Registrations({ slug, event, subTab }: { slug: string; event: EventDetail; subTab?: string }) {
+export function Registrations({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "invites" || subTab === "email" || subTab === "responses" ? subTab : "overview";
+  const tab = subTab === "email" || subTab === "responses" ? subTab : "overview";
 
   return (
     <div>
@@ -331,7 +330,6 @@ export function Registrations({ slug, event, subTab }: { slug: string; event: Ev
         items={[
           { key: "overview", label: "Overview" },
           { key: "responses", label: "Responses" },
-          { key: "invites", label: "Attendee Invites" },
           { key: "email", label: "Email" },
         ]}
         active={tab}
@@ -346,7 +344,6 @@ export function Registrations({ slug, event, subTab }: { slug: string; event: Ev
         />
       )}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="event_registration" />}
-      {tab === "invites" && <Invites slug={slug} event={event} inviteType="attendee" />}
       {tab === "email" && <EventEmail slug={slug} audience="attendees" />}
     </div>
   );

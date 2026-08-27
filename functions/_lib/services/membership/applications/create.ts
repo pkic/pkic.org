@@ -24,14 +24,13 @@ import { getOrganizationDomainClaim, prepareClaimDomainForApplication } from "..
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  VOTING_CATEGORIES,
 } from "../../../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike, StatementLike } from "../../../types";
 
 /** `forms.key` for the portal-managed membership application form. */
 export const MEMBERSHIP_APPLICATION_FORM_KEY = "membership-application";
 
-export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES, VOTING_CATEGORIES };
+export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
 export function emailDomain(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "";

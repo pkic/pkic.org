@@ -2,6 +2,7 @@
 import { all } from "../../db/queries";
 import { chunkJsonRows } from "../../db/json-bulk";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import { voteParticipationGroupPredicate } from "./vote-access";
 
 /**
@@ -79,6 +80,8 @@ export function prepareVoteRepresentativeNotificationIntents(
          ON representative_user.id = representative.user_id
         AND representative_user.active = 1
        WHERE (
+           ${votingMembershipCategoryExistsSql("mca.category_code")}
+         ) AND (
            v.eligible_categories IS NULL
            OR EXISTS (
              SELECT 1

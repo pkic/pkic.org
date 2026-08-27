@@ -6,6 +6,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { MOTION_CHOICES, eligibleCategoriesOf, getVoteRowOrThrow, type BallotChoice, type VoteRow } from "./shared";
 import { exactVoteGroupMembership, voteParticipationGroupPredicate } from "./vote-access";
+import { votingMembershipCategoryExistsSql } from "../membership/categories";
 
 interface EligibleCapacity {
   memberId: string;
@@ -71,6 +72,7 @@ async function resolvePerMemberCapacity(
        AND membership.left_at IS NULL
        AND represented_member.status = 'active'
        AND represented_member.organization_id IS NOT NULL
+       AND ${votingMembershipCategoryExistsSql("category.category_code")}
      LIMIT 1`,
     [member.userId, vote.id, ...context.bindings, requestedMemberId],
   );
@@ -105,7 +107,7 @@ async function resolvePerPersonCapacity(
        ${context.sql}
        AND membership.left_at IS NULL
        AND represented_member.status = 'active'
-       AND category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
+       AND ${votingMembershipCategoryExistsSql("category.category_code")}
        AND (? IS NULL OR EXISTS (
          SELECT 1 FROM json_each(?) allowed WHERE allowed.value = category.category_code
        ))
@@ -165,6 +167,7 @@ function preparePerMemberBallotUpsert(
              AND represented_member.status = 'active'
              AND represented_member.organization_id IS NOT NULL
              AND category.category_code = ?
+             AND ${votingMembershipCategoryExistsSql("category.category_code")}
              AND (
                current_vote.eligible_categories IS NULL
                OR EXISTS (
@@ -234,7 +237,7 @@ function preparePerPersonBallotUpsert(
              ${context.sql}
              AND membership.left_at IS NULL
              AND represented_member.status = 'active'
-             AND category.category_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')
+             AND ${votingMembershipCategoryExistsSql("category.category_code")}
              AND (
                current_vote.eligible_categories IS NULL
                OR EXISTS (
