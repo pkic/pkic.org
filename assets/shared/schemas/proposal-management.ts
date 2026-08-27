@@ -272,7 +272,9 @@ export const proposerSpeakerPatchSchema = speakerProfilePatchSchema.extend({
   role: speakerRoleSchema.optional(),
 });
 
-export const adminSpeakerBioPatchSchema = proposerSpeakerPatchSchema;
+export const proposalSpeakerPatchSchema = proposerSpeakerPatchSchema;
+/** @deprecated Use the neutral proposal speaker patch contract. */
+export const adminSpeakerBioPatchSchema = proposalSpeakerPatchSchema;
 
 export const proposalSpeakerRemovalRequestSchema = z.object({
   replacementProposerUserId: databaseIdSchema.optional(),

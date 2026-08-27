@@ -20,7 +20,6 @@ export const presentationVersionSchema = z.object({
   id: databaseIdSchema,
   proposalId: databaseIdSchema,
   versionNumber: z.number().int().positive(),
-  r2Key: z.string().min(1),
   fileName: z.string().nullable(),
   fileSize: z.number().int().nonnegative().nullable(),
   mimeType: z.string().nullable(),
@@ -40,5 +39,7 @@ export const presentationVersionReviewRequestSchema = z.object({
 
 export type PresentationVersionReview = z.infer<typeof presentationVersionReviewSchema>;
 export type PresentationVersion = z.infer<typeof presentationVersionSchema>;
+/** Internal representation retained for storage operations; never expose through an API response. */
+export type PresentationVersionWithStorageKey = PresentationVersion & { r2Key: string };
 export type PresentationVersionReviewRequest = z.infer<typeof presentationVersionReviewRequestSchema>;
 export type PresentationVersionsListQuery = z.infer<typeof presentationVersionsListQuerySchema>;

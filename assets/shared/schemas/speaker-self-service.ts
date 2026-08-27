@@ -73,7 +73,7 @@ export const speakerSelfServiceReadResponseSchema = z.object({
 export const speakerParticipationResponseSchema = successResponseSchema.extend({
   status: z.enum(["confirmed", "declined"]),
 });
-export const speakerPresentationUploadResponseSchema = successResponseSchema.extend({ r2Key: z.string().min(1) });
+export const speakerPresentationUploadResponseSchema = successResponseSchema;
 
 export const speakerPresentationUploadRouteSchema = {
   tags: ["Proposals", "Presentations"],

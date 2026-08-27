@@ -20,7 +20,7 @@ export async function sendAdminProposalReminder(
     proposalId,
     userId,
     kind,
-    actorUserId: admin.id,
+    actor: admin,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
   return json(

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { jsonErrorResponse, proposalIdParamsSchema, proposalReviewIdParamsSchema } from "./api-common";
+import {
+  jsonErrorResponse,
+  proposalIdParamsSchema,
+  proposalReviewIdParamsSchema,
+  successResponseSchema,
+} from "./api-common";
 import {
   eventProposalDetailResponseSchema,
   eventProposalsListQuerySchema,
@@ -14,6 +19,9 @@ import {
   cancelAcceptedProposalSchema,
   finalizeProposalResponseSchema,
   finalizeProposalSchema,
+  proposalSpeakerPatchSchema,
+  proposalSpeakerRemovalRequestSchema,
+  proposalSpeakerRemovalResponseSchema,
 } from "./proposal-management";
 import { proposalDecisionPreviewResponseSchema } from "./proposal-decisions";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
@@ -31,6 +39,14 @@ import {
   proposalReviewWriteResponseSchema,
 } from "./proposal-reviews";
 import { eventIdSchema } from "./api-common";
+import {
+  proposalSpeakerPatchResponseSchema,
+  proposalSpeakerReminderResponseSchema,
+  proposalSpeakerRemindersResponseSchema,
+  proposalSpeakersResponseSchema,
+} from "./proposal-speakers";
+import { databaseIdSchema } from "./identifiers";
+import { headshotUrlResponseSchema } from "./registration";
 
 export const groupEventProposalParamsSchema = groupReferenceParamsSchema.extend({
   eventId: eventIdSchema,
@@ -39,6 +55,10 @@ export const groupEventProposalParamsSchema = groupReferenceParamsSchema.extend(
 
 export const groupEventProposalReviewParamsSchema = groupEventProposalParamsSchema.extend({
   reviewId: proposalReviewIdParamsSchema.shape.reviewId,
+});
+
+export const groupEventProposalSpeakerParamsSchema = groupEventProposalParamsSchema.extend({
+  userId: databaseIdSchema,
 });
 
 const proposalRouteErrors = {
@@ -230,6 +250,121 @@ export const groupEventProposalCommentsListRouteSchema = {
     },
     ...proposalRouteErrors,
   },
+};
+
+const proposalSpeakerWriteErrors = {
+  "409": jsonErrorResponse("The proposal, speaker, or group context changed while the action was processed."),
+  ...proposalRouteErrors,
+};
+
+export const groupEventProposalSpeakersRouteSchema = {
+  tags: ["Groups"],
+  summary: "List proposal speakers through a group-owned event",
+  request: { params: groupEventProposalParamsSchema },
+  responses: {
+    "200": {
+      description: "Proposal speaker roster.",
+      content: { "application/json": { schema: proposalSpeakersResponseSchema } },
+    },
+    ...proposalRouteErrors,
+  },
+};
+
+export const groupEventProposalSpeakerPatchRouteSchema = {
+  tags: ["Groups"],
+  summary: "Update a proposal speaker",
+  request: {
+    params: groupEventProposalSpeakerParamsSchema,
+    body: { required: true, content: { "application/json": { schema: proposalSpeakerPatchSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Updated proposal speaker.",
+      content: { "application/json": { schema: proposalSpeakerPatchResponseSchema } },
+    },
+    ...proposalSpeakerWriteErrors,
+  },
+};
+
+export const groupEventProposalSpeakerDeleteRouteSchema = {
+  tags: ["Groups"],
+  summary: "Remove a proposal speaker",
+  request: {
+    params: groupEventProposalSpeakerParamsSchema,
+    body: { required: true, content: { "application/json": { schema: proposalSpeakerRemovalRequestSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Proposal speaker removed.",
+      content: { "application/json": { schema: proposalSpeakerRemovalResponseSchema } },
+    },
+    ...proposalSpeakerWriteErrors,
+  },
+};
+
+export const groupEventProposalSpeakerReminderRouteSchema = {
+  tags: ["Groups"],
+  summary: "Queue a proposal speaker reminder",
+  request: { params: groupEventProposalSpeakerParamsSchema },
+  responses: {
+    "200": {
+      description: "Reminder queued.",
+      content: { "application/json": { schema: proposalSpeakerReminderResponseSchema } },
+    },
+    ...proposalSpeakerWriteErrors,
+  },
+};
+
+export const groupEventProposalSpeakerRemindersRouteSchema = {
+  tags: ["Groups"],
+  summary: "Queue proposal speaker reminders",
+  request: { params: groupEventProposalParamsSchema },
+  responses: {
+    "200": {
+      description: "Reminders queued.",
+      content: { "application/json": { schema: proposalSpeakerRemindersResponseSchema } },
+    },
+    ...proposalSpeakerWriteErrors,
+  },
+};
+
+const groupEventProposalSpeakerHeadshotResponses = {
+  "200": {
+    description: "Headshot action completed.",
+    content: { "application/json": { schema: headshotUrlResponseSchema } },
+  },
+  ...proposalSpeakerWriteErrors,
+};
+
+export const groupEventProposalSpeakerHeadshotGetRouteSchema = {
+  tags: ["Groups", "Headshots"],
+  summary: "Download a proposal speaker headshot",
+  request: { params: groupEventProposalSpeakerParamsSchema },
+  responses: { "200": { description: "Binary headshot image." }, ...proposalRouteErrors },
+};
+
+export const groupEventProposalSpeakerHeadshotPutRouteSchema = {
+  tags: ["Groups", "Headshots"],
+  summary: "Upload a proposal speaker headshot",
+  request: { params: groupEventProposalSpeakerParamsSchema },
+  responses: groupEventProposalSpeakerHeadshotResponses,
+};
+
+export const groupEventProposalSpeakerHeadshotDeleteRouteSchema = {
+  tags: ["Groups", "Headshots"],
+  summary: "Remove a proposal speaker headshot",
+  request: { params: groupEventProposalSpeakerParamsSchema },
+  responses: {
+    "200": { description: "Headshot removed.", content: { "application/json": { schema: successResponseSchema } } },
+    ...proposalSpeakerWriteErrors,
+  },
+};
+
+export const groupEventProposalSpeakerGravatarPostRouteSchema = {
+  tags: ["Groups", "Headshots"],
+  summary: "Import a proposal speaker Gravatar",
+  request: { params: groupEventProposalSpeakerParamsSchema },
+  responses: groupEventProposalSpeakerHeadshotResponses,
 };
 
 export const groupEventProposalCommentCreateRouteSchema = {

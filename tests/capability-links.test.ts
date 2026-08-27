@@ -16,7 +16,12 @@ import { run } from "../functions/_lib/db/queries";
 import { nowIso } from "../functions/_lib/utils/time";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { processSelectedOutbox, queueEmail } from "../functions/_lib/email/outbox";
+import {
+  prepareBulkQueueEmailChunkStatements,
+  prepareBulkQueueEmailStatements,
+} from "../functions/_lib/email/outbox-queue";
 import { createInvite } from "../functions/_lib/services/invites";
+import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
 
 const signingSecret = "capability-test-signing-secret";
 const textEncoder = new TextEncoder();
@@ -43,6 +48,38 @@ async function seedRegistrationCapability(): Promise<void> {
       manage_link_secret, capacity_exempt_in_person, created_at, updated_at
     ) VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, 0, ?, ?)`,
     ["registration-capability", "event-capability", "user-capability", newCapabilityLinkSecret(), now, now],
+  );
+}
+
+async function seedSpeakerCapability(): Promise<void> {
+  const now = nowIso();
+  await run(env.DB, "INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", [
+    "event-speaker",
+    "event-speaker",
+    "Speaker Event",
+    "UTC",
+    now,
+    now,
+  ]);
+  await run(
+    env.DB,
+    "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ["user-speaker", "speaker@example.test", "speaker@example.test", "user", 1, now, now],
+  );
+  await run(
+    env.DB,
+    `INSERT INTO session_proposals (
+      id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+      manage_link_secret, submitted_at, updated_at
+    ) VALUES (?, ?, ?, 'submitted', 'talk', 'Talk', 'Abstract', ?, ?, ?)`,
+    ["proposal-speaker", "event-speaker", "user-speaker", newCapabilityLinkSecret(), now, now],
+  );
+  await run(
+    env.DB,
+    `INSERT INTO proposal_speakers (
+      id, proposal_id, user_id, role, status, manage_link_secret, created_at
+    ) VALUES (?, ?, ?, 'speaker', 'invited', ?, ?)`,
+    ["speaker-capability", "proposal-speaker", "user-speaker", newCapabilityLinkSecret(), now],
   );
 }
 
@@ -293,33 +330,114 @@ describe("public capability links", () => {
     expect(outbox?.last_error).toContain("registration-capability");
   });
 
-  it("initializes a legacy speaker secret with Web Crypto when first issuing a link", async () => {
-    const now = nowIso();
-    await run(
-      env.DB,
-      "INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      ["event-speaker", "event-speaker", "Speaker Event", "UTC", now, now],
-    );
+  it("binds queued speaker capabilities to the recipient's current canonical email", async () => {
+    await seedSpeakerCapability();
+    const marker = queuedCapabilityToken("speaker_manage", "speaker-capability");
+    const unboundPayload = authorizeQueuedCapabilityLinks({ manageUrl: marker }, [marker]);
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, unboundPayload),
+    ).rejects.toMatchObject({ status: 410, code: "CAPABILITY_RESOURCE_STALE" });
+
+    const outboxId = await queueEmail(env.DB, {
+      eventId: "event-speaker",
+      templateKey: "unused-speaker-capability",
+      recipientUserId: "user-speaker",
+      recipientEmail: "Speaker@Example.Test",
+      messageType: "transactional",
+      capabilityLinkValues: [marker],
+      data: { manageUrl: marker },
+    });
+    const queued = await env.DB.prepare("SELECT payload_json FROM email_outbox WHERE id = ?")
+      .bind(outboxId)
+      .first<{ payload_json: string }>();
+    const storedPayload = JSON.parse(queued!.payload_json) as Record<string, unknown>;
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, storedPayload),
+    ).resolves.toMatchObject({ manageUrl: expect.stringMatching(/^pkc1_/) });
+
+    await run(env.DB, "UPDATE users SET email = ?, normalized_email = ? WHERE id = ?", [
+      "new-speaker@example.test",
+      "new-speaker@example.test",
+      "user-speaker",
+    ]);
     await run(
       env.DB,
       "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ["user-speaker", "speaker@example.test", "speaker@example.test", "user", 1, now, now],
+      ["old-email-owner", "speaker@example.test", "speaker@example.test", "user", 1, nowIso(), nowIso()],
     );
-    await run(
-      env.DB,
-      `INSERT INTO session_proposals (
-        id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-        manage_link_secret, submitted_at, updated_at
-      ) VALUES (?, ?, ?, 'submitted', 'talk', 'Talk', 'Abstract', ?, ?, ?)`,
-      ["proposal-speaker", "event-speaker", "user-speaker", newCapabilityLinkSecret(), now, now],
-    );
-    await run(
-      env.DB,
-      `INSERT INTO proposal_speakers (
-        id, proposal_id, user_id, role, status, manage_link_secret, created_at
-      ) VALUES (?, ?, ?, 'speaker', 'invited', NULL, ?)`,
-      ["speaker-legacy", "proposal-speaker", "user-speaker", now],
-    );
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, storedPayload),
+    ).rejects.toMatchObject({ status: 410, code: "CAPABILITY_RESOURCE_STALE" });
+
+    const freshPayload = authorizeQueuedCapabilityLinks({ manageUrl: marker }, [marker], {
+      recipientEmail: "new-speaker@example.test",
+    });
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, freshPayload),
+    ).resolves.toMatchObject({ manageUrl: expect.stringMatching(/^pkc1_/) });
+  });
+
+  it("binds speaker recipients in both non-chunked and chunked bulk outbox paths", async () => {
+    await seedSpeakerCapability();
+    const marker = queuedCapabilityToken("speaker_manage", "speaker-capability");
+    const baseRow = {
+      eventId: "event-speaker",
+      recipientEmail: "Speaker@Example.Test",
+      recipientUserId: "user-speaker",
+      templateKey: "unused-bulk-speaker-capability",
+      subject: "Speaker capability",
+      capabilityLinkValues: [marker],
+      data: { manageUrl: marker },
+      messageType: "transactional" as const,
+    };
+    const direct = prepareBulkQueueEmailStatements(env.DB, [{ ...baseRow, outboxId: "speaker-bulk-direct" }]);
+    const chunked = prepareBulkQueueEmailChunkStatements(env.DB, [{ ...baseRow, outboxId: "speaker-bulk-chunked" }]);
+    await env.DB.batch([...direct.map((row) => row.statement), ...chunked.map((chunk) => chunk.statement)]);
+
+    const rows = await env.DB.prepare("SELECT id, payload_json FROM email_outbox WHERE id IN (?, ?) ORDER BY id")
+      .bind("speaker-bulk-direct", "speaker-bulk-chunked")
+      .all<{ id: string; payload_json: string }>();
+    expect(rows.results).toHaveLength(2);
+    for (const row of rows.results) {
+      const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+      expect(payload.__authorizedCapabilityMarkers).toEqual([
+        { marker, recipientNormalizedEmail: "speaker@example.test" },
+      ]);
+      await expect(
+        materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, payload),
+      ).resolves.toMatchObject({ manageUrl: expect.stringMatching(/^pkc1_/) });
+    }
+  });
+
+  it("rotates delivered speaker capabilities and upload generations with a canonical email change", async () => {
+    await seedSpeakerCapability();
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret,
+      purpose: "speaker_manage",
+      resourceId: "speaker-capability",
+    });
+    const before = await env.DB.prepare("SELECT invite_generation FROM proposal_speakers WHERE id = ?")
+      .bind("speaker-capability")
+      .first<{ invite_generation: number }>();
+
+    await env.DB.batch([prepareRotateUserProposalSpeakerManageSecrets(env.DB, "user-speaker")]);
+
+    await expect(
+      verifyDatabaseCapability({ db: env.DB, signingSecret, purpose: "speaker_manage", token }),
+    ).resolves.toEqual({ ok: false, reason: "invalid" });
+    const after = await env.DB.prepare("SELECT invite_generation FROM proposal_speakers WHERE id = ?")
+      .bind("speaker-capability")
+      .first<{ invite_generation: number }>();
+    expect(after?.invite_generation).toBe((before?.invite_generation ?? 0) + 1);
+  });
+
+  it("initializes a legacy speaker secret with Web Crypto when first issuing a link", async () => {
+    await seedSpeakerCapability();
+    await run(env.DB, "UPDATE proposal_speakers SET id = ?, manage_link_secret = NULL WHERE id = ?", [
+      "speaker-legacy",
+      "speaker-capability",
+    ]);
 
     const token = await issueDatabaseCapability({
       db: env.DB,

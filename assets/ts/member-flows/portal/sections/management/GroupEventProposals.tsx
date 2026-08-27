@@ -22,6 +22,7 @@ import { ProposalDecisionPanel } from "../../../../components/proposals/Proposal
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
 import { ProposalInternalCommentsPanel } from "../../../../components/proposals/ProposalInternalCommentsPanel";
 import { ProposalReviewsPanel } from "../../../../components/proposals/ProposalReviewsPanel";
+import { ProposalSpeakersPanel } from "../../../../components/proposals/ProposalSpeakersPanel";
 import { useProposalReviewComments } from "../../../../components/proposals/useProposalReviewComments";
 import { useData } from "../../../../hooks/useData";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
@@ -30,6 +31,14 @@ import { fmt, toast } from "../../ui";
 function proposalEndpoint(groupId: string, eventId: string, proposalId?: string): string {
   const eventBase = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/proposals`;
   return proposalId ? `${eventBase}/${encodeURIComponent(proposalId)}` : eventBase;
+}
+
+function portalSpeakerPath(base: string, userId: string, suffix = ""): string {
+  return `${base}/speakers/${encodeURIComponent(userId)}${suffix ? `/${suffix}` : ""}`;
+}
+
+export function portalSpeakerAssetPath(base: string, userId: string, asset: "headshot" | "gravatar"): string {
+  return `${base}/speakers/${encodeURIComponent(userId)}/${asset}`;
 }
 
 function GroupEventProposalDetail({
@@ -207,6 +216,23 @@ function GroupEventProposalDetail({
               onFinalized={() => void detail.reload()}
               formatDate={fmt}
               notify={toast}
+            />
+          )}
+
+          {access.canReview && (
+            <ProposalSpeakersPanel
+              endpoint={base}
+              proposalId={proposal.id}
+              access={access}
+              proposal={proposal}
+              sessionTypes={detail.data.sessionTypes}
+              onReload={detail.reload}
+              notify={toast}
+              endpoints={{
+                speakerPath: (_speakerProposalId, userId, suffix) => portalSpeakerPath(base, userId, suffix),
+                assetPath: (speakerProposalId, userId, asset) =>
+                  portalSpeakerAssetPath(proposalEndpoint(groupId, eventId, speakerProposalId), userId, asset),
+              }}
             />
           )}
 

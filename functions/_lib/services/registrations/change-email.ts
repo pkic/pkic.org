@@ -31,7 +31,10 @@ import {
   registrationChangedError,
 } from "./transition-guard";
 import { isOrganizationContactForRepresentative } from "../membership/representative-roles";
-import { prepareRotateUserRegistrationManageSecrets } from "./manage-capability-revocation";
+import {
+  prepareRotateUserProposalSpeakerManageSecrets,
+  prepareRotateUserRegistrationManageSecrets,
+} from "./manage-capability-revocation";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
@@ -446,6 +449,7 @@ export async function prepareFinalizeEmailChange(
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
     db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
     prepareRotateUserRegistrationManageSecrets(db, user.id, now, registrationBefore.id),
+    prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
   );
   if (params.rotateManageLink !== false) {
     stmts.push(

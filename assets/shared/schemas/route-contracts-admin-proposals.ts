@@ -8,7 +8,7 @@ import {
   successResponseSchema,
 } from "./api-common";
 import {
-  adminSpeakerBioPatchSchema,
+  proposalSpeakerPatchSchema,
   adminProposalPatchResponseSchema,
   adminProposalPatchSchema,
   cancelAcceptedProposalResponseSchema,
@@ -358,7 +358,7 @@ export const adminProposalSpeakerPatchRouteSchema = {
   request: {
     params: proposalSpeakerIdParamsSchema,
     body: {
-      content: { "application/json": { schema: adminSpeakerBioPatchSchema } },
+      content: { "application/json": { schema: proposalSpeakerPatchSchema } },
       required: true,
     },
   },

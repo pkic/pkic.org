@@ -3,6 +3,7 @@ import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
+import type { AuthAdmin } from "../types";
 import { nowIso } from "../utils/time";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById } from "./events";
@@ -15,6 +16,9 @@ import {
 } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { isProposalInactiveStatus } from "./proposal-status-policy";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 
 interface ReminderProposal {
   id: string;
@@ -74,14 +78,47 @@ async function loadReminderSpeakers(db: DatabaseLike, proposalId: string, userId
   return rows;
 }
 
-export async function sendAdminProposalSpeakerReminders(
+function prepareReminderSnapshotGuard(
+  db: DatabaseLike,
+  proposal: ReminderProposal,
+  speakers: readonly ReminderSpeaker[],
+  userId?: string,
+): StatementLike {
+  const speakerPredicates = speakers.map(
+    () => `EXISTS (
+      SELECT 1 FROM proposal_speakers ps
+      JOIN users u ON u.id = ps.user_id
+      WHERE ps.id = ? AND ps.proposal_id = sp.id AND ps.user_id = ? AND ps.status = ? AND u.email = ?
+    )`,
+  );
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1 FROM session_proposals sp
+          WHERE sp.id = ? AND sp.event_id = ? AND sp.status = ? AND sp.deleted_at IS NULL
+            AND COALESCE((SELECT final_status FROM proposal_decisions WHERE proposal_id = sp.id), '') = ?
+            AND (SELECT COUNT(*) FROM proposal_speakers ps
+                 WHERE ps.proposal_id = sp.id ${userId ? "AND ps.user_id = ?" : "AND ps.status <> 'declined'"}) = ?
+            ${speakerPredicates.length > 0 ? `AND ${speakerPredicates.join(" AND ")}` : ""}`,
+    bindings: [
+      proposal.id,
+      proposal.event_id,
+      proposal.status,
+      proposal.decision_status ?? "",
+      ...(userId ? [userId] : []),
+      speakers.length,
+      ...speakers.flatMap((speaker) => [speaker.proposal_speaker_id, speaker.user_id, speaker.status, speaker.email]),
+    ],
+  });
+}
+
+export async function sendProposalSpeakerReminders(
   db: DatabaseLike,
   payload: {
     proposalId: string;
     userId?: string;
     kind: "profile" | "presentation";
-    actorUserId: string;
+    actor: AuthAdmin;
     appBaseUrl: string;
+    authorization?: ProposalWriteAuthorization;
   },
 ): Promise<{ outboxIds: string[] }> {
   const proposal = await loadReminderProposal(db, payload.proposalId);
@@ -98,6 +135,12 @@ export async function sendAdminProposalSpeakerReminders(
   const statements: StatementLike[] = [];
   const outboxIds: string[] = [];
   const now = nowIso();
+  statements.push(
+    preparePermissionsAuthorizationGuard(db, payload.actor, [
+      { permission: "proposals:manage", context: { type: "event", id: proposal.event_id } },
+    ]),
+    prepareReminderSnapshotGuard(db, proposal, speakers, payload.userId),
+  );
   for (const speaker of speakers) {
     const token = queuedCapabilityToken("speaker_manage", speaker.proposal_speaker_id);
     const actionUrl =
@@ -143,7 +186,7 @@ export async function sendAdminProposalSpeakerReminders(
         db,
         { type: "proposal", id: proposal.id },
         "admin",
-        payload.actorUserId,
+        payload.actor.id,
         payload.kind === "profile" ? "speaker_profile_request_resent" : "presentation_upload_request_sent",
         "proposal_speaker",
         speaker.proposal_speaker_id,
@@ -157,9 +200,25 @@ export async function sendAdminProposalSpeakerReminders(
       ),
     );
   }
-  if (statements.length > 0) await db.batch(statements);
+  if (statements.length > 0) {
+    try {
+      await db.batch(withProposalWriteContextGuard(payload.authorization, statements));
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error) || isAuditOneChangeGuardFailure(error)) {
+        throw new AppError(
+          409,
+          "PROPOSAL_SPEAKER_CONFLICT",
+          "The proposal context changed while reminders were queued",
+        );
+      }
+      throw error;
+    }
+  }
   return { outboxIds };
 }
+
+/** @deprecated Use the transport-neutral proposal speaker reminder service. */
+export const sendAdminProposalSpeakerReminders = sendProposalSpeakerReminders;
 
 export async function remindProposalSpeakerByProposer(
   db: DatabaseLike,

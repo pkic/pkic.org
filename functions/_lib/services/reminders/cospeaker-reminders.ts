@@ -4,11 +4,12 @@ import { speakerManagePageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import { queuedCapabilityToken } from "../capability-links";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
-import { batchQueueEmailsAndUpdateState } from "./shared";
+import { batchQueueEmailsAndUpdateState, prepareSpeakerReminderRecipientGuard } from "./shared";
 import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "../proposal-invite-email-context";
 import type { DatabaseLike } from "../../types";
 import { proposalSpeakerEffectiveProfileColumns } from "../proposal-speakers";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "../proposal-status-policy";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 
 export async function runCoSpeakerInviteReminders(
   db: DatabaseLike,
@@ -32,7 +33,8 @@ export async function runCoSpeakerInviteReminders(
           db,
           `SELECT
          ps.id AS speaker_id, ps.proposal_id, ps.user_id, ps.role, ps.status AS speaker_status,
-         u.email, ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
+         u.email, u.normalized_email,
+         ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
          sp.title AS proposal_title, pu.first_name AS proposer_first_name,
          sp.event_id, e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,
@@ -127,7 +129,7 @@ export async function runCoSpeakerInviteReminders(
       };
     });
 
-    await batchQueueEmailsAndUpdateState(
+    const queuedCount = await batchQueueEmailsAndUpdateState(
       db,
       emailRows,
       dueSpeakerInvites.map((row) =>
@@ -142,7 +144,21 @@ export async function runCoSpeakerInviteReminders(
           .bind(now, row.speaker_id),
       ),
       now,
+      {
+        isExpectedConflict: isAuthorizationGuardFailure,
+        prepareSliceStatements: (start, end) => [
+          prepareSpeakerReminderRecipientGuard(
+            db,
+            dueSpeakerInvites.slice(start, end).map((row) => ({
+              speakerId: row.speaker_id,
+              userId: row.user_id,
+              normalizedEmail: row.normalized_email,
+            })),
+          ),
+        ],
+      },
     );
+    return { speakerInviteRemindersQueued: queuedCount, coSpeakerInvites };
   }
 
   return { speakerInviteRemindersQueued: dueSpeakerInvites.length, coSpeakerInvites };

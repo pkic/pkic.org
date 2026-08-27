@@ -12,7 +12,11 @@ import {
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
-import { materializeQueuedCapabilityLinks, signCapabilityToken } from "../functions/_lib/services/capability-links";
+import {
+  materializeQueuedCapabilityLinks,
+  signCapabilityToken,
+  verifyDatabaseCapability,
+} from "../functions/_lib/services/capability-links";
 import { getRegistrationConfirmationInfo } from "../functions/_lib/services/registrations/confirmation-info";
 import { confirmRegistrationWithNotification } from "../functions/_lib/services/registrations/confirmation-workflow";
 import { getEventById } from "../functions/_lib/services/events";
@@ -609,6 +613,28 @@ describe("Registration Email Change", () => {
         purpose: "registration_manage",
         resourceId: reg.id,
       });
+      const proposalId = uuid();
+      const speakerId = uuid();
+      const speakerLinkSecret = uuid();
+      const speakerToken = await signCapabilityToken({
+        signingSecret: "test-signing-secret",
+        linkSecret: speakerLinkSecret,
+        purpose: "speaker_manage",
+        resourceId: speakerId,
+      });
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO session_proposals
+               (id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+                manage_link_secret, submitted_at, updated_at)
+             VALUES (?, ?, ?, 'submitted', 'talk', 'Email change', 'Abstract', ?, datetime('now'), datetime('now'))`,
+        ).bind(proposalId, eventId, user.id, uuid()),
+        env.DB.prepare(
+          `INSERT INTO proposal_speakers
+               (id, proposal_id, user_id, role, status, manage_link_secret, created_at)
+             VALUES (?, ?, ?, 'speaker', 'confirmed', ?, datetime('now'))`,
+        ).bind(speakerId, proposalId, user.id, speakerLinkSecret),
+      ]);
 
       // Set pending email
       const now = nowIso();
@@ -641,6 +667,14 @@ describe("Registration Email Change", () => {
       await expect(getRegistrationByManageToken(env.DB, oldManageToken, "test-signing-secret")).rejects.toMatchObject({
         code: "REGISTRATION_NOT_FOUND",
       });
+      await expect(
+        verifyDatabaseCapability({
+          db: env.DB,
+          signingSecret: "test-signing-secret",
+          purpose: "speaker_manage",
+          token: speakerToken,
+        }),
+      ).resolves.toEqual({ ok: false, reason: "invalid" });
       expect(
         await first<{ active_sessions: number; active_refresh_tokens: number }>(
           env.DB,

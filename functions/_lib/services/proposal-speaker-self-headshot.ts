@@ -15,6 +15,7 @@ export interface ProposalSpeakerSelfHeadshotContext {
   proposalStatus: string;
   proposalUpdatedAt: string;
   currentStatus: string;
+  inviteGeneration: number;
   accountHeadshotKey: string | null;
   proposalOverrideSet: number;
   proposalOverrideKey: string | null;

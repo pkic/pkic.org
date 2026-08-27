@@ -102,6 +102,14 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
   await row.click();
   await expect(page.getByText("Canonical portal proposal journey", { exact: true })).toBeVisible();
   await expect(page.getByText("Audit log", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Proposal speakers").getByText("Portal Proposer", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit profile" }).click();
+  await page.getByRole("textbox", { name: "Biography" }).fill("Updated through the canonical group portal.");
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByText("Updated through the canonical group portal.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Profile reminder/ }).click();
+  await expect(page.getByText("Profile reminder sent", { exact: true })).toBeVisible();
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(meRequests).toEqual(expect.arrayContaining(["GET /api/v1/me/proposal-programs"]));
@@ -110,6 +118,9 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals$/),
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*$/),
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/audit-log$/),
+      expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers$/),
+      expect.stringMatching(/^PATCH \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers\/.*$/),
+      expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers\/.*\/remind$/),
     ]),
   );
 });

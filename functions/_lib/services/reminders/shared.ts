@@ -1,6 +1,35 @@
 import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../../email/outbox";
 import { attendeeRegistrationClosesAt, type DueInviteRow } from "../reminders-support";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { stringifyJson } from "../../utils/json";
+
+export interface SpeakerReminderRecipientSnapshot {
+  speakerId: string;
+  userId: string;
+  normalizedEmail: string;
+}
+
+/** Rechecks a bounded reminder slice against canonical speaker ownership/email in the commit batch. */
+export function prepareSpeakerReminderRecipientGuard(
+  db: DatabaseLike,
+  snapshots: SpeakerReminderRecipientSnapshot[],
+): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1
+            WHERE NOT EXISTS (
+              SELECT 1
+                FROM json_each(?) candidate
+                LEFT JOIN proposal_speakers ps
+                  ON ps.id = json_extract(candidate.value, '$.speakerId')
+                LEFT JOIN users u ON u.id = ps.user_id
+               WHERE ps.id IS NULL
+                  OR ps.user_id != json_extract(candidate.value, '$.userId')
+                  OR u.normalized_email != json_extract(candidate.value, '$.normalizedEmail')
+            )`,
+    bindings: [stringifyJson(snapshots)],
+  });
+}
 
 /** Runs D1 statements in chunks of 500 to respect batch limits. */
 export async function batchStatements(db: DatabaseLike, stmts: StatementLike[]): Promise<void> {

@@ -46,6 +46,7 @@ export interface DuePresentationRow {
   proposal_id: string;
   user_id: string;
   email: string;
+  normalized_email: string;
   first_name: string | null;
   last_name: string | null;
   proposal_title: string;
@@ -66,6 +67,7 @@ export interface DueSpeakerInviteRow {
   role: string;
   speaker_status: string;
   email: string;
+  normalized_email: string;
   first_name: string | null;
   last_name: string | null;
   proposal_title: string;

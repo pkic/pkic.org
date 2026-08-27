@@ -2,8 +2,13 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 import { createProposal } from "../functions/_lib/services/proposals";
+import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
+import { removeProposalSpeakerByManager } from "../functions/_lib/services/proposal-speaker-removal";
+import { sendProposalSpeakerReminders } from "../functions/_lib/services/proposal-reminders";
+import { removeProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
+import { prepareGroupEventProposalContextGuard } from "../functions/_lib/services/proposal-group-context";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
 import { proposalCommentsListResponseSchema } from "../assets/shared/schemas/proposal-comments";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
@@ -13,6 +18,7 @@ import {
   proposalPatchResponseSchema,
 } from "../assets/shared/schemas/proposal-management";
 import { proposalDecisionPreviewResponseSchema } from "../assets/shared/schemas/proposal-decisions";
+import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
 import app from "../functions/router";
 import { createAdminSession } from "./helpers/auth";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
@@ -188,6 +194,35 @@ async function addProposalSpeaker(
   return speaker.id;
 }
 
+async function proposalManager(fixture: Fixture): Promise<AuthAdmin> {
+  const manager = await user("proposal-route-race-manager");
+  await grant(manager.id, fixture.eventId, "proposals:manage");
+  return {
+    identityType: "user",
+    ...manager,
+    role: "user",
+    grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
+  };
+}
+
+function proposalContextGuard(db: DatabaseLike, fixture: Fixture) {
+  return prepareGroupEventProposalContextGuard(db, {
+    groupId: fixture.ownerGroupId,
+    eventId: fixture.eventId,
+    proposalId: fixture.proposalId,
+  });
+}
+
+function revokeProposalManagement(fixture: Fixture, actor: AuthAdmin): Promise<unknown> {
+  return env.DB.prepare(
+    `UPDATE permission_grants SET revoked_at = datetime('now')
+      WHERE user_id = ? AND permission = 'proposals:manage'
+        AND context_type = 'event' AND context_id = ?`,
+  )
+    .bind(actor.id, fixture.eventId)
+    .run();
+}
+
 describe("group event proposal routes", () => {
   beforeEach(resetDb);
 
@@ -231,6 +266,169 @@ describe("group event proposal routes", () => {
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(wrongEventResponse.status).toBe(404);
+  });
+
+  it("mounts the group speaker roster behind the private proposal-score boundary and exact tuple", async () => {
+    const fixture = await setupFixture();
+    await addProposalSpeaker(fixture, "confirmed");
+    const readOnlyToken = await scopedToken(fixture, ["proposals:read"]);
+    expect((await route(fixture, "/" + fixture.proposalId + "/speakers", {}, readOnlyToken)).status).toBe(403);
+
+    const response = await route(fixture, "/" + fixture.proposalId + "/speakers");
+    expect(response.status).toBe(200);
+    expect(proposalSpeakersResponseSchema.parse(await response.json()).speakers).toHaveLength(1);
+
+    expect(
+      (await routeAt(fixture, fixture.otherGroupId, fixture.eventId, "/" + fixture.proposalId + "/speakers")).status,
+    ).toBe(404);
+  });
+
+  it("rolls back a mounted group speaker patch when its audit record fails", async () => {
+    const fixture = await setupFixture();
+    const speakerId = await addProposalSpeaker(fixture, "confirmed");
+    const [before] = await queryAll<{ first_name: string | null }>(
+      env.DB,
+      "SELECT first_name FROM users WHERE id = ?",
+      [speakerId],
+    );
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_group_speaker_patch_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'speaker_profile_updated'
+         BEGIN SELECT RAISE(ABORT, 'reject group speaker patch audit'); END`,
+    ).run();
+
+    const response = await route(fixture, "/" + fixture.proposalId + "/speakers/" + speakerId, {
+      method: "PATCH",
+      body: JSON.stringify({ firstName: "Must not persist" }),
+    });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [speakerId])).resolves.toEqual([before]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'speaker_profile_updated' AND entity_id IS NOT NULL"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back speaker profile and reminder writes when management is revoked after preflight", async () => {
+    const fixture = await setupFixture();
+    const speakerId = await addProposalSpeaker(fixture, "confirmed");
+    const actor = await proposalManager(fixture);
+    const before = await queryAll<{ profile_overrides_json: string }>(
+      env.DB,
+      "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [fixture.proposalId, speakerId],
+    );
+    const racingEditDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, actor));
+
+    await expect(
+      editProposalSpeaker(
+        racingEditDb,
+        actor,
+        fixture.proposalId,
+        speakerId,
+        { firstName: "Revoked update" },
+        "https://app.test",
+        { contextGuard: proposalContextGuard(racingEditDb, fixture) },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        fixture.proposalId,
+        speakerId,
+      ]),
+    ).resolves.toEqual(before);
+
+    const secondActor = await proposalManager(fixture);
+    await seedWorkflowEmailTemplates(env.DB, fixture.reviewerId);
+    const outboxBefore = await queryAll(env.DB, "SELECT id FROM email_outbox");
+    const racingReminderDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, secondActor));
+    await expect(
+      sendProposalSpeakerReminders(racingReminderDb, {
+        proposalId: fixture.proposalId,
+        userId: speakerId,
+        kind: "profile",
+        actor: secondActor,
+        appBaseUrl: "https://app.test",
+        authorization: { contextGuard: proposalContextGuard(racingReminderDb, fixture) },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toEqual(outboxBefore);
+
+    const thirdActor = await proposalManager(fixture);
+    const racingRosterDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("DELETE FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?")
+        .bind(fixture.proposalId, speakerId)
+        .run(),
+    );
+    await expect(
+      sendProposalSpeakerReminders(racingRosterDb, {
+        proposalId: fixture.proposalId,
+        userId: speakerId,
+        kind: "profile",
+        actor: thirdActor,
+        appBaseUrl: "https://app.test",
+        authorization: { contextGuard: proposalContextGuard(racingRosterDb, fixture) },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toEqual(outboxBefore);
+  });
+
+  it("rolls back speaker removal and headshot writes when management is revoked after preflight", async () => {
+    const fixture = await setupFixture();
+    const removedSpeakerId = await addProposalSpeaker(fixture, "confirmed");
+    await addProposalSpeaker(fixture, "confirmed");
+    const [speaker] = await queryAll<{ id: string; headshot_override_set: number; headshot_r2_key: string | null }>(
+      env.DB,
+      `SELECT id, headshot_override_set, headshot_r2_key FROM proposal_speakers
+        WHERE proposal_id = ? AND user_id = ?`,
+      [fixture.proposalId, removedSpeakerId],
+    );
+    const actor = await proposalManager(fixture);
+    const racingRemovalDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, actor));
+    await expect(
+      removeProposalSpeakerByManager(racingRemovalDb, {
+        actor,
+        proposalId: fixture.proposalId,
+        userId: removedSpeakerId,
+        appBaseUrl: "https://app.test",
+        authorization: { contextGuard: proposalContextGuard(racingRemovalDb, fixture) },
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        fixture.proposalId,
+        removedSpeakerId,
+      ]),
+    ).resolves.toHaveLength(1);
+
+    const secondActor = await proposalManager(fixture);
+    const racingHeadshotDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, secondActor));
+    await expect(
+      removeProposalSpeakerHeadshot({
+        db: racingHeadshotDb,
+        proposalId: fixture.proposalId,
+        proposalEventId: fixture.eventId,
+        permissionActor: secondActor,
+        proposalSpeakerId: speaker.id,
+        speakerUserId: removedSpeakerId,
+        previousOverrideSet: speaker.headshot_override_set,
+        previousOverrideKey: speaker.headshot_r2_key,
+        authorization: { contextGuard: proposalContextGuard(racingHeadshotDb, fixture) },
+        audit: {
+          actorType: "admin",
+          actorId: secondActor.id,
+          action: "proposal_speaker_headshot_removed_by_manager",
+          scope: { type: "proposal", id: fixture.proposalId },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT headshot_override_set, headshot_r2_key FROM proposal_speakers WHERE id = ?", [
+        speaker.id,
+      ]),
+    ).resolves.toEqual([
+      { headshot_override_set: speaker.headshot_override_set, headshot_r2_key: speaker.headshot_r2_key },
+    ]);
   });
 
   it("keeps generic event access and unrelated proposal grants out of the program", async () => {

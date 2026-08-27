@@ -7,6 +7,7 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import type {
   PresentationVersion,
+  PresentationVersionWithStorageKey,
   PresentationVersionReview,
   PresentationVersionReviewRequest,
   PresentationVersionsListQuery,
@@ -40,7 +41,7 @@ export interface PresentationCommitAuthority {
   };
 }
 
-export type { PresentationVersion, PresentationVersionReview };
+export type { PresentationVersion, PresentationVersionReview, PresentationVersionWithStorageKey };
 
 type PresentationVersionRow = {
   id: string;
@@ -61,7 +62,7 @@ type PresentationVersionRow = {
   review_at: string | null;
 };
 
-function rowToVersion(row: PresentationVersionRow): PresentationVersion {
+function rowToVersion(row: PresentationVersionRow): PresentationVersionWithStorageKey {
   return {
     id: row.id,
     proposalId: row.proposal_id,
@@ -159,7 +160,15 @@ export async function listProposalPresentationVersions(
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }
 
-export async function listPresentationVersions(db: DatabaseLike, proposalId: string): Promise<PresentationVersion[]> {
+export function publicPresentationVersion(version: PresentationVersionWithStorageKey): PresentationVersion {
+  const { r2Key: _r2Key, ...publicVersion } = version;
+  return publicVersion;
+}
+
+export async function listPresentationVersions(
+  db: DatabaseLike,
+  proposalId: string,
+): Promise<PresentationVersionWithStorageKey[]> {
   const rows = await all<PresentationVersionRow>(
     db,
     `${VERSION_SELECT}
@@ -170,7 +179,10 @@ export async function listPresentationVersions(db: DatabaseLike, proposalId: str
   return rows.map(rowToVersion);
 }
 
-export async function getPresentationVersion(db: DatabaseLike, versionId: string): Promise<PresentationVersion> {
+export async function getPresentationVersion(
+  db: DatabaseLike,
+  versionId: string,
+): Promise<PresentationVersionWithStorageKey> {
   const row = await first<PresentationVersionRow>(db, `${VERSION_SELECT} WHERE pv.id = ? AND pv.deleted_at IS NULL`, [
     versionId,
   ]);
@@ -181,7 +193,7 @@ export async function getPresentationVersion(db: DatabaseLike, versionId: string
 export async function getCurrentPresentationVersion(
   db: DatabaseLike,
   proposalId: string,
-): Promise<PresentationVersion | null> {
+): Promise<PresentationVersionWithStorageKey | null> {
   const row = await first<PresentationVersionRow>(
     db,
     `${VERSION_SELECT} WHERE pv.proposal_id = ? AND pv.is_current = 1 AND pv.deleted_at IS NULL`,
@@ -334,7 +346,7 @@ export async function createPresentationVersion(
   proposalId: string,
   opts: PresentationVersionCreateInput,
   audit?: PresentationVersionAudit,
-): Promise<PresentationVersion> {
+): Promise<PresentationVersionWithStorageKey> {
   const prepared = preparePresentationVersionCreate(db, proposalId, opts, audit);
   await db.batch(prepared.statements);
   return getPresentationVersion(db, prepared.id);
@@ -346,7 +358,7 @@ export async function reviewPresentationVersion(
   versionId: string,
   actor: AuthAdmin,
   review: PresentationVersionReviewRequest,
-): Promise<PresentationVersion> {
+): Promise<PresentationVersionWithStorageKey> {
   const reviewerUserId = requireAdminDatabaseUserId(actor);
   const version = await getPresentationVersion(db, versionId);
   if (version.proposalId !== proposalId) {

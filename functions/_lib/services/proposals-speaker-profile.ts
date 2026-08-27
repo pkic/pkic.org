@@ -205,7 +205,7 @@ export async function declineSpeakerParticipation(
         .prepare(
           `UPDATE proposal_speakers
            SET status = 'declined', declined_at = ?, decline_reason = ?
-           WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ?
+           WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
              AND (SELECT COUNT(*) FROM proposal_speakers
                   WHERE proposal_id = ? AND status <> 'declined') > 1
              AND EXISTS (
@@ -221,6 +221,7 @@ export async function declineSpeakerParticipation(
           speaker.user_id,
           speaker.role,
           speaker.status,
+          speaker.invite_generation,
           proposal.id,
           proposal.id,
           proposal.status,

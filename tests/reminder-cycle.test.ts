@@ -420,6 +420,41 @@ describe("runReminderCycle", () => {
     expect(outbox[0].recipient_email).toBe("cospeaker@example.test");
   });
 
+  it("does not consume a co-speaker reminder when the canonical email changes before commit", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "old-cospeaker@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "submitted",
+      speakerStatus: "invited",
+      speakerRole: "co_speaker",
+    });
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+    await db
+      .prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("new-cospeaker@example.test", "new-cospeaker@example.test", userId)
+      .run();
+    gate.release();
+
+    await expect(staleReminderRun).resolves.toMatchObject({ speakerInviteRemindersQueued: 0 });
+    await expect(
+      queryAll<{ speaker_invite_reminder_count: number }>(
+        db,
+        "SELECT speaker_invite_reminder_count FROM proposal_speakers WHERE id = ?",
+        [speakerRowId],
+      ),
+    ).resolves.toEqual([{ speaker_invite_reminder_count: 0 }]);
+    await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
+  });
+
   it("skips co-speaker reminder when proposal is rejected", async () => {
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
@@ -501,6 +536,42 @@ describe("runReminderCycle", () => {
     const outbox = await queryAll<{ template_key: string }>(db, "SELECT template_key FROM email_outbox");
     expect(outbox).toHaveLength(1);
     expect(outbox[0].template_key).toBe("presentation_upload_request");
+  });
+
+  it("does not consume a presentation reminder when the canonical email changes before commit", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "old-presenter@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "accepted",
+      speakerStatus: "confirmed",
+      speakerRole: "proposer",
+      presentationDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    });
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+    await db
+      .prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("new-presenter@example.test", "new-presenter@example.test", userId)
+      .run();
+    gate.release();
+
+    await expect(staleReminderRun).resolves.toMatchObject({ presentationRemindersQueued: 0 });
+    await expect(
+      queryAll<{ presentation_reminder_count: number }>(
+        db,
+        "SELECT presentation_reminder_count FROM proposal_speakers WHERE id = ?",
+        [speakerRowId],
+      ),
+    ).resolves.toEqual([{ presentation_reminder_count: 0 }]);
+    await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
   });
 
   it("skips presentation reminder when the deadline is beyond the lead days window", async () => {

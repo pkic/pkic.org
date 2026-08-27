@@ -1,9 +1,9 @@
 import type {
-  AdminProposalSpeaker,
-  AdminProposalSpeakerPatch,
-  AdminProposalSpeakerPatchResponse,
-  AdminProposalSpeakersResponse,
-} from "../../../assets/shared/schemas/admin-event-proposals";
+  ProposalSpeaker,
+  ProposalSpeakerPatch,
+  ProposalSpeakerPatchResponse,
+  ProposalSpeakersResponse,
+} from "../../../assets/shared/schemas/proposal-speakers";
 import type { ProposalStatus } from "../../../assets/shared/schemas/proposal-status";
 import { batchFirst, batchRows } from "../db/pagination";
 import { first } from "../db/queries";
@@ -32,6 +32,9 @@ import {
   type ProposalProfileValues,
 } from "./proposal-speaker-profile-overrides";
 import { requireAdminProposalSpeakerPermission } from "./admin-proposal-speaker-access";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 
 interface AdminProposalRosterRow {
   id: string;
@@ -59,16 +62,18 @@ interface AdminSpeakerEditSnapshot extends ProposalSpeakerWithUser {
   headshot_override_r2_key: string | null;
 }
 
-export function toAdminProposalSpeaker(
+export function toProposalSpeaker(
   speaker: ProposalSpeakerWithUser,
   appBaseUrl: string,
   proposalId?: string,
-): AdminProposalSpeaker {
+  proposalHeadshotUrl?: (userId: string, updatedAt: string | null) => string,
+): ProposalSpeaker {
   const hasBio = Boolean(speaker.biography);
   const hasHeadshot = Boolean(speaker.headshot_r2_key);
   const headshotUrl =
     speaker.headshot_r2_key?.startsWith("proposal-headshots/") && proposalId
-      ? adminProposalSpeakerHeadshotUrl(appBaseUrl, proposalId, speaker.user_id, speaker.headshot_updated_at)
+      ? (proposalHeadshotUrl?.(speaker.user_id, speaker.headshot_updated_at) ??
+        adminProposalSpeakerHeadshotUrl(appBaseUrl, proposalId, speaker.user_id, speaker.headshot_updated_at))
       : publicUserHeadshotUrl(appBaseUrl, speaker.headshot_r2_key, speaker.headshot_updated_at);
   return {
     userId: speaker.user_id,
@@ -94,12 +99,16 @@ export function toAdminProposalSpeaker(
   };
 }
 
-export async function getAdminProposalSpeakerRoster(
+export async function getProposalSpeakerRoster(
   db: DatabaseLike,
   actor: AuthAdmin,
   proposalId: string,
   appBaseUrl: string,
-): Promise<AdminProposalSpeakersResponse> {
+  options?: {
+    proposalHeadshotUrl?: (userId: string, updatedAt: string | null) => string;
+    skipLegacyReviewCheck?: boolean;
+  },
+): Promise<ProposalSpeakersResponse> {
   const [proposalResult, speakersResult] = await db.batch([
     db
       .prepare(
@@ -115,10 +124,14 @@ export async function getAdminProposalSpeakerRoster(
   ]);
   const proposal = batchFirst<AdminProposalRosterRow>(proposalResult);
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  await requireAdminProposalSpeakerPermission(db, actor, proposal.event_id, "review");
+  if (!options?.skipLegacyReviewCheck) {
+    await requireAdminProposalSpeakerPermission(db, actor, proposal.event_id, "review");
+  }
 
   const speakerRows = batchRows<ProposalSpeakerWithUser>(speakersResult);
-  const speakers = speakerRows.map((speaker) => toAdminProposalSpeaker(speaker, appBaseUrl, proposalId));
+  const speakers = speakerRows.map((speaker) =>
+    toProposalSpeaker(speaker, appBaseUrl, proposalId, options?.proposalHeadshotUrl),
+  );
   const summary = {
     total: speakers.length,
     confirmed: 0,
@@ -198,7 +211,7 @@ function nullablePatchValue(value: string | null | undefined): string | null | u
 
 function buildSpeakerPatch(
   current: AdminSpeakerEditSnapshot,
-  patch: AdminProposalSpeakerPatch,
+  patch: ProposalSpeakerPatch,
 ): {
   profile: UserProfilePatch;
   role: AdminSpeakerEditSnapshot["role"];
@@ -233,14 +246,15 @@ function buildSpeakerPatch(
   return { profile, role, changes };
 }
 
-export async function editAdminProposalSpeaker(
+export async function editProposalSpeaker(
   db: DatabaseLike,
   actor: AuthAdmin,
   proposalId: string,
   userId: string,
-  patch: AdminProposalSpeakerPatch,
+  patch: ProposalSpeakerPatch,
   appBaseUrl: string,
-): Promise<AdminProposalSpeakerPatchResponse> {
+  authorization?: ProposalWriteAuthorization,
+): Promise<ProposalSpeakerPatchResponse> {
   const current = await getAdminSpeakerEditSnapshot(db, proposalId, userId);
   await requireAdminProposalSpeakerPermission(db, actor, current.proposal_event_id, "manage");
   const next = buildSpeakerPatch(current, patch);
@@ -250,7 +264,7 @@ export async function editAdminProposalSpeaker(
     nextRole: next.role,
   });
   if (Object.keys(next.changes).length === 0) {
-    return { success: true, speaker: toAdminProposalSpeaker(current, appBaseUrl, proposalId) };
+    return { success: true, speaker: toProposalSpeaker(current, appBaseUrl, proposalId) };
   }
 
   const now = nowIso();
@@ -272,6 +286,9 @@ export async function editAdminProposalSpeaker(
   };
   const profileOverridesJson = updateProposalProfileOverrides(current.profile_overrides_json, baseValues, profilePatch);
   const statements: StatementLike[] = [
+    preparePermissionsAuthorizationGuard(db, actor, [
+      { permission: "proposals:manage", context: { type: "event", id: current.proposal_event_id } },
+    ]),
     db
       .prepare(
         `UPDATE proposal_speakers
@@ -354,17 +371,28 @@ export async function editAdminProposalSpeaker(
 
   let results;
   try {
-    results = await db.batch(statements);
+    results = await db.batch(withProposalWriteContextGuard(authorization, statements));
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
-    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+    if (
+      isAuditOneChangeGuardFailure(error) ||
+      isEventParticipantSourceConflict(error) ||
+      isAuthorizationGuardFailure(error)
+    ) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the update was processed");
     }
     throw error;
   }
   const updated = batchFirst<ProposalSpeakerWithUser>(results.at(-1)!);
   if (!updated) throw new AppError(500, "PROPOSAL_SPEAKER_UPDATE_FAILED", "Unable to load the updated speaker");
-  return { success: true, speaker: toAdminProposalSpeaker(updated, appBaseUrl, proposalId) };
+  return { success: true, speaker: toProposalSpeaker(updated, appBaseUrl, proposalId) };
 }
+
+/** @deprecated Use the transport-neutral proposal speaker service. */
+export const toAdminProposalSpeaker = toProposalSpeaker;
+/** @deprecated Use the transport-neutral proposal speaker service. */
+export const getAdminProposalSpeakerRoster = getProposalSpeakerRoster;
+/** @deprecated Use the transport-neutral proposal speaker service. */
+export const editAdminProposalSpeaker = editProposalSpeaker;

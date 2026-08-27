@@ -24,3 +24,19 @@ export function prepareRotateUserRegistrationManageSecrets(
     )
     .bind(at, userId, excludeRegistrationId ?? null, excludeRegistrationId ?? null);
 }
+
+/**
+ * Rotates every proposal-speaker management capability owned by a user.
+ * Incrementing invite_generation also invalidates presentation uploads that
+ * were authorized before the canonical email changed but have not committed.
+ */
+export function prepareRotateUserProposalSpeakerManageSecrets(db: DatabaseLike, userId: string): StatementLike {
+  return db
+    .prepare(
+      `UPDATE proposal_speakers
+          SET manage_link_secret = lower(hex(randomblob(32))),
+              invite_generation = invite_generation + 1
+        WHERE user_id = ?`,
+    )
+    .bind(userId);
+}

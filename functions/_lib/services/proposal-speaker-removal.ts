@@ -29,6 +29,9 @@ import { getProposalByManageToken } from "./proposals";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 
 interface SpeakerRemovalContext {
   proposal_id: string;
@@ -178,9 +181,11 @@ async function removeProposalSpeaker(
     actorType: "admin" | "user";
     actorId: string;
     actorEmail?: string;
+    permissionActor?: AuthAdmin;
     replacementProposerUserId?: string;
     allowProposerTransfer: boolean;
     appBaseUrl?: string;
+    authorization?: ProposalWriteAuthorization;
   },
 ): Promise<ProposalSpeakerRemovalResult> {
   const { context } = input;
@@ -190,6 +195,13 @@ async function removeProposalSpeaker(
     : null;
   const now = nowIso();
   const statements: StatementLike[] = [];
+  if (input.permissionActor) {
+    statements.push(
+      preparePermissionsAuthorizationGuard(db, input.permissionActor, [
+        { permission: "proposals:manage", context: { type: "event", id: context.event_id } },
+      ]),
+    );
+  }
 
   if (replacement) {
     if (!input.appBaseUrl) throw new Error("Proposer transfer requires the application base URL");
@@ -366,7 +378,7 @@ async function removeProposalSpeaker(
   );
 
   try {
-    const results = await db.batch(statements);
+    const results = await db.batch(withProposalWriteContextGuard(input.authorization, statements));
     return {
       success: true,
       removedUserId: context.speaker_user_id,
@@ -377,7 +389,11 @@ async function removeProposalSpeaker(
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
-    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+    if (
+      isAuditOneChangeGuardFailure(error) ||
+      isEventParticipantSourceConflict(error) ||
+      isAuthorizationGuardFailure(error)
+    ) {
       return throwSpeakerRemovalConflict(db, context.proposal_id, context.speaker_user_id);
     }
     throw error;
@@ -409,6 +425,7 @@ export async function removeAdminProposalSpeaker(
     userId: string;
     replacementProposerUserId?: string;
     appBaseUrl: string;
+    authorization?: ProposalWriteAuthorization;
   },
 ): Promise<ProposalSpeakerRemovalResult> {
   const context = await getSpeakerRemovalContext(db, input.proposalId, input.userId);
@@ -419,8 +436,13 @@ export async function removeAdminProposalSpeaker(
     actorType: "admin",
     actorId: input.actor.id,
     actorEmail: input.actor.email,
+    permissionActor: input.actor,
     replacementProposerUserId: input.replacementProposerUserId,
     allowProposerTransfer: true,
     appBaseUrl: input.appBaseUrl,
+    authorization: input.authorization,
   });
 }
+
+/** Canonical group/event adapter; the legacy admin name remains above for compatibility. */
+export const removeProposalSpeakerByManager = removeAdminProposalSpeaker;

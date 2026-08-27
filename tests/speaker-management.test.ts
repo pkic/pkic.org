@@ -14,7 +14,10 @@ import { validJpegBytes } from "./helpers/raster-images";
 import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { getProposalByManageToken, getSpeakerByManageToken } from "../functions/_lib/services/proposals";
-import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
+import {
+  declineSpeakerParticipation,
+  updateSpeakerProfile,
+} from "../functions/_lib/services/proposals-speaker-profile";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { findOrCreateUser } from "../functions/_lib/services/users";
@@ -43,6 +46,9 @@ import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
+import { setSpeakerPresentationReminderPreference } from "../functions/_lib/services/speaker-presentation-reminder-preferences";
 
 function mountedSpeakerRoute(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -1165,9 +1171,14 @@ describe("speaker self-management endpoints", () => {
   it("rejects a stale speaker profile patch without clearing a newer proposal override", async () => {
     await setupWorkflow();
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
-    const [speaker] = await queryAll<{ id: string; status: string; profile_overrides_json: string }>(
+    const [speaker] = await queryAll<{
+      id: string;
+      status: string;
+      invite_generation: number;
+      profile_overrides_json: string;
+    }>(
       env.DB,
-      "SELECT id, status, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      "SELECT id, status, invite_generation, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
       proposalId,
       coSpeakerUserId,
     );
@@ -1191,6 +1202,7 @@ describe("speaker self-management endpoints", () => {
           proposalUpdatedAt: proposal.updated_at,
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
+          inviteGeneration: speaker.invite_generation,
           expectedProfileOverridesJson: speaker.profile_overrides_json,
         },
       ),
@@ -1213,9 +1225,14 @@ describe("speaker self-management endpoints", () => {
   it("rolls back an account profile patch when the proposal closes after authorization", async () => {
     await setupWorkflow();
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
-    const [speaker] = await queryAll<{ id: string; status: string; profile_overrides_json: string | null }>(
+    const [speaker] = await queryAll<{
+      id: string;
+      status: string;
+      invite_generation: number;
+      profile_overrides_json: string | null;
+    }>(
       env.DB,
-      "SELECT id, status, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      "SELECT id, status, invite_generation, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
       [proposalId, coSpeakerUserId],
     );
     const [proposal] = await queryAll<{ status: string; updated_at: string }>(
@@ -1238,6 +1255,7 @@ describe("speaker self-management endpoints", () => {
           proposalUpdatedAt: proposal.updated_at,
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
+          inviteGeneration: speaker.invite_generation,
           expectedProfileOverridesJson: speaker.profile_overrides_json,
         },
       ),
@@ -1245,6 +1263,78 @@ describe("speaker self-management endpoints", () => {
     await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
       { first_name: "Co" },
     ]);
+  });
+
+  it("rolls back a speaker profile patch when canonical-email revocation wins the commit race", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      env.DB,
+      speakerManageToken,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.batch([prepareRotateUserProposalSpeakerManageSecrets(env.DB, coSpeakerUserId)]),
+    );
+
+    await expect(
+      updateSpeakerProfile(
+        racingDb,
+        { firstName: "Must not commit" },
+        {
+          proposalSpeakerId: speaker.id,
+          proposalId: proposal.id,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
+          userId: user.id,
+          currentStatus: speaker.status,
+          inviteGeneration: speaker.invite_generation,
+          expectedProfileOverridesJson: user.proposalProfileOverridesJson,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
+      { first_name: "Co" },
+    ]);
+  });
+
+  it("rolls back a decline when canonical-email revocation wins the commit race", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.batch([prepareRotateUserProposalSpeakerManageSecrets(env.DB, coSpeakerUserId)]),
+    );
+
+    await expect(
+      declineSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        reason: "Must not commit",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "invited" }]);
+  });
+
+  it("rolls back reminder preferences when canonical-email revocation wins the commit race", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.batch([prepareRotateUserProposalSpeakerManageSecrets(env.DB, coSpeakerUserId)]),
+    );
+
+    await expect(
+      setSpeakerPresentationReminderPreference(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, "pause_30d"),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT presentation_reminders_paused_until FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ presentation_reminders_paused_until: null }]);
   });
 
   it("proposal manage token updates speaker profile fields", async () => {
@@ -2032,7 +2122,7 @@ describe("speaker self-management endpoints", () => {
     expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
   });
 
-  it("compensates a self headshot upload when roster authority is revoked before D1 commit", async () => {
+  it("compensates a self headshot upload when canonical-email revocation wins the D1 race", async () => {
     await setupWorkflow();
     const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
     const { speaker, proposal, user } = await getSpeakerByManageToken(
@@ -2053,7 +2143,7 @@ describe("speaker self-management endpoints", () => {
       async batch(statements) {
         if (!raced) {
           raced = true;
-          await baseDb.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE id = ?").bind(speaker.id).run();
+          await baseDb.batch([prepareRotateUserProposalSpeakerManageSecrets(baseDb, user.id)]);
         }
         return baseDb.batch(statements);
       },
@@ -2072,6 +2162,7 @@ describe("speaker self-management endpoints", () => {
           proposalStatus: proposal.status,
           proposalUpdatedAt: proposal.updated_at,
           currentStatus: speaker.status,
+          inviteGeneration: speaker.invite_generation,
           accountHeadshotKey: user.accountHeadshotR2Key,
           proposalOverrideSet: user.proposalHeadshotOverrideSet,
           proposalOverrideKey: user.proposalHeadshotOverrideKey,
@@ -2139,6 +2230,7 @@ describe("speaker self-management endpoints", () => {
         proposalStatus: proposal.status,
         proposalUpdatedAt: proposal.updated_at,
         currentStatus: speaker.status,
+        inviteGeneration: speaker.invite_generation,
         accountHeadshotKey: existingKey,
         proposalOverrideSet: user.proposalHeadshotOverrideSet,
         proposalOverrideKey: user.proposalHeadshotOverrideKey,
@@ -2345,7 +2437,7 @@ describe("speaker self-management endpoints", () => {
         sendAdminProposalSpeakerReminders(env.DB, {
           proposalId,
           kind,
-          actorUserId: adminUserId,
+          actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
           appBaseUrl: "https://app.test",
         }),
       ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CLOSED" });
@@ -2453,7 +2545,7 @@ describe("speaker self-management endpoints", () => {
         proposalId,
         userId: coSpeakerUserId,
         kind: "profile",
-        actorUserId: adminUserId,
+        actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
         appBaseUrl: "https://app.test",
       }),
     ).rejects.toThrow("forced admin reminder audit failure");

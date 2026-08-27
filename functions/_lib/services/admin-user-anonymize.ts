@@ -6,6 +6,7 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./a
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
+import { prepareRotateUserProposalSpeakerManageSecrets } from "./registrations/manage-capability-revocation";
 
 interface AnonymizeUserRow {
   id: string;
@@ -57,6 +58,7 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
           WHERE user_id = ?`,
       )
       .bind(at, user.id),
+    prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
     db.prepare("UPDATE user_roles SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
     db
       .prepare("UPDATE permission_grants SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")

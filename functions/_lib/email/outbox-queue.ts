@@ -97,7 +97,9 @@ function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt
   if (payload.attachments?.length) data.__attachments = payload.attachments;
   if (payload.replyTo) data.__replyTo = payload.replyTo;
   if (payload.bounceAddress) data.__bounceAddress = payload.bounceAddress;
-  const storedData = authorizeQueuedCapabilityLinks(data, payload.capabilityLinkValues ?? []);
+  const storedData = authorizeQueuedCapabilityLinks(data, payload.capabilityLinkValues ?? [], {
+    recipientEmail: payload.recipientEmail,
+  });
   const sendAfter =
     payload.sendAfterSeconds && payload.sendAfterSeconds > 0
       ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
@@ -225,7 +227,9 @@ function serializeBulkEmailQueueRow(row: BulkEmailQueueRow, queuedAt: string): S
     recipientUserId: row.recipientUserId ?? null,
     recipientEmail: row.recipientEmail,
     subject: row.subject,
-    payloadJson: stringifyJson(authorizeQueuedCapabilityLinks(data, row.capabilityLinkValues ?? [])),
+    payloadJson: stringifyJson(
+      authorizeQueuedCapabilityLinks(data, row.capabilityLinkValues ?? [], { recipientEmail: row.recipientEmail }),
+    ),
     messageType: row.messageType,
     sendAfter: queuedAt,
     queuedAt,
@@ -263,22 +267,24 @@ export function prepareBulkQueueEmailStatements(
     const id = resolveOutboxId(row);
     return {
       id,
-      statement: db
-        .prepare(EMAIL_OUTBOX_INSERT_SQL)
-        .bind(
-          id,
-          row.eventId,
-          row.templateKey,
-          row.recipientUserId ?? null,
-          row.recipientEmail,
-          row.subject,
-          stringifyJson(authorizeQueuedCapabilityLinks(row.data, row.capabilityLinkValues ?? [])),
-          row.messageType,
-          queuedAt,
-          queuedAt,
-          queuedAt,
-          row.idempotencyKey ?? null,
+      statement: db.prepare(EMAIL_OUTBOX_INSERT_SQL).bind(
+        id,
+        row.eventId,
+        row.templateKey,
+        row.recipientUserId ?? null,
+        row.recipientEmail,
+        row.subject,
+        stringifyJson(
+          authorizeQueuedCapabilityLinks(row.data, row.capabilityLinkValues ?? [], {
+            recipientEmail: row.recipientEmail,
+          }),
         ),
+        row.messageType,
+        queuedAt,
+        queuedAt,
+        queuedAt,
+        row.idempotencyKey ?? null,
+      ),
     };
   });
 }

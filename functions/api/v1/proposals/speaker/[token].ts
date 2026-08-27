@@ -174,6 +174,7 @@ export async function onRequestPatch(
         proposalUpdatedAt: proposal.updated_at,
         userId: user.id,
         currentStatus: speaker.status,
+        inviteGeneration: speaker.invite_generation,
         expectedProfileOverridesJson: user.proposalProfileOverridesJson,
       },
     );

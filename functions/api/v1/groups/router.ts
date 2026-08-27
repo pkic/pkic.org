@@ -74,6 +74,23 @@ import { GroupEventProposalCancel } from "./[groupId]/events/[eventId]/proposals
 import { GroupEventProposalFinalizePreview } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize-preview";
 import { GroupEventProposalFinalize } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize";
 import { GroupEventProposalAuditLogList } from "./[groupId]/events/[eventId]/proposals/[proposalId]/audit-log";
+import { GroupEventProposalSpeakersGet } from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers";
+import {
+  GroupEventProposalSpeakerDelete,
+  GroupEventProposalSpeakerPatch,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/[userId]";
+import {
+  GroupEventProposalRemindPresentationPost,
+  GroupEventProposalRemindSpeakersPost,
+  GroupEventProposalSpeakerRemindPost,
+  GroupEventProposalSpeakerRemindPresentationPost,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/reminders";
+import {
+  GroupEventProposalSpeakerHeadshotDelete,
+  GroupEventProposalSpeakerHeadshotGet,
+  GroupEventProposalSpeakerHeadshotPut,
+} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/headshot";
+import { GroupEventProposalSpeakerGravatarPost } from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/gravatar";
 import {
   GroupEventRegistrationAdmitPost,
   GroupEventRegistrationCreate,
@@ -168,6 +185,38 @@ openapi.post("/:groupId/events/:eventId/proposals/:proposalId/cancel", GroupEven
 openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize-preview", GroupEventProposalFinalizePreview);
 openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize", GroupEventProposalFinalize);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId/audit-log", GroupEventProposalAuditLogList);
+openapi.get("/:groupId/events/:eventId/proposals/:proposalId/speakers", GroupEventProposalSpeakersGet);
+openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId", GroupEventProposalSpeakerPatch);
+openapi.delete("/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId", GroupEventProposalSpeakerDelete);
+openapi.post(
+  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/remind",
+  GroupEventProposalSpeakerRemindPost,
+);
+openapi.post(
+  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/remind-presentation",
+  GroupEventProposalSpeakerRemindPresentationPost,
+);
+openapi.get(
+  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/headshot",
+  GroupEventProposalSpeakerHeadshotGet,
+);
+openapi.put(
+  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/headshot",
+  GroupEventProposalSpeakerHeadshotPut,
+);
+openapi.delete(
+  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/headshot",
+  GroupEventProposalSpeakerHeadshotDelete,
+);
+openapi.post(
+  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/gravatar",
+  GroupEventProposalSpeakerGravatarPost,
+);
+openapi.post("/:groupId/events/:eventId/proposals/:proposalId/remind-speakers", GroupEventProposalRemindSpeakersPost);
+openapi.post(
+  "/:groupId/events/:eventId/proposals/:proposalId/remind-presentation",
+  GroupEventProposalRemindPresentationPost,
+);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewsList);
 openapi.post("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewUpsert);
 openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/reviews/:reviewId", GroupEventProposalReviewPatch);

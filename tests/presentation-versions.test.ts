@@ -33,6 +33,10 @@ import {
   PRESENTATION_FILE_SIZE_HEADER,
   presentationUploadRequest,
 } from "../assets/shared/presentation-upload";
+import {
+  getPresentationProposalContext,
+  uploadProposalPresentation,
+} from "../functions/_lib/services/presentation-upload";
 
 interface StoredObject {
   body: ReadableStream | null;
@@ -260,6 +264,65 @@ describe("presentation versioning", () => {
     expect(versions[0].version_number).toBe(1);
     expect(versions[0].is_current).toBe(1);
     expect(versions[0].deleted_at).toBeNull();
+  });
+
+  it("rejects an invited speaker upload before writing to storage or D1", async () => {
+    const { proposalId, speakerToken } = await seed();
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'invited', confirmed_at = NULL WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    const bucket = new FakePresentationBucket();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("invited.pdf"),
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "SPEAKER_NOT_CONFIRMED" } });
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("enforces confirmed speaker status at the upload service boundary", async () => {
+    const { proposalId, speakerUserId } = await seed();
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'invited', confirmed_at = NULL WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    const bucket = new FakePresentationBucket();
+    const context = await getPresentationProposalContext(env.DB, proposalId);
+
+    const speaker = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ?", proposalId)
+    )[0];
+    await expect(
+      uploadProposalPresentation(
+        env.DB,
+        bucket as any,
+        new Request("https://app.test/upload", { method: "PUT", ...presentationRequest("service-invited.pdf") }),
+        context,
+        {
+          actor: { type: "user", userId: speakerUserId },
+          enforceDeadline: true,
+          authority: {
+            speaker: {
+              id: speaker.id,
+              userId: speakerUserId,
+              role: "proposer",
+              status: "invited",
+              inviteGeneration: 1,
+            },
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ status: 403, code: "SPEAKER_NOT_CONFIRMED" });
+    expect(bucket.keys()).toEqual([]);
   });
 
   it("rejects a speaker upload when capability status changes during the R2 stream", async () => {
@@ -1091,6 +1154,76 @@ describe("presentation versioning", () => {
     expect(dlRes.headers.get("content-disposition")).toMatch(/quantum-talk\.pdf/);
     const buf = await dlRes.arrayBuffer();
     expect(new Uint8Array(buf).slice(0, 4)).toEqual(FAKE_PDF);
+  });
+
+  it("rejects presentation downloads for declined speakers and inactive proposals", async () => {
+    const { proposalId, speakerToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    const uploadResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("state-guard.pdf"),
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(uploadResponse.status).toBe(200);
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    const declinedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation/download`),
+      envWithBucket,
+      execCtx,
+    );
+    expect(declinedResponse.status).toBe(403);
+    await expect(declinedResponse.json()).resolves.toMatchObject({ error: { code: "SPEAKER_DECLINED" } });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'confirmed' WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'canceled' WHERE id = ?").bind(proposalId).run();
+    const canceledResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation/download`),
+      envWithBucket,
+      execCtx,
+    );
+    expect(canceledResponse.status).toBe(409);
+    await expect(canceledResponse.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_NOT_ACCEPTED" } });
+  });
+
+  it("redacts internal presentation storage keys from upload and admin list responses", async () => {
+    const { proposalId, speakerToken, adminToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    const uploadResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("redacted.pdf"),
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(uploadResponse.status).toBe(200);
+    await expect(uploadResponse.json()).resolves.toEqual({ success: true });
+
+    const listResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(listResponse.status).toBe(200);
+    const listBody = (await listResponse.json()) as { versions: Array<Record<string, unknown>> };
+    expect(listBody.versions).toHaveLength(1);
+    expect(listBody.versions[0]).not.toHaveProperty("r2Key");
   });
 
   it("encodes presentation download filenames with an ASCII fallback", () => {

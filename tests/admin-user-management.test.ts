@@ -7,13 +7,41 @@ import { resetDb } from "./helpers/reset-db";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
-import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { signCapabilityToken, verifyDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
 import { anonymizeAdminUser } from "../functions/_lib/services/admin-user-anonymize";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 let adminToken: string;
+
+async function seedProposalSpeakerCapability(userId: string, eventId: string, signingSecret: string) {
+  const proposalId = crypto.randomUUID();
+  const speakerId = crypto.randomUUID();
+  const linkSecret = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO session_proposals
+           (id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+            manage_link_secret, submitted_at, updated_at)
+         VALUES (?, ?, ?, 'submitted', 'talk', 'Capability test', 'Abstract', ?, datetime('now'), datetime('now'))`,
+    ).bind(proposalId, eventId, userId, crypto.randomUUID()),
+    env.DB.prepare(
+      `INSERT INTO proposal_speakers
+           (id, proposal_id, user_id, role, status, manage_link_secret, created_at)
+         VALUES (?, ?, ?, 'speaker', 'confirmed', ?, datetime('now'))`,
+    ).bind(speakerId, proposalId, userId, linkSecret),
+  ]);
+  return {
+    speakerId,
+    token: await signCapabilityToken({
+      signingSecret,
+      linkSecret,
+      purpose: "speaker_manage",
+      resourceId: speakerId,
+    }),
+  };
+}
 
 async function setup() {
   const { eventId } = await seedEventAndAdmin(env.DB);
@@ -366,6 +394,7 @@ describe("admin user deactivation", () => {
             WHERE id = ?`,
       ).bind(registrationId, userId),
     ]);
+    const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
     await updateAdminUser(
       env.DB,
@@ -407,6 +436,14 @@ describe("admin user deactivation", () => {
     await expect(getRegistrationByManageToken(env.DB, staleManageToken, signingSecret)).rejects.toMatchObject({
       code: "REGISTRATION_NOT_FOUND",
     });
+    await expect(
+      verifyDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "speaker_manage",
+        token: speakerCapability.token,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "invalid" });
     expect((await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", userId))[0].email).toBe(
       "email-admin-set@example.test",
     );
@@ -707,6 +744,7 @@ describe("admin user anonymization", () => {
            WHERE id = ?`,
       ).bind(registrationId, userId),
     ]);
+    const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
     await anonymizeUser(
       createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
@@ -744,6 +782,14 @@ describe("admin user anonymization", () => {
         signingSecret,
       }),
     ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+    await expect(
+      verifyDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "speaker_manage",
+        token: speakerCapability.token,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "invalid" });
   });
 
   it("durably queues deletion of the prior headshot while clearing its pointer", async () => {

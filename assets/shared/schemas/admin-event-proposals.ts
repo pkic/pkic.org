@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { successResponseSchema } from "./api-common";
-import { databaseIdSchema } from "./identifiers";
-import { proposalStatusSchema } from "./proposal-status";
 import {
-  adminSpeakerBioPatchSchema,
-  MAX_PROPOSAL_PARTICIPANTS,
-  proposalSpeakerProfileSchema,
-} from "./proposal-management";
+  proposalSpeakerPatchResponseSchema,
+  proposalSpeakerReminderResponseSchema,
+  proposalSpeakerRemindersResponseSchema,
+  proposalSpeakerSchema,
+  proposalSpeakersResponseSchema,
+  type ProposalSpeaker,
+  type ProposalSpeakerPatch,
+  type ProposalSpeakerPatchResponse,
+  type ProposalSpeakersResponse,
+} from "./proposal-speakers";
 import {
   eventProposalDetailResponseSchema,
   eventProposalDetailSchema,
@@ -44,50 +47,33 @@ export type {
   ProposalStats,
 };
 
-export const adminProposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
-  confirmedAt: z.string().nullable(),
-  declinedAt: z.string().nullable(),
-  declineReason: z.string().nullable(),
-  termsAcceptedAt: z.string().nullable(),
-  addedAt: z.string(),
-  biography: z.string().nullable(),
-  profileComplete: z.boolean(),
-  hasHeadshot: z.boolean(),
-  hasBio: z.boolean(),
-});
+export {
+  proposalSpeakerPatchResponseSchema,
+  proposalSpeakerReminderResponseSchema,
+  proposalSpeakerRemindersResponseSchema,
+  proposalSpeakerSchema,
+  proposalSpeakersResponseSchema,
+};
+export type { ProposalSpeaker, ProposalSpeakerPatch, ProposalSpeakerPatchResponse, ProposalSpeakersResponse };
 
-export const adminProposalSpeakersResponseSchema = z.object({
-  proposal: z.object({
-    id: databaseIdSchema,
-    title: z.string(),
-    status: proposalStatusSchema,
-    presentationDeadline: z.string().nullable(),
-    presentationUploaded: z.boolean(),
-    presentationUploadedAt: z.string().nullable(),
-  }),
-  summary: z.object({
-    total: z.number().int().nonnegative(),
-    confirmed: z.number().int().nonnegative(),
-    pending: z.number().int().nonnegative(),
-    declined: z.number().int().nonnegative(),
-    profileComplete: z.number().int().nonnegative(),
-    presentationUploaded: z.number().int().min(0).max(1),
-  }),
-  speakers: z.array(adminProposalSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
-});
-
-export const adminProposalSpeakerPatchResponseSchema = successResponseSchema.extend({
-  speaker: adminProposalSpeakerSchema,
-});
-export const adminProposalSpeakerReminderResponseSchema = successResponseSchema;
-export const adminProposalSpeakerRemindersResponseSchema = successResponseSchema.extend({
-  queued: z.number().int().nonnegative(),
-});
-
-export type AdminProposalSpeakerPatch = z.infer<typeof adminSpeakerBioPatchSchema>;
-export type AdminProposalSpeaker = z.infer<typeof adminProposalSpeakerSchema>;
-export type AdminProposalSpeakersResponse = z.infer<typeof adminProposalSpeakersResponseSchema>;
-export type AdminProposalSpeakerPatchResponse = z.infer<typeof adminProposalSpeakerPatchResponseSchema>;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export const adminProposalSpeakerSchema = proposalSpeakerSchema;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export const adminProposalSpeakersResponseSchema = proposalSpeakersResponseSchema;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export const adminProposalSpeakerPatchResponseSchema = proposalSpeakerPatchResponseSchema;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export const adminProposalSpeakerReminderResponseSchema = proposalSpeakerReminderResponseSchema;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export const adminProposalSpeakerRemindersResponseSchema = proposalSpeakerRemindersResponseSchema;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export type AdminProposalSpeakerPatch = ProposalSpeakerPatch;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export type AdminProposalSpeaker = ProposalSpeaker;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export type AdminProposalSpeakersResponse = ProposalSpeakersResponse;
+/** @deprecated Use the neutral proposal speaker contracts. */
+export type AdminProposalSpeakerPatchResponse = ProposalSpeakerPatchResponse;
 
 export { proposalSessionTypeSchema } from "./proposal-management";
 

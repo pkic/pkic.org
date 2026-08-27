@@ -33,32 +33,37 @@ export async function onRequestPut(c: any): Promise<Response> {
     requireInternalSecret(c.env),
   );
 
-  if (speaker.status === "declined") {
-    return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
+  if (speaker.status !== "confirmed") {
+    return json(
+      {
+        error: {
+          code: speaker.status === "declined" ? "SPEAKER_DECLINED" : "SPEAKER_NOT_CONFIRMED",
+          message:
+            speaker.status === "declined"
+              ? "You have declined participation."
+              : "Please confirm participation before uploading.",
+        },
+      },
+      403,
+    );
   }
 
   const uploadContext = await getPresentationProposalContext(requestDb(c), proposal.id);
-  const r2Key = await uploadProposalPresentation(
-    requestDb(c),
-    requirePresentationBucket(c.env),
-    c.req.raw,
-    uploadContext,
-    {
-      actor: { type: "user", userId: speaker.user_id },
-      enforceDeadline: true,
-      authority: {
-        speaker: {
-          id: speaker.id,
-          userId: speaker.user_id,
-          role: speaker.role,
-          status: speaker.status,
-          inviteGeneration: speaker.invite_generation,
-        },
+  await uploadProposalPresentation(requestDb(c), requirePresentationBucket(c.env), c.req.raw, uploadContext, {
+    actor: { type: "user", userId: speaker.user_id },
+    enforceDeadline: true,
+    authority: {
+      speaker: {
+        id: speaker.id,
+        userId: speaker.user_id,
+        role: speaker.role,
+        status: speaker.status,
+        inviteGeneration: speaker.invite_generation,
       },
     },
-  );
+  });
 
-  return json(speakerPresentationUploadResponseSchema.parse({ success: true, r2Key }));
+  return json(speakerPresentationUploadResponseSchema.parse({ success: true }));
 }
 
 export const SpeakerPresentationPut = openApiRoute(

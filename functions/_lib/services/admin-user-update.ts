@@ -10,7 +10,10 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./a
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
-import { prepareRotateUserRegistrationManageSecrets } from "./registrations/manage-capability-revocation";
+import {
+  prepareRotateUserProposalSpeakerManageSecrets,
+  prepareRotateUserRegistrationManageSecrets,
+} from "./registrations/manage-capability-revocation";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -256,7 +259,10 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     );
   }
   if (changingPrimaryEmail) {
-    statements.push(prepareRotateUserRegistrationManageSecrets(db, user.id, at));
+    statements.push(
+      prepareRotateUserRegistrationManageSecrets(db, user.id, at),
+      prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
+    );
   }
   if (deactivating) {
     statements.push(
