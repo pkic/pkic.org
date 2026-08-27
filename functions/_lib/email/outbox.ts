@@ -345,7 +345,7 @@ async function processOutboxRow(
       text: rendered.text,
       // Always send inline content — email clients (Gmail, Apple Mail, Outlook)
       // use the text/calendar alternative with method=REQUEST for the native
-      // accept/decline prompt. Per-day .ics attachments provide granular control.
+      // accept/decline prompt. Generated per-day .ics attachments provide granular control.
       calendarIcsContent: calendar?.inlineContent,
       categories: [row.template_key, row.message_type],
       replyTo: typeof payload.__replyTo === "string" ? payload.__replyTo : undefined,

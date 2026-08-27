@@ -45,7 +45,10 @@
 5. Communication
 
 - `email_template_versions`, `email_outbox`, `unsubscribes`.
-- Calendar handling: generated series/occurrence ICS views and day-scoped inbound reply events; provider delivery status remains in the outbox.
+- Calendar handling: generated series/occurrence ICS views and
+  registration-scoped calendar invites; day-scoped inbound RSVP replies are
+  reconciled against that generated state. Uploaded ICS files are not accepted
+  or delivered; provider delivery status remains in the outbox.
 
 6. Growth and Gamification
 
