@@ -1,20 +1,21 @@
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import {
-  adminCreateEventSchema,
-  adminBulkAttendeeInvitesSchema,
-  adminBulkInviteResponseSchema,
-  adminBulkSpeakerInvitesSchema,
   adminEventCreateResponseSchema,
   adminEventPermissionSchema,
   adminEventTeamListQuerySchema,
   adminEventTeamListResponseSchema,
   adminEventTeamPermissionCreateResponseSchema,
-  adminEventSettingsSchema,
   adminEventSyncSchema,
   adminEventDetailResponseSchema,
   adminEventUpdateResponseSchema,
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
+import { eventCreateSchema, eventSettingsSchema } from "./event-management";
+import {
+  eventBulkAttendeeInvitesSchema,
+  eventBulkSpeakerInvitesSchema,
+  eventInviteBulkResponseSchema,
+} from "./event-invite-bulk";
 import { eventDaysResponseSchema } from "./event-configuration";
 import { adminEventStatsResponseSchema } from "./admin-analytics";
 import { databaseIdSchema } from "./identifiers";
@@ -70,7 +71,7 @@ export const adminEventSettingsPatchRouteSchema = {
   description: "Updates the event's dedicated settings and its extensible custom settings.",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminEventSettingsSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventSettingsSchema } }, required: true },
   },
   responses: {
     "200": {
@@ -135,7 +136,7 @@ export const adminEventCreateRouteSchema = {
   summary: "Create an event",
   description: "Creates a new event with a unique slug and its initial registration settings.",
   request: {
-    body: { content: { "application/json": { schema: adminCreateEventSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventCreateSchema } }, required: true },
   },
   responses: {
     "201": {
@@ -247,12 +248,12 @@ export const adminBulkAttendeeInvitesRouteSchema = {
   summary: "Create attendee invites in bulk",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminBulkAttendeeInvitesSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventBulkAttendeeInvitesSchema } }, required: true },
   },
   responses: {
     "200": {
       description: "Invites processed.",
-      content: { "application/json": { schema: adminBulkInviteResponseSchema } },
+      content: { "application/json": { schema: eventInviteBulkResponseSchema } },
     },
   },
 };
@@ -262,7 +263,7 @@ export const adminBulkSpeakerInvitesRouteSchema = {
   summary: "Create speaker invites in bulk",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminBulkSpeakerInvitesSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventBulkSpeakerInvitesSchema } }, required: true },
   },
 };
 

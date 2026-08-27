@@ -12,11 +12,9 @@ import {
   confirmRegistrationByToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
-import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/admin-registration-detail";
-import {
-  adminEventCreateResponseSchema,
-  adminEventRegistrationsListResponseSchema,
-} from "../assets/shared/schemas/admin-events";
+import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
+import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
+import { adminEventCreateResponseSchema } from "../assets/shared/schemas/admin-events";
 import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
 
 let ADMIN_TOKEN = "event-admin-token";
@@ -296,13 +294,13 @@ describe("admin event management endpoints", () => {
 
     const listResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
     expect(listResponse.status).toBe(200);
-    const list = adminEventRegistrationsListResponseSchema.parse(await listResponse.json());
+    const list = eventRegistrationsListResponseSchema.parse(await listResponse.json());
     expect(list.page.total).toBe(1);
     expect(list.registrations).toEqual([expect.objectContaining({ id: registrationId, referral_code: "first001" })]);
 
     const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${registrationId}`);
     expect(detailResponse.status).toBe(200);
-    const detail = adminRegistrationDetailResponseSchema.parse(await detailResponse.json());
+    const detail = eventRegistrationDetailResponseSchema.parse(await detailResponse.json());
     expect(detail.registration.referral_code).toBe("first001");
   });
 
@@ -573,7 +571,7 @@ describe("admin event management endpoints", () => {
     const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`);
     expect(detailResponse.status).toBe(200);
     const rawDetail = await detailResponse.json();
-    const detail = adminRegistrationDetailResponseSchema.parse(rawDetail);
+    const detail = eventRegistrationDetailResponseSchema.parse(rawDetail);
     expect(detail.registration.status).toBe("cancelled");
     expect(rawDetail).not.toHaveProperty("registration.custom_answers_json");
     expect(rawDetail).not.toHaveProperty("registration.manage_link_secret");

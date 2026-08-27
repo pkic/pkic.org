@@ -3,7 +3,7 @@ import { useProposalReviewComments } from "../../../../../components/proposals/u
 import { api } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { toast } from "../../../../ui";
-import { adminProposalSpeakersResponseSchema } from "../../../../../../shared/schemas/admin-event-proposals";
+import { proposalSpeakersResponseSchema } from "../../../../../../shared/schemas/proposal-speakers";
 import { presentationVersionsResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
 import type { ProposalReview } from "../../../../../../shared/schemas/proposal-reviews";
 import type { PresentationVersion } from "./model";
@@ -35,7 +35,7 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     setLoadingAdditional(true);
     try {
       const [speakerData, presentationData] = await Promise.all([
-        api(`${proposalBase}/speakers`, adminProposalSpeakersResponseSchema).catch(
+        api(`${proposalBase}/speakers`, proposalSpeakersResponseSchema).catch(
           recoverSubresource("speakers", { speakers: [] }),
         ),
         api(`${proposalBase}/presentation/versions?limit=25`, presentationVersionsResponseSchema).catch(

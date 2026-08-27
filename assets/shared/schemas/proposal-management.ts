@@ -222,13 +222,6 @@ export const proposalPatchResponseSchema = z.object({
   proposal: proposalEditableSchema,
 });
 
-/** @deprecated Use proposalPatchSchema. */
-export const adminProposalPatchSchema = proposalPatchSchema;
-/** @deprecated Use proposalEditableSchema. */
-export const adminProposalEditableSchema = proposalEditableSchema;
-/** @deprecated Use proposalPatchResponseSchema. */
-export const adminProposalPatchResponseSchema = proposalPatchResponseSchema;
-
 export const cancelAcceptedProposalSchema = z.object({
   comment: z.string().trim().min(1).max(5_000),
 });
@@ -273,8 +266,6 @@ export const proposerSpeakerPatchSchema = speakerProfilePatchSchema.extend({
 });
 
 export const proposalSpeakerPatchSchema = proposerSpeakerPatchSchema;
-/** @deprecated Use the neutral proposal speaker patch contract. */
-export const adminSpeakerBioPatchSchema = proposalSpeakerPatchSchema;
 
 export const proposalSpeakerRemovalRequestSchema = z.object({
   replacementProposerUserId: databaseIdSchema.optional(),

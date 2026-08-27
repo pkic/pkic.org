@@ -1,6 +1,6 @@
 import type { ValidatedData } from "chanfana";
 import { adminProposalPatchRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
-import { adminProposalPatchResponseSchema } from "../../../../../../assets/shared/schemas/proposal-management";
+import { proposalPatchResponseSchema } from "../../../../../../assets/shared/schemas/proposal-management";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
@@ -13,5 +13,5 @@ export async function onRequestPatch(
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const proposal = await editAdminProposal(db, admin, data.params.proposalId, data.body);
-  return json(adminProposalPatchResponseSchema.parse({ proposal }));
+  return json(proposalPatchResponseSchema.parse({ proposal }));
 }

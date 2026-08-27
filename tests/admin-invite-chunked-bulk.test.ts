@@ -21,7 +21,7 @@ import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import app from "../functions/router";
 import { handleError } from "../functions/_lib/http";
-import { bulkCreateAttendeesAdmin, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
+import { bulkCreateAttendeeInvites, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -190,7 +190,7 @@ describe("attendee invite — chunked bulk send", () => {
       inviteeEmail: `bounded-invite-${index}@example.test`,
     }));
 
-    const outcomes = await bulkCreateAttendeesAdmin(budgeted.db, {
+    const outcomes = await bulkCreateAttendeeInvites(budgeted.db, {
       event,
       invites,
       buildEmailRow: ({ email }) => ({
@@ -225,7 +225,7 @@ describe("attendee invite — chunked bulk send", () => {
       .bind(priorId, event.id, crypto.randomUUID(), "2026-01-01T00:00:00.000Z")
       .run();
 
-    const outcomes = await bulkCreateAttendeesAdmin(appEnv.DB, {
+    const outcomes = await bulkCreateAttendeeInvites(appEnv.DB, {
       event,
       invites: [{ inviteeEmail: "replaced-expired@example.test" }],
     });
@@ -264,7 +264,7 @@ describe("attendee invite — chunked bulk send", () => {
     };
 
     await expect(
-      bulkCreateAttendeesAdmin(failingDb, {
+      bulkCreateAttendeeInvites(failingDb, {
         event,
         invites: [{ inviteeEmail: "atomic-invite@example.test" }],
         buildEmailRow: ({ email }) => ({
@@ -298,7 +298,7 @@ describe("attendee invite — chunked bulk send", () => {
     });
 
     await expect(
-      bulkCreateAttendeesAdmin(racingDb, {
+      bulkCreateAttendeeInvites(racingDb, {
         event,
         invites: [{ inviteeEmail: "schedule-race@example.test" }],
         buildEmailRow: ({ email }) => ({
@@ -327,7 +327,7 @@ describe("attendee invite — chunked bulk send", () => {
       )
     )[0];
     const create = () =>
-      bulkCreateAttendeesAdmin(appEnv.DB, {
+      bulkCreateAttendeeInvites(appEnv.DB, {
         event,
         invites: [{ inviteeEmail: "concurrent-bulk-invite@example.test" }],
         buildEmailRow: ({ email }) => ({

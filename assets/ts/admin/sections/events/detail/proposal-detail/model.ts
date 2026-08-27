@@ -1,4 +1,4 @@
-import type { AdminProposalDetailResponse } from "../../../../../../shared/schemas/admin-event-proposals";
+import type { EventProposalDetailResponse } from "../../../../../../shared/schemas/event-proposals";
 import type { ProposalInternalComment } from "../../../../../../shared/schemas/proposal-comments";
 import type {
   PresentationVersion,
@@ -7,7 +7,7 @@ import type {
 
 export type { PresentationVersion, PresentationVersionReview, ProposalInternalComment };
 
-export type ProposalResponse = AdminProposalDetailResponse;
+export type ProposalResponse = EventProposalDetailResponse;
 export type ProposalDetailRecord = ProposalResponse["proposal"];
 
 export type DetailTab = "submission" | "speakers" | "reviews" | "presentation" | "audit-log" | "decision";

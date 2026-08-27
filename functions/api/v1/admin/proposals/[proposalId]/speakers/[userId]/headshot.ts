@@ -10,7 +10,7 @@ import {
 } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import {
-  getAdminProposalSpeakerHeadshot,
+  getProposalSpeakerHeadshot,
   adminProposalSpeakerHeadshotUrl,
 } from "../../../../../../../_lib/services/admin-proposal-speaker-headshot";
 import {
@@ -34,7 +34,7 @@ type HeadshotParams = { proposalId: string; userId: string };
 async function load(c: AdminContext, proposalId: string, userId: string, permission: AdminProposalSpeakerPermission) {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const speaker = await getAdminProposalSpeakerHeadshot(db, proposalId, userId);
+  const speaker = await getProposalSpeakerHeadshot(db, proposalId, userId);
   await requireAdminProposalSpeakerPermission(db, admin, speaker.proposal_event_id, permission);
   return { db, admin, speaker };
 }
@@ -69,7 +69,7 @@ async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response>
       details: { proposalId: params.proposalId, speakerUserId: speaker.user_id },
     },
   });
-  const updated = await getAdminProposalSpeakerHeadshot(db, params.proposalId, params.userId);
+  const updated = await getProposalSpeakerHeadshot(db, params.proposalId, params.userId);
   return json({
     success: true,
     r2Key,

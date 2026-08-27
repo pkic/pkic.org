@@ -1,12 +1,11 @@
 import { z } from "zod";
-import {
-  adminBulkAttendeeInvitesPreviewSchema,
-  adminBulkSpeakerInvitesPreviewSchema,
-  adminEventCampaignPreviewSchema,
-  adminEventCampaignSendSchema,
-} from "./admin-events";
+import { adminEventCampaignPreviewSchema, adminEventCampaignSendSchema } from "./admin-events";
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
-import { eventInvitePreviewResponseSchema } from "./event-invite-bulk";
+import {
+  eventBulkAttendeeInvitesPreviewSchema,
+  eventBulkSpeakerInvitesPreviewSchema,
+  eventInvitePreviewResponseSchema,
+} from "./event-invite-bulk";
 
 const previewTokenSchema = adminEventCampaignSendSchema.shape.previewToken;
 
@@ -19,7 +18,7 @@ export const adminAttendeeInvitePreviewRouteSchema = {
   description: "Render an attendee invitation preview and issue a short-lived bulk-send token.",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminBulkAttendeeInvitesPreviewSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventBulkAttendeeInvitesPreviewSchema } }, required: true },
   },
   responses: {
     "200": {
@@ -36,7 +35,7 @@ export const adminSpeakerInvitePreviewRouteSchema = {
   description: "Render a speaker invitation preview and issue a short-lived bulk-send token.",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminBulkSpeakerInvitesPreviewSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventBulkSpeakerInvitesPreviewSchema } }, required: true },
   },
   responses: {
     "200": {

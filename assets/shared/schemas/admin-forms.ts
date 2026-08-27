@@ -8,26 +8,10 @@ import {
 } from "./pagination";
 import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import {
-  formDefinitionCreateSchema,
-  formDefinitionUpdateSchema,
-  formFieldDefinitionSchema,
-  formFieldInputSchema,
-  formPlacementSchema,
-  formPurposeSchema,
-  formStatusSchema,
-} from "./forms";
+import { formFieldDefinitionSchema, formPlacementSchema, formPurposeSchema, formStatusSchema } from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
-
-// Compatibility aliases while the legacy admin routes migrate to canonical form-domain names.
-export const adminFormFieldInputSchema = formFieldInputSchema;
-export const adminFormCreateSchema = formDefinitionCreateSchema;
-export const adminFormUpdateSchema = formDefinitionUpdateSchema;
-
-export type AdminFormCreateInput = z.infer<typeof adminFormCreateSchema>;
-export type AdminFormUpdateInput = z.infer<typeof adminFormUpdateSchema>;
 
 export const ADMIN_FORMS_SORT_COLUMNS = [
   "key",

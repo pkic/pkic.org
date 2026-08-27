@@ -116,6 +116,3 @@ export async function buildEventInvitePreview(params: {
     text: rendered.text,
   };
 }
-
-/** @deprecated Import the domain-neutral event-invite preview builder instead. */
-export const buildAdminInvitePreview = buildEventInvitePreview;

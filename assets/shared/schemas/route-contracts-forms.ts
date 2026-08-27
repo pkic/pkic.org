@@ -1,13 +1,11 @@
 import {
   adminFormCreateResponseSchema,
-  adminFormCreateSchema,
   adminFormsListQuerySchema,
   adminFormsListResponseSchema,
   adminFormSubmissionsQuerySchema,
   adminFormSubmissionsResponseSchema,
   adminFormSubmissionStatsQuerySchema,
   adminFormSubmissionStatsResponseSchema,
-  adminFormUpdateSchema,
   adminFormUpdateResponseSchema,
 } from "./admin-forms";
 import { eventSlugParamsSchema, formKeyParamsSchema } from "./api-common";
@@ -17,6 +15,8 @@ import {
   formPlacementUpdateSchema,
   formPlacementsListQuerySchema,
   formPlacementsListResponseSchema,
+  formDefinitionCreateSchema,
+  formDefinitionUpdateSchema,
 } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 
@@ -38,7 +38,7 @@ export const adminFormCreateRouteSchema = {
   summary: "Create a global form",
   description: "Creates an admin-managed global custom form and its field definitions.",
   request: {
-    body: { content: { "application/json": { schema: adminFormCreateSchema } }, required: true },
+    body: { content: { "application/json": { schema: formDefinitionCreateSchema } }, required: true },
   },
   responses: adminFormCreateResponses,
 };
@@ -49,7 +49,7 @@ export const adminEventFormCreateRouteSchema = {
   description: "Creates an admin-managed custom form scoped to one event.",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminFormCreateSchema } }, required: true },
+    body: { content: { "application/json": { schema: formDefinitionCreateSchema } }, required: true },
   },
 };
 
@@ -202,7 +202,7 @@ export const adminFormPatchRouteSchema = {
     body: {
       content: {
         "application/json": {
-          schema: adminFormUpdateSchema,
+          schema: formDefinitionUpdateSchema,
         },
       },
       required: true,

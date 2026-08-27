@@ -1,7 +1,7 @@
 import { Badge } from "../../../../../components/Badge";
 import { ProposalInternalCommentsPanel } from "../../../../../components/proposals/ProposalInternalCommentsPanel";
 import { api } from "../../../../api";
-import { proposalReminderResponseSchema } from "../../../../../../shared/schemas/admin-event-proposals";
+import { proposalSpeakerRemindersResponseSchema } from "../../../../../../shared/schemas/proposal-speakers";
 import type { ProposalAccess, ProposalReview } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
 import type { PageInfo } from "../../../../../../shared/schemas/pagination";
@@ -53,9 +53,13 @@ export function ProposalSidebar({
   async function remindAll(kind: "profile" | "presentation") {
     const path = kind === "profile" ? "remind-speakers" : "remind-presentation";
     try {
-      const response = await api(`/api/v1/admin/proposals/${proposalId}/${path}`, proposalReminderResponseSchema, {
-        method: "POST",
-      });
+      const response = await api(
+        `/api/v1/admin/proposals/${proposalId}/${path}`,
+        proposalSpeakerRemindersResponseSchema,
+        {
+          method: "POST",
+        },
+      );
       toast(
         `${kind === "profile" ? "Profile" : "Presentation"} reminder sent to ${response.queued} speaker(s)`,
         "success",

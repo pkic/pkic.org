@@ -26,12 +26,14 @@ import type {
   AdminApplicationSummary as CanonicalAdminApplicationSummary,
 } from "../../shared/schemas/admin-applications";
 import type {
-  AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
-  AdminEventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   AdminEventTeamListItem as CanonicalEventPermission,
   AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import type {
+  EventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
+  EventRegistrationSummary as CanonicalRegistration,
+} from "../../shared/schemas/event-registrations";
 import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
 import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
@@ -48,11 +50,9 @@ import type {
   AdminEmailOutboxResponse as CanonicalAdminEmailOutboxResponse,
   AdminEmailOutboxRow as CanonicalAdminEmailOutboxRow,
 } from "../../shared/schemas/admin-email-outbox";
-import type {
-  AdminEventProposalSummary as CanonicalAdminEventProposalSummary,
-  AdminProposalSpeaker as CanonicalAdminProposalSpeaker,
-  ProposalAccess as CanonicalProposalAccess,
-} from "../../shared/schemas/admin-event-proposals";
+import type { EventProposalSummary as CanonicalAdminEventProposalSummary } from "../../shared/schemas/event-proposals";
+import type { ProposalAccess as CanonicalProposalAccess } from "../../shared/schemas/event-proposals";
+import type { ProposalSpeaker as CanonicalAdminProposalSpeaker } from "../../shared/schemas/proposal-speakers";
 import type { FormFieldDefinition as CanonicalFormFieldDefinition } from "../../shared/schemas/forms";
 import type {
   AdminFormSubmission as CanonicalAdminFormSubmission,

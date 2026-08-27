@@ -6,11 +6,8 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
-import {
-  adminFormCreateResponseSchema,
-  adminFormCreateSchema,
-  adminFormsListQuerySchema,
-} from "../assets/shared/schemas/admin-forms";
+import { adminFormCreateResponseSchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
+import { formDefinitionCreateSchema } from "../assets/shared/schemas/forms";
 import {
   FORM_FIELD_TYPES,
   FORM_PURPOSES,
@@ -165,7 +162,7 @@ describe("admin forms endpoints", () => {
   it("uses one canonical form vocabulary for create and list contracts", () => {
     for (const purpose of FORM_PURPOSES) {
       expect(
-        adminFormCreateSchema.safeParse({
+        formDefinitionCreateSchema.safeParse({
           key: `form-${purpose.replace(/_/g, "-")}`,
           purpose,
           title: "Canonical form",
@@ -178,7 +175,7 @@ describe("admin forms endpoints", () => {
     }
     for (const fieldType of FORM_FIELD_TYPES) {
       expect(
-        adminFormCreateSchema.safeParse({
+        formDefinitionCreateSchema.safeParse({
           key: `form-${fieldType.replace(/_/g, "-")}`,
           purpose: "survey",
           title: "Canonical field",
@@ -186,7 +183,7 @@ describe("admin forms endpoints", () => {
         }).success,
       ).toBe(true);
     }
-    expect(adminFormCreateSchema.safeParse({ key: "invalid", purpose: "future", title: "Invalid" }).success).toBe(
+    expect(formDefinitionCreateSchema.safeParse({ key: "invalid", purpose: "future", title: "Invalid" }).success).toBe(
       false,
     );
     expect(adminFormsListQuerySchema.safeParse({ status: "deleted" }).success).toBe(false);

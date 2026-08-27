@@ -26,7 +26,7 @@ import app from "../functions/router";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import {
   remindProposalSpeakerByProposer,
-  sendAdminProposalSpeakerReminders,
+  sendProposalSpeakerReminders,
 } from "../functions/_lib/services/proposal-reminders";
 import {
   removeAdminProposalSpeaker,
@@ -2531,7 +2531,7 @@ describe("speaker self-management endpoints", () => {
 
     for (const kind of ["profile", "presentation"] as const) {
       await expect(
-        sendAdminProposalSpeakerReminders(env.DB, {
+        sendProposalSpeakerReminders(env.DB, {
           proposalId,
           kind,
           actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
@@ -2638,7 +2638,7 @@ describe("speaker self-management endpoints", () => {
     ).run();
 
     await expect(
-      sendAdminProposalSpeakerReminders(env.DB, {
+      sendProposalSpeakerReminders(env.DB, {
         proposalId,
         userId: coSpeakerUserId,
         kind: "profile",

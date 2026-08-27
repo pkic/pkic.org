@@ -6,7 +6,7 @@ import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { requireValidEventInviteRecipientBatch } from "../../../../../../../_lib/services/admin-invite-preview";
-import { adminBulkInviteResponseSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
+import { eventInviteBulkResponseSchema } from "../../../../../../../../assets/shared/schemas/event-invite-bulk";
 import { adminBulkAttendeeInvitesRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
@@ -81,6 +81,6 @@ export const AdminEventsEventSlugInvitesAttendeesBulkPost = openApiRoute(
     const endorsed: BulkItemResult[] = outcomes.filter((o) => o.status === "endorsed").map((o) => ({ email: o.email }));
     const skipped: BulkItemResult[] = outcomes.filter((o) => o.status === "skipped").map((o) => ({ email: o.email }));
 
-    return json(adminBulkInviteResponseSchema.parse({ success: true, created, endorsed, skipped }));
+    return json(eventInviteBulkResponseSchema.parse({ success: true, created, endorsed, skipped }));
   },
 );

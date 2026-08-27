@@ -4,7 +4,7 @@ import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_
 import { bulkCreateSpeakerInvites } from "../../../../../../../_lib/services/invites";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
-import { adminBulkInviteResponseSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
+import { eventInviteBulkResponseSchema } from "../../../../../../../../assets/shared/schemas/event-invite-bulk";
 import { adminBulkSpeakerInvitesRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
@@ -84,6 +84,6 @@ export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
       }
     }
 
-    return json(adminBulkInviteResponseSchema.parse({ success: true, created, endorsed, skipped }));
+    return json(eventInviteBulkResponseSchema.parse({ success: true, created, endorsed, skipped }));
   },
 );

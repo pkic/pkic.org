@@ -57,8 +57,3 @@ export async function getProposalSpeakerHeadshot(
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
   throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
 }
-
-/** @deprecated Use the neutral proposal speaker headshot context. */
-export type AdminProposalSpeakerHeadshotContext = ProposalSpeakerHeadshotContext;
-/** @deprecated Use the neutral proposal speaker headshot loader. */
-export const getAdminProposalSpeakerHeadshot = getProposalSpeakerHeadshot;

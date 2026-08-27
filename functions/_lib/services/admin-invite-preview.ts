@@ -134,18 +134,3 @@ export async function requireValidEventInviteRecipientBatch(payload: {
     inviteDigest: computedDigest,
   });
 }
-
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export type AdminInviteType = EventInviteType;
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export type AdminInvitePreviewInput = EventInvitePreviewInput;
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export type AdminInvitePreviewTokenValidation = EventInvitePreviewTokenValidation;
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export const computeAdminInviteDigest = computeEventInviteDigest;
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export const signAdminInvitePreviewToken = signEventInvitePreviewToken;
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export const verifyAdminInvitePreviewToken = verifyEventInvitePreviewToken;
-/** @deprecated Import the domain-neutral event-invite helper instead. */
-export const requireValidAdminInvitePreview = requireValidEventInvitePreview;

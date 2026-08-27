@@ -8,7 +8,7 @@ import { successResponseSchema } from "../../assets/shared/schemas/api-common";
 import { adminAuthSessionResponseSchema } from "../../assets/shared/schemas/admin-auth";
 import { ApiClientError, requestJson } from "../../assets/ts/shared/api-client";
 import { z } from "zod";
-import { adminBulkInviteResponseSchema } from "../../assets/shared/schemas/admin-events";
+import { eventInviteBulkResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
 
 describe("admin API client", () => {
   afterEach(() => {
@@ -102,7 +102,7 @@ describe("admin API client", () => {
     );
 
     await expect(
-      api("/api/v1/admin/events/event/invites/attendees/bulk", adminBulkInviteResponseSchema),
+      api("/api/v1/admin/events/event/invites/attendees/bulk", eventInviteBulkResponseSchema),
     ).resolves.toEqual({
       success: true,
       created: [{ email: "a@example.test" }],

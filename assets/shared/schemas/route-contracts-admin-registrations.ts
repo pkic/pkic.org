@@ -1,19 +1,19 @@
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { adminRegistrationDetailResponseSchema, adminRegistrationDetailSchema } from "./admin-registration-detail";
+import {
+  eventRegistrationDetailResponseSchema,
+  eventRegistrationDetailSchema,
+  eventRegistrationAdmitSchema,
+} from "./event-registration-detail";
 import { z } from "zod";
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
 import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } from "./registration";
-import {
-  ADMIN_EVENT_REGISTRATION_STATUSES,
-  adminEventRegistrationStatusSchema,
-  adminRegistrationAdmitSchema,
-} from "./admin-events";
+import { EVENT_REGISTRATION_STATUSES, eventRegistrationStatusSchema } from "./event-registrations";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import { adminBadgeRolePatchSchema, adminBadgeRoleResponseSchema } from "./participant-roles";
 
-export const ADMIN_REGISTRATION_FORCE_STATUSES = ADMIN_EVENT_REGISTRATION_STATUSES;
-export const adminRegistrationForceStatusSchema = adminEventRegistrationStatusSchema;
+export const ADMIN_REGISTRATION_FORCE_STATUSES = EVENT_REGISTRATION_STATUSES;
+export const adminRegistrationForceStatusSchema = eventRegistrationStatusSchema;
 export const adminRegistrationUpdateSchema = z.union([
   registrationManageSchema,
   z.object({ action: z.literal("force_status"), status: adminRegistrationForceStatusSchema }),
@@ -27,7 +27,7 @@ export const badgeRegenerationQueuedResponseSchema = successResponseSchema.exten
 });
 export const adminRegistrationOpenManageResponseSchema = z.object({ manageUrl: httpCapabilityUrlSchema });
 export const adminRegistrationUpdateResponseSchema = successResponseSchema.extend({
-  registration: adminRegistrationDetailSchema.nullable(),
+  registration: eventRegistrationDetailSchema.nullable(),
   emailChanged: z.boolean().optional(),
 });
 export const adminRegistrationResendConfirmationResponseSchema = successResponseSchema.extend({
@@ -71,7 +71,7 @@ export const adminRegistrationDetailRouteSchema = {
   responses: {
     "200": {
       description: "Registration details and day-level attendance state.",
-      content: { "application/json": { schema: adminRegistrationDetailResponseSchema } },
+      content: { "application/json": { schema: eventRegistrationDetailResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
     "404": { description: "Event or registration not found." },
@@ -160,7 +160,7 @@ export const adminRegistrationAdmitRouteSchema = {
   summary: "Admit a registration",
   request: {
     params: adminRegistrationParamsSchema,
-    body: { content: { "application/json": { schema: adminRegistrationAdmitSchema } }, required: true },
+    body: { content: { "application/json": { schema: eventRegistrationAdmitSchema } }, required: true },
   },
   responses: {
     "200": {
