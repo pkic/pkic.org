@@ -96,6 +96,9 @@ CREATE UNIQUE INDEX uq_audit_log_idempotency_key
 CREATE INDEX idx_audit_log_scope
   ON audit_log(scope_type, scope_id, created_at DESC, id);
 
+CREATE INDEX idx_audit_log_created_at
+  ON audit_log(created_at DESC, id);
+
 -- Domain retries must not enqueue duplicate external side effects. Callers
 -- that can identify a one-shot notification provide this nullable key and a
 -- deterministic outbox id; ordinary repeatable/campaign email remains

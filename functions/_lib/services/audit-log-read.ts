@@ -1,5 +1,5 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import type { AuditLogListQuery } from "../../../assets/shared/schemas/admin-audit-log";
+import type { SystemAuditLogListQuery } from "../../../assets/shared/schemas/system-audit-log";
 import type { ScopedAuditLogListQuery } from "../../../assets/shared/schemas/audit-log";
 import { first } from "../db/queries";
 import { queryPage } from "../db/pagination";
@@ -9,7 +9,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { toAuditLogResponseRows, type AuditLogReadRow } from "./audit";
 
-type AuditLogPageQuery = AuditLogListQuery;
+type AuditLogPageQuery = SystemAuditLogListQuery;
 
 interface AuditLogRestriction {
   joins?: string;

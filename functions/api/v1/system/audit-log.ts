@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/admin/audit-log
+ * GET /api/v1/system/audit-log
  *
  * Returns a paginated, filterable view of the global audit log.
  *
@@ -13,14 +13,16 @@
  *   entityId    — filter by exact entity_id
  */
 import { json } from "../../../_lib/http";
-import { requireAdminFromRequest } from "../../../_lib/auth/admin";
+import { requireUserBackedAdminFromRequest } from "../../../_lib/auth/admin";
+import { requirePermission } from "../../../_lib/auth/permissions";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { listAdminAuditLog } from "../../../_lib/services/admin-audit-log";
-import { auditLogListRouteSchema } from "../../../../assets/shared/schemas/admin-audit-log";
+import { listSystemAuditLog } from "../../../_lib/services/system-audit-log";
+import { systemAuditLogListRouteSchema } from "../../../../assets/shared/schemas/system-audit-log";
 
-export const AdminAuditLogList = openApiRoute(auditLogListRouteSchema, async (c: AdminContext, data) => {
-  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+export const SystemAuditLogList = openApiRoute(systemAuditLogListRouteSchema, async (c: AdminContext, data) => {
+  const staff = await requireUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  requirePermission(staff, "audit:read");
 
-  return json(await listAdminAuditLog(requestDb(c), data.query));
+  return json(await listSystemAuditLog(requestDb(c), data.query));
 });

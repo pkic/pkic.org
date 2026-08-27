@@ -1,8 +1,7 @@
 /**
- * P6M-P2-01: GET /api/v1/admin/audit-log used to parse `new URL()` query
- * params by hand with no Chanfana schema at all. It now validates
+ * The canonical system audit endpoint validates
  * `?limit=`/`?offset=`/`?q=`/`?entityType=`/`?actorType=`/`?action=`/
- * `?entityId=`/`?sort=` against auditLogListRouteSchema and reads them from
+ * `?entityId=`/`?sort=` against systemAuditLogListRouteSchema and reads them from
  * `data.query`. This covers every filter the handler supports, plus
  * pagination, to prove the conversion didn't drop or change behavior.
  */
@@ -12,6 +11,9 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { systemAuditLogListQuerySchema } from "../assets/shared/schemas/system-audit-log";
+import { buildSystemAuditLogPageQuery } from "../functions/_lib/services/system-audit-log";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 
 async function callAppGet(path: string, token: string): Promise<Response> {
   return app.fetch(
@@ -70,7 +72,20 @@ async function getAdminUserId(): Promise<string> {
   return rows[0].id;
 }
 
-describe("GET /api/v1/admin/audit-log", () => {
+async function replaceAdminRoleWithStaffPermissions(userId: string, permissions: string[]): Promise<string> {
+  await env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(userId).run();
+  for (const permission of permissions) {
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, permission, userId)
+      .run();
+  }
+  return createAdminSession(env.DB, userId, `system-audit-${crypto.randomUUID()}`);
+}
+
+describe("GET /api/v1/system/audit-log", () => {
   let adminToken: string;
   let adminUserId: string;
 
@@ -85,7 +100,7 @@ describe("GET /api/v1/admin/audit-log", () => {
     await insertAuditLogRow({ actorType: "system", action: "seed_older", entityType: "event", secondsAgo: 20 });
     await insertAuditLogRow({ actorType: "system", action: "seed_newer", entityType: "event", secondsAgo: 5 });
 
-    const response = await callAppGet("/api/v1/admin/audit-log", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log", adminToken);
     expect(response.status).toBe(200);
     const body = (await response.json()) as AuditLogListResponse;
     expect(body.entries).toHaveLength(2);
@@ -98,7 +113,7 @@ describe("GET /api/v1/admin/audit-log", () => {
     await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "registration", secondsAgo: 10 });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "event", secondsAgo: 5 });
 
-    const response = await callAppGet("/api/v1/admin/audit-log?entityType=registration", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?entityType=registration", adminToken);
     const body = (await response.json()) as AuditLogListResponse;
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0].entity_type).toBe("registration");
@@ -114,7 +129,7 @@ describe("GET /api/v1/admin/audit-log", () => {
     });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "event", secondsAgo: 5 });
 
-    const response = await callAppGet("/api/v1/admin/audit-log?actorType=system", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?actorType=system", adminToken);
     const body = (await response.json()) as AuditLogListResponse;
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0].actor_type).toBe("system");
@@ -134,7 +149,7 @@ describe("GET /api/v1/admin/audit-log", () => {
       secondsAgo: 5,
     });
 
-    const response = await callAppGet("/api/v1/admin/audit-log?action=force_status", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?action=force_status", adminToken);
     const body = (await response.json()) as AuditLogListResponse;
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0].action).toBe("force_status");
@@ -157,7 +172,7 @@ describe("GET /api/v1/admin/audit-log", () => {
       secondsAgo: 5,
     });
 
-    const response = await callAppGet(`/api/v1/admin/audit-log?entityId=${targetId}`, adminToken);
+    const response = await callAppGet(`/api/v1/system/audit-log?entityId=${targetId}`, adminToken);
     const body = (await response.json()) as AuditLogListResponse;
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0].entity_id).toBe(targetId);
@@ -173,7 +188,7 @@ describe("GET /api/v1/admin/audit-log", () => {
     });
     await insertAuditLogRow({ actorType: "system", action: "no_match_here", entityType: "user", secondsAgo: 5 });
 
-    const response = await callAppGet("/api/v1/admin/audit-log?q=needle-in-details", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?q=needle-in-details", adminToken);
     const body = (await response.json()) as AuditLogListResponse;
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0].details).toEqual({ note: "needle-in-details" });
@@ -183,7 +198,7 @@ describe("GET /api/v1/admin/audit-log", () => {
     await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "event", secondsAgo: 10 });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "user", secondsAgo: 5 });
 
-    const response = await callAppGet("/api/v1/admin/audit-log?entityType=&q=&action=", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?entityType=&q=&action=", adminToken);
     expect(response.status).toBe(400);
     expect((await response.json()) as { error: { code: string } }).toMatchObject({
       error: { code: "VALIDATION_ERROR" },
@@ -195,35 +210,69 @@ describe("GET /api/v1/admin/audit-log", () => {
       await insertAuditLogRow({ actorType: "system", action: `bulk_${i}`, entityType: "event", secondsAgo: 5 - i });
     }
 
-    const firstPage = await callAppGet("/api/v1/admin/audit-log?limit=2&offset=0&sort=action", adminToken);
+    const firstPage = await callAppGet("/api/v1/system/audit-log?limit=2&offset=0&sort=action", adminToken);
     const firstBody = (await firstPage.json()) as AuditLogListResponse;
     expect(firstBody.entries).toHaveLength(2);
     expect(firstBody.page.total).toBe(5);
     expect(firstBody.page.hasMore).toBe(true);
     expect(firstBody.entries.map((e) => e.action)).toEqual(["bulk_0", "bulk_1"]);
 
-    const lastPage = await callAppGet("/api/v1/admin/audit-log?limit=2&offset=4&sort=action", adminToken);
+    const lastPage = await callAppGet("/api/v1/system/audit-log?limit=2&offset=4&sort=action", adminToken);
     const lastBody = (await lastPage.json()) as AuditLogListResponse;
     expect(lastBody.entries).toHaveLength(1);
     expect(lastBody.page.hasMore).toBe(false);
   });
 
+  it("uses the global created-at index for the default D1 page query", async () => {
+    const query = buildSystemAuditLogPageQuery(systemAuditLogListQuerySchema.parse({ limit: 50, offset: 0 }));
+    const { pageSql, bindings } = buildOffsetPageSql(query);
+    const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+      .bind(...bindings, query.limit, query.offset)
+      .all<{ detail: string }>();
+    const plan = result.results.map((row) => row.detail).join("\n");
+
+    expect(plan).toContain("idx_audit_log_created_at");
+    expect(plan).not.toContain("USE TEMP B-TREE FOR ORDER BY");
+  });
+
   it("rejects an out-of-range limit", async () => {
-    const response = await callAppGet("/api/v1/admin/audit-log?limit=500", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?limit=500", adminToken);
     expect(response.status).toBe(400);
   });
 
   it("rejects an unknown sort column", async () => {
-    const response = await callAppGet("/api/v1/admin/audit-log?sort=not_a_column", adminToken);
+    const response = await callAppGet("/api/v1/system/audit-log?sort=not_a_column", adminToken);
     expect(response.status).toBe(400);
   });
 
   it("requires admin authentication", async () => {
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/admin/audit-log"),
+      new Request("https://app.test/api/v1/system/audit-log"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(response.status).toBe(401);
+  });
+
+  it("allows a non-admin staff identity with a global audit:read grant", async () => {
+    const staffToken = await replaceAdminRoleWithStaffPermissions(adminUserId, ["audit:read"]);
+    await insertAuditLogRow({ actorType: "system", action: "staff_visible", entityType: "event", secondsAgo: 1 });
+
+    const response = await callAppGet("/api/v1/system/audit-log", staffToken);
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as AuditLogListResponse).entries.map((entry) => entry.action)).toContain(
+      "staff_visible",
+    );
+  });
+
+  it("denies a staff identity that has portal capacity but no global audit permission", async () => {
+    const staffToken = await replaceAdminRoleWithStaffPermissions(adminUserId, ["admin:read"]);
+    const response = await callAppGet("/api/v1/system/audit-log", staffToken);
+    expect(response.status).toBe(403);
+  });
+
+  it("removes the legacy admin API instead of maintaining a second read path", async () => {
+    const response = await callAppGet("/api/v1/admin/audit-log", adminToken);
+    expect(response.status).toBe(404);
   });
 });

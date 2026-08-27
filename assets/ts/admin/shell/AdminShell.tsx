@@ -5,7 +5,6 @@ import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { Dashboard } from "../sections/Dashboard";
 import { Stats } from "../sections/Stats";
-import { AuditLog } from "../sections/AuditLog";
 import { Donations } from "../sections/Donations";
 import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
@@ -24,7 +23,11 @@ import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
-import { ADMIN_ACCOUNT_REDIRECT_TARGET, ADMIN_MAILING_LISTS_REDIRECT_TARGET } from "./legacy-redirects";
+import {
+  ADMIN_ACCOUNT_REDIRECT_TARGET,
+  ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_MAILING_LISTS_REDIRECT_TARGET,
+} from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
   return (
@@ -313,9 +316,10 @@ export function AdminShell() {
             <Route
               path="/auditlog"
               component={() => (
-                <SectionWrapper title="Audit Log">
-                  <AuditLog />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_AUDIT_LOG_REDIRECT_TARGET}
+                  message="The system audit log has moved to the portal."
+                />
               )}
             />
             <Route

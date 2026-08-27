@@ -4,6 +4,7 @@ import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,
   portalDefaultPath,
+  portalHasGlobalPermission,
   portalNavigationItems,
   portalActiveSection,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
@@ -18,8 +19,27 @@ describe("portal capability-derived navigation", () => {
   it("shows management but no member actions to a staff-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ admin: true })).map((item) => item.label);
     expect(labels).toContain("Management");
+    expect(labels).toContain("System");
     expect(labels).toContain("Account Settings");
     expect(labels).not.toContain("My Profile");
+  });
+
+  it("shows system management only for the matching global permission", () => {
+    const globalAudit = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "audit:read", contextType: null, contextId: null }],
+    });
+    const contextualAudit = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "audit:read", contextType: "group", contextId: "group-1" }],
+    });
+    expect(portalHasGlobalPermission(globalAudit, "audit:read")).toBe(true);
+    expect(portalNavigationItems(globalAudit).map((item) => item.label)).toContain("System");
+    expect(portalHasGlobalPermission(contextualAudit, "audit:read")).toBe(false);
+    expect(portalNavigationItems(contextualAudit).map((item) => item.label)).not.toContain("System");
+    expect(portalCapacityFallbackPath(contextualAudit, "/system/audit-log")).toBe("/management");
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {
