@@ -355,7 +355,7 @@ Status: In progress
         preference mutation, and provider desired-state reconciliation.
   - [x] Apply form placement grants to canonical definition, submission, response,
         response-statistics, and management paths.
-  - [ ] Apply event grants beyond meeting entry.
+  - [x] Apply event grants beyond meeting entry.
     - [x] Apply `view` implications to canonical group-scoped event discovery
           and detail reads.
     - [x] Apply the same `view` implications to recurring-series discovery,
@@ -960,7 +960,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,012 backend tests pass with one skipped, 227 frontend tests
+      checkpoint: 2,024 backend tests pass with one skipped, 237 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

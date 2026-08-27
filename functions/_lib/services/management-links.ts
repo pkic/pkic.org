@@ -43,7 +43,7 @@ export function buildManagementLink(appBaseUrl: string, link: ManagementLink): s
     case "organization-content-reviews":
       return adminHashUrl(appBaseUrl, "/organizations/content-reviews").toString();
     case "membership-application":
-      return adminHashUrl(appBaseUrl, `/applications/${encodeURIComponent(link.id)}`).toString();
+      return adminHashUrl(appBaseUrl, `/membership/applications/${encodeURIComponent(link.id)}`).toString();
     case "sponsorship-list":
       return adminHashUrl(appBaseUrl, "/sponsorships").toString();
     case "sponsorship":

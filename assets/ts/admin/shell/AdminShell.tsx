@@ -50,6 +50,13 @@ function PortalAccountRedirect() {
   return <p>Account settings have moved to the portal.</p>;
 }
 
+function MembershipApplicationRoute({ applicationId }: { applicationId: string }) {
+  const [, navigate] = useHashLocation();
+  return (
+    <Applications initialApplicationId={applicationId} onBackFromInitial={() => navigate("/membership/applications")} />
+  );
+}
+
 export function AdminShell() {
   // Initialize chart tooltips once
   useEffect(() => {
@@ -268,6 +275,14 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Membership — Applications">
                   <Applications />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/applications/:applicationId"
+              component={({ params }: { params: { applicationId: string } }) => (
+                <SectionWrapper title="Membership — Application">
+                  <MembershipApplicationRoute applicationId={params.applicationId} />
                 </SectionWrapper>
               )}
             />
