@@ -7,6 +7,7 @@ import { AppError } from "../errors";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import type { DatabaseLike, Env } from "../types";
 import { base64UrlToBytes, bytesToBase64Url } from "./capability-payload";
+import { effectiveInviteExpirySql } from "../invite-validity";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -161,6 +162,7 @@ export async function signedOrQueuedCapability(payload: {
   purpose: CapabilityPurpose;
   resourceId: string;
   ttlSeconds?: number;
+  expiresAtSeconds?: number;
 }): Promise<string> {
   return payload.signingSecret
     ? signCapabilityToken({
@@ -170,7 +172,13 @@ export async function signedOrQueuedCapability(payload: {
         resourceId: payload.resourceId,
         ttlSeconds: payload.ttlSeconds,
       })
-    : queuedCapabilityToken(payload.purpose, payload.resourceId, payload.ttlSeconds);
+    : queuedCapabilityTokenBoundToSecret(
+        payload.purpose,
+        payload.resourceId,
+        payload.linkSecret,
+        payload.ttlSeconds,
+        payload.expiresAtSeconds,
+      );
 }
 
 export async function verifyCapabilityToken(payload: {
@@ -266,18 +274,26 @@ export async function queuedCapabilityTokenBoundToSecret(
   resourceId: string,
   linkSecret: string,
   ttlSeconds = DEFAULT_TTL_SECONDS,
+  expiresAtSeconds?: number,
 ): Promise<string> {
-  return queuedCapabilityToken(purpose, resourceId, ttlSeconds, await sha256Hex(linkSecret));
+  return queuedCapabilityToken(purpose, resourceId, ttlSeconds, await sha256Hex(linkSecret), expiresAtSeconds);
 }
 
-function capabilitySecretQuery(purpose: CapabilityPurpose): string {
+function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite = false): string {
   switch (purpose) {
     case "registration_manage":
       return "SELECT manage_link_secret AS link_secret FROM registrations WHERE id = ?";
     case "registration_confirm":
       return "SELECT confirmation_link_secret AS link_secret FROM registrations WHERE id = ?";
     case "invite":
-      return "SELECT link_secret FROM invites WHERE id = ?";
+      return allowInactiveInvite
+        ? "SELECT i.link_secret FROM invites i WHERE i.id = ?"
+        : `SELECT i.link_secret
+           FROM invites i
+           JOIN events e ON e.id = i.event_id
+           WHERE i.id = ? AND i.status = 'sent'
+             AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+             AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch()`;
     case "proposal_manage":
       return "SELECT manage_link_secret AS link_secret FROM session_proposals WHERE id = ?";
     case "speaker_manage":
@@ -339,9 +355,12 @@ async function loadCapabilityLinkSecret(
   db: DatabaseLike,
   purpose: CapabilityPurpose,
   resourceId: string,
+  allowInactiveInvite = false,
 ): Promise<string | null> {
   if (isStatelessCapabilityPurpose(purpose)) return statelessCapabilityLinkSecret(purpose);
-  const row = await first<{ link_secret: string | null }>(db, capabilitySecretQuery(purpose), [resourceId]);
+  const row = await first<{ link_secret: string | null }>(db, capabilitySecretQuery(purpose, allowInactiveInvite), [
+    resourceId,
+  ]);
   return row?.link_secret ?? null;
 }
 
@@ -369,11 +388,17 @@ export async function verifyDatabaseCapability(payload: {
   signingSecret: string;
   purpose: CapabilityPurpose;
   token: string;
+  allowInactiveInvite?: boolean;
 }): Promise<CapabilityVerifyResult> {
   const parsed = parseToken(payload.token, payload.purpose);
   if (!parsed) return { ok: false, reason: "invalid" };
   if (Math.floor(Date.now() / 1000) >= parsed.expiresAt) return { ok: false, reason: "expired" };
-  const linkSecret = await loadCapabilityLinkSecret(payload.db, payload.purpose, parsed.resourceId);
+  const linkSecret = await loadCapabilityLinkSecret(
+    payload.db,
+    payload.purpose,
+    parsed.resourceId,
+    payload.allowInactiveInvite === true,
+  );
   if (!linkSecret) return { ok: false, reason: "invalid" };
   return verifyCapabilityToken({
     signingSecret: payload.signingSecret,

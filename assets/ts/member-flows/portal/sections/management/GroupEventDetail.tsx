@@ -5,6 +5,7 @@ import { fmt } from "../../ui";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
 import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
+import { GroupEventInvitations } from "./GroupEventInvitations";
 
 function label(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -90,6 +91,8 @@ export function GroupEventDetail({
           ) : null}
         </div>
       )}
+
+      {canManage && <GroupEventInvitations groupId={groupId} event={event} />}
 
       {event.capabilities.includes("manage_attendance") && (
         <div class="border-top pt-3">

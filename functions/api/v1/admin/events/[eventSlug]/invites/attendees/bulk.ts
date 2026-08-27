@@ -14,6 +14,7 @@ import { adminBulkAttendeeInvitesRouteSchema } from "../../../../../../../../ass
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import type { ValidatedData } from "chanfana";
+import { resolveEventInviteExpiry } from "../../../../../../../_lib/invite-validity";
 
 // Outcome buckets returned to the admin UI.
 type BulkItemResult = { email: string };
@@ -30,7 +31,8 @@ export const AdminEventsEventSlugInvitesAttendeesBulkPost = openApiRoute(
     // When sending a large list in chunks the frontend supplies the digest of the
     // full invite list (matching what was committed at preview time).  For single-
     // batch sends the digest is computed directly from the current invites.
-    const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites));
+    const expiresAt = resolveEventInviteExpiry(event, body.expiresAt);
+    const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites, expiresAt));
     await requireValidAdminInvitePreview({
       secret,
       token: body.previewToken,
@@ -45,13 +47,14 @@ export const AdminEventsEventSlugInvitesAttendeesBulkPost = openApiRoute(
     // Invite creation and its durable email intent commit as one aggregate.
     const outcomes = await bulkCreateAttendeesAdmin(requestDb(c), {
       event,
+      expiresAt,
       invites: body.invites.map((i) => ({
         inviteeEmail: i.email,
         inviteeFirstName: i.firstName ?? null,
         inviteeLastName: i.lastName ?? null,
         sourceType: i.sourceType,
       })),
-      buildEmailRow: ({ email, inviteId, token }) => {
+      buildEmailRow: ({ email, inviteId, token, linkSecretFingerprint }) => {
         const registrationUrl = registrationPageUrl(appBaseUrl, event, {
           invite: token,
           inviteId,
@@ -64,6 +67,7 @@ export const AdminEventsEventSlugInvitesAttendeesBulkPost = openApiRoute(
           templateKey: "attendee_invite",
           subject: `Invitation: ${event.name}`,
           capabilityLinkValues: [registrationUrl, declineUrl],
+          linkSecretFingerprint,
           data: {
             ...sharedEmailVars,
             registrationUrl,

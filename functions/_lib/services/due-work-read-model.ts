@@ -5,6 +5,7 @@ import type { AdminDueWorkListQuery, AdminDueWorkRow } from "../../../assets/sha
 import type { DatabaseLike, Env } from "../types";
 import { REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL } from "./registrations/recipient-email";
 import { proposalSpeakerEffectiveProfileExpression } from "./proposal-speakers";
+import { effectiveInviteExpirySql } from "../invite-validity";
 
 const ONE_DAY_MS = 86_400_000;
 
@@ -95,7 +96,7 @@ const DUE_WORK_CTE = `
            i.invitee_last_name,
            i.invitee_email,
            i.reminder_count,
-           i.expires_at,
+           ${effectiveInviteExpirySql("i", "e")} AS expires_at,
            e.name AS event_name,
            e.slug AS event_slug,
            e.starts_at AS event_starts_at,
@@ -114,6 +115,8 @@ const DUE_WORK_CTE = `
       AND i.reminder_count < cfg.max_invite_reminders
       AND (i.reminders_paused_until IS NULL OR i.reminders_paused_until <= cfg.now_at)
       AND COALESCE(i.last_communication_at, i.created_at) <= cfg.reminder_cutoff
+      AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+      AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(cfg.now_at)
   ),
   invite_reminder_candidates AS (
     SELECT 1 AS category_priority,

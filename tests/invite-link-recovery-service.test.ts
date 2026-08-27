@@ -10,9 +10,10 @@ const recipientEmail = "bounded-recovery@example.test";
 function eventInsert(eventId: string, index: number): StatementLike {
   return env.DB.prepare(
     `INSERT INTO events (
-       id, slug, name, timezone, starts_at, ends_at, capacity_in_person,
+     id, slug, name, timezone, starts_at, ends_at, capacity_in_person,
        registration_mode, invite_limit_attendee, settings_json, created_at, updated_at
-     ) VALUES (?, ?, ?, 'UTC', NULL, NULL, NULL, 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+     ) VALUES (?, ?, ?, 'UTC', '2027-12-01T08:00:00.000Z', '2027-12-01T18:00:00.000Z',
+               NULL, 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
   ).bind(eventId, `recovery-event-${index}`, `Recovery Event ${index}`);
 }
 
@@ -20,14 +21,23 @@ function inviteInsert(
   inviteId: string,
   eventId: string,
   createdAt: string,
-  status: "sent" | "expired" = "expired",
+  status: "sent" | "expired" = "sent",
 ): StatementLike {
   return env.DB.prepare(
     `INSERT INTO invites (
        id, event_id, invitee_email, invite_type, link_secret, status, source_type,
        expires_at, last_communication_at, created_at
      ) VALUES (?, ?, ?, 'attendee', ?, ?, 'test', ?, ?, ?)`,
-  ).bind(inviteId, eventId, recipientEmail, crypto.randomUUID(), status, createdAt, createdAt, createdAt);
+  ).bind(
+    inviteId,
+    eventId,
+    recipientEmail,
+    crypto.randomUUID(),
+    status,
+    "2027-11-30T08:00:00.000Z",
+    createdAt,
+    createdAt,
+  );
 }
 
 describe("invite link recovery service", () => {
@@ -39,7 +49,7 @@ describe("invite link recovery service", () => {
     await env.DB.prepare("DROP TRIGGER IF EXISTS fail_invite_recovery_outbox").run();
   });
 
-  it("recovers twenty invitations with four prepared D1 statements", async () => {
+  it("recovers twenty active invitations with five prepared D1 statements", async () => {
     const statements: StatementLike[] = [];
     for (let index = 0; index < 20; index += 1) {
       const eventId = crypto.randomUUID();
@@ -64,7 +74,7 @@ describe("invite link recovery service", () => {
     const outboxIds = await recoverInviteLinksByEmail(countedDb, recipientEmail, "https://app.test");
 
     expect(outboxIds).toHaveLength(20);
-    expect(prepareCount).toBe(4);
+    expect(prepareCount).toBe(5);
     await expect(
       queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM invites WHERE status = 'sent'"),
     ).resolves.toEqual([{ count: 20 }]);
@@ -81,14 +91,14 @@ describe("invite link recovery service", () => {
     expect(payloads.every(({ payload_json }) => !("__subjectOverride" in JSON.parse(payload_json)))).toBe(true);
   });
 
-  it("recovers only the newest expired invitation for one event and type", async () => {
+  it("recovers the active invitation and never revives an expired predecessor", async () => {
     const eventId = crypto.randomUUID();
     const olderId = crypto.randomUUID();
     const newerId = crypto.randomUUID();
     await env.DB.batch([
       eventInsert(eventId, 1),
-      inviteInsert(olderId, eventId, "2026-01-01T00:00:00.000Z"),
-      inviteInsert(newerId, eventId, "2026-02-01T00:00:00.000Z"),
+      inviteInsert(olderId, eventId, "2026-01-01T00:00:00.000Z", "expired"),
+      inviteInsert(newerId, eventId, "2026-02-01T00:00:00.000Z", "sent"),
     ]);
 
     const outboxIds = await recoverInviteLinksByEmail(env.DB, recipientEmail, "https://app.test");
@@ -124,7 +134,7 @@ describe("invite link recovery service", () => {
         "SELECT status, last_communication_at FROM invites WHERE id = ?",
         [inviteId],
       ),
-    ).resolves.toEqual([{ status: "expired", last_communication_at: "2026-01-01T00:00:00.000Z" }]);
+    ).resolves.toEqual([{ status: "sent", last_communication_at: "2026-01-01T00:00:00.000Z" }]);
     await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
   });
 
@@ -152,6 +162,30 @@ describe("invite link recovery service", () => {
     await expect(
       queryAll<{ status: string }>(env.DB, "SELECT status FROM invites WHERE id = ?", [inviteId]),
     ).resolves.toEqual([{ status: "accepted" }]);
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
+  });
+
+  it("suppresses recovery when the event window changes before the durable intent commits", async () => {
+    const eventId = crypto.randomUUID();
+    const inviteId = crypto.randomUUID();
+    await env.DB.batch([eventInsert(eventId, 1), inviteInsert(inviteId, eventId, "2026-01-01T00:00:00.000Z")]);
+    let changed = false;
+    const racingDb: DatabaseLike = {
+      prepare(query) {
+        return env.DB.prepare(query);
+      },
+      async batch(statements) {
+        if (!changed) {
+          changed = true;
+          await env.DB.prepare("UPDATE events SET ends_at = '2027-11-01T00:00:00.000Z' WHERE id = ?")
+            .bind(eventId)
+            .run();
+        }
+        return env.DB.batch(statements);
+      },
+    };
+
+    await expect(recoverInviteLinksByEmail(racingDb, recipientEmail, "https://app.test")).resolves.toEqual([]);
     await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
   });
 });

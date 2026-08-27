@@ -27,6 +27,8 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { AppError } from "../errors";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -232,6 +234,9 @@ export async function submitProposal(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (input.acceptedInvite && isAuthorizationGuardFailure(error)) {
+      throw new AppError(410, "INVITE_EXPIRED", "Invite link has expired");
+    }
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();

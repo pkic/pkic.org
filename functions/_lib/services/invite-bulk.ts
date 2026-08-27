@@ -1,10 +1,19 @@
 import { normalizeEmail } from "../validation";
 import { chunkJsonRows } from "../db/json-bulk";
-import { addHours, nowIso } from "../utils/time";
+import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
+import { sha256Hex } from "../utils/crypto";
 import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../email/outbox-queue";
 import type { DatabaseLike, StatementLike } from "../types";
+import {
+  eventInviteWindowEvidence,
+  inviteExpirySeconds,
+  resolveEventInviteExpiry,
+  type InviteEventWindow,
+} from "../invite-validity";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { AppError } from "../errors";
 
 export type BulkInviteOutcome = {
   email: string;
@@ -23,14 +32,15 @@ export type BulkInviteInput = {
 };
 
 export type BulkInvitePayload = {
-  event: { id: string };
+  event: { id: string } & InviteEventWindow;
   invites: BulkInviteInput[];
-  ttlHours?: number | null;
+  expiresAt?: string;
   buildEmailRow?: (created: {
     inviteId: string;
     token: string;
     email: string;
     invite: BulkInviteInput;
+    linkSecretFingerprint: string;
   }) => InviteEmailQueueRow;
   /** Domain statements committed atomically with invite and outbox creation. */
   additionalStatements?: StatementLike[];
@@ -137,9 +147,18 @@ export async function bulkCreateInvites(
   }
 
   const now = nowIso();
+  const expiresAt = resolveEventInviteExpiry(payload.event, payload.expiresAt, now);
   const normalizedEmails = payload.invites.map((invite) => normalizeEmail(invite.inviteeEmail));
   const emailsJson = JSON.stringify([...new Set(normalizedEmails)]);
   const batchResults = (await db.batch([
+    db
+      .prepare(
+        `UPDATE invites
+         SET status = 'expired'
+         WHERE event_id = ?1 AND invite_type = ?2 AND status = 'sent'
+           AND expires_at IS NOT NULL AND unixepoch(expires_at) <= unixepoch(?3)`,
+      )
+      .bind(payload.event.id, inviteType, now),
     db
       .prepare(
         `SELECT email FROM unsubscribes
@@ -158,11 +177,11 @@ export async function bulkCreateInvites(
       .bind(payload.event.id, inviteType, emailsJson),
   ])) as Array<{ results?: Array<Record<string, string>> }>;
 
-  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
+  const unsubscribed = new Set((batchResults[1].results ?? []).map((row) => row.email));
   const ineligible = new Map(
-    (batchResults[1].results ?? []).map((row) => [row.normalized_email, row.reason ?? "invitee_ineligible"]),
+    (batchResults[2].results ?? []).map((row) => [row.normalized_email, row.reason ?? "invitee_ineligible"]),
   );
-  const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
+  const alreadyInvited = new Set((batchResults[3].results ?? []).map((row) => row.invitee_email));
   const classified = new Set<string>();
   const outcomes: BulkInviteOutcome[] = [];
   const toCreate: Array<{ outcomeIndex: number; email: string; invite: BulkInviteInput }> = [];
@@ -186,24 +205,34 @@ export async function bulkCreateInvites(
     toCreate.push({ outcomeIndex: outcomes.length - 1, email, invite: payload.invites[index] });
   }
 
-  const expiresAt = payload.ttlHours == null ? null : addHours(now, payload.ttlHours);
-  const prepared = toCreate.map(({ outcomeIndex, email, invite }, ordinal) => {
-    const id = uuid();
-    return {
-      outcomeIndex,
-      id,
-      inviteId: id,
-      token: queuedCapabilityToken("invite", id),
-      invite,
-      email,
-      firstName: invite.inviteeFirstName ?? null,
-      lastName: invite.inviteeLastName ?? null,
-      linkSecret: newCapabilityLinkSecret(),
-      sourceType: invite.sourceType ?? "direct",
-      expiresAt,
-      ordinal: ordinal + 1,
-    };
-  });
+  const prepared = await Promise.all(
+    toCreate.map(async ({ outcomeIndex, email, invite }, ordinal) => {
+      const id = uuid();
+      const linkSecret = newCapabilityLinkSecret();
+      const linkSecretFingerprint = await sha256Hex(linkSecret);
+      return {
+        outcomeIndex,
+        id,
+        inviteId: id,
+        token: queuedCapabilityToken(
+          "invite",
+          id,
+          Math.max(1, inviteExpirySeconds(expiresAt) - Math.floor(Date.parse(now) / 1000)),
+          linkSecretFingerprint,
+          inviteExpirySeconds(expiresAt),
+        ),
+        invite,
+        email,
+        firstName: invite.inviteeFirstName ?? null,
+        lastName: invite.inviteeLastName ?? null,
+        linkSecret,
+        linkSecretFingerprint,
+        sourceType: invite.sourceType ?? "direct",
+        expiresAt,
+        ordinal: ordinal + 1,
+      };
+    }),
+  );
 
   const chunks = chunkJsonRows(prepared);
   const emailRows = payload.buildEmailRow
@@ -228,6 +257,7 @@ export async function bulkCreateInvites(
     : [];
   const inviterChunks = chunkJsonRows(inviterRows);
   const statements = [
+    prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
     ...chunks.map((chunk) =>
       db
         .prepare(BULK_INVITE_INSERT_SQL)
@@ -254,10 +284,22 @@ export async function bulkCreateInvites(
     ...emailChunks.map((chunk) => chunk.statement),
     ...(payload.additionalStatements ?? []),
   ];
-  const results = statements.length > 0 ? await db.batch(statements) : [];
+  let results;
+  try {
+    results = await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "EVENT_INVITE_WINDOW_CHANGED",
+        "The event schedule changed before the invitations could be created. Review the deadline and try again.",
+      );
+    }
+    throw error;
+  }
   const insertedIds = new Set(
     results
-      .slice(0, chunks.length)
+      .slice(1, chunks.length + 1)
       .flatMap((result) => (result.results ?? []).map((row) => String((row as { id?: unknown }).id ?? ""))),
   );
   for (let index = 0; index < prepared.length; index += 1) {

@@ -176,6 +176,7 @@ WHEN OLD.status IS NOT NEW.status
   OR OLD.accepted_at IS NOT NEW.accepted_at
   OR OLD.declined_at IS NOT NEW.declined_at
   OR OLD.link_secret IS NOT NEW.link_secret
+  OR OLD.expires_at IS NOT NEW.expires_at
 BEGIN
   UPDATE invites
   SET transition_revision = transition_revision + 1
@@ -188,6 +189,33 @@ END;
 CREATE INDEX idx_invites_recovery_email_created
   ON invites(invitee_email, event_id, invite_type, created_at DESC)
   WHERE status IN ('sent', 'expired');
+
+-- Group and transitional speaker invite lists are event/type scoped and use
+-- created_at as their stable default order. Keep the bounded page in D1.
+CREATE INDEX idx_invites_event_type_created
+  ON invites(event_id, invite_type, created_at DESC, id ASC);
+
+-- This migration is unreleased: normalize legacy invitations onto the same
+-- finite event window used by every new dispatch. Existing earlier deadlines
+-- remain earlier; NULL or overly-late deadlines become the event start/end.
+UPDATE invites
+SET expires_at = (
+  SELECT CASE
+    WHEN invites.expires_at IS NULL THEN event.starts_at
+    WHEN unixepoch(invites.expires_at) <= unixepoch(event.ends_at) THEN invites.expires_at
+    ELSE event.ends_at
+  END
+  FROM events event
+  WHERE event.id = invites.event_id
+)
+WHERE EXISTS (
+  SELECT 1
+  FROM events event
+  WHERE event.id = invites.event_id
+    AND event.starts_at IS NOT NULL
+    AND event.ends_at IS NOT NULL
+    AND unixepoch(event.ends_at) > unixepoch(event.starts_at)
+);
 
 CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)

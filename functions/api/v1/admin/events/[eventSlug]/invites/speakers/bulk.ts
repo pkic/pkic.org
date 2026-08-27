@@ -14,6 +14,7 @@ import {
   computeAdminInviteDigest,
   requireValidAdminInvitePreview,
 } from "../../../../../../../_lib/services/admin-invite-preview";
+import { resolveEventInviteExpiry } from "../../../../../../../_lib/invite-validity";
 
 export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
   adminBulkSpeakerInvitesRouteSchema,
@@ -22,7 +23,8 @@ export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
     const body = data.body;
     const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites));
+    const expiresAt = resolveEventInviteExpiry(event, body.expiresAt);
+    const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites, expiresAt));
     await requireValidAdminInvitePreview({
       secret: requireInternalSecret(c.env),
       token: body.previewToken,
@@ -36,13 +38,14 @@ export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
 
     const outcomes = await bulkCreateSpeakersAdmin(requestDb(c), {
       event,
+      expiresAt,
       invites: body.invites.map((item) => ({
         inviteeEmail: item.email,
         inviteeFirstName: item.firstName,
         inviteeLastName: item.lastName,
         sourceType: item.sourceType,
       })),
-      buildEmailRow: ({ email, inviteId, token, invite }) => {
+      buildEmailRow: ({ email, inviteId, token, invite, linkSecretFingerprint }) => {
         const proposalUrl = proposalPageUrl(appBaseUrl, event, {
           invite: token,
           inviteId,
@@ -55,6 +58,7 @@ export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
           templateKey: "speaker_invite",
           subject,
           capabilityLinkValues: [proposalUrl, declineUrl],
+          linkSecretFingerprint,
           data: {
             ...sharedEmailVars,
             firstName: invite.inviteeFirstName ?? "",

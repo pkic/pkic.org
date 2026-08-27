@@ -84,13 +84,27 @@ They receive a new email only when promotion runs later and a seat is available 
 
 Normal invite links are separate from waitlist offers.
 
-Normal invite links currently do not expire in normal use. Invite creation supports an optional expiry setting for future configuration, but the current invite flows generally do not use it.
+Normal attendee and speaker invitations have one absolute invitation deadline.
+The sender may select it explicitly; otherwise it defaults to the event start.
+The deadline must be in the future and cannot be later than the event end. An
+event therefore needs a finite, valid start and end before invitations can be
+sent.
 
-Even if an invite row has an old `expires_at` value, the accept path currently only checks whether the invite status is still `sent`. Tests currently confirm that behavior.
+An invitation is actionable only while its status is `sent` and its effective
+deadline is still in the future. The effective deadline also caps legacy rows
+without an expiry and rows whose stored expiry is later than a subsequently
+shortened event. Public information views report an invitation past that
+deadline as expired, and durable email delivery cancels queued capabilities
+before calling the provider.
 
 An invite link stops working once its status changes to something like `accepted`, `declined`, `expired`, or `revoked`.
 
 Using an inactive invite later does not automatically put the person back on a waitlist. They need another valid way to register, such as a new invite, open registration, or an admin action.
+
+This policy applies to the normal attendee and event-speaker invitations stored
+in `invites`. Proposal co-speaker invitations and occurrence-specific meeting
+guest links are separate capability domains with their own lifecycle rules;
+they must not silently inherit or duplicate this event-invite policy.
 
 ## Email And Campaigns
 

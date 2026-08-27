@@ -6,6 +6,7 @@ import {
   newCapabilityLinkSecret,
   issueDatabaseCapability,
   queuedCapabilityToken,
+  signedOrQueuedCapability,
   signCapabilityToken,
   verifyCapabilityToken,
   verifyDatabaseCapability,
@@ -13,7 +14,9 @@ import {
 import { resetDb } from "./helpers/reset-db";
 import { run } from "../functions/_lib/db/queries";
 import { nowIso } from "../functions/_lib/utils/time";
+import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { processSelectedOutbox, queueEmail } from "../functions/_lib/email/outbox";
+import { createInvite } from "../functions/_lib/services/invites";
 
 const signingSecret = "capability-test-signing-secret";
 const textEncoder = new TextEncoder();
@@ -146,6 +149,61 @@ describe("public capability links", () => {
     expect(materializedIcs.split("\r\n").every((line) => textEncoder.encode(line).length <= 75)).toBe(true);
   });
 
+  it("binds queued invite markers to the current secret generation", async () => {
+    const now = nowIso();
+    await run(
+      env.DB,
+      `INSERT INTO events
+         (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'UTC', '2027-12-01T08:00:00.000Z', '2027-12-01T18:00:00.000Z', ?, ?)`,
+      ["event-invite-generation", "event-invite-generation", "Invite generation event", now, now],
+    );
+    const created = await createInvite(env.DB, {
+      eventId: "event-invite-generation",
+      inviteeEmail: "generation@example.test",
+      inviteType: "attendee",
+      sourceType: "test",
+    });
+    const marker = created.token;
+    expect(marker).toMatch(/^pkcq1_/);
+    const payload = authorizeQueuedCapabilityLinks({ inviteUrl: marker }, [marker]);
+
+    const delivered = await materializeQueuedCapabilityLinks(
+      env.DB,
+      { INTERNAL_SIGNING_SECRET: signingSecret },
+      payload,
+    );
+    expect(delivered.inviteUrl).toMatch(/^pkc1_/);
+    await expect(
+      verifyDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "invite",
+        token: delivered.inviteUrl as string,
+      }),
+    ).resolves.toMatchObject({ ok: true, resourceId: created.invite.id });
+
+    const replacementSecret = newCapabilityLinkSecret();
+    await run(env.DB, "UPDATE invites SET link_secret = ? WHERE id = ?", [replacementSecret, created.invite.id]);
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, payload),
+    ).rejects.toMatchObject({ status: 410, code: "CAPABILITY_RESOURCE_STALE" });
+
+    const directMarker = await signedOrQueuedCapability({
+      linkSecret: replacementSecret,
+      purpose: "invite",
+      resourceId: created.invite.id,
+    });
+    expect(directMarker).toMatch(/^pkcq1_/);
+    await expect(
+      materializeQueuedCapabilityLinks(
+        env.DB,
+        { INTERNAL_SIGNING_SECRET: signingSecret },
+        authorizeQueuedCapabilityLinks({ inviteUrl: directMarker }, [directMarker]),
+      ),
+    ).resolves.toMatchObject({ inviteUrl: expect.stringMatching(/^pkc1_/) });
+  });
+
   it("materializes only explicitly authorized queued markers", async () => {
     await seedRegistrationCapability();
     const authorizedMarker = queuedCapabilityToken("registration_manage", "registration-capability");
@@ -182,6 +240,34 @@ describe("public capability links", () => {
     });
   });
 
+  it.each([
+    ["accepted", null],
+    ["declined", null],
+    ["revoked", null],
+    ["expired", null],
+    ["sent", "2000-01-01T00:00:00.000Z"],
+  ])("does not materialize an invite that is %s", async (status, expiresAt) => {
+    const inviteId = crypto.randomUUID();
+    const linkSecret = newCapabilityLinkSecret();
+    const now = nowIso();
+    await run(
+      env.DB,
+      "INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES (?, ?, ?, 'UTC', ?, ?)",
+      [inviteId, inviteId, "Invite capability test", now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, expires_at, source_type, created_at)
+       VALUES (?, ?, ?, 'attendee', ?, ?, ?, 'test', ?)`,
+      [inviteId, inviteId, `${inviteId}@example.test`, linkSecret, status, expiresAt, now],
+    );
+    const marker = queuedCapabilityToken("invite", inviteId, undefined, await sha256Hex(linkSecret));
+    const payload = authorizeQueuedCapabilityLinks({ url: marker }, [marker]);
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, payload),
+    ).rejects.toMatchObject({ status: 410, code: "CAPABILITY_RESOURCE_STALE" });
+  });
+
   it("permanently skips a queued email and records the stale capability resource", async () => {
     await seedRegistrationCapability();
     const marker = queuedCapabilityToken("registration_manage", "registration-capability");
@@ -202,7 +288,7 @@ describe("public capability links", () => {
     const outbox = await env.DB.prepare("SELECT status, attempts, last_error FROM email_outbox WHERE id = ?")
       .bind(outboxId)
       .first<{ status: string; attempts: number; last_error: string }>();
-    expect(outbox).toMatchObject({ status: "failed", attempts: 1 });
+    expect(outbox).toMatchObject({ status: "cancelled", attempts: 1 });
     expect(outbox?.last_error).toContain("CAPABILITY_RESOURCE_STALE");
     expect(outbox?.last_error).toContain("registration-capability");
   });

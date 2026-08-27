@@ -182,7 +182,12 @@ async function markOutboxFailed(
   const nonRetryable =
     error instanceof AppError &&
     (error.code === "CAPABILITY_RESOURCE_STALE" || error.code === "CAPABILITY_DESCRIPTOR_INVALID");
-  const status = nonRetryable ? "failed" : getOutboxStatusForRetry(attempts);
+  const status =
+    error instanceof AppError && error.code === "CAPABILITY_RESOURCE_STALE"
+      ? "cancelled"
+      : nonRetryable
+        ? "failed"
+        : getOutboxStatusForRetry(attempts);
   await run(
     db,
     `UPDATE email_outbox

@@ -10,7 +10,12 @@ import {
 import { fmt, toast } from "../../../ui";
 import type { AdminInviteEntry } from "../../../types";
 import { parseContactText } from "../../../../shared/invite-parser";
-import { adminEventInvitesListResponseSchema } from "../../../../../shared/schemas/admin-events";
+import {
+  eventInviteResendResponseSchema,
+  eventInvitesListResponseSchema,
+} from "../../../../../shared/schemas/event-invites";
+import type { EventDetail } from "../../../types";
+import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../../../shared/timezone";
 
 export type InviteType = "attendee" | "speaker";
 
@@ -39,21 +44,35 @@ interface InviteRow extends AdminInviteEntry {
   _key: number;
 }
 
-function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType }) {
+function InviteForm({ slug, inviteType, event }: { slug: string; inviteType: InviteType; event: EventDetail }) {
   const [pasteText, setPasteText] = useState("");
   const [rows, setRows] = useState<InviteRow[]>([{ _key: 0, email: "", firstName: "", lastName: "" }]);
   const [keyCounter, setKeyCounter] = useState(1);
-  const [preview, setPreview] = useState<{ subject: string; html: string; text: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    subject: string;
+    html: string;
+    text: string;
+    inviteExpiresAt: string;
+  } | null>(null);
   const [previewToken, setPreviewToken] = useState<string | null>(null);
   const [inviteDigest, setInviteDigest] = useState<string | null>(null);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [previewStatus, setPreviewStatus] = useState("Preview required before sending.");
   const [sendStatus, setSendStatus] = useState("");
   const [sending, setSending] = useState(false);
+  const [expiresAt, setExpiresAt] = useState(() =>
+    event.starts_at ? instantToDateTimeLocal(event.starts_at, event.timezone) : "",
+  );
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const typeLabel = inviteType === "attendee" ? "attendee" : "speaker";
+  const latestExpiry = event.ends_at ? instantToDateTimeLocal(event.ends_at, event.timezone) : undefined;
+
+  function resolvedExpiry(): string {
+    if (!expiresAt) throw new Error("Set an invitation deadline before previewing or sending.");
+    return dateTimeLocalToIso(expiresAt, event.timezone);
+  }
 
   function handleParse() {
     const { valid, skipped } = parseText(pasteText);
@@ -130,17 +149,19 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setInviteDigest(null);
     try {
       const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
+      const inviteExpiresAt = resolvedExpiry();
       const res = await api(
         `/api/v1/admin/events/${slug}/invites/${inviteType}s/preview`,
         adminInvitePreviewResponseSchema,
         {
           method: "POST",
-          body: JSON.stringify({ invites }),
+          body: JSON.stringify({ invites, expiresAt: inviteExpiresAt }),
         },
       );
       setPreview(res);
       setPreviewToken(res.previewToken);
       setInviteDigest(res.inviteDigest);
+      setExpiresAt(instantToDateTimeLocal(res.inviteExpiresAt, event.timezone));
       setPreviewStatus("Review and confirm below.");
       if (iframeRef.current) {
         iframeRef.current.srcdoc = res.html;
@@ -162,13 +183,14 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setSendStatus("Sending…");
     try {
       const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
+      const inviteExpiresAt = resolvedExpiry();
       const CHUNK = 500;
       let total = 0;
       for (let i = 0; i < invites.length; i += CHUNK) {
         const chunk = invites.slice(i, i + CHUNK);
         await api(`/api/v1/admin/events/${slug}/invites/${inviteType}s/bulk`, adminBulkInviteResponseSchema, {
           method: "POST",
-          body: JSON.stringify({ previewToken, inviteDigest, invites: chunk }),
+          body: JSON.stringify({ previewToken, inviteDigest, expiresAt: inviteExpiresAt, invites: chunk }),
         });
         total += chunk.length;
         setSendStatus(`Sent ${total} of ${invites.length}…`);
@@ -265,6 +287,31 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
         ))}
       </div>
 
+      <div class="mb-3">
+        <label class="form-label small fw-semibold" for={`invite-deadline-${inviteType}`}>
+          Invitation deadline
+        </label>
+        <input
+          id={`invite-deadline-${inviteType}`}
+          class="form-control form-control-sm"
+          type="datetime-local"
+          value={expiresAt}
+          max={latestExpiry}
+          required
+          onInput={(inputEvent) => {
+            setExpiresAt((inputEvent.target as HTMLInputElement).value);
+            setPreview(null);
+            setPreviewToken(null);
+            setInviteDigest(null);
+            setPreviewConfirmed(false);
+            setPreviewStatus("Preview required before sending.");
+          }}
+        />
+        <div class="form-text">
+          Defaults to the event start and cannot be later than the event end
+          {latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""}.
+        </div>
+      </div>
       <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
         <button type="button" class="btn btn-sm btn-outline-secondary" onClick={addRow}>
           + Add row
@@ -313,117 +360,169 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
   );
 }
 
-// ─── Invite list ──────────────────────────────────────────────────────────────
-
-function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType }) {
-  const [statusFilter, setStatusFilter] = useState("sent");
+function SpeakerInviteList({ slug, event }: { slug: string; event: EventDetail }) {
+  const [statusFilter, setStatusFilter] = useState("");
+  const [expiresAt, setExpiresAt] = useState(() =>
+    event.starts_at ? instantToDateTimeLocal(event.starts_at, event.timezone) : "",
+  );
   const tableRef = useRef<ApiTableActions | null>(null);
+  // The transitional admin endpoint is speaker-only; attendee lifecycle moved
+  // to selected-group management.
+  const endpoint = `/api/v1/admin/events/${encodeURIComponent(slug)}/invites`;
 
-  async function handleRevoke(id: string) {
-    if (!confirm("Revoke this invite?")) return;
+  async function handleResend(inviteId: string): Promise<void> {
     try {
-      await apiCommand(`/api/v1/admin/events/${slug}/invites/${id}/revoke`, { method: "POST", body: "{}" });
-      toast("Invite revoked", "success");
+      if (!expiresAt) throw new Error("Set an invitation deadline before resending.");
+      await api(`${endpoint}/${encodeURIComponent(inviteId)}/resend`, eventInviteResendResponseSchema, {
+        method: "POST",
+        body: JSON.stringify({ expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) }),
+      });
+      toast("Speaker invitation resent", "success");
       await tableRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
+    } catch (cause) {
+      toast((cause as Error).message, "error");
+    }
+  }
+
+  async function handleRevoke(inviteId: string): Promise<void> {
+    if (!confirm("Revoke this speaker invitation?")) return;
+    try {
+      await apiCommand(`${endpoint}/${encodeURIComponent(inviteId)}/revoke`, { method: "POST", body: "{}" });
+      toast("Speaker invitation revoked", "success");
+      await tableRef.current?.reload();
+    } catch (cause) {
+      toast((cause as Error).message, "error");
     }
   }
 
   return (
     <ApiDataTable
-      endpoint={`/api/v1/admin/events/${slug}/invites`}
-      responseSchema={adminEventInvitesListResponseSchema}
-      resolve={(data) => data.invites}
-      resolvePage={(data) => data.page}
+      endpoint={endpoint}
+      responseSchema={eventInvitesListResponseSchema}
+      resolve={(response) => response.invites}
+      resolvePage={(response) => response.page}
       paginate
-      searchPlaceholder="Search email / name…"
-      params={{ type: inviteType, ...(statusFilter ? { status: statusFilter } : {}) }}
+      searchPlaceholder="Search speaker invitations…"
+      params={statusFilter ? { status: statusFilter } : undefined}
       actionsRef={tableRef}
       toolbar={({ resetPage }) => (
-        <select
-          class="form-select form-select-sm adm-filter-select"
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter((e.target as HTMLSelectElement).value);
-            resetPage();
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="sent">Pending (sent)</option>
-          <option value="accepted">Accepted</option>
-          <option value="declined">Declined</option>
-          <option value="expired">Expired</option>
-          <option value="revoked">Revoked</option>
-        </select>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          <select
+            class="form-select form-select-sm adm-filter-select"
+            aria-label="Speaker invitation status"
+            value={statusFilter}
+            onChange={(filterEvent) => {
+              setStatusFilter((filterEvent.target as HTMLSelectElement).value);
+              resetPage();
+            }}
+          >
+            <option value="">All statuses</option>
+            <option value="sent">Sent</option>
+            <option value="accepted">Accepted</option>
+            <option value="declined">Declined</option>
+            <option value="expired">Expired</option>
+            <option value="revoked">Revoked</option>
+          </select>
+          <label class="small fw-semibold mb-0" for="speaker-resend-deadline">
+            Resend deadline
+          </label>
+          <input
+            id="speaker-resend-deadline"
+            class="form-control form-control-sm w-auto"
+            type="datetime-local"
+            value={expiresAt}
+            max={event.ends_at ? instantToDateTimeLocal(event.ends_at, event.timezone) : undefined}
+            onInput={(inputEvent) => setExpiresAt((inputEvent.target as HTMLInputElement).value)}
+          />
+        </div>
       )}
       columns={[
         {
-          header: "Email",
-          cell: (inv) => inv.invitee_email,
-          sort: { asc: "invitee_email", desc: "-invitee_email" },
-        },
-        {
-          header: "Name",
-          cell: (inv) => [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—",
+          header: "Invitee",
+          cell: (invite) => (
+            <div>
+              <div class="fw-semibold">
+                {[invite.inviteeFirstName, invite.inviteeLastName].filter(Boolean).join(" ") || "—"}
+              </div>
+              <div class="small text-muted">{invite.inviteeEmail}</div>
+            </div>
+          ),
+          sort: { asc: "invitee_email", desc: "-invitee_email", defaultDirection: "asc" },
         },
         {
           header: "Status",
-          cell: (inv) => <Badge status={inv.status} />,
+          cell: (invite) => <Badge status={invite.status} />,
           sort: { asc: "status", desc: "-status" },
         },
         {
-          header: "Sent by",
-          cell: (inv) => inv.inviter_email ?? inv.inviter_user_id ?? "—",
-          className: "small text-muted",
-        },
-        {
           header: "Sent",
-          cell: (inv) => fmt(inv.created_at),
+          cell: (invite) => fmt(invite.createdAt),
           className: "mono small",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {
           header: "Accepted",
-          cell: (inv) => (inv.accepted_at ? fmt(inv.accepted_at) : "—"),
+          cell: (invite) => (invite.acceptedAt ? fmt(invite.acceptedAt) : "—"),
           className: "mono small",
           sort: { asc: "accepted_at", desc: "-accepted_at", defaultDirection: "desc" },
         },
         {
           header: "",
-          cell: (inv) =>
-            inv.status === "sent" || inv.status === "pending" ? (
-              <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(inv.id)}>
-                Revoke
-              </button>
-            ) : null,
+          className: "text-end",
+          cell: (invite) => (
+            <div class="d-flex justify-content-end gap-2">
+              {invite.actions.resend && (
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  onClick={() => void handleResend(invite.id)}
+                >
+                  Resend
+                </button>
+              )}
+              {invite.actions.revoke && (
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-danger"
+                  onClick={() => void handleRevoke(invite.id)}
+                >
+                  Revoke
+                </button>
+              )}
+            </div>
+          ),
         },
       ]}
-      empty={`No ${inviteType} invites found`}
-      rowKey={(inv) => inv.id}
+      empty="No speaker invitations found."
+      rowKey={(invite) => invite.id}
     />
   );
 }
 
-// ─── Invites compositor ───────────────────────────────────────────────────────
-
-export function Invites({ slug, inviteType = "attendee" }: { slug: string; inviteType?: InviteType }) {
+export function Invites({
+  slug,
+  event,
+  inviteType = "attendee",
+}: {
+  slug: string;
+  event: EventDetail;
+  inviteType?: InviteType;
+}) {
   const [tab, setTab] = useState<"send" | "list">("send");
-  const typeLabel = inviteType === "attendee" ? "Attendee" : "Speaker";
+  if (inviteType === "attendee") return <InviteForm slug={slug} event={event} inviteType="attendee" />;
 
   return (
     <div>
       <Tabs
         items={[
-          { key: "send", label: `Send ${typeLabel} Invites` },
-          { key: "list", label: `${typeLabel} Invite List` },
+          { key: "send", label: "Send Speaker Invites" },
+          { key: "list", label: "Speaker Invite List" },
         ]}
         active={tab}
         onChange={(key) => setTab(key as "send" | "list")}
       />
-
-      {tab === "send" && <InviteForm slug={slug} inviteType={inviteType} />}
-      {tab === "list" && <InviteList slug={slug} inviteType={inviteType} />}
+      {tab === "send" && <InviteForm slug={slug} event={event} inviteType="speaker" />}
+      {tab === "list" && <SpeakerInviteList slug={slug} event={event} />}
     </div>
   );
 }

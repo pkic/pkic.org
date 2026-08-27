@@ -85,8 +85,8 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
       />
 
       {/* Tab content */}
-      {tab === "registrations" && <Registrations slug={slug} subTab={subTab} />}
-      {tab === "proposals" && <Proposals slug={slug} subTab={subTab} />}
+      {tab === "registrations" && <Registrations slug={slug} event={event} subTab={subTab} />}
+      {tab === "proposals" && <Proposals slug={slug} event={event} subTab={subTab} />}
       {tab === "promoters" && <Promoters slug={slug} subTab={subTab} />}
       {tab === "stats" && <EventStats slug={slug} />}
       {tab === "settings" && <Settings event={event} onUpdated={handleUpdated} subTab={subTab} />}

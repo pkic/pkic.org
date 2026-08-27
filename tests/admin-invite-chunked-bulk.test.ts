@@ -26,6 +26,7 @@ import { handleError } from "../functions/_lib/http";
 import { bulkCreateAttendeesAdmin, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 const appEnv = env as unknown as AppEnv;
 
@@ -134,8 +135,14 @@ describe("attendee invite — chunked bulk send", () => {
   });
 
   it("creates hundreds of invites within a bounded D1 query budget", async () => {
-    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
-    const budgeted = createD1QueryBudgetedDatabase(appEnv.DB, 7);
+    const event = (
+      await queryAll<{ id: string; starts_at: string; ends_at: string }>(
+        appEnv.DB,
+        "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
+        [EVENT_SLUG],
+      )
+    )[0];
+    const budgeted = createD1QueryBudgetedDatabase(appEnv.DB, 9);
     const invites = Array.from({ length: 501 }, (_, index) => ({
       inviteeEmail: `bounded-invite-${index}@example.test`,
     }));
@@ -153,12 +160,19 @@ describe("attendee invite — chunked bulk send", () => {
     });
 
     expect(outcomes.filter((outcome) => outcome.status === "created")).toHaveLength(invites.length);
-    // Three classification reads + two JSON invite inserts + two JSON outbox inserts.
-    expect(budgeted.budget.usedQueries()).toBe(7);
+    // One expiry transition + three classification reads + one atomic event-window guard,
+    // two JSON invite inserts, and two JSON outbox inserts.
+    expect(budgeted.budget.usedQueries()).toBe(9);
   });
 
   it("commits invite creation and its outbox intent atomically", async () => {
-    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    const event = (
+      await queryAll<{ id: string; starts_at: string; ends_at: string }>(
+        appEnv.DB,
+        "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
+        [EVENT_SLUG],
+      )
+    )[0];
     let batchCall = 0;
     const failingDb: DatabaseLike = {
       prepare: (query) => appEnv.DB.prepare(query),
@@ -196,8 +210,47 @@ describe("attendee invite — chunked bulk send", () => {
     ).toHaveLength(0);
   });
 
+  it("rejects bulk creation when the event schedule changes after classification", async () => {
+    const event = (
+      await queryAll<{ id: string; starts_at: string; ends_at: string }>(
+        appEnv.DB,
+        "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
+        [EVENT_SLUG],
+      )
+    )[0];
+    const racingDb = mutateBeforeNextBatch(appEnv.DB, async () => {
+      await appEnv.DB.prepare("UPDATE events SET ends_at = starts_at WHERE id = ?").bind(event.id).run();
+    });
+
+    await expect(
+      bulkCreateAttendeesAdmin(racingDb, {
+        event,
+        invites: [{ inviteeEmail: "schedule-race@example.test" }],
+        buildEmailRow: ({ email }) => ({
+          eventId: event.id,
+          recipientEmail: email,
+          templateKey: "attendee_invite",
+          subject: "Schedule race",
+          data: {},
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_INVITE_WINDOW_CHANGED", status: 409 });
+    await expect(
+      queryAll(appEnv.DB, "SELECT id FROM invites WHERE invitee_email = 'schedule-race@example.test'"),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(appEnv.DB, "SELECT id FROM email_outbox WHERE recipient_email = 'schedule-race@example.test'"),
+    ).resolves.toHaveLength(0);
+  });
+
   it("allows only one concurrent active invite and matching outbox intent", async () => {
-    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    const event = (
+      await queryAll<{ id: string; starts_at: string; ends_at: string }>(
+        appEnv.DB,
+        "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
+        [EVENT_SLUG],
+      )
+    )[0];
     const create = () =>
       bulkCreateAttendeesAdmin(appEnv.DB, {
         event,
@@ -225,7 +278,13 @@ describe("attendee invite — chunked bulk send", () => {
   });
 
   it("enforces peer quota atomically and makes repeat endorsements idempotent", async () => {
-    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    const event = (
+      await queryAll<{ id: string; starts_at: string; ends_at: string }>(
+        appEnv.DB,
+        "SELECT id, starts_at, ends_at FROM events WHERE slug = ?",
+        [EVENT_SLUG],
+      )
+    )[0];
     const makePeerInvite = (email: string) =>
       bulkCreateInvites(appEnv.DB, "attendee", {
         event,

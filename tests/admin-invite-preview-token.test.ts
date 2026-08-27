@@ -5,11 +5,13 @@ import {
   verifyAdminInvitePreviewToken,
 } from "../functions/_lib/services/admin-invite-preview";
 
+const INVITE_EXPIRES_AT = "2026-12-01T08:00:00.000Z";
+
 describe("admin invite preview token", () => {
   it("verifies a valid preview token", async () => {
     const secret = "test-secret";
     const invites = [{ email: "alex@example.com", firstName: "Alex", lastName: "Morgan" }];
-    const digest = await computeAdminInviteDigest(invites);
+    const digest = await computeAdminInviteDigest(invites, INVITE_EXPIRES_AT);
 
     const signed = await signAdminInvitePreviewToken({
       secret,
@@ -34,8 +36,8 @@ describe("admin invite preview token", () => {
 
   it("rejects a token when invite payload changed", async () => {
     const secret = "test-secret";
-    const digest = await computeAdminInviteDigest([{ email: "alex@example.com" }]);
-    const changedDigest = await computeAdminInviteDigest([{ email: "sam@example.com" }]);
+    const digest = await computeAdminInviteDigest([{ email: "alex@example.com" }], INVITE_EXPIRES_AT);
+    const changedDigest = await computeAdminInviteDigest([{ email: "sam@example.com" }], INVITE_EXPIRES_AT);
 
     const signed = await signAdminInvitePreviewToken({
       secret,
@@ -60,7 +62,7 @@ describe("admin invite preview token", () => {
 
   it("rejects an expired token", async () => {
     const secret = "test-secret";
-    const digest = await computeAdminInviteDigest([{ email: "alex@example.com" }]);
+    const digest = await computeAdminInviteDigest([{ email: "alex@example.com" }], INVITE_EXPIRES_AT);
 
     const signed = await signAdminInvitePreviewToken({
       secret,
@@ -85,7 +87,7 @@ describe("admin invite preview token", () => {
 
   it("does not allow an attendee preview token to authorize speaker invitations", async () => {
     const secret = "test-secret";
-    const digest = await computeAdminInviteDigest([{ email: "alex@example.com" }]);
+    const digest = await computeAdminInviteDigest([{ email: "alex@example.com" }], INVITE_EXPIRES_AT);
     const signed = await signAdminInvitePreviewToken({
       secret,
       eventId: "event-1",
@@ -105,5 +107,13 @@ describe("admin invite preview token", () => {
         inviteDigest: digest,
       }),
     ).toEqual({ ok: false, reason: "mismatch" });
+  });
+
+  it("binds the invitation deadline into the reviewed payload", async () => {
+    const invites = [{ email: "alex@example.com" }];
+    const first = await computeAdminInviteDigest(invites, INVITE_EXPIRES_AT);
+    const changed = await computeAdminInviteDigest(invites, "2026-12-02T08:00:00.000Z");
+
+    expect(changed).not.toBe(first);
   });
 });

@@ -17,6 +17,7 @@ import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { runReminderCycle } from "../functions/_lib/services/reminders";
+import { runInviteReminders } from "../functions/_lib/services/reminders/invite-reminders";
 import type { Env } from "../functions/_lib/types";
 
 const db = (env as unknown as Env).DB;
@@ -271,6 +272,47 @@ describe("runReminderCycle", () => {
     expect(outbox).toHaveLength(1);
     const payload = JSON.parse(outbox[0].payload_json) as Record<string, string>;
     expect(payload.inviterName).toContain("Bob Inviter");
+  });
+
+  it("does not queue or timestamp an invite reminder after the event schedule changes", async () => {
+    const inviteId = crypto.randomUUID();
+    await insertAttendeeInvite(inviteId, eventId, "schedule-race@example.test");
+    const [before] = await queryAll<{ last_communication_at: string }>(
+      db,
+      "SELECT last_communication_at FROM invites WHERE id = ?",
+      [inviteId],
+    );
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runInviteReminders(gate.db, {
+      appBaseUrl: BASE_URL,
+      limit: 100,
+      maxInviteReminders: 3,
+      cutoff: new Date().toISOString(),
+      now: new Date().toISOString(),
+    });
+    await gate.reached;
+
+    await db
+      .prepare(
+        "UPDATE events SET starts_at = datetime(starts_at, '-1 day'), ends_at = datetime(ends_at, '-1 day') WHERE id = ?",
+      )
+      .bind(eventId)
+      .run();
+    gate.release();
+
+    const result = await staleReminderRun;
+    expect(result.inviteRemindersQueued).toBe(0);
+    await expect(
+      queryAll<{ reminder_count: number; last_communication_at: string }>(
+        db,
+        "SELECT reminder_count, last_communication_at FROM invites WHERE id = ?",
+        [inviteId],
+      ),
+    ).resolves.toEqual([{ reminder_count: 0, last_communication_at: before.last_communication_at }]);
+    await expect(
+      queryAll<{ total: number }>(db, "SELECT COUNT(*) AS total FROM email_outbox WHERE event_id = ?", [eventId]),
+    ).resolves.toEqual([{ total: 0 }]);
   });
 
   it("skips attendee invite when the event has already started", async () => {

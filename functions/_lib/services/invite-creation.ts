@@ -2,12 +2,20 @@ import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { queryPage } from "../db/pagination";
 import { normalizeEmail } from "../validation";
-import { addHours, nowIso } from "../utils/time";
+import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { prepareEngagementStatement } from "./engagement";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "./capability-links";
 import type { DatabaseLike, StatementLike } from "../types";
 import { INVITE_COLUMNS, type InviteInviterInfo, type InviteRecord } from "./invite-types";
+import {
+  effectiveInviteExpirySql,
+  eventInviteWindowEvidence,
+  inviteExpirySeconds,
+  resolveEventInviteExpiry,
+  type InviteEventWindow,
+} from "../invite-validity";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 
 export function formatInviterList(inviters: InviteInviterInfo[]): string {
   if (inviters.length === 0) return "";
@@ -74,7 +82,7 @@ export async function createInvite(
     inviteeLastName?: string | null;
     inviteType: "attendee" | "speaker";
     sourceType?: string;
-    ttlHours?: number | null;
+    expiresAt?: string;
     signingSecret?: string;
   },
   // isNew: true  → fresh invite row created, caller must send the invite email.
@@ -83,7 +91,21 @@ export async function createInvite(
 ): Promise<{ invite: InviteRecord; token: string; isNew: boolean }> {
   const inviteeEmail = normalizeEmail(payload.inviteeEmail);
   const now = nowIso();
-  const expiresAt = payload.ttlHours == null ? null : addHours(now, payload.ttlHours);
+  const event = await first<InviteEventWindow>(db, "SELECT starts_at, ends_at FROM events WHERE id = ?", [
+    payload.eventId,
+  ]);
+  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  const expiresAt = resolveEventInviteExpiry(event, payload.expiresAt, now);
+
+  await db
+    .prepare(
+      `UPDATE invites
+       SET status = 'expired'
+       WHERE event_id = ? AND invite_type = ? AND invitee_email = ? AND status = 'sent'
+         AND expires_at IS NOT NULL AND unixepoch(expires_at) <= unixepoch(?)`,
+    )
+    .bind(payload.eventId, payload.inviteType, inviteeEmail, now)
+    .run();
 
   if (await isUnsubscribed(db, inviteeEmail, payload.eventId)) {
     throw new AppError(409, "INVITEE_UNSUBSCRIBED", "Invitee has unsubscribed from future invitations");
@@ -132,9 +154,15 @@ export async function createInvite(
   const existingInvite = await first<InviteRecord>(
     db,
     `SELECT ${INVITE_COLUMNS} FROM invites
-     WHERE event_id = ? AND invitee_email = ? AND invite_type = ? AND status = 'sent'
+     WHERE invites.event_id = ? AND invitee_email = ? AND invite_type = ? AND status = 'sent'
+       AND EXISTS (
+         SELECT 1 FROM events e
+         WHERE e.id = invites.event_id
+           AND ${effectiveInviteExpirySql("invites", "e")} IS NOT NULL
+           AND unixepoch(${effectiveInviteExpirySql("invites", "e")}) > unixepoch(?)
+       )
      LIMIT 1`,
-    [payload.eventId, inviteeEmail, payload.inviteType],
+    [payload.eventId, inviteeEmail, payload.inviteType, now],
   );
 
   if (existingInvite) {
@@ -206,6 +234,7 @@ export async function createInvite(
   };
 
   const statements: StatementLike[] = [
+    prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.eventId, event, expiresAt, now)),
     db
       .prepare(
         `INSERT INTO invites (
@@ -265,13 +294,26 @@ export async function createInvite(
       }),
     );
   }
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "EVENT_INVITE_WINDOW_CHANGED",
+        "The event schedule changed before the invitation could be created. Review the deadline and try again.",
+      );
+    }
+    throw error;
+  }
 
   const token = await signedOrQueuedCapability({
     signingSecret: payload.signingSecret,
     linkSecret,
     purpose: "invite",
     resourceId: invite.id,
+    ttlSeconds: Math.max(1, inviteExpirySeconds(expiresAt) - Math.floor(Date.parse(now) / 1000)),
+    expiresAtSeconds: inviteExpirySeconds(expiresAt),
   });
   return { invite, token, isNew: true };
 }

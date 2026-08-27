@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { acceptInvite, declineInvite } from "../functions/_lib/services/invite-lifecycle";
-import { resendInviteByAdmin } from "../functions/_lib/services/invite-resend";
+import { resendEventInvite } from "../functions/_lib/services/invite-resend";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 async function insertInvite(eventId: string, status: "sent" | "declined" = "sent"): Promise<string> {
   const id = crypto.randomUUID();
@@ -52,10 +53,10 @@ describe("invite lifecycle aggregate", () => {
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     await expect(
-      resendInviteByAdmin(env.DB, {
+      resendEventInvite(env.DB, {
         event,
         inviteId,
-        admin: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
+        actor: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
         appBaseUrl: "https://app.test",
       }),
     ).rejects.toThrow("forced invite resend audit failure");
@@ -74,10 +75,10 @@ describe("invite lifecycle aggregate", () => {
   it("commits manual resend state, email intent, and audit together", async () => {
     const inviteId = await insertInvite(eventId, "declined");
     const event = await getEventBySlug(env.DB, "pqc-2026");
-    await resendInviteByAdmin(env.DB, {
+    await resendEventInvite(env.DB, {
       event,
       inviteId,
-      admin: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
       appBaseUrl: "https://app.test",
     });
 
@@ -93,6 +94,39 @@ describe("invite lifecycle aggregate", () => {
     expect(
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'invite_resent' AND entity_id = ?", inviteId),
     ).toHaveLength(1);
+  });
+
+  it("rejects acceptance when the event window changes before commit", async () => {
+    const inviteId = await insertInvite(eventId);
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE events SET ends_at = starts_at WHERE id = ?").bind(eventId).run();
+    });
+
+    await expect(acceptInvite(racingDb, inviteId)).rejects.toMatchObject({ code: "INVITE_EXPIRED", status: 410 });
+    await expect(
+      env.DB.prepare("SELECT status FROM invites WHERE id = ?").bind(inviteId).first<{ status: string }>(),
+    ).resolves.toEqual({ status: "sent" });
+  });
+
+  it("rejects resend when the event window changes before commit", async () => {
+    const inviteId = await insertInvite(eventId, "declined");
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE events SET ends_at = starts_at WHERE id = ?").bind(eventId).run();
+    });
+
+    await expect(
+      resendEventInvite(racingDb, {
+        event,
+        inviteId,
+        actor: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_INVITE_WINDOW_CHANGED", status: 409 });
+    await expect(
+      env.DB.prepare("SELECT status FROM invites WHERE id = ?").bind(inviteId).first<{ status: string }>(),
+    ).resolves.toEqual({ status: "declined" });
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
   });
 
   it("allows only one concurrent terminal transition and never leaks decline fallout", async () => {

@@ -21,13 +21,16 @@ export interface AdminInvitePreviewInput {
   sourceType?: string | null;
 }
 
-export function computeAdminInviteDigest(invites: AdminInvitePreviewInput[]): Promise<string> {
-  const canonical = invites.map((item) => ({
-    email: item.email.trim().toLowerCase(),
-    firstName: (item.firstName ?? "").trim(),
-    lastName: (item.lastName ?? "").trim(),
-    sourceType: (item.sourceType ?? "").trim(),
-  }));
+export function computeAdminInviteDigest(invites: AdminInvitePreviewInput[], expiresAt: string): Promise<string> {
+  const canonical = {
+    expiresAt,
+    invites: invites.map((item) => ({
+      email: item.email.trim().toLowerCase(),
+      firstName: (item.firstName ?? "").trim(),
+      lastName: (item.lastName ?? "").trim(),
+      sourceType: (item.sourceType ?? "").trim(),
+    })),
+  };
 
   return sha256Hex(JSON.stringify(canonical));
 }

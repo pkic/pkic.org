@@ -24,14 +24,22 @@ async function call(token: string, path: string): Promise<Response> {
 
 async function insertInvite(
   eventId: string,
-  opts: { email: string; status?: string; createdAt: string },
+  opts: { email: string; status?: string; createdAt: string; type?: "attendee" | "speaker" },
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO invites
        (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
-     VALUES (?, ?, ?, 'attendee', ?, ?, 'direct', ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'direct', ?)`,
   )
-    .bind(crypto.randomUUID(), eventId, opts.email, crypto.randomUUID(), opts.status ?? "sent", opts.createdAt)
+    .bind(
+      crypto.randomUUID(),
+      eventId,
+      opts.email,
+      opts.type ?? "speaker",
+      crypto.randomUUID(),
+      opts.status ?? "sent",
+      opts.createdAt,
+    )
     .run();
 }
 
@@ -50,24 +58,30 @@ describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
     await insertInvite(eventId, { email: "a@invite.test", createdAt: "2026-01-01T00:00:00.000Z" });
     await insertInvite(eventId, { email: "b@invite.test", createdAt: "2026-01-02T00:00:00.000Z" });
     await insertInvite(eventId, { email: "c@invite.test", status: "accepted", createdAt: "2026-01-03T00:00:00.000Z" });
+    await insertInvite(eventId, {
+      email: "attendee@invite.test",
+      createdAt: "2026-01-04T00:00:00.000Z",
+      type: "attendee",
+    });
   });
 
   it("bounds results with limit/offset via data.query and returns a real page envelope", async () => {
     const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?limit=2&offset=0&sort=created_at");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      invites: Array<{ invitee_email: string }>;
+      invites: Array<{ inviteeEmail: string; inviteType: string }>;
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
     expect(body.invites).toHaveLength(2);
     expect(body.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+    expect(body.invites.every((invite) => invite.inviteType === "speaker")).toBe(true);
   });
 
   it("filters by status", async () => {
     const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?status=accepted");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { invites: Array<{ invitee_email: string }>; page: { total: number } };
-    expect(body.invites.map((i) => i.invitee_email)).toEqual(["c@invite.test"]);
+    const body = (await response.json()) as { invites: Array<{ inviteeEmail: string }>; page: { total: number } };
+    expect(body.invites.map((i) => i.inviteeEmail)).toEqual(["c@invite.test"]);
     expect(body.page.total).toBe(1);
   });
 

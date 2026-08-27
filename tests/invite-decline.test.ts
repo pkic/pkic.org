@@ -23,7 +23,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "form-get@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -44,7 +43,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "already-done@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -77,7 +75,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "other-no-note@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -112,6 +109,37 @@ describe("invite decline", () => {
     expect(response.status).toBe(400);
   });
 
+  it("does not let a still-sent invitation bypass its database expiry", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { invite, token } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "expired-sent@example.test",
+      inviteType: "attendee",
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare("UPDATE invites SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?")
+      .bind(invite.id)
+      .run();
+
+    const response = await declinePost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reasonCode: "schedule_conflict" }),
+        }),
+        { token },
+      ),
+    );
+
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_EXPIRED" } });
+    await expect(
+      env.DB.prepare("SELECT status FROM invites WHERE id = ?").bind(invite.id).first<{ status: string }>(),
+    ).resolves.toEqual({ status: "sent" });
+  });
+
   it("stores structured reason and unsubscribe choice", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -119,7 +147,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "reason-store@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -166,7 +193,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "decliner@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -229,7 +255,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "decliner-unsub@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -259,7 +284,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "decliner-rollback@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
     await env.DB.prepare(

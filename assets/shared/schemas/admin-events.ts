@@ -218,37 +218,6 @@ export type AdminEventRegistrationsStats = EventRegistrationsStats;
 export const adminEventRegistrationsListResponseSchema = eventRegistrationsListResponseSchema;
 export type AdminEventRegistrationsListResponse = EventRegistrationsListResponse;
 
-export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
-export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
-export const adminEventInvitesListQuerySchema = searchableListQuerySchema(eventInvitesSortValueSchema).extend({
-  status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]).optional(),
-  type: z.enum(["attendee", "speaker"]).optional(),
-});
-export type AdminEventInvitesListQuery = z.infer<typeof adminEventInvitesListQuerySchema>;
-export const adminEventInviteSummarySchema = z.object({
-  id: z.string(),
-  invitee_email: z.string(),
-  invitee_first_name: z.string().nullable(),
-  invitee_last_name: z.string().nullable(),
-  invite_type: z.string(),
-  status: z.string(),
-  decline_reason_code: z.string().nullable(),
-  decline_reason_note: z.string().nullable(),
-  unsubscribe_future: z.number(),
-  reminder_count: z.number(),
-  source_type: z.string(),
-  expires_at: z.string().nullable(),
-  accepted_at: z.string().nullable(),
-  declined_at: z.string().nullable(),
-  created_at: z.string(),
-  inviter_user_id: z.string().nullable(),
-  inviter_email: z.string().nullable(),
-  inviter_first_name: z.string().nullable(),
-  inviter_last_name: z.string().nullable(),
-});
-export type AdminEventInviteSummary = z.infer<typeof adminEventInviteSummarySchema>;
-export const adminEventInvitesListResponseSchema = paginatedResponseSchema("invites", adminEventInviteSummarySchema);
-
 export const eventPresentationArchiveQuerySchema = z.object({
   versions: z.literal("all").optional(),
 });
@@ -331,6 +300,7 @@ export const adminInvitePreviewResponseSchema = z.object({
   text: z.string(),
   previewToken: z.string(),
   inviteDigest: z.string(),
+  inviteExpiresAt: z.string(),
 });
 export const adminEventSponsorTiersResponseSchema = z.object({
   tiers: z.array(z.object({ tierName: z.string(), hasAttendeeDataAccess: z.boolean() })),
@@ -355,10 +325,12 @@ const bulkInviteeSchema = inviteeSchema.extend({
 const adminBulkInvitesSchema = z.object({
   previewToken: z.string().trim().min(16).max(2048),
   inviteDigest: z.string().max(128).optional(),
+  expiresAt: z.iso.datetime().optional(),
   invites: z.array(bulkInviteeSchema).min(1).max(2000),
 });
 
 const adminBulkInvitesPreviewSchema = z.object({
+  expiresAt: z.iso.datetime().optional(),
   invites: z.array(bulkInviteeSchema).min(1).max(50000),
 });
 

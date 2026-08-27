@@ -16,6 +16,7 @@ export interface DueInviteRow {
   invitee_email: string;
   invitee_first_name: string | null;
   invitee_last_name: string | null;
+  link_secret: string;
   invite_type: "attendee" | "speaker";
   reminder_count: number;
   transition_revision: number;
@@ -24,6 +25,7 @@ export interface DueInviteRow {
   event_slug: string;
   event_base_path: string | null;
   event_starts_at: string | null;
+  event_ends_at: string | null;
   event_settings_json: string;
 }
 

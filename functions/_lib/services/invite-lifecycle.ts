@@ -2,10 +2,13 @@ import { AppError } from "../errors";
 import { all, first } from "../db/queries";
 import { chunkJsonRows } from "../db/json-bulk";
 import { normalizeEmail } from "../validation";
-import { nowIso } from "../utils/time";
+import { isPast, nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { prepareEngagementStatement } from "./engagement";
 import { verifyDatabaseCapability } from "./capability-links";
+import { newCapabilityLinkSecret } from "../auth/capability-links";
+import { activeInviteValidityEvidence, effectiveStoredInviteExpiry, type InviteEventWindow } from "../invite-validity";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../types";
 import { INVITE_COLUMNS, type InviteRecord } from "./invite-types";
 
@@ -54,7 +57,13 @@ export async function findInviteByToken(
   signingSecret: string,
   inviteId?: string | null,
 ): Promise<InviteRecord> {
-  const verified = await verifyDatabaseCapability({ db, signingSecret, purpose: "invite", token });
+  const verified = await verifyDatabaseCapability({
+    db,
+    signingSecret,
+    purpose: "invite",
+    token,
+    allowInactiveInvite: true,
+  });
   if (!verified.ok) {
     throw new AppError(
       verified.reason === "expired" ? 410 : 404,
@@ -69,6 +78,14 @@ export async function findInviteByToken(
   );
   if (!invite) {
     throw new AppError(404, "INVITE_NOT_FOUND", "Invite token is invalid");
+  }
+
+  const event = await first<InviteEventWindow>(db, "SELECT starts_at, ends_at FROM events WHERE id = ?", [
+    invite.event_id,
+  ]);
+  const effectiveExpiry = event ? effectiveStoredInviteExpiry(event, invite.expires_at) : null;
+  if (effectiveExpiry === null || isPast(effectiveExpiry)) {
+    throw new AppError(410, "INVITE_EXPIRED", "Invite link has expired");
   }
 
   if (invite.status !== "sent") {
@@ -86,13 +103,18 @@ export async function acceptInvite(db: DatabaseLike, inviteId: string): Promise<
   try {
     await db.batch(prepareAcceptInviteStatements(db, invite));
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(410, "INVITE_EXPIRED", "Invite link has expired");
+    }
     if (!isStaleInviteTransition(error)) throw error;
     throw new AppError(409, "INVITE_CHANGED", "Invite state changed; please retry");
   }
 }
 
 export function prepareAcceptInviteStatements(db: DatabaseLike, invite: InviteRecord): StatementLike[] {
+  const acceptedAt = nowIso();
   const statements: StatementLike[] = [
+    prepareAuthorizationGuard(db, activeInviteValidityEvidence(invite.id, acceptedAt)),
     prepareInviteTransitionGuard(db, invite),
     db
       .prepare(
@@ -100,7 +122,7 @@ export function prepareAcceptInviteStatements(db: DatabaseLike, invite: InviteRe
          SET status = 'accepted', accepted_at = ?, used_count = used_count + 1
          WHERE id = ? AND status = 'sent'`,
       )
-      .bind(nowIso(), invite.id),
+      .bind(acceptedAt, invite.id),
   ];
   if (invite.inviter_user_id) {
     statements.push(
@@ -156,16 +178,17 @@ export function prepareRevokeDuplicateInvitesStatement(
   payload: { eventId: string; inviteeEmail: string; keepInviteId?: string | null },
 ): StatementLike {
   const inviteeEmail = normalizeEmail(payload.inviteeEmail);
+  const linkSecret = newCapabilityLinkSecret();
   return db
     .prepare(
       `UPDATE invites
-     SET status = 'revoked'
+     SET status = 'revoked', link_secret = ?
      WHERE event_id = ?
        AND invitee_email = ?
        AND status = 'sent'
        AND (? IS NULL OR id != ?)`,
     )
-    .bind(payload.eventId, inviteeEmail, payload.keepInviteId ?? null, payload.keepInviteId ?? null);
+    .bind(linkSecret, payload.eventId, inviteeEmail, payload.keepInviteId ?? null, payload.keepInviteId ?? null);
 }
 
 export async function declineInvite(

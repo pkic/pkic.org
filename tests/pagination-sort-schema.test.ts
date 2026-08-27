@@ -23,11 +23,8 @@ import {
   emailTemplatesListQuerySchema,
   emailTemplatesSortValueSchema,
 } from "../assets/shared/schemas/admin-email-templates";
-import {
-  eventsListSortValueSchema,
-  eventTeamSortValueSchema,
-  eventInvitesSortValueSchema,
-} from "../assets/shared/schemas/admin-events";
+import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/shared/schemas/admin-events";
+import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
 import { formSubmissionsSortValueSchema } from "../assets/shared/schemas/admin-forms";
 import { adminFormSubmissionsQuerySchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
 import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";

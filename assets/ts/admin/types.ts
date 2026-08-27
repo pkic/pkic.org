@@ -28,11 +28,11 @@ import type {
 import type {
   AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
-  AdminEventInviteSummary as CanonicalInviteRecord,
   AdminEventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   AdminEventTeamListItem as CanonicalEventPermission,
   AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
 import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
 import type { membershipSettingsSchema } from "../../shared/schemas/membership-settings";

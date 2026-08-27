@@ -894,6 +894,21 @@ Status: In progress
       unrelated Google Groups batching assertion; its isolated 27-test suite
       passed immediately afterward, documenting the nondeterministic failure
       without misreporting the complete run as green.
+      Attendee invitation list, search, resend, and revoke now use the same
+      selected-group event context. The canonical D1 query owns invite-type
+      scoping, server-side filters, sorting, pagination, and transition actions;
+      the group projection excludes inviter internals, decline notes, and
+      unsubscribe state. Exact event-management authorization is guarded for
+      both reads and same-batch writes. Every invitation producer binds queued
+      capabilities to the current secret generation, and delivery fails closed
+      when an invite is revoked, expired, accepted, declined, or superseded.
+      The unreleased consolidated migration includes the query-plan-verified
+      event/type/created index. Transitional admin list/resend/revoke is now
+      speaker-only, while attendee and speaker bulk creation remain pending a
+      deliberate portal design. A real Worker/D1 browser journey exercises
+      attendee list, search, resend, and revoke without an admin API request.
+      The complete repository gate passes 2,031 backend tests (one skipped),
+      245 frontend tests, and 80 tool tests, with zero changed-code duplication.
       This parent item remains open for the other management areas and final
       admin-shell retirement below, not for event registration setup.
 - [ ] Move remaining global management views into the portal.

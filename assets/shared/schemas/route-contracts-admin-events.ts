@@ -19,6 +19,12 @@ import { eventDaysResponseSchema } from "./event-configuration";
 import { adminEventStatsResponseSchema } from "./admin-analytics";
 import { databaseIdSchema } from "./identifiers";
 import { z } from "zod";
+import {
+  adminEventSpeakerInvitesListQuerySchema,
+  eventInviteResendSchema,
+  eventInviteResendResponseSchema,
+  eventInvitesListResponseSchema,
+} from "./event-invites";
 
 const adminEventSyncEventSchema = z.object({
   id: z.string(),
@@ -186,10 +192,42 @@ export const adminEventTeamPermissionCreateRouteSchema = {
   },
 };
 
-export const adminEventInviteRevokeRouteSchema = {
+/** Transitional speaker-only lifecycle retained while attendee management moves to groups. */
+export const adminEventSpeakerInvitesListRouteSchema = {
+  tags: ["Admin events", "Invites"],
+  summary: "List speaker invitations for an event (admin)",
+  description: "Lists only speaker invitations; attendee invitation lifecycle is managed in the selected group.",
+  request: { params: eventSlugParamsSchema, query: adminEventSpeakerInvitesListQuerySchema },
+  responses: {
+    "200": {
+      description: "Speaker invitations list.",
+      content: { "application/json": { schema: eventInvitesListResponseSchema } },
+    },
+  },
+};
+
+export const adminEventSpeakerInviteResendRouteSchema = {
+  tags: ["Admin events", "Invites"],
+  summary: "Resend a speaker invitation",
+  description: "Re-queues a speaker invitation; attendee invitation IDs are not addressable through this route.",
+  request: {
+    params: eventSlugParamsSchema.extend({ inviteId: databaseIdSchema }),
+    body: { content: { "application/json": { schema: eventInviteResendSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Speaker invitation resent.",
+      content: { "application/json": { schema: eventInviteResendResponseSchema } },
+    },
+    "404": { description: "Speaker invitation not found for this event." },
+    "409": { description: "Invitation cannot be resent in its current state." },
+  },
+};
+
+export const adminEventSpeakerInviteRevokeRouteSchema = {
   tags: ["Admin events"],
-  summary: "Revoke an event invitation",
-  description: "Revoke a pending invitation before it is accepted.",
+  summary: "Revoke a speaker invitation",
+  description: "Revoke a pending speaker invitation before it is accepted.",
   request: {
     params: eventSlugParamsSchema.extend({ inviteId: databaseIdSchema }),
   },
@@ -198,7 +236,7 @@ export const adminEventInviteRevokeRouteSchema = {
       description: "Invitation revoked.",
       content: { "application/json": { schema: successResponseSchema } },
     },
-    "404": { description: "Invitation not found for this event." },
+    "404": { description: "Speaker invitation not found for this event." },
     "409": { description: "Invitation is no longer pending." },
   },
 };

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventIdSchema, frontendPathPattern, jsonErrorResponse } from "./api-common";
+import { eventIdSchema, frontendPathPattern, jsonErrorResponse, successResponseSchema } from "./api-common";
 import {
   eventAttendanceRegistrationsListResponseSchema,
   eventAttendanceRegistrationsQuerySchema,
@@ -31,6 +31,12 @@ import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendeeRegistrationParticipationSchema, registrationSubmissionResponseSchema } from "./registration";
 import { eventGroupGrantSchemas } from "./resource-grants";
+import {
+  eventAttendeeInvitesListResponseSchema,
+  eventInvitesListQuerySchema,
+  eventInviteResendSchema,
+  eventInviteResendResponseSchema,
+} from "./event-invites";
 import {
   eventRegistrationAdmitResponseSchema,
   eventRegistrationAttendanceDetailResponseSchema,
@@ -94,6 +100,7 @@ export const groupEventProfilesRouteSchema = {
 
 const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
 const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
+const groupEventInviteParamsSchema = groupEventParamsSchema.extend({ inviteId: databaseIdSchema });
 const eventConfigurationRevisionSchema = z.object({
   expectedUpdatedAt: z.iso.datetime(),
 });
@@ -212,7 +219,6 @@ export const groupEventDetailRouteSchema = {
       content: { "application/json": { schema: groupEventDetailResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
-    "404": jsonErrorResponse("The event is not available through this group."),
   },
 };
 
@@ -424,6 +430,62 @@ export const groupEventSettingsUpdateRouteSchema = {
     "401": jsonErrorResponse("An authenticated portal identity is required."),
     "403": jsonErrorResponse("Event management access is required."),
     "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
+  },
+};
+
+const groupEventAttendeeInvitesListQuerySchema = eventInvitesListQuerySchema.omit({ type: true });
+export type GroupEventAttendeeInvitesListQuery = z.infer<typeof groupEventAttendeeInvitesListQuerySchema>;
+
+export const groupEventInvitesListRouteSchema = {
+  tags: ["Groups", "Event invites"],
+  summary: "List attendee invitations for a managed group event",
+  description: "Returns a bounded, attendee-only invitation projection with server-side search and pagination.",
+  request: { params: groupEventParamsSchema, query: groupEventAttendeeInvitesListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded attendee invitation page.",
+      content: { "application/json": { schema: eventAttendeeInvitesListResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventInviteResendRouteSchema = {
+  tags: ["Groups", "Event invites"],
+  summary: "Resend an attendee invitation",
+  description: "Re-queues an existing attendee invitation that has not been accepted or revoked.",
+  request: {
+    params: groupEventInviteParamsSchema,
+    body: { content: { "application/json": { schema: eventInviteResendSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Invitation resent.",
+      content: { "application/json": { schema: eventInviteResendResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The attendee invitation is not available for this event."),
+    "409": jsonErrorResponse("The invitation cannot be resent in its current state."),
+  },
+};
+
+export const groupEventInviteRevokeRouteSchema = {
+  tags: ["Groups", "Event invites"],
+  summary: "Revoke an attendee invitation",
+  description: "Revokes a pending attendee invitation before it is accepted.",
+  request: { params: groupEventInviteParamsSchema },
+  responses: {
+    "200": {
+      description: "Invitation revoked.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The attendee invitation is not available for this event."),
+    "409": jsonErrorResponse("The invitation is no longer pending."),
   },
 };
 

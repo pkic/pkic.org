@@ -16,7 +16,10 @@ export async function batchQueueEmailsAndUpdateState(
   emailRows: InviteEmailQueueRow[],
   stateStatements: Array<StatementLike | StatementLike[]>,
   queuedAt: string,
-  options: { isExpectedConflict?: (error: unknown) => boolean } = {},
+  options: {
+    isExpectedConflict?: (error: unknown) => boolean;
+    prepareSliceStatements?: (start: number, end: number) => StatementLike[];
+  } = {},
 ): Promise<number> {
   const MAX_ROWS = 250;
   let committed = 0;
@@ -30,7 +33,7 @@ export async function batchQueueEmailsAndUpdateState(
       const emailStatements = prepareBulkQueueInviteEmailChunkStatements(db, emailSlice, queuedAt).map(
         (chunk) => chunk.statement,
       );
-      await db.batch([...emailStatements, ...stateSlice]);
+      await db.batch([...(options.prepareSliceStatements?.(start, end) ?? []), ...emailStatements, ...stateSlice]);
       return emailSlice.length;
     } catch (error) {
       if (!options.isExpectedConflict?.(error)) throw error;

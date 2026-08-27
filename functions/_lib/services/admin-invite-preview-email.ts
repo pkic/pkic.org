@@ -11,6 +11,7 @@ import {
 } from "./admin-invite-preview";
 import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
 import type { DatabaseLike } from "../types";
+import { resolveEventInviteExpiry } from "../invite-validity";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
@@ -22,10 +23,12 @@ export async function buildAdminInvitePreview(params: {
   adminId: string;
   inviteType: AdminInviteType;
   invites: AdminInvitePreviewInput[];
+  expiresAt?: string;
 }): Promise<{
   previewToken: string;
   previewExpiresAt: string;
   inviteDigest: string;
+  inviteExpiresAt: string;
   recipientCount: number;
   subject: string;
   html: string;
@@ -47,9 +50,10 @@ export async function buildAdminInvitePreview(params: {
           source: "speaker_invite",
         });
   const declineUrl = inviteDeclineUrl(params.appBaseUrl, params.event, "preview-token");
+  const inviteExpiresAt = resolveEventInviteExpiry(params.event, params.expiresAt);
   const [renderBundle, digest] = await Promise.all([
     loadEmailRenderBundle(params.db, [templateKey]),
-    computeAdminInviteDigest(params.invites),
+    computeAdminInviteDigest(params.invites, inviteExpiresAt),
   ]);
   const template = renderBundle.templates.get(templateKey)!;
   const preview = await signAdminInvitePreviewToken({
@@ -83,6 +87,7 @@ export async function buildAdminInvitePreview(params: {
     previewToken: preview.token,
     previewExpiresAt: preview.expiresAt,
     inviteDigest: digest,
+    inviteExpiresAt,
     recipientCount: params.invites.length,
     subject,
     html: rendered.html,

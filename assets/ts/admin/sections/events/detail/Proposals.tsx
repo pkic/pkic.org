@@ -5,7 +5,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataT
 import { FilterSelect } from "../../../components/FilterSelect";
 import { Tabs } from "../../../../components/Tabs";
 import { fmt } from "../../../ui";
-import type { ProposalSummary } from "../../../types";
+import type { EventDetail, ProposalSummary } from "../../../types";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 import { Invites } from "./Invites";
@@ -324,7 +324,7 @@ function ProposalsList({ slug }: { slug: string }) {
 
 // ─── Proposals compositor ─────────────────────────────────────────────────────
 
-export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
+export function Proposals({ slug, event, subTab }: { slug: string; event: EventDetail; subTab?: string }) {
   const [, navigate] = useHashLocation();
   const tab = subTab === "invites" || subTab === "email" || subTab === "responses" ? subTab : "proposals";
 
@@ -342,7 +342,7 @@ export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="proposal_submission" />}
-      {tab === "invites" && <Invites slug={slug} inviteType="speaker" />}
+      {tab === "invites" && <Invites slug={slug} event={event} inviteType="speaker" />}
       {tab === "email" && <EventEmail slug={slug} audience="speakers" />}
     </div>
   );

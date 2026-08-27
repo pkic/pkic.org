@@ -6,14 +6,13 @@ import {
   adminEventCampaignSendSchema,
 } from "./admin-events";
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
-import { databaseIdSchema } from "./identifiers";
-import { inviteTypeSchema } from "./registration";
 
 const previewTokenSchema = adminEventCampaignSendSchema.shape.previewToken;
 const invitePreviewResponseSchema = successResponseSchema.extend({
   previewToken: previewTokenSchema,
   previewExpiresAt: z.string(),
   inviteDigest: z.string().regex(/^[0-9a-f]{64}$/i),
+  inviteExpiresAt: z.string(),
   recipientCount: z.number().int().nonnegative(),
   subject: z.string(),
   html: z.string(),
@@ -54,29 +53,6 @@ export const adminSpeakerInvitePreviewRouteSchema = {
       content: { "application/json": { schema: adminSpeakerInvitePreviewResponseSchema } },
     },
     "400": { description: "Invalid invite preview payload." },
-  },
-};
-
-export const adminInviteResendResponseSchema = successResponseSchema.extend({
-  inviteId: databaseIdSchema,
-  resentAt: z.string(),
-  inviteType: inviteTypeSchema,
-});
-
-export const adminInviteResendRouteSchema = {
-  tags: ["Admin events", "Invites"],
-  summary: "Resend an event invitation",
-  description: "Re-queues an existing, not-yet-accepted invitation for delivery.",
-  request: {
-    params: eventSlugParamsSchema.extend({ inviteId: databaseIdSchema }),
-  },
-  responses: {
-    "200": {
-      description: "Invitation resent.",
-      content: { "application/json": { schema: adminInviteResendResponseSchema } },
-    },
-    "404": { description: "Invitation not found for this event." },
-    "409": { description: "Invitation cannot be resent in its current state." },
   },
 };
 

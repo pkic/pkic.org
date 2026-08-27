@@ -7,6 +7,7 @@ import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./fronte
 import { bulkCreateInvites } from "./invite-bulk";
 import { findInviteByToken, isStaleInviteTransition, prepareDeclineInviteStatements } from "./invite-lifecycle";
 import type { z } from "zod";
+import { effectiveStoredInviteExpiry } from "../invite-validity";
 
 type InviteDeclineBody = z.infer<typeof inviteDeclineSchema>;
 
@@ -39,6 +40,7 @@ export async function declineAndForwardInvite(
   try {
     outcomes = await bulkCreateInvites(db, invite.invite_type, {
       event,
+      expiresAt: effectiveStoredInviteExpiry(event, invite.expires_at) ?? undefined,
       invites: (input.body.forwards ?? []).map((contact) => ({
         inviteeEmail: contact.email,
         inviteeFirstName: contact.firstName ?? null,
@@ -52,7 +54,7 @@ export async function declineAndForwardInvite(
         unsubscribeFuture: input.body.unsubscribeFuture,
         npsScore: input.body.npsScore,
       }),
-      buildEmailRow: ({ inviteId, token, email, invite: contact }) => {
+      buildEmailRow: ({ inviteId, token, email, invite: contact, linkSecretFingerprint }) => {
         const registrationUrl =
           invite.invite_type === "attendee"
             ? registrationPageUrl(input.appBaseUrl, event, {
@@ -76,6 +78,7 @@ export async function declineAndForwardInvite(
           recipientEmail: email,
           subject: invite.invite_type === "speaker" ? `Speaker invitation: ${event.name}` : `Invitation: ${event.name}`,
           capabilityLinkValues: [registrationUrl, proposalUrl, declineUrl],
+          linkSecretFingerprint,
           data: {
             ...buildEventEmailVariables(event, input.appBaseUrl),
             firstName: contact.inviteeFirstName ?? "",

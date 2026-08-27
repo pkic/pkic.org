@@ -113,7 +113,7 @@ export async function createPeerInvitations(
       inviteeLastName: invite.lastName,
       sourceType: inviteType === "attendee" ? "peer-invite" : "peer-nomination",
     })),
-    buildEmailRow: ({ inviteId, token, email, invite }) => {
+    buildEmailRow: ({ inviteId, token, email, invite, linkSecretFingerprint }) => {
       const primaryUrl =
         inviteType === "attendee"
           ? registrationPageUrl(appBaseUrl, event, {
@@ -136,6 +136,7 @@ export async function createPeerInvitations(
         messageType: "transactional",
         subject: inviteType === "attendee" ? `Invitation: ${event.name}` : `Invitation to speak at ${event.name}`,
         capabilityLinkValues: [primaryUrl, declineUrl],
+        linkSecretFingerprint,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: invite.inviteeFirstName ?? "",

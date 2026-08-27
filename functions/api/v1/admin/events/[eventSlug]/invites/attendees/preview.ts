@@ -28,6 +28,7 @@ export const AdminEventsEventSlugInvitesAttendeesPreviewPost = openApiRoute(
       adminId: admin.id,
       inviteType: "attendee",
       invites: body.invites,
+      expiresAt: body.expiresAt,
     });
 
     return json(adminAttendeeInvitePreviewResponseSchema.parse({ success: true, ...preview }));
