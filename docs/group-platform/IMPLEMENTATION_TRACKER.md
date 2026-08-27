@@ -232,7 +232,7 @@ Status: In progress
 - [x] Keep public workshop registration in the shared event-registration flow.
 - [x] Add rotatable, expiring guest invitation capabilities that authorize only
       browser-bound mailbox verification, never meeting entry by themselves.
-- [x] Make administrator-created attendee and speaker invitation validity
+- [x] Make manager-created attendee and speaker invitation validity
       explicitly configurable, defaulting to the event start and never
       extending beyond the event end.
       Evidence: one shared validity contract and effective-expiry SQL expression
@@ -241,11 +241,16 @@ Status: In progress
       or overlong expiries are bounded by the event, and shortening an event
       makes stale invitations logically expired. Duplicate classification and
       the final guarded D1 batch use the same predicate, so replacement cannot
-      race with an event schedule or invitation change. Focused service, mounted
-      route, query-plan, atomicity, and portal-component regressions are included.
-- [ ] Add the same explicit expiry selection to peer co-speaker nominations;
-      they currently use the safe event-bounded default but do not expose a
-      custom deadline.
+      race with an event schedule or invitation change. The selected-group
+      portal, temporary admin adapter, resend actions, and peer attendee/speaker
+      nomination route all reuse this contract and command boundary. Focused
+      service, mounted route, query-plan, atomicity, and portal-component
+      regressions are included.
+- [x] Add the same explicit expiry selection to peer speaker nominations.
+      Evidence: the existing peer route extends the shared invite-validity
+      schema and delegates to the same event-bounded bulk command; omitted,
+      past, concurrent-schedule-change, valid custom, and post-event deadlines
+      are covered without adding a second expiry implementation.
 - [ ] Define and implement occurrence/event-bounded validity configuration for
       external meeting-guest invitations without weakening their separate
       mailbox verification and occurrence-entry checks.
@@ -942,21 +947,29 @@ Status: In progress
       unrelated Google Groups batching assertion; its isolated 27-test suite
       passed immediately afterward, documenting the nondeterministic failure
       without misreporting the complete run as green.
-      Attendee invitation list, search, resend, and revoke now use the same
+      Attendee and speaker invitation create, preview, list, search, resend, and
+      revoke now use the same
       selected-group event context. The canonical D1 query owns invite-type
       scoping, server-side filters, sorting, pagination, and transition actions;
       the group projection excludes inviter internals, decline notes, and
       unsubscribe state. Exact event-management authorization is guarded for
-      both reads and same-batch writes. Every invitation producer binds queued
+      both reads and same-batch writes. One shared composer and neutral schemas
+      drive both invitation types and the temporary admin adapter. Preview
+      confirmation signs every independently sendable ordered recipient batch
+      over its actor, event, invitation type, effective expiry, and digest; the
+      bulk command recomputes the digest before any write, rejecting recipient
+      substitution while preserving bounded 500-recipient D1 commits. Every
+      invitation producer binds queued
       capabilities to the current secret generation, and delivery fails closed
       when an invite is revoked, expired, accepted, declined, or superseded.
       The unreleased consolidated migration includes the query-plan-verified
-      event/type/created index. Transitional admin list/resend/revoke is now
-      speaker-only, while attendee and speaker bulk creation remain pending a
-      deliberate portal design. A real Worker/D1 browser journey exercises
-      attendee list, search, resend, and revoke without an admin API request.
-      The complete repository gate passes 2,031 backend tests (one skipped),
-      245 frontend tests, and 80 tool tests, with zero changed-code duplication.
+      event/type/created index. The obsolete admin-only bulk form is removed;
+      the admin view renders the shared composer as a compatibility adapter.
+      A real Worker/D1 browser journey creates, previews, sends, searches,
+      resends, and revokes an attendee invitation without an admin API request.
+      Focused tests cover the corresponding speaker lifecycle, large-list
+      batching, preview-token substitution attacks, permission boundaries,
+      accessible controls, and text-safe recipient rendering.
       Program-committee proposal management now uses the same selected-group
       event context. Neutral shared contracts and components serve the portal
       and the temporary admin adapter for detail, reviews, comments, accepted
@@ -974,8 +987,8 @@ Status: In progress
       merge also prevents configurable form keys from replacing canonical
       event, identity, route, or management variables. A real Worker/D1 browser
       journey completes the portal proposal workflow without an admin API
-      fallback. The complete repository gate now passes 2,114 backend tests
-      (one skipped), 256 frontend tests, and 80 tool tests, with zero duplicated
+      fallback. The complete repository gate now passes 2,122 backend tests
+      (one skipped), 258 frontend tests, and 80 tool tests, with zero duplicated
       changed-code blocks.
       This parent item remains open for the other management areas and final
       admin-shell retirement below, not for event registration or proposal
@@ -1093,7 +1106,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,114 backend tests pass with one skipped, 256 frontend tests
+      checkpoint: 2,122 backend tests pass with one skipped, 258 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

@@ -195,6 +195,20 @@ Registration policy is controlled per event:
 - required registration;
 - public registration where the profile permits it.
 
+Group managers create attendee and speaker invitations through the canonical
+group-event boundary. One shared bulk composer, request/response contract,
+validity policy, command service, and text-safe email-variable builder serve
+the portal and any temporary compatibility adapter. Invitation validity is
+explicitly configurable, defaults to the event start, and can never extend
+beyond the event end.
+
+Bulk sending requires a short-lived preview confirmation. Each independently
+sendable recipient batch is signed over its ordered recipients, actor, event,
+invitation type, and effective expiry. The command recomputes that digest before
+any D1 or outbox write, so a preview cannot authorize substituted, reordered,
+or appended recipients while still allowing large lists to be committed in
+bounded batches.
+
 The authenticated group-registration adapter accepts participation data only.
 It derives the attendee identity and profile from the verified session and then
 uses the same registration, consent, form-answer, capacity, notification,
