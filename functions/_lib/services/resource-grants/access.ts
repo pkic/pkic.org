@@ -3,8 +3,9 @@ import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
-import { hasActiveGroupMembership } from "../groups/access";
-import { canManageAnyGroup } from "../groups/governance";
+import { activeGroupMembershipAuthorizationEvidence, hasActiveGroupMembership } from "../groups/access";
+import { canManageAnyGroup, groupManagementAuthorizationEvidence } from "../groups/governance";
+import type { LiveGroupResourceContextAccess } from "./access-query";
 import {
   getResourceGrantDefinition,
   isManagerResourceCapability,
@@ -27,6 +28,23 @@ export interface GroupResourceViewer {
 export interface GroupResourceContextAccess {
   member: boolean;
   manager: boolean;
+}
+
+/**
+ * Reusable live context evidence for resource reads. Keep membership and
+ * leadership inside the same D1 statement as the protected resource query so
+ * a revoked grant, membership, or role cannot expose a stale page.
+ */
+export function liveGroupResourceContextAccess(
+  viewer: GroupResourceViewer,
+  groupId: string,
+): LiveGroupResourceContextAccess {
+  return {
+    memberEvidence: activeGroupMembershipAuthorizationEvidence(viewer.userId, groupId),
+    managerEvidence: viewer.admin
+      ? groupManagementAuthorizationEvidence(viewer.admin, [groupId])
+      : { sql: "SELECT 1 WHERE 0", bindings: [] },
+  };
 }
 
 export async function resolveGroupResourceContextAccess(

@@ -2,7 +2,7 @@ import type {
   GroupMailingListCreateInput,
   GroupMailingListUpdateInput,
 } from "../../../../assets/shared/schemas/mailing-lists";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
@@ -11,6 +11,7 @@ import { nowIso } from "../../utils/time";
 import { prepareAuditLog, type AuditScope } from "../audit";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import { prepareReconcileMailingListStatement } from "../mailing-list-subscriptions";
+import { prepareGroupResourceContextAuthorizationGuard, requireGroupResourceAccess } from "../resource-grants";
 import { translateMailingListWriteError, validateMailingListConfiguration } from "./configuration";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
 
@@ -172,11 +173,24 @@ export async function deleteMailingList(
   }
 }
 
-function groupMailingListOwnershipGuard(db: DatabaseLike, listId: string, groupId: string): StatementLike {
-  return prepareAuthorizationGuard(db, {
-    sql: "SELECT 1 FROM mailing_lists WHERE id = ? AND group_id = ?",
-    bindings: [listId, groupId],
-  });
+async function requireManagedGroupMailingList(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  listId: string,
+): Promise<void> {
+  const list = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
+  if (!list) {
+    throw new AppError(404, "NOT_FOUND", "Mailing list not found");
+  }
+  try {
+    await requireGroupResourceAccess(db, actor, "mailingList", listId, "manage", groupId);
+  } catch (error) {
+    if (error instanceof AppError && error.code === "RESOURCE_CAPABILITY_REQUIRED" && list.group_id !== groupId) {
+      throw new AppError(404, "NOT_FOUND", "Mailing list not found");
+    }
+    throw error;
+  }
 }
 
 /** Group-scoped commands retain one write implementation while binding ownership and authorization atomically. */
@@ -200,13 +214,11 @@ export async function updateGroupMailingList(
   listId: string,
   input: GroupMailingListUpdateInput,
 ) {
-  await requireGroupManagement(db, actor, groupId);
-  const existing = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
-  if (!existing || existing.group_id !== groupId) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
+  await requireManagedGroupMailingList(db, actor, groupId, listId);
   return updateMailingList(db, listId, input, actor.id, {
     authorizationGuards: [
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
-      groupMailingListOwnershipGuard(db, listId, groupId),
+      prepareGroupResourceContextAuthorizationGuard(db, groupId, "mailingList", listId, "manage"),
     ],
     auditScope: { type: "group", id: groupId },
   });
@@ -218,13 +230,11 @@ export async function archiveGroupMailingList(
   groupId: string,
   listId: string,
 ): Promise<void> {
-  await requireGroupManagement(db, actor, groupId);
-  const existing = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
-  if (!existing || existing.group_id !== groupId) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
+  await requireManagedGroupMailingList(db, actor, groupId, listId);
   await deleteMailingList(db, listId, actor.id, {
     authorizationGuards: [
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
-      groupMailingListOwnershipGuard(db, listId, groupId),
+      prepareGroupResourceContextAuthorizationGuard(db, groupId, "mailingList", listId, "manage"),
     ],
     auditScope: { type: "group", id: groupId },
   });

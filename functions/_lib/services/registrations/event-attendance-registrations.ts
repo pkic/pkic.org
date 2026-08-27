@@ -1,5 +1,4 @@
 import {
-  EVENT_REGISTRATIONS_SORT_COLUMNS,
   eventAttendanceRegistrationSummarySchema,
   eventAttendanceRegistrationsStatsSchema,
   type EventAttendanceRegistrationSummary,
@@ -10,10 +9,10 @@ import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { resolveOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { getAttendanceStatusByType } from "./attendance-statistics";
 import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
+import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
 
 interface AttendanceRegistrationRow {
   id: string;
@@ -71,7 +70,7 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
                 WHERE ${conditions.join(" AND ")}`,
       bindings,
     },
-    orderBy: resolveOrderBy(params.sort, EVENT_REGISTRATIONS_SORT_COLUMNS, "ORDER BY r.created_at DESC", "r.id ASC"),
+    orderBy: resolveEventRegistrationOrderBy(params.sort),
     limit: params.limit,
     offset: params.offset,
   };

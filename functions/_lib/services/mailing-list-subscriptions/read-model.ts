@@ -11,7 +11,8 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { toMailingList, type MailingListRow } from "../mailing-list-record";
-import { getResourceGrantDefinition, memberResourceGrantCapabilitiesFor } from "../resource-grants/definitions";
+import { liveGroupResourceContextAccess } from "../resource-grants/access";
+import { buildLiveAccessibleGroupResourceIdsCte } from "../resource-grants/access-query";
 import { EFFECTIVE_SUBSCRIPTION_CTE, EFFECTIVE_SUBSCRIPTION_VALUE_SQL } from "./projection";
 
 interface EffectiveSubscriptionRow extends MailingListRow {
@@ -63,25 +64,14 @@ export async function listEffectiveGroupMailingListSubscriptions(
   query: GroupMailingListSubscriptionsQuery,
 ): Promise<{ subscriptions: ReturnType<typeof mapRow>[]; page: PageInfo }> {
   const groupId = await resolveGroupId(db, groupIdOrSlug);
-  const definition = getResourceGrantDefinition("mailingList");
-  const visibleCapabilities = memberResourceGrantCapabilitiesFor(definition, "view");
-  const capabilityPlaceholders = visibleCapabilities.map(() => "?").join(", ");
-  const conditions = [
-    `(EXISTS (
-       SELECT 1 FROM group_memberships membership
-       JOIN groups membership_group ON membership_group.id = membership.group_id AND membership_group.active = 1
-        WHERE membership.group_id = ? AND membership.user_id = ? AND membership.left_at IS NULL
-     ) AND (
-       group_id = ?
-       OR EXISTS (
-         SELECT 1 FROM mailing_list_group_grants grant_row
-          WHERE grant_row.mailing_list_id = effective_subscriptions.id
-            AND grant_row.group_id = ?
-            AND grant_row.capability IN (${capabilityPlaceholders})
-       )
-     ))`,
-  ];
-  const bindings: unknown[] = [userId, groupId, userId, groupId, groupId, ...visibleCapabilities];
+  const accessibleLists = buildLiveAccessibleGroupResourceIdsCte(
+    "mailingList",
+    groupId,
+    liveGroupResourceContextAccess({ userId }, groupId),
+    "view",
+  );
+  const conditions: string[] = [];
+  const bindings: unknown[] = [userId, ...accessibleLists.bindings];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
   if (search) {
     conditions.push(search.sql);
@@ -96,10 +86,11 @@ export async function listEffectiveGroupMailingListSubscriptions(
     conditions.push(query.primaryDiscussion ? "is_primary_discussion = 1" : "is_primary_discussion = 0");
   }
   const { rows, total } = await queryPage<EffectiveSubscriptionRow>(db, {
-    sql: `${EFFECTIVE_SUBSCRIPTION_CTE}
+    sql: `${EFFECTIVE_SUBSCRIPTION_CTE}, ${accessibleLists.sql}
       SELECT ${SELECT_COLUMNS}
         FROM effective_subscriptions
-       WHERE ${conditions.join(" AND ")}`,
+        JOIN accessible_resource accessible ON accessible.resource_id = effective_subscriptions.id
+       ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}`,
     bindings,
     orderBy: resolveMappedOrderBy(
       query.sort,
