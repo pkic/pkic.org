@@ -328,6 +328,21 @@ the group portal; temporary admin routes are adapters over the same services,
 not a second implementation. Speaker self-service remains a separate,
 resource-bound capability surface.
 
+Proposal co-speaker invitations use the same event-bounded validity policy as
+other event invitations: omission resolves to the event start and an explicit
+deadline cannot exceed the event end. Expiry blocks delivery and use while the
+speaker remains unconfirmed; confirming the invitation preserves the same
+resource-bound speaker capability for later self-management. Renewing an
+expired or declined invitation rotates its secret and generation, so the prior
+bearer link cannot become valid again.
+
+Invitation creation and renewal recheck the exact group, event, proposal,
+speaker snapshot, event schedule, capacity, and live management permission in
+the same D1 batch. Queued capability descriptors are bound to both the intended
+recipient and current secret generation. Reminder and recovery selection stays
+in indexed D1 queries, and concurrent decline or confirmation cannot be
+overwritten by a stale invitation request.
+
 Meeting endpoints are a profile-specific projection over the shared event
 series service. They do not introduce separate recurrence, pagination,
 calendar, or attendance implementations.

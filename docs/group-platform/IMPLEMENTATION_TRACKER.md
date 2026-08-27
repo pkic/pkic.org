@@ -251,6 +251,14 @@ Status: In progress
       schema and delegates to the same event-bounded bulk command; omitted,
       past, concurrent-schedule-change, valid custom, and post-event deadlines
       are covered without adding a second expiry implementation.
+- [x] Apply the shared event-bounded validity policy to proposal co-speaker
+      invitations without expiring confirmed-speaker self-management.
+      Evidence: omitted deadlines resolve to the event start and explicit
+      deadlines cannot exceed the event end. Expiry stops delivery and use of
+      an unconfirmed invitation, while confirmation preserves the same
+      resource-bound speaker capability. Renewing an expired or declined
+      invitation rotates its secret and generation instead of reviving the old
+      bearer capability.
 - [ ] Define and implement occurrence/event-bounded validity configuration for
       external meeting-guest invitations without weakening their separate
       mailbox verification and occurrence-entry checks.
@@ -654,9 +662,19 @@ Status: In progress
       adapters. Presentation upload/download remains speaker-capability scoped,
       requires a confirmed speaker on an accepted proposal, and no longer
       returns private R2 storage keys through public presentation contracts.
-- [ ] Add canonical group co-speaker invitation/capability management; the
-      existing speaker roster management does not yet replace the remaining
-      token-based nomination flow.
+- [x] Add canonical group co-speaker invitation/capability management.
+      Evidence: one shared contract, service, portal form, and exact
+      group/event/proposal route replace the remaining portal dependency on the
+      proposer-only nomination path. Active duplicates are idempotent; expired
+      or declined invitations are renewed with a rotated secret and generation.
+      Recipient- and secret-bound durable-outbox markers fail closed after
+      expiry, decline, replacement, or recipient changes. Exact speaker-state,
+      proposal-tuple, permission, event-schedule, and capacity guards run in the
+      same D1 batch, including deterministic decline and confirmation race
+      coverage. Reminder and recovery selection remains in indexed D1 queries.
+      Focused service, route, capability, concurrency, query-plan, component,
+      and real Worker/D1 browser tests cover the lifecycle without an admin API
+      fallback.
 - [x] Add nested mailing-list discovery, preference, configuration-management,
       and resource-sharing routes.
       Evidence: participant subscription preferences remain a distinct
@@ -987,8 +1005,8 @@ Status: In progress
       merge also prevents configurable form keys from replacing canonical
       event, identity, route, or management variables. A real Worker/D1 browser
       journey completes the portal proposal workflow without an admin API
-      fallback. The complete repository gate now passes 2,122 backend tests
-      (one skipped), 258 frontend tests, and 80 tool tests, with zero duplicated
+      fallback. The complete repository gate now passes 2,137 backend tests
+      (one skipped), 259 frontend tests, and 80 tool tests, with zero duplicated
       changed-code blocks.
       This parent item remains open for the other management areas and final
       admin-shell retirement below, not for event registration or proposal
@@ -1106,7 +1124,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,122 backend tests pass with one skipped, 258 frontend tests
+      checkpoint: 2,137 backend tests pass with one skipped, 259 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
