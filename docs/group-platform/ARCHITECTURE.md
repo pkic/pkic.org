@@ -219,7 +219,14 @@ batch. A revoked grant or ended membership therefore cannot race a prepared
 registration into the database.
 
 Guests are normally invited to one occurrence. Series-wide guest access is an
-explicit exception. Public workshops use the public-registration event policy.
+explicit exception. Guest validity composes the same shared invitation policy:
+an omitted occurrence-scoped deadline resolves to that occurrence's start and
+cannot exceed its end, while a series-wide deadline uses the materialized
+parent-event window. A schedule change may shorten an issued deadline but never
+extend it. Creation rechecks the exact schedule in the invitation D1 batch, and
+queued capability delivery, mailbox challenge creation, verified sessions, and
+occurrence entry all apply the same live effective deadline. Public workshops
+use the public-registration event policy.
 
 Invitation, RSVP, registration, join confirmation, and verified attendance are
 separate facts.

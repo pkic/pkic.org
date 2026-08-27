@@ -394,6 +394,15 @@ every pending browser challenge and guest session. A capability-bearing
 invitation authorizes only the start of mailbox verification; it is not an
 attendee identity and cannot read landing data or reveal the provider URL.
 
+`expires_at` stores the deadline resolved when the invitation is issued. An
+omitted deadline resolves to the selected occurrence start, or to the parent
+event start for an explicit series-wide invitation. The effective deadline is
+the earlier of that stored value and the current occurrence/event end. Moving a
+schedule therefore cannot extend an issued capability, and shortening or
+invalidating the schedule takes effect without rewriting guest rows. The same
+effective projection is used by listing, queued capability materialization,
+mailbox challenges, sessions, and canonical occurrence eligibility.
+
 ### meeting_guest_browser_challenges
 
 A short-lived challenge binds one invited guest and occurrence to a random

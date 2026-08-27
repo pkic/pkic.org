@@ -259,9 +259,21 @@ Status: In progress
       resource-bound speaker capability. Renewing an expired or declined
       invitation rotates its secret and generation instead of reviving the old
       bearer capability.
-- [ ] Define and implement occurrence/event-bounded validity configuration for
+- [x] Define and implement occurrence/event-bounded validity configuration for
       external meeting-guest invitations without weakening their separate
       mailbox verification and occurrence-entry checks.
+      Evidence: the guest request composes the canonical event-invite validity
+      schema. Omission resolves to the selected occurrence start, or to the
+      materialized parent-event start for an explicit series-wide invitation;
+      an explicit deadline cannot exceed the corresponding end. One shared
+      effective-expiry SQL expression drives guest listing, pending counts,
+      queued capability materialization, browser challenges, verified sessions,
+      and the canonical occurrence-eligibility view. The invitation D1 batch
+      rechecks the exact schedule, while later schedule changes can shorten but
+      never extend an issued deadline. Focused service, mounted route,
+      concurrency, migration, component, and Playwright regressions cover
+      defaults, bounds, schedule races, queued delivery, established sessions,
+      mailbox verification, and intentional occurrence entry.
 - [x] Make GET render only; require intentional POST before redirect.
 - [x] Display and snapshot name and affiliation.
 - [x] Reuse existing event terms and consent acceptance logic through one
@@ -1139,7 +1151,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,141 backend tests pass with one skipped, 262 frontend tests
+      checkpoint: 2,145 backend tests pass with one skipped, 263 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
