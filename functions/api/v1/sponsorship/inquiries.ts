@@ -11,6 +11,7 @@ import { enforceRateLimit } from "../../../_lib/rate-limit";
 import { getClientIp } from "../../../_lib/request";
 import { processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { getEventBySlug } from "../../../_lib/services/events";
+import { buildManagementLink } from "../../../_lib/services/management-links";
 import {
   createSponsorshipInquiry,
   findOrganizationIdByName,
@@ -70,7 +71,7 @@ async function handleSponsorshipInquiry(c: any, body: SponsorshipInquiry): Promi
     eventName: event?.name ?? "",
     brochureUrl: env.SPONSORSHIP_BROCHURE_URL ?? "https://pkic.org/sponsors/",
     notificationEmail: env.SPONSORSHIP_NOTIFICATION_EMAIL ?? "sponsorships@pkic.org",
-    adminUrl: `${resolveAppBaseUrl(env, c.req.raw)}/admin/`,
+    managementUrl: buildManagementLink(resolveAppBaseUrl(env, c.req.raw), { kind: "sponsorship-list" }),
   });
   for (const outboxId of created.outboxIds) {
     c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, outboxId));

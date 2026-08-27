@@ -11,8 +11,7 @@ import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { voteTypeSchema, voteStatusSchema } from "./votes";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { groupIdSchema, groupReferenceSchema } from "./groups";
-import { workingGroupSummarySchema } from "./members-directory";
+import { groupIdSchema } from "./groups";
 import {
   contentReviewStatusSchema,
   organizationContentReviewSchema,
@@ -228,63 +227,6 @@ export const myOrganizationVisibilityUpdateRouteSchema = {
       description: "Updated.",
       content: { "application/json": { schema: myOrganizationVisibilityUpdateResponseSchema } },
     },
-  },
-};
-
-export const myWorkingGroupSummarySchema = z.object({
-  workingGroupId: groupIdSchema,
-  slug: z.string(),
-  name: z.string(),
-  joinedAt: z.string(),
-});
-
-/** One row returned by either the joined-membership or eligible catalog view. */
-export const myWorkingGroupEntrySchema = workingGroupSummarySchema.extend({
-  workingGroupId: groupIdSchema,
-  joinedAt: z.string().nullable(),
-});
-export const MY_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "joinedAt"] as const;
-export const myWorkingGroupsListQuerySchema = listQuerySchema(MY_WORKING_GROUP_SORT_COLUMNS).extend({
-  view: z.enum(["joined", "catalog"]).default("catalog"),
-});
-export type MyWorkingGroupsListQuery = z.infer<typeof myWorkingGroupsListQuerySchema>;
-export const myWorkingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", myWorkingGroupEntrySchema);
-
-export const myWorkingGroupsListRouteSchema = {
-  tags: ["Me"],
-  summary: "List my working groups",
-  description: "Paginated joined-membership or eligible-catalog view selected with the view query parameter.",
-  request: { query: myWorkingGroupsListQuerySchema },
-  responses: {
-    "200": {
-      description: "My working groups.",
-      content: {
-        "application/json": {
-          schema: myWorkingGroupsListResponseSchema,
-        },
-      },
-    },
-  },
-};
-
-export const myWorkingGroupJoinRouteSchema = {
-  tags: ["Me"],
-  summary: "Join a working group",
-  request: { params: z.object({ wgId: groupReferenceSchema }) },
-  responses: {
-    "200": { description: "Joined." },
-    "403": { description: "CA working group requires category A membership." },
-    "404": { description: "Working group not found." },
-  },
-};
-
-export const myWorkingGroupLeaveRouteSchema = {
-  tags: ["Me"],
-  summary: "Leave a working group",
-  request: { params: z.object({ wgId: groupReferenceSchema }) },
-  responses: {
-    "200": { description: "Left." },
-    "404": { description: "Working group not found." },
   },
 };
 

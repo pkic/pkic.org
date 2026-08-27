@@ -3,9 +3,13 @@ import { prepareBulkQueueInviteEmailChunkStatements } from "../email/outbox";
 import type { DatabaseLike, StatementLike } from "../types";
 import { stringifyJson } from "../utils/json";
 import { nowIso } from "../utils/time";
+import { sha256Hex } from "../utils/crypto";
+import { newCapabilityLinkSecret } from "../auth/capability-links";
 import { buildInviteEmailQueueRow } from "./invite-email";
 import { isStaleInviteTransition, prepareInviteTransitionGuardStatements } from "./invite-lifecycle";
 import type { EventRouteRow } from "./reminders-support";
+import { effectiveInviteExpirySql, eventInviteWindowsEvidence } from "../invite-validity";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 
 export const INVITE_LINK_RECOVERY_LIMIT = 20;
 
@@ -15,6 +19,7 @@ interface InviteRecoveryMatch {
   invitee_first_name: string | null;
   invitee_last_name: string | null;
   invite_type: "attendee" | "speaker";
+  link_secret: string;
   transition_revision: number;
   event_id: string;
   event_name: string;
@@ -24,6 +29,8 @@ interface InviteRecoveryMatch {
   event_starts_at: string | null;
   event_ends_at: string | null;
   event_settings_json: string;
+  expires_at: string;
+  next_link_secret?: string;
 }
 
 type RecoveryEvent = EventRouteRow & { timezone: string; ends_at: string | null };
@@ -42,14 +49,21 @@ function recoveryEvent(row: InviteRecoveryMatch): RecoveryEvent {
 }
 
 function prepareRecoveryUpdate(db: DatabaseLike, rows: InviteRecoveryMatch[], recoveredAt: string): StatementLike {
+  const secretRows = stringifyJson(rows.map((row) => ({ id: row.id, linkSecret: row.next_link_secret })));
   return db
     .prepare(
       `UPDATE invites
-       SET status = 'sent', expires_at = NULL, last_communication_at = ?
+       SET status = 'sent',
+           link_secret = COALESCE(
+             (SELECT json_extract(value, '$.linkSecret')
+              FROM json_each(?)
+              WHERE json_extract(value, '$.id') = invites.id),
+             link_secret),
+           last_communication_at = ?
        WHERE id IN (SELECT value FROM json_each(?))
-         AND status IN ('sent', 'expired')`,
+         AND status = 'sent'`,
     )
-    .bind(recoveredAt, stringifyJson(rows.map((row) => row.id)));
+    .bind(secretRows, recoveredAt, stringifyJson(rows.map((row) => row.id)));
 }
 
 async function commitRecoveryRows(
@@ -60,9 +74,9 @@ async function commitRecoveryRows(
 ): Promise<string[]> {
   if (rows.length === 0) return [];
 
-  const emailChunks = prepareBulkQueueInviteEmailChunkStatements(
-    db,
-    rows.map((row) => {
+  const generationRows = rows.map((row) => ({ ...row, next_link_secret: newCapabilityLinkSecret() }));
+  const emailRows = await Promise.all(
+    generationRows.map(async (row) => {
       const event = recoveryEvent(row);
       return buildInviteEmailQueueRow({
         event,
@@ -71,20 +85,32 @@ async function commitRecoveryRows(
         source: row.invite_type === "attendee" ? "invite_recovery" : "speaker_invite_recovery",
         subject: row.invite_type === "attendee" ? `Invitation: ${event.name}` : `Speaker invitation: ${event.name}`,
         reminderCount: "recovery",
+        linkSecretFingerprint: await sha256Hex(row.next_link_secret!),
       });
     }),
-    recoveredAt,
   );
+  const emailChunks = prepareBulkQueueInviteEmailChunkStatements(db, emailRows, recoveredAt);
 
   try {
     await db.batch([
-      ...prepareInviteTransitionGuardStatements(db, rows),
-      prepareRecoveryUpdate(db, rows, recoveredAt),
+      prepareAuthorizationGuard(
+        db,
+        eventInviteWindowsEvidence(
+          generationRows.map((row) => ({
+            eventId: row.event_id,
+            event: recoveryEvent(row),
+            expiresAt: row.expires_at,
+          })),
+          recoveredAt,
+        ),
+      ),
+      ...prepareInviteTransitionGuardStatements(db, generationRows),
+      prepareRecoveryUpdate(db, generationRows, recoveredAt),
       ...emailChunks.map((chunk) => chunk.statement),
     ]);
     return emailChunks.flatMap((chunk) => chunk.ids);
   } catch (error) {
-    if (!isStaleInviteTransition(error)) throw error;
+    if (!isStaleInviteTransition(error) && !isAuthorizationGuardFailure(error)) throw error;
     if (rows.length === 1) return [];
     const midpoint = Math.floor(rows.length / 2);
     return [
@@ -113,7 +139,9 @@ export async function recoverInviteLinksByEmail(
          i.invitee_first_name,
          i.invitee_last_name,
          i.invite_type,
+         i.link_secret,
          i.transition_revision,
+         ${effectiveInviteExpirySql("i", "e")} AS expires_at,
          i.created_at AS invite_created_at,
          e.id AS event_id,
          e.name AS event_name,
@@ -130,10 +158,12 @@ export async function recoverInviteLinksByEmail(
        FROM invites i
        JOIN events e ON e.id = i.event_id
        WHERE i.invitee_email = ?
-         AND i.status IN ('sent', 'expired')
+         AND i.status = 'sent'
+         AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+         AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch()
      )
      SELECT
-       id, invitee_email, invitee_first_name, invitee_last_name, invite_type,
+       id, invitee_email, invitee_first_name, invitee_last_name, invite_type, link_secret, expires_at,
        transition_revision, event_id, event_name, event_slug, event_base_path,
        event_timezone, event_starts_at, event_ends_at, event_settings_json
      FROM ranked_matches

@@ -19,6 +19,7 @@ export interface ProposalSpeakerAuthoritySnapshot {
   proposalUpdatedAt: string;
   userId: string;
   currentStatus: string;
+  inviteGeneration: number;
 }
 
 export interface ProposalProfileValues {
@@ -44,7 +45,7 @@ export function proposalSpeakerAuthorityCondition(context: ProposalSpeakerAuthor
       SELECT 1
         FROM proposal_speakers ps
         JOIN session_proposals sp ON sp.id = ps.proposal_id
-       WHERE ps.id = ? AND ps.proposal_id = ? AND ps.user_id = ? AND ps.status = ?
+       WHERE ps.id = ? AND ps.proposal_id = ? AND ps.user_id = ? AND ps.status = ? AND ps.invite_generation = ?
          AND sp.id = ? AND sp.status = ? AND sp.updated_at = ? AND sp.deleted_at IS NULL
     )`,
     bindings: [
@@ -52,6 +53,7 @@ export function proposalSpeakerAuthorityCondition(context: ProposalSpeakerAuthor
       context.proposalId,
       context.userId,
       context.currentStatus,
+      context.inviteGeneration,
       context.proposalId,
       context.proposalStatus,
       context.proposalUpdatedAt,
@@ -73,7 +75,7 @@ export function prepareProposalSpeakerProfileAuthorityGuard(
     .prepare(
       `UPDATE proposal_speakers
           SET profile_overrides_json = profile_overrides_json
-        WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ?
+        WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ? AND invite_generation = ?
           AND profile_overrides_json IS ?
           AND EXISTS (
             SELECT 1 FROM session_proposals
@@ -85,6 +87,7 @@ export function prepareProposalSpeakerProfileAuthorityGuard(
       context.proposalId,
       context.userId,
       context.currentStatus,
+      context.inviteGeneration,
       context.expectedProfileOverridesJson,
       context.proposalId,
       context.proposalStatus,
@@ -147,7 +150,7 @@ export function prepareClearProposalSpeakerProfileOverridesStatement(
     .prepare(
       `UPDATE proposal_speakers
           SET profile_overrides_json = json_remove(profile_overrides_json, ${paths})
-        WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ?
+        WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ? AND invite_generation = ?
           AND profile_overrides_json IS ?`,
     )
     .bind(
@@ -155,6 +158,7 @@ export function prepareClearProposalSpeakerProfileOverridesStatement(
       context.proposalId,
       context.userId,
       context.currentStatus,
+      context.inviteGeneration,
       context.expectedProfileOverridesJson,
     );
 }

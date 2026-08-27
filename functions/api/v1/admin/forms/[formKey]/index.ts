@@ -43,6 +43,13 @@ export const AdminFormsFormKeyPatch = openApiRoute(adminFormPatchRouteSchema, as
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = data.body;
   const { form } = await requireManagedForm(requestDb(c), data.params.formKey);
+  if (form.scope_type === "community") {
+    throw new AppError(
+      403,
+      "GROUP_FORM_MANAGEMENT_REQUIRED",
+      "Group-owned forms must be changed from their owning group context.",
+    );
+  }
   await updateManagedForm(requestDb(c), admin.id, form, body);
 
   const updated = await requireManagedForm(requestDb(c), data.params.formKey);
@@ -58,6 +65,13 @@ export const AdminFormsFormKeyPatch = openApiRoute(adminFormPatchRouteSchema, as
 export const AdminFormsFormKeyDelete = openApiRoute(adminFormDeleteRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const { form } = await requireManagedForm(requestDb(c), data.params.formKey);
+  if (form.scope_type === "community") {
+    throw new AppError(
+      403,
+      "GROUP_FORM_MANAGEMENT_REQUIRED",
+      "Group-owned forms must be changed from their owning group context.",
+    );
+  }
 
   const action = await removeManagedForm(requestDb(c), admin.id, form);
   return json({

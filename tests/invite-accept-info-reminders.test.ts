@@ -37,7 +37,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "alice@example.test",
       inviteeFirstName: "Alice",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -68,7 +67,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "speaker@example.test",
       inviteeFirstName: "Bob",
       inviteType: "speaker",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -106,7 +104,6 @@ describe("invite info endpoint", () => {
       eventId,
       inviteeEmail: "done@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -128,7 +125,6 @@ describe("invite info endpoint", () => {
       eventId,
       inviteeEmail: "declined@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -161,7 +157,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "invitee@example.test",
       inviteeFirstName: "Invitee",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -195,7 +190,7 @@ describe("invite info endpoint", () => {
     expect(body.inviters[0].lastName).toBe("Smith");
   });
 
-  it("keeps a sent invite valid even when expires_at is in the past", async () => {
+  it("reports a still-sent invite as expired when its database expiry has passed", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const { token, invite } = await createInvite(env.DB, {
@@ -203,7 +198,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "still-valid@example.test",
       inviteeFirstName: "Still",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -215,10 +209,10 @@ describe("invite info endpoint", () => {
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { status: string };
-    expect(body.status).toBe("valid");
+    expect(body.status).toBe("expired");
   });
 
-  it("creates invites without a default expiry when ttlHours is omitted", async () => {
+  it("defaults invitation validity to the event start", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const { invite } = await createInvite(env.DB, {
@@ -231,7 +225,7 @@ describe("invite info endpoint", () => {
       invite.id,
     ]);
 
-    expect(rows[0].expires_at).toBeNull();
+    expect(rows[0].expires_at).toBe("2026-12-01T08:00:00.000Z");
   });
 });
 
@@ -255,7 +249,6 @@ describe("invite accept endpoint", () => {
       eventId,
       inviteeEmail: "speaker@example.test",
       inviteType: "speaker",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -288,7 +281,6 @@ describe("invite accept endpoint", () => {
       inviteeEmail: "attendee@example.test",
       inviteeFirstName: "Alice",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -332,7 +324,6 @@ describe("invite accept endpoint", () => {
       eventId,
       inviteeEmail: "real@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -412,7 +403,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "remind@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -442,7 +432,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "remind30@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -471,7 +460,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "resume@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -514,7 +502,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "unsub@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 

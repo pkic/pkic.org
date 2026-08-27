@@ -10,11 +10,13 @@ export interface AuthOperationMetadata {
   required: true;
   scheme?: AuthSecurityScheme;
   scopes?: AuthScope[];
+  scopesAnyOf?: AuthScope[][];
 }
 
 export interface McpOperationMetadata {
   expose: true;
   scopes?: AuthScope[];
+  scopesAnyOf?: AuthScope[][];
   readonly?: boolean;
 }
 
@@ -51,18 +53,36 @@ function uniqueScopes(scopes: AuthScope[]): AuthScope[] {
   return [...new Set(scopes)];
 }
 
+function uniqueScopeAlternatives(alternatives: AuthScope[][]): AuthScope[][] {
+  return [
+    ...new Map(
+      alternatives
+        .map(uniqueScopes)
+        .filter((scopes) => scopes.length > 0)
+        .map((scopes) => [scopes.join("\u0000"), scopes]),
+    ).values(),
+  ];
+}
+
 function formatRequiredScopes(scopes: AuthScope[]): string {
   return scopes.map((scope) => `\`${scope}\``).join(", ");
 }
 
-function withRequiredScopesDescription(operation: JsonObject, scopes: AuthScope[]): JsonObject {
-  if (scopes.length === 0) {
+function withRequiredScopesDescription(
+  operation: JsonObject,
+  scopes: AuthScope[],
+  scopesAnyOf: AuthScope[][] = [],
+): JsonObject {
+  if (scopes.length === 0 && scopesAnyOf.length === 0) {
     return operation;
   }
 
-  const requiredScopes = `Required scopes: ${formatRequiredScopes(scopes)}.`;
+  const requiredScopes =
+    scopesAnyOf.length > 0
+      ? `Required scope alternative: ${scopesAnyOf.map((alternative) => `[${formatRequiredScopes(alternative)}]`).join(" or ")}.`
+      : `Required scopes: ${formatRequiredScopes(scopes)}.`;
   const description = typeof operation.description === "string" ? operation.description.trim() : "";
-  const cleanedDescription = description.replace(/\s*Required scopes: .*\.$/s, "").trim();
+  const cleanedDescription = description.replace(/\s*Required (?:scopes|scope alternative): .*\.$/s, "").trim();
 
   return {
     ...operation,
@@ -103,10 +123,12 @@ export function inferredScopesForOperation(path: string, method: string): AuthSc
 function operationAuthMetadata(path: string, method: string, operation: JsonObject): AuthOperationMetadata | undefined {
   const explicit = operation[AUTH_EXTENSION] as AuthOperationMetadata | undefined;
   if (explicit?.required === true) {
+    const scopesAnyOf = uniqueScopeAlternatives(explicit.scopesAnyOf ?? []);
     return {
       required: true,
       scheme: explicit.scheme ?? inferredAuthSchemeForOperation(),
-      scopes: uniqueScopes(explicit.scopes ?? inferredScopesForOperation(path, method)),
+      scopes: uniqueScopes(explicit.scopes ?? (scopesAnyOf.length > 0 ? [] : inferredScopesForOperation(path, method))),
+      ...(scopesAnyOf.length > 0 ? { scopesAnyOf } : {}),
     };
   }
 
@@ -149,12 +171,20 @@ export function decorateOpenApiSpec(spec: JsonObject): JsonObject {
       const auth = operationAuthMetadata(path, key, operation);
       if (!auth) continue;
       const scopes = auth.scopes ?? [];
+      const scopesAnyOf = auth.scopesAnyOf ?? [];
+      const scheme = auth.scheme ?? "BearerAuth";
 
       decoratedPathItem[key] = {
-        ...withRequiredScopesDescription(operation, scopes),
+        ...withRequiredScopesDescription(operation, scopes, scopesAnyOf),
         [AUTH_EXTENSION]: auth,
-        "x-pkic-required-scopes": scopes,
-        security: operation.security ?? [{ [auth.scheme ?? "BearerAuth"]: scopes }],
+        ...(scopesAnyOf.length > 0
+          ? { "x-pkic-required-scopes-any-of": scopesAnyOf }
+          : { "x-pkic-required-scopes": scopes }),
+        security:
+          operation.security ??
+          (scopesAnyOf.length > 0
+            ? scopesAnyOf.map((alternative) => ({ [scheme]: alternative }))
+            : [{ [scheme]: scopes }]),
       };
     }
 
@@ -196,17 +226,26 @@ export function filterOpenApiSpecForMcp(spec: JsonObject): JsonObject {
       const operation = value as JsonObject;
       const mcpMetadata = operation[MCP_EXTENSION] as McpOperationMetadata | undefined;
       const auth = operationAuthMetadata(path, key, operation);
-      const scopes = uniqueScopes(mcpMetadata?.scopes ?? auth?.scopes ?? inferredScopesForOperation(path, key));
+      const scopesAnyOf = uniqueScopeAlternatives(mcpMetadata?.scopesAnyOf ?? auth?.scopesAnyOf ?? []);
+      const scopes = uniqueScopes(
+        mcpMetadata?.scopes ?? auth?.scopes ?? (scopesAnyOf.length > 0 ? [] : inferredScopesForOperation(path, key)),
+      );
 
       filteredPathItem[key] = {
-        ...withRequiredScopesDescription(operation, scopes),
+        ...withRequiredScopesDescription(operation, scopes, scopesAnyOf),
         [MCP_EXTENSION]: {
           expose: true,
           readonly: mcpMetadata?.readonly ?? !WRITE_METHODS.has(key),
           scopes,
+          ...(scopesAnyOf.length > 0 ? { scopesAnyOf } : {}),
         },
-        "x-pkic-required-scopes": scopes,
-        security: [{ McpSession: scopes }],
+        ...(scopesAnyOf.length > 0
+          ? { "x-pkic-required-scopes-any-of": scopesAnyOf }
+          : { "x-pkic-required-scopes": scopes }),
+        security:
+          scopesAnyOf.length > 0
+            ? scopesAnyOf.map((alternative) => ({ McpSession: alternative }))
+            : [{ McpSession: scopes }],
       };
     }
 

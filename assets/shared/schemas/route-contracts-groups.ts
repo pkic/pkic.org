@@ -3,6 +3,8 @@ import { jsonErrorResponse } from "./api-common";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import {
   groupCategoryRulesReplaceSchema,
+  groupCategoryRulesResponseSchema,
+  groupCreationCapabilitiesResponseSchema,
   groupGetQuerySchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
   groupAutomaticEnrollmentPreferenceSchema,
@@ -35,6 +37,17 @@ export const groupTypesListRouteSchema = {
     "200": {
       description: "Configured group types.",
       content: { "application/json": { schema: groupTypesListResponseSchema } },
+    },
+  },
+};
+
+export const groupCreationCapabilitiesRouteSchema = {
+  tags: ["Groups"],
+  summary: "Resolve whether the current identity may create a top-level group",
+  responses: {
+    "200": {
+      description: "Current server-derived group creation capability.",
+      content: { "application/json": { schema: groupCreationCapabilitiesResponseSchema } },
     },
   },
 };
@@ -244,6 +257,20 @@ export const groupCategoryRulesReplaceRouteSchema = {
     },
     "403": jsonErrorResponse("Rule management is not authorized."),
     "409": jsonErrorResponse("The group changed before the replacement committed."),
+  },
+};
+
+export const groupCategoryRulesGetRouteSchema = {
+  tags: ["Groups"],
+  summary: "Get category eligibility and automatic-enrollment rules",
+  request: { params: groupReferenceParamsSchema },
+  responses: {
+    "200": {
+      description: "Current category rules and group revision.",
+      content: { "application/json": { schema: groupCategoryRulesResponseSchema } },
+    },
+    "403": jsonErrorResponse("Rule management is not authorized."),
+    "404": jsonErrorResponse("Group not found."),
   },
 };
 

@@ -26,7 +26,6 @@ import sponsorPortal_Router from "./sponsor-portal/router";
 import portal_Router from "./portal/router";
 import votes_Router from "./votes/router";
 import webhooks_Router from "./webhooks/router";
-import workingGroups_Router from "./working-groups/router";
 
 const app = new Hono();
 export const openapi = fromHono(app);
@@ -64,6 +63,5 @@ openapi.route("/sponsor-portal", sponsorPortal_Router);
 openapi.route("/portal", portal_Router);
 openapi.route("/votes", votes_Router);
 openapi.route("/webhooks", webhooks_Router);
-openapi.route("/working-groups", workingGroups_Router);
 
 export default openapi;

@@ -21,6 +21,7 @@ import {
 } from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { buildManagementLink } from "../../../../_lib/services/management-links";
 
 export const MeOrganizationGet = openApiRoute(myOrganizationProfileGetRouteSchema, async (c: AdminContext) => {
   const db = requestDb(c);
@@ -38,7 +39,9 @@ export const MeOrganizationPatch = openApiRoute(
       db,
       member,
       data.body,
-      `${getConfig(c.env, c.req.raw).appBaseUrl}/admin/#/organizations/content-reviews`,
+      buildManagementLink(getConfig(c.env, c.req.raw).appBaseUrl, {
+        kind: "organization-content-reviews",
+      }),
     );
 
     c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));

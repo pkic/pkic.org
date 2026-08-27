@@ -10,7 +10,10 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./a
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
-import { prepareRotateUserRegistrationManageSecrets } from "./registrations/manage-capability-revocation";
+import {
+  prepareRotateUserProposalSpeakerManageSecrets,
+  prepareRotateUserRegistrationManageSecrets,
+} from "./registrations/manage-capability-revocation";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -247,16 +250,19 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   const changingPrimaryEmail = email !== user.email;
   if (deactivating || changingPrimaryEmail) {
     // Deactivation and canonical login changes share one credential-revocation
-    // boundary. Do not retain bearer sessions or one-time login links issued
-    // to an inactive account or the former mailbox.
+    // boundary. Do not retain bearer sessions issued to an inactive account or
+    // the former mailbox. Signed email-auth capabilities are checked against
+    // the current email and eligibility when used.
     statements.push(
       db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
       db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
-      db.prepare("UPDATE auth_magic_links SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(at, user.id),
     );
   }
   if (changingPrimaryEmail) {
-    statements.push(prepareRotateUserRegistrationManageSecrets(db, user.id, at));
+    statements.push(
+      prepareRotateUserRegistrationManageSecrets(db, user.id, at),
+      prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
+    );
   }
   if (deactivating) {
     statements.push(

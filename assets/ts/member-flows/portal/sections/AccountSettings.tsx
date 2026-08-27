@@ -4,7 +4,7 @@ import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
-import { profile } from "../state";
+import { portalSession, profile } from "../state";
 import type { NotificationPreferences } from "../types";
 import { toast } from "../ui";
 import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
@@ -80,20 +80,26 @@ function NotificationPreferencesCard() {
 }
 
 export function AccountSettings() {
+  const session = portalSession.value;
+  const hasMemberCapacity = Boolean(session?.member);
+  const email = profile.value?.email || session?.identity.email || "";
+
   return (
     <div class="d-flex flex-column gap-3 content-width-md">
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-semibold">Email</div>
         <div class="card-body">
-          <p class="mb-0">{profile.value?.email}</p>
+          <p class="mb-0">{email}</p>
           <p class="text-muted small mb-0">
-            Your email address is tied to your membership record. Contact PKI Consortium staff to change it.
+            {hasMemberCapacity
+              ? "This is the verified primary email address for your account. Contact PKI Consortium staff to change it."
+              : "This is the verified primary email address for your portal identity."}
           </p>
         </div>
       </div>
 
       <PasskeySettings toastTargetId="portal-toast-area" />
-      <NotificationPreferencesCard />
+      {hasMemberCapacity && <NotificationPreferencesCard />}
     </div>
   );
 }

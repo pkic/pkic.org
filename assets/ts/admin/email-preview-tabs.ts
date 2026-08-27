@@ -1,6 +1,2 @@
-export type EmailPreviewTab = "html" | "text";
-
-export const EMAIL_PREVIEW_TABS: Array<{ key: EmailPreviewTab; label: string }> = [
-  { key: "html", label: "HTML" },
-  { key: "text", label: "Text" },
-];
+/** @deprecated Import from the frontend-shared email preview module. */
+export { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../shared/email-preview-tabs";

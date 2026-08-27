@@ -336,8 +336,25 @@ describe("consolidated pending migration upgrade", () => {
         { permission: "proposals:read" },
         { permission: "proposals:score" },
         { permission: "proposals:manage" },
+        { permission: "proposals:edit_accepted_abstract" },
+        { permission: "proposals:cancel_accepted" },
       ]),
     );
+    expect(
+      db
+        .prepare(
+          `SELECT role_id
+             FROM role_permissions
+            WHERE permission = 'proposals:edit_accepted_abstract'
+            ORDER BY role_id`,
+        )
+        .all(),
+    ).toEqual([{ role_id: "role-admin" }, { role_id: "role-event_organizer" }, { role_id: "role-program_committee" }]);
+    expect(
+      db
+        .prepare("SELECT role_id FROM role_permissions WHERE permission = 'proposals:cancel_accepted' ORDER BY role_id")
+        .all(),
+    ).toEqual([{ role_id: "role-admin" }, { role_id: "role-event_organizer" }, { role_id: "role-program_committee" }]);
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_permissions'").get()).toBe(
       undefined,
     );
@@ -430,6 +447,16 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'storage_deletion_outbox'").get(),
     ).toEqual({ name: "storage_deletion_outbox" });
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('auth_magic_links', 'sponsor_portal_magic_links') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([]);
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sponsor_portal_sessions'").get(),
+    ).toEqual({ name: "sponsor_portal_sessions" });
     expect(
       db
         .prepare("PRAGMA table_info(application_documents)")

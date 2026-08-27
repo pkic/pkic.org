@@ -5,7 +5,6 @@ import { adminRegistrationBadgeRegenerationRouteSchema } from "../../../../../..
 import { AdminRegistrationAdmit } from "./admit";
 import { AdminRegistrationAuditLogGet } from "./audit-log";
 import { AdminRegistrationBadgeRoleGet, AdminRegistrationBadgeRolePatch } from "./badge-role";
-import { AdminRegistrationDayAttendancePatch } from "./day-attendance";
 import { AdminRegistrationDetailGet, AdminRegistrationPatch } from "./index";
 import { AdminRegistrationOpenManage } from "./open-manage";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l } from "./regenerate-badge";
@@ -19,7 +18,6 @@ openapi.post("/admit", AdminRegistrationAdmit);
 openapi.get("/audit-log", AdminRegistrationAuditLogGet);
 openapi.get("/badge-role", AdminRegistrationBadgeRoleGet);
 openapi.patch("/badge-role", AdminRegistrationBadgeRolePatch);
-openapi.patch("/day-attendance", AdminRegistrationDayAttendancePatch);
 openapi.get("/", AdminRegistrationDetailGet);
 openapi.patch("/", AdminRegistrationPatch);
 openapi.post("/open-manage", AdminRegistrationOpenManage);

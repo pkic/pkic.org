@@ -9,8 +9,11 @@ import {
 } from "../assets/shared/schemas/portal-auth";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
-import { createTestRateLimiter, queryAll } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { insertIndividualMember } from "./helpers/membership";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { redeemPortalSignInCapability } from "../functions/_lib/auth/portal";
+import { hashOptional } from "../functions/_lib/request";
 
 const env = workerEnv as unknown as Env;
 
@@ -61,7 +64,13 @@ async function requestPortalToken(email: string): Promise<string> {
     "SELECT payload_json FROM email_outbox WHERE template_key = 'portal_magic_link' ORDER BY rowid DESC LIMIT 1",
   );
   expect(rows).toHaveLength(1);
-  const payload = JSON.parse(rows[0].payload_json) as { magicLinkUrl: string };
+  const storedPayload = JSON.parse(rows[0].payload_json) as {
+    magicLinkUrl: string;
+    __authorizedCapabilityMarkers?: unknown[];
+  };
+  expect(storedPayload.magicLinkUrl).toMatch(/pkcq1_/);
+  expect(storedPayload.__authorizedCapabilityMarkers).toHaveLength(1);
+  const payload = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, rows[0].payload_json);
   const link = new URL(payload.magicLinkUrl);
   expect(link.search).toBe("");
   const token = new URL(link.hash.slice(1), link.origin).searchParams.get("token");
@@ -100,7 +109,6 @@ describe("identity-based portal authentication", () => {
       method: "POST",
       body: JSON.stringify({ token }),
     });
-
     expect(verified.status).toBe(200);
     const body = portalSessionEstablishedResponseSchema.parse(await verified.json());
     expect(body.identity.id).toBe(userId);
@@ -177,6 +185,43 @@ describe("identity-based portal authentication", () => {
     expect(expiredCookies).toContain("pkic_admin_session=");
     expect(expiredCookies).toContain("pkic_member_session=");
     expect((await call("/api/v1/auth/portal/session", {}, cookie)).status).toBe(401);
+  });
+
+  it("rejects portal redemption when the primary email changes after reads", async () => {
+    const userId = await insertStaffUser("portal-redemption-race@example.test");
+    const token = await requestPortalToken("portal-redemption-race@example.test");
+    const signingSecret = env.INTERNAL_SIGNING_SECRET!;
+    const [ipHash, userAgentHash] = await Promise.all([
+      hashOptional("203.0.113.71", signingSecret),
+      hashOptional("portal-auth-test-browser", signingSecret),
+    ]);
+
+    const gate = gateNextBatch(env.DB);
+    const staleRedemption = redeemPortalSignInCapability(gate.db, env, {
+      token,
+      signingSecret,
+      ipHash,
+      userAgentHash,
+    });
+    await gate.reached;
+
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("portal-redemption-changed@example.test", "portal-redemption-changed@example.test", userId)
+      .run();
+    gate.release();
+
+    await expect(staleRedemption).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    expect(await queryAll(env.DB, "SELECT id FROM sessions WHERE user_id = ?", userId)).toHaveLength(0);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'portal_magic_link_verified' AND actor_id = ?",
+        userId,
+      ),
+    ).toHaveLength(0);
+    await expect(queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", userId)).resolves.toEqual([
+      { email: "portal-redemption-changed@example.test" },
+    ]);
   });
 
   it("revokes bearer-only portal sessions for either capacity", async () => {

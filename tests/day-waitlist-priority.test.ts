@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
-import { updateAdminRegistrationDayAttendance } from "../functions/_lib/services/registrations/admin-day-attendance";
+import { updateRegistrationDayAttendance } from "../functions/_lib/services/registrations/day-attendance-management";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import {
   promoteEventWaitlistWithNotifications,
@@ -671,16 +671,13 @@ describe("day waitlist priorities", () => {
       "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
     );
     await expect(
-      updateAdminRegistrationDayAttendance(
-        env.DB,
-        { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
-        {
-          eventSlug: event.slug,
-          registrationId: organizer.registration.id,
-          change: { action: "waitlist", dayDates: ["2026-12-01"] },
-          appBaseUrl: "https://example.test",
-        },
-      ),
+      updateRegistrationDayAttendance(env.DB, {
+        event,
+        registrationId: organizer.registration.id,
+        change: { action: "waitlist", dayDates: ["2026-12-01"] },
+        appBaseUrl: "https://example.test",
+        actorUserId: admin.id,
+      }),
     ).rejects.toThrow(/role-based capacity-exempt attendee cannot be placed on the waitlist/);
   });
 });

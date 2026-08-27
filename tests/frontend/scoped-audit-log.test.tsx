@@ -5,6 +5,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuditLogEntry } from "../../assets/shared/schemas/audit-log";
 import { AuditLogSection } from "../../assets/ts/admin/sections/events/detail/proposal-detail/AuditLogSection";
+import { ProposalAuditLog } from "../../assets/ts/components/proposals/ProposalAuditLog";
 import { RegistrationAuditLogSection } from "../../assets/ts/admin/sections/events/detail/registration-detail/RegistrationPanels";
 
 const mounted: HTMLElement[] = [];
@@ -125,6 +126,17 @@ describe("scoped audit-log server pagination", () => {
       "Proposal updated",
       "proposal_decision_recorded",
       "Decision recorded",
+    );
+  });
+
+  it("pages the group-scoped proposal audit endpoint through the shared audit UI", async () => {
+    await assertPagedAuditLog(
+      <ProposalAuditLog endpoint="/api/v1/groups/group-1/events/event-1/proposals/proposal-1/audit-log" />,
+      "/api/v1/groups/group-1/events/event-1/proposals/proposal-1/audit-log",
+      "proposal_decision_recorded",
+      "Decision recorded",
+      "proposal_review_upserted",
+      "Review updated",
     );
   });
 

@@ -3,6 +3,7 @@ import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
+import type { ProposalWriteAuthorization } from "../proposal-write-authorization";
 import {
   assertReviewWritable,
   auditState,
@@ -19,6 +20,7 @@ export async function updateProposalReview(
   proposalId: string,
   reviewId: string,
   patch: ProposalReviewPatch,
+  authorization?: ProposalWriteAuthorization,
 ): Promise<ProposalReview> {
   const reviewerUserId = requireAdminDatabaseUserId(actor);
   const context = await getReviewContext(db, actor, proposalId);
@@ -44,5 +46,5 @@ export async function updateProposalReview(
   const changes = buildProposalReviewAuditDetails(auditState(existing), next);
   if (Object.keys(changes).length === 0) return existing;
 
-  return saveExistingProposalReview(db, actor, proposalId, context, existing, next, changes);
+  return saveExistingProposalReview(db, actor, proposalId, context, existing, next, changes, authorization);
 }

@@ -8,9 +8,7 @@ import {
 } from "../../../auth/capability-links";
 import { AppError } from "../../../errors";
 import { randomToken } from "../../../utils/crypto";
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+import { decodeCapabilityPayload, encodeCapabilityPayload } from "../../../auth/capability-payload";
 
 const memberJoinCapabilityPayloadSchema = z.object({
   email: normalizedEmailSchema,
@@ -18,26 +16,6 @@ const memberJoinCapabilityPayloadSchema = z.object({
   capabilityId: z.string().min(16).max(64),
 });
 export type MemberJoinCapabilityPayload = z.infer<typeof memberJoinCapabilityPayloadSchema>;
-
-function encodePayload(payload: MemberJoinCapabilityPayload): string {
-  const bytes = encoder.encode(JSON.stringify(payload));
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function decodePayload(resourceId: string): MemberJoinCapabilityPayload | null {
-  if (!/^[A-Za-z0-9_-]+$/.test(resourceId)) return null;
-  try {
-    const normalized = resourceId.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    return memberJoinCapabilityPayloadSchema.parse(JSON.parse(decoder.decode(bytes)));
-  } catch {
-    return null;
-  }
-}
 
 export function newMemberJoinCapabilityPayload(
   email: string,
@@ -55,7 +33,7 @@ export function queuedMemberJoinVerificationToken(
   // secret. D1 stores neither a usable verification token nor its signing key.
   return queuedCapabilityToken(
     "member_join_verify",
-    encodePayload(payload),
+    encodeCapabilityPayload(payload),
     ttlSeconds,
     undefined,
     nowSeconds + ttlSeconds,
@@ -78,7 +56,7 @@ export async function verifyMemberJoinVerificationToken(
       verified.reason === "expired" ? "Membership verification link expired" : "Invalid membership verification link",
     );
   }
-  const payload = decodePayload(verified.resourceId);
+  const payload = decodeCapabilityPayload(verified.resourceId, memberJoinCapabilityPayloadSchema);
   if (!payload) throw new AppError(404, "MEMBER_JOIN_LINK_INVALID", "Invalid membership verification link");
   return payload;
 }
@@ -91,7 +69,7 @@ export function issueMemberJoinApplicationToken(
   return signStatelessCapabilityToken({
     signingSecret,
     purpose: "member_join_apply",
-    resourceId: encodePayload(payload),
+    resourceId: encodeCapabilityPayload(payload),
     ttlSeconds,
   });
 }
@@ -114,7 +92,7 @@ export async function verifyMemberJoinApplicationToken(
         : "Invalid membership application capability",
     );
   }
-  const payload = decodePayload(verified.resourceId);
+  const payload = decodeCapabilityPayload(verified.resourceId, memberJoinCapabilityPayloadSchema);
   if (!payload) throw new AppError(401, "MEMBER_JOIN_CAPABILITY_INVALID", "Invalid membership application capability");
   return payload;
 }

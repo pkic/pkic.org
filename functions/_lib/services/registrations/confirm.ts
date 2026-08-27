@@ -17,6 +17,7 @@ import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 import { prepareVerifyPrimaryEmailStatement } from "../email-verification";
 import { prepareVerifiedDomainAssociationStatements } from "../organization-representations";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 
 export interface PreparedRegistrationConfirmation {
   stage: "confirmed";
@@ -311,6 +312,9 @@ export async function confirmRegistrationByToken(
     try {
       await db.batch(prepared.statements);
     } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(410, "INVITE_EXPIRED", "Linked invitation has expired");
+      }
       if (isStaleRegistrationTransition(error)) {
         throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
       }

@@ -1,22 +1,28 @@
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { AuthAdmin, DatabaseLike } from "../types";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareStorageDeletion, withStorageUploadCompensation } from "./storage-deletion-outbox";
 import type { HeadshotAudit } from "./user-headshot";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 
 interface ProposalSpeakerHeadshotContext {
   db: DatabaseLike;
   proposalId: string;
   proposalSpeakerId: string;
   speakerUserId: string;
+  proposalEventId?: string;
+  permissionActor?: AuthAdmin;
   previousOverrideSet: number;
   previousOverrideKey: string | null;
   /** Optional proposer-authorized proposal snapshot; admins may manage closed proposals. */
   editableProposalSnapshot?: { status: string; updatedAt: string };
   audit: HeadshotAudit;
+  authorization?: ProposalWriteAuthorization;
 }
 
 function editableProposalGuard(input: ProposalSpeakerHeadshotContext): { sql: string; bindings: unknown[] } {
@@ -55,7 +61,14 @@ export async function replaceProposalSpeakerHeadshot(
       prepareCommitStatements: () => {
         const deletion = prepareStorageDeletion(input.db, input.previousOverrideKey, at);
         const proposalGuard = editableProposalGuard(input);
-        return [
+        return withProposalWriteContextGuard(input.authorization, [
+          ...(input.permissionActor && input.proposalEventId
+            ? [
+                preparePermissionsAuthorizationGuard(input.db, input.permissionActor, [
+                  { permission: "proposals:manage", context: { type: "event", id: input.proposalEventId } },
+                ]),
+              ]
+            : []),
           input.db
             .prepare(
               `UPDATE proposal_speakers
@@ -85,11 +98,11 @@ export async function replaceProposalSpeakerHeadshot(
             input.audit.scope,
           ),
           ...(deletion ? [deletion] : []),
-        ];
+        ]);
       },
     });
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditOneChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the headshot was uploaded");
     }
     throw error;
@@ -102,38 +115,47 @@ export async function removeProposalSpeakerHeadshot(input: ProposalSpeakerHeadsh
   const deletion = prepareStorageDeletion(input.db, input.previousOverrideKey, at);
   const proposalGuard = editableProposalGuard(input);
   try {
-    await input.db.batch([
-      input.db
-        .prepare(
-          `UPDATE proposal_speakers
+    await input.db.batch(
+      withProposalWriteContextGuard(input.authorization, [
+        ...(input.permissionActor && input.proposalEventId
+          ? [
+              preparePermissionsAuthorizationGuard(input.db, input.permissionActor, [
+                { permission: "proposals:manage", context: { type: "event", id: input.proposalEventId } },
+              ]),
+            ]
+          : []),
+        input.db
+          .prepare(
+            `UPDATE proposal_speakers
            SET headshot_override_set = 1, headshot_r2_key = NULL, headshot_updated_at = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ?
              AND headshot_override_set = ? AND headshot_r2_key IS ?${proposalGuard.sql}`,
-        )
-        .bind(
+          )
+          .bind(
+            at,
+            input.proposalSpeakerId,
+            input.proposalId,
+            input.speakerUserId,
+            input.previousOverrideSet,
+            input.previousOverrideKey,
+            ...proposalGuard.bindings,
+          ),
+        prepareAuditLogAfterOneChange(
+          input.db,
+          input.audit.actorType,
+          input.audit.actorId,
+          input.audit.action,
+          input.audit.entityType ?? "proposal_speaker",
+          input.audit.entityId ?? input.proposalSpeakerId,
+          { ...input.audit.details, previousKey: input.previousOverrideKey },
           at,
-          input.proposalSpeakerId,
-          input.proposalId,
-          input.speakerUserId,
-          input.previousOverrideSet,
-          input.previousOverrideKey,
-          ...proposalGuard.bindings,
+          input.audit.scope,
         ),
-      prepareAuditLogAfterOneChange(
-        input.db,
-        input.audit.actorType,
-        input.audit.actorId,
-        input.audit.action,
-        input.audit.entityType ?? "proposal_speaker",
-        input.audit.entityId ?? input.proposalSpeakerId,
-        { ...input.audit.details, previousKey: input.previousOverrideKey },
-        at,
-        input.audit.scope,
-      ),
-      ...(deletion ? [deletion] : []),
-    ]);
+        ...(deletion ? [deletion] : []),
+      ]),
+    );
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditOneChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the headshot was removed");
     }
     throw error;

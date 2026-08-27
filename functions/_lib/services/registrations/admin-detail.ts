@@ -1,9 +1,14 @@
 import { adminRegistrationDetailResponseSchema } from "../../../../assets/shared/schemas/admin-registration-detail";
 import type { AdminRegistrationDetailResponse } from "../../../../assets/shared/schemas/admin-registration-detail";
+import {
+  eventRegistrationAttendanceDetailResponseSchema,
+  eventRegistrationAttendanceDetailSchema,
+} from "../../../../assets/shared/schemas/event-registration-detail";
+import type { EventRegistrationAttendanceDetailResponse } from "../../../../assets/shared/schemas/event-registration-detail";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
-import { getRegistrationDayAttendance } from "../event-days";
+import { getRegistrationDayAttendance, listConfiguredEventDaysWithCounts } from "../event-days";
 import { getActiveFormByPurpose } from "../forms";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
@@ -16,8 +21,8 @@ export interface AdminRegistrationDetailRow {
   user_id: string;
   status: string;
   cancellation_reason_code: string | null;
-  attendance_type: string;
-  source_type: string;
+  attendance_type: AdminRegistrationDetailResponse["registration"]["attendance_type"];
+  source_type: AdminRegistrationDetailResponse["registration"]["source_type"];
   created_at: string;
   updated_at: string;
   user_email: string | null;
@@ -146,5 +151,50 @@ export async function getAdminRegistrationDetail(
           },
     dayAttendance,
     dayWaitlist,
+  });
+}
+
+/**
+ * Returns the least-privilege projection required by a group attendance
+ * manager. Keep this separate from the legacy administrator detail response so
+ * form answers and referral data cannot cross the group-management boundary.
+ */
+export async function getEventRegistrationAttendanceDetail(
+  db: DatabaseLike,
+  eventId: string,
+  registrationId: string,
+): Promise<EventRegistrationAttendanceDetailResponse | null> {
+  const registration = await first<{
+    id: string;
+    event_id: string;
+    user_id: string;
+    status: string;
+    attendance_type: string;
+    source_type: string;
+    created_at: string;
+    updated_at: string;
+    user_email: string | null;
+    display_name: string | null;
+  }>(
+    db,
+    `SELECT r.id, r.event_id, r.user_id, r.status, r.attendance_type, r.source_type,
+            r.created_at, r.updated_at, u.email AS user_email,
+            COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name
+       FROM registrations r
+       LEFT JOIN users u ON u.id = r.user_id
+      WHERE r.id = ? AND r.event_id = ?`,
+    [registrationId, eventId],
+  );
+  if (!registration) return null;
+  const [dayAttendance, dayWaitlist, eventDays] = await Promise.all([
+    getRegistrationDayAttendance(db, registration.id),
+    listDayWaitlistForRegistration(db, registration.id),
+    listConfiguredEventDaysWithCounts(db, eventId),
+  ]);
+  return eventRegistrationAttendanceDetailResponseSchema.parse({
+    registration: eventRegistrationAttendanceDetailSchema.parse(registration),
+    dayAttendance,
+    dayWaitlist,
+    eventDays,
   });
 }

@@ -1,13 +1,14 @@
 import type { AttendeeRegistrationFields } from "../../../assets/shared/schemas/registration";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import { AppError } from "../errors";
 import { deriveEventAttendanceType } from "./event-days";
-import { validateRequiredConsents } from "./consent";
+import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { validateCustomAnswersForSubmission } from "./forms";
 import type { InviteRecord } from "./invites";
 import { prepareRegistrationSubmission } from "./registration-submission";
 import type { VerifiedRegistrationIdentityContext } from "./registrations";
+import type { EventFormResolution } from "./forms";
 
 export async function prepareValidatedAttendeeRegistration(
   db: DatabaseLike,
@@ -25,6 +26,8 @@ export async function prepareValidatedAttendeeRegistration(
     confirmationTtlHours: number;
     referralCodeLength: number;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    authorizationGuards?: readonly StatementLike[];
+    formResolution?: EventFormResolution;
   },
 ) {
   const attendanceType = input.attendanceType ?? deriveEventAttendanceType(input.dayAttendance);
@@ -38,6 +41,7 @@ export async function prepareValidatedAttendeeRegistration(
     eventId: options.eventId,
     purpose: "event_registration",
     customAnswers: input.customAnswers,
+    resolution: options.formResolution,
     context: { attendanceType, dayAttendance: input.dayAttendance },
   });
   const customAnswers = validatedForm.answers;
@@ -71,6 +75,8 @@ export async function prepareValidatedAttendeeRegistration(
     signingSecret: options.signingSecret,
     confirmationTtlHours: options.confirmationTtlHours,
     referralCodeLength: options.referralCodeLength,
+    authorizationGuards: options.authorizationGuards,
+    termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, options.eventId, requiredTerms),
     verifiedIdentity: options.verifiedIdentity,
   });
   return { prepared, requiredTerms };

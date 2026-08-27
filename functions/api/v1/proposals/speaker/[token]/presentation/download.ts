@@ -12,7 +12,32 @@ import {
 import { requireInternalSecret } from "../../../../../../_lib/request";
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const { proposal } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
+  const { speaker, proposal } = await getSpeakerByManageToken(
+    c.env.DB,
+    c.req.param("token"),
+    requireInternalSecret(c.env),
+  );
+
+  if (speaker.status !== "confirmed") {
+    return json(
+      {
+        error: {
+          code: speaker.status === "declined" ? "SPEAKER_DECLINED" : "SPEAKER_NOT_CONFIRMED",
+          message:
+            speaker.status === "declined"
+              ? "You have declined participation."
+              : "Please confirm participation before downloading.",
+        },
+      },
+      403,
+    );
+  }
+  if (proposal.status !== "accepted") {
+    return json(
+      { error: { code: "PROPOSAL_NOT_ACCEPTED", message: "Presentations are unavailable for this proposal." } },
+      409,
+    );
+  }
 
   const version = await getCurrentPresentationVersion(c.env.DB, proposal.id);
 

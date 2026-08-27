@@ -7,7 +7,6 @@ import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } 
 import {
   ADMIN_EVENT_REGISTRATION_STATUSES,
   adminEventRegistrationStatusSchema,
-  adminManageDayAttendanceSchema,
   adminRegistrationAdmitSchema,
 } from "./admin-events";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
@@ -27,7 +26,6 @@ export const badgeRegenerationQueuedResponseSchema = successResponseSchema.exten
   badgeUrl: httpUrlSchema,
 });
 export const adminRegistrationOpenManageResponseSchema = z.object({ manageUrl: httpCapabilityUrlSchema });
-export const adminRegistrationDayAttendanceResponseSchema = successResponseSchema;
 export const adminRegistrationUpdateResponseSchema = successResponseSchema.extend({
   registration: adminRegistrationDetailSchema.nullable(),
   emailChanged: z.boolean().optional(),
@@ -126,24 +124,6 @@ export const adminRegistrationBadgeRolePatchRouteSchema = {
     "400": { description: "Invalid badge-role payload." },
     "401": { description: "Admin authorization required." },
     "404": { description: "Event or registration not found." },
-  },
-};
-export const adminRegistrationDayAttendancePatchRouteSchema = {
-  tags: ["Admin registrations"],
-  summary: "Update registration day attendance",
-  request: {
-    params: adminRegistrationParamsSchema,
-    body: { content: { "application/json": { schema: adminManageDayAttendanceSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Day attendance updated.",
-      content: { "application/json": { schema: adminRegistrationDayAttendanceResponseSchema } },
-    },
-    "400": { description: "Invalid day-attendance payload." },
-    "401": { description: "Admin authorization required." },
-    "404": { description: "Event, registration, or event day not found." },
-    "409": { description: "The requested attendance transition conflicts with capacity or current state." },
   },
 };
 export const adminRegistrationOpenManageRouteSchema = {

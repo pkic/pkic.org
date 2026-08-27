@@ -20,6 +20,7 @@ import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
 import { adminProposalOpenManageResponseSchema } from "../../../../../shared/schemas/route-contracts-admin-proposals";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
+import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     false;
   const canManagePresentation = proposal.status === "accepted" || proposalRequiresPresentation || versions.length > 0;
   const proposalDecidable = isProposalDecidableStatus(proposal.status);
+  const canEditAbstract = proposal.status === "accepted" ? access.canEditAcceptedAbstract : access.canFinalize;
   const reviewCount = reviewSummary.totalReviews;
   const quorumMet = reviewSummary.quorumMet;
   const recommendationCounts = {
@@ -115,7 +117,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
         ]
       : []),
     { key: "audit-log", label: "Audit Log" },
-    ...(access.canFinalize && (proposalDecidable || proposal.decision_status)
+    ...((access.canFinalize && (proposalDecidable || proposal.decision_status)) ||
+    (access.canCancelAcceptedProposal && proposal.status === "accepted") ||
+    proposal.status === "canceled"
       ? [{ key: "decision", label: "Decision" }]
       : []),
   ];
@@ -253,7 +257,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
             <div class="card">
               <div class="card-header d-flex align-items-center gap-2">
                 <h6 class="mb-0">Abstract</h6>
-                {access.canFinalize && !editingAbstract && (
+                {canEditAbstract && !editingAbstract && (
                   <button
                     class="btn btn-sm btn-outline-secondary ms-auto"
                     onClick={() => {
@@ -382,16 +386,26 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
             </div>
           )}
 
-          {/* ── Decision tab (finalizers only) ── */}
-          {activeTab === "decision" && access.canFinalize && (proposalDecidable || proposal.decision_status) && (
-            <ProposalDecisionPanel
-              proposalId={proposalId}
-              proposal={proposal}
-              reviewCount={reviewCount}
-              minReviewsRequired={minReviewsRequired}
-              loading={loadingSub}
-              onSaved={() => void reload()}
-            />
+          {/* ── Decision and accepted-session cancellation ── */}
+          {activeTab === "decision" && (
+            <>
+              {access.canFinalize && (proposalDecidable || proposal.decision_status) && (
+                <ProposalDecisionPanel
+                  proposalId={proposalId}
+                  proposal={proposal}
+                  reviewCount={reviewCount}
+                  minReviewsRequired={minReviewsRequired}
+                  loading={loadingSub}
+                  onSaved={() => void reload()}
+                />
+              )}
+              <ProposalCancellationPanel
+                proposalId={proposalId}
+                proposal={proposal}
+                canCancel={access.canCancelAcceptedProposal}
+                onSaved={() => void reload()}
+              />
+            </>
           )}
         </div>
 

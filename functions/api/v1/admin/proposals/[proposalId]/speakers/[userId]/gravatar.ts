@@ -27,6 +27,8 @@ async function onPost(c: AdminContext, data: Data): Promise<Response> {
     db,
     bucket: requireUserHeadshotBucket(c.env),
     proposalId: data.params.proposalId,
+    proposalEventId: speaker.proposal_event_id,
+    permissionActor: admin,
     proposalSpeakerId: speaker.speaker_id,
     speakerUserId: speaker.user_id,
     previousOverrideSet: speaker.headshot_override_set,

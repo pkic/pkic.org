@@ -1,8 +1,9 @@
 /**
  * POST /api/v1/invites/resend-link
  *
- * Sends fresh links for pending or expired invitations matching the supplied
- * email. The response is generic to prevent invitation enumeration.
+ * Sends fresh links only for still-active invitations matching the supplied
+ * email. Extending an expired invitation requires an authorized resend with
+ * an explicit new deadline. The response is generic to prevent enumeration.
  */
 import { processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../_lib/config";

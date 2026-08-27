@@ -10,8 +10,8 @@ import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { requestAdminMagicLink } from "../functions/_lib/auth/admin";
+import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queueAdminSignInCapability, redeemAdminSignInCapability } from "../functions/_lib/auth/admin";
 import { addUserEmail, removeUserEmail } from "../functions/_lib/services/user-emails";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -308,12 +308,63 @@ describe("secondary user emails", () => {
       body: JSON.stringify({ email: "alias@example.test" }),
     });
 
-    const viaCanonical = await requestAdminMagicLink(env.DB, { email: "canonical@example.test", ttlMinutes: 15 });
-    expect(viaCanonical.token).not.toBeNull();
+    const viaCanonical = await queueAdminSignInCapability(env.DB, {
+      email: "canonical@example.test",
+      ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    expect(viaCanonical.queuedToken).not.toBeNull();
 
-    const viaAlias = await requestAdminMagicLink(env.DB, { email: "alias@example.test", ttlMinutes: 15 });
-    expect(viaAlias.token).toBeNull();
+    const viaAlias = await queueAdminSignInCapability(env.DB, {
+      email: "alias@example.test",
+      ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    expect(viaAlias.queuedToken).toBeNull();
     expect(viaAlias.admin).toBeNull();
+  });
+
+  it("invalidates an issued sign-in capability when the primary email changes", async () => {
+    const userId = await insertUser("change-before-link@example.test");
+    const staffRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'membership_processor'")
+    )[0];
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
+      .run();
+
+    const issued = await queueAdminSignInCapability(env.DB, {
+      email: "change-before-link@example.test",
+      ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    expect(issued.queuedToken).not.toBeNull();
+    const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(
+      env.DB,
+      env,
+      JSON.stringify({
+        magicLinkUrl: issued.queuedToken,
+        __authorizedCapabilityMarkers: [issued.queuedToken],
+      }),
+    );
+    const token = new URL(
+      `https://app.test/admin/?token=${encodeURIComponent(delivered.magicLinkUrl)}`,
+    ).searchParams.get("token")!;
+
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("changed-after-link@example.test", "changed-after-link@example.test", userId)
+      .run();
+
+    await expect(
+      redeemAdminSignInCapability(env.DB, {
+        token,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
   });
 
   it("Users list search matches a secondary email", async () => {

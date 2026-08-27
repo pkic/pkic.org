@@ -393,7 +393,8 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(response.status).toBe(404);
   });
 
-  it("public chair compatibility response resolves published All Members group leadership", async () => {
+  it("public consortium chairs resolve published All Members group leadership", async () => {
+    expect((await call(null, "/api/v1/leadership/forum-chairs")).status).toBe(404);
     const emptyResponse = await call(null, "/api/v1/leadership/consortium-chairs");
     expect(emptyResponse.status).toBe(200);
     expect((await emptyResponse.json()) as { chair: unknown }).toEqual({ chair: null, viceChair: null });
@@ -417,11 +418,5 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(body.chair?.name).toBe("Consortium Chair");
     expect(body.chair?.startsAt).toBeTruthy();
     expect(body.viceChair?.name).toBe("Consortium ViceChair");
-
-    const compatibilityResponse = await call(null, "/api/v1/leadership/forum-chairs");
-    expect(compatibilityResponse.status).toBe(200);
-    expect(((await compatibilityResponse.json()) as { chair: { name: string } | null }).chair?.name).toBe(
-      "Consortium Chair",
-    );
   });
 });

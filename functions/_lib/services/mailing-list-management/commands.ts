@@ -1,25 +1,43 @@
-import type { MailingListCreateInput, MailingListUpdateInput } from "../../../../assets/shared/schemas/mailing-lists";
+import type {
+  GroupMailingListCreateInput,
+  GroupMailingListUpdateInput,
+} from "../../../../assets/shared/schemas/mailing-lists";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLog, type AuditScope } from "../audit";
+import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import { prepareReconcileMailingListStatement } from "../mailing-list-subscriptions";
 import { translateMailingListWriteError, validateMailingListConfiguration } from "./configuration";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
 
-export async function createMailingList(db: DatabaseLike, input: MailingListCreateInput, actorUserId: string) {
+interface MailingListMutationOptions {
+  authorizationGuards?: StatementLike[];
+  auditScope?: AuditScope;
+}
+
+type MailingListCreateCommandInput = GroupMailingListCreateInput & { groupId: string };
+
+export async function createMailingList(
+  db: DatabaseLike,
+  input: MailingListCreateCommandInput,
+  actorUserId: string,
+  options: MailingListMutationOptions = {},
+) {
   const now = nowIso();
   const id = uuid();
   await validateMailingListConfiguration(db, {
     purpose: input.purpose,
-    groupId: input.groupId ?? null,
+    groupId: input.groupId,
     primaryDiscussion: input.primaryDiscussion ?? false,
     subscriptionDefault: input.subscriptionDefault ?? "none",
   });
   try {
     await db.batch([
+      ...(options.authorizationGuards ?? []),
       db
         .prepare(
           `INSERT INTO mailing_lists
@@ -32,7 +50,7 @@ export async function createMailingList(db: DatabaseLike, input: MailingListCrea
           input.email,
           input.label,
           input.purpose,
-          input.groupId ?? null,
+          input.groupId,
           input.primaryDiscussion ? 1 : 0,
           input.subscriptionDefault ?? "none",
           input.postingPolicy ?? "subscribers",
@@ -52,9 +70,14 @@ export async function createMailingList(db: DatabaseLike, input: MailingListCrea
         id,
         { email: input.email },
         now,
+        null,
+        options.auditScope,
       ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "MAILING_LIST_AUTHORIZATION_CHANGED", "Group-management authority changed while saving");
+    }
     translateMailingListWriteError(error);
   }
   return loadMailingList(db, id);
@@ -63,8 +86,9 @@ export async function createMailingList(db: DatabaseLike, input: MailingListCrea
 export async function updateMailingList(
   db: DatabaseLike,
   id: string,
-  input: MailingListUpdateInput,
+  input: GroupMailingListUpdateInput,
   actorUserId: string,
+  options: MailingListMutationOptions = {},
 ) {
   const existing = await first<MailingListRow>(db, `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists WHERE id = ?`, [
     id,
@@ -72,7 +96,7 @@ export async function updateMailingList(
   if (!existing) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
   await validateMailingListConfiguration(db, {
     purpose: input.purpose ?? existing.purpose,
-    groupId: input.groupId === undefined ? existing.group_id : input.groupId,
+    groupId: existing.group_id,
     primaryDiscussion: input.primaryDiscussion ?? existing.is_primary_discussion === 1,
     subscriptionDefault: input.subscriptionDefault ?? existing.subscription_default,
   });
@@ -85,29 +109,128 @@ export async function updateMailingList(
   values.push(now, id);
   try {
     await db.batch([
+      ...(options.authorizationGuards ?? []),
       db.prepare(`UPDATE mailing_lists SET ${setters.join(", ")} WHERE id = ?`).bind(...values),
       prepareReconcileMailingListStatement(db, id, now),
-      prepareAuditLog(db, "admin", actorUserId, "mailing_list_updated", "mailing_list", id, input, now),
+      prepareAuditLog(
+        db,
+        "admin",
+        actorUserId,
+        "mailing_list_updated",
+        "mailing_list",
+        id,
+        input,
+        now,
+        null,
+        options.auditScope,
+      ),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "MAILING_LIST_AUTHORIZATION_CHANGED", "Group-management authority changed while saving");
+    }
     translateMailingListWriteError(error);
   }
   return loadMailingList(db, id);
 }
 
-export async function deleteMailingList(db: DatabaseLike, id: string, actorUserId: string): Promise<void> {
+export async function deleteMailingList(
+  db: DatabaseLike,
+  id: string,
+  actorUserId: string,
+  options: MailingListMutationOptions = {},
+): Promise<void> {
   if (!(await first(db, "SELECT id FROM mailing_lists WHERE id = ?", [id]))) {
     throw new AppError(404, "NOT_FOUND", "Mailing list not found");
   }
   const now = nowIso();
-  await db.batch([
-    db.prepare("UPDATE mailing_lists SET active = 0, archived_at = ?, updated_at = ? WHERE id = ?").bind(now, now, id),
-    prepareReconcileMailingListStatement(db, id, now),
-    prepareAuditLog(db, "admin", actorUserId, "mailing_list_archived", "mailing_list", id, {}, now),
-  ]);
+  try {
+    await db.batch([
+      ...(options.authorizationGuards ?? []),
+      db
+        .prepare("UPDATE mailing_lists SET active = 0, archived_at = ?, updated_at = ? WHERE id = ?")
+        .bind(now, now, id),
+      prepareReconcileMailingListStatement(db, id, now),
+      prepareAuditLog(
+        db,
+        "admin",
+        actorUserId,
+        "mailing_list_archived",
+        "mailing_list",
+        id,
+        {},
+        now,
+        null,
+        options.auditScope,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "MAILING_LIST_AUTHORIZATION_CHANGED", "Group-management authority changed while saving");
+    }
+    throw error;
+  }
 }
 
-function addMailingListSetters(input: MailingListUpdateInput, setters: string[], values: unknown[]): void {
+function groupMailingListOwnershipGuard(db: DatabaseLike, listId: string, groupId: string): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: "SELECT 1 FROM mailing_lists WHERE id = ? AND group_id = ?",
+    bindings: [listId, groupId],
+  });
+}
+
+/** Group-scoped commands retain one write implementation while binding ownership and authorization atomically. */
+export async function createGroupMailingList(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  input: GroupMailingListCreateInput,
+) {
+  await requireGroupManagement(db, actor, groupId);
+  return createMailingList(db, { ...input, groupId }, actor.id, {
+    authorizationGuards: [prepareGroupManagementAuthorizationGuard(db, actor, [groupId])],
+    auditScope: { type: "group", id: groupId },
+  });
+}
+
+export async function updateGroupMailingList(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  listId: string,
+  input: GroupMailingListUpdateInput,
+) {
+  await requireGroupManagement(db, actor, groupId);
+  const existing = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
+  if (!existing || existing.group_id !== groupId) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
+  return updateMailingList(db, listId, input, actor.id, {
+    authorizationGuards: [
+      prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+      groupMailingListOwnershipGuard(db, listId, groupId),
+    ],
+    auditScope: { type: "group", id: groupId },
+  });
+}
+
+export async function archiveGroupMailingList(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  listId: string,
+): Promise<void> {
+  await requireGroupManagement(db, actor, groupId);
+  const existing = await first<{ group_id: string }>(db, "SELECT group_id FROM mailing_lists WHERE id = ?", [listId]);
+  if (!existing || existing.group_id !== groupId) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
+  await deleteMailingList(db, listId, actor.id, {
+    authorizationGuards: [
+      prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+      groupMailingListOwnershipGuard(db, listId, groupId),
+    ],
+    auditScope: { type: "group", id: groupId },
+  });
+}
+
+function addMailingListSetters(input: GroupMailingListUpdateInput, setters: string[], values: unknown[]): void {
   const add = (column: string, value: unknown) => {
     setters.push(`${column} = ?`);
     values.push(value);
@@ -115,7 +238,6 @@ function addMailingListSetters(input: MailingListUpdateInput, setters: string[],
   if (input.email !== undefined) add("email", input.email);
   if (input.label !== undefined) add("label", input.label);
   if (input.purpose !== undefined) add("purpose", input.purpose);
-  if (input.groupId !== undefined) add("group_id", input.groupId);
   if (input.primaryDiscussion !== undefined) add("is_primary_discussion", input.primaryDiscussion ? 1 : 0);
   if (input.subscriptionDefault !== undefined) add("subscription_default", input.subscriptionDefault);
   if (input.postingPolicy !== undefined) add("posting_policy", input.postingPolicy);

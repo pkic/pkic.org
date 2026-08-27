@@ -1,10 +1,12 @@
 import { all } from "../db/queries";
+import { emailPlainText } from "../email/plain-text";
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import type { DatabaseLike } from "../types";
 import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
-import { buildProposalInviteEmailContextMap } from "./proposal-invite-email-context";
+import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 interface ProposalMatch {
   proposal_id: string;
@@ -31,7 +33,7 @@ export async function queueProposalManageLinkRecovery(
        FROM session_proposals sp
        JOIN users u ON u.id = sp.proposer_user_id
       WHERE sp.event_id = ? AND lower(u.email) = lower(?)
-        AND sp.status NOT IN ('rejected', 'withdrawn')
+        AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
       ORDER BY sp.submitted_at DESC
       LIMIT 20`,
     [event.id, email],
@@ -66,6 +68,7 @@ export async function queueProposalManageLinkRecovery(
         queuedCapabilityToken("proposal_manage", proposal.proposal_id),
       );
       const referralCode = referralByProposal.get(proposal.proposal_id);
+      const inviteContext = inviteContexts.get(proposal.proposal_id);
       return {
         eventId: event.id,
         templateKey: "proposal_submitted",
@@ -76,12 +79,16 @@ export async function queueProposalManageLinkRecovery(
         capabilityLinkValues: [manageUrl],
         data: {
           ...eventVariables,
-          firstName: proposal.first_name ?? "",
-          lastName: proposal.last_name ?? "",
-          proposalTitle: proposal.title,
-          proposalAbstract: proposal.abstract,
-          proposalType: proposal.proposal_type,
-          speakerLineupText: inviteContexts.get(proposal.proposal_id)?.speakerLineupText ?? "",
+          firstName: emailPlainText(proposal.first_name ?? ""),
+          lastName: emailPlainText(proposal.last_name ?? ""),
+          ...(inviteContext
+            ? proposalInviteEmailTextVariables(inviteContext)
+            : {
+                proposalTitle: emailPlainText(proposal.title),
+                proposalAbstract: emailPlainText(proposal.abstract),
+                speakerLineupText: emailPlainText(""),
+              }),
+          proposalType: emailPlainText(proposal.proposal_type),
           manageUrl,
           shareUrl: referralCode ? `${appBaseUrl}/r/${referralCode}` : "",
         },

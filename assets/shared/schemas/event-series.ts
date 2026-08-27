@@ -17,8 +17,24 @@ import { eventGroupGrantSchemas } from "./resource-grants";
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
 export type EventProfileKey = z.infer<typeof eventProfileKeySchema>;
+/**
+ * Standalone events are not meeting series. Meetings and board meetings must
+ * be created through the meeting-series workflow so occurrences remain the
+ * source of truth.
+ */
+export const STANDALONE_EVENT_PROFILE_KEYS = ["conference", "workshop", "tutorial"] as const;
+export const standaloneEventProfileKeySchema = z.enum(STANDALONE_EVENT_PROFILE_KEYS);
+export type StandaloneEventProfileKey = z.infer<typeof standaloneEventProfileKeySchema>;
+export const EVENT_PROFILE_LABELS: Record<EventProfileKey, string> = {
+  meeting: "Meeting",
+  board_meeting: "Board meeting",
+  conference: "Conference",
+  workshop: "Workshop",
+  tutorial: "Tutorial",
+};
 export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
+export type EventSourceMode = z.infer<typeof eventSourceModeSchema>;
 
 export const EVENT_REGISTRATION_POLICIES = [
   "no_registration",
@@ -29,6 +45,13 @@ export const EVENT_REGISTRATION_POLICIES = [
 ] as const;
 export const eventRegistrationPolicySchema = z.enum(EVENT_REGISTRATION_POLICIES);
 export type EventRegistrationPolicy = z.infer<typeof eventRegistrationPolicySchema>;
+export const EVENT_REGISTRATION_POLICY_LABELS = {
+  no_registration: "No registration",
+  optional: "Optional registration",
+  invitation_only: "Invitation only",
+  required: "Registration required",
+  public: "Public registration",
+} as const satisfies Record<EventRegistrationPolicy, string>;
 export const EVENT_GUEST_POLICIES = ["none", "occurrence_invitation", "public_registration"] as const;
 export const eventGuestPolicySchema = z.enum(EVENT_GUEST_POLICIES);
 export type EventGuestPolicy = z.infer<typeof eventGuestPolicySchema>;

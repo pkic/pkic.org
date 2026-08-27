@@ -19,6 +19,7 @@ import {
   type PreparedVoteNotificationDelivery,
 } from "./votes";
 import type { DatabaseLike, Env } from "../types";
+import { emailPlainText } from "../email/plain-text";
 
 export interface VotesDueWorkResult {
   opened: number;
@@ -68,9 +69,9 @@ export async function runVotesDueWork(
     messageType: "transactional",
     subject: `Vote open: ${recipient.voteTitle}`,
     data: {
-      representativeName: recipient.representativeName,
-      organizationName: recipient.organizationName,
-      voteTitle: recipient.voteTitle,
+      representativeName: emailPlainText(recipient.representativeName),
+      organizationName: emailPlainText(recipient.organizationName),
+      voteTitle: emailPlainText(recipient.voteTitle),
       closesAt: recipient.closesAt,
       voteUrl: `/portal/votes/${recipient.voteId}`,
     },

@@ -3,8 +3,8 @@
  * Council roster (:body is "board" or "executive_council").
  *
  * Replaces the static content/about/board.md / executive-council.md
- * person-card lists — same pattern as GET /api/v1/working-groups/:id's
- * chair/viceChair fields (members-directory.ts), just for the
+ * person-card lists — the generic group directory exposes group leadership,
+ * while this route supports the
  * many-simultaneous-holder Board/EC rosters instead of a single chair slot.
  */
 import { OpenAPIRoute } from "chanfana";

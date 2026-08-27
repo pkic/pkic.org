@@ -37,7 +37,11 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeUndefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].put).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].put).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"].post).toBeDefined();
@@ -50,8 +54,8 @@ describe("OpenAPI schema generation", () => {
       spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].patch,
     ).toBeDefined();
     expect(
-      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"].patch,
-    ).toBeDefined();
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"],
+    ).toBeUndefined();
     expect(
       spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/open-manage"].post,
     ).toBeDefined();
@@ -85,6 +89,17 @@ describe("OpenAPI schema generation", () => {
     });
     expect(operation["x-pkic-required-scopes"]).toEqual(["proposals:score"]);
     expect(operation.description).toContain("Required scopes: `proposals:score`.");
+  });
+
+  it("documents accepted-abstract editing as alternative least-privilege scopes", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+    const operation = spec.paths["/api/v1/admin/proposals/{proposalId}"].patch;
+    const alternatives = [["proposals:manage"], ["proposals:edit_accepted_abstract"]];
+
+    expect(operation.security).toEqual(alternatives.map((scopes) => ({ BearerAuth: scopes })));
+    expect(operation[AUTH_EXTENSION]).toMatchObject({ required: true, scopesAnyOf: alternatives });
+    expect(operation["x-pkic-required-scopes-any-of"]).toEqual(alternatives);
+    expect(operation.description).toContain("Required scope alternative:");
   });
 
   it("documents role ids as plain strings, not uuid()-formatted, so built-in system roles are valid per the spec (Phase 3 §3.1)", () => {

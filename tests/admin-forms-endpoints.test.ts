@@ -394,6 +394,50 @@ describe("admin forms endpoints", () => {
     expect(eventForm).toMatchObject({ event_slug: "pqc-2026", event_name: "PQC Conference 2026" });
   });
 
+  it("keeps group-owned community form mutations in the group context while preserving admin reads", async () => {
+    const { eventId } = await setupAdmin();
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+    const created = await createManagedForm(
+      env.DB,
+      admin.id,
+      {
+        type: "group",
+        ref: "20000000-0000-4000-8000-000000000001",
+        groupId: "20000000-0000-4000-8000-000000000001",
+      },
+      {
+        key: "group-owned-survey",
+        purpose: "survey",
+        title: "Group-owned survey",
+        status: "active",
+        fields: [],
+      },
+    );
+
+    const readResponse = await callAdmin("/api/v1/admin/forms/group-owned-survey");
+    expect(readResponse.status).toBe(200);
+    const readPayload = (await readResponse.json()) as { form: { key: string } };
+    expect(readPayload.form.key).toBe("group-owned-survey");
+
+    const patchResponse = await callAdmin("/api/v1/admin/forms/group-owned-survey", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "Should be group-managed" }),
+    });
+    expect(patchResponse.status).toBe(403);
+    await expect(patchResponse.json()).resolves.toMatchObject({
+      error: { code: "GROUP_FORM_MANAGEMENT_REQUIRED" },
+    });
+
+    const deleteResponse = await callAdmin("/api/v1/admin/forms/group-owned-survey", { method: "DELETE" });
+    expect(deleteResponse.status).toBe(403);
+    await expect(deleteResponse.json()).resolves.toMatchObject({
+      error: { code: "GROUP_FORM_MANAGEMENT_REQUIRED" },
+    });
+
+    expect(created.id).toBeTruthy();
+    expect(eventId).toBeTruthy();
+  });
+
   it("rolls back form aggregate writes when a field statement fails", async () => {
     await setupAdmin();
     const admin = (

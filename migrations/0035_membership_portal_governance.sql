@@ -20,13 +20,10 @@
 -- assignments) can declare the FK in its own initial CREATE TABLE — no
 -- rebuild required anywhere in this schema.
 
--- Admin, member, and MCP OAuth magic links share auth_magic_links. Bind every
--- newly issued link to one verifier context so a user eligible for multiple
--- surfaces cannot exchange one flow's token through another. This remains an
--- open TEXT vocabulary rather than a CHECK constraint so adding another auth
--- flow never requires rebuilding the table. Existing NULL-purpose links fail
--- closed in the application and naturally expire.
-ALTER TABLE auth_magic_links ADD COLUMN purpose TEXT;
+-- Email sign-in capabilities are signed at delivery and redeemed exactly
+-- once through audit_log.idempotency_key. No usable credential or issued-link
+-- row is persisted, so the legacy pre-redemption table is no longer needed.
+DROP TABLE auth_magic_links;
 
 CREATE TABLE membership_categories (
   code         TEXT NOT NULL PRIMARY KEY,
@@ -124,6 +121,19 @@ CREATE INDEX idx_email_outbox_expired_lease
 -- for the same generation share one outbox idempotency key.
 ALTER TABLE proposal_speakers ADD COLUMN invite_generation INTEGER NOT NULL DEFAULT 0;
 
+-- Co-speaker invitation eligibility is bounded by the owning event. NULL is
+-- retained only for pre-branch rows and is interpreted as the event start by
+-- the shared domain policy; every new or renewed invitation stores the
+-- resolved deadline explicitly.
+ALTER TABLE proposal_speakers ADD COLUMN invite_expires_at TEXT;
+
+DROP INDEX idx_proposal_speakers_speaker_invite_reminder_due;
+CREATE INDEX idx_proposal_speakers_speaker_invite_reminder_due
+  ON proposal_speakers(COALESCE(speaker_invite_last_communication_at, created_at), id,
+                       invite_expires_at, speaker_invite_reminder_count,
+                       speaker_invite_reminders_paused_until)
+  WHERE status = 'invited' AND role <> 'proposer';
+
 -- A proposal manager may curate a co-speaker's profile for this proposal, but
 -- the proposer-management capability must never rewrite that person's
 -- account-wide profile or headshot. Keep these overrides on the speaker roster
@@ -179,6 +189,7 @@ WHEN OLD.status IS NOT NEW.status
   OR OLD.accepted_at IS NOT NEW.accepted_at
   OR OLD.declined_at IS NOT NEW.declined_at
   OR OLD.link_secret IS NOT NEW.link_secret
+  OR OLD.expires_at IS NOT NEW.expires_at
 BEGIN
   UPDATE invites
   SET transition_revision = transition_revision + 1
@@ -191,6 +202,33 @@ END;
 CREATE INDEX idx_invites_recovery_email_created
   ON invites(invitee_email, event_id, invite_type, created_at DESC)
   WHERE status IN ('sent', 'expired');
+
+-- Group and transitional speaker invite lists are event/type scoped and use
+-- created_at as their stable default order. Keep the bounded page in D1.
+CREATE INDEX idx_invites_event_type_created
+  ON invites(event_id, invite_type, created_at DESC, id ASC);
+
+-- This migration is unreleased: normalize legacy invitations onto the same
+-- finite event window used by every new dispatch. Existing earlier deadlines
+-- remain earlier; NULL or overly-late deadlines become the event start/end.
+UPDATE invites
+SET expires_at = (
+  SELECT CASE
+    WHEN invites.expires_at IS NULL THEN event.starts_at
+    WHEN unixepoch(invites.expires_at) <= unixepoch(event.ends_at) THEN invites.expires_at
+    ELSE event.ends_at
+  END
+  FROM events event
+  WHERE event.id = invites.event_id
+)
+WHERE EXISTS (
+  SELECT 1
+  FROM events event
+  WHERE event.id = invites.event_id
+    AND event.starts_at IS NOT NULL
+    AND event.ends_at IS NOT NULL
+    AND unixepoch(event.ends_at) > unixepoch(event.starts_at)
+);
 
 CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
@@ -889,7 +927,7 @@ CREATE INDEX idx_referral_conversions_code_created
 -- Section: RESTful API & Portal-Managed Forms
 --
 -- (Membership Application Endpoint), (Sponsor Interest
--- Endpoint), and (public members / working-groups endpoints) all need
+-- Endpoint), and (public members / group endpoints) all need
 -- tables that don't exist yet. Per the no-CHECK-constraint
 -- convention, status/stage/type columns below carry `-- allowed:`
 -- comments only; validation lives in the application layer (Zod).
@@ -911,11 +949,10 @@ CREATE INDEX idx_referral_conversions_code_created
 --    (idempotency key for the Stripe webhook, mirroring `donations.
 --    checkout_session_id`).
 --
--- 3. groups / group_memberships — required immediately by GET /api/v1/working-groups
---    (list) and GET /api/v1/working-groups/:id (detail + member list).
---    Seeded here with the six working groups already published under
---    content/wg/ so the public endpoints return real data before
---    or touch this table again (e.g. adding chair assignment UI).
+-- 3. groups / group_memberships — required immediately by the canonical
+--    /api/v1/groups and /api/v1/me/groups resources.
+--    Seeded with the published and coordination groups needed by the
+--    canonical group resources during initial local setup.
 
 -- ── Membership applications ──────────────────────────────
 
@@ -1556,6 +1593,9 @@ ALTER TABLE registrations
   ADD COLUMN form_placement_id TEXT REFERENCES form_placements(id);
 ALTER TABLE session_proposals
   ADD COLUMN form_placement_id TEXT REFERENCES form_placements(id);
+ALTER TABLE session_proposals ADD COLUMN canceled_at TEXT;
+ALTER TABLE session_proposals ADD COLUMN canceled_by_user_id TEXT REFERENCES users(id);
+ALTER TABLE session_proposals ADD COLUMN cancellation_comment TEXT;
 
 CREATE INDEX idx_registrations_form_placement
   ON registrations(form_placement_id, created_at, id);
@@ -1922,6 +1962,18 @@ VALUES (
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
 VALUES
+  (
+    lower(hex(randomblob(16))), 'proposal_canceled', 1,
+    'Session canceled: {{proposalTitleText}}',
+    'Hi {{firstNameText}},
+
+The accepted session **{{proposalTitleText}}** for **{{eventNameText}}** has been canceled by the program team.
+
+Reason: {{cancellationCommentText}}
+
+No further speaker action is required.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  ),
   (
     lower(hex(randomblob(16))), 'membership_join_verify', 1,
     'Verify your email address to join the PKI Consortium',
@@ -2512,7 +2564,9 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
 --
 -- `event_organizer`'s bundle extends beyond literal
 -- events:write/events:manage to also include proposals:read,
--- proposals:score, proposals:manage, agenda:read, agenda:write — justified by
+-- proposals:score, proposals:manage, proposals:edit_accepted_abstract,
+-- proposals:cancel_accepted,
+-- agenda:read, agenda:write — justified by
 -- persona description ("manage capacity, send communications, manage
 -- registrations, and view all attendee and proposal data for that event"),
 -- and needed so an organizer's event access isn't missing proposal/agenda
@@ -2548,6 +2602,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:edit_accepted_abstract', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:cancel_accepted', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'agenda:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'sponsor-portal:attendee-data', datetime('now')),
@@ -2574,12 +2630,16 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:edit_accepted_abstract', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:cancel_accepted', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:write', datetime('now')),
 
   (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:edit_accepted_abstract', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:cancel_accepted', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:write', datetime('now')),
 
@@ -2661,7 +2721,7 @@ INSERT INTO roles (id, name, description, is_system_role, single_holder_per_cont
 -- bound and no separate table-rebuild migration is needed.
 --
 -- credential_id stores the credential ID as base64url TEXT, in the clear —
--- unlike `sessions.token_hash`/`auth_magic_links.token_hash`, a WebAuthn
+-- unlike `sessions.token_hash`, a WebAuthn
 -- credential ID is not a bearer secret (security comes from the private key
 -- never leaving the authenticator, proven via signature); hashing it would
 -- only lose the ability to look it up for `excludeCredentials` at
@@ -3554,7 +3614,7 @@ END;
 -- ── Managed mailing list configuration ─────────────────────────────
 -- Replaces the hardcoded PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST constants
 -- in membership-onboarding.ts, which had no staff-editable home before this.
--- Every list may be owned by a group; groups may have multiple lists with
+-- Every list is owned by a group; groups may have multiple lists with
 -- independent purposes and subscription defaults.
 CREATE TABLE mailing_lists (
   id                        TEXT NOT NULL PRIMARY KEY,
@@ -3562,7 +3622,7 @@ CREATE TABLE mailing_lists (
   label                     TEXT NOT NULL,
   purpose                   TEXT NOT NULL,
   -- allowed: all_members | consultation | group | custom
-  group_id                  TEXT REFERENCES groups(id),
+  group_id                  TEXT NOT NULL REFERENCES groups(id),
   is_primary_discussion     INTEGER NOT NULL DEFAULT 0 CHECK (is_primary_discussion IN (0, 1)),
   subscription_default      TEXT NOT NULL DEFAULT 'none',
   -- allowed: group_members | eligible_categories | none
@@ -3690,11 +3750,10 @@ You may revise and resubmit at any time.',
 --    consortium sponsorship goes active, cleared when it lapses.
 -- 2. `event_sponsor_attendee_tiers` — per-event config of which sponsor
 --    tiers get attendee-data access.
--- 3. `sponsor_portal_magic_links`/`sponsor_portal_sessions` — a sponsor
---    contact has no `users` row ("no separate account
---    required"), so the existing `auth_magic_links`/`sessions` tables
---    (both `user_id NOT NULL`) can't be reused the way member/admin auth
---    does. These are the same shape, scoped to `sponsorship_id` instead.
+-- 3. `sponsor_portal_sessions` — a sponsor contact has no `users` row ("no
+--    separate account required"), so the existing `sessions` table (with
+--    `user_id NOT NULL`) cannot be reused. Sessions are scoped to
+--    `sponsorship_id` instead.
 -- 4. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
 --    against anything already there). Keep the legacy source tables as a
@@ -3728,18 +3787,7 @@ CREATE TABLE event_sponsor_attendee_tiers (
   UNIQUE(event_id, tier_name)
 );
 
--- ── Sponsor portal auth (no `users` row — see header) ─────────────────────
-
-CREATE TABLE sponsor_portal_magic_links (
-  id              TEXT NOT NULL PRIMARY KEY,
-  sponsorship_id  TEXT NOT NULL REFERENCES sponsorships(id),
-  token_hash      TEXT NOT NULL UNIQUE,
-  expires_at      TEXT NOT NULL,
-  used_at         TEXT,
-  request_ip_hash TEXT,
-  user_agent_hash TEXT,
-  created_at      TEXT NOT NULL
-);
+-- ── Sponsor portal sessions (no `users` row — see header) ──────────────────
 
 CREATE TABLE sponsor_portal_sessions (
   id             TEXT NOT NULL PRIMARY KEY,
@@ -3751,6 +3799,19 @@ CREATE TABLE sponsor_portal_sessions (
 );
 
 CREATE INDEX idx_sponsor_portal_sessions_sponsorship ON sponsor_portal_sessions(sponsorship_id);
+
+-- The authenticated sponsor identity is the current contact mailbox. Any
+-- change to that mailbox revokes existing bearer sessions immediately, no
+-- matter which present or future management path performs the update.
+CREATE TRIGGER revoke_sponsor_portal_sessions_on_contact_email_change
+AFTER UPDATE OF contact_email ON sponsorships
+WHEN lower(trim(COALESCE(OLD.contact_email, ''))) <> lower(trim(COALESCE(NEW.contact_email, '')))
+BEGIN
+  UPDATE sponsor_portal_sessions
+     SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   WHERE sponsorship_id = NEW.id
+     AND revoked_at IS NULL;
+END;
 
 -- ── Migrate live `sponsors`/`sponsor_events` rows first ───────
 -- (must run before any future YAML-scan pass — see scripts/migrate-sponsors-yaml-to-d1.mjs

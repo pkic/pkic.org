@@ -24,7 +24,8 @@ import {
   signMeetingGuestSessionToken,
 } from "../functions/_lib/auth/meeting-guest-session";
 import { signCapabilityToken } from "../functions/_lib/auth/capability-links";
-import { joinGroup } from "../functions/_lib/services/groups";
+import { createGroup, joinGroup } from "../functions/_lib/services/groups";
+import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -46,7 +47,7 @@ async function inviteTestOccurrenceGuest(
   return (await inviteOccurrenceGuest(db, actor, groupId, seriesId, occurrenceId, input, "https://app.test")).guest;
 }
 
-async function fixture() {
+async function fixture(options: { memberGroup?: "owner" | "shared" } = {}) {
   const adminId = await insertUser(env.DB, `meeting-security-admin-${crypto.randomUUID()}@example.test`);
   await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
   const admin: AuthAdmin = {
@@ -56,11 +57,22 @@ async function fixture() {
     role: "admin",
   };
 
+  const memberGroup =
+    options.memberGroup === "shared"
+      ? await createGroup(env.DB, admin, {
+          typeKey: "working_group",
+          name: `Meeting security shared group ${crypto.randomUUID()}`,
+          visibility: "authenticated",
+          eligibilityMode: "open",
+        })
+      : null;
+  const memberGroupId = memberGroup?.id ?? GROUP_ID;
+
   const userId = await insertUser(env.DB, `meeting-security-member-${crypto.randomUUID()}@example.test`);
   const organizationId = await insertOrganization(env.DB, `Meeting Security Org ${crypto.randomUUID()}`);
   const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
   await addRepresentative(env.DB, memberId, userId);
-  await joinGroup(env.DB, GROUP_ID, {
+  await joinGroup(env.DB, memberGroupId, {
     actorUserId: userId,
     targetUserId: userId,
     selection: { mode: "all_eligible", confirmed: true },
@@ -75,7 +87,7 @@ async function fixture() {
     profileKey: "meeting",
     policy: {
       registrationPolicy: "no_registration",
-      memberEligibility: "owner_group",
+      memberEligibility: memberGroup ? "shared_groups" : "owner_group",
       guestPolicy: "occurrence_invitation",
     },
     startsAt,
@@ -97,7 +109,7 @@ async function fixture() {
     },
     ENCRYPTION_SECRET,
   );
-  return { admin, userId, series, occurrence };
+  return { admin, userId, series, occurrence, memberGroupId };
 }
 
 async function memberRequest(token: string | null, path: string, init: RequestInit = {}): Promise<Response> {
@@ -180,6 +192,63 @@ describe("authenticated meeting entry", () => {
     expect(JSON.stringify(await response.json())).not.toContain("meeting-security-member");
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("requires an explicit attend grant for shared-group member entry", async () => {
+    const { admin, userId, series, occurrence, memberGroupId } = await fixture({ memberGroup: "shared" });
+    const path = `/api/v1/me/meetings/occurrences/${occurrence.id}/join`;
+
+    for (const capability of ["view", "register", "manage"] as const) {
+      await grantResourceToGroup(env.DB, admin, GROUP_ID, "event", series.eventId, {
+        granteeGroupId: memberGroupId,
+        capability,
+      });
+      const response = await memberRequest(
+        await createMemberSession(env.DB, userId, `shared-${capability}-${crypto.randomUUID()}`, SIGNING_SECRET),
+        path,
+      );
+      expect(response.status, `${capability} must not authorize meeting entry`).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: "MEETING_ACCESS_REVOKED" } });
+      await revokeResourceGroupGrant(env.DB, admin, GROUP_ID, "event", series.eventId, {
+        granteeGroupId: memberGroupId,
+        capability,
+      });
+    }
+
+    const memberToken = await createMemberSession(
+      env.DB,
+      userId,
+      `shared-attend-${crypto.randomUUID()}`,
+      SIGNING_SECRET,
+    );
+    await grantResourceToGroup(env.DB, admin, GROUP_ID, "event", series.eventId, {
+      granteeGroupId: memberGroupId,
+      capability: "attend",
+    });
+    const landingResponse = await memberRequest(memberToken, path);
+    expect(landingResponse.status, await landingResponse.clone().text()).toBe(200);
+    const landing = (await landingResponse.json()) as {
+      landingRevision: string;
+      terms: Array<{ id: string; version: string; accepted: boolean }>;
+    };
+    const joined = await memberRequest(memberToken, path, {
+      method: "POST",
+      body: JSON.stringify({
+        landingRevision: landing.landingRevision,
+        acceptedTerms: landing.terms.map(({ id, version }) => ({ termId: id, version })),
+        intentionalJoin: true,
+      }),
+    });
+    expect(joined.status, await joined.clone().text()).toBe(200);
+    expect(await joined.json()).toMatchObject({ redirectUrl: "https://meet.example.test/authenticated-room" });
+
+    await revokeResourceGroupGrant(env.DB, admin, GROUP_ID, "event", series.eventId, {
+      granteeGroupId: memberGroupId,
+      capability: "attend",
+    });
+    const revoked = await memberRequest(memberToken, path);
+    expect(revoked.status).toBe(403);
+    expect(await revoked.json()).toMatchObject({ error: { code: "MEETING_ACCESS_REVOKED" } });
   });
 
   it("derives member identity from the session and records intentional re-entry separately from attendance", async () => {

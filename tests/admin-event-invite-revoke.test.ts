@@ -4,9 +4,9 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { adminEventInviteRevokeRouteSchema } from "../assets/shared/schemas/route-contracts";
+import { adminEventSpeakerInviteRevokeRouteSchema } from "../assets/shared/schemas/route-contracts";
 import { successResponseSchema } from "../assets/shared/schemas/api-common";
-import { revokeInviteByAdmin } from "../functions/_lib/services/invites";
+import { revokeEventInvite } from "../functions/_lib/services/invite-revoke";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 
@@ -20,14 +20,18 @@ async function call(path: string, token?: string): Promise<Response> {
   return app.fetch(request(path, token), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
-async function insertInvite(eventId: string, status = "sent"): Promise<string> {
+async function insertInvite(
+  eventId: string,
+  status = "sent",
+  inviteType: "attendee" | "speaker" = "speaker",
+): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO invites
        (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
-     VALUES (?, ?, ?, 'attendee', ?, ?, 'direct', datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, ?, 'direct', datetime('now'))`,
   )
-    .bind(id, eventId, `invite-${id}@example.test`, crypto.randomUUID(), status)
+    .bind(id, eventId, `invite-${id}@example.test`, inviteType, crypto.randomUUID(), status)
     .run();
   return id;
 }
@@ -53,7 +57,7 @@ describe("POST /api/v1/admin/events/:eventSlug/invites/:inviteId/revoke", () => 
 
     expect(response.status).toBe(200);
     expect(successResponseSchema.parse(await response.json())).toEqual({ success: true });
-    expect(adminEventInviteRevokeRouteSchema.responses["200"]).toBeDefined();
+    expect(adminEventSpeakerInviteRevokeRouteSchema.responses["200"]).toBeDefined();
     await expect(
       queryAll<{ status: string }>(env.DB, "SELECT status FROM invites WHERE id = ?", inviteId),
     ).resolves.toEqual([{ status: "revoked" }]);
@@ -77,6 +81,21 @@ describe("POST /api/v1/admin/events/:eventSlug/invites/:inviteId/revoke", () => 
 
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: "INVITE_NOT_ACTIVE" } });
+  });
+
+  it("does not expose attendee invitations through the transitional admin route", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const adminId = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0]
+      .id;
+    const adminToken = await createAdminSession(env.DB, adminId, "invite-revoke-attendee-token");
+    const inviteId = await insertInvite(eventId, "sent", "attendee");
+
+    const response = await call(`/api/v1/admin/events/pqc-2026/invites/${inviteId}/revoke`, adminToken);
+
+    expect(response.status).toBe(404);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM invites WHERE id = ?", inviteId),
+    ).resolves.toEqual([{ status: "sent" }]);
   });
 
   it("does not revoke an invite owned by another event", async () => {
@@ -118,10 +137,11 @@ describe("POST /api/v1/admin/events/:eventSlug/invites/:inviteId/revoke", () => 
     const inviteId = await insertInvite(eventId);
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const gate = gateNextBatch(env.DB);
-    const revocation = revokeInviteByAdmin(gate.db, {
+    const revocation = revokeEventInvite(gate.db, {
       event,
       inviteId,
-      admin: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+      actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+      expectedInviteType: "speaker",
     });
 
     await gate.reached;

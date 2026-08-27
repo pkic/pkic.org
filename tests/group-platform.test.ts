@@ -1,13 +1,18 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  groupMembershipsListQuerySchema,
+  groupCategoryRulesResponseSchema,
   groupJoinSchema,
   groupPortalContextResponseSchema,
   groupsListResponseSchema,
 } from "../assets/shared/schemas/groups";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import {
   assignLocalGroupLeadership,
+  buildGroupMembershipsPageQuery,
+  buildGroupsPageQuery,
   canManageGroup,
   createGroup,
   getVisibleGroup,
@@ -65,6 +70,43 @@ describe("group visibility", () => {
     expect(authenticatedPage.groups.some((group) => group.slug === "all-members")).toBe(true);
     expect(authenticatedPage.groups.some((group) => group.slug === "executive-council")).toBe(false);
     expect((await getVisibleGroup(env.DB, "all-members", { canReadAll: false, userId }))?.slug).toBe("all-members");
+  });
+
+  it("uses bounded group indexes for canonical group and membership pages", async () => {
+    const groupsQuery = buildGroupsPageQuery({
+      limit: 25,
+      offset: 0,
+      typeKey: "working_group",
+      active: true,
+    });
+    const groupsSql = buildOffsetPageSql(groupsQuery);
+    const groupPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${groupsSql.pageSql}`)
+      .bind(...groupsSql.bindings, groupsQuery.limit, groupsQuery.offset)
+      .all<{ detail: string }>();
+    const groupCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${groupsSql.countSql}`)
+      .bind(...groupsSql.countBindings)
+      .all<{ detail: string }>();
+    const groupDetails = [...groupPagePlan.results, ...groupCountPlan.results].map((row) => row.detail).join("\n");
+    expect(groupDetails).toMatch(/idx_groups_type_active/);
+    expect(groupDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(groupDetails).toMatch(/idx_groups_parent_active/);
+
+    const membershipsQuery = buildGroupMembershipsPageQuery(
+      "10000000-0000-4000-8000-000000000001",
+      groupMembershipsListQuerySchema.parse({ active: true, limit: 25 }),
+    );
+    const membershipsSql = buildOffsetPageSql(membershipsQuery);
+    const membershipPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${membershipsSql.pageSql}`)
+      .bind(...membershipsSql.bindings, membershipsQuery.limit, membershipsQuery.offset)
+      .all<{ detail: string }>();
+    const membershipCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${membershipsSql.countSql}`)
+      .bind(...membershipsSql.countBindings)
+      .all<{ detail: string }>();
+    const membershipDetails = [...membershipPagePlan.results, ...membershipCountPlan.results]
+      .map((row) => row.detail)
+      .join("\n");
+    expect(membershipDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(membershipDetails).not.toMatch(/SCAN group_memberships\b/);
   });
 });
 
@@ -1034,6 +1076,33 @@ describe("group route contracts", () => {
     const testEnv = { ...env, ADMIN_API_KEY: apiKey } as Env;
     const headers = { authorization: `Bearer ${apiKey}`, "content-type": "application/json" };
 
+    const createdResponse = await callApi(testEnv, "/api/v1/groups", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ typeKey: "working_group", name: "Mounted API-created Group", eligibilityMode: "open" }),
+    });
+    expect(createdResponse.status, await createdResponse.clone().text()).toBe(201);
+    await expect(createdResponse.json()).resolves.toMatchObject({ group: { name: "Mounted API-created Group" } });
+
+    const nonAdminUserId = await insertUser(env.DB, "mounted-group-non-admin@example.test");
+    const nonAdminToken = await createMemberSession(env.DB, nonAdminUserId, "mounted-group-non-admin-token");
+    const adminSession = await createAdminSession(env.DB, admin.id, "mounted-group-capability-admin-token");
+    const sessionHeaders = { authorization: `Bearer ${adminSession}` };
+    const canCreate = await callApi(testEnv, "/api/v1/groups/creation-capabilities", { headers: sessionHeaders });
+    expect(canCreate.status, await canCreate.clone().text()).toBe(200);
+    await expect(canCreate.json()).resolves.toEqual({ canCreate: true });
+    const cannotCreate = await callApi(testEnv, "/api/v1/groups/creation-capabilities", {
+      headers: { authorization: `Bearer ${nonAdminToken}` },
+    });
+    expect(cannotCreate.status).toBe(200);
+    await expect(cannotCreate.json()).resolves.toEqual({ canCreate: false });
+    const createDenied = await callApi(testEnv, "/api/v1/groups", {
+      method: "POST",
+      headers: { authorization: `Bearer ${nonAdminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ typeKey: "working_group", name: "Should Not Be Created" }),
+    });
+    expect(createDenied.status).toBe(401);
+
     const update = await callApi(testEnv, `/api/v1/groups/${group.id}`, {
       method: "PATCH",
       headers,
@@ -1060,6 +1129,21 @@ describe("group route contracts", () => {
     });
     expect(replace.status, await replace.clone().text()).toBe(200);
     await expect(replace.json()).resolves.toMatchObject({ group: { revision: 2 } });
+
+    const read = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, { headers: sessionHeaders });
+    expect(read.status, await read.clone().text()).toBe(200);
+    expect(groupCategoryRulesResponseSchema.parse(await read.json())).toMatchObject({
+      groupId: group.id,
+      revision: 2,
+      rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+    });
+
+    const participantUserId = await insertUser(env.DB, "category-rules-participant@example.test");
+    const participantToken = await createMemberSession(env.DB, participantUserId, "category-rules-participant-token");
+    const denied = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
+      headers: { authorization: `Bearer ${participantToken}` },
+    });
+    expect(denied.status).toBe(403);
 
     const staleReplace = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
       method: "PUT",

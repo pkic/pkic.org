@@ -55,6 +55,11 @@ export interface EventUpsertPayload {
   inviteLimitAttendee?: number;
   inviteLimitSpeakerNomination?: number;
   settings?: Record<string, unknown>;
+  /** Only portal/integration event creation supplies group ownership metadata. */
+  ownerGroupId?: string;
+  profileKey?: string;
+  sourceMode?: "hugo" | "portal" | "integration";
+  links?: readonly string[];
 }
 
 export interface EventSyncTerms {
@@ -70,58 +75,51 @@ interface EventTermInput {
   displayText?: string;
 }
 
+export function prepareEventCreateStatement(
+  db: DatabaseLike,
+  payload: EventUpsertPayload,
+): { eventId: string; statement: StatementLike } {
+  const now = nowIso();
+  const eventId = uuid();
+  return {
+    eventId,
+    statement: db
+      .prepare(
+        `INSERT INTO events (
+          id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
+          registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at,
+          owner_group_id, profile_key, source_mode, links_json
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        eventId,
+        payload.slug,
+        payload.name,
+        payload.timezone,
+        payload.startsAt ?? null,
+        payload.endsAt ?? null,
+        payload.registrationMode ?? "invite_or_open",
+        payload.inviteLimitAttendee ?? 50,
+        payload.inviteLimitSpeakerNomination ?? 10,
+        stringifyJson(payload.settings ?? {}),
+        now,
+        now,
+        payload.ownerGroupId ?? null,
+        payload.profileKey ?? null,
+        payload.sourceMode ?? null,
+        payload.links === undefined ? null : stringifyJson(payload.links),
+      ),
+  };
+}
+
 async function buildEventUpsertStatement(
   db: DatabaseLike,
   payload: EventUpsertPayload,
 ): Promise<{ eventId: string; statement: StatementLike }> {
   const existing = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`, [payload.slug]);
+
+  if (!existing) return prepareEventCreateStatement(db, payload);
   const now = nowIso();
-
-  if (!existing) {
-    const event: EventRecord = {
-      id: uuid(),
-      slug: payload.slug,
-      name: payload.name,
-      timezone: payload.timezone,
-      starts_at: payload.startsAt ?? null,
-      ends_at: payload.endsAt ?? null,
-      source_path: null,
-      base_path: null, // Set on first frontend submission via updateEventBasePath
-      capacity_in_person: null,
-      registration_mode: payload.registrationMode ?? "invite_or_open",
-      invite_limit_attendee: payload.inviteLimitAttendee ?? 50,
-      invite_limit_speaker_nomination: payload.inviteLimitSpeakerNomination ?? 10,
-      settings_json: stringifyJson(payload.settings ?? {}),
-    };
-
-    return {
-      eventId: event.id,
-      statement: db
-        .prepare(
-          `INSERT INTO events (
-            id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
-            registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          event.id,
-          event.slug,
-          event.name,
-          event.timezone,
-          event.starts_at,
-          event.ends_at,
-          event.source_path,
-          event.base_path,
-          event.capacity_in_person,
-          event.registration_mode,
-          event.invite_limit_attendee,
-          event.invite_limit_speaker_nomination,
-          event.settings_json,
-          now,
-          now,
-        ),
-    };
-  }
 
   return {
     eventId: existing.id,
@@ -164,17 +162,20 @@ export async function createAdminEvent(
   payload: EventUpsertPayload,
   actorUserId: string,
 ): Promise<EventRecord> {
-  if (await eventSlugExists(db, payload.slug)) {
-    throw new AppError(409, "SLUG_TAKEN", `The slug '${payload.slug}' is already in use`);
+  const mutation = prepareEventCreateStatement(db, payload);
+  try {
+    await db.batch([
+      mutation.statement,
+      prepareAuditLog(db, "admin", actorUserId, "event_created", "event", mutation.eventId, {
+        slug: payload.slug,
+      }),
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
+      throw new AppError(409, "SLUG_TAKEN", `The slug '${payload.slug}' is already in use`);
+    }
+    throw error;
   }
-
-  const mutation = await buildEventUpsertStatement(db, payload);
-  await db.batch([
-    mutation.statement,
-    prepareAuditLog(db, "admin", actorUserId, "event_created", "event", mutation.eventId, {
-      slug: payload.slug,
-    }),
-  ]);
 
   return getEventBySlug(db, payload.slug);
 }

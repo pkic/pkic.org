@@ -4,7 +4,6 @@ import type {
   SponsorshipCompany as CanonicalSponsorshipCompany,
   SponsorshipEvent as CanonicalSponsorshipEvent,
 } from "../../shared/schemas/admin-sponsorships";
-import type { MailingList as CanonicalMailingList } from "../../shared/schemas/mailing-lists";
 import type { AdminEmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/admin-email-templates";
 import type { LeadershipPosition as CanonicalLeadershipPosition } from "../../shared/schemas/leadership";
 import type {
@@ -27,15 +26,14 @@ import type {
   AdminApplicationSummary as CanonicalAdminApplicationSummary,
 } from "../../shared/schemas/admin-applications";
 import type {
-  adminEventDaysResponseSchema,
-  adminEventTermsResponseSchema,
   AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
-  AdminEventInviteSummary as CanonicalInviteRecord,
   AdminEventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   AdminEventTeamListItem as CanonicalEventPermission,
   AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
+import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
 import type { membershipSettingsSchema } from "../../shared/schemas/membership-settings";
 import type {
@@ -85,9 +83,8 @@ export type { SponsorshipPipelineStage };
 export type EventSummary = CanonicalEventSummary;
 export type EventDetail = CanonicalAdminEventDetail;
 
-export type AdminEventDay = z.infer<typeof adminEventDaysResponseSchema>["days"][number];
+export type AdminEventDay = z.infer<typeof eventDaysResponseSchema>["days"][number];
 export type AdminAttendanceOption = AdminEventDay["attendanceOptions"][number];
-export type AdminEventTerm = z.infer<typeof adminEventTermsResponseSchema>["terms"]["attendee"][number];
 
 export type AdminEventFormSummary = CanonicalAdminEventFormSummary;
 
@@ -174,9 +171,6 @@ export type OrganizationContentReviewSummary = CanonicalOrganizationContentRevie
 export type OrganizationContentReviewDiffEntry = CanonicalOrganizationContentReviewDiffEntry;
 
 export type OrganizationContentReviewDetail = CanonicalOrganizationContentReviewDetail;
-
-// Managed mailing list configuration
-export type MailingList = CanonicalMailingList;
 
 export type Sponsorship = CanonicalSponsorship;
 

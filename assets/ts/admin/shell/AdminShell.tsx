@@ -14,10 +14,8 @@ import { Templates } from "../sections/Templates";
 import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
-import { AccountSettings } from "../sections/AccountSettings";
 import { Organizations } from "../sections/Organizations";
 import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
-import { MailingLists } from "../sections/MailingLists";
 import { Sponsorships } from "../sections/Sponsorships";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
@@ -26,6 +24,7 @@ import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
+import { ADMIN_ACCOUNT_REDIRECT_TARGET, ADMIN_MAILING_LISTS_REDIRECT_TARGET } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
   return (
@@ -36,11 +35,18 @@ function SectionWrapper({ title, children }: { title: string; children: preact.C
   );
 }
 
-function PortalVotesRedirect() {
+function PortalRedirect({ target, message }: { target: string; message: string }) {
   useEffect(() => {
-    window.location.assign("/portal/#/management");
-  }, []);
-  return <p>Vote management has moved to the group-centered portal.</p>;
+    window.location.assign(target);
+  }, [target]);
+  return <p>{message}</p>;
+}
+
+function MembershipApplicationRoute({ applicationId }: { applicationId: string }) {
+  const [, navigate] = useHashLocation();
+  return (
+    <Applications initialApplicationId={applicationId} onBackFromInitial={() => navigate("/membership/applications")} />
+  );
 }
 
 export function AdminShell() {
@@ -240,14 +246,6 @@ export function AdminShell() {
               )}
             />
             <Route
-              path="/mailing-lists"
-              component={() => (
-                <SectionWrapper title="Mailing Lists">
-                  <MailingLists />
-                </SectionWrapper>
-              )}
-            />
-            <Route
               path="/sponsorships"
               component={() => (
                 <SectionWrapper title="Sponsorships">
@@ -255,12 +253,28 @@ export function AdminShell() {
                 </SectionWrapper>
               )}
             />
-            <Route path="/votes" component={PortalVotesRedirect} />
+            <Route
+              path="/votes"
+              component={() => (
+                <PortalRedirect
+                  target="/portal/#/management"
+                  message="Vote management has moved to the group-centered portal."
+                />
+              )}
+            />
             <Route
               path="/membership"
               component={() => (
                 <SectionWrapper title="Membership — Applications">
                   <Applications />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/applications/:applicationId"
+              component={({ params }: { params: { applicationId: string } }) => (
+                <SectionWrapper title="Membership — Application">
+                  <MembershipApplicationRoute applicationId={params.applicationId} />
                 </SectionWrapper>
               )}
             />
@@ -307,9 +321,19 @@ export function AdminShell() {
             <Route
               path="/account"
               component={() => (
-                <SectionWrapper title="Account Settings">
-                  <AccountSettings />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ACCOUNT_REDIRECT_TARGET}
+                  message="Account settings have moved to the portal."
+                />
+              )}
+            />
+            <Route
+              path="/mailing-lists"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_MAILING_LISTS_REDIRECT_TARGET}
+                  message="Mailing-list management has moved to the selected-group portal."
+                />
               )}
             />
 

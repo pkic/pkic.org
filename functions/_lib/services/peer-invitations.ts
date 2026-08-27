@@ -13,6 +13,8 @@ import { createReferralCode } from "./referrals";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
+import { emailPlainText } from "../email/plain-text";
+import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
 
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
 
@@ -105,6 +107,7 @@ export async function createPeerInvitations(
 
   const outcomes = await bulkCreateInvites(env.DB, inviteType, {
     event,
+    expiresAt: body.expiresAt,
     inviter: { userId: registration.user_id, registrationId: registration.id },
     maxPrimaryInvites: maxAllowed,
     invites: body.invites.map((invite) => ({
@@ -113,7 +116,7 @@ export async function createPeerInvitations(
       inviteeLastName: invite.lastName,
       sourceType: inviteType === "attendee" ? "peer-invite" : "peer-nomination",
     })),
-    buildEmailRow: ({ inviteId, token, email, invite }) => {
+    buildEmailRow: ({ inviteId, token, email, invite, linkSecretFingerprint }) => {
       const primaryUrl =
         inviteType === "attendee"
           ? registrationPageUrl(appBaseUrl, event, {
@@ -136,11 +139,14 @@ export async function createPeerInvitations(
         messageType: "transactional",
         subject: inviteType === "attendee" ? `Invitation: ${event.name}` : `Invitation to speak at ${event.name}`,
         capabilityLinkValues: [primaryUrl, declineUrl],
+        linkSecretFingerprint,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: invite.inviteeFirstName ?? "",
-          lastName: invite.inviteeLastName ?? "",
-          inviterName,
+          ...buildEventInviteRecipientVariables(
+            { firstName: invite.inviteeFirstName, lastName: invite.inviteeLastName },
+            inviteType === "attendee" ? "Attendee" : "Speaker",
+          ),
+          inviterName: emailPlainText(inviterName),
           [primaryKey]: primaryUrl,
           declineUrl,
         },

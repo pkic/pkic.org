@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { usersListResponseSchema, type AdminUserListItem } from "../../shared/schemas/admin-users";
-import { createLatestRequestGate } from "../hooks/useServerCollection";
+import { userCatalogListResponseSchema, type UserCatalogItem } from "../../shared/schemas/user-catalog";
+import { buildServerCollectionUrl, createLatestRequestGate } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
 
 export interface PickedUser {
@@ -14,14 +14,16 @@ export function UserPicker({
   onChange,
   disabled,
   placeholder = "Search by email or name…",
+  endpoint = "/api/v1/admin/users",
 }: {
   value: PickedUser | null;
   onChange: (user: PickedUser | null) => void;
   disabled?: boolean;
   placeholder?: string;
+  endpoint?: string;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<AdminUserListItem[]>([]);
+  const [results, setResults] = useState<UserCatalogItem[]>([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -54,8 +56,8 @@ export function UserPicker({
       const request = requestGate.current!.start();
       try {
         const data = await getJson(
-          `/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`,
-          usersListResponseSchema,
+          buildServerCollectionUrl(endpoint, { limit: "8", offset: "0", sort: "email", q: term }),
+          userCatalogListResponseSchema,
           { signal: request.signal },
         );
         if (!request.isCurrent()) return;
@@ -70,7 +72,7 @@ export function UserPicker({
     }, 250);
   }
 
-  function pick(user: AdminUserListItem): void {
+  function pick(user: UserCatalogItem): void {
     cancelPendingSearch();
     onChange({ id: user.id, email: user.email });
     setQuery(user.email);
@@ -89,6 +91,8 @@ export function UserPicker({
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         disabled={disabled}
+        autocomplete="off"
+        aria-autocomplete="list"
       />
       {open && results.length > 0 && (
         <div class="list-group position-absolute w-100 shadow-sm adm-user-picker-results">

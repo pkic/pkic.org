@@ -1,7 +1,7 @@
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
-import { bulkCreateSpeakersAdmin } from "../../../../../../../_lib/services/invites";
+import { bulkCreateSpeakerInvites } from "../../../../../../../_lib/services/invites";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { adminBulkInviteResponseSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
@@ -10,10 +10,9 @@ import { requestDb, type AdminContext } from "../../../../../../../_lib/db/conte
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import type { ValidatedData } from "chanfana";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
-import {
-  computeAdminInviteDigest,
-  requireValidAdminInvitePreview,
-} from "../../../../../../../_lib/services/admin-invite-preview";
+import { requireValidEventInviteRecipientBatch } from "../../../../../../../_lib/services/admin-invite-preview";
+import { resolveEventInviteExpiry } from "../../../../../../../_lib/invite-validity";
+import { buildEventInviteRecipientVariables } from "../../../../../../../_lib/services/event-invite-email-variables";
 
 export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
   adminBulkSpeakerInvitesRouteSchema,
@@ -22,27 +21,30 @@ export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
     const body = data.body;
     const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites));
-    await requireValidAdminInvitePreview({
+    const expiresAt = resolveEventInviteExpiry(event, body.expiresAt);
+    await requireValidEventInviteRecipientBatch({
       secret: requireInternalSecret(c.env),
       token: body.previewToken,
       eventId: event.id,
       adminId: admin.id,
       inviteType: "speaker",
-      inviteDigest,
+      invites: body.invites,
+      expiresAt,
+      inviteDigest: body.inviteDigest,
     });
     const sharedEmailVars = buildEventEmailVariables(event, appBaseUrl);
     const subject = `Speaker invitation: ${event.name}`;
 
-    const outcomes = await bulkCreateSpeakersAdmin(requestDb(c), {
+    const outcomes = await bulkCreateSpeakerInvites(requestDb(c), {
       event,
+      expiresAt,
       invites: body.invites.map((item) => ({
         inviteeEmail: item.email,
         inviteeFirstName: item.firstName,
         inviteeLastName: item.lastName,
         sourceType: item.sourceType,
       })),
-      buildEmailRow: ({ email, inviteId, token, invite }) => {
+      buildEmailRow: ({ email, inviteId, token, invite, linkSecretFingerprint }) => {
         const proposalUrl = proposalPageUrl(appBaseUrl, event, {
           invite: token,
           inviteId,
@@ -55,10 +57,13 @@ export const AdminEventsEventSlugInvitesSpeakersBulkPost = openApiRoute(
           templateKey: "speaker_invite",
           subject,
           capabilityLinkValues: [proposalUrl, declineUrl],
+          linkSecretFingerprint,
           data: {
             ...sharedEmailVars,
-            firstName: invite.inviteeFirstName ?? "",
-            lastName: invite.inviteeLastName ?? "",
+            ...buildEventInviteRecipientVariables(
+              { firstName: invite.inviteeFirstName, lastName: invite.inviteeLastName },
+              "Speaker",
+            ),
             proposalUrl,
             declineUrl,
           },

@@ -146,12 +146,18 @@ export async function uploadProposalPresentation(
 
   const parsed = parsePresentationUpload(request);
   if ("error" in parsed) throw new AppError(parsed.status, parsed.error.code, parsed.error.message);
-  if (payload.actor.type === "user" && !payload.authority?.speaker) {
-    throw new AppError(
-      409,
-      "PRESENTATION_UPLOAD_CONFLICT",
-      "Speaker participation changed while the upload was starting.",
-    );
+  if (payload.actor.type === "user") {
+    const speakerAuthority = payload.authority?.speaker;
+    if (!speakerAuthority) {
+      throw new AppError(
+        409,
+        "PRESENTATION_UPLOAD_CONFLICT",
+        "Speaker participation changed while the upload was starting.",
+      );
+    }
+    if (speakerAuthority.status !== "confirmed") {
+      throw new AppError(403, "SPEAKER_NOT_CONFIRMED", "Speaker participation must be confirmed before uploading.");
+    }
   }
   const eventSlug = storagePathSegment(context.event_slug, "event");
   const proposalTitle = storagePathSegment(context.title, "proposal");

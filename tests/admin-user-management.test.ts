@@ -7,13 +7,41 @@ import { resetDb } from "./helpers/reset-db";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
-import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { signCapabilityToken, verifyDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
 import { anonymizeAdminUser } from "../functions/_lib/services/admin-user-anonymize";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 let adminToken: string;
+
+async function seedProposalSpeakerCapability(userId: string, eventId: string, signingSecret: string) {
+  const proposalId = crypto.randomUUID();
+  const speakerId = crypto.randomUUID();
+  const linkSecret = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO session_proposals
+           (id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+            manage_link_secret, submitted_at, updated_at)
+         VALUES (?, ?, ?, 'submitted', 'talk', 'Capability test', 'Abstract', ?, datetime('now'), datetime('now'))`,
+    ).bind(proposalId, eventId, userId, crypto.randomUUID()),
+    env.DB.prepare(
+      `INSERT INTO proposal_speakers
+           (id, proposal_id, user_id, role, status, manage_link_secret, created_at)
+         VALUES (?, ?, ?, 'speaker', 'confirmed', ?, datetime('now'))`,
+    ).bind(speakerId, proposalId, userId, linkSecret),
+  ]);
+  return {
+    speakerId,
+    token: await signCapabilityToken({
+      signingSecret,
+      linkSecret,
+      purpose: "speaker_manage",
+      resourceId: speakerId,
+    }),
+  };
+}
 
 async function setup() {
   const { eventId } = await seedEventAndAdmin(env.DB);
@@ -308,9 +336,6 @@ describe("admin user deactivation", () => {
       env.DB.prepare(
         "INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 day'))",
       ).bind(crypto.randomUUID(), targetId, `refresh-${crypto.randomUUID()}`),
-      env.DB.prepare(
-        "INSERT INTO auth_magic_links (id, user_id, token_hash, expires_at, created_at, purpose) VALUES (?, ?, ?, datetime('now', '+1 hour'), datetime('now'), 'member')",
-      ).bind(crypto.randomUUID(), targetId, `magic-${crypto.randomUUID()}`),
     ]);
     const staffToken = await createAdminSession(env.DB, staffId, "identity-recovery-session");
 
@@ -322,16 +347,15 @@ describe("admin user deactivation", () => {
 
     expect(response.status).toBe(200);
     await expect(
-      queryAll<{ email: string; sessions: number; refresh: number; magic: number }>(
+      queryAll<{ email: string; sessions: number; refresh: number }>(
         env.DB,
         `SELECT u.email,
                 (SELECT COUNT(*) FROM sessions WHERE user_id = u.id AND revoked_at IS NULL) AS sessions,
-                (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = u.id AND revoked_at IS NULL) AS refresh,
-                (SELECT COUNT(*) FROM auth_magic_links WHERE user_id = u.id AND used_at IS NULL) AS magic
+                (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = u.id AND revoked_at IS NULL) AS refresh
            FROM users u WHERE u.id = ?`,
         [targetId],
       ),
-    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0, refresh: 0, magic: 0 }]);
+    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0, refresh: 0 }]);
   });
 
   it("invalidates a stale pending confirmation when an admin changes the primary email", async () => {
@@ -370,6 +394,7 @@ describe("admin user deactivation", () => {
             WHERE id = ?`,
       ).bind(registrationId, userId),
     ]);
+    const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
     await updateAdminUser(
       env.DB,
@@ -411,6 +436,14 @@ describe("admin user deactivation", () => {
     await expect(getRegistrationByManageToken(env.DB, staleManageToken, signingSecret)).rejects.toMatchObject({
       code: "REGISTRATION_NOT_FOUND",
     });
+    await expect(
+      verifyDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "speaker_manage",
+        token: speakerCapability.token,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "invalid" });
     expect((await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", userId))[0].email).toBe(
       "email-admin-set@example.test",
     );
@@ -696,10 +729,6 @@ describe("admin user anonymization", () => {
         "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
       ).bind(crypto.randomUUID(), userId, "alias@example.test", "alias@example.test"),
       env.DB.prepare(
-        `INSERT INTO auth_magic_links (id, user_id, token_hash, expires_at, created_at)
-           VALUES (?, ?, ?, datetime('now', '+1 hour'), datetime('now'))`,
-      ).bind(crypto.randomUUID(), userId, `magic-${crypto.randomUUID()}`),
-      env.DB.prepare(
         `INSERT INTO passkey_credentials
              (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
            VALUES (?, ?, ?, 'public-key', 0, 'Personal security key', datetime('now'))`,
@@ -715,13 +744,13 @@ describe("admin user anonymization", () => {
            WHERE id = ?`,
       ).bind(registrationId, userId),
     ]);
+    const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
     await anonymizeUser(
       createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
     );
 
     expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toHaveLength(0);
-    expect(await queryAll(env.DB, "SELECT id FROM auth_magic_links WHERE user_id = ?", userId)).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id = ?", userId)).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", userId),
@@ -753,6 +782,14 @@ describe("admin user anonymization", () => {
         signingSecret,
       }),
     ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+    await expect(
+      verifyDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "speaker_manage",
+        token: speakerCapability.token,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "invalid" });
   });
 
   it("durably queues deletion of the prior headshot while clearing its pointer", async () => {

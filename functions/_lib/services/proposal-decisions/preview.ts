@@ -1,4 +1,4 @@
-import type { ProposalDecisionPreviewResponse } from "../../../../assets/shared/schemas/admin-event-proposals";
+import type { ProposalDecisionPreviewResponse } from "../../../../assets/shared/schemas/proposal-decisions";
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
 import type { EmailContentType } from "../../../../assets/shared/schemas/admin-email-templates";
 import {

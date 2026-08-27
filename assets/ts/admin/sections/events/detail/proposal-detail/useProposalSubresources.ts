@@ -1,31 +1,12 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import {
-  proposalCommentCreateResponseSchema,
-  proposalCommentsListResponseSchema,
-  type ProposalInternalComment,
-} from "../../../../../../shared/schemas/proposal-comments";
-import type { PageInfo } from "../../../../../../shared/schemas/pagination";
-import {
-  proposalReviewsListResponseSchema,
-  type ProposalReview,
-  type ProposalReviewSummary,
-} from "../../../../../../shared/schemas/proposal-reviews";
+import { useProposalReviewComments } from "../../../../../components/proposals/useProposalReviewComments";
 import { api } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { toast } from "../../../../ui";
-import type { PresentationVersion } from "./model";
-import { presentationVersionsResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
 import { adminProposalSpeakersResponseSchema } from "../../../../../../shared/schemas/admin-event-proposals";
-
-const EMPTY_REVIEW_SUMMARY: ProposalReviewSummary = {
-  totalReviews: 0,
-  averageScore: null,
-  acceptCount: 0,
-  needsWorkCount: 0,
-  rejectCount: 0,
-  minReviewsRequired: 0,
-  quorumMet: false,
-};
+import { presentationVersionsResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
+import type { ProposalReview } from "../../../../../../shared/schemas/proposal-reviews";
+import type { PresentationVersion } from "./model";
 
 function recoverSubresource<T>(label: string, fallback: T): (error: unknown) => T {
   return (error) => {
@@ -35,128 +16,79 @@ function recoverSubresource<T>(label: string, fallback: T): (error: unknown) => 
   };
 }
 
+/** Admin adapter for shared review/comment data plus admin-only speaker and presentation resources. */
 export function useProposalSubresources(proposalId: string, reloadProposal: () => void) {
-  const [reviews, setReviews] = useState<ProposalReview[]>([]);
-  const [reviewPage, setReviewPage] = useState<PageInfo | null>(null);
-  const [reviewSummary, setReviewSummary] = useState<ProposalReviewSummary>(EMPTY_REVIEW_SUMMARY);
-  const [myReview, setMyReview] = useState<ProposalReview | null>(null);
-  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
+  const proposalBase = `/api/v1/admin/proposals/${proposalId}`;
+  const reviewComments = useProposalReviewComments(proposalBase, reloadProposal);
   const [speakers, setSpeakers] = useState<ProposalSpeaker[]>([]);
-  const [comments, setComments] = useState<ProposalInternalComment[]>([]);
-  const [commentPage, setCommentPage] = useState<PageInfo | null>(null);
-  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [versions, setVersions] = useState<PresentationVersion[]>([]);
-  const [versionPage, setVersionPage] = useState<PageInfo | null>(null);
+  const [versionPage, setVersionPage] = useState<{
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  } | null>(null);
   const [loadingMoreVersions, setLoadingMoreVersions] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [savingComment, setSavingComment] = useState(false);
+  const [loadingAdditional, setLoadingAdditional] = useState(true);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reloadAdditional = useCallback(async () => {
+    setLoadingAdditional(true);
     try {
-      const [reviewData, speakerData, commentData, presentationData] = await Promise.all([
-        api(`/api/v1/admin/proposals/${proposalId}/reviews?limit=25`, proposalReviewsListResponseSchema).catch(
-          recoverSubresource("reviews", null),
-        ),
-        api(`/api/v1/admin/proposals/${proposalId}/speakers`, adminProposalSpeakersResponseSchema).catch(
+      const [speakerData, presentationData] = await Promise.all([
+        api(`${proposalBase}/speakers`, adminProposalSpeakersResponseSchema).catch(
           recoverSubresource("speakers", { speakers: [] }),
         ),
-        api(`/api/v1/admin/proposals/${proposalId}/comments?limit=25`, proposalCommentsListResponseSchema).catch(
-          recoverSubresource("comments", {
-            comments: [],
-            page: { limit: 25, offset: 0, total: 0, hasMore: false },
-          }),
-        ),
-        api(
-          `/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=25`,
-          presentationVersionsResponseSchema,
-        ).catch(
+        api(`${proposalBase}/presentation/versions?limit=25`, presentationVersionsResponseSchema).catch(
           recoverSubresource("presentation versions", {
             versions: [],
             page: { limit: 25, offset: 0, total: 0, hasMore: false },
           }),
         ),
       ]);
-      setReviews(reviewData?.reviews ?? []);
-      setReviewPage(reviewData?.page ?? null);
-      setReviewSummary(reviewData?.summary ?? EMPTY_REVIEW_SUMMARY);
-      setMyReview(reviewData?.myReview ?? null);
-      setSpeakers(speakerData.speakers ?? []);
-      setComments(commentData.comments ?? []);
-      setCommentPage(commentData.page);
-      setVersions(presentationData.versions ?? []);
+      setSpeakers(speakerData.speakers);
+      setVersions(presentationData.versions);
       setVersionPage(presentationData.page);
     } finally {
-      setLoading(false);
+      setLoadingAdditional(false);
     }
-  }, [proposalId]);
+  }, [proposalBase]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void reloadAdditional();
+  }, [reloadAdditional]);
+
+  async function reload(): Promise<void> {
+    await Promise.all([reviewComments.reload(), reloadAdditional()]);
+  }
 
   function reviewSaved(review: ProposalReview): void {
-    setMyReview(review);
-    setReviews((previous) => {
-      const index = previous.findIndex((item) => item.reviewer_user_id === review.reviewer_user_id);
-      return index >= 0
-        ? previous.map((item, itemIndex) => (itemIndex === index ? review : item))
-        : [...previous, review];
-    });
-    void Promise.all([reloadProposal(), reload()]);
+    reviewComments.reviewSaved(review);
+    void reloadAdditional();
   }
 
   async function addComment(comment: string): Promise<boolean> {
-    setSavingComment(true);
     try {
-      const result = await api(`/api/v1/admin/proposals/${proposalId}/comments`, proposalCommentCreateResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({ comment }),
-      });
-      setComments((previous) => [result.comment, ...previous]);
-      setCommentPage((previous) => (previous ? { ...previous, total: previous.total + 1 } : previous));
+      await reviewComments.addComment(comment);
       return true;
     } catch (error) {
       toast((error as Error).message, "error");
       return false;
-    } finally {
-      setSavingComment(false);
     }
   }
 
   async function loadMoreComments(): Promise<void> {
-    if (!commentPage?.hasMore || loadingMoreComments) return;
-    setLoadingMoreComments(true);
     try {
-      const next = await api(
-        `/api/v1/admin/proposals/${proposalId}/comments?limit=${commentPage.limit}&offset=${comments.length}`,
-        proposalCommentsListResponseSchema,
-      );
-      setComments((previous) => [...previous, ...next.comments]);
-      setCommentPage(next.page);
+      await reviewComments.loadMoreComments();
     } catch (error) {
       toast((error as Error).message, "error");
-    } finally {
-      setLoadingMoreComments(false);
     }
   }
 
   async function loadMoreReviews(): Promise<void> {
-    if (!reviewPage?.hasMore || loadingMoreReviews) return;
-    setLoadingMoreReviews(true);
     try {
-      const next = await api(
-        `/api/v1/admin/proposals/${proposalId}/reviews?limit=${reviewPage.limit}&offset=${reviews.length}`,
-        proposalReviewsListResponseSchema,
-      );
-      setReviews((previous) => [...previous, ...next.reviews]);
-      setReviewPage(next.page);
-      setReviewSummary(next.summary);
-      setMyReview(next.myReview);
+      await reviewComments.loadMoreReviews();
     } catch (error) {
       toast((error as Error).message, "error");
-    } finally {
-      setLoadingMoreReviews(false);
     }
   }
 
@@ -165,7 +97,7 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     setLoadingMoreVersions(true);
     try {
       const next = await api(
-        `/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=${versionPage.limit}&offset=${versions.length}`,
+        `${proposalBase}/presentation/versions?limit=${versionPage.limit}&offset=${versions.length}`,
         presentationVersionsResponseSchema,
       );
       setVersions((previous) => [...previous, ...next.versions]);
@@ -178,21 +110,21 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
   }
 
   return {
-    reviews,
-    reviewPage,
-    reviewSummary,
-    myReview,
-    loadingMoreReviews,
+    reviews: reviewComments.reviews,
+    reviewPage: reviewComments.reviewPage,
+    reviewSummary: reviewComments.reviewSummary,
+    myReview: reviewComments.myReview,
+    loadingMoreReviews: reviewComments.loadingMoreReviews,
     speakers,
     setSpeakers,
-    comments,
-    commentPage,
-    loadingMoreComments,
+    comments: reviewComments.comments,
+    commentPage: reviewComments.commentPage,
+    loadingMoreComments: reviewComments.loadingMoreComments,
     versions,
     versionPage,
     loadingMoreVersions,
-    loading,
-    savingComment,
+    loading: reviewComments.loading || loadingAdditional,
+    savingComment: false,
     reload,
     reviewSaved,
     addComment,

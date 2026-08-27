@@ -1,12 +1,11 @@
-import type { z } from "zod";
+import type { EventTermsReplaceInput } from "../../../../assets/shared/schemas/event-configuration";
 import { all } from "../../db/queries";
-import { prepareAuditLog } from "../audit";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { adminEventTermsReplaceSchema } from "../../../../assets/shared/schemas/admin-events";
+import { prepareEventConfigurationRevision, type EventConfigurationMutationContext } from "./configuration-revision";
 
-type EventTermsInput = z.infer<typeof adminEventTermsReplaceSchema>;
+type EventTermsInput = EventTermsReplaceInput;
 type AudienceType = keyof EventTermsInput;
 
 export interface EventTermRow {
@@ -88,28 +87,22 @@ function termStatements(
 /** Atomically replaces all audience term sets and records the audit event. */
 export async function replaceConfiguredEventTerms(
   db: DatabaseLike,
-  actorId: string,
   eventId: string,
   input: EventTermsInput,
-): Promise<void> {
+  context: EventConfigurationMutationContext,
+): Promise<{ updatedAt: string }> {
   const now = nowIso();
+  const revision = prepareEventConfigurationRevision(db, eventId, context, "event_terms_replaced", {
+    attendeeCount: input.attendee.length,
+    speakerCount: input.speaker.length,
+    presentationCount: input.presentation.length,
+  });
   await db.batch([
+    ...(context.authorizationGuards ?? []),
     ...termStatements(db, eventId, "attendee", input.attendee, now),
     ...termStatements(db, eventId, "speaker", input.speaker, now),
     ...termStatements(db, eventId, "presentation", input.presentation, now),
-    prepareAuditLog(
-      db,
-      "admin",
-      actorId,
-      "event_terms_replaced",
-      "event",
-      eventId,
-      {
-        attendeeCount: input.attendee.length,
-        speakerCount: input.speaker.length,
-        presentationCount: input.presentation.length,
-      },
-      now,
-    ),
+    ...revision.statements,
   ]);
+  return { updatedAt: revision.updatedAt };
 }

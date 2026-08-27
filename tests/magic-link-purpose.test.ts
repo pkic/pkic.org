@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import { requestAdminMagicLink, verifyAdminMagicLink } from "../functions/_lib/auth/admin";
-import { requestMemberMagicLink, verifyMemberMagicLink } from "../functions/_lib/auth/member";
-import { AUTH_MAGIC_LINK_PURPOSES } from "../functions/_lib/auth/session-engine";
+import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../assets/shared/constants/email-auth";
+import { queueAdminSignInCapability, redeemAdminSignInCapability } from "../functions/_lib/auth/admin";
+import { queueMemberSignInCapability, redeemMemberSignInCapability } from "../functions/_lib/auth/member";
 import { sendMcpAuthorizeMagicLink, verifyMcpAuthorizeMagicLink } from "../functions/_lib/mcp/oauth";
-import { sha256Hex } from "../functions/_lib/utils/crypto";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -24,70 +23,73 @@ async function seedDualContextUser(): Promise<string> {
   return admin.id;
 }
 
-async function readMagicLink(token: string): Promise<{ purpose: string | null; used_at: string | null }> {
-  const [row] = await queryAll<{ purpose: string | null; used_at: string | null }>(
+async function materializeDirectToken(token: string): Promise<string> {
+  const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(
     env.DB,
-    "SELECT purpose, used_at FROM auth_magic_links WHERE token_hash = ?",
-    await sha256Hex(token),
+    env,
+    JSON.stringify({ magicLinkUrl: token, __authorizedCapabilityMarkers: [token] }),
   );
-  return row;
+  return delivered.magicLinkUrl;
 }
 
-describe("shared auth magic-link purpose isolation", () => {
+describe("stateless email-auth capability purpose isolation", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
-  it("does not let member and admin verifiers exchange or consume each other's tokens", async () => {
+  it("does not let member and admin verifiers exchange or consume each other's capabilities", async () => {
     const userId = await seedDualContextUser();
-    const verifiedDomainOrganizationId = await insertOrganization(env.DB, "Verified domain organization");
-    const verifiedDomainMemberId = await seedOrganizationAggregate(env.DB, verifiedDomainOrganizationId);
-    await env.DB.prepare(
-      `INSERT INTO organization_domain_claims
-         (id, domain, application_id, organization_id, created_at, updated_at)
-       VALUES (?, 'pkic.org', NULL, ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), verifiedDomainOrganizationId)
-      .run();
-
-    const adminMagic = await requestAdminMagicLink(env.DB, {
+    const adminMagic = await queueAdminSignInCapability(env.DB, {
       email: ADMIN_EMAIL,
       ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
-    expect(adminMagic.token).toBeTruthy();
-    const adminToken = adminMagic.token!;
-    expect(await readMagicLink(adminToken)).toEqual({ purpose: AUTH_MAGIC_LINK_PURPOSES.admin, used_at: null });
+    expect(adminMagic.queuedToken).toMatch(/^pkcq1_/);
+    const adminToken = await materializeDirectToken(adminMagic.queuedToken!);
+    expect(adminToken).toMatch(/^pkc1_/);
 
-    await expect(verifyMemberMagicLink(env.DB, { token: adminToken, sessionTtlHours: 8 })).rejects.toMatchObject({
-      code: "MAGIC_LINK_INVALID",
-    });
-    expect((await readMagicLink(adminToken)).used_at).toBeNull();
-    await expect(verifyAdminMagicLink(env.DB, { token: adminToken, sessionTtlHours: 8 })).resolves.toMatchObject({
-      admin: { email: ADMIN_EMAIL },
-    });
+    await expect(
+      redeemMemberSignInCapability(env.DB, {
+        token: adminToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    await expect(
+      redeemAdminSignInCapability(env.DB, {
+        token: adminToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).resolves.toMatchObject({ admin: { email: ADMIN_EMAIL } });
     expect(
-      await queryAll(
+      await queryAll<{ action: string }>(
         env.DB,
-        "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
-        [verifiedDomainMemberId, userId],
+        "SELECT action FROM audit_log WHERE action = 'admin_magic_link_verified'",
       ),
     ).toHaveLength(1);
 
-    const memberMagic = await requestMemberMagicLink(env.DB, {
+    const memberMagic = await queueMemberSignInCapability(env.DB, {
       email: ADMIN_EMAIL,
       ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
-    expect(memberMagic.token).toBeTruthy();
-    const memberToken = memberMagic.token!;
-    expect(await readMagicLink(memberToken)).toEqual({ purpose: AUTH_MAGIC_LINK_PURPOSES.member, used_at: null });
-
-    await expect(verifyAdminMagicLink(env.DB, { token: memberToken, sessionTtlHours: 8 })).rejects.toMatchObject({
-      code: "MAGIC_LINK_INVALID",
-    });
-    expect((await readMagicLink(memberToken)).used_at).toBeNull();
-    await expect(verifyMemberMagicLink(env.DB, { token: memberToken, sessionTtlHours: 8 })).resolves.toMatchObject({
-      member: { email: ADMIN_EMAIL },
-    });
+    expect(memberMagic.queuedToken).toMatch(/^pkcq1_/);
+    const memberToken = await materializeDirectToken(memberMagic.queuedToken!);
+    await expect(
+      redeemAdminSignInCapability(env.DB, {
+        token: memberToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    await expect(
+      redeemMemberSignInCapability(env.DB, {
+        token: memberToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).resolves.toMatchObject({ member: { email: ADMIN_EMAIL } });
     const [verified] = await queryAll<{ email_verified_at: string | null; email_verification_method: string | null }>(
       env.DB,
       "SELECT email_verified_at, email_verification_method FROM users WHERE id = ?",
@@ -95,11 +97,14 @@ describe("shared auth magic-link purpose isolation", () => {
     );
     expect(verified.email_verified_at).not.toBeNull();
     expect(verified.email_verification_method).toBe("magic_link");
+    expect(
+      await queryAll(env.DB, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_magic_links'"),
+    ).toHaveLength(0);
   });
 
-  it("keeps MCP OAuth links out of the normal admin verifier", async () => {
+  it("keeps MCP OAuth capabilities out of the normal admin verifier and records one-time replay in audit", async () => {
     await seedDualContextUser();
-    const returnTo = "/api/v1/oauth/authorize?client_id=purpose-test";
+    const returnTo = `/api/v1/oauth/authorize?client_id=purpose-test&state=${"x".repeat(1900)}`;
 
     await sendMcpAuthorizeMagicLink({
       request: new Request("https://app.test/api/v1/oauth/authorize", {
@@ -115,44 +120,46 @@ describe("shared auth magic-link purpose isolation", () => {
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'admin_magic_link' ORDER BY created_at DESC LIMIT 1",
     );
-    const token = new URL((JSON.parse(outbox.payload_json) as { magicLinkUrl: string }).magicLinkUrl).searchParams.get(
-      "token",
-    );
-    expect(token).toBeTruthy();
-    expect(await readMagicLink(token!)).toEqual({ purpose: AUTH_MAGIC_LINK_PURPOSES.mcpOauth, used_at: null });
-
-    await expect(verifyAdminMagicLink(env.DB, { token: token!, sessionTtlHours: 8 })).rejects.toMatchObject({
-      code: "MAGIC_LINK_INVALID",
-    });
-    expect((await readMagicLink(token!)).used_at).toBeNull();
+    const storedPayload = JSON.parse(outbox.payload_json) as {
+      magicLinkUrl: string;
+      __authorizedCapabilityMarkers?: unknown[];
+    };
+    expect(storedPayload.magicLinkUrl).toMatch(/pkcq1_/);
+    expect(storedPayload.__authorizedCapabilityMarkers).toHaveLength(1);
+    const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, outbox.payload_json);
+    const token = new URL(delivered.magicLinkUrl).searchParams.get("token")!;
+    expect(token).toMatch(/^pkc1_/);
+    expect(token.length).toBeGreaterThan(512);
+    expect(token.length).toBeLessThanOrEqual(EMAIL_AUTH_TOKEN_MAX_LENGTH);
 
     await expect(
+      redeemAdminSignInCapability(env.DB, {
+        token,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    await expect(
       verifyMcpAuthorizeMagicLink(
-        new Request(`https://app.test/api/v1/oauth/verify-link?token=${encodeURIComponent(token!)}`, {
+        new Request(`https://app.test/api/v1/oauth/verify-link?token=${encodeURIComponent(token)}`, {
           headers: { "cf-connecting-ip": "203.0.113.90", "user-agent": "purpose-test-browser" },
         }),
         env,
       ),
     ).resolves.toMatchObject({ admin: { email: ADMIN_EMAIL }, returnTo });
-  });
-
-  it("fails closed for legacy links with no purpose", async () => {
-    const userId = await seedDualContextUser();
-    const token = "legacy-purpose-less-token";
-    await env.DB.prepare(
-      `INSERT INTO auth_magic_links (
-         id, user_id, token_hash, purpose, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
-       ) VALUES (?, ?, ?, NULL, datetime('now', '+15 minutes'), NULL, NULL, NULL, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), userId, await sha256Hex(token))
-      .run();
-
-    await expect(verifyAdminMagicLink(env.DB, { token, sessionTtlHours: 8 })).rejects.toMatchObject({
-      code: "MAGIC_LINK_INVALID",
-    });
-    await expect(verifyMemberMagicLink(env.DB, { token, sessionTtlHours: 8 })).rejects.toMatchObject({
-      code: "MAGIC_LINK_INVALID",
-    });
-    expect((await readMagicLink(token)).used_at).toBeNull();
+    await expect(
+      verifyMcpAuthorizeMagicLink(
+        new Request(`https://app.test/api/v1/oauth/verify-link?token=${encodeURIComponent(token)}`, {
+          headers: { "cf-connecting-ip": "203.0.113.90", "user-agent": "purpose-test-browser" },
+        }),
+        env,
+      ),
+    ).rejects.toMatchObject({ code: "MAGIC_LINK_USED" });
+    expect(
+      await queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE action = 'admin_magic_link_verified'",
+      ),
+    ).toHaveLength(1);
   });
 });

@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserPicker } from "../../assets/ts/components/UserPicker";
 import { getJson } from "../../assets/ts/shared/api-client";
-import type { AdminUserListItem } from "../../assets/shared/schemas/admin-users";
+import type { UserCatalogItem } from "../../assets/shared/schemas/user-catalog";
 
 vi.mock("../../assets/ts/shared/api-client", () => ({ getJson: vi.fn() }));
 
@@ -28,25 +28,13 @@ function flush(): Promise<void> {
   return Promise.resolve();
 }
 
-function user(id: string, email: string): AdminUserListItem {
+function user(id: string, email: string): UserCatalogItem {
   return {
     id,
     email,
     first_name: null,
     last_name: null,
     organization_name: null,
-    role: "user",
-    active: 1,
-    created_at: "2026-01-01T00:00:00Z",
-    member_id: null,
-    member_category: null,
-    member_status: null,
-    member_organization_id: null,
-    member_organization_name: null,
-    links: [],
-    membership: null,
-    type: "contact_only",
-    eventParticipationCount: 0,
   };
 }
 
@@ -62,10 +50,10 @@ describe("UserPicker request ordering", () => {
     vi.useRealTimers();
   });
 
-  async function mountPicker() {
+  async function mountPicker(endpoint?: string) {
     const container = document.createElement("div");
     mounted.push(container);
-    await act(() => render(h(UserPicker, { value: null, onChange: vi.fn() }), container));
+    await act(() => render(h(UserPicker, { value: null, onChange: vi.fn(), endpoint }), container));
     const input = container.querySelector("input") as HTMLInputElement;
     return { container, input };
   }
@@ -82,8 +70,8 @@ describe("UserPicker request ordering", () => {
 
   it("ignores an older successful response after a newer search result", async () => {
     vi.useFakeTimers();
-    const oldRequest = deferred<{ users: AdminUserListItem[] }>();
-    const newRequest = deferred<{ users: AdminUserListItem[] }>();
+    const oldRequest = deferred<{ users: UserCatalogItem[] }>();
+    const newRequest = deferred<{ users: UserCatalogItem[] }>();
     vi.mocked(getJson)
       .mockImplementationOnce(() => oldRequest.promise)
       .mockImplementationOnce(() => newRequest.promise);
@@ -106,10 +94,33 @@ describe("UserPicker request ordering", () => {
     expect(container.textContent).not.toContain("old@example.test");
   });
 
+  it("uses an explicit scoped catalog while retaining the admin source as the migration default", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockResolvedValue({ users: [] });
+    const scoped = await mountPicker("/api/v1/groups/group%2Fone/user-catalog");
+    expect(scoped.input.autocomplete).toBe("off");
+    await search(scoped.input, "Ada Lovelace");
+    const scopedUrl = new URL(String(vi.mocked(getJson).mock.calls[0][0]), "https://app.test");
+    expect(scopedUrl.pathname).toBe("/api/v1/groups/group%2Fone/user-catalog");
+    expect(Object.fromEntries(scopedUrl.searchParams)).toEqual({
+      limit: "8",
+      offset: "0",
+      sort: "email",
+      q: "Ada Lovelace",
+    });
+
+    vi.mocked(getJson).mockClear();
+    const admin = await mountPicker();
+    await search(admin.input, "admin@example.test");
+    expect(new URL(String(vi.mocked(getJson).mock.calls[0][0]), "https://app.test").pathname).toBe(
+      "/api/v1/admin/users",
+    );
+  });
+
   it("does not clear a newer result when an older search fails", async () => {
     vi.useFakeTimers();
-    const oldRequest = deferred<{ users: AdminUserListItem[] }>();
-    const newRequest = deferred<{ users: AdminUserListItem[] }>();
+    const oldRequest = deferred<{ users: UserCatalogItem[] }>();
+    const newRequest = deferred<{ users: UserCatalogItem[] }>();
     vi.mocked(getJson)
       .mockImplementationOnce(() => oldRequest.promise)
       .mockImplementationOnce(() => newRequest.promise);
@@ -145,7 +156,7 @@ describe("UserPicker request ordering", () => {
 
   it("aborts an in-flight search when unmounted", async () => {
     vi.useFakeTimers();
-    const request = deferred<{ users: AdminUserListItem[] }>();
+    const request = deferred<{ users: UserCatalogItem[] }>();
     vi.mocked(getJson).mockImplementationOnce((_path, _schema, options) => {
       expect(options?.signal).toBeInstanceOf(AbortSignal);
       return request.promise;

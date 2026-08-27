@@ -122,7 +122,9 @@ describe("verified-email-first membership join", () => {
     });
     if (body.status !== "application_ready") throw new Error("Expected application capability");
     expect(body.joinToken).toMatch(/^pkc1_/);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM auth_magic_links")).toHaveLength(0);
+    expect(
+      await queryAll(testEnv.DB, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_magic_links'"),
+    ).toHaveLength(0);
   });
 
   it("reuses an active claimed organization, verifies the identity, and returns a normal member session", async () => {

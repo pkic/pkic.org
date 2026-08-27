@@ -109,7 +109,6 @@ export function buildApplicationApprovedWelcomeEmail(params: {
   applicantName: string;
   loginUrl: string;
   workingGroupNames: string[];
-  icsAttachments?: EmailDraft["attachments"];
 }): EmailDraft {
   return {
     templateKey: "application-approved-welcome",
@@ -121,7 +120,6 @@ export function buildApplicationApprovedWelcomeEmail(params: {
       loginUrl: params.loginUrl,
       workingGroups: params.workingGroupNames.join(", "),
     },
-    attachments: params.icsAttachments,
   };
 }
 

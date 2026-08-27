@@ -1,9 +1,9 @@
 /**
  * Board of Directors / Executive Council leadership positions (consolidated
- * migration 0035) — admin CRUD plus the public roster read, and the PKIC forum
- * chair/vice-chair public read. The public compatibility surface resolves the
+ * migration 0035) — admin CRUD plus the public roster read, and the consortium
+ * chair/vice-chair public read. The public leadership surface resolves the
  * explicitly published All Members group's canonical lead/deputy-lead roles;
- * there is no separate forum authorization model.
+ * there is no separate consortium authorization model.
  *
  * Board/EC positions store the membership they explicitly represent. This
  * avoids assigning an arbitrary organization to people who concurrently
@@ -55,7 +55,7 @@ export interface LeadershipPublicPerson {
   endsAt: string | null;
 }
 
-export interface ForumChairPublic extends PublicRoleProfile {
+export interface ConsortiumChairPublic extends PublicRoleProfile {
   startsAt: string;
 }
 
@@ -312,7 +312,7 @@ export async function getLeadershipPublic(
   return { current, past };
 }
 
-interface ForumChairRow {
+interface ConsortiumChairRow {
   role_id: string;
   first_name: string | null;
   last_name: string | null;
@@ -327,13 +327,13 @@ interface ForumChairRow {
 }
 
 /**
- * Public consortium chair/vice-chair compatibility response. Its source is
+ * Public consortium chair/vice-chair response. Its source is
  * the ordinary All Members group and publication is controlled on that group.
  */
-export async function getForumChairsPublic(
+export async function getConsortiumChairsPublic(
   db: DatabaseLike,
-): Promise<{ chair: ForumChairPublic | null; viceChair: ForumChairPublic | null }> {
-  const rows = await all<ForumChairRow>(
+): Promise<{ chair: ConsortiumChairPublic | null; viceChair: ConsortiumChairPublic | null }> {
+  const rows = await all<ConsortiumChairRow>(
     db,
     `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
@@ -361,7 +361,7 @@ ${deterministicRepresentativeJoinSql("u.id")}
     [SYSTEM_ROLE_IDS.groupLead, SYSTEM_ROLE_IDS.groupDeputyLead],
   );
 
-  const toPublic = (row: ForumChairRow | undefined): ForumChairPublic | null => {
+  const toPublic = (row: ConsortiumChairRow | undefined): ConsortiumChairPublic | null => {
     if (!row) return null;
     return {
       ...toPublicRoleProfile(row),

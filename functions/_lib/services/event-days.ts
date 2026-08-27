@@ -34,9 +34,15 @@ export interface DayAttendanceSelection {
   attendanceType: DayAttendanceType;
 }
 
+const EVENT_DAYS_LIST_SQL = `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order,
+  attendance_options_json, capacity_revision
+  FROM event_days
+  WHERE event_id = ?
+  ORDER BY sort_order ASC, day_date ASC`;
+
 /**
  * Parses the attendance options for a day from its JSON column.
- * Falls back to a legacy default (in_person + on_demand) using the
+ * Falls back to the legacy core options using the
  * in_person_capacity column when no options have been configured.
  */
 export function resolveAttendanceOptions(
@@ -52,39 +58,37 @@ export function resolveAttendanceOptions(
       // fall through to legacy default
     }
   }
-  // Legacy default: in-person (capped) + on-demand (unlimited)
+  // Legacy default: the three core modes, with capacity applying only in person.
   return [
     { value: "in_person", label: "In-person", capacity: day.in_person_capacity ?? null },
+    { value: "virtual", label: "Virtual", capacity: null },
     { value: "on_demand", label: "On-demand", capacity: null },
   ];
 }
 
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
-  return all<EventDayRecord>(
-    db,
-    `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order,
-            attendance_options_json, capacity_revision
-     FROM event_days
-     WHERE event_id = ?
-     ORDER BY sort_order ASC, day_date ASC`,
-    [eventId],
-  );
+  return all<EventDayRecord>(db, EVENT_DAYS_LIST_SQL, [eventId]);
 }
 
-/** Admin projection with registered attendance counts grouped in D1, not in the browser. */
-export async function listAdminEventDaysWithCounts(db: DatabaseLike, eventId: string) {
-  const [days, counts] = await Promise.all([
-    listEventDays(db, eventId),
-    all<{ event_day_id: string; attendance_type: string; count: number }>(
-      db,
-      `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
-       FROM registration_day_attendance rda
-       JOIN registrations r ON r.id = rda.registration_id
-       WHERE r.event_id = ? AND r.status = 'registered'
-       GROUP BY rda.event_day_id, rda.attendance_type`,
-      [eventId],
-    ),
+export const CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL = `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
+  FROM event_days day
+  JOIN registration_day_attendance rda ON rda.event_day_id = day.id
+  JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
+  WHERE day.event_id = ? AND r.status = 'registered'
+  GROUP BY rda.event_day_id, rda.attendance_type`;
+
+/** Management projection with registered attendance counts grouped in D1, not in the browser. */
+export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventId: string) {
+  const [daysResult, countsResult] = await db.batch([
+    db.prepare(EVENT_DAYS_LIST_SQL).bind(eventId),
+    db.prepare(CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL).bind(eventId),
   ]);
+  const days = (daysResult.results ?? []) as unknown as EventDayRecord[];
+  const counts = (countsResult.results ?? []) as unknown as Array<{
+    event_day_id: string;
+    attendance_type: string;
+    count: number;
+  }>;
   const countByDay = new Map<string, Record<string, number>>();
   for (const row of counts) {
     const attendanceCounts = countByDay.get(row.event_day_id) ?? {};
@@ -166,9 +170,10 @@ export async function countRegisteredByEventDay(
   const rows = await all<{ event_day_id: string; attendance_type: string; total: number }>(
     db,
     `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS total
-     FROM registration_day_attendance rda
-     JOIN registrations r ON r.id = rda.registration_id
-     WHERE r.event_id = ?
+     FROM event_days day
+     JOIN registration_day_attendance rda ON rda.event_day_id = day.id
+     JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
+     WHERE day.event_id = ?
        AND r.status IN ('pending_email_confirmation', 'registered')
      GROUP BY rda.event_day_id, rda.attendance_type`,
     [eventId],
@@ -223,6 +228,13 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     const day = dayMap.get(selection.dayDate);
     if (!day) {
       throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${selection.dayDate}' is not configured for this event`);
+    }
+    if (!resolveAttendanceOptions(day).some((option) => option.value === selection.attendanceType)) {
+      throw new AppError(
+        400,
+        "DAY_ATTENDANCE_TYPE_NOT_CONFIGURED",
+        `Attendance type '${selection.attendanceType}' is not configured for day '${selection.dayDate}'`,
+      );
     }
 
     nextByDayId.set(day.id, selection.attendanceType);

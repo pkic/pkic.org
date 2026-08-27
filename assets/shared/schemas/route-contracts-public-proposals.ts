@@ -74,7 +74,7 @@ export const proposalResendManageLinkRouteSchema = {
 export const inviteResendLinkRouteSchema = {
   tags: ["Invites"],
   summary: "Resend pending invitation links",
-  description: "Sends fresh links for pending or expired invitations matching the supplied email address.",
+  description: "Sends fresh links for active pending invitations matching the supplied email address.",
   request: {
     body: requiredJsonBody(inviteResendLinkSchema),
   },

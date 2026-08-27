@@ -368,6 +368,10 @@ export async function requireGlobalGroupManagement(db: DatabaseLike, actor: Auth
   }
 }
 
+export async function canCreateGroup(db: DatabaseLike, actor: AuthAdmin): Promise<boolean> {
+  return hasGroupManagementAuthorization(db, actor, [], "global");
+}
+
 /** True only for a global manager or leadership inherited from an ancestor. */
 export async function canEnableLocalOnlyGovernance(
   db: DatabaseLike,

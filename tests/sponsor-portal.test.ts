@@ -10,9 +10,11 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
+import { onRequestPost as verifySponsorPortalLink } from "../functions/api/v1/auth/sponsor-portal/verify-link";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createContext, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { issueSponsorPortalSession, signSponsorPortalSessionToken } from "../functions/_lib/auth/sponsor-portal";
 import { listSponsorPortalAttendeesForExport } from "../functions/_lib/services/sponsorship";
 
@@ -56,6 +58,18 @@ async function callAdmin(token: string, path: string, init: RequestInit = {}): P
   headers.set("authorization", `Bearer ${token}`);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   return call(new Request(`https://app.test${path}`, { ...init, headers }));
+}
+
+async function readSponsorPortalToken(): Promise<string> {
+  const [outbox] = await queryAll<{ payload_json: string }>(
+    env.DB,
+    "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
+  );
+  const stored = JSON.parse(outbox.payload_json) as { portalUrl: string; __authorizedCapabilityMarkers?: unknown[] };
+  expect(stored.portalUrl).toMatch(/pkcq1_/);
+  expect(stored.__authorizedCapabilityMarkers).toHaveLength(1);
+  const payload = await deliveredEmailPayload<{ portalUrl: string }>(env.DB, env, outbox.payload_json);
+  return new URL(payload.portalUrl).searchParams.get("token")!;
 }
 
 async function seedConsentingRegistration(eventId: string, email: string, term: string): Promise<string> {
@@ -126,28 +140,7 @@ describe("Sponsor portal", () => {
     );
     expect(requestLinkResponse.status).toBe(200);
 
-    const tokenRow = (
-      await queryAll<{ token_hash: string }>(
-        env.DB,
-        "SELECT token_hash FROM sponsor_portal_magic_links ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
-    expect(tokenRow).toBeDefined();
-
-    // We can't recover the raw token from its hash, so exercise verify-link
-    // against a freshly issued one via the stage-transition side effect
-    // instead (already covered structurally in sponsorship-pipeline.test.ts);
-    // here we drive the session issuance directly through the service layer
-    // equivalent path used by verify-link, by requesting a second link and
-    // reading it back out of the outbox email body.
-    const outboxRow = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
-    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
-    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    const magicToken = await readSponsorPortalToken();
     expect(magicToken).toBeTruthy();
 
     const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
@@ -226,27 +219,15 @@ describe("Sponsor portal", () => {
   });
 
   it("403s attendee access when the sponsorship's tier is not configured for attendee data access", async () => {
-    const sponsorshipId = await createActiveEventSponsorship("Ambassador", "ambassador@sponsor.test");
-    const magicLinkRow = (
-      await queryAll<{ token_hash: string }>(
-        env.DB,
-        "SELECT token_hash FROM sponsor_portal_magic_links WHERE sponsorship_id = ?",
-        [sponsorshipId],
-      )
-    )[0];
-    expect(magicLinkRow).toBeUndefined();
+    await createActiveEventSponsorship("Ambassador", "ambassador@sponsor.test");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'sponsor-portal-access'"),
+    ).toHaveLength(0);
   });
 
   it("403s attendee access once the sponsorship lapses", async () => {
     await createActiveEventSponsorship("Leader", "leader2@sponsor.test");
-    const outboxRow = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
-    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
-    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    const magicToken = await readSponsorPortalToken();
 
     const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
     const setCookie = verifyResponse.headers.get("set-cookie") ?? "";
@@ -266,18 +247,69 @@ describe("Sponsor portal", () => {
     expect(attendeesResponse.status).toBe(403);
   });
 
+  it("rolls back sponsor magic-link redemption when the contact email changes before commit", async () => {
+    const sponsorshipId = await createActiveEventSponsorship("Leader", "original-contact@sponsor.test");
+    const magicToken = await readSponsorPortalToken();
+
+    const gate = gateNextBatch(env.DB);
+    const verificationContext = createContext(
+      env,
+      new Request("https://app.test/api/v1/auth/sponsor-portal/verify-link", {
+        method: "POST",
+        body: JSON.stringify({ token: magicToken }),
+        headers: { "content-type": "application/json" },
+      }),
+      {},
+    );
+    verificationContext.set?.("requestDb", gate.db);
+    const staleRedemption = verifySponsorPortalLink(verificationContext);
+    await gate.reached;
+
+    await env.DB.prepare("UPDATE sponsorships SET contact_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("replacement-contact@sponsor.test", sponsorshipId)
+      .run();
+    gate.release();
+
+    await expect(staleRedemption).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    expect(await queryAll(env.DB, "SELECT id FROM sponsor_portal_sessions")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'sponsor_portal_magic_link_verified'"),
+    ).toHaveLength(0);
+    expect(
+      await queryAll<{ contact_email: string }>(
+        env.DB,
+        "SELECT contact_email FROM sponsorships WHERE id = ?",
+        sponsorshipId,
+      ),
+    ).toEqual([{ contact_email: "replacement-contact@sponsor.test" }]);
+  });
+
+  it("revokes existing sponsor sessions when the authenticated contact email changes", async () => {
+    const sponsorshipId = await createActiveEventSponsorship("Leader", "original-contact@sponsor.test");
+    const sessionToken = await createSponsorPortalSession(sponsorshipId);
+
+    await env.DB.prepare("UPDATE sponsorships SET contact_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("replacement-contact@sponsor.test", sponsorshipId)
+      .run();
+
+    const attendeesResponse = await call(
+      getRequest(`/api/v1/sponsor-portal/events/${eventId}/attendees`, sessionToken),
+    );
+    expect(attendeesResponse.status).toBe(401);
+    expect(
+      await queryAll<{ revoked_at: string | null }>(
+        env.DB,
+        "SELECT revoked_at FROM sponsor_portal_sessions WHERE sponsorship_id = ?",
+        sponsorshipId,
+      ),
+    ).toEqual([{ revoked_at: expect.any(String) }]);
+  });
+
   it("exports attendees as CSV and logs the download in audit_log", async () => {
     await createActiveEventSponsorship("Leader", "leader3@sponsor.test");
     await seedConsentingRegistration(eventId, "csv@attendee.test", "sponsor-data-sharing");
 
-    const outboxRow = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
-    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
-    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    const magicToken = await readSponsorPortalToken();
     const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
     const setCookie = verifyResponse.headers.get("set-cookie") ?? "";
     const sessionToken = decodeURIComponent(setCookie.split(";")[0].split("=")[1]);
@@ -318,14 +350,7 @@ describe("Sponsor portal", () => {
     );
     expect(requestLinkResponse.status).toBe(200);
 
-    const outboxRow = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
-    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
-    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    const magicToken = await readSponsorPortalToken();
     expect(magicToken).toBeTruthy();
 
     const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
@@ -339,14 +364,7 @@ describe("Sponsor portal", () => {
 
   it("logs out: revokes the session server-side and clears the cookie", async () => {
     await createActiveEventSponsorship("Leader", "logout-sponsor@sponsor.test");
-    const outboxRow = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
-    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
-    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    const magicToken = await readSponsorPortalToken();
     const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
     const setCookie = verifyResponse.headers.get("set-cookie") ?? "";
     const sessionToken = decodeURIComponent(setCookie.split(";")[0].split("=")[1]);

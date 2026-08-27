@@ -5,7 +5,7 @@
  */
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
-import { requestMemberMagicLink } from "../../../../_lib/auth/member";
+import { queueMemberSignInCapability } from "../../../../_lib/auth/member";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { logInfo } from "../../../../_lib/logging";
 import { memberAuthRequestSchema } from "../../../../../assets/shared/schemas/member-auth";
@@ -19,15 +19,16 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, memberAuthRequestSchema);
   const http = await prepareMagicLinkRequestHttp(c, body.email, MEMBER_MAGIC_LINK_REQUEST_RATE_LIMIT_NAMESPACE);
 
-  const magic = await requestMemberMagicLink(http.db, {
+  const magic = await queueMemberSignInCapability(http.db, {
     email: body.email,
     ipHash: http.ipHash,
     userAgentHash: http.userAgentHash,
     ttlMinutes: http.magicLinkTtlMinutes,
+    signingSecret: http.secret,
   });
 
-  if (magic.token && magic.member) {
-    const magicLinkUrl = `${http.appBaseUrl}/portal/?token=${encodeURIComponent(magic.token)}`;
+  if (magic.queuedToken && magic.member) {
+    const magicLinkUrl = `${http.appBaseUrl}/portal/?token=${encodeURIComponent(magic.queuedToken)}`;
     const outboxId = await queueEmail(http.db, {
       templateKey: "member_magic_link",
       recipientEmail: magic.member.email,
@@ -35,6 +36,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       messageType: "transactional",
       subject: "Your PKI Consortium member sign-in link",
       data: { email: magic.member.email, magicLinkUrl, expiresInMinutes: http.magicLinkTtlMinutes },
+      capabilityLinkValues: [magicLinkUrl],
     });
     c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, outboxId));
   } else {

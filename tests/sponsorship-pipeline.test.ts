@@ -11,7 +11,7 @@ import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import {
   seedOrganizationAggregate,
   addRepresentative,
@@ -22,7 +22,11 @@ import { gateBatchGroup } from "./helpers/d1-batch-gate";
 import { advanceSponsorshipStage } from "../functions/_lib/services/sponsorship/admin-pipeline";
 import type { AuthAdmin } from "../functions/_lib/types";
 
-const NOTIFICATIONS = { appBaseUrl: "https://app.test", magicLinkTtlMinutes: 30 };
+const NOTIFICATIONS = {
+  appBaseUrl: "https://app.test",
+  magicLinkTtlMinutes: 30,
+  signingSecret: env.INTERNAL_SIGNING_SECRET!,
+};
 
 function futureRenewalDate(): string {
   return new Date(Date.now() + 180 * 86_400_000).toISOString().slice(0, 10);
@@ -582,7 +586,7 @@ describe("Sponsorship sales pipeline", () => {
     });
   });
 
-  it("advancing an event sponsorship to active at a qualifying tier sends sponsor-portal-access and issues a magic link", async () => {
+  it("advancing an event sponsorship to active at a qualifying tier queues sponsor-portal access", async () => {
     await call(adminToken, `/api/v1/admin/events/pqc-2026/sponsor-tiers`, {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
@@ -612,19 +616,25 @@ describe("Sponsorship sales pipeline", () => {
       "SELECT template_key, payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access'",
     );
     expect(outboxRows).toHaveLength(1);
-    expect(JSON.parse(outboxRows[0].payload_json)).toMatchObject({
+    const queuedPayload = JSON.parse(outboxRows[0].payload_json) as {
+      portalUrl: string;
+      __authorizedCapabilityMarkers?: unknown[];
+    };
+    expect(queuedPayload).toMatchObject({
       contactNameText: "Leader Contact",
       tierText: "Leader",
       eventNameText: "PQC Conference 2026",
       portalUrl: expect.stringContaining("/sponsor-portal/?token="),
     });
-
-    const magicLinkRows = await queryAll<{ sponsorship_id: string }>(
+    expect(queuedPayload.portalUrl).toContain("pkcq1_");
+    expect(queuedPayload.portalUrl).not.toContain("pkc1_");
+    expect(queuedPayload.__authorizedCapabilityMarkers).toHaveLength(1);
+    const deliveredPayload = await deliveredEmailPayload<{ portalUrl: string }>(
       env.DB,
-      "SELECT sponsorship_id FROM sponsor_portal_magic_links WHERE sponsorship_id = ?",
-      [created.sponsorship.id],
+      env,
+      outboxRows[0].payload_json,
     );
-    expect(magicLinkRows).toHaveLength(1);
+    expect(new URL(deliveredPayload.portalUrl).searchParams.get("token")).toMatch(/^pkc1_/);
   });
 
   it("does not send sponsor-portal-access when the sponsorship's tier is not configured for attendee data access", async () => {
@@ -694,11 +704,6 @@ describe("Sponsorship sales pipeline", () => {
       expect(sponsorship.pipeline_stage).toBe("new_inquiry");
       expect(
         await queryAll(env.DB, "SELECT id FROM sponsorship_events WHERE sponsorship_id = ? AND to_stage = 'active'", [
-          created.sponsorship.id,
-        ]),
-      ).toHaveLength(0);
-      expect(
-        await queryAll(env.DB, "SELECT id FROM sponsor_portal_magic_links WHERE sponsorship_id = ?", [
           created.sponsorship.id,
         ]),
       ).toHaveLength(0);

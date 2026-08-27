@@ -10,6 +10,7 @@ import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, type InviteRecord } from "./invites";
 import { prepareReferralCodeStatement } from "./referrals";
 import { prepareQueueEmailStatement } from "../email/outbox";
+import { emailPlainText } from "../email/plain-text";
 import { buildEventEmailVariables } from "./events";
 import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
@@ -27,6 +28,11 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { AppError } from "../errors";
+import { proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
+import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
+import { nowIso } from "../utils/time";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -79,6 +85,17 @@ export async function submitProposal(
   input: ProposalSubmissionInput,
 ): Promise<ProposalSubmissionResult> {
   const statements: StatementLike[] = input.formRevisionGuard && !input.formDefinition ? [input.formRevisionGuard] : [];
+  const inviteNow = nowIso();
+  const coSpeakerExpiresAt =
+    input.body.speakers.length > 0 ? resolveEventInviteExpiry(input.event, undefined, inviteNow) : null;
+  if (coSpeakerExpiresAt) {
+    statements.push(
+      prepareAuthorizationGuard(
+        db,
+        eventInviteWindowEvidence(input.event.id, input.event, coSpeakerExpiresAt, inviteNow),
+      ),
+    );
+  }
   const proposerWrite = await buildFindOrCreateUserStatement(db, profileWrite(input.body.proposer));
   if (proposerWrite.statement) statements.push(proposerWrite.statement);
   const proposer = proposerWrite.user;
@@ -128,6 +145,7 @@ export async function submitProposal(
       proposalId: created.proposal.id,
       userId: userWrite.user.id,
       role: speaker.role,
+      inviteExpiresAt: coSpeakerExpiresAt,
       proposalContext,
     });
     statements.push(...preparedSpeaker.statements);
@@ -172,6 +190,13 @@ export async function submitProposal(
     proposer.organization_name,
     proposer.email,
   );
+  const inviteEmailText = proposalInviteEmailTextVariables({
+    invitedByDisplay,
+    inviterFirstName: proposer.first_name ?? "",
+    proposalTitle: created.proposal.title,
+    proposalAbstract: created.proposal.abstract,
+    speakerLineupText,
+  });
   const eventVariables = buildEventEmailVariables(input.event, input.appBaseUrl);
   const outboxIds: string[] = [];
 
@@ -187,13 +212,9 @@ export async function submitProposal(
       capabilityLinkValues: [manageUrl],
       data: {
         ...eventVariables,
-        firstName: user.first_name ?? "",
-        lastName: user.last_name ?? "",
-        proposerFirstName: proposer.first_name ?? "",
-        invitedByDisplay,
-        proposalTitle: created.proposal.title,
-        proposalAbstract: created.proposal.abstract,
-        speakerLineupText,
+        firstName: emailPlainText(user.first_name ?? ""),
+        lastName: emailPlainText(user.last_name ?? ""),
+        ...inviteEmailText,
         manageUrl,
       },
     });
@@ -216,12 +237,10 @@ export async function submitProposal(
     capabilityLinkValues: [queuedManageUrl],
     data: {
       ...eventVariables,
-      firstName: proposer.first_name ?? "",
-      lastName: proposer.last_name ?? "",
-      proposalTitle: created.proposal.title,
-      proposalAbstract: created.proposal.abstract,
-      proposalType: created.proposal.proposal_type,
-      speakerLineupText,
+      firstName: emailPlainText(proposer.first_name ?? ""),
+      lastName: emailPlainText(proposer.last_name ?? ""),
+      ...inviteEmailText,
+      proposalType: emailPlainText(created.proposal.proposal_type),
       manageUrl: queuedManageUrl,
       shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     },
@@ -232,6 +251,9 @@ export async function submitProposal(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (input.acceptedInvite && isAuthorizationGuardFailure(error)) {
+      throw new AppError(410, "INVITE_EXPIRED", "Invite link has expired");
+    }
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();

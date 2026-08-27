@@ -14,7 +14,7 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
  * These modules resolve a resource before authorizing it, so their router
- * boundary can honor grants scoped to an event, working group, or another
+ * boundary can honor grants scoped to an event, group, or another
  * domain object. Listing and mutation handlers in the remaining delegated
  * modules perform their named permission check directly.
  *
@@ -35,7 +35,6 @@ const DELEGATED_MODULES = new Map<string, string>([
   ["sponsorships", "sponsorship router"],
   ["vote-proposals", "vote proposal router"],
   ["votes", "vote router"],
-  ["working-groups", "working group router"],
 ]);
 
 function normalizedPolicyPath(path: string): string {
@@ -97,7 +96,7 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
       : readOrWrite(normalizedMethod, "users:read", "users:write");
     return { kind: "permission", permission };
   }
-  if (module === "email" || module === "forms" || module === "mailing-lists") {
+  if (module === "email" || module === "forms") {
     return {
       kind: "permission",
       permission: readOrWrite(normalizedMethod, "admin:read", "admin:write"),

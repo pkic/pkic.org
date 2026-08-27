@@ -11,8 +11,9 @@ import { requireGroupManagementActor, requireGroupResourceContext } from "../../
 
 export const GroupVoteCreate = openApiRoute(groupVoteCreateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const { group, viewer } = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
-  const actor = requireGroupManagementActor(viewer);
+  const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+  const { group } = context;
+  const actor = requireGroupManagementActor(context);
   await requireEffectiveGroupPermission(db, actor, group.id, "votes:create");
   const vote = await createVoteDirect(db, actor, { ...data.body, ownerGroupId: group.id });
   return json(groupVoteMutationResponseSchema.parse({ vote }));

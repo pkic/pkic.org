@@ -28,7 +28,7 @@ describe("invite resend-link endpoint", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("queues a fresh pending invitation without invalidating the earlier link", async () => {
+  it("queues a fresh pending invitation and invalidates the earlier link generation", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
@@ -62,8 +62,8 @@ describe("invite resend-link endpoint", () => {
     );
     const freshToken = new URL(delivered.registrationUrl as string).searchParams.get("invite")!;
 
-    await expect(findInviteByToken(env.DB, created.token, signingSecret, created.invite.id)).resolves.toMatchObject({
-      id: created.invite.id,
+    await expect(findInviteByToken(env.DB, created.token, signingSecret, created.invite.id)).rejects.toMatchObject({
+      code: "INVITE_NOT_FOUND",
     });
     await expect(findInviteByToken(env.DB, freshToken, signingSecret, created.invite.id)).resolves.toMatchObject({
       id: created.invite.id,

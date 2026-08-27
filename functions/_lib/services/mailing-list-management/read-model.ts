@@ -1,12 +1,23 @@
 import { MAILING_LIST_SORT_COLUMNS, type MailingListsListQuery } from "../../../../assets/shared/schemas/mailing-lists";
-import { queryPage } from "../../db/pagination";
+import {
+  groupManagementCandidateAuthorizationEvidence,
+  prepareGroupManagementAuthorizationGuard,
+  requireGroupManagement,
+} from "../groups/governance";
+import type { AuthAdmin } from "../../types";
+import { isAuthorizationGuardFailure, type AuthorizationEvidence } from "../../db/authorization-guard";
+import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
+import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
 
-export async function listMailingLists(db: DatabaseLike, query: MailingListsListQuery) {
+export function buildMailingListsPageQuery(
+  query: MailingListsListQuery,
+  options: { groupId: string; requiredAuthorization?: AuthorizationEvidence },
+): OffsetPageQuery {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
@@ -14,10 +25,8 @@ export async function listMailingLists(db: DatabaseLike, query: MailingListsList
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
-  if (query.groupId) {
-    conditions.push("group_id = ?");
-    bindings.push(query.groupId);
-  }
+  conditions.push("group_id = ?");
+  bindings.push(options.groupId);
   if (query.purpose) {
     conditions.push("purpose = ?");
     bindings.push(query.purpose);
@@ -26,8 +35,12 @@ export async function listMailingLists(db: DatabaseLike, query: MailingListsList
   if (query.primaryDiscussion !== undefined) {
     conditions.push(query.primaryDiscussion ? "is_primary_discussion = 1" : "is_primary_discussion = 0");
   }
+  if (options.requiredAuthorization) {
+    conditions.push(`EXISTS (${options.requiredAuthorization.sql})`);
+    bindings.push(...options.requiredAuthorization.bindings);
+  }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const { rows, total } = await queryPage<MailingListRow>(db, {
+  return {
     sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where}`,
     bindings,
     orderBy: resolveMappedOrderBy(
@@ -44,8 +57,34 @@ export async function listMailingLists(db: DatabaseLike, query: MailingListsList
     ),
     limit: query.limit,
     offset: query.offset,
+  };
+}
+
+/** Lists only configurations currently manageable by the selected group actor. */
+export async function listGroupManagedMailingLists(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  query: MailingListsListQuery,
+) {
+  await requireGroupManagement(db, actor, groupId);
+  const pageQuery = buildMailingListsPageQuery(query, {
+    groupId,
+    requiredAuthorization: groupManagementCandidateAuthorizationEvidence(actor, "mailing_lists.group_id"),
   });
-  return { mailingLists: rows.map(toMailingList), total };
+  try {
+    const [, pageResult, countResult] = await db.batch([
+      prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+      ...buildOffsetPageStatements(db, pageQuery),
+    ]);
+    const { rows, total } = decodeOffsetPageResults<MailingListRow>(pageResult, countResult);
+    return { mailingLists: rows.map(toMailingList), total };
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
+    }
+    throw error;
+  }
 }
 
 export async function resolveAutoSyncListEmails(db: DatabaseLike, membershipCategory: string): Promise<string[]> {

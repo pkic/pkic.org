@@ -11,6 +11,7 @@ import { adminSessionEstablishedResponseSchema } from "../../../assets/shared/sc
 
 export interface MagicLinkRequestHttpContext {
   db: DatabaseLike;
+  secret: string;
   appBaseUrl: string;
   magicLinkTtlMinutes: number;
   ipHash: string | null;
@@ -62,6 +63,7 @@ export async function prepareMagicLinkRequestHttp(
   const hashes = await hashRequestContext(c, secret);
   return {
     db: requestDb(c),
+    secret,
     appBaseUrl: config.appBaseUrl,
     magicLinkTtlMinutes: config.magicLinkTtlMinutes,
     ...hashes,

@@ -3,6 +3,7 @@ import type { DatabaseLike } from "../types";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
+import { buildPersonalCampaignTemplateData } from "./admin-email-campaign/template-data";
 import {
   chunkRecipients,
   findBroadcastOnlyTemplateRefs,
@@ -58,11 +59,7 @@ export async function queueAdminCampaign(
         subject: input.subjectOverride ?? `Update: ${event.name}`,
         capabilityLinkValues: manageUrl ? [manageUrl] : [],
         data: {
-          ...sharedEventVars,
-          firstName: recipient.firstName,
-          lastName: recipient.lastName,
-          ...routeVars,
-          ...recipient.templateData,
+          ...buildPersonalCampaignTemplateData(recipient, { ...sharedEventVars, ...routeVars }),
           ...(manageUrl ? { manageUrl } : {}),
           __adminCampaignCustomText: input.customText ?? null,
           __adminCampaignBodyContent: input.bodyContent ?? null,

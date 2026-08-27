@@ -1,4 +1,4 @@
-import { preparePortalMagicLink } from "../auth/portal";
+import { queuePortalSignInCapability } from "../auth/portal";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
@@ -11,9 +11,10 @@ export async function requestPortalSignInLink(
     userAgentHash: string | null;
     ttlMinutes: number;
     appBaseUrl: string;
+    signingSecret: string;
   },
 ): Promise<{ outboxId: string | null; identityFound: boolean }> {
-  const magic = await preparePortalMagicLink(db, payload);
+  const magic = await queuePortalSignInCapability(db, payload);
   if (!magic) return { outboxId: null, identityFound: false };
 
   const email = prepareQueueEmailStatement(db, {
@@ -25,13 +26,13 @@ export async function requestPortalSignInLink(
     subject: "Your PKI Consortium portal sign-in link",
     data: {
       email: magic.identity.email,
-      magicLinkUrl: `${payload.appBaseUrl}/portal/#/verify?token=${encodeURIComponent(magic.token)}`,
+      magicLinkUrl: `${payload.appBaseUrl}/portal/#/verify?token=${encodeURIComponent(magic.queuedToken)}`,
       expiresInMinutes: payload.ttlMinutes,
     },
+    capabilityLinkValues: [magic.queuedToken],
   });
 
   await db.batch([
-    magic.statement,
     email.statement,
     prepareAuditLog(
       db,

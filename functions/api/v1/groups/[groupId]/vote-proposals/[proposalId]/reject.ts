@@ -16,7 +16,7 @@ export const GroupVoteProposalRejectPost = openApiRoute(
     const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
     const result = await rejectGroupVoteProposal(
       db,
-      requireGroupManagementActor(context.viewer),
+      requireGroupManagementActor(context),
       context.viewer,
       context.group.id,
       data.params.proposalId,

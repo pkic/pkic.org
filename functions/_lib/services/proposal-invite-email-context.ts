@@ -1,4 +1,5 @@
 import { all, first } from "../db/queries";
+import { emailPlainText } from "../email/plain-text";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { stringifyJson } from "../utils/json";
@@ -11,6 +12,17 @@ export interface ProposalInviteEmailContext {
   proposalTitle: string;
   proposalAbstract: string;
   speakerLineupText: string;
+}
+
+/** Converts public proposal/person fields into content-type-aware literal email values. */
+export function proposalInviteEmailTextVariables(context: ProposalInviteEmailContext) {
+  return {
+    proposerFirstName: emailPlainText(context.inviterFirstName ?? ""),
+    invitedByDisplay: emailPlainText(context.invitedByDisplay),
+    proposalTitle: emailPlainText(context.proposalTitle),
+    proposalAbstract: emailPlainText(context.proposalAbstract),
+    speakerLineupText: emailPlainText(context.speakerLineupText),
+  };
 }
 
 interface ProposalInviteSummary {

@@ -5,7 +5,7 @@ import type { DatabaseLike } from "../../types";
 
 export interface MailingListConfiguration {
   purpose: MailingList["purpose"];
-  groupId: string | null;
+  groupId: string;
   primaryDiscussion: boolean;
   subscriptionDefault: MailingList["subscriptionDefault"];
 }
@@ -14,16 +14,7 @@ export async function validateMailingListConfiguration(
   db: DatabaseLike,
   configuration: MailingListConfiguration,
 ): Promise<void> {
-  if (configuration.purpose === "group" && !configuration.groupId) {
-    throw new AppError(422, "MAILING_LIST_GROUP_REQUIRED", "A group-purpose mailing list must belong to a group");
-  }
-  if (configuration.primaryDiscussion && !configuration.groupId) {
-    throw new AppError(422, "MAILING_LIST_GROUP_REQUIRED", "A primary discussion list must belong to a group");
-  }
-  if (configuration.subscriptionDefault === "group_members" && !configuration.groupId) {
-    throw new AppError(422, "MAILING_LIST_GROUP_REQUIRED", "A group-members default requires a group");
-  }
-  if (configuration.groupId && !(await first(db, "SELECT id FROM groups WHERE id = ?", [configuration.groupId]))) {
+  if (!(await first(db, "SELECT id FROM groups WHERE id = ?", [configuration.groupId]))) {
     throw new AppError(422, "MAILING_LIST_GROUP_INVALID", "The selected group does not exist");
   }
 }

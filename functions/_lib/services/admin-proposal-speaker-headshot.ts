@@ -3,7 +3,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { proposalSpeakerEffectiveHeadshotExpression } from "./proposal-speakers";
 
-export interface AdminProposalSpeakerHeadshotContext {
+export interface ProposalSpeakerHeadshotContext {
   speaker_id: string;
   user_id: string;
   email: string;
@@ -28,12 +28,12 @@ export function adminProposalSpeakerHeadshotUrl(
   return url.toString();
 }
 
-export async function getAdminProposalSpeakerHeadshot(
+export async function getProposalSpeakerHeadshot(
   db: DatabaseLike,
   proposalId: string,
   userId: string,
-): Promise<AdminProposalSpeakerHeadshotContext> {
-  const speaker = await first<AdminProposalSpeakerHeadshotContext>(
+): Promise<ProposalSpeakerHeadshotContext> {
+  const speaker = await first<ProposalSpeakerHeadshotContext>(
     db,
     `SELECT ps.id AS speaker_id, ps.user_id, u.email,
             sp.event_id AS proposal_event_id,
@@ -57,3 +57,8 @@ export async function getAdminProposalSpeakerHeadshot(
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
   throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
 }
+
+/** @deprecated Use the neutral proposal speaker headshot context. */
+export type AdminProposalSpeakerHeadshotContext = ProposalSpeakerHeadshotContext;
+/** @deprecated Use the neutral proposal speaker headshot loader. */
+export const getAdminProposalSpeakerHeadshot = getProposalSpeakerHeadshot;

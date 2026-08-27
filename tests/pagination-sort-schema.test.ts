@@ -23,11 +23,8 @@ import {
   emailTemplatesListQuerySchema,
   emailTemplatesSortValueSchema,
 } from "../assets/shared/schemas/admin-email-templates";
-import {
-  eventsListSortValueSchema,
-  eventTeamSortValueSchema,
-  eventInvitesSortValueSchema,
-} from "../assets/shared/schemas/admin-events";
+import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/shared/schemas/admin-events";
+import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
 import { formSubmissionsSortValueSchema } from "../assets/shared/schemas/admin-forms";
 import { adminFormSubmissionsQuerySchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
 import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";
@@ -144,6 +141,13 @@ describe("shared list/search contract", () => {
 
   it("rejects collection limits above the shared D1-safe maximum", () => {
     expect(schema.safeParse({ limit: 201 }).success).toBe(false);
+  });
+
+  it("supports a stricter endpoint maximum without redeclaring pagination validation", () => {
+    const bounded = listQuerySchema(["name"] as const, { limit: 8, maxLimit: 8 });
+    expect(bounded.parse({})).toMatchObject({ limit: 8, offset: 0 });
+    expect(bounded.safeParse({ limit: 9 }).success).toBe(false);
+    expect(() => paginationQuerySchemaWithDefaults({ limit: 9, maxLimit: 8 })).toThrow(RangeError);
   });
 
   it("rejects offsets that would force an excessive D1 skip scan", () => {

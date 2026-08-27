@@ -5,14 +5,14 @@
  * group. It does not expose arbitrary group leadership.
  */
 import { json } from "../../../_lib/http";
-import { getForumChairsPublic } from "../../../_lib/services/leadership";
+import { getConsortiumChairsPublic } from "../../../_lib/services/leadership";
 import { consortiumChairsPublicRouteSchema } from "../../../../assets/shared/schemas/leadership";
 import { openApiRoute } from "../../../_lib/openapi/route";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
 export const ConsortiumChairsPublicGet = openApiRoute(consortiumChairsPublicRouteSchema, async (c: any) => {
-  const chairs = await getForumChairsPublic(c.env.DB);
+  const chairs = await getConsortiumChairsPublic(c.env.DB);
   const response = json(chairs);
   response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   return response;

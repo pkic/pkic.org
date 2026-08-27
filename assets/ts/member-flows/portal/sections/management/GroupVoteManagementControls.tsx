@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "preact/compat";
 import { useRef, useState } from "preact/hooks";
 import {
   groupVoteBallotsAuditResponseSchema,
@@ -8,9 +9,14 @@ import {
 import type { GroupVoteDetail } from "../../../../../shared/schemas/group-votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Spinner } from "../../../../components/Spinner";
 import { patchJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
 import { GroupVoteLifecycleActions } from "./GroupVoteLifecycleActions";
+
+const GroupVoteStatistics = lazy(() =>
+  import("./GroupVoteStatistics").then((module) => ({ default: module.GroupVoteStatistics })),
+);
 
 function localDateTime(value: string): string {
   const date = new Date(value);
@@ -35,6 +41,7 @@ export function GroupVoteManagementControls({
   const [visibility, setVisibility] = useState(vote.visibility);
   const [publicDetailLevel, setPublicDetailLevel] = useState(vote.publicDetailLevel);
   const [showBallots, setShowBallots] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(vote.id)}`;
@@ -220,6 +227,21 @@ export function GroupVoteManagementControls({
           />
         </div>
       )}
+      <div class="mt-3">
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          aria-expanded={showStatistics}
+          onClick={() => setShowStatistics((shown) => !shown)}
+        >
+          {showStatistics ? "Hide vote statistics" : "Load vote statistics"}
+        </button>
+        {showStatistics && (
+          <Suspense fallback={<Spinner />}>
+            <GroupVoteStatistics groupId={groupId} voteId={vote.id} />
+          </Suspense>
+        )}
+      </div>
     </section>
   );
 }

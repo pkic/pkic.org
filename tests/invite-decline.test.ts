@@ -3,7 +3,10 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
+import { renderEmail } from "../functions/_lib/email/render";
 import app from "../functions/router";
+
+const EMAIL_LAYOUT = "<!doctype html><html><body>{{{body_html}}}</body></html>";
 
 function mounted(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -23,7 +26,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "form-get@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -44,7 +46,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "already-done@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -77,7 +78,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "other-no-note@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -112,6 +112,37 @@ describe("invite decline", () => {
     expect(response.status).toBe(400);
   });
 
+  it("does not let a still-sent invitation bypass its database expiry", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { invite, token } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "expired-sent@example.test",
+      inviteType: "attendee",
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare("UPDATE invites SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?")
+      .bind(invite.id)
+      .run();
+
+    const response = await declinePost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reasonCode: "schedule_conflict" }),
+        }),
+        { token },
+      ),
+    );
+
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_EXPIRED" } });
+    await expect(
+      env.DB.prepare("SELECT status FROM invites WHERE id = ?").bind(invite.id).first<{ status: string }>(),
+    ).resolves.toEqual({ status: "sent" });
+  });
+
   it("stores structured reason and unsubscribe choice", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -119,7 +150,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "reason-store@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -166,7 +196,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "decliner@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -216,6 +245,51 @@ describe("invite decline", () => {
     expect(outbox.map((row) => row.recipient_email)).toEqual(["colleague1@example.test", "colleague2@example.test"]);
   });
 
+  it("renders forwarded speaker recipient names through the shared text-safe variables", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { token } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "declining-speaker@example.test",
+      inviteType: "speaker",
+      signingSecret: "test-signing-secret",
+    });
+
+    const response = await declinePost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            reasonCode: "schedule_conflict",
+            forwards: [
+              {
+                email: "forwarded-speaker@example.test",
+                firstName: "Forwarded",
+                lastName: "Speaker",
+              },
+            ],
+          }),
+        }),
+        { token },
+      ),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE recipient_email = ? AND template_key = 'speaker_invite'",
+      "forwarded-speaker@example.test",
+    );
+    const rendered = await renderEmail(
+      "Hi {{attendeeName}},\n\n[Submit proposal]({{proposalUrl}})",
+      JSON.parse(outbox[0].payload_json) as Record<string, unknown>,
+      EMAIL_LAYOUT,
+    );
+    expect(rendered.html).not.toContain("{{attendeeName}}");
+    expect(rendered.text).toContain("Forwarded Speaker");
+  });
+
   it("silently skips unsubscribed contacts when forwarding", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -229,7 +303,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "decliner-unsub@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -259,7 +332,6 @@ describe("invite decline", () => {
       eventId,
       inviteeEmail: "decliner-rollback@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
     await env.DB.prepare(

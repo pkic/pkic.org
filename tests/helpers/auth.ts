@@ -4,6 +4,7 @@ import { signAdminSessionToken } from "../../functions/_lib/auth/admin";
 import { createUserBackedAuthAdmin } from "../../functions/_lib/auth/admin-identity";
 import { signMemberSessionToken } from "../../functions/_lib/auth/member";
 import { AUTH_SCOPES } from "../../functions/_lib/auth/scopes";
+import type { AuthScope } from "../../functions/_lib/auth/scopes";
 import { first } from "../../functions/_lib/db/queries";
 import type { DatabaseLike } from "../../functions/_lib/types";
 import { env } from "cloudflare:test";
@@ -22,6 +23,7 @@ export async function createAdminSession(
   adminUserId: string,
   rawToken: string,
   signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+  options: { scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -48,10 +50,12 @@ export async function createAdminSession(
       id: adminUserId,
       email,
       role,
-      scopes: role === "admin" ? [...AUTH_SCOPES] : [],
+      scopes: options.scopes ?? (role === "admin" ? [...AUTH_SCOPES] : []),
     }),
     sessionId,
     expiresAt,
+    scopes: options.scopes,
+    scopeRestricted: options.scopeRestricted,
   });
 }
 

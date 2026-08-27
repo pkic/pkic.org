@@ -1,4 +1,5 @@
 import { all } from "../../db/queries";
+import { sha256Hex } from "../../utils/crypto";
 import { formatInviterList, type InviteInviterInfo } from "../invites";
 import { buildInviteEmailQueueRow } from "../invite-email";
 import { isStaleInviteTransition, prepareInviteTransitionGuard } from "../invite-lifecycle";
@@ -11,6 +12,8 @@ import {
 } from "../reminders-support";
 import { attendeeEffectiveDeadline, batchQueueEmailsAndUpdateState } from "./shared";
 import type { DatabaseLike } from "../../types";
+import { effectiveInviteExpirySql, eventInviteWindowsEvidence } from "../../invite-validity";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 
 export async function runInviteReminders(
   db: DatabaseLike,
@@ -34,9 +37,10 @@ export async function runInviteReminders(
     `WITH candidates AS (
        SELECT
          i.id, i.event_id, i.invitee_email, i.invitee_first_name, i.invitee_last_name,
-         i.invite_type, i.reminder_count, i.transition_revision, i.expires_at,
+         i.invite_type, i.link_secret, i.reminder_count, i.transition_revision,
+         ${effectiveInviteExpirySql("i", "e")} AS expires_at,
          e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
-         e.starts_at AS event_starts_at, e.settings_json AS event_settings_json,
+         e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, e.settings_json AS event_settings_json,
          CASE WHEN json_valid(e.settings_json)
            THEN COALESCE(
              json_extract(e.settings_json, '$.registration.closesAt'),
@@ -48,14 +52,16 @@ export async function runInviteReminders(
        FROM invites i
        JOIN events e ON e.id = i.event_id
        WHERE i.status = 'sent'
+         AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+         AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?)
          AND i.reminder_count < ?
          AND (i.reminders_paused_until IS NULL OR i.reminders_paused_until <= ?)
          AND COALESCE(i.last_communication_at, i.created_at) <= ?
      )
      SELECT
        id, event_id, invitee_email, invitee_first_name, invitee_last_name,
-       invite_type, reminder_count, transition_revision, expires_at, event_name, event_slug,
-       event_base_path, event_starts_at, event_settings_json
+       invite_type, link_secret, reminder_count, transition_revision, expires_at, event_name, event_slug,
+       event_base_path, event_starts_at, event_ends_at, event_settings_json
      FROM candidates
      WHERE invite_type <> 'attendee'
        OR (
@@ -68,7 +74,7 @@ export async function runInviteReminders(
        )
      ORDER BY candidate_due_at ASC, id ASC
      LIMIT ?`,
-    [maxInviteReminders, now, cutoff, now, now, limit],
+    [now, maxInviteReminders, now, cutoff, now, now, limit],
   );
 
   const attendeeInvites: ReminderCandidatePreview[] = [];
@@ -126,31 +132,34 @@ export async function runInviteReminders(
       invitersByInviteId.set(row.invite_id, arr);
     }
 
-    const emailRows = dueInvites.map((invite) => {
-      const event: EventRouteRow = {
-        id: invite.event_id,
-        name: invite.event_name,
-        slug: invite.event_slug,
-        base_path: invite.event_base_path,
-        starts_at: invite.event_starts_at,
-        settings_json: invite.event_settings_json,
-      };
-      const isAttendee = invite.invite_type === "attendee";
-      const deadlineForUrgency = isAttendee ? attendeeEffectiveDeadline(invite) : invite.expires_at;
-      const daysToExpiry = daysUntil(deadlineForUrgency);
-      const reminderNumber = Number(invite.reminder_count ?? 0) + 1;
-      const subject = inviteReminderSubject(event.name, reminderNumber, daysToExpiry);
-      return buildInviteEmailQueueRow({
-        event,
-        invite,
-        appBaseUrl,
-        source: isAttendee ? "invite_reminder" : "speaker_invite_reminder",
-        subject,
-        inviterName: formatInviterList(invitersByInviteId.get(invite.id) ?? []),
-        reminderCount: String(reminderNumber),
-        daysUntilExpiry: daysToExpiry !== null ? String(daysToExpiry) : "",
-      });
-    });
+    const emailRows = await Promise.all(
+      dueInvites.map(async (invite) => {
+        const event: EventRouteRow = {
+          id: invite.event_id,
+          name: invite.event_name,
+          slug: invite.event_slug,
+          base_path: invite.event_base_path,
+          starts_at: invite.event_starts_at,
+          settings_json: invite.event_settings_json,
+        };
+        const isAttendee = invite.invite_type === "attendee";
+        const deadlineForUrgency = isAttendee ? attendeeEffectiveDeadline(invite) : invite.expires_at;
+        const daysToExpiry = daysUntil(deadlineForUrgency);
+        const reminderNumber = Number(invite.reminder_count ?? 0) + 1;
+        const subject = inviteReminderSubject(event.name, reminderNumber, daysToExpiry);
+        return buildInviteEmailQueueRow({
+          event,
+          invite,
+          appBaseUrl,
+          source: isAttendee ? "invite_reminder" : "speaker_invite_reminder",
+          subject,
+          inviterName: formatInviterList(invitersByInviteId.get(invite.id) ?? []),
+          reminderCount: String(reminderNumber),
+          daysUntilExpiry: daysToExpiry !== null ? String(daysToExpiry) : "",
+          linkSecretFingerprint: await sha256Hex(invite.link_secret),
+        });
+      }),
+    );
 
     queuedCount = await batchQueueEmailsAndUpdateState(
       db,
@@ -164,7 +173,22 @@ export async function runInviteReminders(
           .bind(now, invite.id),
       ]),
       now,
-      { isExpectedConflict: isStaleInviteTransition },
+      {
+        isExpectedConflict: (error) => isStaleInviteTransition(error) || isAuthorizationGuardFailure(error),
+        prepareSliceStatements: (start, end) => [
+          prepareAuthorizationGuard(
+            db,
+            eventInviteWindowsEvidence(
+              dueInvites.slice(start, end).map((invite) => ({
+                eventId: invite.event_id,
+                event: { starts_at: invite.event_starts_at, ends_at: invite.event_ends_at },
+                expiresAt: invite.expires_at!,
+              })),
+              now,
+            ),
+          ),
+        ],
+      },
     );
   }
 

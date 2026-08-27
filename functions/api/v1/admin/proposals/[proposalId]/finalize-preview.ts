@@ -4,7 +4,7 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import type { AdminContext } from "../../../../../_lib/db/context";
-import { proposalDecisionPreviewResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
+import { proposalDecisionPreviewResponseSchema } from "../../../../../../assets/shared/schemas/proposal-decisions";
 import { adminProposalFinalizePreviewRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { previewProposalDecisionEmails } from "../../../../../_lib/services/proposal-decisions";
 

@@ -1,10 +1,22 @@
 import { normalizeEmail } from "../validation";
 import { chunkJsonRows } from "../db/json-bulk";
-import { addHours, nowIso } from "../utils/time";
+import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
+import { sha256Hex } from "../utils/crypto";
 import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../email/outbox-queue";
 import type { DatabaseLike, StatementLike } from "../types";
+import {
+  effectiveInviteExpirySql,
+  eventInviteWindowEvidence,
+  inviteExpirySeconds,
+  prepareExpireEffectiveEventInvites,
+  resolveEventInviteExpiry,
+  type InviteEventWindow,
+} from "../invite-validity";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { AppError } from "../errors";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 export type BulkInviteOutcome = {
   email: string;
@@ -23,14 +35,15 @@ export type BulkInviteInput = {
 };
 
 export type BulkInvitePayload = {
-  event: { id: string };
+  event: { id: string } & InviteEventWindow;
   invites: BulkInviteInput[];
-  ttlHours?: number | null;
+  expiresAt?: string;
   buildEmailRow?: (created: {
     inviteId: string;
     token: string;
     email: string;
     invite: BulkInviteInput;
+    linkSecretFingerprint: string;
   }) => InviteEmailQueueRow;
   /** Domain statements committed atomically with invite and outbox creation. */
   additionalStatements?: StatementLike[];
@@ -53,7 +66,7 @@ const ELIGIBILITY_QUERY = {
     JOIN users u ON u.id = ps.user_id
     WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
       AND sp.event_id = ?2
-      AND sp.status NOT IN ('rejected', 'withdrawn')
+      AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
       AND ps.status <> 'declined'`,
 } as const;
 
@@ -137,6 +150,7 @@ export async function bulkCreateInvites(
   }
 
   const now = nowIso();
+  const expiresAt = resolveEventInviteExpiry(payload.event, payload.expiresAt, now);
   const normalizedEmails = payload.invites.map((invite) => normalizeEmail(invite.inviteeEmail));
   const emailsJson = JSON.stringify([...new Set(normalizedEmails)]);
   const batchResults = (await db.batch([
@@ -151,11 +165,17 @@ export async function bulkCreateInvites(
     db.prepare(ELIGIBILITY_QUERY[inviteType]).bind(emailsJson, payload.event.id),
     db
       .prepare(
-        `SELECT invitee_email FROM invites
-         WHERE event_id = ?1 AND invite_type = ?2 AND status = 'sent'
-           AND invitee_email IN (SELECT value FROM json_each(?3))`,
+        `SELECT i.invitee_email
+         FROM invites i
+         JOIN events e ON e.id = i.event_id
+         WHERE i.event_id = ?1
+           AND i.invite_type = ?2
+           AND i.status = 'sent'
+           AND i.invitee_email IN (SELECT value FROM json_each(?3))
+           AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+           AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?4)`,
       )
-      .bind(payload.event.id, inviteType, emailsJson),
+      .bind(payload.event.id, inviteType, emailsJson, now),
   ])) as Array<{ results?: Array<Record<string, string>> }>;
 
   const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
@@ -186,24 +206,34 @@ export async function bulkCreateInvites(
     toCreate.push({ outcomeIndex: outcomes.length - 1, email, invite: payload.invites[index] });
   }
 
-  const expiresAt = payload.ttlHours == null ? null : addHours(now, payload.ttlHours);
-  const prepared = toCreate.map(({ outcomeIndex, email, invite }, ordinal) => {
-    const id = uuid();
-    return {
-      outcomeIndex,
-      id,
-      inviteId: id,
-      token: queuedCapabilityToken("invite", id),
-      invite,
-      email,
-      firstName: invite.inviteeFirstName ?? null,
-      lastName: invite.inviteeLastName ?? null,
-      linkSecret: newCapabilityLinkSecret(),
-      sourceType: invite.sourceType ?? "direct",
-      expiresAt,
-      ordinal: ordinal + 1,
-    };
-  });
+  const prepared = await Promise.all(
+    toCreate.map(async ({ outcomeIndex, email, invite }, ordinal) => {
+      const id = uuid();
+      const linkSecret = newCapabilityLinkSecret();
+      const linkSecretFingerprint = await sha256Hex(linkSecret);
+      return {
+        outcomeIndex,
+        id,
+        inviteId: id,
+        token: queuedCapabilityToken(
+          "invite",
+          id,
+          Math.max(1, inviteExpirySeconds(expiresAt) - Math.floor(Date.parse(now) / 1000)),
+          linkSecretFingerprint,
+          inviteExpirySeconds(expiresAt),
+        ),
+        invite,
+        email,
+        firstName: invite.inviteeFirstName ?? null,
+        lastName: invite.inviteeLastName ?? null,
+        linkSecret,
+        linkSecretFingerprint,
+        sourceType: invite.sourceType ?? "direct",
+        expiresAt,
+        ordinal: ordinal + 1,
+      };
+    }),
+  );
 
   const chunks = chunkJsonRows(prepared);
   const emailRows = payload.buildEmailRow
@@ -228,6 +258,8 @@ export async function bulkCreateInvites(
     : [];
   const inviterChunks = chunkJsonRows(inviterRows);
   const statements = [
+    prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+    prepareExpireEffectiveEventInvites(db, { eventId: payload.event.id, inviteType, now }),
     ...chunks.map((chunk) =>
       db
         .prepare(BULK_INVITE_INSERT_SQL)
@@ -254,10 +286,22 @@ export async function bulkCreateInvites(
     ...emailChunks.map((chunk) => chunk.statement),
     ...(payload.additionalStatements ?? []),
   ];
-  const results = statements.length > 0 ? await db.batch(statements) : [];
+  let results;
+  try {
+    results = await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "EVENT_INVITE_WINDOW_CHANGED",
+        "The event schedule changed before the invitations could be created. Review the deadline and try again.",
+      );
+    }
+    throw error;
+  }
   const insertedIds = new Set(
     results
-      .slice(0, chunks.length)
+      .slice(2, chunks.length + 2)
       .flatMap((result) => (result.results ?? []).map((row) => String((row as { id?: unknown }).id ?? ""))),
   );
   for (let index = 0; index < prepared.length; index += 1) {
@@ -278,11 +322,17 @@ export async function bulkCreateInvites(
   if (unresolvedEmails.length > 0) {
     const active = await db
       .prepare(
-        `SELECT invitee_email FROM invites
-         WHERE event_id = ?1 AND invite_type = ?2 AND status = 'sent'
-           AND invitee_email IN (SELECT value FROM json_each(?3))`,
+        `SELECT i.invitee_email
+         FROM invites i
+         JOIN events e ON e.id = i.event_id
+         WHERE i.event_id = ?1
+           AND i.invite_type = ?2
+           AND i.status = 'sent'
+           AND i.invitee_email IN (SELECT value FROM json_each(?3))
+           AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
+           AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?4)`,
       )
-      .bind(payload.event.id, inviteType, JSON.stringify(unresolvedEmails))
+      .bind(payload.event.id, inviteType, JSON.stringify(unresolvedEmails), now)
       .all<{ invitee_email: string }>();
     for (const row of active.results) finalActive.add(row.invitee_email);
   }
@@ -305,10 +355,18 @@ export async function bulkCreateInvites(
 export type BulkAttendeeOutcome = BulkInviteOutcome;
 export type BulkSpeakerOutcome = BulkInviteOutcome;
 
-export function bulkCreateAttendeesAdmin(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkAttendeeOutcome[]> {
+export function bulkCreateAttendeeInvites(
+  db: DatabaseLike,
+  payload: BulkInvitePayload,
+): Promise<BulkAttendeeOutcome[]> {
   return bulkCreateInvites(db, "attendee", payload);
 }
 
-export function bulkCreateSpeakersAdmin(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkSpeakerOutcome[]> {
+export function bulkCreateSpeakerInvites(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkSpeakerOutcome[]> {
   return bulkCreateInvites(db, "speaker", payload);
 }
+
+/** @deprecated Import the domain-neutral bulk invite helper instead. */
+export const bulkCreateAttendeesAdmin = bulkCreateAttendeeInvites;
+/** @deprecated Import the domain-neutral bulk invite helper instead. */
+export const bulkCreateSpeakersAdmin = bulkCreateSpeakerInvites;

@@ -7,6 +7,42 @@ import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../../utils/r
 import { parseJsonSafe } from "../../utils/json";
 import type { FormFieldDefinition } from "../forms/read";
 import type { AttendeeCampaignRow, AttendeeDayProjections, CampaignRecipient, SpeakerCampaignRow } from "./types";
+import { emailPlainText } from "../../email/plain-text";
+
+/**
+ * Merges recipient-specific form values with canonical campaign data. The
+ * canonical values deliberately win because configurable form-field keys must
+ * never replace trusted event, identity, or route variables.
+ */
+export function buildPersonalCampaignTemplateData(
+  recipient: Pick<CampaignRecipient, "firstName" | "lastName" | "templateData"> | undefined,
+  canonicalData: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...(recipient?.templateData ?? {}),
+    ...canonicalData,
+    firstName: emailPlainText(recipient?.firstName || "Member"),
+    lastName: emailPlainText(recipient?.lastName || ""),
+  };
+}
+
+function buildSafeCustomAnswerData(
+  customAnswers: Record<string, unknown> | null,
+  formFields: FormFieldDefinition[] | undefined,
+): { customAnswerRows: Array<Record<string, unknown>>; customAnswerVariables: Record<string, unknown> } {
+  return {
+    customAnswerRows: buildCustomAnswerRows(customAnswers, formFields).map((answer) => ({
+      label: emailPlainText(answer.label),
+      displayValue: emailPlainText(answer.displayValue),
+    })),
+    customAnswerVariables: Object.fromEntries(
+      Object.entries(buildCustomAnswerVariables(customAnswers, formFields)).map(([key, value]) => [
+        key,
+        emailPlainText(value),
+      ]),
+    ),
+  };
+}
 
 export function buildAttendeeCampaignRecipients(
   rows: AttendeeCampaignRow[],
@@ -38,18 +74,21 @@ function buildAttendeeTemplateData(
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null);
   const attendanceType = row.attendance_type ?? "";
   const attendanceData = buildAttendanceEmailData(attendanceType, dayAttendanceRaw, dayWaitlist);
+  const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(customAnswers, formFields);
   return {
-    email: row.email.trim().toLowerCase(),
-    organizationName: row.organization_name ?? "",
-    jobTitle: row.job_title ?? "",
+    // Custom field keys are configurable. Put them first so they cannot shadow
+    // canonical recipient values used by campaign templates.
+    ...customAnswerVariables,
+    email: emailPlainText(row.email.trim().toLowerCase()),
+    organizationName: emailPlainText(row.organization_name ?? ""),
+    jobTitle: emailPlainText(row.job_title ?? ""),
     ...buildRegistrationEmailStatusData(row.status, dayWaitlist),
     attendanceType,
     attendanceLabel: attendanceData.attendanceLabel || (ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType),
     dayAttendance: attendanceData.dayAttendance,
     dayWaitlist,
     manageUrl: undefined,
-    customAnswerRows: buildCustomAnswerRows(customAnswers, formFields),
-    ...buildCustomAnswerVariables(customAnswers, formFields),
+    customAnswerRows,
   };
 }
 
@@ -58,15 +97,18 @@ export function buildSpeakerTemplateData(
   formFields: FormFieldDefinition[] | undefined,
 ): Record<string, unknown> {
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.details_json, null);
+  const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(customAnswers, formFields);
   return {
-    email: row.email.trim().toLowerCase(),
-    organizationName: row.organization_name ?? "",
-    jobTitle: row.job_title ?? "",
+    // Preserve configurable custom tags without allowing them to replace the
+    // canonical speaker fields below.
+    ...customAnswerVariables,
+    email: emailPlainText(row.email.trim().toLowerCase()),
+    organizationName: emailPlainText(row.organization_name ?? ""),
+    jobTitle: emailPlainText(row.job_title ?? ""),
     speakerStatus: row.speaker_status,
-    proposalTitle: row.proposal_title,
-    proposalAbstract: row.proposal_abstract ?? "",
-    proposalType: row.proposal_type ?? "",
-    customAnswerRows: buildCustomAnswerRows(customAnswers, formFields),
-    ...buildCustomAnswerVariables(customAnswers, formFields),
+    proposalTitle: emailPlainText(row.proposal_title),
+    proposalAbstract: emailPlainText(row.proposal_abstract ?? ""),
+    proposalType: emailPlainText(row.proposal_type ?? ""),
+    customAnswerRows,
   };
 }

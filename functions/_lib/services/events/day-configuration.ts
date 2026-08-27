@@ -1,16 +1,15 @@
-import type { z } from "zod";
+import type { EventDaysReplaceInput } from "../../../../assets/shared/schemas/event-configuration";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
-import { prepareAuditLog } from "../audit";
 import { listEventDays } from "../event-days";
 import { stringifyJson } from "../../utils/json";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { localDateTimeInTimeZoneToIso } from "../../utils/timezone";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { adminEventDaysReplaceSchema } from "../../../../assets/shared/schemas/admin-events";
+import { prepareEventConfigurationRevision, type EventConfigurationMutationContext } from "./configuration-revision";
 
-type EventDaysInput = z.infer<typeof adminEventDaysReplaceSchema>;
+type EventDaysInput = EventDaysReplaceInput;
 
 interface ReferencedDayRow {
   event_day_id: string;
@@ -88,10 +87,10 @@ function upsertDayStatement(db: DatabaseLike, eventId: string, day: PreparedDay,
  */
 export async function replaceConfiguredEventDays(
   db: DatabaseLike,
-  actorId: string,
   event: { id: string; timezone: string },
   input: EventDaysInput,
-): Promise<{ skipped: string[] }> {
+  context: EventConfigurationMutationContext,
+): Promise<{ skipped: string[]; updatedAt: string }> {
   // Resolve and validate every time range before preparing any mutation.
   const preparedDays = prepareDays(input, event.timezone);
   const existingDays = await listEventDays(db, event.id);
@@ -111,21 +110,17 @@ export async function replaceConfiguredEventDays(
   const skipped = removedDays.filter((day) => referencedIds.has(day.id)).map((day) => day.day_date);
   const deletable = removedDays.filter((day) => !referencedIds.has(day.id));
   const now = nowIso();
+  const revision = prepareEventConfigurationRevision(db, event.id, context, "event_days_updated", {
+    dayCount: preparedDays.length,
+    skipped,
+  });
 
   await db.batch([
+    ...(context.authorizationGuards ?? []),
     ...deletable.map((day) => db.prepare("DELETE FROM event_days WHERE id = ?").bind(day.id)),
     ...preparedDays.map((day) => upsertDayStatement(db, event.id, day, now)),
-    prepareAuditLog(
-      db,
-      "admin",
-      actorId,
-      "event_days_updated",
-      "event",
-      event.id,
-      { dayCount: preparedDays.length, skipped },
-      now,
-    ),
+    ...revision.statements,
   ]);
 
-  return { skipped };
+  return { skipped, updatedAt: revision.updatedAt };
 }

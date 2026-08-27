@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { verifyAdminMagicLink } from "../../../../_lib/auth/admin";
+import { redeemAdminSignInCapability } from "../../../../_lib/auth/admin";
 import { adminAuthVerifySchema } from "../../../../../assets/shared/schemas/admin-auth";
 import type { AdminContext } from "../../../../_lib/db/context";
 import type { DatabaseSessionLike } from "../../../../_lib/db/session";
@@ -16,8 +16,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const http = await prepareMagicLinkVerificationHttp(c, ADMIN_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
   const db = http.db as DatabaseSessionLike;
 
-  const verified = await verifyAdminMagicLink(db, {
+  const verified = await redeemAdminSignInCapability(db, {
     token: body.token,
+    signingSecret: http.secret,
     sessionTtlHours: 8,
     ipHash: http.ipHash,
     userAgentHash: http.userAgentHash,

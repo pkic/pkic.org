@@ -143,6 +143,25 @@ describe("proposal decision review rounds", () => {
     ).resolves.toHaveLength(0);
   });
 
+  it("keeps accepted proposals locked in proposer self-service", async () => {
+    const seeded = await seedDecisionWorkflow();
+    await recordProposalDecision(env.DB, {
+      proposalId: seeded.proposalId,
+      actor: decisionActor(seeded.adminId),
+      finalStatus: "accepted",
+      minReviewsRequired: 0,
+    });
+
+    await expect(
+      updateProposalByManageToken(env.DB, {
+        manageToken: seeded.manageToken,
+        action: "update",
+        title: "A proposer must not rewrite an accepted proposal",
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_NOT_EDITABLE" });
+  });
+
   it("requires fresh reviews after needs-work and retains both decision rounds", async () => {
     const seeded = await seedDecisionWorkflow();
     for (const [index, token] of seeded.reviewerTokens.entries()) {

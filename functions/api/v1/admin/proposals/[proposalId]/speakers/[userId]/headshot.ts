@@ -53,6 +53,8 @@ async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response>
     db,
     bucket: requireUserHeadshotBucket(c.env),
     proposalId: params.proposalId,
+    proposalEventId: speaker.proposal_event_id,
+    permissionActor: admin,
     proposalSpeakerId: speaker.speaker_id,
     speakerUserId: speaker.user_id,
     previousOverrideSet: speaker.headshot_override_set,
@@ -85,6 +87,8 @@ async function onDelete(c: AdminContext, data: DeleteData): Promise<Response> {
   await removeProposalSpeakerHeadshot({
     db,
     proposalId: data.params.proposalId,
+    proposalEventId: speaker.proposal_event_id,
+    permissionActor: admin,
     proposalSpeakerId: speaker.speaker_id,
     speakerUserId: speaker.user_id,
     previousOverrideSet: speaker.headshot_override_set,

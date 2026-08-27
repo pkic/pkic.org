@@ -202,7 +202,7 @@ export const finalizeProposalResponseSchema = successResponseSchema.extend({
   minReviewsRequired: z.number().int().nonnegative(),
 });
 
-export const adminProposalPatchSchema = z
+export const proposalPatchSchema = z
   .object({
     title: proposalTitleSchema.optional(),
     abstract: proposalAbstractSchema.optional(),
@@ -211,15 +211,33 @@ export const adminProposalPatchSchema = z
     message: "Provide a title or abstract to update",
   });
 
-export const adminProposalEditableSchema = z.object({
+export const proposalEditableSchema = z.object({
   id: databaseIdSchema,
   title: z.string(),
   abstract: z.string(),
   updated_at: z.string(),
 });
 
-export const adminProposalPatchResponseSchema = z.object({
-  proposal: adminProposalEditableSchema,
+export const proposalPatchResponseSchema = z.object({
+  proposal: proposalEditableSchema,
+});
+
+/** @deprecated Use proposalPatchSchema. */
+export const adminProposalPatchSchema = proposalPatchSchema;
+/** @deprecated Use proposalEditableSchema. */
+export const adminProposalEditableSchema = proposalEditableSchema;
+/** @deprecated Use proposalPatchResponseSchema. */
+export const adminProposalPatchResponseSchema = proposalPatchResponseSchema;
+
+export const cancelAcceptedProposalSchema = z.object({
+  comment: z.string().trim().min(1).max(5_000),
+});
+
+export const cancelAcceptedProposalResponseSchema = successResponseSchema.extend({
+  proposalId: databaseIdSchema,
+  status: z.literal("canceled"),
+  canceledAt: z.string(),
+  notifiedSpeakerCount: z.number().int().nonnegative(),
 });
 
 function optionalNullableOrEmpty<T extends z.ZodTypeAny>(schema: T) {
@@ -254,7 +272,9 @@ export const proposerSpeakerPatchSchema = speakerProfilePatchSchema.extend({
   role: speakerRoleSchema.optional(),
 });
 
-export const adminSpeakerBioPatchSchema = proposerSpeakerPatchSchema;
+export const proposalSpeakerPatchSchema = proposerSpeakerPatchSchema;
+/** @deprecated Use the neutral proposal speaker patch contract. */
+export const adminSpeakerBioPatchSchema = proposalSpeakerPatchSchema;
 
 export const proposalSpeakerRemovalRequestSchema = z.object({
   replacementProposerUserId: databaseIdSchema.optional(),
@@ -271,11 +291,14 @@ export const coSpeakerInviteSchema = z.object({
   firstName: firstNameSchema.optional(),
   lastName: lastNameSchema.optional(),
   role: speakerRoleSchema.exclude(["proposer"]).default("speaker"),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 export const coSpeakerInviteResponseSchema = successResponseSchema.extend({
   email: normalizedEmailSchema,
   role: speakerRoleSchema,
+  expiresAt: z.iso.datetime(),
+  queued: z.boolean(),
 });
 
 export const coSpeakerInviteRouteSchema = {
@@ -287,7 +310,7 @@ export const coSpeakerInviteRouteSchema = {
   },
   responses: {
     "200": {
-      description: "Co-speaker invitation sent.",
+      description: "Co-speaker invitation state, including whether a new delivery was queued.",
       content: { "application/json": { schema: coSpeakerInviteResponseSchema } },
     },
     "400": { description: "Proposal is closed or the request is invalid." },

@@ -1,5 +1,6 @@
 export * from "./access";
 export * from "./capacities";
+export * from "./category-rules";
 export * from "./audit-log";
 export * from "./automatic-enrollment";
 export * from "./automatic-enrollment-group";
@@ -7,5 +8,7 @@ export * from "./governance";
 export * from "./management";
 export * from "./membership";
 export * from "./portal-context";
+export * from "./public-directory";
 export * from "./read-model";
 export * from "./self-participation";
+export * from "./statistics";

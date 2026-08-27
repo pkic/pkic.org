@@ -12,7 +12,6 @@ const MEMBER_NAV_ITEMS: PortalNavItem[] = [
   { path: "/groups", section: "groups", label: "Groups" },
   { path: "/votes", section: "votes", label: "Votes" },
   { path: "/application", section: "application", label: "My Application" },
-  { path: "/account", section: "account", label: "Account Settings" },
 ];
 
 const MANAGEMENT_NAV_ITEM: PortalNavItem = {
@@ -20,6 +19,8 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   section: "management",
   label: "Management",
 };
+
+const ACCOUNT_NAV_ITEM: PortalNavItem = { path: "/account", section: "account", label: "Account Settings" };
 
 export const PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS = {
   "/working-groups": "/groups",
@@ -29,10 +30,15 @@ const CAPACITY_ROUTE_PATHS = new Set([
   ...MEMBER_NAV_ITEMS.map((item) => item.path),
   ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
   MANAGEMENT_NAV_ITEM.path,
+  ACCOUNT_NAV_ITEM.path,
 ]);
 
 export function portalNavigationItems(session: PortalSession | null): PortalNavItem[] {
-  return [...(session?.member ? MEMBER_NAV_ITEMS : []), ...(session?.admin ? [MANAGEMENT_NAV_ITEM] : [])];
+  return [
+    ...(session?.member ? MEMBER_NAV_ITEMS : []),
+    ...(session?.admin ? [MANAGEMENT_NAV_ITEM] : []),
+    ...(session?.member || session?.admin ? [ACCOUNT_NAV_ITEM] : []),
+  ];
 }
 
 export function portalDefaultPath(session: PortalSession | null): string {

@@ -1,14 +1,12 @@
-import {
-  isAdminEventCustomSettingKey,
-  type AdminEventSettingsInput,
-} from "../../../../assets/shared/schemas/admin-events";
+import { isEventCustomSettingKey, type EventSettingsInput } from "../../../../assets/shared/schemas/event-management";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { AppError } from "../../errors";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { resolveHeroImageSource } from "../../utils/hero-image-url";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog } from "../audit";
-import { getEventBySlug } from "../events";
+import { prepareAuditLog, prepareScopedAuditLogAfterOneChange, type AuditScope } from "../audit";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { getEventBySlug, type EventRecord } from "../events";
 import { getAdminEventDetail } from "./admin-detail";
 
 function setFormLink(
@@ -22,15 +20,26 @@ function setFormLink(
   settings.forms = forms;
 }
 
+/** Keeps creation routes from inventing divergent venue/virtual-URL codecs. */
+export function initialEventSettings(
+  input: Pick<EventSettingsInput, "venue" | "virtualUrl" | "location">,
+): Record<string, unknown> {
+  const settings: Record<string, unknown> = {};
+  if (input.venue) settings["venue"] = input.venue;
+  if (input.virtualUrl) settings["virtualUrl"] = input.virtualUrl;
+  if (input.location) settings["location"] = input.location;
+  return settings;
+}
+
 function mergeEventSettings(
   existingJson: string,
-  input: AdminEventSettingsInput,
+  input: Omit<EventSettingsInput, "registrationMode"> & { registrationMode?: string },
   appBaseUrl: string,
   allowedHeroImageHosts?: string,
 ): Record<string, unknown> {
   const existing = parseJsonSafe<Record<string, unknown>>(existingJson, {});
   const custom = Object.fromEntries(
-    Object.entries(input.settings ?? {}).filter(([key]) => isAdminEventCustomSettingKey(key)),
+    Object.entries(input.settings ?? {}).filter(([key]) => isEventCustomSettingKey(key)),
   );
   const settings = { ...existing, ...custom };
   const assignNullable = (key: string, value: unknown): void => {
@@ -67,17 +76,29 @@ function mergeEventSettings(
   return settings;
 }
 
-export async function updateEventSettings(
+export interface EventSettingsMutationInput {
+  event: EventRecord;
+  actorId: string;
+  settings: Omit<EventSettingsInput, "registrationMode"> & { registrationMode?: string };
+  appBaseUrl: string;
+  allowedHeroImageHosts?: string;
+  expectedUpdatedAt?: string;
+  links?: readonly string[];
+  auditScope?: AuditScope;
+  auditDetails?: unknown;
+  authorizationGuards?: StatementLike[];
+}
+
+/**
+ * Builds the complete local event-settings transition. The caller owns the
+ * batch boundary so group resource management can prepend its live authority
+ * guard to this same transaction.
+ */
+export function buildEventSettingsMutationStatements(
   db: DatabaseLike,
-  input: {
-    eventSlug: string;
-    actorId: string;
-    settings: AdminEventSettingsInput;
-    appBaseUrl: string;
-    allowedHeroImageHosts?: string;
-  },
-) {
-  const event = await getEventBySlug(db, input.eventSlug);
+  input: EventSettingsMutationInput,
+): StatementLike[] {
+  const { event } = input;
   const at = nowIso();
   const mergedSettings = mergeEventSettings(
     event.settings_json,
@@ -86,6 +107,7 @@ export async function updateEventSettings(
     input.allowedHeroImageHosts,
   );
   const statements: StatementLike[] = [
+    ...(input.authorizationGuards ?? []),
     db
       .prepare(
         `UPDATE events
@@ -94,9 +116,10 @@ export async function updateEventSettings(
                 starts_at = IIF(? = 1, starts_at, ?),
                 ends_at = IIF(? = 1, ends_at, ?),
                 registration_mode = COALESCE(?, registration_mode),
+                links_json = IIF(? = 1, ?, links_json),
                 invite_limit_attendee = COALESCE(?, invite_limit_attendee),
                 settings_json = ?, updated_at = ?
-          WHERE id = ?`,
+          WHERE id = ? AND (? IS NULL OR updated_at = ?)`,
       )
       .bind(
         input.settings.name ?? null,
@@ -106,12 +129,31 @@ export async function updateEventSettings(
         input.settings.endsAt === undefined ? 1 : 0,
         input.settings.endsAt ?? null,
         input.settings.registrationMode ?? null,
+        input.links === undefined ? 0 : 1,
+        input.links === undefined ? null : stringifyJson(input.links),
         input.settings.inviteLimitAttendee ?? null,
         stringifyJson(mergedSettings),
         at,
         event.id,
+        input.expectedUpdatedAt ?? null,
+        input.expectedUpdatedAt ?? null,
       ),
   ];
+  if (input.expectedUpdatedAt) {
+    statements.push(
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        input.auditScope ?? { type: "event", id: event.id },
+        "admin",
+        input.actorId,
+        "event_settings_updated",
+        "event",
+        event.id,
+        input.auditDetails ?? input.settings,
+        at,
+      ),
+    );
+  }
   if (input.settings.userRetentionDays !== undefined) {
     statements.push(
       db
@@ -125,10 +167,67 @@ export async function updateEventSettings(
         .bind(event.id, input.settings.userRetentionDays, at),
     );
   }
-  statements.push(
-    prepareAuditLog(db, "admin", input.actorId, "event_settings_updated", "event", event.id, input.settings, at),
-  );
-  await db.batch(statements);
+  if (!input.expectedUpdatedAt) {
+    statements.push(
+      prepareAuditLog(
+        db,
+        "admin",
+        input.actorId,
+        "event_settings_updated",
+        "event",
+        event.id,
+        input.auditDetails ?? input.settings,
+        at,
+        null,
+        input.auditScope,
+      ),
+    );
+  }
+  return statements;
+}
+
+export async function updateEventSettings(
+  db: DatabaseLike,
+  input: {
+    eventSlug: string;
+    actorId: string;
+    settings: EventSettingsInput;
+    appBaseUrl: string;
+    allowedHeroImageHosts?: string;
+  },
+) {
+  const event = await getEventBySlug(db, input.eventSlug);
+  const registrationMutation =
+    Object.prototype.hasOwnProperty.call(input.settings, "registrationMode") ||
+    Object.prototype.hasOwnProperty.call(input.settings, "registrationFormKey");
+  try {
+    await db.batch(
+      buildEventSettingsMutationStatements(db, {
+        event,
+        actorId: input.actorId,
+        settings: input.settings,
+        appBaseUrl: input.appBaseUrl,
+        allowedHeroImageHosts: input.allowedHeroImageHosts,
+        authorizationGuards: registrationMutation
+          ? [
+              prepareAuthorizationGuard(db, {
+                sql: "SELECT 1 FROM events WHERE id = ? AND COALESCE(source_mode, '') <> 'portal'",
+                bindings: [event.id],
+              }),
+            ]
+          : undefined,
+      }),
+    );
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        403,
+        "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP",
+        "Registration policy and attendee forms for portal-owned events must be managed from the owning group.",
+      );
+    }
+    throw error;
+  }
 
   // Return the same normalized projection as the admin detail GET route. This
   // keeps PATCH consumers on one response contract instead of exposing the

@@ -215,6 +215,7 @@ export const adminFormPatchRouteSchema = {
     },
     "400": { description: "Invalid form payload." },
     "401": { description: "Admin authorization required." },
+    "403": { description: "Group-owned forms must be managed from the owning group context." },
     "404": { description: "Form not found." },
   },
 };
@@ -230,6 +231,7 @@ export const adminFormDeleteRouteSchema = {
   responses: {
     "200": { description: "Form deleted or archived successfully." },
     "401": { description: "Admin authorization required." },
+    "403": { description: "Group-owned forms must be managed from the owning group context." },
     "404": { description: "Form not found." },
   },
 };

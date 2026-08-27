@@ -11,8 +11,9 @@ import { requireGroupManagementActor, requireGroupResourceContext } from "../../
 
 export const GroupVoteBallotAuditGet = openApiRoute(groupVoteBallotsAuditRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const { group, viewer } = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
-  const actor = requireGroupManagementActor(viewer);
+  const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+  const { group } = context;
+  const actor = requireGroupManagementActor(context);
   await requireVoteManagementAccess(db, actor, data.params.voteId, group.id);
   return json(
     groupVoteBallotsAuditResponseSchema.parse(

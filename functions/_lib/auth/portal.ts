@@ -4,9 +4,9 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
-import { requireUserBackedAdminFromRequest } from "./admin";
+import { requireUserBackedAdminFromRequest, staffSignInAuthorizationEvidence } from "./admin";
 import { publicAuthAdmin } from "./admin-identity";
-import { requireMemberFromRequest } from "./member";
+import { memberSignInAuthorizationEvidence, requireMemberFromRequest } from "./member";
 import {
   prepareIdentityCapacitySessions,
   resolveIdentityCapacities,
@@ -14,22 +14,13 @@ import {
   type PreparedCapacitySession,
 } from "./identity-capacities";
 import {
-  AUTH_MAGIC_LINK_PURPOSES,
-  fetchMagicLinkRowByToken,
-  prepareConsumeMagicLinkStatement,
-  prepareMagicLinkRow,
-  validateMagicLinkRow,
-  type MagicLinkTableConfig,
-} from "./session-engine";
+  assertEmailAuthCapabilityEmail,
+  commitEmailAuthRedemption,
+  queueEmailAuthCapability,
+  verifyEmailAuthCapabilityToken,
+} from "./email-auth-capabilities";
 import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
 import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../services/audit";
-
-const PORTAL_MAGIC_LINKS = {
-  table: "auth_magic_links",
-  subjectColumn: "user_id",
-  purpose: AUTH_MAGIC_LINK_PURPOSES.portal,
-} satisfies MagicLinkTableConfig;
 export interface PortalSessionResult {
   identity: IdentityCapacity;
   admin?: UserBackedAuthAdmin;
@@ -42,14 +33,19 @@ export interface PortalSessionEstablishedResult extends PortalSessionResult {
   memberSession?: PreparedCapacitySession<AuthMember>;
 }
 
-export async function preparePortalMagicLink(
+export async function queuePortalSignInCapability(
   db: DatabaseLike,
-  payload: { email: string; ttlMinutes: number; ipHash?: string | null; userAgentHash?: string | null },
+  payload: {
+    email: string;
+    ttlMinutes: number;
+    signingSecret: string;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+  },
 ): Promise<{
-  token: string;
+  queuedToken: string;
   identity: IdentityCapacity;
   capacities: Array<"admin" | "member">;
-  statement: StatementLike;
 } | null> {
   const identity = await first<IdentityCapacity>(
     db,
@@ -59,67 +55,82 @@ export async function preparePortalMagicLink(
   if (!identity) return null;
   const resolved = await resolveIdentityCapacities(db, identity.id);
   if (!resolved) return null;
-  const magic = await prepareMagicLinkRow(db, PORTAL_MAGIC_LINKS, identity.id, payload);
+  const magic = await queueEmailAuthCapability({
+    signingSecret: payload.signingSecret,
+    purpose: "portal_sign_in",
+    subjectId: identity.id,
+    email: identity.email,
+    ttlSeconds: payload.ttlMinutes * 60,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
   return {
-    token: magic.token,
+    queuedToken: magic.queuedToken,
     identity: resolved.identity,
     capacities: [...(resolved.staff ? (["admin"] as const) : []), ...(resolved.member ? (["member"] as const) : [])],
-    statement: magic.statement,
   };
 }
 
-export async function verifyPortalMagicLink(
+export async function redeemPortalSignInCapability(
   db: DatabaseLike,
   env: Pick<Env, "MEMBER_SESSION_TTL_HOURS">,
-  payload: { token: string; ipHash?: string | null; userAgentHash?: string | null },
+  payload: { token: string; signingSecret: string; ipHash?: string | null; userAgentHash?: string | null },
 ): Promise<PortalSessionEstablishedResult> {
-  const row = await fetchMagicLinkRowByToken(db, PORTAL_MAGIC_LINKS, payload.token);
-  if (!row) throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid portal magic link token");
-  validateMagicLinkRow(row, payload);
+  const capability = await verifyEmailAuthCapabilityToken({
+    signingSecret: payload.signingSecret,
+    purpose: "portal_sign_in",
+    token: payload.token,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
 
-  const resolved = await resolveIdentityCapacities(db, row.subjectId);
+  const resolved = await resolveIdentityCapacities(db, capability.subjectId);
   if (!resolved) throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has portal access");
+  await assertEmailAuthCapabilityEmail({
+    signingSecret: payload.signingSecret,
+    capability,
+    currentEmail: resolved.identity.email,
+  });
   const sessions = await prepareIdentityCapacitySessions(db, resolved, env.MEMBER_SESSION_TTL_HOURS);
   const verifiedAt = nowIso();
   const capacities: Array<"admin" | "member"> = [
     ...(sessions.admin ? (["admin"] as const) : []),
     ...(sessions.member ? (["member"] as const) : []),
   ];
+  const normalizedEmail = normalizeEmail(resolved.identity.email);
+  const authorizationEvidence = [
+    ...(sessions.admin ? [staffSignInAuthorizationEvidence(resolved.identity.id, normalizedEmail)] : []),
+    ...(sessions.member ? [memberSignInAuthorizationEvidence(resolved.identity.id, normalizedEmail)] : []),
+  ];
 
-  try {
-    await db.batch([
-      prepareConsumeMagicLinkStatement(db, PORTAL_MAGIC_LINKS.table, row.id),
-      prepareAuditLogAfterOneChange(
-        db,
-        "user",
-        resolved.identity.id,
-        "portal_magic_link_verified",
-        "identity_session",
-        (sessions.admin ?? sessions.member)!.sessionId,
-        { capacities, expiresAt: sessions.expiresAt },
-        verifiedAt,
-      ),
+  await commitEmailAuthRedemption(db, {
+    purpose: "portal_sign_in",
+    capabilityId: capability.capabilityId,
+    actorType: "user",
+    actorId: resolved.identity.id,
+    action: "portal_magic_link_verified",
+    entityType: "identity_session",
+    entityId: (sessions.admin ?? sessions.member)!.sessionId,
+    details: { capacities, expiresAt: sessions.expiresAt },
+    createdAt: verifiedAt,
+    authorizationEvidence,
+    statements: [
       prepareVerifyPrimaryEmailStatement(db, {
         userId: resolved.identity.id,
-        normalizedEmail: normalizeEmail(resolved.identity.email),
+        normalizedEmail,
         method: "magic_link",
         verifiedAt,
       }),
       ...(await prepareVerifiedDomainAssociationStatements(db, {
         userId: resolved.identity.id,
-        normalizedEmail: normalizeEmail(resolved.identity.email),
+        normalizedEmail,
         at: verifiedAt,
       })),
       ...[sessions.admin?.statement, sessions.member?.statement].filter((statement): statement is StatementLike =>
         Boolean(statement),
       ),
-    ]);
-  } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
-      throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-    }
-    throw error;
-  }
+    ],
+  });
 
   return {
     identity: resolved.identity,

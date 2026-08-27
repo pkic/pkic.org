@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   eventIdSchema,
   eventSlugParamsSchema,
@@ -10,42 +9,52 @@ import {
   trimmedString,
   versionPattern,
 } from "./api-common";
+import { z } from "zod";
+import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
+import { attendanceTypeSchema } from "./registration";
+import { eventSourceModeSchema } from "./event-series";
+import { groupIdSchema } from "./groups";
+import { EVENT_PROPOSALS_SORT_COLUMNS, eventProposalsListQuerySchema } from "./event-proposals";
 import {
-  listQuerySchema,
-  paginatedResponseSchema,
-  searchableListQuerySchema,
-  sortColumnSchema,
-  sortColumnSchemaWithDefault,
-} from "./pagination";
-import { attendanceTypeSchema, dayDateSchema, inviteeSchema } from "./registration";
-import { sourceTypeSchema } from "./source";
-import { addDuplicateStringIssues } from "./refinements";
-import { proposalRecommendationSchema } from "./proposal-reviews";
-import { proposalAdminStatusFilterSchema } from "./proposal-status";
-import { proposalSessionTypesSchema } from "./proposal-management";
-import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
-import { adminRegistrationRecordContextSchema } from "./admin-registration-detail";
-import { eventSummarySchema } from "./event-read-models";
+  attendeeInviteLimitSchema,
+  eventCreateSchema,
+  eventCustomSettingsSchema,
+  eventSettingsSchema,
+  isEventCustomSettingKey,
+  type EventCreateInput,
+  type EventSettingsInput,
+} from "./event-management";
+import {
+  EVENT_REGISTRATIONS_SORT_COLUMNS,
+  EVENT_REGISTRATION_STATUSES,
+  EVENT_REGISTRATION_STATUS_FILTERS,
+  EVENT_REGISTRATION_STATUS_LABELS,
+  booleanQueryValueSchema,
+  eventRegistrationAttendanceChangeFilterSchema,
+  eventRegistrationAttendanceChangeSchema,
+  eventRegistrationStatusFilterSchema,
+  eventRegistrationStatusLabel,
+  eventRegistrationStatusSchema,
+  eventRegistrationSummarySchema,
+  eventRegistrationsListResponseSchema,
+  eventRegistrationsQuerySchema,
+  eventRegistrationsStatsSchema,
+  type EventRegistrationAttendanceChange,
+  type EventRegistrationStatus,
+  type EventRegistrationStatusFilter,
+  type EventRegistrationSummary,
+  type EventRegistrationsListResponse,
+  type EventRegistrationsQuery,
+  type EventRegistrationsStats,
+} from "./event-registrations";
+import { eventRegistrationAdmitSchema } from "./event-registration-detail";
 
-export const EVENT_PROPOSALS_SORT_COLUMNS = [
-  "submittedAt",
-  "score",
-  "reviews",
-  "title",
-  "proposer",
-  "type",
-  "status",
-  "decision",
-  "recommendations",
-] as const;
-
-export const adminEventProposalsQuerySchema = listQuerySchema(EVENT_PROPOSALS_SORT_COLUMNS).extend({
-  sort: sortColumnSchemaWithDefault(EVENT_PROPOSALS_SORT_COLUMNS, "-submittedAt"),
-  status: proposalAdminStatusFilterSchema.optional(),
-  recommendation: proposalRecommendationSchema.optional(),
+/** Legacy admin-only extension for auditing soft-deleted proposal records. */
+export const adminEventProposalsQuerySchema = eventProposalsListQuerySchema.extend({
   deleted: z.literal("1").optional(),
 });
 export type AdminEventProposalsQuery = z.infer<typeof adminEventProposalsQuerySchema>;
+export { EVENT_PROPOSALS_SORT_COLUMNS };
 
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
 export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
@@ -81,6 +90,9 @@ export const adminEventDetailSchema = z.object({
   hero_image_url: z.string().nullable(),
   location: z.string().nullable(),
   session_types: z.array(z.object({ label: z.string(), requiresPresentation: z.boolean() })).nullable(),
+  /** Source and ownership determine which portal or admin surface owns authoring. */
+  ownerGroupId: groupIdSchema.nullable().default(null),
+  sourceMode: eventSourceModeSchema.nullable().default(null),
   settings: z.record(z.string(), z.unknown()),
 });
 export type AdminEventDetail = z.infer<typeof adminEventDetailSchema>;
@@ -137,107 +149,53 @@ export const adminEventTeamPermissionCreateResponseSchema = z.object({
   }),
 });
 
-export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "attendance_type", "created_at"] as const;
-export const ADMIN_EVENT_REGISTRATION_STATUSES = ["registered", "pending_email_confirmation", "cancelled"] as const;
-export const ADMIN_EVENT_REGISTRATION_STATUS_FILTERS = ["all", ...ADMIN_EVENT_REGISTRATION_STATUSES] as const;
-export const ADMIN_EVENT_REGISTRATION_STATUS_LABELS: Record<AdminEventRegistrationStatus, string> = {
-  pending_email_confirmation: "Pending confirmation",
-  registered: "Registered",
-  cancelled: "Cancelled",
+/** @deprecated Import from event-registrations instead. */
+export {
+  EVENT_REGISTRATIONS_SORT_COLUMNS,
+  booleanQueryValueSchema,
+  eventRegistrationSummarySchema,
+  eventRegistrationsListResponseSchema,
+  eventRegistrationsQuerySchema,
+  eventRegistrationsStatsSchema,
 };
-export const adminEventRegistrationStatusSchema = z.enum(ADMIN_EVENT_REGISTRATION_STATUSES);
-export type AdminEventRegistrationStatus = z.infer<typeof adminEventRegistrationStatusSchema>;
-export const adminEventRegistrationStatusFilterSchema = z.enum(ADMIN_EVENT_REGISTRATION_STATUS_FILTERS);
-export type AdminEventRegistrationStatusFilter = z.infer<typeof adminEventRegistrationStatusFilterSchema>;
-export function adminEventRegistrationStatusLabel(status: AdminEventRegistrationStatus): string {
-  return ADMIN_EVENT_REGISTRATION_STATUS_LABELS[status];
-}
-export const adminEventAttendanceChangeSchema = z.enum(["any", "left_in_person", "joined_in_person"]);
-export const booleanQueryValueSchema = z.enum(["true", "false"]);
-export const adminEventRegistrationsQuerySchema = searchableListQuerySchema(
-  sortColumnSchema(EVENT_REGISTRATIONS_SORT_COLUMNS),
-).extend({
-  status: adminEventRegistrationStatusSchema.optional(),
-  bounced: booleanQueryValueSchema.optional(),
-  consent: booleanQueryValueSchema.optional(),
-  attendance_change: adminEventAttendanceChangeSchema.optional(),
-});
-export type AdminEventRegistrationsQuery = z.infer<typeof adminEventRegistrationsQuerySchema>;
-
-export const adminEventRegistrationAttendanceChangeSchema = z.object({
-  changedAt: z.string(),
-  transitions: z.array(
-    z.object({
-      fromType: z.string(),
-      toType: z.string(),
-      days: z.array(z.object({ dayDate: z.string(), label: z.string().nullable() })),
-    }),
-  ),
-});
-export type AdminEventRegistrationAttendanceChange = z.infer<typeof adminEventRegistrationAttendanceChangeSchema>;
-export const adminEventRegistrationSummarySchema = adminRegistrationRecordContextSchema.extend({
-  id: z.string(),
-  user_id: z.string(),
-  status: adminEventRegistrationStatusSchema,
-  attendance_type: z.string().nullable(),
-  source_type: z.string().nullable(),
-  rsvp_events_json: z.string().nullable(),
-  has_bounced: z.boolean(),
-  sponsor_consent: z.boolean(),
-  custom_answers_json: z.string().nullable(),
-  dayWaitlistSummary: z.string().nullable(),
-  dayWaitlistCount: z.number(),
-  attendanceChangeHistory: z.array(adminEventRegistrationAttendanceChangeSchema),
-  lastAttendanceChange: adminEventRegistrationAttendanceChangeSchema.nullable(),
-});
-export type AdminEventRegistrationSummary = z.infer<typeof adminEventRegistrationSummarySchema>;
-export const adminEventRegistrationsStatsSchema = z.object({
-  byAttendanceType: z.record(z.string(), z.number()),
-  attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
-  byStatus: z.record(z.string(), z.number()),
-  bouncedCount: z.number(),
-  consentCount: z.number(),
-});
-export type AdminEventRegistrationsStats = z.infer<typeof adminEventRegistrationsStatsSchema>;
-export const adminEventRegistrationsListResponseSchema = paginatedResponseSchema(
-  "registrations",
-  adminEventRegistrationSummarySchema,
-).extend({
-  event: eventSummarySchema,
-  stats: adminEventRegistrationsStatsSchema,
-});
-export type AdminEventRegistrationsListResponse = z.infer<typeof adminEventRegistrationsListResponseSchema>;
-
-export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
-export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
-export const adminEventInvitesListQuerySchema = searchableListQuerySchema(eventInvitesSortValueSchema).extend({
-  status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]).optional(),
-  type: z.enum(["attendee", "speaker"]).optional(),
-});
-export type AdminEventInvitesListQuery = z.infer<typeof adminEventInvitesListQuerySchema>;
-export const adminEventInviteSummarySchema = z.object({
-  id: z.string(),
-  invitee_email: z.string(),
-  invitee_first_name: z.string().nullable(),
-  invitee_last_name: z.string().nullable(),
-  invite_type: z.string(),
-  status: z.string(),
-  decline_reason_code: z.string().nullable(),
-  decline_reason_note: z.string().nullable(),
-  unsubscribe_future: z.number(),
-  reminder_count: z.number(),
-  source_type: z.string(),
-  expires_at: z.string().nullable(),
-  accepted_at: z.string().nullable(),
-  declined_at: z.string().nullable(),
-  created_at: z.string(),
-  inviter_user_id: z.string().nullable(),
-  inviter_email: z.string().nullable(),
-  inviter_first_name: z.string().nullable(),
-  inviter_last_name: z.string().nullable(),
-});
-export type AdminEventInviteSummary = z.infer<typeof adminEventInviteSummarySchema>;
-export const adminEventInvitesListResponseSchema = paginatedResponseSchema("invites", adminEventInviteSummarySchema);
+/** @deprecated Import from event-registrations instead. */
+export type {
+  EventRegistrationSummary,
+  EventRegistrationsListResponse,
+  EventRegistrationsQuery,
+  EventRegistrationsStats,
+};
+/** @deprecated Use eventRegistrationStatusSchema from event-registrations. */
+export const adminEventRegistrationStatusSchema = eventRegistrationStatusSchema;
+export type AdminEventRegistrationStatus = EventRegistrationStatus;
+/** @deprecated Use eventRegistrationStatusFilterSchema from event-registrations. */
+export const adminEventRegistrationStatusFilterSchema = eventRegistrationStatusFilterSchema;
+export type AdminEventRegistrationStatusFilter = EventRegistrationStatusFilter;
+/** @deprecated Use eventRegistrationStatusLabel from event-registrations. */
+export const adminEventRegistrationStatusLabel = eventRegistrationStatusLabel;
+/** @deprecated Use EVENT_REGISTRATION_STATUSES from event-registrations. */
+export const ADMIN_EVENT_REGISTRATION_STATUSES = EVENT_REGISTRATION_STATUSES;
+/** @deprecated Use EVENT_REGISTRATION_STATUS_FILTERS from event-registrations. */
+export const ADMIN_EVENT_REGISTRATION_STATUS_FILTERS = EVENT_REGISTRATION_STATUS_FILTERS;
+/** @deprecated Use EVENT_REGISTRATION_STATUS_LABELS from event-registrations. */
+export const ADMIN_EVENT_REGISTRATION_STATUS_LABELS = EVENT_REGISTRATION_STATUS_LABELS;
+/** @deprecated Use eventRegistrationAttendanceChangeFilterSchema from event-registrations. */
+export const adminEventAttendanceChangeSchema = eventRegistrationAttendanceChangeFilterSchema;
+/** @deprecated Use eventRegistrationAttendanceChangeSchema from event-registrations. */
+export const adminEventRegistrationAttendanceChangeSchema = eventRegistrationAttendanceChangeSchema;
+export type AdminEventRegistrationAttendanceChange = EventRegistrationAttendanceChange;
+/** @deprecated Use eventRegistrationsQuerySchema from event-registrations. */
+export const adminEventRegistrationsQuerySchema = eventRegistrationsQuerySchema;
+export type AdminEventRegistrationsQuery = EventRegistrationsQuery;
+/** @deprecated Use eventRegistrationSummarySchema from event-registrations. */
+export const adminEventRegistrationSummarySchema = eventRegistrationSummarySchema;
+export type AdminEventRegistrationSummary = EventRegistrationSummary;
+/** @deprecated Use eventRegistrationsStatsSchema from event-registrations. */
+export const adminEventRegistrationsStatsSchema = eventRegistrationsStatsSchema;
+export type AdminEventRegistrationsStats = EventRegistrationsStats;
+/** @deprecated Use eventRegistrationsListResponseSchema from event-registrations. */
+export const adminEventRegistrationsListResponseSchema = eventRegistrationsListResponseSchema;
+export type AdminEventRegistrationsListResponse = EventRegistrationsListResponse;
 
 export const eventPresentationArchiveQuerySchema = z.object({
   versions: z.literal("all").optional(),
@@ -278,7 +236,7 @@ export const adminEventSyncSchema = z.object({
     startsAt: z.iso.datetime().optional(),
     endsAt: z.iso.datetime().optional(),
     registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
-    inviteLimitAttendee: z.number().int().positive().max(50).optional(),
+    inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
     frontend: z.object({ routes: frontendRoutesSchema }).optional(),
     settings: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
   }),
@@ -291,196 +249,19 @@ export const adminEventSyncSchema = z.object({
 });
 export type AdminEventSyncInput = z.infer<typeof adminEventSyncSchema>;
 
-export const ADMIN_EVENT_MANAGED_SETTING_KEYS = [
-  "forms",
-  "heroImageUrl",
-  "location",
-  "proposal",
-  "venue",
-  "virtualUrl",
-] as const;
-const adminEventManagedSettingKeySet = new Set<string>(ADMIN_EVENT_MANAGED_SETTING_KEYS);
-const unsafeObjectKeys = new Set(["__proto__", "constructor", "prototype"]);
+/** @deprecated Import from event-management instead. */
+export { eventCreateSchema, eventCustomSettingsSchema, eventSettingsSchema, isEventCustomSettingKey };
+/** @deprecated Import from event-management instead. */
+export type { EventCreateInput, EventSettingsInput };
+/** @deprecated Use the event-management module instead. */
+export const adminEventSettingsSchema = eventSettingsSchema;
+/** @deprecated Use EventSettingsInput from event-management. */
+export type AdminEventSettingsInput = EventSettingsInput;
+/** @deprecated Use isEventCustomSettingKey from event-management. */
+export const isAdminEventCustomSettingKey = isEventCustomSettingKey;
+/** @deprecated Use eventCustomSettingsSchema from event-management. */
+export const adminEventCustomSettingsSchema = eventCustomSettingsSchema;
 
-export function isAdminEventCustomSettingKey(key: string): boolean {
-  return !adminEventManagedSettingKeySet.has(key) && !unsafeObjectKeys.has(key);
-}
-
-export const adminEventCustomSettingsSchema = z
-  .record(z.string().trim().min(1).max(80), z.unknown())
-  .refine((settings) => Object.keys(settings).length <= 100, "At most 100 custom settings are allowed")
-  .superRefine((settings, ctx) => {
-    for (const key of Object.keys(settings)) {
-      if (!isAdminEventCustomSettingKey(key)) {
-        ctx.addIssue({ code: "custom", path: [key], message: `'${key}' is managed by a dedicated event setting` });
-      }
-    }
-  });
-
-export const adminEventSettingsSchema = z.object({
-  name: trimmedString(3, 180).optional(),
-  timezone: trimmedString(2, 64).optional(),
-  startsAt: z.iso.datetime().nullable().optional(),
-  endsAt: z.iso.datetime().nullable().optional(),
-  venue: trimmedString(2, 500).nullable().optional(),
-  virtualUrl: httpUrlSchema.nullable().optional(),
-  heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
-  location: trimmedString(2, 200).nullable().optional(),
-  sessionTypes: proposalSessionTypesSchema.nullable().optional(),
-  registrationFormKey: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z][a-z0-9-]*$/)
-    .nullable()
-    .optional(),
-  proposalFormKey: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z][a-z0-9-]*$/)
-    .nullable()
-    .optional(),
-  registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
-  inviteLimitAttendee: z.number().int().positive().max(50).optional(),
-  settings: adminEventCustomSettingsSchema.optional(),
-  userRetentionDays: z.number().int().positive().max(3650).optional(),
-});
-export type AdminEventSettingsInput = z.infer<typeof adminEventSettingsSchema>;
-
-export const adminEventTermInputSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
-  version: z.string().trim().regex(versionPattern),
-  required: z.boolean().default(true),
-  contentRef: trimmedString(1, 500).optional(),
-  displayText: trimmedString(3, 4000),
-  helpText: trimmedString(3, 2000).optional(),
-});
-
-export const adminEventTermsReplaceSchema = z
-  .object({
-    attendee: z.array(adminEventTermInputSchema).max(40).default([]),
-    speaker: z.array(adminEventTermInputSchema).max(40).default([]),
-    presentation: z.array(adminEventTermInputSchema).max(40).default([]),
-  })
-  .superRefine((value, ctx) => {
-    for (const audience of ["attendee", "speaker", "presentation"] as const) {
-      addDuplicateStringIssues(value[audience], ctx, {
-        value: (term) => `${term.termKey}:${term.version}`,
-        path: (index) => [audience, index, "termKey"],
-        label: "Term version",
-      });
-    }
-  });
-
-export const adminAttendanceOptionSchema = z.object({
-  value: z
-    .string()
-    .trim()
-    .min(1)
-    .max(64)
-    .regex(/^[a-z_][a-z0-9_]*$/),
-  label: trimmedString(1, 80),
-  capacity: z.number().int().positive().nullable().optional(),
-});
-
-export const adminEventDayInputSchema = z
-  .object({
-    date: z
-      .string()
-      .trim()
-      .regex(/^\d{4}-\d{2}-\d{2}$/),
-    label: trimmedString(1, 200).optional(),
-    startTime: z
-      .string()
-      .trim()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-      .optional(),
-    endTime: z
-      .string()
-      .trim()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-      .optional(),
-    sortOrder: z.number().int().min(0).max(9999).optional(),
-    attendanceOptions: z.array(adminAttendanceOptionSchema).max(20).default([]),
-  })
-  .superRefine((value, ctx) => {
-    addDuplicateStringIssues(value.attendanceOptions, ctx, {
-      value: (option) => option.value,
-      path: (index) => ["attendanceOptions", index, "value"],
-      label: "Attendance option",
-    });
-  });
-
-export const adminEventDaysReplaceSchema = z
-  .object({ days: z.array(adminEventDayInputSchema).max(31) })
-  .superRefine((value, ctx) => {
-    addDuplicateStringIssues(value.days, ctx, {
-      value: (day) => day.date,
-      path: (index) => ["days", index, "date"],
-      label: "Event day",
-    });
-  });
-
-export const adminEventDaysResponseSchema = z.object({
-  days: z.array(
-    z.object({
-      id: z.string(),
-      date: z.string(),
-      label: z.string().nullable(),
-      startsAt: z.string().nullable(),
-      endsAt: z.string().nullable(),
-      sortOrder: z.number(),
-      attendanceOptions: z.array(adminAttendanceOptionSchema),
-      attendanceCounts: z.record(z.string(), z.number()),
-    }),
-  ),
-});
-export const adminEventDaysReplaceResponseSchema = successResponseSchema
-  .extend(adminEventDaysResponseSchema.shape)
-  .extend({ skipped: z.array(z.string()) });
-export const adminEventTermsResponseSchema = z.object({
-  terms: z.object({
-    attendee: z.array(
-      z.object({
-        id: z.string(),
-        audience_type: z.string(),
-        term_key: z.string(),
-        version: z.string(),
-        required: z.number(),
-        content_ref: z.string().nullable(),
-        display_text: z.string().nullable(),
-        help_text: z.string().nullable(),
-      }),
-    ),
-    speaker: z.array(
-      z.object({
-        id: z.string(),
-        audience_type: z.string(),
-        term_key: z.string(),
-        version: z.string(),
-        required: z.number(),
-        content_ref: z.string().nullable(),
-        display_text: z.string().nullable(),
-        help_text: z.string().nullable(),
-      }),
-    ),
-    presentation: z.array(
-      z.object({
-        id: z.string(),
-        audience_type: z.string(),
-        term_key: z.string(),
-        version: z.string(),
-        required: z.number(),
-        content_ref: z.string().nullable(),
-        display_text: z.string().nullable(),
-        help_text: z.string().nullable(),
-      }),
-    ),
-  }),
-});
 export const adminEventEmailPreviewResponseSchema = z.object({
   subject: z.string(),
   html: z.string(),
@@ -492,28 +273,14 @@ export const adminEventEmailSendResponseSchema = z.object({
   queuedRecipients: z.number().optional(),
   queuedBatches: z.number().optional(),
 });
-export const adminInvitePreviewResponseSchema = z.object({
-  subject: z.string(),
-  html: z.string(),
-  text: z.string(),
-  previewToken: z.string(),
-  inviteDigest: z.string(),
-});
+/** @deprecated Import from event-invite-bulk instead. */
+export { eventInvitePreviewSchema as adminInvitePreviewResponseSchema } from "./event-invite-bulk";
 export const adminEventSponsorTiersResponseSchema = z.object({
   tiers: z.array(z.object({ tierName: z.string(), hasAttendeeDataAccess: z.boolean() })),
 });
 
-export const adminCreateEventSchema = z.object({
-  slug: z.string().trim().regex(slugPattern),
-  name: trimmedString(3, 180),
-  timezone: trimmedString(2, 64).default("UTC"),
-  startsAt: z.iso.datetime().nullable().optional(),
-  endsAt: z.iso.datetime().nullable().optional(),
-  registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).default("invite_or_open"),
-  inviteLimitAttendee: z.number().int().positive().max(50).default(5),
-  venue: trimmedString(2, 500).nullable().optional(),
-  virtualUrl: httpUrlSchema.nullable().optional(),
-});
+/** @deprecated Use the domain-neutral eventCreateSchema. */
+export const adminCreateEventSchema = eventCreateSchema;
 
 export const adminEventPermissionSchema = z.object({
   userEmail: z.email().trim().toLowerCase(),
@@ -521,48 +288,20 @@ export const adminEventPermissionSchema = z.object({
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 export type AdminEventPermissionInput = z.infer<typeof adminEventPermissionSchema>;
-const bulkInviteNameSchema = (max: number) => z.string().trim().min(1).max(max).optional();
-const bulkInviteeSchema = inviteeSchema.extend({
-  firstName: bulkInviteNameSchema(80),
-  lastName: bulkInviteNameSchema(120),
-  sourceType: sourceTypeSchema.optional(),
-});
-
-const adminBulkInvitesSchema = z.object({
-  previewToken: z.string().trim().min(16).max(2048),
-  inviteDigest: z.string().max(128).optional(),
-  invites: z.array(bulkInviteeSchema).min(1).max(2000),
-});
-
-const adminBulkInvitesPreviewSchema = z.object({
-  invites: z.array(bulkInviteeSchema).min(1).max(50000),
-});
-
-export const adminBulkAttendeeInvitesSchema = adminBulkInvitesSchema;
-export const adminBulkSpeakerInvitesSchema = adminBulkInvitesSchema;
-export const adminBulkAttendeeInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
-export const adminBulkSpeakerInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
-const adminBulkInviteResultSchema = z.object({ email: z.email() });
-export const adminBulkInviteResponseSchema = successResponseSchema.extend({
-  created: z.array(adminBulkInviteResultSchema),
-  endorsed: z.array(adminBulkInviteResultSchema),
-  skipped: z.array(adminBulkInviteResultSchema),
-});
+/** @deprecated Import from event-invite-bulk instead. */
+export {
+  eventBulkAttendeeInvitesPreviewSchema as adminBulkAttendeeInvitesPreviewSchema,
+  eventBulkAttendeeInvitesSchema as adminBulkAttendeeInvitesSchema,
+  eventInviteBulkResponseSchema as adminBulkInviteResponseSchema,
+  eventBulkSpeakerInvitesPreviewSchema as adminBulkSpeakerInvitesPreviewSchema,
+  eventBulkSpeakerInvitesSchema as adminBulkSpeakerInvitesSchema,
+} from "./event-invite-bulk";
 export const adminWaitlistPromotionResponseSchema = successResponseSchema.extend({
   dayRegistrationOffers: z.number().int().nonnegative(),
   affectedRegistrations: z.array(z.string()),
 });
-export const adminRegistrationAdmitSchema = z.object({
-  mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
-  reason: trimmedString(3, 1000),
-  dayDates: z.array(dayDateSchema).min(1).max(31).optional(),
-});
-
-export const adminManageDayAttendanceSchema = z.object({
-  action: z.enum(["in_person", "virtual", "on_demand", "remove", "waitlist"]),
-  dayDates: z.array(dayDateSchema).min(1).max(31),
-});
-export type AdminManageDayAttendanceInput = z.infer<typeof adminManageDayAttendanceSchema>;
+/** @deprecated Use eventRegistrationAdmitSchema from event-registration-detail. */
+export const adminRegistrationAdmitSchema = eventRegistrationAdmitSchema;
 
 const campaignFilterSchema = z.object({
   audience: z.enum(["attendees", "speakers"]),

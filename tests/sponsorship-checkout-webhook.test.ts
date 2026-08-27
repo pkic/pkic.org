@@ -143,6 +143,10 @@ describe("POST /api/v1/sponsorship/checkout/webhook", () => {
       "<!doctype html><html><body>{{{body_html}}}</body></html>",
     );
 
+    expect(JSON.parse(outbox!.payload_json)).toMatchObject({
+      adminUrl: "https://app.test/admin/#/sponsorships",
+    });
+
     expect(rendered.text).toContain("attacker.invalid");
     expect(rendered.html).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
   });

@@ -1,7 +1,7 @@
 {{/*
   wg/chairs-og-card.html — mount point for the client-fetched WG chair/vice-chair
   panel on the Puppeteer-rendered OG card (all.og-card.html). Same public
-  GET /api/v1/working-groups/:slug endpoint as wg/chairs-app.html's sidebar
+  GET /api/v1/groups/:slug/directory endpoint as wg/chairs-app.html's sidebar
   widget, rendered in "card" mode (full person-card markup, sized like
   person-card.html's "sm") instead of the sidebar's compact rows. Starts
   hidden — functions/api/v1/og/card/[...path].ts's `waitUntil: networkidle0`

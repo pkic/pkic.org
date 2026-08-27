@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_EVENT_REGISTRATION_STATUSES,
   adminEventCampaignPreviewSchema,
-  adminManageDayAttendanceSchema,
   adminEventRegistrationStatusSchema,
   adminEventRegistrationsQuerySchema,
 } from "../assets/shared/schemas/admin-events";
+import { eventRegistrationDayAttendanceChangeSchema } from "../assets/shared/schemas/event-registration-detail";
 import {
   ADMIN_REGISTRATION_FORCE_STATUSES,
   adminRegistrationUpdateSchema,
@@ -43,7 +43,7 @@ describe("admin registration status policy", () => {
         },
       }).success,
     ).toBe(true);
-    expect(adminManageDayAttendanceSchema.parse({ action: "waitlist", dayDates: ["2026-12-01"] })).toEqual({
+    expect(eventRegistrationDayAttendanceChangeSchema.parse({ action: "waitlist", dayDates: ["2026-12-01"] })).toEqual({
       action: "waitlist",
       dayDates: ["2026-12-01"],
     });

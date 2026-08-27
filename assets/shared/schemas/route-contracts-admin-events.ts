@@ -5,9 +5,6 @@ import {
   adminBulkInviteResponseSchema,
   adminBulkSpeakerInvitesSchema,
   adminEventCreateResponseSchema,
-  adminEventDaysReplaceResponseSchema,
-  adminEventDaysReplaceSchema,
-  adminEventDaysResponseSchema,
   adminEventPermissionSchema,
   adminEventTeamListQuerySchema,
   adminEventTeamListResponseSchema,
@@ -15,14 +12,19 @@ import {
   adminEventSettingsSchema,
   adminEventSyncSchema,
   adminEventDetailResponseSchema,
-  adminEventTermsReplaceSchema,
-  adminEventTermsResponseSchema,
   adminEventUpdateResponseSchema,
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
+import { eventDaysResponseSchema } from "./event-configuration";
 import { adminEventStatsResponseSchema } from "./admin-analytics";
 import { databaseIdSchema } from "./identifiers";
 import { z } from "zod";
+import {
+  adminEventSpeakerInvitesListQuerySchema,
+  eventInviteResendSchema,
+  eventInviteResendResponseSchema,
+  eventInvitesListResponseSchema,
+} from "./event-invites";
 
 const adminEventSyncEventSchema = z.object({
   id: z.string(),
@@ -77,38 +79,7 @@ export const adminEventSettingsPatchRouteSchema = {
     },
     "400": { description: "Invalid event settings payload." },
     "401": { description: "Admin authorization required." },
-    "404": { description: "Event not found." },
-  },
-};
-
-export const adminEventTermsGetRouteSchema = {
-  tags: ["Admin events"],
-  summary: "List configured event terms",
-  request: { params: eventSlugParamsSchema },
-  responses: {
-    "200": {
-      description: "Active terms grouped by audience.",
-      content: { "application/json": { schema: adminEventTermsResponseSchema } },
-    },
-    "401": { description: "Admin authorization required." },
-    "404": { description: "Event not found." },
-  },
-};
-
-export const adminEventTermsReplaceRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Replace configured event terms",
-  request: {
-    params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminEventTermsReplaceSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Active terms replaced and returned grouped by audience.",
-      content: { "application/json": { schema: adminEventTermsResponseSchema } },
-    },
-    "400": { description: "Invalid or duplicate term configuration." },
-    "401": { description: "Admin authorization required." },
+    "403": { description: "Portal-owned registration settings must be managed from the owning group." },
     "404": { description: "Event not found." },
   },
 };
@@ -150,7 +121,8 @@ export const adminEventStatsRouteSchema = {
   request: { params: eventSlugParamsSchema },
   responses: {
     "200": {
-      description: "Event registration, attendance, waitlist, invitation, proposal, and RSVP statistics.",
+      description:
+        "Event registration, attendance, waitlist, invitation, and RSVP statistics. Proposal totals are included only when the caller also has proposals:read for this event.",
       content: { "application/json": { schema: adminEventStatsResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
@@ -185,30 +157,10 @@ export const adminEventDaysGetRouteSchema = {
   responses: {
     "200": {
       description: "Configured event days.",
-      content: { "application/json": { schema: adminEventDaysResponseSchema } },
+      content: { "application/json": { schema: eventDaysResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
     "403": { description: "Insufficient permission to read this event." },
-    "404": { description: "Event not found." },
-  },
-};
-
-export const adminEventDaysReplaceRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Replace configured event days",
-  description: "Updates matching days in place and removes only unused days omitted from the new configuration.",
-  request: {
-    params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminEventDaysReplaceSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Updated event days and any dates that could not be removed.",
-      content: { "application/json": { schema: adminEventDaysReplaceResponseSchema } },
-    },
-    "400": { description: "Invalid event-day payload." },
-    "401": { description: "Admin authorization required." },
-    "403": { description: "Insufficient permission to update this event." },
     "404": { description: "Event not found." },
   },
 };
@@ -241,10 +193,42 @@ export const adminEventTeamPermissionCreateRouteSchema = {
   },
 };
 
-export const adminEventInviteRevokeRouteSchema = {
+/** Transitional speaker-only lifecycle retained while attendee management moves to groups. */
+export const adminEventSpeakerInvitesListRouteSchema = {
+  tags: ["Admin events", "Invites"],
+  summary: "List speaker invitations for an event (admin)",
+  description: "Lists only speaker invitations; attendee invitation lifecycle is managed in the selected group.",
+  request: { params: eventSlugParamsSchema, query: adminEventSpeakerInvitesListQuerySchema },
+  responses: {
+    "200": {
+      description: "Speaker invitations list.",
+      content: { "application/json": { schema: eventInvitesListResponseSchema } },
+    },
+  },
+};
+
+export const adminEventSpeakerInviteResendRouteSchema = {
+  tags: ["Admin events", "Invites"],
+  summary: "Resend a speaker invitation",
+  description: "Re-queues a speaker invitation; attendee invitation IDs are not addressable through this route.",
+  request: {
+    params: eventSlugParamsSchema.extend({ inviteId: databaseIdSchema }),
+    body: { content: { "application/json": { schema: eventInviteResendSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Speaker invitation resent.",
+      content: { "application/json": { schema: eventInviteResendResponseSchema } },
+    },
+    "404": { description: "Speaker invitation not found for this event." },
+    "409": { description: "Invitation cannot be resent in its current state." },
+  },
+};
+
+export const adminEventSpeakerInviteRevokeRouteSchema = {
   tags: ["Admin events"],
-  summary: "Revoke an event invitation",
-  description: "Revoke a pending invitation before it is accepted.",
+  summary: "Revoke a speaker invitation",
+  description: "Revoke a pending speaker invitation before it is accepted.",
   request: {
     params: eventSlugParamsSchema.extend({ inviteId: databaseIdSchema }),
   },
@@ -253,7 +237,7 @@ export const adminEventInviteRevokeRouteSchema = {
       description: "Invitation revoked.",
       content: { "application/json": { schema: successResponseSchema } },
     },
-    "404": { description: "Invitation not found for this event." },
+    "404": { description: "Speaker invitation not found for this event." },
     "409": { description: "Invitation is no longer pending." },
   },
 };

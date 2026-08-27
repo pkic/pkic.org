@@ -4,7 +4,7 @@ import type {
   registrationCreateSchema,
 } from "../../../../assets/shared/schemas/registration";
 import { AppError } from "../../errors";
-import type { DatabaseLike, Env } from "../../types";
+import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { buildBadgeAttachment } from "../../email/attachments";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../email/outbox";
@@ -17,6 +17,7 @@ import { buildEventEmailVariables, getEventBySlug, updateEventBasePath } from ".
 import { registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
+import type { EventFormResolution } from "../forms";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
@@ -45,6 +46,8 @@ export interface EventRegistrationSubmissionMetadata {
   signingSecret: string;
   config: PublicRegistrationSubmissionConfig;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
+  authorizationGuards?: readonly StatementLike[];
+  formResolution?: EventFormResolution;
 }
 
 function requireRegistrationPolicy(
@@ -115,6 +118,8 @@ export async function submitEventRegistration(
     signingSecret: metadata.signingSecret,
     confirmationTtlHours: metadata.config.confirmationLinkTtlHours,
     referralCodeLength: metadata.config.referralCodeLength,
+    authorizationGuards: metadata.authorizationGuards,
+    formResolution: metadata.formResolution,
     verifiedIdentity: metadata.verifiedIdentity,
   });
   const { user, referralCode } = prepared;

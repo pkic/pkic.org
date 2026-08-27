@@ -17,7 +17,11 @@ import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { runReminderCycle } from "../functions/_lib/services/reminders";
+import { runInviteReminders } from "../functions/_lib/services/reminders/invite-reminders";
 import type { Env } from "../functions/_lib/types";
+import { listDueWork } from "../functions/_lib/services/due-work-read-model";
+import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";
+import { renderEmail } from "../functions/_lib/email/render";
 
 const db = (env as unknown as Env).DB;
 
@@ -269,8 +273,50 @@ describe("runReminderCycle", () => {
       "SELECT payload_json FROM email_outbox WHERE template_key = 'attendee_invite'",
     );
     expect(outbox).toHaveLength(1);
-    const payload = JSON.parse(outbox[0].payload_json) as Record<string, string>;
-    expect(payload.inviterName).toContain("Bob Inviter");
+    const payload = JSON.parse(outbox[0].payload_json) as Record<string, unknown>;
+    const rendered = await renderEmail("{{inviterName}}", payload, "{{{body_html}}}");
+    expect(rendered.text).toContain("Bob Inviter");
+  });
+
+  it("does not queue or timestamp an invite reminder after the event schedule changes", async () => {
+    const inviteId = crypto.randomUUID();
+    await insertAttendeeInvite(inviteId, eventId, "schedule-race@example.test");
+    const [before] = await queryAll<{ last_communication_at: string }>(
+      db,
+      "SELECT last_communication_at FROM invites WHERE id = ?",
+      [inviteId],
+    );
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runInviteReminders(gate.db, {
+      appBaseUrl: BASE_URL,
+      limit: 100,
+      maxInviteReminders: 3,
+      cutoff: new Date().toISOString(),
+      now: new Date().toISOString(),
+    });
+    await gate.reached;
+
+    await db
+      .prepare(
+        "UPDATE events SET starts_at = datetime(starts_at, '-1 day'), ends_at = datetime(ends_at, '-1 day') WHERE id = ?",
+      )
+      .bind(eventId)
+      .run();
+    gate.release();
+
+    const result = await staleReminderRun;
+    expect(result.inviteRemindersQueued).toBe(0);
+    await expect(
+      queryAll<{ reminder_count: number; last_communication_at: string }>(
+        db,
+        "SELECT reminder_count, last_communication_at FROM invites WHERE id = ?",
+        [inviteId],
+      ),
+    ).resolves.toEqual([{ reminder_count: 0, last_communication_at: before.last_communication_at }]);
+    await expect(
+      queryAll<{ total: number }>(db, "SELECT COUNT(*) AS total FROM email_outbox WHERE event_id = ?", [eventId]),
+    ).resolves.toEqual([{ total: 0 }]);
   });
 
   it("skips attendee invite when the event has already started", async () => {
@@ -374,6 +420,66 @@ describe("runReminderCycle", () => {
     expect(outbox[0].recipient_email).toBe("cospeaker@example.test");
   });
 
+  it("does not consume a co-speaker reminder when the canonical email changes before commit", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "old-cospeaker@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "submitted",
+      speakerStatus: "invited",
+      speakerRole: "co_speaker",
+    });
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+    await db
+      .prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("new-cospeaker@example.test", "new-cospeaker@example.test", userId)
+      .run();
+    gate.release();
+
+    await expect(staleReminderRun).resolves.toMatchObject({ speakerInviteRemindersQueued: 0 });
+    await expect(
+      queryAll<{ speaker_invite_reminder_count: number }>(
+        db,
+        "SELECT speaker_invite_reminder_count FROM proposal_speakers WHERE id = ?",
+        [speakerRowId],
+      ),
+    ).resolves.toEqual([{ speaker_invite_reminder_count: 0 }]);
+    await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
+  });
+
+  it("does not select an expired co-speaker invitation for reminders", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "expired-cospeaker@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "submitted",
+      speakerStatus: "invited",
+      speakerRole: "co_speaker",
+    });
+    await db
+      .prepare("UPDATE proposal_speakers SET invite_expires_at = ? WHERE id = ?")
+      .bind("2020-01-01T00:00:00.000Z", speakerRowId)
+      .run();
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+    expect(result.speakerInviteRemindersQueued).toBe(0);
+    expect(result.preview.coSpeakerInvites).toHaveLength(0);
+    await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
+  });
+
   it("skips co-speaker reminder when proposal is rejected", async () => {
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
@@ -391,6 +497,31 @@ describe("runReminderCycle", () => {
     const result = await runReminderCycle(db, BASE_PAYLOAD);
 
     expect(result.speakerInviteRemindersQueued).toBe(0);
+  });
+
+  it("excludes a canceled proposal from reminders and the due-work projection", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    await insertUser(userId, "canceled@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: crypto.randomUUID(),
+      userId,
+      eventId,
+      proposalStatus: "canceled",
+      speakerStatus: "invited",
+    });
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+    const dueWork = await listDueWork(
+      db,
+      env as unknown as Env,
+      BASE_URL,
+      adminDueWorkListQuerySchema.parse({ bucket: "reminders", q: "canceled@example.test" }),
+    );
+
+    expect(result.speakerInviteRemindersQueued).toBe(0);
+    expect(dueWork.items).toHaveLength(0);
   });
 
   // ── Section 3: Presentation upload reminders ─────────────────────────────────
@@ -430,6 +561,42 @@ describe("runReminderCycle", () => {
     const outbox = await queryAll<{ template_key: string }>(db, "SELECT template_key FROM email_outbox");
     expect(outbox).toHaveLength(1);
     expect(outbox[0].template_key).toBe("presentation_upload_request");
+  });
+
+  it("does not consume a presentation reminder when the canonical email changes before commit", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "old-presenter@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "accepted",
+      speakerStatus: "confirmed",
+      speakerRole: "proposer",
+      presentationDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    });
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+    await db
+      .prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind("new-presenter@example.test", "new-presenter@example.test", userId)
+      .run();
+    gate.release();
+
+    await expect(staleReminderRun).resolves.toMatchObject({ presentationRemindersQueued: 0 });
+    await expect(
+      queryAll<{ presentation_reminder_count: number }>(
+        db,
+        "SELECT presentation_reminder_count FROM proposal_speakers WHERE id = ?",
+        [speakerRowId],
+      ),
+    ).resolves.toEqual([{ presentation_reminder_count: 0 }]);
+    await expect(queryAll(db, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
   });
 
   it("skips presentation reminder when the deadline is beyond the lead days window", async () => {

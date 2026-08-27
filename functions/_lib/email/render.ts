@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
+import { resolveEmailTemplateData } from "./plain-text";
 
 // ─── Conditional template helpers ────────────────────────────────────────────
 
@@ -395,7 +396,7 @@ export async function renderEmail(
   baseUrl = "https://pkic.org",
 ): Promise<{ html: string; text: string }> {
   // Inject baseUrl into template data so {{baseUrl}} resolves in body + partials.
-  const dataWithBase: Record<string, unknown> = { baseUrl, ...data };
+  const dataWithBase = resolveEmailTemplateData({ baseUrl, ...data }, contentType);
   const rendered = compileSimpleTemplate(template, dataWithBase);
 
   if (contentType === "html") {
@@ -425,7 +426,8 @@ export async function renderEmail(
 }
 
 export function renderSubject(template: string | null, fallback: string, data: Record<string, unknown>): string {
-  const override = data.__subjectOverride;
+  const subjectData = resolveEmailTemplateData(data, "subject");
+  const override = subjectData.__subjectOverride;
   if (typeof override === "string" && override.trim().length > 0) {
     return override.replace(/[\r\n]+/g, " ").trim();
   }
@@ -434,6 +436,6 @@ export function renderSubject(template: string | null, fallback: string, data: R
     return fallback.replace(/[\r\n]+/g, " ").trim();
   }
 
-  const rendered = compileSimpleTemplate(template, data);
+  const rendered = compileSimpleTemplate(template, subjectData);
   return rendered.replace(/[\r\n]+/g, " ").trim();
 }

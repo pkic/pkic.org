@@ -5,6 +5,7 @@ import type {
   FormPlacementUpdateInput,
 } from "../../../../assets/shared/schemas/forms";
 import { formPlacementCreateSchema } from "../../../../assets/shared/schemas/forms";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -55,6 +56,57 @@ export function mapFormPlacement(row: FormPlacementRow): FormPlacement {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Revalidates every mutable placement attribute before a cross-aggregate
+ * command changes the placement. `IS` keeps the nullable columns
+ * null-safe, so a placement moved to another context cannot be acted on by a
+ * stale read from the caller.
+ */
+export function prepareFormPlacementSnapshotGuard(
+  db: DatabaseLike,
+  placement: Pick<
+    FormPlacement,
+    | "id"
+    | "formId"
+    | "ownerGroupId"
+    | "contextType"
+    | "contextRef"
+    | "audience"
+    | "active"
+    | "opensAt"
+    | "closesAt"
+    | "updatedAt"
+  >,
+): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1
+            FROM form_placements
+           WHERE id = ?
+             AND form_id = ?
+             AND owner_group_id IS ?
+             AND context_type = ?
+             AND context_ref IS ?
+             AND audience = ?
+             AND active = ?
+             AND opens_at IS ?
+             AND closes_at IS ?
+             AND updated_at = ?
+           LIMIT 1`,
+    bindings: [
+      placement.id,
+      placement.formId,
+      placement.ownerGroupId,
+      placement.contextType,
+      placement.contextRef,
+      placement.audience,
+      placement.active ? 1 : 0,
+      placement.opensAt,
+      placement.closesAt,
+      placement.updatedAt,
+    ],
+  });
 }
 
 export function defaultFormAudience(purpose: string): string {

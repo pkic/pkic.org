@@ -13,6 +13,7 @@ import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { advanceSponsorshipStage, toApiSponsorship } from "../../../../../_lib/services/sponsorship";
 import { sponsorshipStageUpdateRouteSchema } from "../../../../../../assets/shared/schemas/admin-sponsorships";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { requireInternalSecret } from "../../../../../_lib/request";
 
 export const SponsorshipStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
@@ -30,6 +31,7 @@ export const SponsorshipStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSc
     notifications: {
       appBaseUrl: config.appBaseUrl,
       magicLinkTtlMinutes: config.magicLinkTtlMinutes,
+      signingSecret: requireInternalSecret(c.env),
     },
   });
 

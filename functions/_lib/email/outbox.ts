@@ -182,7 +182,12 @@ async function markOutboxFailed(
   const nonRetryable =
     error instanceof AppError &&
     (error.code === "CAPABILITY_RESOURCE_STALE" || error.code === "CAPABILITY_DESCRIPTOR_INVALID");
-  const status = nonRetryable ? "failed" : getOutboxStatusForRetry(attempts);
+  const status =
+    error instanceof AppError && error.code === "CAPABILITY_RESOURCE_STALE"
+      ? "cancelled"
+      : nonRetryable
+        ? "failed"
+        : getOutboxStatusForRetry(attempts);
   await run(
     db,
     `UPDATE email_outbox
@@ -332,23 +337,6 @@ async function processOutboxRow(
       }
     }
 
-    // Attach meeting calendar ICS files — static, staff-uploaded R2
-    // objects, unlike the generated per-recipient calendar.icsFiles above.
-    const icsAttachments = queuedAttachments.filter((a) => a.kind === "r2-ics-file");
-    if (icsAttachments.length > 0 && env.ASSETS_BUCKET) {
-      for (const icsAttachment of icsAttachments) {
-        const icsObj = await env.ASSETS_BUCKET.get(icsAttachment.r2Key);
-        if (!icsObj) {
-          continue;
-        }
-        const base64 = uint8ToBase64(new Uint8Array(await icsObj.arrayBuffer()));
-        attachments = [
-          ...(attachments ?? []),
-          { filename: icsAttachment.filename, contentType: "text/calendar", base64Content: base64 },
-        ];
-      }
-    }
-
     const bccRecipients = Array.isArray(payload.__bccRecipients)
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : undefined;
@@ -362,7 +350,7 @@ async function processOutboxRow(
       text: rendered.text,
       // Always send inline content — email clients (Gmail, Apple Mail, Outlook)
       // use the text/calendar alternative with method=REQUEST for the native
-      // accept/decline prompt. Per-day .ics attachments provide granular control.
+      // accept/decline prompt. Generated per-day .ics attachments provide granular control.
       calendarIcsContent: calendar?.inlineContent,
       categories: [row.template_key, row.message_type],
       replyTo: typeof payload.__replyTo === "string" ? payload.__replyTo : undefined,

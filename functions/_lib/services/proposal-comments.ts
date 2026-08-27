@@ -5,6 +5,8 @@ import type {
 } from "../../../assets/shared/schemas/proposal-comments";
 import { getProposalAccessForEvent } from "../auth/proposal-access";
 import { requireAdminDatabaseUserId } from "../auth/admin-identity";
+import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { queryPage } from "../db/pagination";
 import { first } from "../db/queries";
 import { buildD1TextSearchFilter } from "../db/search";
@@ -14,12 +16,17 @@ import type { AuthAdmin, DatabaseLike } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
+import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 
 const COMMENT_COLUMNS = `pc.id, pc.proposal_id, pc.author_user_id, pc.comment,
   pc.created_at, pc.updated_at, u.email AS author_email,
   u.first_name AS author_first_name, u.last_name AS author_last_name`;
 
-async function requireProposalCommentAccess(db: DatabaseLike, actor: AuthAdmin, proposalId: string): Promise<void> {
+async function requireProposalCommentAccess(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  proposalId: string,
+): Promise<{ eventId: string }> {
   const proposal = await first<{ event_id: string }>(
     db,
     "SELECT event_id FROM session_proposals WHERE id = ? AND deleted_at IS NULL",
@@ -31,6 +38,7 @@ async function requireProposalCommentAccess(db: DatabaseLike, actor: AuthAdmin, 
   if (!access.canReview) {
     throw new AppError(403, "FORBIDDEN", "Missing permission to review proposal comments");
   }
+  return { eventId: proposal.event_id };
 }
 
 export async function listProposalComments(
@@ -74,23 +82,40 @@ export async function addProposalComment(
   actor: AuthAdmin,
   proposalId: string,
   comment: string,
+  authorization?: ProposalWriteAuthorization,
 ): Promise<ProposalInternalComment> {
   const authorUserId = requireAdminDatabaseUserId(actor);
-  await requireProposalCommentAccess(db, actor, proposalId);
+  const proposal = await requireProposalCommentAccess(db, actor, proposalId);
   const id = uuid();
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO proposal_internal_comments (
-           id, proposal_id, author_user_id, comment, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(id, proposalId, authorUserId, comment, now, now),
-    prepareAuditLog(db, "admin", actor.id, "proposal_internal_comment_added", "proposal", proposalId, {
-      commentId: id,
-    }),
-  ]);
+  try {
+    await db.batch(
+      withProposalWriteContextGuard(authorization, [
+        preparePermissionsAuthorizationGuard(db, actor, [
+          { permission: "proposals:score", context: { type: "event", id: proposal.eventId } },
+        ]),
+        db
+          .prepare(
+            `INSERT INTO proposal_internal_comments (
+               id, proposal_id, author_user_id, comment, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(id, proposalId, authorUserId, comment, now, now),
+        prepareAuditLog(db, "admin", actor.id, "proposal_internal_comment_added", "proposal", proposalId, {
+          commentId: id,
+        }),
+      ]),
+    );
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_COMMENT_AUTHORIZATION_CHANGED",
+        "Comment access changed while the comment was saved",
+      );
+    }
+    throw error;
+  }
 
   const created = await first<ProposalInternalComment>(
     db,

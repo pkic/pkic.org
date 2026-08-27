@@ -4,13 +4,7 @@ export interface QueuedBadgeAttachment {
   filenameBase: string;
 }
 
-export interface QueuedIcsFileAttachment {
-  kind: "r2-ics-file";
-  r2Key: string;
-  filename: string;
-}
-
-export type QueuedEmailAttachment = QueuedBadgeAttachment | QueuedIcsFileAttachment;
+export type QueuedEmailAttachment = QueuedBadgeAttachment;
 
 function slugifyAttachmentPart(value: string): string {
   return value
@@ -45,14 +39,6 @@ export function buildBadgeAttachment(payload: {
   };
 }
 
-export function buildIcsFileAttachment(payload: { r2Key: string; filename: string }): QueuedIcsFileAttachment {
-  return {
-    kind: "r2-ics-file",
-    r2Key: payload.r2Key,
-    filename: payload.filename,
-  };
-}
-
 export function parseQueuedEmailAttachments(payload: Record<string, unknown>): QueuedEmailAttachment[] {
   const rawAttachments = payload.__attachments;
   if (!Array.isArray(rawAttachments)) {
@@ -71,15 +57,6 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
         candidate.r2Key.length > 0 &&
         typeof candidate.filenameBase === "string" &&
         candidate.filenameBase.length > 0
-      );
-    }
-
-    if (candidate.kind === "r2-ics-file") {
-      return (
-        typeof candidate.r2Key === "string" &&
-        candidate.r2Key.length > 0 &&
-        typeof candidate.filename === "string" &&
-        candidate.filename.length > 0
       );
     }
 

@@ -1,9 +1,8 @@
 /**
  * Member-facing (non-staff) authentication.
  *
- * Shares session/magic-link mechanism with ./admin.ts and
- * ./sponsor-portal.ts via ./session-engine.ts (cookie parsing, JWT claims
- * base shape, session/magic-link row issue/fetch/consume). What stays
+ * Shares signed email-auth capabilities with the other personas and the
+ * revocable session mechanism through ./session-engine.ts. What stays
  * separate is the eligibility gate and identity: admin.ts's
  * STAFF_ACCESS_CONDITION deliberately excludes plain members (role='user'
  * with no user_roles/permission_grants), so `/api/v1/me/*` needs its own
@@ -29,7 +28,6 @@ import { prepareVerifyPrimaryEmailStatement } from "../services/email-verificati
 import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
 import { nowIso } from "../utils/time";
 import {
-  AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
   getSessionCookieToken,
   serializeSessionCookie,
@@ -42,13 +40,16 @@ import {
   assertSessionActive,
   revokeSessionRow,
   prepareRevokeSessionRow,
-  insertMagicLinkRow,
-  fetchMagicLinkRowByToken,
-  validateAndConsumeMagicLinkRow,
   type SessionTableConfig,
-  type MagicLinkTableConfig,
 } from "./session-engine";
 import { MEMBER_SESSION_COOKIE_NAME, MEMBER_SESSION_COOKIE_PATH } from "./session-cookies";
+import {
+  assertEmailAuthCapabilityEmail,
+  commitEmailAuthRedemption,
+  queueEmailAuthCapability,
+  verifyEmailAuthCapabilityToken,
+} from "./email-auth-capabilities";
+import type { AuthorizationEvidence } from "../db/authorization-guard";
 export { MEMBER_SESSION_COOKIE_NAME, MEMBER_SESSION_COOKIE_PATH } from "./session-cookies";
 
 interface MemberEligibleUserRow {
@@ -106,6 +107,18 @@ const MEMBER_ELIGIBLE_USER_SELECT = `
   JOIN organizations o ON o.id = m.organization_id
 `;
 
+export function memberSignInAuthorizationEvidence(userId: string, normalizedEmail: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+          FROM (${MEMBER_ELIGIBLE_USER_SELECT}) eligible
+          WHERE eligible.id = ?
+            AND eligible.normalized_email = ?
+            AND eligible.active = 1
+          LIMIT 1`,
+    bindings: [userId, normalizedEmail],
+  };
+}
+
 export interface MemberSessionTokenClaims {
   typ: "member-session";
   sub: string;
@@ -126,11 +139,6 @@ export interface MemberSessionTokenClaims {
 const MEMBER_SESSION_TOKEN_TYPE = "member-session";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {
-  table: "auth_magic_links",
-  subjectColumn: "user_id",
-  purpose: AUTH_MAGIC_LINK_PURPOSES.member,
-};
 
 const memberByRequest = new WeakMap<Request, AuthMember>();
 
@@ -323,10 +331,16 @@ export async function requireMemberFromRequest(
   return member;
 }
 
-export async function requestMemberMagicLink(
+export async function queueMemberSignInCapability(
   db: DatabaseLike,
-  payload: { email: string; ipHash?: string | null; userAgentHash?: string | null; ttlMinutes: number },
-): Promise<{ token: string | null; member: AuthMember | null }> {
+  payload: {
+    email: string;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+    ttlMinutes: number;
+    signingSecret: string;
+  },
+): Promise<{ queuedToken: string | null; member: AuthMember | null }> {
   const email = normalizeEmail(payload.email);
   const row = await first<MemberEligibleUserRow>(
     db,
@@ -338,50 +352,87 @@ export async function requestMemberMagicLink(
   );
 
   if (!row) {
-    return { token: null, member: null };
+    return { queuedToken: null, member: null };
   }
 
-  const token = await insertMagicLinkRow(db, MAGIC_LINKS_TABLE, row.id, payload);
+  const capability = await queueEmailAuthCapability({
+    signingSecret: payload.signingSecret,
+    purpose: "member_sign_in",
+    subjectId: row.id,
+    email: row.email,
+    ttlSeconds: payload.ttlMinutes * 60,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
   // Only used by the request-link route to address the notification email
   // and to log/report eligibility — the actual session-granting selection
-  // of an active membership happens fresh in verifyMemberMagicLink via
+  // of an active membership happens fresh in redeemMemberSignInCapability via
   // findEligibleMemberById, not from this snapshot.
-  return { token, member: toAuthMember([row]) };
+  return { queuedToken: capability.queuedToken, member: toAuthMember([row]) };
 }
 
-export async function verifyMemberMagicLink(
+export async function redeemMemberSignInCapability(
   db: DatabaseLike,
-  payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
+  payload: {
+    token: string;
+    signingSecret: string;
+    sessionTtlHours: number;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+  },
 ): Promise<{ member: AuthMember; sessionId: string; expiresAt: string }> {
-  const row = await fetchMagicLinkRowByToken(db, MAGIC_LINKS_TABLE, payload.token);
-  if (!row) {
-    throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid member magic link token");
-  }
-
-  await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, row, payload);
-
-  const member = await findEligibleMemberById(db, row.subjectId);
+  const capability = await verifyEmailAuthCapabilityToken({
+    signingSecret: payload.signingSecret,
+    purpose: "member_sign_in",
+    token: payload.token,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  const member = await findEligibleMemberById(db, capability.subjectId);
   if (!member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer an active member");
   }
+  await assertEmailAuthCapabilityEmail({
+    signingSecret: payload.signingSecret,
+    capability,
+    currentEmail: member.email,
+  });
 
   const normalizedEmail = normalizeEmail(member.email);
   const verifiedAt = nowIso();
-  await db.batch([
-    prepareVerifyPrimaryEmailStatement(db, {
-      userId: row.subjectId,
-      normalizedEmail,
-      method: "magic_link",
-      verifiedAt,
-    }),
-    ...(await prepareVerifiedDomainAssociationStatements(db, {
-      userId: row.subjectId,
-      normalizedEmail,
-      at: verifiedAt,
-    })),
-  ]);
+  const session = await prepareMemberSession(db, member.userId, payload.sessionTtlHours);
+  await commitEmailAuthRedemption(db, {
+    purpose: "member_sign_in",
+    capabilityId: capability.capabilityId,
+    actorType: "user",
+    actorId: member.userId,
+    action: "member_magic_link_verified",
+    entityType: "member_session",
+    entityId: session.sessionId,
+    details: { expiresAt: session.expiresAt },
+    createdAt: verifiedAt,
+    authorizationEvidence: memberSignInAuthorizationEvidence(member.userId, normalizedEmail),
+    statements: [
+      prepareVerifyPrimaryEmailStatement(db, {
+        userId: member.userId,
+        normalizedEmail,
+        method: "magic_link",
+        verifiedAt,
+      }),
+      ...(await prepareVerifiedDomainAssociationStatements(db, {
+        userId: member.userId,
+        normalizedEmail,
+        at: verifiedAt,
+      })),
+      session.statement,
+    ],
+  });
 
-  return issueMemberSession(db, member, payload.sessionTtlHours);
+  return {
+    member: { ...member, sessionId: session.sessionId, expiresAt: session.expiresAt },
+    sessionId: session.sessionId,
+    expiresAt: session.expiresAt,
+  };
 }
 
 export async function revokeMemberSession(db: DatabaseLike, sessionId: string): Promise<void> {

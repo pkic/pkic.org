@@ -13,11 +13,25 @@ import { useState } from "preact/hooks";
 import { ApplicationDetailView } from "./ApplicationDetailView";
 import { ApplicationsList } from "./ApplicationsList";
 
-export function Applications() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export function Applications({
+  initialApplicationId = null,
+  onBackFromInitial,
+}: {
+  initialApplicationId?: string | null;
+  onBackFromInitial?: () => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(initialApplicationId);
 
   if (selectedId) {
-    return <ApplicationDetailView applicationId={selectedId} onBack={() => setSelectedId(null)} />;
+    return (
+      <ApplicationDetailView
+        applicationId={selectedId}
+        onBack={() => {
+          setSelectedId(null);
+          if (selectedId === initialApplicationId) onBackFromInitial?.();
+        }}
+      />
+    );
   }
   return <ApplicationsList onViewApplication={(id) => setSelectedId(id)} />;
 }

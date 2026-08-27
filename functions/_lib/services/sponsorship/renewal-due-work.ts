@@ -10,6 +10,7 @@ import { nowIso } from "../../utils/time";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { resolveRenewalAction, utcDate, type ResolvedSponsorshipRenewalAction } from "./renewal-policy";
 import { prepareSponsorshipStageTransition } from "./stage-transition";
+import { buildManagementLink } from "../management-links";
 
 const REMINDER_NOTES = {
   "reminder-60": "Renewal reminder sent (60 days)",
@@ -59,7 +60,7 @@ async function prepareReminderStatements(
   row: SponsorshipDueWorkRow,
   action: ResolvedSponsorshipRenewalAction & { action: "reminder-60" | "reminder-30" },
   now: string,
-  adminUrl: string,
+  managementUrl: string,
 ): Promise<StatementLike[]> {
   if (!row.assigned_to_email) return [];
   const operationKey = `sponsorship:${row.id}:${action.effectKey}`;
@@ -122,7 +123,7 @@ async function prepareReminderStatements(
           organizationNameText: escapeMarkdownText(sponsorName(row)),
           tierText: escapeMarkdownText(row.tier ?? ""),
           renewalDate: row.renewal_date,
-          adminUrl,
+          adminUrl: managementUrl,
         },
       },
       now,
@@ -203,7 +204,7 @@ export async function runSponsorshipDueWork(
                 organizationNameText: escapeMarkdownText(sponsorName(row)),
                 tierText: escapeMarkdownText(row.tier ?? ""),
                 renewalDate: row.renewal_date,
-                adminUrl: `${config.appBaseUrl}/admin/#/sponsorships/${row.id}`,
+                adminUrl: buildManagementLink(config.appBaseUrl, { kind: "sponsorship", id: row.id }),
               },
             },
             now,
@@ -225,7 +226,7 @@ export async function runSponsorshipDueWork(
       row,
       action,
       now,
-      `${config.appBaseUrl}/admin/#/sponsorships/${row.id}`,
+      buildManagementLink(config.appBaseUrl, { kind: "sponsorship", id: row.id }),
     );
     if (statements.length === 0) continue;
     if (!hasD1QueryCapacity(d1QueryBudget, statements.length)) break;

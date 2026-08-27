@@ -10,7 +10,7 @@ import { getAdminSponsorship, type AdminSponsorshipRow } from "./admin-read-mode
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { escapeMarkdownText } from "../../email/markdown";
-import { prepareSponsorPortalMagicLinkForSponsorship } from "../../auth/sponsor-portal";
+import { queueSponsorPortalSignInCapability } from "../../auth/sponsor-portal";
 import { prepareRefreshOrganizationSponsorshipProjection, prepareSponsorshipStageTransition } from "./stage-transition";
 import { hasFutureRenewalDate, initialRenewalActionDueAt, utcDate } from "./renewal-policy";
 import {
@@ -210,7 +210,7 @@ export async function advanceSponsorshipStage(
     toStage: string;
     actor: AuthAdmin;
     note: string | null;
-    notifications: { appBaseUrl: string; magicLinkTtlMinutes: number };
+    notifications: { appBaseUrl: string; magicLinkTtlMinutes: number; signingSecret: string };
   },
 ): Promise<AdvanceSponsorshipStageResult> {
   if (!SPONSORSHIP_PIPELINE_STAGES.includes(params.toStage as SponsorshipPipelineStage)) {
@@ -283,10 +283,11 @@ export async function advanceSponsorshipStage(
   }
 
   if (becameActive && qualifiesForAttendeeDataAccess && existing.contact_email) {
-    const magicLink = await prepareSponsorPortalMagicLinkForSponsorship(db, params.id, {
+    const magicLink = await queueSponsorPortalSignInCapability(params.id, existing.contact_email, {
       ttlMinutes: params.notifications.magicLinkTtlMinutes,
+      signingSecret: params.notifications.signingSecret,
     });
-    const portalUrl = `${params.notifications.appBaseUrl}/sponsor-portal/?token=${encodeURIComponent(magicLink.token)}`;
+    const portalUrl = `${params.notifications.appBaseUrl}/sponsor-portal/?token=${encodeURIComponent(magicLink.queuedToken)}`;
     const queued = prepareQueueEmailStatement(
       db,
       {
@@ -301,10 +302,11 @@ export async function advanceSponsorshipStage(
           portalUrl,
           expiresInMinutes: params.notifications.magicLinkTtlMinutes,
         },
+        capabilityLinkValues: [portalUrl],
       },
       now,
     );
-    statements.push(magicLink.statement, queued.statement);
+    statements.push(queued.statement);
     outboxIds.push(queued.id);
   }
 
