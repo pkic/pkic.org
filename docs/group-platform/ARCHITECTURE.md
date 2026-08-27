@@ -313,6 +313,7 @@ Canonical group routes use the following shape:
     /api/v1/groups/:groupId/mailing-lists
     /api/v1/groups/:groupId/stats
     /api/v1/groups/:groupId/audit-log
+    /api/v1/system/audit-log
     /api/v1/me/meetings/occurrences/:occurrenceId/join
     /api/v1/meeting-guests/invitations/bootstrap
     /api/v1/meeting-guests/invitations/verify
@@ -358,6 +359,16 @@ actions separately enforce membership.
 
 The portal presents a selected-group context and derives navigation from that
 group's capabilities. The same views support differently typed groups.
+
+Global system-management destinations use the same portal identity but require
+an exact global permission independently of group capacity. The global audit
+log is available at `/portal/#/system/audit-log` only with `audit:read`; its
+canonical `/api/v1/system/audit-log` endpoint recomputes live staff grants and
+performs search, exact filters, sorting, counting, and pagination in D1. Entity
+and actor filters are open strings rather than a duplicated frontend catalog,
+so adding a new audited resource or actor does not require a portal change. The
+former admin component, schema, service, and API route are removed; its hash URL
+is only a temporary bookmark redirect.
 
 The separate admin application is retired incrementally:
 

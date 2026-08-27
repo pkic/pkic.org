@@ -1012,6 +1012,18 @@ Status: In progress
       admin-shell retirement below, not for event registration or proposal
       decision management.
 - [ ] Move remaining global management views into the portal.
+      Current evidence: the global audit log is the first permission-derived
+      System destination. Its schema, service, and API moved rather than being
+      copied to `/api/v1/system/audit-log`; the old admin handler and component
+      are removed, while the old hash URL is only a bookmark redirect. The
+      canonical endpoint recomputes live user-backed staff permissions and
+      requires a global `audit:read` grant. The shared collection controller
+      keeps search, open-ended exact actor/entity/action filters, allowlisted
+      sorting, counting, and pagination in D1. Mounted tests cover global and
+      contextual permission separation plus removal of the old API, and a real
+      Worker/D1 browser journey proves the portal path and redirect make no
+      legacy audit request. Other global management destinations remain, so
+      this item is deliberately still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
       used by admin sign-in, MCP OAuth, membership due work, organization content
@@ -1065,7 +1077,10 @@ Status: In progress
       configuration asserts `idx_mailing_lists_group_active` for the actual
       page and count builder; the group user catalog asserts its production
       page builder uses the indexed alternate-email lookup while remaining
-      bounded to eight server-filtered identities. The focused group,
+      bounded to eight server-filtered identities; the canonical global audit
+      page asserts that its default production query uses
+      `idx_audit_log_created_at` without a full audit-log scan or temporary
+      order B-tree. The focused group,
       statistics, mailing-list,
       meeting-entry, and grant selection passes 67 tests, followed by 38 tests
       after the read-time authorization guard was added. Event-day management
@@ -1124,7 +1139,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,137 backend tests pass with one skipped, 259 frontend tests
+      checkpoint: 2,141 backend tests pass with one skipped, 262 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -1145,7 +1160,10 @@ Status: In progress
       journey signs in as an event program manager, reads proposals through the
       selected-group API, edits an accepted abstract, previews and records a
       final decision, and reads the resulting audit history without an admin API
-      fallback.
+      fallback. The global system-audit journey signs in through the neutral
+      portal flow, renders D1 audit data through the canonical system API, and
+      proves both direct portal navigation and the old admin bookmark redirect
+      make no request to the removed admin audit endpoint.
 - [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
