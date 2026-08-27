@@ -16,6 +16,8 @@ export const proposalAccessSchema = z.object({
   eventPermissions: z.array(z.string()),
   canReview: z.boolean(),
   canFinalize: z.boolean(),
+  canEditAcceptedAbstract: z.boolean(),
+  canCancelAcceptedProposal: z.boolean(),
 });
 
 const adminEventProposalCoreSchema = z.object({
@@ -60,6 +62,8 @@ export const adminProposalDetailSchema = adminEventProposalCoreSchema
   .extend({
     review_count: z.number(),
     details: z.record(z.string(), z.unknown()).nullable(),
+    canceled_at: z.string().nullable(),
+    cancellation_comment: z.string().nullable(),
   });
 
 export const adminProposalDetailResponseSchema = z.object({

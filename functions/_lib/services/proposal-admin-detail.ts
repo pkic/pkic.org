@@ -16,6 +16,8 @@ interface ProposalDetailRow {
   details_json: string | null;
   submitted_at: string;
   updated_at: string;
+  canceled_at: string | null;
+  cancellation_comment: string | null;
   proposer_email: string;
   proposer_first_name: string | null;
   proposer_last_name: string | null;
@@ -32,6 +34,7 @@ export async function getAdminProposalDetailData(db: DatabaseLike, proposalId: s
     `SELECT
        sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type,
        sp.title, sp.abstract, sp.details_json, sp.review_round, sp.submitted_at, sp.updated_at,
+       sp.canceled_at, sp.cancellation_comment,
        u.email AS proposer_email, u.first_name AS proposer_first_name,
        u.last_name AS proposer_last_name, e.settings_json AS event_settings_json,
        (SELECT COUNT(*) FROM proposal_reviews pr
@@ -61,6 +64,8 @@ export async function getAdminProposalDetailData(db: DatabaseLike, proposalId: s
       review_round: proposal.review_round,
       submitted_at: proposal.submitted_at,
       updated_at: proposal.updated_at,
+      canceled_at: proposal.canceled_at,
+      cancellation_comment: proposal.cancellation_comment,
       proposer_email: proposal.proposer_email,
       proposer_first_name: proposal.proposer_first_name,
       proposer_last_name: proposal.proposer_last_name,

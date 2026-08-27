@@ -2320,6 +2320,39 @@ describe("speaker self-management endpoints", () => {
     expect(await response.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 
+  it("does not let a proposer remind speakers after the proposal is canceled", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+
+    await expect(
+      remindProposalSpeakerByProposer(env.DB, {
+        proposal: { ...proposal, status: "canceled" },
+        userId: coSpeakerUserId,
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CLOSED" });
+  });
+
+  it("does not let an administrator send profile or presentation reminders after cancellation", async () => {
+    const { adminUserId } = await setupWorkflow();
+    const { proposalId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'canceled' WHERE id = ?").bind(proposalId).run();
+    const outboxBefore = await queryAll(env.DB, "SELECT id FROM email_outbox");
+
+    for (const kind of ["profile", "presentation"] as const) {
+      await expect(
+        sendAdminProposalSpeakerReminders(env.DB, {
+          proposalId,
+          kind,
+          actorUserId: adminUserId,
+          appBaseUrl: "https://app.test",
+        }),
+      ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CLOSED" });
+    }
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(outboxBefore.length);
+  });
+
   it("rolls back a proposer reminder email and reminder state when audit fails", async () => {
     await setupWorkflow();
     const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();

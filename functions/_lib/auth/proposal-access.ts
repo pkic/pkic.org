@@ -5,6 +5,8 @@ export interface ProposalAccess {
   eventPermissions: string[];
   canReview: boolean;
   canFinalize: boolean;
+  canEditAcceptedAbstract: boolean;
+  canCancelAcceptedProposal: boolean;
 }
 
 /**
@@ -33,5 +35,7 @@ export async function getProposalAccessForEvent(
     eventPermissions,
     canReview: hasPermission(actor, "proposals:score", context),
     canFinalize: hasPermission(actor, "proposals:manage", context),
+    canEditAcceptedAbstract: hasPermission(actor, "proposals:edit_accepted_abstract", context),
+    canCancelAcceptedProposal: hasPermission(actor, "proposals:cancel_accepted", context),
   };
 }

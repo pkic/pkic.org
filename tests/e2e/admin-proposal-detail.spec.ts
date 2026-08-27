@@ -12,7 +12,13 @@ const adminSessionResponse = adminAuthSessionResponseSchema.parse({
     id: "admin-1",
     email: "admin@pkic.org",
     role: "admin",
-    scopes: ["proposals:read", "proposals:score", "proposals:manage"],
+    scopes: [
+      "proposals:read",
+      "proposals:score",
+      "proposals:manage",
+      "proposals:edit_accepted_abstract",
+      "proposals:cancel_accepted",
+    ],
     grants: [],
     expiresAt: null,
   },
@@ -28,6 +34,10 @@ test("renders the admin proposal detail workflow with submission answers and ope
     tracks: "66666666666666666666666666666666",
     recording: "77777777777777777777777777777777",
   };
+  let abstract = "A practical session on operating certificate platforms with clear failure domains.";
+  let proposalStatus: "accepted" | "canceled" = "accepted";
+  let canceledAt: string | null = null;
+  let cancellationComment: string | null = null;
   const openedUrls: string[] = [];
   const consoleErrors: string[] = [];
   const auditOffsets: number[] = [];
@@ -256,6 +266,24 @@ test("renders the admin proposal detail workflow with submission answers and ope
   });
 
   await page.route(`**/api/v1/admin/proposals/${proposalId}`, async (route) => {
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON() as { abstract?: string; title?: string };
+      expect(body.title).toBeUndefined();
+      abstract = body.abstract ?? abstract;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          proposal: {
+            id: proposalId,
+            title: "Operational PKI at Internet Scale",
+            abstract,
+            updated_at: "2025-02-01T12:00:00.000Z",
+          },
+        }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -264,12 +292,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
           id: proposalId,
           event_id: "event-1",
           proposer_user_id: proposerUserId,
-          status: "accepted",
+          status: proposalStatus,
           proposal_type: "panel",
           title: "Operational PKI at Internet Scale",
-          abstract: "A practical session on operating certificate platforms with clear failure domains.",
+          abstract,
           submitted_at: "2025-01-30T12:00:00.000Z",
           updated_at: "2025-02-01T11:00:00.000Z",
+          canceled_at: canceledAt,
+          cancellation_comment: cancellationComment,
           proposer_email: "speaker@pkic.org",
           proposer_first_name: "Sam",
           proposer_last_name: "Speaker",
@@ -289,6 +319,8 @@ test("renders the admin proposal detail workflow with submission answers and ope
           eventPermissions: ["review", "finalize"],
           canReview: true,
           canFinalize: true,
+          canEditAcceptedAbstract: true,
+          canCancelAcceptedProposal: true,
         },
         form: {
           id: formId,
@@ -302,8 +334,11 @@ test("renders the admin proposal detail workflow with submission answers and ope
               fieldType: "text",
               required: true,
               options: null,
+              optionSource: null,
               validation: null,
               sortOrder: 1,
+              updatedAt: "2025-01-01T00:00:00.000Z",
+              archivedAt: null,
             },
             {
               id: fieldIds.format,
@@ -315,8 +350,11 @@ test("renders the admin proposal detail workflow with submission answers and ope
                 { value: "talk", label: "Talk" },
                 { value: "panel", label: "Panel discussion" },
               ],
+              optionSource: null,
               validation: null,
               sortOrder: 2,
+              updatedAt: "2025-01-01T00:00:00.000Z",
+              archivedAt: null,
             },
             {
               id: fieldIds.tracks,
@@ -328,8 +366,11 @@ test("renders the admin proposal detail workflow with submission answers and ope
                 { value: "pki", label: "PKI" },
                 { value: "policy", label: "Policy" },
               ],
+              optionSource: null,
               validation: null,
               sortOrder: 3,
+              updatedAt: "2025-01-01T00:00:00.000Z",
+              archivedAt: null,
             },
             {
               id: fieldIds.recording,
@@ -338,8 +379,11 @@ test("renders the admin proposal detail workflow with submission answers and ope
               fieldType: "boolean",
               required: false,
               options: null,
+              optionSource: null,
               validation: null,
               sortOrder: 4,
+              updatedAt: "2025-01-01T00:00:00.000Z",
+              archivedAt: null,
             },
           ],
         },
@@ -352,12 +396,36 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/cancel`, async (route) => {
+    const body = route.request().postDataJSON() as { comment: string };
+    expect(body.comment).toBe("The speaker is unavailable for the scheduled session.");
+    proposalStatus = "canceled";
+    canceledAt = "2025-02-01T13:00:00.000Z";
+    cancellationComment = body.comment;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        proposalId,
+        status: "canceled",
+        canceledAt,
+        notifiedSpeakerCount: 1,
+      }),
+    });
+  });
+
   await page.goto(`/admin/#/events/pqc-2026/proposal/${proposalId}`);
 
   await expect(page.getByRole("heading", { name: "Operational PKI at Internet Scale" })).toBeVisible();
 
   // Submission tab is active by default — check abstract card + answer table
-  await expect(page.getByRole("heading", { name: "Abstract" })).toBeVisible();
+  const abstractCard = page.getByRole("heading", { name: "Abstract" }).locator("../..");
+  await expect(abstractCard).toBeVisible();
+  await abstractCard.getByRole("button", { name: "Edit" }).click();
+  await abstractCard.getByRole("textbox").fill("A corrected accepted abstract for the published program.");
+  await abstractCard.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("A corrected accepted abstract for the published program.")).toBeVisible();
   await expect(page.getByRole("cell", { name: "Panel discussion" })).toBeVisible();
   await expect(page.getByText("Platform operators", { exact: true })).toBeVisible();
   await expect(page.locator("li").filter({ hasText: /^PKI$/ })).toBeVisible();
@@ -407,6 +475,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
   expect(adminUpload?.fileName).toBe("admin-upload.pdf");
   expect(adminUpload?.fileSize).toBe(String(pdfBody.byteLength));
   expect(adminUpload?.body).toEqual(pdfBody);
+
+  await page.getByRole("tab", { name: "Decision" }).click();
+  await page.getByLabel("Comment to speakers *").fill("The speaker is unavailable for the scheduled session.");
+  await page.getByLabel("I understand that all current speakers will be notified.").check();
+  await page.getByRole("button", { name: "Cancel accepted session" }).click();
+  await expect(page.getByText("Session canceled", { exact: true })).toBeVisible();
+  await expect(page.getByText("The speaker is unavailable for the scheduled session.")).toBeVisible();
+
   expect(consoleErrors).toEqual([]);
 });
 
@@ -455,7 +531,13 @@ test("offers an event-level presentation ZIP from the proposals overview", async
           proposals: [],
           page: { offset: 0, limit: 50, total: 0, hasMore: false },
           event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference 2026" },
-          access: { canReview: true, canFinalize: true, eventPermissions: ["review", "finalize"] },
+          access: {
+            canReview: true,
+            canFinalize: true,
+            canEditAcceptedAbstract: true,
+            canCancelAcceptedProposal: true,
+            eventPermissions: ["review", "finalize"],
+          },
           stats: { byStatus: {}, byRecommendation: {}, reviewedCount: 0, unreviewedCount: 0, total: 0 },
         }),
       ),

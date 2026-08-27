@@ -13,6 +13,7 @@ import {
   proposalSpeakerEffectiveProfileColumns,
 } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
+import { isProposalInactiveStatus } from "./proposal-status-policy";
 
 interface ReminderProposal {
   id: string;
@@ -83,6 +84,9 @@ export async function sendAdminProposalSpeakerReminders(
   },
 ): Promise<{ outboxIds: string[] }> {
   const proposal = await loadReminderProposal(db, payload.proposalId);
+  if (isProposalInactiveStatus(proposal.status)) {
+    throw new AppError(409, "PROPOSAL_CLOSED", "Cannot send reminders for a closed proposal");
+  }
   if (payload.kind === "presentation" && proposal.decision_status !== "accepted") {
     throw new AppError(409, "PROPOSAL_NOT_ACCEPTED", "Presentation reminders can only be sent for accepted proposals");
   }
@@ -160,7 +164,7 @@ export async function remindProposalSpeakerByProposer(
   db: DatabaseLike,
   payload: { proposal: ProposalRecord; userId: string; appBaseUrl: string },
 ): Promise<{ outboxId: string }> {
-  if (["withdrawn", "rejected"].includes(payload.proposal.status)) {
+  if (isProposalInactiveStatus(payload.proposal.status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Cannot send reminders for a closed proposal");
   }
   const [event, speakers, inviteContext, proposer] = await Promise.all([

@@ -222,6 +222,17 @@ export const adminProposalPatchResponseSchema = z.object({
   proposal: adminProposalEditableSchema,
 });
 
+export const cancelAcceptedProposalSchema = z.object({
+  comment: z.string().trim().min(1).max(5_000),
+});
+
+export const cancelAcceptedProposalResponseSchema = successResponseSchema.extend({
+  proposalId: databaseIdSchema,
+  status: z.literal("canceled"),
+  canceledAt: z.string(),
+  notifiedSpeakerCount: z.number().int().nonnegative(),
+});
+
 function optionalNullableOrEmpty<T extends z.ZodTypeAny>(schema: T) {
   return z.union([schema, z.literal(""), z.null()]).optional();
 }

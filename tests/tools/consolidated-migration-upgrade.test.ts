@@ -336,8 +336,25 @@ describe("consolidated pending migration upgrade", () => {
         { permission: "proposals:read" },
         { permission: "proposals:score" },
         { permission: "proposals:manage" },
+        { permission: "proposals:edit_accepted_abstract" },
+        { permission: "proposals:cancel_accepted" },
       ]),
     );
+    expect(
+      db
+        .prepare(
+          `SELECT role_id
+             FROM role_permissions
+            WHERE permission = 'proposals:edit_accepted_abstract'
+            ORDER BY role_id`,
+        )
+        .all(),
+    ).toEqual([{ role_id: "role-admin" }, { role_id: "role-event_organizer" }, { role_id: "role-program_committee" }]);
+    expect(
+      db
+        .prepare("SELECT role_id FROM role_permissions WHERE permission = 'proposals:cancel_accepted' ORDER BY role_id")
+        .all(),
+    ).toEqual([{ role_id: "role-admin" }, { role_id: "role-event_organizer" }, { role_id: "role-program_committee" }]);
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_permissions'").get()).toBe(
       undefined,
     );

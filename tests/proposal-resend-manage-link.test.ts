@@ -110,6 +110,54 @@ describe("proposal resend-manage-link endpoint", () => {
     await expect(response.json()).resolves.toEqual({ success: true });
   });
 
+  it("does not recover proposer or speaker management links for a canceled proposal", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+    const now = nowIso();
+    const proposerId = crypto.randomUUID();
+    const speakerId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    await run(
+      env.DB,
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'canceled-owner@example.test', 'canceled-owner@example.test', 'user', 1, ?, ?),
+              (?, 'canceled-speaker@example.test', 'canceled-speaker@example.test', 'user', 1, ?, ?)`,
+      [proposerId, now, now, speakerId, now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO session_proposals (
+         id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+         manage_link_secret, submitted_at, updated_at
+       ) VALUES (?, ?, ?, 'canceled', 'talk', 'Canceled proposal', 'Abstract', ?, ?, ?)`,
+      [proposalId, eventId, proposerId, "stable-proposal-secret", now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO proposal_speakers (
+         id, proposal_id, user_id, role, status, manage_link_secret, created_at
+       ) VALUES (?, ?, ?, 'speaker', 'confirmed', ?, ?)`,
+      [crypto.randomUUID(), proposalId, speakerId, "stable-speaker-secret", now],
+    );
+    const testEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret };
+
+    const proposerResponse = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-manage-link", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42" },
+      body: JSON.stringify({ email: "canceled-owner@example.test" }),
+    });
+    const speakerResponse = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.43" },
+      body: JSON.stringify({ email: "canceled-speaker@example.test" }),
+    });
+
+    expect(proposerResponse.status).toBe(200);
+    expect(speakerResponse.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+  });
+
   it("rejects an expired proposal management capability", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const now = nowIso();

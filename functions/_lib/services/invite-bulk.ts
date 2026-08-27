@@ -14,6 +14,7 @@ import {
 } from "../invite-validity";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 export type BulkInviteOutcome = {
   email: string;
@@ -63,7 +64,7 @@ const ELIGIBILITY_QUERY = {
     JOIN users u ON u.id = ps.user_id
     WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
       AND sp.event_id = ?2
-      AND sp.status NOT IN ('rejected', 'withdrawn')
+      AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
       AND ps.status <> 'declined'`,
 } as const;
 

@@ -5,6 +5,7 @@ import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext } from "./proposal-invite-email-context";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 interface SpeakerManageLinkMatch {
   speaker_id: string;
@@ -46,7 +47,7 @@ export async function queueProposalSpeakerManageLinkRecovery(
        AND sp.event_id = ?
        AND ps.role <> 'proposer'
        AND ps.status IN ('invited', 'confirmed')
-       AND sp.status NOT IN ('rejected', 'withdrawn')
+       AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
        AND sp.deleted_at IS NULL
      ORDER BY ps.created_at DESC
      LIMIT 1`,
@@ -93,7 +94,7 @@ export async function queueProposalSpeakerManageLinkRecovery(
               JOIN users u ON u.id = ps.user_id
              WHERE ps.id = ? AND ps.proposal_id = ? AND ps.user_id = ?
                AND ps.role <> 'proposer' AND ps.status IN ('invited', 'confirmed')
-               AND sp.event_id = ? AND sp.status NOT IN ('rejected', 'withdrawn')
+               AND sp.event_id = ? AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
                AND sp.deleted_at IS NULL AND sp.updated_at = ?
                AND u.normalized_email = ? AND u.updated_at = ?`,
       bindings: [

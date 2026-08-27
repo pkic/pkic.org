@@ -16,6 +16,8 @@ const proposal: ProposalDetailRecord = {
   review_round: 1,
   submitted_at: "2026-08-01T00:00:00.000Z",
   updated_at: "2026-08-02T00:00:00.000Z",
+  canceled_at: null,
+  cancellation_comment: null,
   proposer_email: "proposer@example.test",
   proposer_first_name: "Proposal",
   proposer_last_name: "Owner",

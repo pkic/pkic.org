@@ -5,6 +5,7 @@ import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContextMap } from "./proposal-invite-email-context";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 interface ProposalMatch {
   proposal_id: string;
@@ -31,7 +32,7 @@ export async function queueProposalManageLinkRecovery(
        FROM session_proposals sp
        JOIN users u ON u.id = sp.proposer_user_id
       WHERE sp.event_id = ? AND lower(u.email) = lower(?)
-        AND sp.status NOT IN ('rejected', 'withdrawn')
+        AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
       ORDER BY sp.submitted_at DESC
       LIMIT 20`,
     [event.id, email],

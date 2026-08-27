@@ -16,6 +16,7 @@ import {
   type InviteEventWindow,
 } from "../invite-validity";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 export function formatInviterList(inviters: InviteInviterInfo[]): string {
   if (inviters.length === 0) return "";
@@ -138,7 +139,7 @@ export async function createInvite(
        JOIN session_proposals sp ON sp.id = ps.proposal_id
        JOIN users u ON u.id = ps.user_id
        WHERE u.normalized_email = ? AND sp.event_id = ?
-         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
          AND ps.status NOT IN ('declined')
        LIMIT 1`,
       [inviteeEmail, payload.eventId],

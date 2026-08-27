@@ -1580,6 +1580,9 @@ ALTER TABLE registrations
   ADD COLUMN form_placement_id TEXT REFERENCES form_placements(id);
 ALTER TABLE session_proposals
   ADD COLUMN form_placement_id TEXT REFERENCES form_placements(id);
+ALTER TABLE session_proposals ADD COLUMN canceled_at TEXT;
+ALTER TABLE session_proposals ADD COLUMN canceled_by_user_id TEXT REFERENCES users(id);
+ALTER TABLE session_proposals ADD COLUMN cancellation_comment TEXT;
 
 CREATE INDEX idx_registrations_form_placement
   ON registrations(form_placement_id, created_at, id);
@@ -1946,6 +1949,18 @@ VALUES (
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
 VALUES
+  (
+    lower(hex(randomblob(16))), 'proposal_canceled', 1,
+    'Session canceled: {{proposalTitleText}}',
+    'Hi {{firstNameText}},
+
+The accepted session **{{proposalTitleText}}** for **{{eventNameText}}** has been canceled by the program team.
+
+Reason: {{cancellationCommentText}}
+
+No further speaker action is required.',
+    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  ),
   (
     lower(hex(randomblob(16))), 'membership_join_verify', 1,
     'Verify your email address to join the PKI Consortium',
@@ -2536,7 +2551,9 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
 --
 -- `event_organizer`'s bundle extends beyond literal
 -- events:write/events:manage to also include proposals:read,
--- proposals:score, proposals:manage, agenda:read, agenda:write — justified by
+-- proposals:score, proposals:manage, proposals:edit_accepted_abstract,
+-- proposals:cancel_accepted,
+-- agenda:read, agenda:write — justified by
 -- persona description ("manage capacity, send communications, manage
 -- registrations, and view all attendee and proposal data for that event"),
 -- and needed so an organizer's event access isn't missing proposal/agenda
@@ -2572,6 +2589,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:edit_accepted_abstract', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:cancel_accepted', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'agenda:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'sponsor-portal:attendee-data', datetime('now')),
@@ -2598,12 +2617,16 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:edit_accepted_abstract', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:cancel_accepted', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:write', datetime('now')),
 
   (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:edit_accepted_abstract', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:cancel_accepted', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:write', datetime('now')),
 

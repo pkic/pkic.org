@@ -91,6 +91,17 @@ describe("OpenAPI schema generation", () => {
     expect(operation.description).toContain("Required scopes: `proposals:score`.");
   });
 
+  it("documents accepted-abstract editing as alternative least-privilege scopes", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+    const operation = spec.paths["/api/v1/admin/proposals/{proposalId}"].patch;
+    const alternatives = [["proposals:manage"], ["proposals:edit_accepted_abstract"]];
+
+    expect(operation.security).toEqual(alternatives.map((scopes) => ({ BearerAuth: scopes })));
+    expect(operation[AUTH_EXTENSION]).toMatchObject({ required: true, scopesAnyOf: alternatives });
+    expect(operation["x-pkic-required-scopes-any-of"]).toEqual(alternatives);
+    expect(operation.description).toContain("Required scope alternative:");
+  });
+
   it("documents role ids as plain strings, not uuid()-formatted, so built-in system roles are valid per the spec (Phase 3 §3.1)", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
     const rolesGet = spec.paths["/api/v1/admin/roles"].get;

@@ -6,6 +6,7 @@ import type { DatabaseLike, Env } from "../types";
 import { REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL } from "./registrations/recipient-email";
 import { proposalSpeakerEffectiveProfileExpression } from "./proposal-speakers";
 import { effectiveInviteExpirySql } from "../invite-validity";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
 const ONE_DAY_MS = 86_400_000;
 
@@ -168,7 +169,7 @@ const DUE_WORK_CTE = `
     CROSS JOIN cfg
     WHERE ps.status = 'invited'
       AND ps.role <> 'proposer'
-      AND sp.status NOT IN ('rejected', 'withdrawn')
+      AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
       AND (e.starts_at IS NULL OR e.starts_at > cfg.now_at)
       AND ps.speaker_invite_reminder_count < cfg.max_invite_reminders
       AND (ps.speaker_invite_reminders_paused_until IS NULL OR ps.speaker_invite_reminders_paused_until <= cfg.now_at)

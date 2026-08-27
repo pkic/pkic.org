@@ -6,7 +6,10 @@ import {
   requireAdminRoutesHaveAuthorizationPolicy,
 } from "../functions/_lib/auth/admin-route-policy";
 import type { AuthAdmin } from "../functions/_lib/types";
-import { proposalPermissionForRequest } from "../functions/_lib/auth/proposal-route-policy";
+import {
+  proposalPermissionAlternativesForRequest,
+  proposalPermissionForRequest,
+} from "../functions/_lib/auth/proposal-route-policy";
 
 const actor = (permissions: string[]): AuthAdmin => ({
   identityType: "user",
@@ -60,5 +63,13 @@ describe("admin route authorization policy", () => {
     expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/presentation/versions/v1", "DELETE")).toBe(
       "proposals:manage",
     );
+    expect(proposalPermissionAlternativesForRequest("/api/v1/admin/proposals/p1", "PATCH")).toEqual([
+      "proposals:manage",
+      "proposals:edit_accepted_abstract",
+    ]);
+    expect(proposalPermissionAlternativesForRequest("/api/v1/admin/proposals/p1/finalize", "POST")).toEqual([
+      "proposals:manage",
+    ]);
+    expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/cancel", "POST")).toBe("proposals:cancel_accepted");
   });
 });

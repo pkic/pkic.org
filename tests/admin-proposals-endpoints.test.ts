@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
-import type { DatabaseLike } from "../functions/_lib/types";
+import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import {
   adminProposalDetailResponseSchema,
@@ -23,6 +23,9 @@ import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/prop
 import { editAdminProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
 import { buildAdminEventProposalsPageQuery } from "../functions/_lib/services/admin-event-proposals";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { editAdminProposal } from "../functions/_lib/services/proposal-admin-edit";
+import { cancelAcceptedProposal } from "../functions/_lib/services/proposal-cancellation";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 const proposalDetails = {
   audience: "Operators",
@@ -62,6 +65,28 @@ async function callAdminProposalPatch(token: string, proposalId: string, body: u
   return app.fetch(
     new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
       method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalDetail(token: string, proposalId: string): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalCancel(token: string, proposalId: string, body: unknown): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/cancel`, {
+      method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
@@ -224,6 +249,42 @@ async function seedProposalWithReviews(
   ]);
 
   return { proposalId, adminId };
+}
+
+async function seedScopedProposalEditor(
+  eventId: string,
+  grantedByUserId: string,
+  permissions: string[],
+): Promise<{ actor: AuthAdmin; token: string; userId: string }> {
+  const userId = crypto.randomUUID();
+  const email = `proposal-editor-${userId}@example.test`;
+  await env.DB.prepare(
+    `INSERT INTO users (
+       id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at
+     ) VALUES (?, ?, ?, 'Proposal', 'Editor', 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(userId, email, email)
+    .run();
+  for (const permission of permissions) {
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (
+         id, user_id, permission, context_type, context_id, granted_by_user_id, created_at
+       ) VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, permission, eventId, grantedByUserId)
+      .run();
+  }
+  return {
+    userId,
+    token: await createAdminSession(env.DB, userId, `proposal-editor-token-${userId}`),
+    actor: {
+      identityType: "user",
+      id: userId,
+      email,
+      role: "user",
+      grants: permissions.map((permission) => ({ permission, contextType: "event", contextId: eventId })),
+    },
+  };
 }
 
 async function seedProposalSpeaker(
@@ -865,6 +926,279 @@ describe("admin proposal endpoints", () => {
     expect(JSON.parse(audit.details_json)).toEqual({
       title: { from: "Endpoint Proposal", to: "Updated Endpoint Proposal" },
     });
+  });
+
+  it("lets the narrow event capability update only an accepted abstract", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+
+    const response = await callAdminProposalPatch(editor.token, proposalId, {
+      abstract:
+        "The accepted abstract was corrected by the program committee to explain the operational scope, expected audience, and concrete outcomes in enough detail.",
+    });
+
+    expect(response.status).toBe(200);
+    const payload = adminProposalPatchResponseSchema.parse(await response.json());
+    expect(payload.proposal.abstract).toContain("corrected by the program committee");
+    expect(payload.proposal.title).toBe("Endpoint Proposal");
+  });
+
+  it("does not let the accepted-abstract capability change an accepted title", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+
+    const response = await callAdminProposalPatch(editor.token, proposalId, { title: "Changed accepted title" });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("keeps accepted titles manageable while reserving accepted abstracts for the narrow capability", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const manager = await seedScopedProposalEditor(eventId, adminId, ["proposals:manage"]);
+    const acceptedEditor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+
+    expect(
+      (
+        await callAdminProposalPatch(manager.token, proposalId, {
+          abstract:
+            "Manage alone must not override acceptance by changing an accepted abstract without the explicit event-scoped capability required for that operation.",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await callAdminProposalPatch(manager.token, proposalId, { title: "Corrected accepted title" })).status,
+    ).toBe(200);
+
+    await env.DB.prepare("UPDATE session_proposals SET status = 'submitted' WHERE id = ?").bind(proposalId).run();
+    expect(
+      (
+        await callAdminProposalPatch(acceptedEditor.token, proposalId, {
+          abstract:
+            "The narrow accepted-abstract permission is intentionally not a general proposal editor and cannot modify an ordinary submitted proposal at this stage.",
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it("rolls back accepted abstract edits when the capability is revoked before commit", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ?")
+        .bind(editor.userId)
+        .run(),
+    );
+
+    await expect(
+      editAdminProposal(racingDb, editor.actor, proposalId, { abstract: "This edit must roll back." }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_AUTHORIZATION_CHANGED" });
+    const [proposal] = await queryAll<{ abstract: string }>(
+      env.DB,
+      "SELECT abstract FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(proposal.abstract).toContain("realistic content");
+    await expect(queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_edited'")).resolves.toHaveLength(
+      0,
+    );
+  });
+
+  it("does not apply an accepted abstract edit after the proposal status changes", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = ? WHERE id = ?")
+        .bind("2099-01-01T00:00:00.000Z", proposalId)
+        .run(),
+    );
+
+    await expect(
+      editAdminProposal(racingDb, editor.actor, proposalId, { abstract: "This stale edit must not win." }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_EDIT_CONFLICT" });
+    const [proposal] = await queryAll<{ status: string; abstract: string }>(
+      env.DB,
+      "SELECT status, abstract FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(proposal.status).toBe("rejected");
+    expect(proposal.abstract).toContain("realistic content");
+  });
+
+  it("cancels an accepted proposal with a comment while preserving its accepted decision", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:cancel_accepted"]);
+    const adminToken = await createAdminSession(env.DB, adminId, `proposal-cancellation-read-${proposalId}`);
+    await seedProposalSpeaker(proposalId, { status: "confirmed" });
+    await seedProposalSpeaker(proposalId, { status: "invited" });
+    await seedProposalSpeaker(proposalId, { status: "declined" });
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+    await env.DB.prepare(
+      `INSERT INTO proposal_decision_history (
+         id, proposal_id, review_round, decided_by_user_id, final_status, decision_note,
+         min_reviews_required, review_count, decided_at, decision_sequence
+       )
+       SELECT id, proposal_id, review_round, decided_by_user_id, final_status, decision_note,
+              min_reviews_required, review_count, decided_at, decision_sequence
+         FROM proposal_decisions WHERE proposal_id = ?`,
+    )
+      .bind(proposalId)
+      .run();
+
+    const response = await callAdminProposalCancel(editor.token, proposalId, {
+      comment: "The speaker is unavailable; [untrusted link](https://example.invalid).",
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      proposalId,
+      status: "canceled",
+      notifiedSpeakerCount: 3,
+    });
+    const [proposal] = await queryAll<{
+      status: string;
+      cancellation_comment: string;
+      canceled_by_user_id: string;
+    }>(env.DB, "SELECT status, cancellation_comment, canceled_by_user_id FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
+    expect(proposal).toEqual({
+      status: "canceled",
+      cancellation_comment: "The speaker is unavailable; [untrusted link](https://example.invalid).",
+      canceled_by_user_id: editor.userId,
+    });
+    await expect(
+      queryAll(env.DB, "SELECT final_status FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toEqual([{ final_status: "accepted" }]);
+    await expect(
+      queryAll(env.DB, "SELECT final_status FROM proposal_decision_history WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toEqual([{ final_status: "accepted" }]);
+    const outbox = await queryAll<{ template_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, payload_json FROM email_outbox WHERE idempotency_key LIKE 'proposal-canceled:%'",
+    );
+    expect(outbox).toHaveLength(3);
+    expect(outbox.every((row) => row.template_key === "proposal_canceled")).toBe(true);
+    expect(JSON.parse(outbox[0].payload_json).cancellationCommentText).toContain("\\[untrusted link\\]");
+
+    const detailResponse = await callAdminProposalDetail(adminToken, proposalId);
+    expect(detailResponse.status).toBe(200);
+    const detail = adminProposalDetailResponseSchema.parse(await detailResponse.json());
+    expect(detail.proposal.status).toBe("canceled");
+    expect(detail.proposal.decision_status).toBe("accepted");
+    expect(detail.proposal.cancellation_comment).toContain("speaker is unavailable");
+
+    const listResponse = await callAdminProposalsList(
+      adminToken,
+      "/api/v1/admin/events/pqc-2026/proposals?status=canceled",
+    );
+    expect(listResponse.status).toBe(200);
+    const list = adminEventProposalsResponseSchema.parse(await listResponse.json());
+    expect(list.proposals).toHaveLength(1);
+    expect(list.proposals[0]).toMatchObject({ id: proposalId, status: "canceled", decision_status: "accepted" });
+  });
+
+  it("requires the cancellation capability and a non-empty comment", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const manager = await seedScopedProposalEditor(eventId, adminId, ["proposals:manage"]);
+    const canceler = await seedScopedProposalEditor(eventId, adminId, ["proposals:cancel_accepted"]);
+    const otherEventId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO events (
+         id, slug, name, timezone, starts_at, ends_at, registration_mode, invite_limit_attendee,
+         settings_json, created_at, updated_at
+       ) VALUES (?, ?, 'Other Event', 'UTC', '2027-01-01T09:00:00.000Z', '2027-01-01T17:00:00.000Z',
+                 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+    )
+      .bind(otherEventId, `other-${otherEventId}`)
+      .run();
+    const wrongEventCanceler = await seedScopedProposalEditor(otherEventId, adminId, ["proposals:cancel_accepted"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+
+    expect((await callAdminProposalCancel(manager.token, proposalId, { comment: "Unavailable" })).status).toBe(403);
+    expect((await callAdminProposalCancel(canceler.token, proposalId, { comment: "   " })).status).toBe(400);
+    expect(
+      (await callAdminProposalCancel(wrongEventCanceler.token, proposalId, { comment: "Wrong event" })).status,
+    ).toBe(403);
+  });
+
+  it("rolls back accepted-proposal cancellation when its permission is revoked before commit", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const canceler = await seedScopedProposalEditor(eventId, adminId, ["proposals:cancel_accepted"]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ?")
+        .bind(canceler.userId)
+        .run(),
+    );
+
+    await expect(
+      cancelAcceptedProposal(racingDb, canceler.actor, proposalId, "Speaker unavailable", "https://app.test"),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CANCELLATION_AUTHORIZATION_CHANGED" });
+    await expect(queryAll(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [proposalId])).resolves.toEqual([
+      { status: "accepted" },
+    ]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE idempotency_key LIKE 'proposal-canceled:%'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back accepted-proposal cancellation when the speaker roster changes before commit", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const canceler = await seedScopedProposalEditor(eventId, adminId, ["proposals:cancel_accepted"]);
+    await seedProposalSpeaker(proposalId, { status: "confirmed" });
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await seedProposalSpeaker(proposalId, { status: "invited" });
+    });
+
+    await expect(
+      cancelAcceptedProposal(racingDb, canceler.actor, proposalId, "Speaker unavailable", "https://app.test"),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CANCELLATION_CONFLICT" });
+    await expect(queryAll(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [proposalId])).resolves.toEqual([
+      { status: "accepted" },
+    ]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE idempotency_key LIKE 'proposal-canceled:%'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back cancellation state and notifications when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const canceler = await seedScopedProposalEditor(eventId, adminId, ["proposals:cancel_accepted"]);
+    await seedProposalSpeaker(proposalId, { status: "confirmed" });
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(proposalId).run();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_proposal_cancellation_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'accepted_proposal_canceled'
+         BEGIN SELECT RAISE(ABORT, 'forced cancellation audit failure'); END`,
+    ).run();
+
+    await expect(
+      cancelAcceptedProposal(env.DB, canceler.actor, proposalId, "Speaker unavailable", "https://app.test"),
+    ).rejects.toThrow("forced cancellation audit failure");
+    await expect(
+      queryAll(env.DB, "SELECT status, canceled_at FROM session_proposals WHERE id = ?", [proposalId]),
+    ).resolves.toEqual([{ status: "accepted", canceled_at: null }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE idempotency_key LIKE 'proposal-canceled:%'"),
+    ).resolves.toHaveLength(0);
   });
 
   it("rolls back a proposal edit when its audit write fails", async () => {

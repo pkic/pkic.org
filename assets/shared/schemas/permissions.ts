@@ -30,6 +30,8 @@ export const PERMISSIONS = [
   "proposals:read",
   "proposals:score",
   "proposals:manage",
+  "proposals:edit_accepted_abstract",
+  "proposals:cancel_accepted",
   "agenda:read",
   "agenda:write",
   "sponsor-portal:attendee-data",

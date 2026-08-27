@@ -115,6 +115,28 @@ describe("OpenAPI auth decoration", () => {
     );
   });
 
+  it("preserves OR semantics for alternative MCP scopes", () => {
+    const alternatives: AuthScope[][] = [["proposals:manage"], ["proposals:edit_accepted_abstract"]];
+    const filtered = filterOpenApiSpecForMcp({
+      openapi: "3.1.0",
+      info: { title: "PKI Consortium API", version: "v1" },
+      paths: {
+        "/api/v1/admin/proposals/{proposalId}": {
+          patch: {
+            operationId: "editProposal",
+            [AUTH_EXTENSION]: { required: true, scopesAnyOf: alternatives },
+            [MCP_EXTENSION]: { expose: true },
+          },
+        },
+      },
+    });
+    const operation = filtered.paths["/api/v1/admin/proposals/{proposalId}"].patch;
+
+    expect(operation.security).toEqual(alternatives.map((scopes) => ({ McpSession: scopes })));
+    expect(operation["x-pkic-required-scopes-any-of"]).toEqual(alternatives);
+    expect(operation[MCP_EXTENSION].scopesAnyOf).toEqual(alternatives);
+  });
+
   it("marks internal admin routes and leaves non-admin token workflows as schema-documented inputs", () => {
     const decorated = decorateOpenApiSpec({
       openapi: "3.1.0",

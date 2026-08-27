@@ -2,14 +2,18 @@ import { Hono, type Context, type Next } from "hono";
 import { fromHono } from "chanfana";
 import { handleError } from "../../../../../_lib/http";
 import { getCachedAdminForRequest } from "../../../../../_lib/auth/admin";
-import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { getProposalEventScope, proposalPermissionForRequest } from "../../../../../_lib/auth/proposal-route-policy";
+import { requireAnyPermission } from "../../../../../_lib/auth/permissions";
+import {
+  getProposalEventScope,
+  proposalPermissionAlternativesForRequest,
+} from "../../../../../_lib/auth/proposal-route-policy";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminProposalAuditLogRouteSchema,
   adminProposalCommentCreateRouteSchema,
+  adminProposalCancelRouteSchema,
   adminProposalCommentsListRouteSchema,
   adminProposalFinalizePreviewRouteSchema,
   adminProposalFinalizeRouteSchema,
@@ -24,6 +28,7 @@ import { AdminProposalsProposalIdGet } from "./index";
 import { onRequestPost as AdminProposalsProposalIdOpenManagePost_l } from "./open-manage";
 import { onRequestPost as AdminProposalsProposalIdFlagPost_l } from "./flag";
 import { onRequestPatch as AdminProposalsProposalIdPatch_l } from "./patch";
+import { onRequestPost as AdminProposalsProposalIdCancelPost_l } from "./cancel";
 import { onRequestPost as AdminProposalsProposalIdFinalizePost_l } from "./finalize";
 import { onRequestPost as AdminProposalsProposalIdFinalizePreviewPost_l } from "./finalize-preview";
 import { onRequestGet as AdminProposalsProposalIdAuditLogGet_l } from "./audit-log";
@@ -51,7 +56,10 @@ export const openapi = fromHono(app);
  * Contextual gate for the whole /admin/proposals/:proposalId/** subtree.
  * Detail reads require proposals:read; audit, comments, and reviews require
  * proposals:score because their payloads can contain private reviewer notes;
- * other writes require proposals:manage. Permissions may be global or scoped
+ * other writes require proposals:manage. The proposal PATCH route also admits
+ * the narrow proposals:edit_accepted_abstract capability; its service selects
+ * the exact required capability from the proposal status and validated body.
+ * Permissions may be global or scoped
  * to the proposal's event, matching the same permission
  * events/[eventSlug]/proposals.ts already requires to list an event's
  * proposals. Several handlers in this subtree (audit-log.ts,
@@ -73,7 +81,7 @@ async function requireProposalAccess(c: Context<RequestDbContext>, next: Next): 
   const proposalId = c.req.param("proposalId") ?? "";
   const eventId = await getProposalEventScope(requestDb(c), proposalId);
 
-  requirePermission(admin, proposalPermissionForRequest(c.req.path, c.req.method), {
+  requireAnyPermission(admin, proposalPermissionAlternativesForRequest(c.req.path, c.req.method), {
     type: "event",
     id: eventId,
   });
@@ -88,6 +96,10 @@ const AdminProposalsProposalIdOpenManagePost = openApiRoute(
   AdminProposalsProposalIdOpenManagePost_l,
 );
 const AdminProposalsProposalIdPatch = openApiRoute(adminProposalPatchRouteSchema, AdminProposalsProposalIdPatch_l);
+const AdminProposalsProposalIdCancelPost = openApiRoute(
+  adminProposalCancelRouteSchema,
+  AdminProposalsProposalIdCancelPost_l,
+);
 const AdminProposalsProposalIdFlagPost = openApiRoute(adminProposalFlagRouteSchema, AdminProposalsProposalIdFlagPost_l);
 const AdminProposalsProposalIdFinalizePost = openApiRoute(
   adminProposalFinalizeRouteSchema,
@@ -126,6 +138,7 @@ openapi.get("/", AdminProposalsProposalIdGet);
 openapi.post("/open-manage", AdminProposalsProposalIdOpenManagePost);
 openapi.post("/flag", AdminProposalsProposalIdFlagPost);
 openapi.patch("/", AdminProposalsProposalIdPatch);
+openapi.post("/cancel", AdminProposalsProposalIdCancelPost);
 openapi.post("/finalize", AdminProposalsProposalIdFinalizePost);
 openapi.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost);
 openapi.get("/audit-log", AdminProposalsProposalIdAuditLogGet);

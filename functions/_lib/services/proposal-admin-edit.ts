@@ -4,17 +4,20 @@ import type {
   adminProposalPatchSchema,
 } from "../../../assets/shared/schemas/proposal-management";
 import { getProposalAccessForEvent } from "../auth/proposal-access";
+import { preparePermissionsAuthorizationGuard, type Permission } from "../auth/permissions";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { nowIso } from "../utils/time";
-import { prepareAuditLogWhen } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 
 type ProposalPatch = z.infer<typeof adminProposalPatchSchema>;
 type EditableProposal = z.infer<typeof adminProposalEditableSchema>;
 
 interface EditableProposalWithEvent extends EditableProposal {
   event_id: string;
+  status: string;
 }
 
 export async function editAdminProposal(
@@ -25,7 +28,7 @@ export async function editAdminProposal(
 ): Promise<EditableProposal> {
   const current = await first<EditableProposalWithEvent>(
     db,
-    `SELECT id, event_id, title, abstract, updated_at
+    `SELECT id, event_id, status, title, abstract, updated_at
      FROM session_proposals
      WHERE id = ? AND deleted_at IS NULL`,
     [proposalId],
@@ -33,7 +36,20 @@ export async function editAdminProposal(
   if (!current) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
 
   const access = await getProposalAccessForEvent(db, current.event_id, actor);
-  if (!access.canFinalize) throw new AppError(403, "FORBIDDEN", "Missing permission to edit proposals");
+  const accepted = current.status === "accepted";
+  const requiredPermissions: Permission[] = accepted
+    ? [
+        ...(patch.title !== undefined ? (["proposals:manage"] as const) : []),
+        ...(patch.abstract !== undefined ? (["proposals:edit_accepted_abstract"] as const) : []),
+      ]
+    : ["proposals:manage"];
+  if (
+    (!accepted && !access.canFinalize) ||
+    (accepted && patch.title !== undefined && !access.canFinalize) ||
+    (accepted && patch.abstract !== undefined && !access.canEditAcceptedAbstract)
+  ) {
+    throw new AppError(403, "FORBIDDEN", "Missing permission to edit the requested proposal fields");
+  }
 
   const next = {
     id: current.id,
@@ -47,35 +63,56 @@ export async function editAdminProposal(
   if (Object.keys(changes).length === 0) return next;
 
   next.updated_at = nowIso();
-  const [updated] = await db.batch([
-    db
-      .prepare(
-        `UPDATE session_proposals
-         SET title = ?, abstract = ?, updated_at = ?
-         WHERE id = ? AND title = ? AND abstract = ? AND deleted_at IS NULL`,
-      )
-      .bind(next.title, next.abstract, next.updated_at, current.id, current.title, current.abstract),
-    prepareAuditLogWhen(db, {
-      actorType: "admin",
-      actorId: actor.id,
-      action: "proposal_edited",
-      entityType: "proposal",
-      entityId: current.id,
-      details: changes,
-      createdAt: next.updated_at,
-      conditionSql:
-        "SELECT 1 FROM session_proposals WHERE id = ? AND title = ? AND abstract = ? AND updated_at = ? AND deleted_at IS NULL AND changes() = 1",
-      conditionBindings: [current.id, next.title, next.abstract, next.updated_at],
-    }),
-  ]);
-  if ((updated.meta?.changes ?? 0) !== 1) {
-    const exists = await first<{ id: string }>(
-      db,
-      "SELECT id FROM session_proposals WHERE id = ? AND deleted_at IS NULL",
-      [current.id],
-    );
-    if (!exists) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-    throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was processed");
+  try {
+    await db.batch([
+      preparePermissionsAuthorizationGuard(db, actor, [
+        ...requiredPermissions.map((permission) => ({
+          permission,
+          context: { type: "event", id: current.event_id },
+        })),
+      ]),
+      db
+        .prepare(
+          `UPDATE session_proposals
+           SET title = ?, abstract = ?, updated_at = ?
+           WHERE id = ? AND event_id = ? AND status = ? AND title = ? AND abstract = ?
+             AND updated_at = ? AND deleted_at IS NULL`,
+        )
+        .bind(
+          next.title,
+          next.abstract,
+          next.updated_at,
+          current.id,
+          current.event_id,
+          current.status,
+          current.title,
+          current.abstract,
+          current.updated_at,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actor.id,
+        "proposal_edited",
+        "proposal",
+        current.id,
+        changes,
+        next.updated_at,
+        { type: "event", id: current.event_id },
+      ),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_AUTHORIZATION_CHANGED",
+        "Proposal editing permission changed while the update was being saved",
+      );
+    }
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was being saved");
+    }
+    throw error;
   }
   return next;
 }

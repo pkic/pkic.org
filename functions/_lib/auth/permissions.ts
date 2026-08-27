@@ -112,6 +112,25 @@ export function requirePermission(actor: AuthAdmin, permission: string, context?
   }
 }
 
+/** Require at least one permission without accidentally turning alternatives into an AND policy. */
+export function requireAnyPermission(
+  actor: AuthAdmin,
+  permissions: readonly string[],
+  context?: PermissionContext,
+): void {
+  if (permissions.some((permission) => hasPermission(actor, permission, context))) return;
+
+  if (actor.scopeRestricted && !permissions.some((permission) => actor.scopes?.includes(permission) === true)) {
+    throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
+  }
+  const scope = context ? ` (context: ${context.type}:${context.id})` : "";
+  throw new AppError(
+    403,
+    "PERMISSION_REQUIRED",
+    `Missing one of the required permissions: ${permissions.join(", ")}${scope}`,
+  );
+}
+
 /**
  * Canonical live-D1 evidence for one or more permissions. Request preflight
  * uses `hasPermission`; protected mutation batches use this equivalent SQL so

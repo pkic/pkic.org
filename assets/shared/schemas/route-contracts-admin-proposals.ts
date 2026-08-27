@@ -11,6 +11,8 @@ import {
   adminSpeakerBioPatchSchema,
   adminProposalPatchResponseSchema,
   adminProposalPatchSchema,
+  cancelAcceptedProposalResponseSchema,
+  cancelAcceptedProposalSchema,
   finalizeProposalResponseSchema,
   finalizeProposalSchema,
   proposalSpeakerRemovalRequestSchema,
@@ -72,7 +74,12 @@ export const adminProposalOpenManageRouteSchema = {
 export const adminProposalPatchRouteSchema = {
   tags: ["Admin proposals"],
   summary: "Update proposal title or abstract",
-  description: "Updates editable proposal text fields. Requires organizer-level access for the proposal's event.",
+  description:
+    "Updates editable proposal text fields. Ordinary proposals and title changes require proposals:manage. Accepted-proposal abstract changes require the event-scoped proposals:edit_accepted_abstract capability; changing both fields requires both capabilities.",
+  "x-pkic-auth": {
+    required: true,
+    scopesAnyOf: [["proposals:manage"], ["proposals:edit_accepted_abstract"]],
+  },
   request: {
     params: proposalIdParamsSchema,
     body: {
@@ -91,8 +98,34 @@ export const adminProposalPatchRouteSchema = {
     },
     "400": { description: "Invalid proposal patch payload." },
     "401": { description: "Admin authorization required." },
-    "403": { description: "The admin lacks organizer permission for this proposal." },
+    "403": { description: "The admin lacks the permission required for this proposal's current status." },
+    "409": { description: "The proposal or authorization changed while the update was being saved." },
     "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminProposalCancelRouteSchema = {
+  tags: ["Admin proposals"],
+  summary: "Cancel an accepted proposal",
+  description:
+    "Removes an accepted proposal from the program without rewriting its accepted decision, records the required comment, deactivates speaker capacity, and queues a notification to every current speaker.",
+  request: {
+    params: proposalIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: cancelAcceptedProposalSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Accepted proposal canceled and speaker notifications queued.",
+      content: { "application/json": { schema: cancelAcceptedProposalResponseSchema } },
+    },
+    "400": { description: "A cancellation comment is required." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The actor lacks proposals:cancel_accepted for this event." },
+    "404": { description: "Proposal not found." },
+    "409": { description: "The proposal is not accepted or changed while cancellation was being saved." },
   },
 };
 

@@ -7,6 +7,7 @@ import { batchQueueEmailsAndUpdateState } from "./shared";
 import { buildProposalInviteEmailContextMap } from "../proposal-invite-email-context";
 import type { DatabaseLike } from "../../types";
 import { proposalSpeakerEffectiveProfileColumns } from "../proposal-speakers";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "../proposal-status-policy";
 
 export async function runCoSpeakerInviteReminders(
   db: DatabaseLike,
@@ -43,7 +44,7 @@ export async function runCoSpeakerInviteReminders(
        LEFT JOIN users pu ON pu.id = sp.proposer_user_id
        WHERE ps.status = 'invited'
          AND ps.role <> 'proposer'
-         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
          AND (e.starts_at IS NULL OR e.starts_at > ?)
          AND ps.speaker_invite_reminder_count < ?
          AND (ps.speaker_invite_reminders_paused_until IS NULL OR ps.speaker_invite_reminders_paused_until <= ?)

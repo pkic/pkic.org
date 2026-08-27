@@ -19,6 +19,8 @@ import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { runReminderCycle } from "../functions/_lib/services/reminders";
 import { runInviteReminders } from "../functions/_lib/services/reminders/invite-reminders";
 import type { Env } from "../functions/_lib/types";
+import { listDueWork } from "../functions/_lib/services/due-work-read-model";
+import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";
 
 const db = (env as unknown as Env).DB;
 
@@ -433,6 +435,31 @@ describe("runReminderCycle", () => {
     const result = await runReminderCycle(db, BASE_PAYLOAD);
 
     expect(result.speakerInviteRemindersQueued).toBe(0);
+  });
+
+  it("excludes a canceled proposal from reminders and the due-work projection", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    await insertUser(userId, "canceled@example.test");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: crypto.randomUUID(),
+      userId,
+      eventId,
+      proposalStatus: "canceled",
+      speakerStatus: "invited",
+    });
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+    const dueWork = await listDueWork(
+      db,
+      env as unknown as Env,
+      BASE_URL,
+      adminDueWorkListQuerySchema.parse({ bucket: "reminders", q: "canceled@example.test" }),
+    );
+
+    expect(result.speakerInviteRemindersQueued).toBe(0);
+    expect(dueWork.items).toHaveLength(0);
   });
 
   // ── Section 3: Presentation upload reminders ─────────────────────────────────

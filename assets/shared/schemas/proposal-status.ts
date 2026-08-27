@@ -16,7 +16,7 @@ export const PROPOSAL_SPEAKER_ROSTER_EDITABLE_STATUSES = [
 export const proposalSpeakerRosterEditableStatusSchema = z.enum(PROPOSAL_SPEAKER_ROSTER_EDITABLE_STATUSES);
 export const PROPOSAL_REPLACEMENT_PROPOSER_STATUSES = ["invited", "confirmed"] as const;
 
-export const PROPOSAL_MODERATION_STATUSES = ["withdrawn", "spam", "duplicate", "deleted"] as const;
+export const PROPOSAL_MODERATION_STATUSES = ["withdrawn", "canceled", "spam", "duplicate", "deleted"] as const;
 export const PROPOSAL_STATUSES = [
   ...PROPOSAL_DECIDABLE_STATUSES,
   ...PROPOSAL_DECISION_STATUSES,
@@ -24,12 +24,20 @@ export const PROPOSAL_STATUSES = [
 ] as const;
 export const proposalStatusSchema = z.enum(PROPOSAL_STATUSES);
 
-export const PROPOSAL_INACTIVE_STATUSES = ["withdrawn", "rejected", "spam", "duplicate", "deleted"] as const;
+export const PROPOSAL_INACTIVE_STATUSES = [
+  "withdrawn",
+  "canceled",
+  "rejected",
+  "spam",
+  "duplicate",
+  "deleted",
+] as const;
 export const PROPOSAL_ADMIN_STATUS_FILTERS = [
   "active",
   ...PROPOSAL_DECIDABLE_STATUSES,
   ...PROPOSAL_DECISION_STATUSES,
   "withdrawn",
+  "canceled",
   "spam",
   "duplicate",
 ] as const;
@@ -73,6 +81,10 @@ export function isProposalSpeakerRosterEditableStatus(
   value: string,
 ): value is z.infer<typeof proposalSpeakerRosterEditableStatusSchema> {
   return proposalSpeakerRosterEditableStatusSchema.safeParse(value).success;
+}
+
+export function isProposalInactiveStatus(value: string): boolean {
+  return (PROPOSAL_INACTIVE_STATUSES as readonly string[]).includes(value);
 }
 
 export function isEligibleReplacementProposerStatus(value: string): boolean {
