@@ -1,8 +1,11 @@
 import { useState } from "preact/hooks";
-import { Badge } from "../../../components/Badge";
+import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
-import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
-import type { AdminApplicationDetail } from "../../types";
+import {
+  isIndividualMembershipCategory,
+  type MembershipCategoryCatalogEntry,
+} from "../../../../../shared/schemas/membership-categories";
+import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import { asString } from "./helpers";
 import { ApplicationEditForm, type ApplicationEditFormValue } from "./ApplicationEditForm";
 
@@ -13,9 +16,13 @@ import { ApplicationEditForm, type ApplicationEditFormValue } from "./Applicatio
  */
 export function ApplicationOverviewCard({
   detail,
+  categories,
+  canWrite,
   onSave,
 }: {
-  detail: AdminApplicationDetail;
+  detail: MembershipApplicationDetail;
+  categories: MembershipCategoryCatalogEntry[];
+  canWrite: boolean;
   onSave: (edits: {
     applicantName: string;
     applicantEmail: string;
@@ -57,7 +64,7 @@ export function ApplicationOverviewCard({
     setEditSaving(true);
     setEditError("");
     try {
-      const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(editForm.membershipCategory);
+      const isIndividual = isIndividualMembershipCategory(editForm.membershipCategory);
       await onSave({
         applicantName: editForm.applicantName,
         applicantEmail: editForm.applicantEmail,
@@ -82,8 +89,13 @@ export function ApplicationOverviewCard({
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
         <span>Application</span>
-        {!editing && (
-          <button class="btn btn-sm btn-outline-primary" onClick={startEditing}>
+        {!editing && canWrite && (
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            onClick={startEditing}
+            disabled={categories.length === 0}
+          >
             Edit
           </button>
         )}
@@ -106,7 +118,10 @@ export function ApplicationOverviewCard({
               </tr>
               <tr>
                 <th class="text-muted small">Category</th>
-                <td class="mono">{detail.membershipCategory}</td>
+                <td>
+                  {detail.membershipCategoryLabel}{" "}
+                  <span class="mono text-muted small">({detail.membershipCategory})</span>
+                </td>
               </tr>
               <tr>
                 <th class="text-muted small">Stage</th>
@@ -134,6 +149,7 @@ export function ApplicationOverviewCard({
           editForm && (
             <ApplicationEditForm
               form={editForm}
+              categories={categories}
               onChange={(updater) => setEditForm((f) => (f ? updater(f) : f))}
               disabled={editSaving}
               error={editError}

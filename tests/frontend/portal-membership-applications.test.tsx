@@ -1,0 +1,179 @@
+// @vitest-environment jsdom
+import { render, type ComponentChild } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
+import { ApplicationsList } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList";
+
+const APPLICATION_ID = "00000000-0000-4000-8000-000000000201";
+const NOW = "2026-08-27T12:00:00.000Z";
+
+const detail = {
+  id: APPLICATION_ID,
+  applicantEmail: "applicant@example.test",
+  applicantName: "Example Applicant",
+  organizationName: "Example Organization",
+  membershipCategory: "F",
+  membershipCategoryLabel: "General Member",
+  stage: "ec_review" as const,
+  onHoldSubtype: null,
+  assignedToUserId: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+  stageEnteredAt: NOW,
+  answers: {},
+  requestedWorkingGroups: [],
+  events: [],
+  communications: [],
+  concerns: [],
+  ecDecisions: [],
+};
+
+const categories = [
+  {
+    code: "F" as const,
+    label: "General Member",
+    description: null,
+    displayOrder: 60,
+    isIndividual: false,
+    isVoting: true,
+  },
+];
+
+let container: HTMLElement | null = null;
+
+function json(value: unknown): Response {
+  return new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function mount(node: ComponentChild): HTMLElement {
+  container = document.createElement("div");
+  document.body.append(container);
+  void act(() => render(node, container!));
+  return container;
+}
+
+afterEach(() => {
+  if (container) {
+    void act(() => render(null, container!));
+    container.remove();
+    container = null;
+  }
+  vi.unstubAllGlobals();
+});
+
+describe("portal membership-application management", () => {
+  it("lists the D1 category label through only the canonical server-side collection API", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return json({
+          applications: [detail],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+
+    const open = vi.fn();
+    const page = mount(<ApplicationsList onViewApplication={open} />);
+    await settle();
+
+    expect(page.textContent).toContain("General Member");
+    expect(page.textContent).toContain("(F)");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.pathname).toBe("/api/v1/system/membership-applications");
+    expect(requests[0]?.searchParams.get("limit")).toBe("50");
+    expect(requests[0]?.searchParams.get("offset")).toBe("0");
+    expect(requests[0]?.searchParams.get("sort")).toBe("-created_at");
+    expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
+
+    void act(() => (page.querySelector("tbody tr") as HTMLTableRowElement).click());
+    expect(open).toHaveBeenCalledWith(APPLICATION_ID);
+  });
+
+  it("keeps a read-only reviewer view free of write and approval controls", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(detail);
+      }),
+    );
+
+    const page = mount(
+      <ApplicationDetailView
+        applicationId={APPLICATION_ID}
+        categories={categories}
+        canWrite={false}
+        canApprove={false}
+        onBack={vi.fn()}
+      />,
+    );
+    await settle();
+
+    expect(page.textContent).toContain("Example Applicant");
+    expect(page.textContent).toContain("General Member");
+    expect(page.textContent).not.toContain("Approve & run onboarding");
+    expect(page.textContent).not.toContain("Send communication");
+    expect(page.textContent).not.toContain("Add internal note");
+    expect(page.textContent).not.toContain("staff override");
+    expect([...page.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Edit")).toBe(false);
+    expect(requests.every((url) => url.pathname.startsWith("/api/v1/system/membership-applications"))).toBe(true);
+  });
+
+  it("renders write and approval controls only for their respective capabilities", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(detail);
+      }),
+    );
+
+    const page = mount(
+      <ApplicationDetailView
+        applicationId={APPLICATION_ID}
+        categories={categories}
+        canWrite
+        canApprove
+        onBack={vi.fn()}
+      />,
+    );
+    await settle();
+
+    expect(page.textContent).toContain("Approve & run onboarding");
+    expect(page.textContent).toContain("Send communication");
+    expect(page.textContent).toContain("Add internal note");
+    expect(page.textContent).toContain("staff override");
+    expect([...page.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Edit")).toBe(true);
+  });
+});

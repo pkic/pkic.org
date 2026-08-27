@@ -1,6 +1,6 @@
-import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
+import type { MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
 
-/** Application-answer keys editable via PATCH /api/v1/admin/applications/:id (Fix 3). */
+/** Application-answer keys editable via PATCH /api/v1/system/membership-applications/:id (Fix 3). */
 export interface ApplicationEditFormValue {
   applicantName: string;
   applicantEmail: string;
@@ -16,6 +16,7 @@ export interface ApplicationEditFormValue {
 
 export function ApplicationEditForm({
   form,
+  categories,
   onChange,
   disabled,
   error,
@@ -24,6 +25,7 @@ export function ApplicationEditForm({
   saving,
 }: {
   form: ApplicationEditFormValue;
+  categories: MembershipCategoryCatalogEntry[];
   onChange: (updater: (f: ApplicationEditFormValue) => ApplicationEditFormValue) => void;
   disabled: boolean;
   error: string;
@@ -31,6 +33,8 @@ export function ApplicationEditForm({
   onCancel: () => void;
   saving: boolean;
 }) {
+  const selectedCategory = categories.find((category) => category.code === form.membershipCategory);
+
   return (
     <div>
       <div class="row g-2 mb-2">
@@ -61,14 +65,14 @@ export function ApplicationEditForm({
             onChange={(e) => onChange((f) => ({ ...f, membershipCategory: (e.target as HTMLSelectElement).value }))}
             disabled={disabled}
           >
-            {MEMBERSHIP_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {categories.map((category) => (
+              <option key={category.code} value={category.code}>
+                {category.label} ({category.code})
               </option>
             ))}
           </select>
         </div>
-        {!INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(form.membershipCategory) && (
+        {selectedCategory?.isIndividual !== true && (
           <div class="col-sm-6">
             <label class="form-label small mb-1">Organization</label>
             <input
@@ -140,10 +144,10 @@ export function ApplicationEditForm({
       <hr class="my-3" />
       {error && <div class="alert alert-danger small py-2 mb-2">{error}</div>}
       <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-primary" onClick={onSave} disabled={saving}>
+        <button type="button" class="btn btn-sm btn-primary" onClick={onSave} disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </button>
-        <button class="btn btn-sm btn-outline-secondary" onClick={onCancel} disabled={saving}>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel} disabled={saving}>
           Cancel
         </button>
       </div>

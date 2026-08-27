@@ -4,8 +4,8 @@ import { ApplicationDetailGet, ApplicationDetailPatch } from "./index";
 import { ApplicationStagePatch } from "./stage";
 import { ApplicationCommunicationsPost } from "./communications";
 import { ApplicationNotesPost } from "./notes";
-import { AdminApplicationDocumentsGet } from "./documents";
-import { AdminApplicationEcDecisionsPost } from "./ec-decisions";
+import { StaffApplicationDocumentsGet } from "./documents";
+import { MembershipApplicationEcDecisionsPost } from "./ec-decisions";
 import { ApplicationApprovePost } from "./approve";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 
@@ -17,8 +17,8 @@ openapi.patch("/", ApplicationDetailPatch);
 openapi.patch("/stage", ApplicationStagePatch);
 openapi.post("/communications", ApplicationCommunicationsPost);
 openapi.post("/notes", ApplicationNotesPost);
-openapi.get("/documents", AdminApplicationDocumentsGet);
-openapi.post("/ec-decisions", AdminApplicationEcDecisionsPost);
+openapi.get("/documents", StaffApplicationDocumentsGet);
+openapi.post("/ec-decisions", MembershipApplicationEcDecisionsPost);
 openapi.post("/approve", ApplicationApprovePost);
 
 export default openapi;

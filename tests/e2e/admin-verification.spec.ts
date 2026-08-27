@@ -31,7 +31,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { adminApplicationDetailSchema } from "../../assets/shared/schemas/admin-applications";
+import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
 
@@ -164,7 +164,7 @@ async function provisionApprovedMember(
   for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
     const status = await page.evaluate(
       async ({ applicationId, toStage }) => {
-        const res = await fetch(`/api/v1/admin/applications/${applicationId}/stage`, {
+        const res = await fetch(`/api/v1/system/membership-applications/${applicationId}/stage`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -182,7 +182,7 @@ async function provisionApprovedMember(
   }
 
   const approved = await page.evaluate(async (applicationId) => {
-    const res = await fetch(`/api/v1/admin/applications/${applicationId}/approve`, {
+    const res = await fetch(`/api/v1/system/membership-applications/${applicationId}/approve`, {
       method: "POST",
       credentials: "same-origin",
     });
@@ -506,6 +506,17 @@ test.describe("Admin browser-verification pass", () => {
   // `window.confirm`, which this test dismisses programmatically the same
   // way the "mailing lists" and "working groups" tests above dismiss theirs.
   test("applications: Approve & run onboarding click-through runs full onboarding", async ({ page }) => {
+    const canonicalRequests: string[] = [];
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/system/membership-applications")) {
+        canonicalRequests.push(`${request.method()} ${pathname}`);
+      }
+      if (pathname.startsWith("/api/v1/admin/applications")) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
     page.on("dialog", (d) => d.accept());
     await page.goto("/admin/");
     await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
@@ -522,8 +533,12 @@ test.describe("Admin browser-verification pass", () => {
     });
 
     const since = await outboxLength();
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
 
-    await page.goto("/admin/#/membership/applications");
+    await page.goto("/portal/#/system/membership-applications");
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Membership Applications" })).toHaveAttribute("aria-current", "page");
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter is sufficient here because every earlier fixture has
     // already moved out of ec_review.
@@ -550,20 +565,20 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
     await expect(page.getByText("No further transitions from this stage.")).toBeVisible();
 
-    // Independent confirmation 1/2: re-fetch the application from the admin
+    // Independent confirmation 1/3: re-fetch the application from the System
     // API (not the same optimistic UI state the toast/badge above already
     // reflect) — durably approved with an event recording the transition.
     const refetched = await page.evaluate(async (id) => {
-      const res = await fetch(`/api/v1/admin/applications/${id}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/system/membership-applications/${id}`, { credentials: "same-origin" });
       const body = await res.json();
       return { status: res.status, body };
     }, applicationId);
     expect(refetched.status).toBe(200);
-    const refetchedBody = adminApplicationDetailSchema.parse(refetched.body);
+    const refetchedBody = membershipApplicationDetailSchema.parse(refetched.body);
     expect(refetchedBody.stage).toBe("approved");
     expect(refetchedBody.events.some((e) => e.toStage === "approved")).toBe(true);
 
-    // Independent confirmation 2/2: onboarding provisioning
+    // Independent confirmation 2/3: onboarding provisioning
     // (approveApplication -> provisionOrganizationMembership) really ran —
     // a real user now exists, linked to a real organization matching the
     // application's organizationName, not just the application row's own
@@ -579,6 +594,11 @@ test.describe("Admin browser-verification pass", () => {
     const provisionedUser = usersLookup.body.users.find((u) => u.email === email);
     expect(provisionedUser, JSON.stringify(usersLookup.body)).toBeTruthy();
     expect(provisionedUser?.membership?.organizationName).toBe(orgName);
+
+    expect(canonicalRequests).toContain(`GET /api/v1/system/membership-applications`);
+    expect(canonicalRequests).toContain(`GET /api/v1/system/membership-applications/${applicationId}`);
+    expect(canonicalRequests).toContain(`POST /api/v1/system/membership-applications/${applicationId}/approve`);
+    expect(legacyRequests).toEqual([]);
 
     // Independent confirmation 3/3: the onboarding welcome email — one of
     // approveApplication's own outbox side effects — actually landed,

@@ -1,10 +1,19 @@
 import { Link } from "wouter";
 import type { PortalSession } from "../types";
-import { portalSystemNavigationItems } from "../shell/portal-navigation";
+import { portalHasGlobalPermission, portalSystemNavigationItems } from "../shell/portal-navigation";
 import { OrganizationContentReviews } from "./OrganizationContentReviews";
 import { SystemAuditLog } from "./SystemAuditLog";
+import { MembershipApplications } from "./membership-applications";
 
-export function SystemManagement({ session, view }: { session: PortalSession | null; view?: string }) {
+export function SystemManagement({
+  session,
+  view,
+  resourceId,
+}: {
+  session: PortalSession | null;
+  view?: string;
+  resourceId?: string;
+}) {
   const items = portalSystemNavigationItems(session);
   const requestedPath = view ? `/system/${view}` : null;
   const selected = requestedPath ? items.find((item) => item.path === requestedPath) : items[0];
@@ -33,7 +42,13 @@ export function SystemManagement({ session, view }: { session: PortalSession | n
           </Link>
         ))}
       </nav>
-      {selected.path === "/system/organization-content-reviews" ? (
+      {selected.path === "/system/membership-applications" ? (
+        <MembershipApplications
+          initialApplicationId={resourceId}
+          canWrite={portalHasGlobalPermission(session, "membership:write")}
+          canApprove={portalHasGlobalPermission(session, "membership:approve")}
+        />
+      ) : selected.path === "/system/organization-content-reviews" ? (
         <OrganizationContentReviews />
       ) : selected.path === "/system/audit-log" ? (
         <SystemAuditLog />

@@ -1,10 +1,10 @@
 /**
- * admin-applications.test.ts
+ * membership-application-management.test.ts
  *
- * admin membership application endpoints:
- *  - PATCH /api/v1/admin/applications/:id (Fix 3: correct applicant-submitted
+ * Canonical System membership-application management endpoints:
+ *  - PATCH /api/v1/system/membership-applications/:id (Fix 3: correct applicant-submitted
  *    fields without transitioning stage)
- *  - GET /api/v1/admin/applications?sort=... (Fix 4: sortable columns)
+ *  - GET /api/v1/system/membership-applications?sort=... (Fix 4: sortable columns)
  *  - POST /api/v1/internal/jobs/run with runConsultationBatch/runEcReviewBatch
  *    (Fix 5b: manual off-cycle triggers for the twice-weekly membership
  *    batches)
@@ -22,9 +22,11 @@ import { createApplicationFormSubmission, seedMemberApplication } from "./helper
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { updateMembershipSettings } from "../functions/_lib/services/membership-settings";
 import { runOnHoldReminders } from "../functions/_lib/services/membership/scheduled-jobs";
-import { updateAdminApplication } from "../functions/_lib/services/admin-applications";
-import type { AuthAdmin } from "../functions/_lib/types";
-import { adminApplicationsListResponseSchema } from "../assets/shared/schemas/admin-applications";
+import { updateMembershipApplication } from "../functions/_lib/services/membership/applications/management";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+import { membershipApplicationsListResponseSchema } from "../assets/shared/schemas/membership-application-management";
+import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
+import type { Permission } from "../assets/shared/schemas/permissions";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -67,6 +69,16 @@ async function assignRole(
     .run();
 }
 
+async function grantGlobalPermission(userId: string, permission: Permission, grantedBy: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO permission_grants
+       (id, user_id, permission, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), userId, permission, grantedBy)
+    .run();
+}
+
 async function createApplication(overrides: Record<string, unknown> = {}): Promise<{ id: string }> {
   const id = await seedMemberApplication({
     applicantEmail: (overrides.applicant_email as string) ?? "applicant@example.test",
@@ -81,10 +93,10 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
   return { id };
 }
 
-describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application fields)", () => {
+describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit application fields)", () => {
   let adminToken: string;
   let adminId: string;
-  let adminActor: AuthAdmin;
+  let adminActor: UserBackedAuthAdmin;
 
   beforeEach(async () => {
     await resetDb();
@@ -92,7 +104,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
     adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
-    adminToken = await createAdminSession(env.DB, adminId, "admin-applications-token");
+    adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-token");
   });
 
   it("edits top-level fields and answers, without transitioning stage", async () => {
@@ -102,7 +114,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     });
     const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         applicantName: "Corrected Name",
@@ -151,8 +163,8 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     const concurrentDb = gateBatchGroup(env.DB, 2);
 
     const outcomes = await Promise.allSettled([
-      updateAdminApplication(concurrentDb, id, adminActor, { applicantName: "First Correction" }),
-      updateAdminApplication(concurrentDb, id, adminActor, { applicantName: "Second Correction" }),
+      updateMembershipApplication(concurrentDb, id, adminActor, { applicantName: "First Correction" }),
+      updateMembershipApplication(concurrentDb, id, adminActor, { applicantName: "Second Correction" }),
     ]);
 
     expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
@@ -188,7 +200,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     const staleReminder = runOnHoldReminders(gate.db, env as any);
     await gate.reached;
 
-    const edit = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const edit = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantEmail: "updated@example.test" }),
     });
@@ -214,7 +226,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     });
     const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}`);
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`);
     const body = (await response.json()) as {
       requestedWorkingGroups: Array<{ slug: string; name: string }>;
     };
@@ -228,7 +240,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   it("records a member_application_events row for the edit, distinct from a stage transition (fromStage === toStage)", async () => {
     const { id } = await createApplication({ stage: "in_review" });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Renamed Applicant" }),
     });
@@ -247,40 +259,41 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     expect(events[0].actor_user_id).toBe(adminId);
   });
 
-  it("keeps API-key audit identity out of the nullable application-edit event user foreign key", async () => {
+  it("rejects API-key edits without side effects", async () => {
     const { id } = await createApplication({ stage: "in_review" });
-    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}`, {
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "API Key Correction" }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
     expect(
       await queryAll<{ actor_user_id: string | null }>(
         env.DB,
         "SELECT actor_user_id FROM member_application_events WHERE application_id = ?",
         id,
       ),
-    ).toEqual([{ actor_user_id: null }]);
+    ).toEqual([]);
     expect(
       await queryAll<{ actor_id: string | null }>(
         env.DB,
         "SELECT actor_id FROM audit_log WHERE action = 'application_edited' AND entity_id = ?",
         id,
       ),
-    ).toEqual([{ actor_id: "api-key" }]);
+    ).toEqual([]);
   });
 
   it("allows editing an already-approved application's details more than once (uq_member_application_events_approved must not reject the from_stage=to_stage='approved' marker event)", async () => {
     const { id } = await createApplication({ stage: "approved" });
 
-    const first = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const first = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "First Correction" }),
     });
     expect(first.status).toBe(200);
 
-    const second = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const second = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Second Correction" }),
     });
@@ -298,7 +311,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   it("writes an audit_log entry for the edit", async () => {
     const { id } = await createApplication();
 
-    await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Audited Name" }),
     });
@@ -316,7 +329,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   it("clears organizationName when the category is edited to an individual (org-less) category", async () => {
     const { id } = await createApplication({ membership_category: "F", organization_name: "Old Org" });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ membershipCategory: "H6" }),
     });
@@ -333,7 +346,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
 
   it("rejects an empty patch body (no fields provided)", async () => {
     const { id } = await createApplication();
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({}),
     });
@@ -341,7 +354,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   });
 
   it("returns 404 for a non-existent application", async () => {
-    const response = await call(adminToken, `/api/v1/admin/applications/${crypto.randomUUID()}`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${crypto.randomUUID()}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Nobody" }),
     });
@@ -357,7 +370,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     });
     const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
 
-    const response = await call(staffToken, `/api/v1/admin/applications/${id}`, {
+    const response = await call(staffToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Should Not Save" }),
     });
@@ -377,7 +390,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     await assignRole(staffId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffId, "staff-membership-token");
 
-    const response = await call(staffToken, `/api/v1/admin/applications/${id}`, {
+    const response = await call(staffToken, `/api/v1/system/membership-applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Processor Edited" }),
     });
@@ -385,14 +398,16 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   });
 });
 
-describe("GET /api/v1/admin/applications?sort=... (Fix 4 — sortable columns)", () => {
+describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortable columns)", () => {
   let adminToken: string;
+  let adminId: string;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-applications-sort-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-sort-token");
 
     // Distinct applicant_name/created_at ordering, inserted out of both
     // alphabetical and chronological order so sort actually changes result order.
@@ -411,38 +426,114 @@ describe("GET /api/v1/admin/applications?sort=... (Fix 4 — sortable columns)",
   });
 
   it("defaults to created_at DESC when no sort param is given (unchanged behavior)", async () => {
-    const response = await call(adminToken, "/api/v1/admin/applications");
+    const response = await call(adminToken, "/api/v1/system/membership-applications");
     expect(response.status).toBe(200);
-    const body = adminApplicationsListResponseSchema.parse(await response.json());
+    const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
   });
 
   it("sorts ascending by a valid allowlisted column (applicant_name)", async () => {
-    const response = await call(adminToken, "/api/v1/admin/applications?sort=applicant_name");
+    const response = await call(adminToken, "/api/v1/system/membership-applications?sort=applicant_name");
     expect(response.status).toBe(200);
-    const body = adminApplicationsListResponseSchema.parse(await response.json());
+    const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
   });
 
   it("sorts descending with a leading '-'", async () => {
-    const response = await call(adminToken, "/api/v1/admin/applications?sort=-applicant_name");
+    const response = await call(adminToken, "/api/v1/system/membership-applications?sort=-applicant_name");
     expect(response.status).toBe(200);
-    const body = adminApplicationsListResponseSchema.parse(await response.json());
+    const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Zed Applicant", "Amy Applicant"]);
   });
 
   it("applies the shared search contract in D1 and returns the matching page total", async () => {
-    const response = await call(adminToken, "/api/v1/admin/applications?q=amy%40example.test");
+    const response = await call(adminToken, "/api/v1/system/membership-applications?q=amy%40example.test");
     expect(response.status).toBe(200);
-    const body = adminApplicationsListResponseSchema.parse(await response.json());
+    const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map(({ applicantName }) => applicantName)).toEqual(["Amy Applicant"]);
     expect(body.page.total).toBe(1);
+  });
+
+  it("joins the configured category label and searches that label in D1", async () => {
+    await env.DB.prepare("UPDATE membership_categories SET label = 'Consortium organizations' WHERE code = 'F'").run();
+
+    const response = await call(
+      adminToken,
+      "/api/v1/system/membership-applications?q=consortium%20organizations&limit=1&offset=0",
+    );
+    expect(response.status).toBe(200);
+    const body = membershipApplicationsListResponseSchema.parse(await response.json());
+    expect(body.applications).toHaveLength(1);
+    expect(body.applications[0]).toMatchObject({
+      membershipCategory: "F",
+      membershipCategoryLabel: "Consortium organizations",
+    });
+    expect(body.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
+  });
+
+  it("exposes the D1-backed category catalog to readers and never the legacy admin route", async () => {
+    const catalog = await call(adminToken, "/api/v1/system/membership-categories");
+    expect(catalog.status).toBe(200);
+    const catalogBody = membershipCategoryCatalogResponseSchema.parse(await catalog.json());
+    expect(catalogBody.categories[0]).toMatchObject({
+      code: "A",
+      label: expect.any(String),
+      displayOrder: 10,
+      isIndividual: false,
+      isVoting: true,
+    });
+
+    expect((await call(adminToken, "/api/v1/admin/applications")).status).toBe(404);
+  });
+
+  it("keeps read, write, and approval capabilities independently enforceable", async () => {
+    const readUserId = await insertUser("application-reader@example.test");
+    await grantGlobalPermission(readUserId, "membership:read", adminId);
+    const readToken = await createAdminSession(env.DB, readUserId, "application-reader-token");
+
+    const writeUserId = await insertUser("application-writer@example.test");
+    await grantGlobalPermission(writeUserId, "membership:write", adminId);
+    const writeToken = await createAdminSession(env.DB, writeUserId, "application-writer-token");
+
+    const approveUserId = await insertUser("application-approver@example.test");
+    await grantGlobalPermission(approveUserId, "membership:approve", adminId);
+    const approveToken = await createAdminSession(env.DB, approveUserId, "application-approver-token");
+
+    const applicationId = crypto.randomUUID();
+    expect((await call(readToken, "/api/v1/system/membership-applications")).status).toBe(200);
+    expect(
+      (
+        await call(readToken, `/api/v1/system/membership-applications/${applicationId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ applicantName: "Must not write" }),
+        })
+      ).status,
+    ).toBe(403);
+
+    expect((await call(writeToken, "/api/v1/system/membership-applications")).status).toBe(403);
+    expect(
+      (
+        await call(writeToken, `/api/v1/system/membership-applications/${applicationId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ applicantName: "Authorized but missing" }),
+        })
+      ).status,
+    ).toBe(404);
+
+    expect((await call(approveToken, "/api/v1/system/membership-applications")).status).toBe(403);
+    expect(
+      (
+        await call(approveToken, `/api/v1/system/membership-applications/${applicationId}/approve`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(404);
   });
 
   it("rejects an unknown/unsafe sort column with a 400 instead of silently ignoring it", async () => {
     const response = await call(
       adminToken,
-      `/api/v1/admin/applications?sort=${encodeURIComponent("id; DROP TABLE member_applications; --")}`,
+      `/api/v1/system/membership-applications?sort=${encodeURIComponent("id; DROP TABLE member_applications; --")}`,
     );
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
@@ -532,7 +623,7 @@ describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBat
   });
 });
 
-describe("POST /api/v1/admin/applications/:id/communications", () => {
+describe("POST /api/v1/system/membership-applications/:id/communications", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -544,7 +635,7 @@ describe("POST /api/v1/admin/applications/:id/communications", () => {
 
   it("commits its email intent, communication record, and audit atomically", async () => {
     const { id } = await createApplication({ applicant_email: "communication@example.test" });
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/communications`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/communications`, {
       method: "POST",
       body: JSON.stringify({ subject: "Additional information", body: "Please provide more detail." }),
     });
@@ -568,7 +659,7 @@ describe("POST /api/v1/admin/applications/:id/communications", () => {
     const { id } = await createApplication({ applicant_email: "service-actor@example.test" });
     const response = await call(
       env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/admin/applications/${id}/communications`,
+      `/api/v1/system/membership-applications/${id}/communications`,
       {
         method: "POST",
         body: JSON.stringify({ subject: "Not attributable", body: "This must not be queued." }),
@@ -596,7 +687,7 @@ describe("POST /api/v1/admin/applications/:id/communications", () => {
        END`,
     ).run();
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/communications`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/communications`, {
       method: "POST",
       body: JSON.stringify({ subject: "Must roll back", body: "This cannot become partial." }),
     });

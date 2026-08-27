@@ -66,6 +66,28 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(contentReviewer, "/system/organization-content-reviews")).toBeNull();
   });
 
+  it("exposes membership applications only to a global membership reader", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "membership:read", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "membership:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toEqual([
+      {
+        path: "/system/membership-applications",
+        section: "system",
+        label: "Membership Applications",
+      },
+    ]);
+    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+  });
+
   it("shows member actions but no management entry to a member-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");

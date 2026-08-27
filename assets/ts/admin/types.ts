@@ -17,15 +17,6 @@ import type {
   UserRoleAssignment as CanonicalUserRoleAssignment,
 } from "../../shared/schemas/access-control";
 import type {
-  AdminApplicationCommunication as CanonicalAdminApplicationCommunication,
-  AdminApplicationConcern as CanonicalAdminApplicationConcern,
-  AdminApplicationDetail as CanonicalAdminApplicationDetail,
-  AdminApplicationDocument as CanonicalAdminApplicationDocument,
-  AdminApplicationEcDecision as CanonicalAdminApplicationEcDecision,
-  AdminApplicationEvent as CanonicalAdminApplicationEvent,
-  AdminApplicationSummary as CanonicalAdminApplicationSummary,
-} from "../../shared/schemas/admin-applications";
-import type {
   AdminEventSummary as CanonicalEventSummary,
   AdminEventTeamListItem as CanonicalEventPermission,
   AdminEventDetail as CanonicalAdminEventDetail,
@@ -171,16 +162,6 @@ export type SponsorshipEvent = CanonicalSponsorshipEvent;
 
 // Interim Admin Tool — GET/POST /api/v1/admin/members
 export type AdminMemberSummary = CanonicalAdminMemberSummary;
-
-// GET /api/v1/admin/applications
-export type AdminApplicationSummary = CanonicalAdminApplicationSummary;
-
-export type AdminApplicationEvent = CanonicalAdminApplicationEvent;
-export type AdminApplicationCommunication = CanonicalAdminApplicationCommunication;
-export type AdminApplicationConcern = CanonicalAdminApplicationConcern;
-export type AdminApplicationEcDecision = CanonicalAdminApplicationEcDecision;
-export type AdminApplicationDocument = CanonicalAdminApplicationDocument;
-export type AdminApplicationDetail = CanonicalAdminApplicationDetail;
 
 // GET/PATCH /api/v1/admin/membership-settings
 export type AdminMembershipSettings = z.infer<typeof membershipSettingsSchema>;

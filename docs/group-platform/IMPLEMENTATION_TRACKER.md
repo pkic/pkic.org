@@ -1060,7 +1060,22 @@ Status: In progress
       Mounted backend and frontend tests prove permission boundaries, decision
       behavior, schema validation, D1 filtering, error and empty rendering, and
       absence of admin API requests. A real Worker/D1 browser journey completes
-      a review through the portal and verifies the old bookmark redirect. Other
+      a review through the portal and verifies the old bookmark redirect.
+      Membership-application review is the third permission-derived System
+      destination. Neutral shared schemas and the canonical membership service
+      now drive `/api/v1/system/membership-applications`; the old admin route,
+      component mount, transport names, and hardcoded category-id editor are
+      removed. Read, mutation, and approval actions require their distinct live
+      `membership:read`, `membership:write`, and `membership:approve`
+      permissions from a user-backed staff session. The joined D1 query owns
+      category-label search, allowlisted sorting, counting, and pagination, and
+      the portal editor consumes the D1-backed category catalog and labels.
+      Notification links and old bookmarks lead to the portal. Mounted backend
+      and frontend tests cover permission separation, API-key rejection,
+      category labels, D1 filtering, route removal, capability-derived controls,
+      and absence of legacy requests. A real Worker/D1 browser journey verifies
+      the public application, email confirmation, staff sign-in, portal review,
+      approval, organization provisioning, and welcome notification. Other
       global management destinations remain, so this item is deliberately still
       open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1184,7 +1199,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,148 backend tests pass with one skipped, 268 frontend tests
+      checkpoint: 2,151 backend tests pass with one skipped, 273 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, zero-duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier

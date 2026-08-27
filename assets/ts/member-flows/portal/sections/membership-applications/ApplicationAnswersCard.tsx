@@ -1,7 +1,7 @@
-import type { AdminApplicationDetail } from "../../types";
+import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import { asBool, asString, asStringArray, externalLink } from "./helpers";
 
-export function ApplicationAnswersCard({ detail }: { detail: AdminApplicationDetail }) {
+export function ApplicationAnswersCard({ detail }: { detail: MembershipApplicationDetail }) {
   return (
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Application answers</div>

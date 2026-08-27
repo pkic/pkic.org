@@ -1,5 +1,5 @@
-import { adminApplicationDocumentsListResponseSchema } from "../../../../shared/schemas/application-documents";
-import { ApiDataTable } from "../../components/ApiDataTable";
+import { staffApplicationDocumentsListResponseSchema } from "../../../../../shared/schemas/application-documents";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { fmt } from "../../ui";
 
 export function ApplicationDocumentsCard({ applicationId }: { applicationId: string }) {
@@ -8,8 +8,8 @@ export function ApplicationDocumentsCard({ applicationId }: { applicationId: str
       <div class="card-header bg-white fw-semibold">Documents</div>
       <div class="card-body">
         <ApiDataTable
-          endpoint={`/api/v1/admin/applications/${applicationId}/documents`}
-          responseSchema={adminApplicationDocumentsListResponseSchema}
+          endpoint={`/api/v1/system/membership-applications/${applicationId}/documents`}
+          responseSchema={staffApplicationDocumentsListResponseSchema}
           resolve={(response) => response.documents}
           resolvePage={(response) => response.page}
           paginate

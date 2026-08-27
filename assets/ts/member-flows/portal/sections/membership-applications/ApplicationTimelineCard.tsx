@@ -1,7 +1,7 @@
 import { fmt } from "../../ui";
-import type { AdminApplicationDetail } from "../../types";
+import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 
-export function ApplicationTimelineCard({ detail }: { detail: AdminApplicationDetail }) {
+export function ApplicationTimelineCard({ detail }: { detail: MembershipApplicationDetail }) {
   return (
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Timeline</div>

@@ -1045,7 +1045,7 @@ CREATE INDEX idx_member_application_events_app ON member_application_events(appl
 -- so its provisioning/email/audit/Google-Groups writes in the same batch
 -- never commit either, without needing per-statement claim-token chaining.
 -- Scoped to `from_stage != 'approved'` (a real transition into approved) so
--- it does NOT also reject updateAdminApplication's own
+-- it does NOT also reject updateMembershipApplication's own
 -- from_stage = to_stage = 'approved' marker event, which records a details
 -- edit on an application that's already approved without representing a
 -- second approval.

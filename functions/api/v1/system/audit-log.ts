@@ -13,16 +13,14 @@
  *   entityId    — filter by exact entity_id
  */
 import { json } from "../../../_lib/http";
-import { requireUserBackedAdminFromRequest } from "../../../_lib/auth/admin";
-import { requirePermission } from "../../../_lib/auth/permissions";
-import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import type { AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { listSystemAuditLog } from "../../../_lib/services/system-audit-log";
 import { systemAuditLogListRouteSchema } from "../../../../assets/shared/schemas/system-audit-log";
+import { requireSystemPermission } from "./authorization";
 
 export const SystemAuditLogList = openApiRoute(systemAuditLogListRouteSchema, async (c: AdminContext, data) => {
-  const staff = await requireUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(staff, "audit:read");
+  const { db } = await requireSystemPermission(c, "audit:read");
 
-  return json(await listSystemAuditLog(requestDb(c), data.query));
+  return json(await listSystemAuditLog(db, data.query));
 });

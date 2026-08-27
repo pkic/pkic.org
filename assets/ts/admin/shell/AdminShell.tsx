@@ -15,7 +15,6 @@ import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
 import { Organizations } from "../sections/Organizations";
 import { Sponsorships } from "../sections/Sponsorships";
-import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
@@ -26,6 +25,7 @@ import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
+  ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
@@ -43,13 +43,6 @@ function PortalRedirect({ target, message }: { target: string; message: string }
     window.location.assign(target);
   }, [target]);
   return <p>{message}</p>;
-}
-
-function MembershipApplicationRoute({ applicationId }: { applicationId: string }) {
-  const [, navigate] = useHashLocation();
-  return (
-    <Applications initialApplicationId={applicationId} onBackFromInitial={() => navigate("/membership/applications")} />
-  );
 }
 
 export function AdminShell() {
@@ -269,25 +262,28 @@ export function AdminShell() {
             <Route
               path="/membership"
               component={() => (
-                <SectionWrapper title="Membership — Applications">
-                  <Applications />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET}
+                  message="Membership application review has moved to the portal."
+                />
               )}
             />
             <Route
               path="/membership/applications/:applicationId"
               component={({ params }: { params: { applicationId: string } }) => (
-                <SectionWrapper title="Membership — Application">
-                  <MembershipApplicationRoute applicationId={params.applicationId} />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={`${ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET}/${encodeURIComponent(params.applicationId)}`}
+                  message="Membership application review has moved to the portal."
+                />
               )}
             />
             <Route
               path="/membership/applications"
               component={() => (
-                <SectionWrapper title="Membership — Applications">
-                  <Applications />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET}
+                  message="Membership application review has moved to the portal."
+                />
               )}
             />
             <Route

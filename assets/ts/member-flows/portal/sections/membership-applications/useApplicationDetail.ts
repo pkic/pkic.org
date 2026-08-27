@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { api } from "../../api";
+import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
-import type { AdminApplicationDetail } from "../../types";
-import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
+import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
+import type { EcDecisionValue } from "../../../../../shared/schemas/ec-review";
 import {
-  adminApplicationDetailSchema,
-  adminEcDecisionCreateResponseSchema,
+  membershipApplicationDetailSchema,
+  staffEcDecisionCreateResponseSchema,
   applicationApproveResponseSchema,
   applicationCommunicationCreateResponseSchema,
   applicationNoteCreateResponseSchema,
   applicationStageTransitionResponseSchema,
-} from "../../../../shared/schemas/admin-applications";
+} from "../../../../../shared/schemas/membership-application-management";
 
 /**
  * Data + mutation commands for one application's detail view: transition,
@@ -21,13 +21,16 @@ import {
 export function useApplicationDetail(applicationId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<AdminApplicationDetail | null>(null);
+  const [detail, setDetail] = useState<MembershipApplicationDetail | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api(`/api/v1/admin/applications/${applicationId}`, adminApplicationDetailSchema);
+      const data = await getJson(
+        `/api/v1/system/membership-applications/${applicationId}`,
+        membershipApplicationDetailSchema,
+      );
       setDetail(data);
     } catch (e) {
       setError((e as Error).message);
@@ -42,14 +45,15 @@ export function useApplicationDetail(applicationId: string) {
 
   async function transition(params: { toStage: string; onHoldSubtype?: string; note?: string }) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/stage`, applicationStageTransitionResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify({
+      await patchJson(
+        `/api/v1/system/membership-applications/${applicationId}/stage`,
+        {
           toStage: params.toStage,
           onHoldSubtype: params.toStage === "on_hold" ? params.onHoldSubtype : undefined,
           note: params.note || undefined,
-        }),
-      });
+        },
+        applicationStageTransitionResponseSchema,
+      );
       toast(`Application moved to '${params.toStage}'`, "success");
       await reload();
     } catch (e) {
@@ -59,13 +63,10 @@ export function useApplicationDetail(applicationId: string) {
 
   async function sendCommunication(params: { subject: string; body: string }) {
     try {
-      await api(
-        `/api/v1/admin/applications/${applicationId}/communications`,
+      await postJson(
+        `/api/v1/system/membership-applications/${applicationId}/communications`,
+        { subject: params.subject, body: params.body },
         applicationCommunicationCreateResponseSchema,
-        {
-          method: "POST",
-          body: JSON.stringify({ subject: params.subject, body: params.body }),
-        },
       );
       toast("Communication sent", "success");
       await reload();
@@ -76,10 +77,11 @@ export function useApplicationDetail(applicationId: string) {
 
   async function addNote(body: string) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/notes`, applicationNoteCreateResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({ body }),
-      });
+      await postJson(
+        `/api/v1/system/membership-applications/${applicationId}/notes`,
+        { body },
+        applicationNoteCreateResponseSchema,
+      );
       toast("Note added", "success");
       await reload();
     } catch (e) {
@@ -89,14 +91,15 @@ export function useApplicationDetail(applicationId: string) {
 
   async function recordEcDecision(params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/ec-decisions`, adminEcDecisionCreateResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({
+      await postJson(
+        `/api/v1/system/membership-applications/${applicationId}/ec-decisions`,
+        {
           ecMemberUserId: params.ecMemberUserId,
           decision: params.decision,
           reason: params.reason || undefined,
-        }),
-      });
+        },
+        staffEcDecisionCreateResponseSchema,
+      );
       toast("EC decision recorded", "success");
       await reload();
     } catch (e) {
@@ -107,9 +110,11 @@ export function useApplicationDetail(applicationId: string) {
   async function approve() {
     if (!confirm("Approve this application and run onboarding?")) return;
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/approve`, applicationApproveResponseSchema, {
-        method: "POST",
-      });
+      await postJson(
+        `/api/v1/system/membership-applications/${applicationId}/approve`,
+        {},
+        applicationApproveResponseSchema,
+      );
       toast("Application approved", "success");
       await reload();
     } catch (e) {
@@ -130,9 +135,9 @@ export function useApplicationDetail(applicationId: string) {
     aboutOrganization: string | null;
     reason: string | null;
   }) {
-    await api(`/api/v1/admin/applications/${applicationId}`, adminApplicationDetailSchema, {
-      method: "PATCH",
-      body: JSON.stringify({
+    await patchJson(
+      `/api/v1/system/membership-applications/${applicationId}`,
+      {
         applicantName: edits.applicantName,
         applicantEmail: edits.applicantEmail,
         organizationName: edits.organizationName,
@@ -145,8 +150,9 @@ export function useApplicationDetail(applicationId: string) {
           about_organization: edits.aboutOrganization,
           reason: edits.reason,
         },
-      }),
-    });
+      },
+      membershipApplicationDetailSchema,
+    );
     toast("Application updated", "success");
     await reload();
   }

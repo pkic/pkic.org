@@ -40,6 +40,23 @@ export const membershipCategoryCatalogEntrySchema = z.object({
 });
 export type MembershipCategoryCatalogEntry = z.infer<typeof membershipCategoryCatalogEntrySchema>;
 
+export const membershipCategoryCatalogResponseSchema = z.object({
+  categories: z.array(membershipCategoryCatalogEntrySchema),
+});
+
+export const membershipCategoryCatalogRouteSchema = {
+  tags: ["Membership"],
+  summary: "List the configured membership-category catalog",
+  responses: {
+    "200": {
+      description: "Membership categories in configured display order.",
+      content: {
+        "application/json": { schema: membershipCategoryCatalogResponseSchema },
+      },
+    },
+  },
+};
+
 /** Individual (org-less) membership categories — "NULL for individual categories H5/H6/H7" rule. */
 export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set<string>(["H5", "H6", "H7"]);
 

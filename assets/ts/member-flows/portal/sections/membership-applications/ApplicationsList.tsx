@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { Badge } from "../../../components/Badge";
-import { api } from "../../api";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { Badge } from "../../../../components/Badge";
+import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
-import { APPLICATION_STAGES } from "../../../../shared/schemas/member-applications";
-import { adminApplicationsListResponseSchema } from "../../../../shared/schemas/admin-applications";
+import { APPLICATION_STAGES } from "../../../../../shared/schemas/member-applications";
+import { membershipApplicationsListResponseSchema } from "../../../../../shared/schemas/membership-application-management";
 
 /**
  * Consultation queue visibility (Fix 5a): shown above the table only when
@@ -18,7 +18,10 @@ function ConsultationQueueBanner() {
 
   useEffect(() => {
     let cancelled = false;
-    void api("/api/v1/admin/applications?stage=in_consultation&limit=1&offset=0", adminApplicationsListResponseSchema)
+    void getJson(
+      "/api/v1/system/membership-applications?stage=in_consultation&limit=1&offset=0",
+      membershipApplicationsListResponseSchema,
+    )
       .then((data) => {
         if (!cancelled) setCount(data.page.total);
       })
@@ -48,11 +51,12 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
     <div>
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable
-        endpoint="/api/v1/admin/applications"
-        responseSchema={adminApplicationsListResponseSchema}
+        endpoint="/api/v1/system/membership-applications"
+        responseSchema={membershipApplicationsListResponseSchema}
         resolve={(data) => data.applications}
         resolvePage={(data) => data.page}
         paginate
+        initialSort="-created_at"
         actionsRef={tableRef}
         searchPlaceholder="applicant email or name"
         params={stageFilter ? { stage: stageFilter } : {}}
@@ -92,7 +96,11 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
           },
           {
             header: "Category",
-            cell: (a) => <span class="mono">{a.membershipCategory}</span>,
+            cell: (a) => (
+              <>
+                {a.membershipCategoryLabel} <span class="mono text-muted small">({a.membershipCategory})</span>
+              </>
+            ),
             sort: { asc: "membership_category", desc: "-membership_category" },
           },
           {

@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/admin/applications/:id/approve. Runs the full onboarding
+ * POST /api/v1/system/membership-applications/:id/approve. Runs the full onboarding
  * orchestration (membership/applications/approve.ts's approveApplication),
  * which commits membership provisioning, the application stage transition,
  * Google Groups enqueues, the three applicant-facing email-outbox inserts
@@ -12,21 +12,18 @@
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getConfig } from "../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { approveApplication } from "../../../../../_lib/services/membership/applications/approve";
 import {
   applicationApproveResponseSchema,
   applicationApproveRouteSchema,
-} from "../../../../../../assets/shared/schemas/admin-applications";
-import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+} from "../../../../../../assets/shared/schemas/membership-application-management";
+import type { AdminContext } from "../../../../../_lib/db/context";
+import { requireSystemPermission } from "../../authorization";
 
 export const ApplicationApprovePost = openApiRoute(applicationApproveRouteSchema, async (c: AdminContext, data) => {
-  const db = requestDb(c);
-  const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  requirePermission(admin, "membership:approve");
+  const { db, staff } = await requireSystemPermission(c, "membership:approve");
 
   const applicationId = data.params.id;
   const config = getConfig(c.env, c.req.raw);
@@ -34,7 +31,7 @@ export const ApplicationApprovePost = openApiRoute(applicationApproveRouteSchema
 
   const result = await approveApplication(db, {
     applicationId,
-    actor: admin,
+    actor: staff,
     approvalMode: "staff_override",
     loginUrl,
     sendOrgContactAssignedEmail: true,

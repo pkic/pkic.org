@@ -1,5 +1,5 @@
 /**
- * Admin membership application endpoints — list/detail, stage
+ * Staff membership application management — list/detail, stage
  * transitions, communications/notes, EC decision staff override, approval.
  */
 import { z } from "zod";
@@ -11,15 +11,15 @@ import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
 import { groupLabelSchema } from "./groups";
 import {
-  adminApplicationDocumentSchema,
-  adminApplicationDocumentsListResponseSchema,
+  staffApplicationDocumentSchema,
+  staffApplicationDocumentsListResponseSchema,
   applicationDocumentsListQuerySchema,
 } from "./application-documents";
 
-export { adminApplicationDocumentSchema, adminApplicationDocumentsListResponseSchema } from "./application-documents";
+export { staffApplicationDocumentSchema, staffApplicationDocumentsListResponseSchema } from "./application-documents";
 
-/** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
-export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
+/** Allowlisted sort columns for GET /api/v1/system/membership-applications — see listMembershipApplications. */
+export const MEMBERSHIP_APPLICATIONS_SORT_COLUMNS = [
   "applicant_name",
   "organization_name",
   "membership_category",
@@ -27,30 +27,31 @@ export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const adminApplicationsListQuerySchema = listQuerySchema(ADMIN_APPLICATIONS_SORT_COLUMNS).extend({
+export const membershipApplicationsListQuerySchema = listQuerySchema(MEMBERSHIP_APPLICATIONS_SORT_COLUMNS).extend({
   stage: applicationStageSchema.optional(),
 });
-export type AdminApplicationsListQuery = z.infer<typeof adminApplicationsListQuerySchema>;
+export type MembershipApplicationsListQuery = z.infer<typeof membershipApplicationsListQuerySchema>;
 
-export const adminApplicationSummarySchema = z.object({
+export const membershipApplicationSummarySchema = z.object({
   id: z.string(),
   applicantEmail: z.string(),
   applicantName: z.string(),
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
+  membershipCategoryLabel: z.string(),
   stage: applicationStageSchema,
   onHoldSubtype: onHoldSubtypeSchema.nullable(),
   assignedToUserId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
-export type AdminApplicationSummary = z.infer<typeof adminApplicationSummarySchema>;
-export const adminApplicationsListResponseSchema = paginatedResponseSchema(
+export type MembershipApplicationSummary = z.infer<typeof membershipApplicationSummarySchema>;
+export const membershipApplicationsListResponseSchema = paginatedResponseSchema(
   "applications",
-  adminApplicationSummarySchema,
+  membershipApplicationSummarySchema,
 );
 
-export const adminApplicationEventSchema = z.object({
+export const membershipApplicationEventSchema = z.object({
   fromStage: applicationStageSchema.nullable(),
   toStage: applicationStageSchema,
   actorUserId: z.string().nullable(),
@@ -58,7 +59,7 @@ export const adminApplicationEventSchema = z.object({
   createdAt: z.string(),
 });
 
-export const adminApplicationCommunicationSchema = z.object({
+export const membershipApplicationCommunicationSchema = z.object({
   id: z.string(),
   applicationId: z.string(),
   kind: z.enum(["communication", "note"]),
@@ -70,7 +71,7 @@ export const adminApplicationCommunicationSchema = z.object({
   createdAt: z.string(),
 });
 
-export const adminApplicationConcernSchema = z.object({
+export const membershipApplicationConcernSchema = z.object({
   id: z.string(),
   applicationId: z.string(),
   submittedByUserId: z.string(),
@@ -78,7 +79,7 @@ export const adminApplicationConcernSchema = z.object({
   createdAt: z.string(),
 });
 
-export const adminApplicationEcDecisionSchema = z.object({
+export const membershipApplicationEcDecisionSchema = z.object({
   id: z.string(),
   applicationId: z.string(),
   ecMemberUserId: z.string(),
@@ -87,14 +88,14 @@ export const adminApplicationEcDecisionSchema = z.object({
   createdAt: z.string(),
 });
 
-export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend({
+export const membershipApplicationDetailSchema = membershipApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
   requestedWorkingGroups: z.array(groupLabelSchema.pick({ slug: true, name: true })),
-  events: z.array(adminApplicationEventSchema),
-  communications: z.array(adminApplicationCommunicationSchema),
-  concerns: z.array(adminApplicationConcernSchema),
-  ecDecisions: z.array(adminApplicationEcDecisionSchema),
+  events: z.array(membershipApplicationEventSchema),
+  communications: z.array(membershipApplicationCommunicationSchema),
+  concerns: z.array(membershipApplicationConcernSchema),
+  ecDecisions: z.array(membershipApplicationEcDecisionSchema),
 });
 export const applicationStageTransitionResponseSchema = z.object({
   id: databaseIdSchema,
@@ -103,7 +104,7 @@ export const applicationStageTransitionResponseSchema = z.object({
 });
 export const applicationCommunicationCreateResponseSchema = z.object({ id: databaseIdSchema, createdAt: z.string() });
 export const applicationNoteCreateResponseSchema = applicationCommunicationCreateResponseSchema;
-export const adminEcDecisionCreateResponseSchema = adminApplicationEcDecisionSchema;
+export const staffEcDecisionCreateResponseSchema = membershipApplicationEcDecisionSchema;
 export const applicationApproveResponseSchema = z.object({
   applicationId: databaseIdSchema,
   memberId: databaseIdSchema,
@@ -111,35 +112,35 @@ export const applicationApproveResponseSchema = z.object({
   organizationId: databaseIdSchema.nullable(),
   workingGroupSlugs: z.array(z.string()),
 });
-export type AdminApplicationDetail = z.infer<typeof adminApplicationDetailSchema>;
-export type AdminApplicationEvent = z.infer<typeof adminApplicationEventSchema>;
-export type AdminApplicationCommunication = z.infer<typeof adminApplicationCommunicationSchema>;
-export type AdminApplicationConcern = z.infer<typeof adminApplicationConcernSchema>;
-export type AdminApplicationEcDecision = z.infer<typeof adminApplicationEcDecisionSchema>;
-export type AdminApplicationDocument = z.infer<typeof adminApplicationDocumentSchema>;
+export type MembershipApplicationDetail = z.infer<typeof membershipApplicationDetailSchema>;
+export type MembershipApplicationEvent = z.infer<typeof membershipApplicationEventSchema>;
+export type MembershipApplicationCommunication = z.infer<typeof membershipApplicationCommunicationSchema>;
+export type MembershipApplicationConcern = z.infer<typeof membershipApplicationConcernSchema>;
+export type MembershipApplicationEcDecision = z.infer<typeof membershipApplicationEcDecisionSchema>;
+export type StaffApplicationDocument = z.infer<typeof staffApplicationDocumentSchema>;
 
-export const adminApplicationsListRouteSchema = {
+export const membershipApplicationsListRouteSchema = {
   tags: ["Membership"],
   summary: "List membership applications (staff)",
-  request: { query: adminApplicationsListQuerySchema },
+  request: { query: membershipApplicationsListQuerySchema },
   responses: {
     "200": {
       description: "Applications list.",
       content: {
-        "application/json": { schema: adminApplicationsListResponseSchema },
+        "application/json": { schema: membershipApplicationsListResponseSchema },
       },
     },
   },
 };
 
-export const adminApplicationDetailRouteSchema = {
+export const membershipApplicationDetailRouteSchema = {
   tags: ["Membership"],
   summary: "Get a membership application's full detail (staff)",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": {
       description: "Application detail.",
-      content: { "application/json": { schema: adminApplicationDetailSchema } },
+      content: { "application/json": { schema: membershipApplicationDetailSchema } },
     },
     "404": { description: "Application not found." },
   },
@@ -218,22 +219,22 @@ export const applicationNoteCreateRouteSchema = {
   },
 };
 
-export const adminEcDecisionCreateSchema = ecDecisionCreateSchema.safeExtend({
+export const staffEcDecisionCreateSchema = ecDecisionCreateSchema.safeExtend({
   ecMemberUserId: databaseIdSchema,
 });
 
-export const adminEcDecisionCreateRouteSchema = {
+export const staffEcDecisionCreateRouteSchema = {
   tags: ["Membership"],
   summary: "Record an EC decision on behalf of an EC member (staff override)",
   description: "Fallback for exceptional access cases; written to audit_log with actor and reason.",
   request: {
     params: z.object({ id: z.string() }),
-    body: { content: { "application/json": { schema: adminEcDecisionCreateSchema } }, required: true },
+    body: { content: { "application/json": { schema: staffEcDecisionCreateSchema } }, required: true },
   },
   responses: {
     "201": {
       description: "Decision recorded.",
-      content: { "application/json": { schema: adminEcDecisionCreateResponseSchema } },
+      content: { "application/json": { schema: staffEcDecisionCreateResponseSchema } },
     },
     "404": { description: "Application not found." },
     "409": { description: "Application is not currently in EC review." },
@@ -262,7 +263,7 @@ export const applicationApproveRouteSchema = {
 // submitted (e.g. a mistyped email domain) without moving the application
 // through any stage. Only a fixed subset of top-level columns plus a fixed
 // subset of form_submission_answers keys are editable — see
-// admin-applications.ts's updateAdminApplication for the upsert behavior.
+// functions/_lib/services/membership/applications/management.ts for the upsert behavior.
 
 export const applicationEditableAnswersSchema = z.object({
   job_title: z.string().trim().max(200).nullable().optional(),
@@ -308,7 +309,7 @@ export const applicationUpdateRouteSchema = {
   },
 };
 
-export const adminApplicationDocumentsListRouteSchema = {
+export const staffApplicationDocumentsListRouteSchema = {
   tags: ["Membership"],
   summary: "List all documents uploaded for an application (staff)",
   request: {
@@ -318,7 +319,7 @@ export const adminApplicationDocumentsListRouteSchema = {
   responses: {
     "200": {
       description: "Documents.",
-      content: { "application/json": { schema: adminApplicationDocumentsListResponseSchema } },
+      content: { "application/json": { schema: staffApplicationDocumentsListResponseSchema } },
     },
     "404": { description: "Application not found." },
   },

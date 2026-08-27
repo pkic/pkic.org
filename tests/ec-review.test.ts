@@ -3,7 +3,7 @@
  *
  * Executive Council review — the real member-session EC decision
  * path (POST /api/v1/me/applications/:id/ec-decision) and the staff-admin
- * override fallback (POST /api/v1/admin/applications/:id/ec-decisions).
+ * override fallback (POST /api/v1/system/membership-applications/:id/ec-decisions).
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -149,7 +149,7 @@ describe("Executive Council review", () => {
     const adminToken = await createAdminSession(env.DB, adminRow.id, "ec-override-admin-token");
     const ecUserId = await insertActiveMember("ec-remote@example.test", true);
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/ec-decisions`, {
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ ecMemberUserId: ecUserId, decision: "approve" }),
     });

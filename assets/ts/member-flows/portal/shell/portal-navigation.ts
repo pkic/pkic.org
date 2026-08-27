@@ -22,6 +22,12 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
 
 const SYSTEM_NAV_ITEMS = [
   {
+    path: "/system/membership-applications",
+    section: "system",
+    label: "Membership Applications",
+    permission: "membership:read",
+  },
+  {
     path: "/system/organization-content-reviews",
     section: "system",
     label: "Content Reviews",

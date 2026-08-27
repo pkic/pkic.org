@@ -1,30 +1,24 @@
 /**
- * Admin listing/detail queries for member_applications. Parallel
- * to admin-members.ts's split between the public directory query and a
- * dedicated, unfiltered admin query — the admin view needs every stage
+ * Staff listing/detail queries for member_applications. This management view
+ * needs every stage
  * (not just active ones) plus the staff-only communications/notes/
  * concerns/EC-decision timelines the applicant-facing status endpoint never
  * returns.
  */
-import { all } from "../db/queries";
-import { queryPage } from "../db/pagination";
-import { buildD1TextSearchFilter } from "../db/search";
-import { AppError } from "../errors";
-import { adminDatabaseUserId } from "../auth/admin-identity";
-import { uuid } from "../utils/ids";
-import { nowIso } from "../utils/time";
-import {
-  emailDomain,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  MEMBERSHIP_APPLICATION_FORM_KEY,
-} from "./membership/applications/create";
+import { all, first } from "../../../db/queries";
+import { queryPage } from "../../../db/pagination";
+import { buildD1TextSearchFilter } from "../../../db/search";
+import { AppError } from "../../../errors";
+import { uuid } from "../../../utils/ids";
+import { nowIso } from "../../../utils/time";
+import { emailDomain, INDIVIDUAL_MEMBERSHIP_CATEGORIES, MEMBERSHIP_APPLICATION_FORM_KEY } from "./create";
 import {
   getApplicationAnswers,
   getMemberApplicationById,
   listApplicationCommunications,
   listApplicationConcerns,
   type MemberApplicationRow,
-} from "./membership/applications/queries";
+} from "./queries";
 import {
   getGlobalFormByKey,
   formSubmissionContextChangedError,
@@ -32,26 +26,34 @@ import {
   prepareCreateFormSubmission,
   prepareUpdateFormSubmission,
   validateCustomAnswersAgainstForm,
-} from "./forms";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+} from "../../forms";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
 import {
   getOrganizationDomainClaim,
   prepareClaimDomainForApplication,
   prepareReleaseApplicationDomainClaim,
-} from "./membership/organization-domain-claims";
-import { listEcDecisions } from "./ec-review";
+} from "../organization-domain-claims";
+import { listEcDecisions } from "../../ec-review";
 import {
-  ADMIN_APPLICATIONS_SORT_COLUMNS,
-  adminApplicationDetailSchema,
-  adminApplicationSummarySchema,
-  type AdminApplicationsListQuery,
-  type AdminApplicationDetail,
-  type AdminApplicationSummary,
-} from "../../../assets/shared/schemas/admin-applications";
-import { resolveOrderBy } from "../db/sort";
-import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
+  MEMBERSHIP_APPLICATIONS_SORT_COLUMNS,
+  membershipApplicationDetailSchema,
+  membershipApplicationSummarySchema,
+  type MembershipApplicationsListQuery,
+  type MembershipApplicationDetail,
+  type MembershipApplicationSummary,
+} from "../../../../../assets/shared/schemas/membership-application-management";
+import { resolveMappedOrderBy } from "../../../db/sort";
+import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../../types";
 
-type AdminApplicationSummaryRow = Pick<
+const MEMBERSHIP_APPLICATION_ORDER_COLUMNS: Record<(typeof MEMBERSHIP_APPLICATIONS_SORT_COLUMNS)[number], string> = {
+  applicant_name: "ma.applicant_name",
+  organization_name: "ma.organization_name",
+  membership_category: "ma.membership_category",
+  stage: "ma.stage",
+  created_at: "ma.created_at",
+};
+
+type MembershipApplicationSummaryRow = Pick<
   MemberApplicationRow,
   | "id"
   | "applicant_email"
@@ -65,13 +67,21 @@ type AdminApplicationSummaryRow = Pick<
   | "updated_at"
 >;
 
-function toSummary(row: AdminApplicationSummaryRow): AdminApplicationSummary {
-  return adminApplicationSummarySchema.parse({
+type MembershipApplicationManagementSummaryRow = MembershipApplicationSummaryRow & {
+  membership_category_label: string;
+};
+
+function toSummary(
+  row: MembershipApplicationSummaryRow,
+  membershipCategoryLabel: string,
+): MembershipApplicationSummary {
+  return membershipApplicationSummarySchema.parse({
     id: row.id,
     applicantEmail: row.applicant_email,
     applicantName: row.applicant_name,
     organizationName: row.organization_name,
     membershipCategory: row.membership_category,
+    membershipCategoryLabel,
     stage: row.stage,
     onHoldSubtype: row.on_hold_subtype,
     assignedToUserId: row.assigned_to_user_id,
@@ -80,42 +90,53 @@ function toSummary(row: AdminApplicationSummaryRow): AdminApplicationSummary {
   });
 }
 
-export async function listAdminApplications(
+export async function listMembershipApplications(
   db: DatabaseLike,
-  params: AdminApplicationsListQuery,
-): Promise<{ applications: AdminApplicationSummary[]; total: number }> {
+  params: MembershipApplicationsListQuery,
+): Promise<{ applications: MembershipApplicationSummary[]; total: number }> {
   const conditions: string[] = [];
   const values: unknown[] = [];
   if (params.stage) {
-    conditions.push("stage = ?");
+    conditions.push("ma.stage = ?");
     values.push(params.stage);
   }
   if (params.q) {
     const search = buildD1TextSearchFilter(params.q, [
-      "applicant_name",
-      "applicant_email",
-      "organization_name",
-      "membership_category",
-      "applicant_name || ' ' || applicant_email || ' ' || COALESCE(organization_name, '') || ' ' || membership_category",
+      "ma.applicant_name",
+      "ma.applicant_email",
+      "ma.organization_name",
+      "ma.membership_category",
+      "mc.label",
+      "ma.applicant_name || ' ' || ma.applicant_email || ' ' || COALESCE(ma.organization_name, '') || ' ' || ma.membership_category || ' ' || mc.label",
     ]);
     conditions.push(search.sql);
     values.push(...search.bindings);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    MEMBERSHIP_APPLICATION_ORDER_COLUMNS,
+    "ma.created_at DESC",
+    "ma.id ASC",
+  );
 
-  const { rows, total } = await queryPage<AdminApplicationSummaryRow>(db, {
-    sql: `SELECT id, applicant_email, applicant_name, organization_name,
-                   membership_category, stage, on_hold_subtype, assigned_to_user_id,
-                   created_at, updated_at
-            FROM member_applications ${where}`,
+  const { rows, total } = await queryPage<MembershipApplicationManagementSummaryRow>(db, {
+    sql: `SELECT ma.id, ma.applicant_email, ma.applicant_name, ma.organization_name,
+                   ma.membership_category, mc.label AS membership_category_label,
+                   ma.stage, ma.on_hold_subtype, ma.assigned_to_user_id,
+                   ma.created_at, ma.updated_at
+            FROM member_applications ma
+            JOIN membership_categories mc ON mc.code = ma.membership_category ${where}`,
     bindings: values,
     orderBy,
     limit: params.limit,
     offset: params.offset,
   });
 
-  return { applications: rows.map(toSummary), total };
+  return {
+    applications: rows.map((row) => toSummary(row, row.membership_category_label)),
+    total,
+  };
 }
 
 interface ApplicationEventRow {
@@ -126,10 +147,10 @@ interface ApplicationEventRow {
   created_at: string;
 }
 
-export async function getAdminApplicationDetail(
+export async function getMembershipApplicationDetail(
   db: DatabaseLike,
   applicationId: string,
-): Promise<AdminApplicationDetail> {
+): Promise<MembershipApplicationDetail> {
   const application = await getMemberApplicationById(db, applicationId);
   if (!application) {
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
@@ -140,7 +161,10 @@ export async function getAdminApplicationDetail(
   const requestedSlugs = Array.isArray(requestedWorkingGroups)
     ? [...new Set(requestedWorkingGroups.filter((value): value is string => typeof value === "string"))].slice(0, 200)
     : [];
-  const [eventRows, communications, concerns, ecDecisions, requestedWorkingGroupRows] = await Promise.all([
+  const [category, eventRows, communications, concerns, ecDecisions, requestedWorkingGroupRows] = await Promise.all([
+    first<{ label: string }>(db, "SELECT label FROM membership_categories WHERE code = ?", [
+      application.membership_category,
+    ]),
     all<ApplicationEventRow>(
       db,
       `SELECT from_stage, to_stage, actor_user_id, note, created_at FROM member_application_events WHERE application_id = ? ORDER BY created_at ASC`,
@@ -162,8 +186,8 @@ export async function getAdminApplicationDetail(
   ]);
   const requestedWorkingGroupNames = new Map(requestedWorkingGroupRows.map((row) => [row.slug, row.name]));
 
-  return adminApplicationDetailSchema.parse({
-    ...toSummary(application),
+  return membershipApplicationDetailSchema.parse({
+    ...toSummary(application, category?.label ?? application.membership_category),
     stageEnteredAt: application.stage_entered_at,
     answers,
     requestedWorkingGroups: requestedSlugs.map((slug) => ({
@@ -211,7 +235,7 @@ export async function getAdminApplicationDetail(
 // Corrects applicant-submitted data (e.g. a mistyped email domain) without
 // moving the application through the stage machine — a distinct
 // operation from transitionApplicationStage. Route layer
-// (functions/api/v1/admin/applications/[id]/index.ts) writes the audit_log
+// (functions/api/v1/system/membership-applications/[id]/index.ts) writes the audit_log
 // entry; this function only touches member_applications and records a
 // member_application_events row so the correction shows up in the
 // application's timeline. Per consolidated migration 0035's own note, member_application_events
@@ -238,12 +262,12 @@ export interface ApplicationEditInput {
   answers?: Partial<Record<(typeof EDITABLE_ANSWER_KEYS)[number], string | null>>;
 }
 
-export async function updateAdminApplication(
+export async function updateMembershipApplication(
   db: DatabaseLike,
   applicationId: string,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   input: ApplicationEditInput,
-): Promise<AdminApplicationDetail> {
+): Promise<MembershipApplicationDetail> {
   const application = await getMemberApplicationById(db, applicationId);
   if (!application) {
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
@@ -378,7 +402,7 @@ export async function updateAdminApplication(
   if (changedFields.length === 0) {
     // Nothing actually changed (e.g. caller sent the same values back) — skip
     // the write and the timeline event entirely.
-    return getAdminApplicationDetail(db, applicationId);
+    return getMembershipApplicationDetail(db, applicationId);
   }
 
   setClauses.push("updated_at = ?");
@@ -419,7 +443,7 @@ export async function updateAdminApplication(
           applicationId,
           application.stage,
           application.stage,
-          adminDatabaseUserId(actor),
+          actor.id,
           `Application details edited: ${changedFields.join(", ")}`,
           now,
         ),
@@ -441,5 +465,5 @@ export async function updateAdminApplication(
     throw error;
   }
 
-  return getAdminApplicationDetail(db, applicationId);
+  return getMembershipApplicationDetail(db, applicationId);
 }

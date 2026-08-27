@@ -3,15 +3,19 @@ import {
   ON_HOLD_SUBTYPES,
   allowedTransitions,
   type ApplicationStage,
-} from "../../../../shared/schemas/member-applications";
-import type { AdminApplicationDetail } from "../../types";
+} from "../../../../../shared/schemas/member-applications";
+import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 
 export function ApplicationTransitionCard({
   detail,
+  canWrite,
+  canApprove,
   onApprove,
   onTransition,
 }: {
-  detail: AdminApplicationDetail;
+  detail: MembershipApplicationDetail;
+  canWrite: boolean;
+  canApprove: boolean;
   onApprove: () => Promise<void>;
   onTransition: (params: { toStage: string; onHoldSubtype?: string; note?: string }) => Promise<void>;
 }) {
@@ -39,12 +43,12 @@ export function ApplicationTransitionCard({
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Stage transition</div>
       <div class="card-body">
-        {detail.stage === "ec_review" && (
-          <button class="btn btn-sm btn-success mb-3" onClick={() => void onApprove()}>
+        {canApprove && detail.stage === "ec_review" && (
+          <button type="button" class="btn btn-sm btn-success mb-3" onClick={() => void onApprove()}>
             Approve &amp; run onboarding
           </button>
         )}
-        {availableTransitions.length === 0 ? (
+        {!canWrite ? null : availableTransitions.length === 0 ? (
           <p class="text-muted small mb-0">No further transitions from this stage.</p>
         ) : (
           <form onSubmit={submitTransition}>

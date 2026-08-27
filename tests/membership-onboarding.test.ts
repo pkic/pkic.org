@@ -1,7 +1,7 @@
 /**
  * membership-onboarding.test.ts
  *
- * post-approval onboarding — POST /api/v1/admin/applications/:id/approve.
+ * post-approval onboarding — POST /api/v1/system/membership-applications/:id/approve.
  * Covers org-tied vs. individual branches, primary contact assignment,
  * organization_domain_claims transfer, mailing-list reconciliation, group eligibility,
  * and the three onboarding emails.
@@ -99,7 +99,7 @@ describe("Post-approval onboarding", () => {
 
   it("approves an org-tied application: creates org/user/member, sets primary contact, writes the domain", async () => {
     const { id } = await createEcReviewApplication();
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organizationId: string; memberId: string; userId: string };
     expect(body.organizationId).toBeTruthy();
@@ -170,7 +170,7 @@ describe("Post-approval onboarding", () => {
       reason: "Staff will resolve this decline manually",
     });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { memberId: string };
@@ -195,7 +195,7 @@ describe("Post-approval onboarding", () => {
         linkedin: "https://linkedin.com/in/newmember",
       },
     );
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { userId: string };
 
@@ -215,7 +215,7 @@ describe("Post-approval onboarding", () => {
       { organization_name: null, membership_category: "H6" },
       { working_groups: [] },
     );
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organizationId: string | null };
     expect(body.organizationId).toBeNull();
@@ -226,7 +226,7 @@ describe("Post-approval onboarding", () => {
 
   it("adds the requested group capacity and reconciles mailing-list subscriptions", async () => {
     const { id } = await createEcReviewApplication();
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; memberId: string };
 
     const wgRows = await queryAll<{ member_id: string | null }>(
@@ -256,7 +256,7 @@ describe("Post-approval onboarding", () => {
 
   it("omits a requested group when its configured category rule is not satisfied", async () => {
     const { id } = await createEcReviewApplication({ membership_category: "B" }, { working_groups: ["ca", "pqc"] });
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).not.toContain("ca");
     expect(body.workingGroupSlugs).toContain("pqc");
@@ -274,14 +274,14 @@ describe("Post-approval onboarding", () => {
 
   it("allows category A into the CA working group", async () => {
     const { id } = await createEcReviewApplication({ membership_category: "A" }, { working_groups: ["ca"] });
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).toContain("ca");
   });
 
   it("queues member-account-claim and application-approved-welcome emails", async () => {
     const { id } = await createEcReviewApplication();
-    await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
 
     const claimEmails = await queryAll(
       env.DB,
@@ -302,7 +302,7 @@ describe("Post-approval onboarding", () => {
 
   it("writes the audit-log entry and queues the emails in the same commit as membership provisioning (PR #1 review blocker 4)", async () => {
     const { id } = await createEcReviewApplication();
-    await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
 
     const auditRows = await queryAll<{ actor_type: string; actor_id: string; entity_id: string; created_at: string }>(
       env.DB,
@@ -337,27 +337,32 @@ describe("Post-approval onboarding", () => {
     expect(auditRows[0]!.created_at).toBe(applicationApprovedAt);
   });
 
-  it("keeps API-key audit identity out of the nullable approval-event user foreign key", async () => {
+  it("rejects API-key approval without side effects", async () => {
     const { id } = await createEcReviewApplication();
-    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}/approve`, {
-      method: "POST",
-    });
+    const response = await call(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/system/membership-applications/${id}/approve`,
+      {
+        method: "POST",
+      },
+    );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
     expect(
       await queryAll<{ actor_user_id: string | null }>(
         env.DB,
         "SELECT actor_user_id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
         id,
       ),
-    ).toEqual([{ actor_user_id: null }]);
+    ).toEqual([]);
     expect(
       await queryAll<{ actor_id: string | null }>(
         env.DB,
         "SELECT actor_id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
         id,
       ),
-    ).toEqual([{ actor_id: "api-key" }]);
+    ).toEqual([]);
   });
 
   it("does not write an audit-log entry for the unattended EC-window auto-approve path (no admin actor)", async () => {
@@ -394,13 +399,13 @@ describe("Post-approval onboarding", () => {
       stage: "pending",
     });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(409);
   });
 
   it("a newly approved member's duplicate-domain check catches a later application from the same org domain", async () => {
     const { id } = await createEcReviewApplication();
-    await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
 
     const response = await app.fetch(
       new Request("https://app.test/api/v1/members/applications", {
@@ -429,8 +434,8 @@ describe("Post-approval onboarding", () => {
     const { id } = await createEcReviewApplication();
 
     const [first, second] = await Promise.all([
-      call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" }),
-      call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" }),
     ]);
 
     const winner = first.status === 200 ? first : second;
@@ -573,7 +578,7 @@ describe("Post-approval onboarding", () => {
       membership_category: "G",
     });
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(409);
 
     const applications = await queryAll<{ stage: string }>(

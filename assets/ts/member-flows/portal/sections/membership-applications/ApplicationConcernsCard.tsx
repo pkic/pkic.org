@@ -1,7 +1,7 @@
 import { fmt } from "../../ui";
-import type { AdminApplicationDetail } from "../../types";
+import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 
-export function ApplicationConcernsCard({ detail }: { detail: AdminApplicationDetail }) {
+export function ApplicationConcernsCard({ detail }: { detail: MembershipApplicationDetail }) {
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Consultation concerns</div>

@@ -31,10 +31,10 @@ export const applicationDocumentSchema = z.object({
 });
 export type ApplicationDocument = z.infer<typeof applicationDocumentSchema>;
 
-export const adminApplicationDocumentSchema = applicationDocumentSchema.extend({
+export const staffApplicationDocumentSchema = applicationDocumentSchema.extend({
   uploadedByEmail: normalizedEmailSchema,
 });
-export type AdminApplicationDocument = z.infer<typeof adminApplicationDocumentSchema>;
+export type StaffApplicationDocument = z.infer<typeof staffApplicationDocumentSchema>;
 
 export const applicationDocumentUploadHeadersSchema = z.object({
   "idempotency-key": z
@@ -57,8 +57,8 @@ export const applicationDocumentUploadResponseSchema = z.object({
 export const applicationDocumentsListResponseSchema = paginatedResponseSchema("documents", applicationDocumentSchema);
 export type ApplicationDocumentsListResponse = z.infer<typeof applicationDocumentsListResponseSchema>;
 
-export const adminApplicationDocumentsListResponseSchema = paginatedResponseSchema(
+export const staffApplicationDocumentsListResponseSchema = paginatedResponseSchema(
   "documents",
-  adminApplicationDocumentSchema,
+  staffApplicationDocumentSchema,
 );
-export type AdminApplicationDocumentsListResponse = z.infer<typeof adminApplicationDocumentsListResponseSchema>;
+export type StaffApplicationDocumentsListResponse = z.infer<typeof staffApplicationDocumentsListResponseSchema>;

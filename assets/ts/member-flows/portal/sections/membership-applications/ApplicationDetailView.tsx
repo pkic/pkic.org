@@ -1,6 +1,6 @@
-import { Spinner } from "../../../components/Spinner";
-import { ErrorAlert } from "../../../components/ErrorAlert";
-import { Badge } from "../../../components/Badge";
+import { Spinner } from "../../../../components/Spinner";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Badge } from "../../../../components/Badge";
 import { useApplicationDetail } from "./useApplicationDetail";
 import { ApplicationOverviewCard } from "./ApplicationOverviewCard";
 import { ApplicationAnswersCard } from "./ApplicationAnswersCard";
@@ -10,8 +10,21 @@ import { ApplicationTimelineCard } from "./ApplicationTimelineCard";
 import { ApplicationCommunicationsCard } from "./ApplicationCommunicationsCard";
 import { ApplicationEcDecisionsCard } from "./ApplicationEcDecisionsCard";
 import { ApplicationConcernsCard } from "./ApplicationConcernsCard";
+import type { MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
 
-export function ApplicationDetailView({ applicationId, onBack }: { applicationId: string; onBack: () => void }) {
+export function ApplicationDetailView({
+  applicationId,
+  categories,
+  canWrite,
+  canApprove,
+  onBack,
+}: {
+  applicationId: string;
+  categories: MembershipCategoryCatalogEntry[];
+  canWrite: boolean;
+  canApprove: boolean;
+  onBack: () => void;
+}) {
   const { loading, error, detail, transition, sendCommunication, addNote, recordEcDecision, approve, saveEdit } =
     useApplicationDetail(applicationId);
 
@@ -22,7 +35,7 @@ export function ApplicationDetailView({ applicationId, onBack }: { applicationId
   return (
     <div>
       <div class="d-flex align-items-center gap-2 mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={onBack}>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onBack}>
           ← Back to list
         </button>
         <span class="page-heading mb-0">{detail.applicantName}</span>
@@ -31,16 +44,29 @@ export function ApplicationDetailView({ applicationId, onBack }: { applicationId
 
       <div class="row g-4">
         <div class="col-md-6">
-          <ApplicationOverviewCard detail={detail} onSave={saveEdit} />
+          <ApplicationOverviewCard detail={detail} categories={categories} canWrite={canWrite} onSave={saveEdit} />
           <ApplicationAnswersCard detail={detail} />
-          <ApplicationTransitionCard detail={detail} onApprove={approve} onTransition={transition} />
+          {(canWrite || canApprove) && (
+            <ApplicationTransitionCard
+              detail={detail}
+              canWrite={canWrite}
+              canApprove={canApprove}
+              onApprove={approve}
+              onTransition={transition}
+            />
+          )}
           <ApplicationDocumentsCard applicationId={detail.id} />
         </div>
 
         <div class="col-md-6">
           <ApplicationTimelineCard detail={detail} />
-          <ApplicationCommunicationsCard detail={detail} onSendCommunication={sendCommunication} onAddNote={addNote} />
-          <ApplicationEcDecisionsCard detail={detail} onRecordEcDecision={recordEcDecision} />
+          <ApplicationCommunicationsCard
+            detail={detail}
+            canWrite={canWrite}
+            onSendCommunication={sendCommunication}
+            onAddNote={addNote}
+          />
+          <ApplicationEcDecisionsCard detail={detail} canApprove={canApprove} onRecordEcDecision={recordEcDecision} />
           <ApplicationConcernsCard detail={detail} />
         </div>
       </div>

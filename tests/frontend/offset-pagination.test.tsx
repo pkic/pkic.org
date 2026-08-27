@@ -12,7 +12,7 @@ import {
 } from "../../assets/shared/schemas/admin-donations";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
 import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
-import { ApplicationDocumentsCard } from "../../assets/ts/admin/sections/Applications/ApplicationDocumentsCard";
+import { ApplicationDocumentsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDocumentsCard";
 import { Donations } from "../../assets/ts/admin/sections/Donations";
 import { Email } from "../../assets/ts/admin/sections/Email";
 import { DueWorkTable } from "../../assets/ts/admin/sections/due-work/DueWorkTable";
@@ -336,7 +336,9 @@ describe("canonical offset pagination", () => {
     const container = mount(<ApplicationDocumentsCard applicationId="00000000-0000-4000-8000-000000000010" />);
     await settle();
 
-    expect(requests.at(-1)?.pathname).toBe("/api/v1/admin/applications/00000000-0000-4000-8000-000000000010/documents");
+    expect(requests.at(-1)?.pathname).toBe(
+      "/api/v1/system/membership-applications/00000000-0000-4000-8000-000000000010/documents",
+    );
     expect(requests.at(-1)?.searchParams.get("limit")).toBe("10");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
     expect(requests.at(-1)?.searchParams.get("sort")).toBe("-uploadedAt");
