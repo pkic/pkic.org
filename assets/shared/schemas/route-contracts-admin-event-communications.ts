@@ -6,21 +6,12 @@ import {
   adminEventCampaignSendSchema,
 } from "./admin-events";
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
+import { eventInvitePreviewResponseSchema } from "./event-invite-bulk";
 
 const previewTokenSchema = adminEventCampaignSendSchema.shape.previewToken;
-const invitePreviewResponseSchema = successResponseSchema.extend({
-  previewToken: previewTokenSchema,
-  previewExpiresAt: z.string(),
-  inviteDigest: z.string().regex(/^[0-9a-f]{64}$/i),
-  inviteExpiresAt: z.string(),
-  recipientCount: z.number().int().nonnegative(),
-  subject: z.string(),
-  html: z.string(),
-  text: z.string(),
-});
 
-export const adminAttendeeInvitePreviewResponseSchema = invitePreviewResponseSchema;
-export const adminSpeakerInvitePreviewResponseSchema = invitePreviewResponseSchema;
+export const adminAttendeeInvitePreviewResponseSchema = eventInvitePreviewResponseSchema;
+export const adminSpeakerInvitePreviewResponseSchema = eventInvitePreviewResponseSchema;
 
 export const adminAttendeeInvitePreviewRouteSchema = {
   tags: ["Admin events", "Invites"],

@@ -3,7 +3,7 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
-import { buildAdminInvitePreview } from "../../../../../../../_lib/services/admin-invite-preview-email";
+import { buildEventInvitePreview } from "../../../../../../../_lib/services/admin-invite-preview-email";
 import {
   adminSpeakerInvitePreviewResponseSchema,
   adminSpeakerInvitePreviewRouteSchema,
@@ -17,7 +17,7 @@ export const AdminEventsEventSlugInvitesSpeakersPreviewPost = openApiRoute(
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     const body = data.body;
     const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
-    const preview = await buildAdminInvitePreview({
+    const preview = await buildEventInvitePreview({
       db: requestDb(c),
       event,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),

@@ -2,18 +2,24 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   eventAttendeeInvitesListResponseSchema,
   eventInviteResendResponseSchema,
-  type EventAttendeeInviteSummary,
+  eventInvitesListResponseSchema,
+  type EventInviteSummary,
 } from "../../../../../shared/schemas/event-invites";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
-import { fmt } from "../../ui";
+import { fmt, toast } from "../../ui";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../../../shared/timezone";
+import {
+  BulkInviteComposer,
+  eventInviteEndpoints,
+  type BulkInviteType,
+} from "../../../../components/event-invites/BulkInviteComposer";
 
-type InviteStatusFilter = "" | EventAttendeeInviteSummary["status"];
+type InviteStatusFilter = "" | EventInviteSummary["status"];
 
 const INVITE_STATUS_FILTERS: ReadonlyArray<{ value: InviteStatusFilter; label: string }> = [
   { value: "", label: "All statuses" },
@@ -24,7 +30,12 @@ const INVITE_STATUS_FILTERS: ReadonlyArray<{ value: InviteStatusFilter; label: s
   { value: "revoked", label: "Revoked" },
 ];
 
-function inviteeLabel(invite: EventAttendeeInviteSummary): string {
+type InvitationRow = Pick<
+  EventInviteSummary,
+  "id" | "inviteeEmail" | "inviteeFirstName" | "inviteeLastName" | "status" | "actions"
+>;
+
+function inviteeLabel(invite: InvitationRow): string {
   const name = [invite.inviteeFirstName, invite.inviteeLastName].filter(Boolean).join(" ");
   return name || invite.inviteeEmail;
 }
@@ -33,21 +44,31 @@ function inviteeLabel(invite: EventAttendeeInviteSummary): string {
  * Selected-group attendee invitation lifecycle. The server remains the source
  * of truth for whether a specific invitation may be resent or revoked.
  */
-export function GroupEventInvitations({ groupId, event }: { groupId: string; event: GroupEvent }) {
+export function GroupEventInvitations({
+  groupId,
+  event,
+  inviteType = "attendee",
+}: {
+  groupId: string;
+  event: GroupEvent;
+  inviteType?: BulkInviteType;
+}) {
   const tableActions = useRef<ApiTableActions | null>(null);
   const [status, setStatus] = useState<InviteStatusFilter>("");
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState("");
-  const endpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}/invites`;
+  const base = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}/invites`;
+  const endpoint = inviteType === "attendee" ? base : `${base}/speakers`;
+  const label = inviteType === "attendee" ? "Attendee" : "Speaker";
   const latestExpiry = event.endsAt ? instantToDateTimeLocal(event.endsAt, event.timezone) : undefined;
 
   useEffect(() => {
     setExpiresAt("");
   }, [event.id]);
 
-  async function runAction(invite: EventAttendeeInviteSummary, action: "resend" | "revoke"): Promise<void> {
+  async function runAction(invite: InvitationRow, action: "resend" | "revoke"): Promise<void> {
     if (
       action === "revoke" &&
       !window.confirm(`Revoke the invitation for ${inviteeLabel(invite)}? They will no longer be able to accept it.`)
@@ -79,14 +100,21 @@ export function GroupEventInvitations({ groupId, event }: { groupId: string; eve
   }
 
   return (
-    <section class="border-top pt-3" aria-label="Attendee invitations">
-      <h6 class="small fw-semibold">Attendee invitations</h6>
+    <section class="border-top pt-3" aria-label={`${label} invitations`}>
+      <h6 class="small fw-semibold">{label} invitations</h6>
+      <BulkInviteComposer
+        type={inviteType}
+        event={{ endsAt: event.endsAt, timezone: event.timezone }}
+        endpoints={eventInviteEndpoints(base, inviteType)}
+        notify={toast}
+        onSent={() => tableActions.current?.reload()}
+      />
       <div class="mb-3">
-        <label class="form-label small fw-semibold" for={`group-event-invite-deadline-${event.id}`}>
+        <label class="form-label small fw-semibold" for={`group-event-invite-deadline-${event.id}-${inviteType}`}>
           Resend deadline
         </label>
         <input
-          id={`group-event-invite-deadline-${event.id}`}
+          id={`group-event-invite-deadline-${event.id}-${inviteType}`}
           class="form-control form-control-sm"
           type="datetime-local"
           value={expiresAt}
@@ -107,7 +135,9 @@ export function GroupEventInvitations({ groupId, event }: { groupId: string; eve
       <ApiDataTable
         actionsRef={tableActions}
         endpoint={endpoint}
-        responseSchema={eventAttendeeInvitesListResponseSchema}
+        responseSchema={
+          inviteType === "attendee" ? eventAttendeeInvitesListResponseSchema : eventInvitesListResponseSchema
+        }
         resolve={(response) => response.invites}
         resolvePage={(response) => response.page}
         paginate
@@ -200,7 +230,7 @@ export function GroupEventInvitations({ groupId, event }: { groupId: string; eve
             },
           },
         ]}
-        empty="No attendee invitations for this event."
+        empty={`No ${inviteType} invitations for this event.`}
         rowKey={(invite) => invite.id}
       />
     </section>

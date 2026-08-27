@@ -72,35 +72,7 @@ test("a selected-group manager manages an attendee invitation without admin APIs
   await signInToPortal(page, e2eAdminEmail("portal-event"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const event = await createPublicGroupEvent(page, unique);
-  const inviterEmail = `portal-inviter-${unique}@pkic.org`;
   const inviteeEmail = `portal-invitee-${unique}@pkic.org`;
-
-  const registration = expectStatus(
-    await api(page, `/api/v1/events/${event.slug}/registrations`, "POST", {
-      firstName: "Portal",
-      lastName: "Inviter",
-      email: inviterEmail,
-      organizationName: "E2E Organization",
-      attendanceType: "virtual",
-      consents: [{ termKey: "e2e-invitation-terms", version: "1.0" }],
-    }),
-    200,
-  );
-  const manageToken = registration.manageToken;
-  expect(typeof manageToken).toBe("string");
-
-  const peerInvite = await page.evaluate(
-    async ({ eventSlug, token, email }) => {
-      const response = await fetch(`/api/v1/events/${eventSlug}/invites`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ invites: [{ email, firstName: "Portal", lastName: "Invitee" }] }),
-      });
-      return { status: response.status, body: await response.json() };
-    },
-    { eventSlug: event.slug, token: manageToken as string, email: inviteeEmail },
-  );
-  expect(peerInvite.status, JSON.stringify(peerInvite.body)).toBe(200);
 
   const adminRequests: string[] = [];
   const groupInviteRequests: string[] = [];
@@ -124,10 +96,23 @@ test("a selected-group manager manages an attendee invitation without admin APIs
 
   const detail = page.getByRole("region", { name: `${event.name} details` });
   await expect(detail.getByRole("heading", { name: "Attendee invitations" })).toBeVisible();
-  const invitationSearch = detail.getByPlaceholder("Search invitations…");
+  const invitations = detail.getByRole("region", { name: "Attendee invitations" });
+  await invitations.getByRole("textbox", { name: /Paste emails and names/i }).fill(`Portal Invitee <${inviteeEmail}>`);
+  await invitations.getByRole("button", { name: "Parse" }).click();
+  await invitations.getByRole("button", { name: "Preview email" }).click();
+  await expect(invitations.getByText("Review and confirm below.")).toBeVisible();
+  await invitations.getByRole("checkbox").check();
+  const created = page.waitForResponse(
+    (response) => response.url().endsWith("/invites/attendees/bulk") && response.request().method() === "POST",
+  );
+  await invitations.getByRole("button", { name: "Send attendee invites" }).click();
+  expect((await created).status()).toBe(200);
+  await expect(invitations.getByText("Sent 1 invites")).toBeVisible();
+
+  const invitationSearch = invitations.getByPlaceholder("Search invitations…");
   await invitationSearch.fill(inviteeEmail);
   await invitationSearch.press("Enter");
-  const inviteRow = detail.getByRole("row").filter({ hasText: inviteeEmail });
+  const inviteRow = invitations.getByRole("row").filter({ hasText: inviteeEmail });
   await expect(inviteRow).toBeVisible();
 
   const resent = page.waitForResponse(
@@ -156,6 +141,8 @@ test("a selected-group manager manages an attendee invitation without admin APIs
   expect(groupInviteRequests).toEqual(
     expect.arrayContaining([
       expect.stringMatching(/^GET .*\/api\/v1\/groups\/.*\/events\/.*\/invites\?.*q=/),
+      expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/attendees\/preview$/),
+      expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/attendees\/bulk$/),
       expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/.*\/resend$/),
       expect.stringMatching(/^POST .*\/api\/v1\/groups\/.*\/events\/.*\/invites\/.*\/revoke$/),
     ]),

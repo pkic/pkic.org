@@ -214,6 +214,75 @@ describe("portal event invitations", () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Invitation is no longer pending.");
   });
 
+  it("creates attendee invitations through preview-confirmed group endpoints without admin fallback", async () => {
+    const requests: Array<{ method: string; url: URL }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = urlOf(input);
+        const method = init.method ?? "GET";
+        requests.push({ method, url });
+        if (method === "GET") return json(response([]));
+        if (url.pathname.endsWith("/preview")) {
+          return json({
+            success: true,
+            subject: "Invitation",
+            html: "<p>Preview</p>",
+            text: "Preview",
+            previewToken: "p".repeat(32),
+            inviteDigest: "a".repeat(64),
+            inviteExpiresAt: EVENT.startsAt,
+            previewExpiresAt: "2026-11-30T12:00:00.000Z",
+            recipientCount: 1,
+            sendBatches: [{ offset: 0, count: 1, previewToken: "p".repeat(32), inviteDigest: "a".repeat(64) }],
+          });
+        }
+        if (url.pathname.endsWith("/bulk"))
+          return json({ success: true, created: [{ email: "new@example.test" }], endorsed: [], skipped: [] });
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
+    await settle();
+    const composer = container.querySelector('[aria-label="Send attendee invitations"]')!;
+    expect(composer.querySelector('input[aria-label="attendee 1 first name"]')).not.toBeNull();
+    expect(composer.querySelector('input[aria-label="attendee 1 last name"]')).not.toBeNull();
+    expect(composer.querySelector('input[aria-label="attendee 1 email address"]')).not.toBeNull();
+    const textarea = composer.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "New Person <new@example.test>";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    const parse = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Parse",
+    )!;
+    await act(async () => parse.click());
+    await settle();
+    expect(composer.textContent).toContain("1 valid");
+    const preview = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Preview email",
+    )!;
+    await act(async () => preview.click());
+    await settle();
+    expect(composer.textContent).toContain("Review and confirm below.");
+    const confirm = await waitForElement(() => composer.querySelector<HTMLInputElement>('input[type="checkbox"]'));
+    confirm.checked = true;
+    confirm.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    const send = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Send attendee invites",
+    )!;
+    await act(async () => send.click());
+    await settle();
+    expect(requests.map((request) => request.url.pathname)).toEqual(
+      expect.arrayContaining([
+        `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites/attendees/preview`,
+        `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites/attendees/bulk`,
+      ]),
+    );
+    expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
+  });
+
   it("appears in event details only when the server reports manage capability", async () => {
     const event: GroupEvent = {
       id: EVENT_ID,
@@ -250,5 +319,27 @@ describe("portal event invitations", () => {
     );
     await settle();
     expect(manager.textContent).toContain("Attendee invitations");
+  });
+
+  it("uses distinct resend deadline controls for attendee and speaker invitations", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(response([]))),
+    );
+    const container = mount(
+      <>
+        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} />
+        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} inviteType="speaker" />
+      </>,
+    );
+    await settle();
+    const ids = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[id^="group-event-invite-deadline-"]'),
+    ).map((input) => input.id);
+    expect(ids).toEqual([
+      `group-event-invite-deadline-${EVENT_ID}-attendee`,
+      `group-event-invite-deadline-${EVENT_ID}-speaker`,
+    ]);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

@@ -355,10 +355,18 @@ export async function bulkCreateInvites(
 export type BulkAttendeeOutcome = BulkInviteOutcome;
 export type BulkSpeakerOutcome = BulkInviteOutcome;
 
-export function bulkCreateAttendeesAdmin(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkAttendeeOutcome[]> {
+export function bulkCreateAttendeeInvites(
+  db: DatabaseLike,
+  payload: BulkInvitePayload,
+): Promise<BulkAttendeeOutcome[]> {
   return bulkCreateInvites(db, "attendee", payload);
 }
 
-export function bulkCreateSpeakersAdmin(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkSpeakerOutcome[]> {
+export function bulkCreateSpeakerInvites(db: DatabaseLike, payload: BulkInvitePayload): Promise<BulkSpeakerOutcome[]> {
   return bulkCreateInvites(db, "speaker", payload);
 }
+
+/** @deprecated Import the domain-neutral bulk invite helper instead. */
+export const bulkCreateAttendeesAdmin = bulkCreateAttendeeInvites;
+/** @deprecated Import the domain-neutral bulk invite helper instead. */
+export const bulkCreateSpeakersAdmin = bulkCreateSpeakerInvites;

@@ -2,26 +2,26 @@ import { sha256Hex } from "../utils/crypto";
 import { AppError } from "../errors";
 import { signAdminPreviewToken, verifyAdminPreviewToken } from "../auth/admin-preview-token";
 
-export type AdminInviteType = "attendee" | "speaker";
+export type EventInviteType = "attendee" | "speaker";
 
-interface AdminInvitePreviewClaims {
+interface EventInvitePreviewClaims {
   v: 1;
   type: "admin_invite_bulk";
-  inviteType: AdminInviteType;
+  inviteType: EventInviteType;
   eventId: string;
   adminId: string;
   inviteDigest: string;
   exp: number;
 }
 
-export interface AdminInvitePreviewInput {
+export interface EventInvitePreviewInput {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
   sourceType?: string | null;
 }
 
-export function computeAdminInviteDigest(invites: AdminInvitePreviewInput[], expiresAt: string): Promise<string> {
+export function computeEventInviteDigest(invites: EventInvitePreviewInput[], expiresAt: string): Promise<string> {
   const canonical = {
     expiresAt,
     invites: invites.map((item) => ({
@@ -35,11 +35,11 @@ export function computeAdminInviteDigest(invites: AdminInvitePreviewInput[], exp
   return sha256Hex(JSON.stringify(canonical));
 }
 
-export async function signAdminInvitePreviewToken(payload: {
+export async function signEventInvitePreviewToken(payload: {
   secret: string;
   eventId: string;
   adminId: string;
-  inviteType: AdminInviteType;
+  inviteType: EventInviteType;
   inviteDigest: string;
   ttlSeconds: number;
 }): Promise<{ token: string; expiresAt: string }> {
@@ -51,17 +51,17 @@ export async function signAdminInvitePreviewToken(payload: {
   });
 }
 
-export type AdminInvitePreviewTokenValidation =
-  { ok: true; claims: AdminInvitePreviewClaims } | { ok: false; reason: "invalid" | "expired" | "mismatch" };
+export type EventInvitePreviewTokenValidation =
+  { ok: true; claims: EventInvitePreviewClaims } | { ok: false; reason: "invalid" | "expired" | "mismatch" };
 
-export async function verifyAdminInvitePreviewToken(payload: {
+export async function verifyEventInvitePreviewToken(payload: {
   secret: string;
   token: string;
   eventId: string;
   adminId: string;
-  inviteType: AdminInviteType;
+  inviteType: EventInviteType;
   inviteDigest: string;
-}): Promise<AdminInvitePreviewTokenValidation> {
+}): Promise<EventInvitePreviewTokenValidation> {
   const validation = await verifyAdminPreviewToken({
     ...payload,
     type: "admin_invite_bulk",
@@ -83,15 +83,15 @@ export async function verifyAdminInvitePreviewToken(payload: {
   };
 }
 
-export async function requireValidAdminInvitePreview(payload: {
+export async function requireValidEventInvitePreview(payload: {
   secret: string;
   token: string;
   eventId: string;
   adminId: string;
-  inviteType: AdminInviteType;
+  inviteType: EventInviteType;
   inviteDigest: string;
-}): Promise<AdminInvitePreviewClaims> {
-  const validation = await verifyAdminInvitePreviewToken(payload);
+}): Promise<EventInvitePreviewClaims> {
+  const validation = await verifyEventInvitePreviewToken(payload);
   if (validation.ok) return validation.claims;
   if (validation.reason === "expired") {
     throw new AppError(409, "INVITE_PREVIEW_EXPIRED", "Invite preview expired. Render a fresh preview before sending.");
@@ -105,3 +105,47 @@ export async function requireValidAdminInvitePreview(payload: {
   }
   throw new AppError(400, "INVITE_PREVIEW_INVALID", "Invalid invite preview token. Render preview before sending.");
 }
+
+/** Verifies that the submitted recipient batch is exactly the batch the user previewed. */
+export async function requireValidEventInviteRecipientBatch(payload: {
+  secret: string;
+  token: string;
+  eventId: string;
+  adminId: string;
+  inviteType: EventInviteType;
+  invites: EventInvitePreviewInput[];
+  expiresAt: string;
+  inviteDigest: string;
+}): Promise<EventInvitePreviewClaims> {
+  const computedDigest = await computeEventInviteDigest(payload.invites, payload.expiresAt);
+  if (computedDigest !== payload.inviteDigest) {
+    throw new AppError(
+      409,
+      "INVITE_PREVIEW_STALE",
+      "Invite list changed after preview. Render preview again before sending.",
+    );
+  }
+  return requireValidEventInvitePreview({
+    secret: payload.secret,
+    token: payload.token,
+    eventId: payload.eventId,
+    adminId: payload.adminId,
+    inviteType: payload.inviteType,
+    inviteDigest: computedDigest,
+  });
+}
+
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export type AdminInviteType = EventInviteType;
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export type AdminInvitePreviewInput = EventInvitePreviewInput;
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export type AdminInvitePreviewTokenValidation = EventInvitePreviewTokenValidation;
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export const computeAdminInviteDigest = computeEventInviteDigest;
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export const signAdminInvitePreviewToken = signEventInvitePreviewToken;
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export const verifyAdminInvitePreviewToken = verifyEventInvitePreviewToken;
+/** @deprecated Import the domain-neutral event-invite helper instead. */
+export const requireValidAdminInvitePreview = requireValidEventInvitePreview;

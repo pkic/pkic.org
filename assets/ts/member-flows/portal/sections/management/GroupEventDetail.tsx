@@ -99,6 +99,10 @@ export function GroupEventDetail({
 
       {canManage && <GroupEventInvitations groupId={groupId} event={event} />}
 
+      {event.proposalAccess?.canFinalize && (
+        <GroupEventInvitations groupId={groupId} event={event} inviteType="speaker" />
+      )}
+
       {canReadProposalProgram(event) && <GroupEventProposals groupId={groupId} eventId={event.id} />}
 
       {event.capabilities.includes("manage_attendance") && (

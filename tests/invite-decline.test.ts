@@ -3,7 +3,10 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
+import { renderEmail } from "../functions/_lib/email/render";
 import app from "../functions/router";
+
+const EMAIL_LAYOUT = "<!doctype html><html><body>{{{body_html}}}</body></html>";
 
 function mounted(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -240,6 +243,51 @@ describe("invite decline", () => {
       ["colleague1@example.test", "colleague2@example.test"],
     );
     expect(outbox.map((row) => row.recipient_email)).toEqual(["colleague1@example.test", "colleague2@example.test"]);
+  });
+
+  it("renders forwarded speaker recipient names through the shared text-safe variables", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { token } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "declining-speaker@example.test",
+      inviteType: "speaker",
+      signingSecret: "test-signing-secret",
+    });
+
+    const response = await declinePost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            reasonCode: "schedule_conflict",
+            forwards: [
+              {
+                email: "forwarded-speaker@example.test",
+                firstName: "Forwarded",
+                lastName: "Speaker",
+              },
+            ],
+          }),
+        }),
+        { token },
+      ),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE recipient_email = ? AND template_key = 'speaker_invite'",
+      "forwarded-speaker@example.test",
+    );
+    const rendered = await renderEmail(
+      "Hi {{attendeeName}},\n\n[Submit proposal]({{proposalUrl}})",
+      JSON.parse(outbox[0].payload_json) as Record<string, unknown>,
+      EMAIL_LAYOUT,
+    );
+    expect(rendered.html).not.toContain("{{attendeeName}}");
+    expect(rendered.text).toContain("Forwarded Speaker");
   });
 
   it("silently skips unsubscribed contacts when forwarding", async () => {

@@ -1,18 +1,16 @@
 /**
  * admin-invite-chunked-bulk.test.ts
  *
- * Verifies the chunked-send protocol introduced to support large CSV uploads
- * (>500 invitees).  The frontend:
+ * Verifies the recipient-bound chunked-send protocol for large CSV uploads.
  *
- *  1. POSTs all invites to the preview endpoint → receives previewToken + inviteDigest
- *  2. Splits the list into 500-row chunks and POSTs each chunk to the bulk
- *     endpoint, passing the original inviteDigest so the HMAC token (signed
- *     against the full list) still validates correctly.
+ *  1. POSTs all invites to the preview endpoint.
+ *  2. Receives one independently signed send token per 500-row recipient batch.
+ *  3. POSTs each exact batch with its own token and digest.
  *
  * Tests:
- *  - Preview response includes inviteDigest
- *  - Bulk accepts a chunk that differs from the full list when inviteDigest matches
- *  - Bulk rejects a chunk without inviteDigest when the chunk ≠ full list
+ *  - Preview response describes every bounded send batch.
+ *  - Bulk accepts the exact recipient batch that was previewed.
+ *  - Bulk rejects recipient substitution even when the caller replays a valid digest.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -79,7 +77,7 @@ describe("attendee invite — chunked bulk send", () => {
     await seedRequiredTemplates(adminId);
   });
 
-  it("preview response includes inviteDigest", async () => {
+  it("preview response includes recipient-bound send batches", async () => {
     const invites = [
       { email: "a@example.com", firstName: "Alice", lastName: "A" },
       { email: "b@example.com", firstName: "Bob", lastName: "B" },
@@ -92,10 +90,47 @@ describe("attendee invite — chunked bulk send", () => {
     expect(body.previewToken).toBeTypeOf("string");
     expect(body.inviteDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(body.recipientCount).toBe(2);
+    expect(body.sendBatches).toEqual([
+      {
+        offset: 0,
+        count: 2,
+        previewToken: body.previewToken,
+        inviteDigest: body.inviteDigest,
+      },
+    ]);
   });
 
-  it("bulk accepts a chunk with the full-list inviteDigest", async () => {
-    // Preview issued for two invitees
+  it("bulk accepts the exact recipient batch that was previewed", async () => {
+    const invites = [
+      { email: "a@example.com", firstName: "Alice", lastName: "A" },
+      { email: "b@example.com", firstName: "Bob", lastName: "B" },
+    ];
+    const previewRes = await callMounted("preview", { invites });
+    const { previewToken, inviteDigest } = (await previewRes.json()) as Record<string, string>;
+    const bulkRes = await callMounted("bulk", { invites, previewToken, inviteDigest });
+
+    expect(bulkRes.status).toBe(200);
+    const bulkBody = (await bulkRes.json()) as { success: boolean; created: unknown[] };
+    expect(bulkBody.success).toBe(true);
+    expect(bulkBody.created).toHaveLength(2);
+    await expect(
+      queryAll<{ expires_at: string }>(appEnv.DB, "SELECT expires_at FROM invites WHERE invitee_email = ?", [
+        "a@example.com",
+      ]),
+    ).resolves.toEqual([{ expires_at: "2026-12-01T08:00:00.000Z" }]);
+    const outbox = await queryAll<{ payload_json: string }>(
+      appEnv.DB,
+      "SELECT payload_json FROM email_outbox WHERE recipient_email = ?",
+      "a@example.com",
+    );
+    expect(JSON.parse(outbox[0].payload_json)).toMatchObject({
+      firstName: { __pkicEmailPlainText: "Alice" },
+      lastName: { __pkicEmailPlainText: "A" },
+      attendeeName: { __pkicEmailPlainText: "Alice A" },
+    });
+  });
+
+  it("rejects recipient substitution even when a valid full-list digest is replayed", async () => {
     const allInvites = [
       { email: "a@example.com", firstName: "Alice", lastName: "A" },
       { email: "b@example.com", firstName: "Bob", lastName: "B" },
@@ -103,40 +138,43 @@ describe("attendee invite — chunked bulk send", () => {
     const previewRes = await callMounted("preview", { invites: allInvites });
     const { previewToken, inviteDigest } = (await previewRes.json()) as Record<string, string>;
 
-    // Send only the first invitee as a "chunk" — pass the full-list digest so
-    // the token (signed over both invitees) still validates.
-    const chunk = [{ email: "a@example.com", firstName: "Alice", lastName: "A" }];
-    const bulkRes = await callMounted("bulk", { invites: chunk, previewToken, inviteDigest });
-
-    expect(bulkRes.status).toBe(200);
-    const bulkBody = (await bulkRes.json()) as { success: boolean; created: unknown[] };
-    expect(bulkBody.success).toBe(true);
-    expect(bulkBody.created).toHaveLength(1);
-    await expect(
-      queryAll<{ expires_at: string }>(appEnv.DB, "SELECT expires_at FROM invites WHERE invitee_email = ?", [
-        "a@example.com",
-      ]),
-    ).resolves.toEqual([{ expires_at: "2026-12-01T08:00:00.000Z" }]);
-  });
-
-  it("bulk rejects a chunk when inviteDigest is omitted and chunk ≠ full list", async () => {
-    // Preview issued for two invitees
-    const allInvites = [
-      { email: "a@example.com", firstName: "Alice", lastName: "A" },
-      { email: "b@example.com", firstName: "Bob", lastName: "B" },
-    ];
-    const previewRes = await callMounted("preview", { invites: allInvites });
-    const { previewToken } = (await previewRes.json()) as Record<string, string>;
-
-    // Send only the first invitee without passing inviteDigest — the worker
-    // will compute the digest from the chunk alone, which differs from the
-    // full-list digest embedded in the token → 409 INVITE_PREVIEW_STALE.
-    const chunk = [{ email: "a@example.com", firstName: "Alice", lastName: "A" }];
-    const bulkRes = await callMounted("bulk", { invites: chunk, previewToken }).catch(handleError);
+    const substituted = [{ email: "attacker-chosen@example.com", firstName: "Mallory", lastName: "M" }];
+    const bulkRes = await callMounted("bulk", {
+      invites: substituted,
+      previewToken,
+      inviteDigest,
+    }).catch(handleError);
 
     expect(bulkRes.status).toBe(409);
     const bulkBody = (await bulkRes.json()) as { error: { code: string } };
     expect(bulkBody.error.code).toBe("INVITE_PREVIEW_STALE");
+    await expect(
+      queryAll(appEnv.DB, "SELECT id FROM invites WHERE invitee_email = 'attacker-chosen@example.com'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("issues independently bound tokens for lists larger than one D1 send batch", async () => {
+    const invites = Array.from({ length: 501 }, (_, index) => ({ email: `batch-${index}@example.test` }));
+    const previewRes = await callMounted("preview", { invites });
+    expect(previewRes.status).toBe(200);
+    const preview = (await previewRes.json()) as {
+      sendBatches: Array<{ offset: number; count: number; previewToken: string; inviteDigest: string }>;
+    };
+    expect(preview.sendBatches.map(({ offset, count }) => ({ offset, count }))).toEqual([
+      { offset: 0, count: 500 },
+      { offset: 500, count: 1 },
+    ]);
+
+    const second = preview.sendBatches[1];
+    const bulkRes = await callMounted("bulk", {
+      invites: invites.slice(second.offset, second.offset + second.count),
+      previewToken: second.previewToken,
+      inviteDigest: second.inviteDigest,
+    });
+    expect(bulkRes.status, await bulkRes.clone().text()).toBe(200);
+    await expect(
+      queryAll(appEnv.DB, "SELECT id FROM invites WHERE invitee_email = 'batch-500@example.test'"),
+    ).resolves.toHaveLength(1);
   });
 
   it("creates hundreds of invites within a bounded D1 query budget", async () => {

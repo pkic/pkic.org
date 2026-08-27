@@ -1,5 +1,11 @@
-import { requireAnyPermission, requirePermission, type Permission } from "../auth/permissions";
-import { prepareAuthorizationGuard } from "../db/authorization-guard";
+import {
+  preparePermissionsAuthorizationGuard,
+  requireAnyPermission,
+  requirePermission,
+  type Permission,
+} from "../auth/permissions";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
@@ -79,4 +85,33 @@ export function prepareGroupEventProposalContextGuard(
       ? [context.groupId, context.groupId, context.eventId, context.proposalId]
       : [context.groupId, context.groupId, context.eventId],
   });
+}
+
+/** Rechecks the exact program tuple and permission in the same D1 batch as a page and count. */
+export async function queryGroupEventProposalPage<T>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  context: GroupEventProposalContext,
+  permission: Permission,
+  query: OffsetPageQuery,
+): Promise<{ rows: T[]; total: number }> {
+  try {
+    const [, , pageResult, countResult] = await db.batch([
+      prepareGroupEventProposalContextGuard(db, context),
+      preparePermissionsAuthorizationGuard(db, actor, [
+        { permission, context: { type: "event", id: context.eventId } },
+      ]),
+      ...buildOffsetPageStatements(db, query),
+    ]);
+    return decodeOffsetPageResults<T>(pageResult, countResult);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED",
+        "Proposal-program access changed while the invitation list was loading",
+      );
+    }
+    throw error;
+  }
 }

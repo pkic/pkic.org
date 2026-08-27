@@ -3,6 +3,7 @@ import { escapeMarkdownText } from "../functions/_lib/email/markdown";
 import { emailMarkdownText, emailPlainText } from "../functions/_lib/email/plain-text";
 import { renderEmail, renderSubject } from "../functions/_lib/email/render";
 import { buildInviteEmailQueueRow } from "../functions/_lib/services/invite-email";
+import { buildEventInviteRecipientVariables } from "../functions/_lib/services/event-invite-email-variables";
 import {
   buildAttendeeCampaignRecipients,
   buildPersonalCampaignTemplateData,
@@ -83,8 +84,8 @@ describe("untrusted Markdown email text", () => {
       invite: {
         id: "email-security-invite",
         invitee_email: "speaker@example.test",
-        invitee_first_name: "Speaker",
-        invitee_last_name: "Person",
+        invitee_first_name: "[Speaker](https://attacker.invalid/speaker)",
+        invitee_last_name: '<img src="https://attacker.invalid/name.gif">',
         invite_type: "speaker",
         expires_at: "2027-01-01T09:00:00.000Z",
       },
@@ -96,9 +97,30 @@ describe("untrusted Markdown email text", () => {
       inviterName: '[Organizer](https://attacker.invalid/inviter) <img src="https://attacker.invalid/pixel.gif">',
     });
     const payload = JSON.parse(JSON.stringify(row.data)) as Record<string, unknown>;
-    const rendered = await renderEmail("Invited by {{inviterName}}. [Respond]({{proposalUrl}})", payload, LAYOUT);
+    const rendered = await renderEmail(
+      "Hello {{attendeeName}} ({{firstName}} {{lastName}}). Invited by {{inviterName}}. [Respond]({{proposalUrl}})",
+      payload,
+      LAYOUT,
+    );
     expect(rendered.html).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
     expect(rendered.html).toContain('href="https://app.test/');
+  });
+
+  it("protects the shared preview and peer-invitation recipient variables", async () => {
+    const data = JSON.parse(
+      JSON.stringify(
+        buildEventInviteRecipientVariables(
+          {
+            firstName: "[Speaker](https://attacker.invalid/speaker)",
+            lastName: '<img src="https://attacker.invalid/name.gif">',
+          },
+          "Speaker",
+        ),
+      ),
+    ) as Record<string, unknown>;
+    const rendered = await renderEmail("{{attendeeName}} ({{firstName}} {{lastName}})", data, LAYOUT);
+    expect(rendered.html).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
+    expect(rendered.text).toContain("attacker.invalid");
   });
 
   it("protects proposal and profile fields in speaker campaign templates", async () => {

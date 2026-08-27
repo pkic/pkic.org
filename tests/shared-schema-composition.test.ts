@@ -43,11 +43,29 @@ import { adminEmailTemplateVersionCreateResponseSchema } from "../assets/shared/
 import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
+import { eventInviteValiditySchema } from "../assets/shared/schemas/event-invite-validity";
+import { registrationInviteCreateSchema } from "../assets/shared/schemas/registration";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
 
 describe("canonical shared schema composition", () => {
+  it("reuses event invite validity for peer invitation creation", () => {
+    expect(registrationInviteCreateSchema.shape.expiresAt).toBe(eventInviteValiditySchema.shape.expiresAt);
+    expect(
+      registrationInviteCreateSchema.parse({
+        invites: [{ email: "speaker@example.test" }],
+        expiresAt: "2026-12-02T12:00:00.000Z",
+      }).expiresAt,
+    ).toBe("2026-12-02T12:00:00.000Z");
+    expect(
+      registrationInviteCreateSchema.safeParse({
+        invites: [{ email: "speaker@example.test" }],
+        expiresAt: "not-a-date",
+      }).success,
+    ).toBe(false);
+  });
+
   it("uses one event identity contract across event workflow responses", () => {
     expect(adminEventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(adminEventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);

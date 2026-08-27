@@ -19,6 +19,7 @@ import {
   updateSpeakerProfile,
 } from "../functions/_lib/services/proposals-speaker-profile";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
+import { createPeerInvitations } from "../functions/_lib/services/peer-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import app from "../functions/router";
@@ -49,6 +50,7 @@ import {
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
 import { setSpeakerPresentationReminderPreference } from "../functions/_lib/services/speaker-presentation-reminder-preferences";
+import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 
 function mountedSpeakerRoute(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -2596,7 +2598,6 @@ describe("speaker nomination by attendees", () => {
     expect(regResponse.status).toBe(200);
     await regResponse.json();
 
-    // Get confirmation token from outbox and confirm
     const outbox = await queryAll<{ payload_json: string }>(
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
@@ -2618,10 +2619,33 @@ describe("speaker nomination by attendees", () => {
     return confirmPayload.manageToken;
   }
 
-  it("allows a registered attendee to nominate a speaker", async () => {
-    const manageToken = await registerAndConfirmAttendee();
+  async function registerAndConfirmAttendeeDirect(): Promise<string> {
+    const { eventId } = await setupWorkflow();
+    const attendee = await findOrCreateUser(env.DB, {
+      email: `nominator-${crypto.randomUUID()}@pkic.org`,
+      firstName: "Attendee",
+      lastName: "Nominator",
+    });
+    const created = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: attendee.id,
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    if (!created.confirmationToken) throw new Error("Expected a registration confirmation token");
+    return (
+      await confirmRegistrationByToken(env.DB, {
+        token: created.confirmationToken,
+        waitlistClaimWindowHours: 24,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      })
+    ).manageToken;
+  }
 
-    const response = await mountedSpeakerRoute(
+  async function postSpeakerNomination(manageToken: string, email: string, expiresAt?: string): Promise<Response> {
+    return mountedSpeakerRoute(
       createContext(
         env,
         new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {
@@ -2631,12 +2655,18 @@ describe("speaker nomination by attendees", () => {
             authorization: `Bearer ${manageToken}`,
           },
           body: JSON.stringify({
-            invites: [{ email: "nominee@example.test", firstName: "Nominee", lastName: "Speaker" }],
+            ...(expiresAt ? { expiresAt } : {}),
+            invites: [{ email, firstName: "Nominee", lastName: "Speaker" }],
           }),
         }),
         { eventSlug: "pqc-2026" },
       ),
     );
+  }
+
+  it("allows a registered attendee to nominate a speaker", async () => {
+    const manageToken = await registerAndConfirmAttendee();
+    const response = await postSpeakerNomination(manageToken, "nominee@example.test");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -2646,6 +2676,81 @@ describe("speaker nomination by attendees", () => {
     expect(body.success).toBe(true);
     expect(body.created).toHaveLength(1);
     expect(body.created[0].email).toBe("nominee@example.test");
+    await expect(
+      queryAll<{ expires_at: string }>(
+        env.DB,
+        "SELECT expires_at FROM invites WHERE invitee_email = ? AND invite_type = 'speaker'",
+        "nominee@example.test",
+      ),
+    ).resolves.toEqual([{ expires_at: "2026-12-01T08:00:00.000Z" }]);
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE recipient_email = ? AND template_key = 'speaker_invite'",
+      "nominee@example.test",
+    );
+    expect(JSON.parse(outbox[0].payload_json)).toMatchObject({
+      attendeeName: { __pkicEmailPlainText: "Nominee Speaker" },
+    });
+  });
+
+  it("accepts a custom speaker nomination deadline within the event window", async () => {
+    const manageToken = await registerAndConfirmAttendeeDirect();
+    const response = await postSpeakerNomination(
+      manageToken,
+      "custom-deadline-nominee@example.test",
+      "2026-12-02T12:00:00.000Z",
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll<{ expires_at: string }>(
+        env.DB,
+        "SELECT expires_at FROM invites WHERE invitee_email = ? AND invite_type = 'speaker'",
+        "custom-deadline-nominee@example.test",
+      ),
+    ).resolves.toEqual([{ expires_at: "2026-12-02T12:00:00.000Z" }]);
+  });
+
+  it("rejects past and post-event speaker nomination deadlines", async () => {
+    const manageToken = await registerAndConfirmAttendeeDirect();
+    for (const [label, expiresAt] of [
+      ["past", "2026-01-01T00:00:00.000Z"],
+      ["after-event", "2026-12-03T18:00:00.001Z"],
+    ] as const) {
+      const email = `${label}-nominee@example.test`;
+      const response = await postSpeakerNomination(manageToken, email, expiresAt);
+
+      expect(response.status).toBe(400);
+      await expect(
+        queryAll(env.DB, "SELECT id FROM invites WHERE invitee_email = ? AND invite_type = 'speaker'", email),
+      ).resolves.toHaveLength(0);
+    }
+  });
+
+  it("does not insert a peer speaker nomination after a concurrent event schedule change", async () => {
+    const manageToken = await registerAndConfirmAttendeeDirect();
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE events SET ends_at = starts_at WHERE slug = 'pqc-2026'").run();
+    });
+    const racingEnv = { ...env, DB: racingDb } as any;
+
+    await expect(
+      createPeerInvitations(
+        racingEnv,
+        new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {
+          headers: { authorization: `Bearer ${manageToken}` },
+        }),
+        "pqc-2026",
+        {
+          expiresAt: "2026-12-02T12:00:00.000Z",
+          invites: [{ email: "schedule-race-nominee@example.test" }],
+        },
+        "speaker",
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_INVITE_WINDOW_CHANGED", status: 409 });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM invites WHERE invitee_email = 'schedule-race-nominee@example.test'"),
+    ).resolves.toHaveLength(0);
   });
 
   it("rejects speaker nomination without auth token", async () => {

@@ -11,8 +11,7 @@ import {
 } from "./api-common";
 import { z } from "zod";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
-import { attendanceTypeSchema, inviteeSchema } from "./registration";
-import { sourceTypeSchema } from "./source";
+import { attendanceTypeSchema } from "./registration";
 import { eventSourceModeSchema } from "./event-series";
 import { groupIdSchema } from "./groups";
 import { EVENT_PROPOSALS_SORT_COLUMNS, eventProposalsListQuerySchema } from "./event-proposals";
@@ -274,14 +273,8 @@ export const adminEventEmailSendResponseSchema = z.object({
   queuedRecipients: z.number().optional(),
   queuedBatches: z.number().optional(),
 });
-export const adminInvitePreviewResponseSchema = z.object({
-  subject: z.string(),
-  html: z.string(),
-  text: z.string(),
-  previewToken: z.string(),
-  inviteDigest: z.string(),
-  inviteExpiresAt: z.string(),
-});
+/** @deprecated Import from event-invite-bulk instead. */
+export { eventInvitePreviewSchema as adminInvitePreviewResponseSchema } from "./event-invite-bulk";
 export const adminEventSponsorTiersResponseSchema = z.object({
   tiers: z.array(z.object({ tierName: z.string(), hasAttendeeDataAccess: z.boolean() })),
 });
@@ -295,35 +288,14 @@ export const adminEventPermissionSchema = z.object({
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 export type AdminEventPermissionInput = z.infer<typeof adminEventPermissionSchema>;
-const bulkInviteNameSchema = (max: number) => z.string().trim().min(1).max(max).optional();
-const bulkInviteeSchema = inviteeSchema.extend({
-  firstName: bulkInviteNameSchema(80),
-  lastName: bulkInviteNameSchema(120),
-  sourceType: sourceTypeSchema.optional(),
-});
-
-const adminBulkInvitesSchema = z.object({
-  previewToken: z.string().trim().min(16).max(2048),
-  inviteDigest: z.string().max(128).optional(),
-  expiresAt: z.iso.datetime().optional(),
-  invites: z.array(bulkInviteeSchema).min(1).max(2000),
-});
-
-const adminBulkInvitesPreviewSchema = z.object({
-  expiresAt: z.iso.datetime().optional(),
-  invites: z.array(bulkInviteeSchema).min(1).max(50000),
-});
-
-export const adminBulkAttendeeInvitesSchema = adminBulkInvitesSchema;
-export const adminBulkSpeakerInvitesSchema = adminBulkInvitesSchema;
-export const adminBulkAttendeeInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
-export const adminBulkSpeakerInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
-const adminBulkInviteResultSchema = z.object({ email: z.email() });
-export const adminBulkInviteResponseSchema = successResponseSchema.extend({
-  created: z.array(adminBulkInviteResultSchema),
-  endorsed: z.array(adminBulkInviteResultSchema),
-  skipped: z.array(adminBulkInviteResultSchema),
-});
+/** @deprecated Import from event-invite-bulk instead. */
+export {
+  eventBulkAttendeeInvitesPreviewSchema as adminBulkAttendeeInvitesPreviewSchema,
+  eventBulkAttendeeInvitesSchema as adminBulkAttendeeInvitesSchema,
+  eventInviteBulkResponseSchema as adminBulkInviteResponseSchema,
+  eventBulkSpeakerInvitesPreviewSchema as adminBulkSpeakerInvitesPreviewSchema,
+  eventBulkSpeakerInvitesSchema as adminBulkSpeakerInvitesSchema,
+} from "./event-invite-bulk";
 export const adminWaitlistPromotionResponseSchema = successResponseSchema.extend({
   dayRegistrationOffers: z.number().int().nonnegative(),
   affectedRegistrations: z.array(z.string()),

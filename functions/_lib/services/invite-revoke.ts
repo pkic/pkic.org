@@ -1,6 +1,6 @@
 import { first } from "../db/queries";
 import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike } from "../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { newCapabilityLinkSecret } from "../auth/capability-links";
 import { prepareAuditLog, type AuditScope } from "./audit";
@@ -14,6 +14,8 @@ export interface EventInviteRevokePayload {
   actor: AuthAdmin;
   expectedInviteType?: InviteRecord["invite_type"];
   auditScope?: AuditScope;
+  /** Route-specific live authorization evidence committed with the revoke. */
+  authorizationStatements?: StatementLike[];
 }
 
 export async function revokeEventInvite(db: DatabaseLike, payload: EventInviteRevokePayload): Promise<void> {
@@ -31,6 +33,7 @@ export async function revokeEventInvite(db: DatabaseLike, payload: EventInviteRe
   try {
     await db.batch([
       prepareInviteTransitionGuard(db, invite),
+      ...(payload.authorizationStatements ?? []),
       db
         .prepare(
           "UPDATE invites SET status = 'revoked', link_secret = ? WHERE id = ? AND event_id = ? AND status = 'sent'",

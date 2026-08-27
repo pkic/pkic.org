@@ -1,7 +1,7 @@
 import { first } from "../db/queries";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike } from "../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import { newCapabilityLinkSecret } from "../auth/capability-links";
@@ -21,6 +21,8 @@ export interface EventInviteResendPayload {
   expectedInviteType?: InviteRecord["invite_type"];
   auditScope?: AuditScope;
   expiresAt?: string;
+  /** Route-specific live authorization evidence committed with the resend. */
+  authorizationStatements?: StatementLike[];
 }
 
 export async function resendEventInvite(
@@ -73,6 +75,7 @@ export async function resendEventInvite(
     await db.batch([
       prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
       prepareInviteTransitionGuard(db, invite),
+      ...(payload.authorizationStatements ?? []),
       db
         .prepare(
           `UPDATE invites

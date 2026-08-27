@@ -2,11 +2,9 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { inviteTypeSchema } from "./registration";
+import { eventInviteValiditySchema } from "./event-invite-validity";
 
-/** Absolute invitation deadline; omission means the event start. */
-export const eventInviteValiditySchema = z.object({
-  expiresAt: z.iso.datetime().optional(),
-});
+export { eventInviteValiditySchema } from "./event-invite-validity";
 
 export const eventInviteResendSchema = eventInviteValiditySchema;
 

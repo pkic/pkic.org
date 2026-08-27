@@ -22,6 +22,7 @@ import { defaultedSourceTypeSchema } from "./source";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 import { proposalSpeakerRoleSchema } from "./participant-roles";
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
+import { eventInviteValiditySchema } from "./event-invite-validity";
 import {
   eventAttendanceTypeValueSchema,
   eventDayDateSchema,
@@ -375,7 +376,9 @@ export const registrationManageUpdateResponseSchema = successResponseSchema.exte
 export type RegistrationManageReadResponse = z.infer<typeof registrationManageReadResponseSchema>;
 export type RegistrationManageUpdateResponse = z.infer<typeof registrationManageUpdateResponseSchema>;
 
-export const registrationInviteCreateSchema = z.object({ invites: z.array(inviteeSchema).min(1).max(10) });
+export const registrationInviteCreateSchema = eventInviteValiditySchema.extend({
+  invites: z.array(inviteeSchema).min(1).max(10),
+});
 
 export const peerInviteResultSchema = successResponseSchema.extend({
   created: z.array(z.object({ email: normalizedEmailSchema })),

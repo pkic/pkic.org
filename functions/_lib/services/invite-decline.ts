@@ -8,7 +8,7 @@ import { bulkCreateInvites } from "./invite-bulk";
 import { findInviteByToken, isStaleInviteTransition, prepareDeclineInviteStatements } from "./invite-lifecycle";
 import type { z } from "zod";
 import { effectiveStoredInviteExpiry } from "../invite-validity";
-import { emailPlainText } from "../email/plain-text";
+import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
 
 type InviteDeclineBody = z.infer<typeof inviteDeclineSchema>;
 
@@ -82,8 +82,10 @@ export async function declineAndForwardInvite(
           linkSecretFingerprint,
           data: {
             ...buildEventEmailVariables(event, input.appBaseUrl),
-            firstName: emailPlainText(contact.inviteeFirstName ?? ""),
-            lastName: emailPlainText(contact.inviteeLastName ?? ""),
+            ...buildEventInviteRecipientVariables(
+              { firstName: contact.inviteeFirstName, lastName: contact.inviteeLastName },
+              invite.invite_type === "attendee" ? "Attendee" : "Speaker",
+            ),
             registrationUrl,
             proposalUrl,
             declineUrl,

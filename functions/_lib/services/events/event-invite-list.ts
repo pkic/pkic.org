@@ -10,7 +10,7 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { effectiveInviteExpirySql } from "../../invite-validity";
 
-type EventInviteRow = Omit<EventInviteSummary, "actions">;
+export type EventInviteRow = Omit<EventInviteSummary, "actions">;
 
 /** Lists only the server-selected invite type; callers cannot widen this scope. */
 export async function listEventInvitesOfType(
@@ -29,6 +29,14 @@ export async function listEventInvites(
   query: EventInvitesListQuery,
 ): Promise<{ invites: EventInviteSummary[]; page: ReturnType<typeof buildPageInfo> }> {
   const { rows, total } = await queryPage<EventInviteRow>(db, buildEventInvitesPageQuery(eventId, query));
+  return buildEventInviteListResult(query, rows, total);
+}
+
+export function buildEventInviteListResult(
+  query: Pick<EventInvitesListQuery, "limit" | "offset">,
+  rows: EventInviteRow[],
+  total: number,
+): { invites: EventInviteSummary[]; page: ReturnType<typeof buildPageInfo> } {
   const invites = rows.map((invite) => ({
     ...invite,
     actions: {

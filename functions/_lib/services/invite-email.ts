@@ -1,5 +1,6 @@
 import type { InviteEmailQueueRow } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
+import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
 import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
@@ -60,8 +61,10 @@ export function buildInviteEmailQueueRow(payload: {
     capabilityLinkValues: [actionUrl, declineUrl],
     data: {
       ...buildEventEmailVariables(event, payload.appBaseUrl),
-      firstName: emailPlainText(invite.invitee_first_name ?? ""),
-      lastName: emailPlainText(invite.invitee_last_name ?? ""),
+      ...buildEventInviteRecipientVariables(
+        { firstName: invite.invitee_first_name, lastName: invite.invitee_last_name },
+        isAttendee ? "Attendee" : "Speaker",
+      ),
       inviterName: emailPlainText(payload.inviterName ?? ""),
       registrationUrl: isAttendee ? actionUrl : undefined,
       proposalUrl: isAttendee ? undefined : actionUrl,

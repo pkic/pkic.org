@@ -107,11 +107,7 @@ import {
   GroupEventRegistrationSettingsGet,
   GroupEventRegistrationSettingsPut,
 } from "./[groupId]/events/[eventId]/registration-settings";
-import {
-  GroupEventAttendeeInvitesList,
-  GroupEventAttendeeInviteResend,
-  GroupEventAttendeeInviteRevoke,
-} from "./[groupId]/events/[eventId]/invites";
+import { registerGroupEventInviteRoutes } from "./register-group-event-invite-routes";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
 import { GroupStatsGet } from "./[groupId]/stats";
 import { GroupUserCatalogList } from "./[groupId]/user-catalog";
@@ -257,9 +253,7 @@ openapi.delete("/:groupId/vote-proposals/:proposalId/endorsement", GroupVoteProp
 openapi.post("/:groupId/vote-proposals/:proposalId/approve", GroupVoteProposalApprovePost);
 openapi.post("/:groupId/vote-proposals/:proposalId/reject", GroupVoteProposalRejectPost);
 openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
-openapi.get("/:groupId/events/:eventId/invites", GroupEventAttendeeInvitesList);
-openapi.post("/:groupId/events/:eventId/invites/:inviteId/resend", GroupEventAttendeeInviteResend);
-openapi.post("/:groupId/events/:eventId/invites/:inviteId/revoke", GroupEventAttendeeInviteRevoke);
+registerGroupEventInviteRoutes(openapi);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);
