@@ -56,6 +56,8 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/analytics/summary"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/analytics/registrations"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/analytics/donations"]).toBeUndefined();
+    expect(spec.paths["/api/v1/audit-log"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/audit-log"]).toBeUndefined();
     expect(spec.paths["/api/v1/donations"].get).toBeDefined();
     expect(spec.paths["/api/v1/donations/{id}"].get).toBeDefined();
     expect(spec.paths["/api/v1/donations/promoters"].get).toBeDefined();

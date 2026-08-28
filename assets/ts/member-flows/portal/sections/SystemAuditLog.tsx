@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
-import { systemAuditLogListResponseSchema } from "../../../../shared/schemas/system-audit-log";
+import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
 
 interface AuditFilters {
   entityType: string;
@@ -41,8 +41,8 @@ export function SystemAuditLog() {
 
   return (
     <ApiDataTable
-      endpoint="/api/v1/system/audit-log"
-      responseSchema={systemAuditLogListResponseSchema}
+      endpoint="/api/v1/audit-log"
+      responseSchema={auditLogListResponseSchema}
       resolve={(data) => data.entries}
       resolvePage={(data) => data.page}
       paginate

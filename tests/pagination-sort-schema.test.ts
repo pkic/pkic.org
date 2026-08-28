@@ -17,7 +17,7 @@ import {
 } from "../assets/shared/schemas/pagination";
 import { donationsListQuerySchema } from "../assets/shared/schemas/donation-management";
 import { usersListQuerySchema } from "../assets/shared/schemas/user-management";
-import { systemAuditLogListQuerySchema } from "../assets/shared/schemas/system-audit-log";
+import { auditLogListQuerySchema } from "../assets/shared/schemas/audit-log";
 import {
   emailTemplateVersionsListQuerySchema,
   emailTemplatesListQuerySchema,
@@ -185,9 +185,9 @@ describe("consolidated per-endpoint sort schemas still validate their own allowl
     expect(usersListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
-  it("systemAuditLogListQuerySchema sort", () => {
-    expect(systemAuditLogListQuerySchema.safeParse({ sort: "action" }).success).toBe(true);
-    expect(systemAuditLogListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
+  it("auditLogListQuerySchema sort", () => {
+    expect(auditLogListQuerySchema.safeParse({ sort: "action" }).success).toBe(true);
+    expect(auditLogListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
   it("emailTemplatesSortValueSchema", () => {

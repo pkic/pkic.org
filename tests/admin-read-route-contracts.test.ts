@@ -44,6 +44,8 @@ describe("admin read route OpenAPI contracts", () => {
     expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
     expect(paths["/api/v1/analytics/summary"].get).toBeDefined();
     expect(paths["/api/v1/system/analytics/summary"]).toBeUndefined();
+    expect(paths["/api/v1/audit-log"].get).toBeDefined();
+    expect(paths["/api/v1/system/audit-log"]).toBeUndefined();
     expect(paths["/api/v1/admin/stats"]).toBeUndefined();
     expect(paths["/api/v1/admin/votes"]).toBeUndefined();
     expect(paths["/api/v1/admin/votes/{id}"]).toBeUndefined();

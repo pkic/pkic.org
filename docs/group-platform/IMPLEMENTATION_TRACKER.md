@@ -1099,16 +1099,18 @@ Status: In progress
       decision management.
 - [ ] Move remaining global management views into the portal.
       Current evidence: the global audit log is the first permission-derived
-      System destination. Its schema, service, and API moved rather than being
-      copied to `/api/v1/system/audit-log`; the old admin handler and component
-      are removed, while the old hash URL is only a bookmark redirect. The
+      portal destination. Its schema, service, and API moved rather than being
+      copied to a System API namespace: the canonical domain endpoint is
+      `/api/v1/audit-log`; the old admin handler and component are removed,
+      while the old hash URL is only a bookmark redirect. The
       canonical endpoint recomputes live user-backed staff permissions and
       requires a global `audit:read` grant. The shared collection controller
       keeps search, open-ended exact actor/entity/action filters, allowlisted
       sorting, counting, and pagination in D1. Mounted tests cover global and
       contextual permission separation plus removal of the old API, and a real
       Worker/D1 browser journey proves the portal path and redirect make no
-      legacy audit request. Organization-content moderation is the second
+      legacy audit request, including no `/api/v1/system/audit-log` request.
+      Organization-content moderation is the second
       permission-derived System destination. One neutral shared schema now owns
       its list, detail, decision, route, and paginated response contracts; the
       portal consumes a canonical `/api/v1/system/organization-content-reviews`

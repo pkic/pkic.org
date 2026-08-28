@@ -1,6 +1,9 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import type { SystemAuditLogListQuery } from "../../../assets/shared/schemas/system-audit-log";
-import type { ScopedAuditLogListQuery } from "../../../assets/shared/schemas/audit-log";
+import {
+  AUDIT_LOG_SORT_COLUMNS,
+  type AuditLogListQuery,
+  type ScopedAuditLogListQuery,
+} from "../../../assets/shared/schemas/audit-log";
 import { first } from "../db/queries";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
@@ -9,7 +12,16 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { toAuditLogResponseRows, type AuditLogReadRow } from "./audit";
 
-type AuditLogPageQuery = SystemAuditLogListQuery;
+interface AuditLogPageQuery {
+  limit: number;
+  offset: number;
+  q?: string;
+  sort?: string;
+  entityType?: string | null;
+  actorType?: string | null;
+  action?: string | null;
+  entityId?: string | null;
+}
 
 interface AuditLogRestriction {
   joins?: string;
@@ -28,6 +40,16 @@ const SCOPED_AUDIT_SORT_POLICY: AuditLogSortPolicy = {
     action: "al.action COLLATE NOCASE",
     actor: "actor_display COLLATE NOCASE",
   },
+  fallback: "al.created_at DESC",
+};
+
+const GLOBAL_AUDIT_LOG_SORT_POLICY: AuditLogSortPolicy = {
+  expressions: {
+    actor: "actor_display",
+    action: "al.action",
+    entity_type: "al.entity_type",
+    created_at: "al.created_at",
+  } satisfies Record<(typeof AUDIT_LOG_SORT_COLUMNS)[number], string>,
   fallback: "al.created_at DESC",
 };
 
@@ -107,6 +129,16 @@ export async function listAuditLogPage(
   const { rows, total } = await queryPage<AuditLogReadRow>(db, buildAuditLogPageQuery(query, restriction, sortPolicy));
   const auditLog = toAuditLogResponseRows(rows);
   return { auditLog, page: buildPageInfo(query.limit, query.offset, total, auditLog.length) };
+}
+
+/** Platform-wide variant exposed for D1 query-plan assertions. */
+export function buildGlobalAuditLogPageQuery(query: AuditLogListQuery) {
+  return buildAuditLogPageQuery(query, {}, GLOBAL_AUDIT_LOG_SORT_POLICY);
+}
+
+export async function listGlobalAuditLog(db: DatabaseLike, query: AuditLogListQuery) {
+  const { auditLog, page } = await listAuditLogPage(db, query, {}, GLOBAL_AUDIT_LOG_SORT_POLICY);
+  return { entries: auditLog, page };
 }
 
 async function listAuditLogForScope(db: DatabaseLike, query: ScopedAuditLogListQuery, scope: AuditLogRestriction) {

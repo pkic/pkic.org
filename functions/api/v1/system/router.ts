@@ -4,7 +4,6 @@ import type { RequestDbContext } from "../../../_lib/db/context";
 import membershipApplications_Router from "./membership-applications/router";
 import { SystemMembershipCategoriesList, SystemMembershipCategoryUpdate } from "./membership-categories";
 import { SystemMembershipSettingsGet, SystemMembershipSettingsUpdate } from "./membership-settings";
-import { SystemAuditLogList } from "./audit-log";
 import accessControl_Router from "./access-control/router";
 import { EmailTemplatesList } from "./email-templates";
 import emailTemplates_Router from "./email-templates/router";
@@ -19,7 +18,6 @@ import {
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-openapi.get("/audit-log", SystemAuditLogList);
 openapi.route("/access-control", accessControl_Router);
 openapi.get("/email-templates", EmailTemplatesList);
 openapi.route("/email-templates", emailTemplates_Router);

@@ -3,11 +3,13 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
 test("a permitted staff identity uses the system audit log only through the portal", async ({ page }) => {
-  const systemRequests: string[] = [];
+  const auditLogRequests: string[] = [];
+  const retiredSystemRequests: string[] = [];
   const legacyAuditRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname === "/api/v1/system/audit-log") systemRequests.push(`${request.method()} ${pathname}`);
+    if (pathname === "/api/v1/audit-log") auditLogRequests.push(`${request.method()} ${pathname}`);
+    if (pathname === "/api/v1/system/audit-log") retiredSystemRequests.push(`${request.method()} ${pathname}`);
     if (pathname === "/api/v1/admin/audit-log") legacyAuditRequests.push(`${request.method()} ${pathname}`);
   });
 
@@ -18,7 +20,8 @@ test("a permitted staff identity uses the system audit log only through the port
   await expect(page.getByRole("link", { name: "System" })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.locator("tbody tr").first()).toBeVisible();
-  expect(systemRequests).toContain("GET /api/v1/system/audit-log");
+  expect(auditLogRequests).toContain("GET /api/v1/audit-log");
+  expect(retiredSystemRequests).toEqual([]);
   expect(legacyAuditRequests).toEqual([]);
 
   await page.goto("/admin/#/auditlog");
@@ -53,7 +56,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
     action: "page_two_action",
   };
 
-  await page.route("**/api/v1/system/audit-log**", async (route) => {
+  await page.route("**/api/v1/audit-log**", async (route) => {
     requestCount += 1;
     const url = new URL(route.request().url());
     const offset = Number(url.searchParams.get("offset") ?? "0");

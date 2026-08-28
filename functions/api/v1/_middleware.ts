@@ -17,6 +17,8 @@ function isSensitiveArchitecturePath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/admin/") ||
     pathname.startsWith("/api/v1/analytics/") ||
+    pathname === "/api/v1/audit-log" ||
+    pathname.startsWith("/api/v1/audit-log/") ||
     pathname.startsWith("/api/v1/email/") ||
     pathname.startsWith("/api/v1/internal/") ||
     pathname.startsWith("/api/v1/operations/") ||

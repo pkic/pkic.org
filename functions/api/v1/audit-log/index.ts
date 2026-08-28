@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/system/audit-log
+ * GET /api/v1/audit-log
  *
  * Returns a paginated, filterable view of the global audit log.
  *
@@ -15,12 +15,12 @@
 import { json } from "../../../_lib/http";
 import type { AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { listSystemAuditLog } from "../../../_lib/services/system-audit-log";
-import { systemAuditLogListRouteSchema } from "../../../../assets/shared/schemas/system-audit-log";
+import { listGlobalAuditLog } from "../../../_lib/services/audit-log-read";
+import { auditLogListRouteSchema } from "../../../../assets/shared/schemas/audit-log";
 import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
-export const SystemAuditLogList = openApiRoute(systemAuditLogListRouteSchema, async (c: AdminContext, data) => {
+export const AuditLogList = openApiRoute(auditLogListRouteSchema, async (c: AdminContext, data) => {
   const { db } = await requireStaffPermission(c, "audit:read");
 
-  return json(await listSystemAuditLog(db, data.query));
+  return json(await listGlobalAuditLog(db, data.query));
 });

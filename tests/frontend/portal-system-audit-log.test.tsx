@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe("portal system audit log", () => {
-  it("loads a schema-validated server page from the canonical system API", async () => {
+  it("loads a schema-validated server page from the canonical domain API", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -64,11 +64,12 @@ describe("portal system audit log", () => {
     expect(container.textContent).toContain("system_setting_updated");
     expect(container.textContent).toContain('"field": "label"');
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.pathname).toBe("/api/v1/system/audit-log");
+    expect(requests[0]?.pathname).toBe("/api/v1/audit-log");
     expect(requests[0]?.searchParams.get("limit")).toBe("50");
     expect(requests[0]?.searchParams.get("offset")).toBe("0");
     expect(requests[0]?.searchParams.get("sort")).toBeNull();
     expect(requests[0]?.pathname.startsWith("/api/v1/admin/")).toBe(false);
+    expect(requests[0]?.pathname.startsWith("/api/v1/system/audit-log")).toBe(false);
 
     const entityType = container.querySelector<HTMLInputElement>("#system-audit-entityType");
     const actorType = container.querySelector<HTMLInputElement>("#system-audit-actorType");
