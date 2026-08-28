@@ -55,11 +55,15 @@ Status: In progress
       routes have been removed. The obsolete admin event-management, form,
       invitation, proposal, speaker, and registration aliases have now been
       replaced at every caller by their canonical domain contracts; the
-      duplicate admin registration-detail schema module is removed. Narrow
-      compatibility exports remain only where an existing admin consumer still
-      uses a canonical mailing-list, vote, statistics, or organization-content
-      implementation; remove each export with that consumer rather than
-      creating a second contract.
+      duplicate admin registration-detail schema module is removed. Internal
+      command services now use the generalized audit-change guard classifier
+      directly; its one-row compatibility alias, the redundant form-answer
+      schema name, and an unused admin vote-candidate alias are removed. A
+      current import audit still finds test-only proposal, proposal-schema,
+      registration-list, and registration-statistics adapters plus narrow
+      exports required by live admin consumers. Remove the test-only adapters
+      after migrating those tests, and remove each live compatibility export
+      with its consumer rather than creating a second contract.
 - [x] Prove empty-database migration application.
       Evidence: all 37 migrations, including 234 commands in 0035, applied to
       a fresh independent local D1 state under ScanDisk after the authenticated
@@ -1280,9 +1284,15 @@ Status: In progress
       table. System Analytics asserts created-at index use for its bounded
       registration, invitation, and donation time series and the event-first
       registration index for the top-events projection; all-time aggregate
-      totals intentionally read their complete tables. The overall item remains
-      open until the final critical-query
-      inventory is reconciled against current production builders.
+      totals intentionally read their complete tables. Group form discovery
+      now exposes the exact production page/count builder to its regression;
+      both statements prove indexed owner, grantee-capability, and live member
+      access through `idx_form_placements_owner_active`,
+      `idx_form_placement_group_grants_group`, and
+      `idx_group_memberships_user_active` without scanning those tables. The
+      overall item remains open: the reconciled inventory still requires plan
+      coverage for the global form catalogue, proposal-review list, and full
+      merged form-submission page/count builders.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and
@@ -1335,8 +1345,8 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the bounded Due Work
-      listing cleanup with 2,207 backend tests (one skipped), 292 frontend
+      Current evidence: the complete gate passes after the compatibility and
+      group-form query-plan cleanup with 2,208 backend tests (one skipped), 292 frontend
       tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.

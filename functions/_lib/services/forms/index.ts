@@ -15,7 +15,12 @@ export {
 } from "./read";
 export type { FormPurpose } from "../../../../assets/shared/schemas/forms";
 
-export { getGroupFormDefinition, listGroupFormPlacements, type GroupFormViewer } from "./group-placement-read";
+export {
+  buildGroupFormPlacementsPageQuery,
+  getGroupFormDefinition,
+  listGroupFormPlacements,
+  type GroupFormViewer,
+} from "./group-placement-read";
 export { updateGroupFormPlacement } from "./group-placement-mutation";
 export { createGroupFormDefinition, updateGroupFormDefinition } from "./group-definition-mutation";
 export { submitGroupFormResponse } from "./group-response-submission";

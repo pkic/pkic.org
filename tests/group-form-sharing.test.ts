@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  buildGroupFormPlacementsPageQuery,
   createManagedForm,
   createManagedFormPlacement,
   createGroupFormDefinition,
@@ -8,6 +9,7 @@ import {
   updateGroupFormDefinition,
   updateGroupFormPlacement,
 } from "../functions/_lib/services/forms";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
@@ -124,6 +126,40 @@ function authenticatedRequest(token: string, path: string, init: RequestInit = {
 beforeEach(resetDb);
 
 describe("group form sharing", () => {
+  it("uses indexed owner, grant, and live-membership paths for the production page and count queries", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "view_definition",
+    });
+    const query = buildGroupFormPlacementsPageQuery({ userId: fixture.memberId }, fixture.grantee.id, {
+      active: "true",
+      q: "shared",
+      sort: "title",
+      limit: 20,
+      offset: 0,
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all<{ detail: string }>(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...countBindings)
+        .all<{ detail: string }>(),
+    ]);
+
+    for (const plan of [pagePlan, countPlan]) {
+      const details = plan.results.map((row) => row.detail).join("\n");
+      expect(details).toContain("idx_form_placements_owner_active");
+      expect(details).toContain("idx_form_placement_group_grants_group");
+      expect(details).toContain("idx_group_memberships_user_active");
+      expect(details).not.toMatch(/(?:^|\n)SCAN form_placements(?:$|\s)/);
+      expect(details).not.toMatch(/(?:^|\n)SCAN form_placement_group_grants(?:$|\s)/);
+      expect(details).not.toMatch(/(?:^|\n)SCAN group_memberships(?:$|\s)/);
+    }
+  });
+
   it("lets effective group leadership create and edit an owned form without accepting owner overrides", async () => {
     const fixture = await createFixture();
     const leader = await userActor("owner-form-leader");
