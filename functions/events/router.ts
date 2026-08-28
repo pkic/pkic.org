@@ -5,7 +5,7 @@ import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { Env } from "../_lib/types";
 
 const EVENT_SHELL_CSP =
-  "default-src 'none'; img-src 'self' https://pkic.org https://i.ytimg.com data:; form-action 'self'; base-uri 'self'; connect-src 'self' data:; block-all-mixed-content; style-src 'unsafe-inline' 'self'; font-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/; frame-ancestors 'none'";
+  "default-src 'none'; img-src 'self' https://pkic.org https://i.ytimg.com data:; form-action 'self'; base-uri 'self'; connect-src 'self' data:; block-all-mixed-content; style-src 'unsafe-inline' 'self'; font-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/ https://js.stripe.com; frame-src https://js.stripe.com; frame-ancestors 'none'";
 
 const PRIVATE_RESPONSE_HEADERS = {
   "cache-control": "no-store, max-age=0",

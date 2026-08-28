@@ -262,7 +262,11 @@ Status: In progress
       eight shells, static-page precedence, unknown and hostile paths, HEAD and
       error responses, stable portal URLs, source-mode isolation from legacy
       route overrides, portal event creation/configuration, and the real
-      registration, confirmation, and self-management journey.
+      registration, confirmation, and self-management journey. The private
+      shell CSP permits only the Stripe script and frame origins required by the
+      existing confirmation-page donation component; missing or failed shell
+      asset reads return a sanitized no-store 503 with the same security
+      headers.
 - [x] Add rotatable, expiring guest invitation capabilities that authorize only
       browser-bound mailbox verification, never meeting entry by themselves.
 - [x] Make manager-created attendee and speaker invitation validity
