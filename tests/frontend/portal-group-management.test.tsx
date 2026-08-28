@@ -2,7 +2,10 @@
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Management } from "../../assets/ts/member-flows/portal/sections/management/Management";
+import {
+  Management,
+  managementRouteOwnsHash,
+} from "../../assets/ts/member-flows/portal/sections/management/Management";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const navigate = vi.fn();
@@ -75,6 +78,13 @@ afterEach(() => {
 });
 
 describe("portal selected-group management", () => {
+  it("does not let delayed group selection override another portal route", () => {
+    expect(managementRouteOwnsHash(undefined, "#/management")).toBe(true);
+    expect(managementRouteOwnsHash(undefined, "#/system/users")).toBe(false);
+    expect(managementRouteOwnsHash(GROUP_ID, `#/groups/${GROUP_ID}/settings`)).toBe(true);
+    expect(managementRouteOwnsHash(GROUP_ID, "#/system/users")).toBe(false);
+  });
+
   it("loads one server-derived group context and updates through the canonical group route", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     let revision = 0;

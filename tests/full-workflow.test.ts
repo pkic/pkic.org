@@ -3,8 +3,6 @@ import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
-import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
-import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
@@ -89,7 +87,8 @@ async function seedRequiredEmailTemplates(adminId: string): Promise<void> {
 async function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string): Promise<string> {
   const payload = await deliveredEmailPayload<Record<string, string>>(env.DB, env, payloadJson);
   const url = new URL(payload[fieldName]);
-  const token = url.searchParams.get("token");
+  const fragmentQuery = url.hash.includes("?") ? url.hash.slice(url.hash.indexOf("?") + 1) : "";
+  const token = url.searchParams.get("token") ?? new URLSearchParams(fragmentQuery).get("token");
   if (!token) {
     throw new Error(`Missing token in ${fieldName}`);
   }
@@ -131,42 +130,34 @@ describe("full workflow", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     try {
-      const requestLinkResponse = await requestAdminLink(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/auth/request-link", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: "admin@pkic.org" }),
-          }),
-          {},
-        ),
+      const requestLinkResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/auth/request-link", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "admin@pkic.org" }),
+        }),
       );
       expect(requestLinkResponse.status).toBe(200);
 
       const magicLinkOutbox = (
         await queryAll<{ payload_json: string }>(
           env.DB,
-          "SELECT payload_json FROM email_outbox WHERE template_key = 'admin_magic_link' ORDER BY created_at DESC LIMIT 1",
+          "SELECT payload_json FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
       const magicToken = await extractTokenFromOutboxUrl(magicLinkOutbox.payload_json, "magicLinkUrl");
 
-      const verifyResponse = await verifyAdminLink(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/auth/verify-link", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token: magicToken } as VerifyAdminPayload),
-          }),
-          {},
-        ),
+      const verifyResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/auth/verify-link", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: magicToken } as VerifyAdminPayload),
+        }),
       );
       expect(verifyResponse.status).toBe(200);
       await verifyResponse.json();
       const adminSessionCookie = verifyResponse.headers.get("set-cookie") ?? "";
-      const adminSessionToken = decodeURIComponent(adminSessionCookie.match(/^pkic_admin_session=([^;]+)/)?.[1] ?? "");
+      const adminSessionToken = decodeURIComponent(adminSessionCookie.match(/^pkic_session=([^;]+)/)?.[1] ?? "");
 
       const reviewerUserId = crypto.randomUUID();
       await env.DB.prepare(

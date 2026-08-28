@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/auth/sponsor-portal/verify-link.
- * Mirrors auth/member/verify-link.ts, issuing a sponsor-portal session
- * instead of a member session (see _lib/auth/sponsor-portal.ts).
+ * Redeems a sponsor-contact capability into its deliberately separate,
+ * sponsorship-scoped session (see _lib/auth/sponsor-portal.ts).
  */
 import { parseJsonBody } from "../../../../_lib/validation";
 import {

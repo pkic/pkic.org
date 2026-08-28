@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInAsE2eAdmin } from "./helpers/admin-auth";
+import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { capturedEmailCount, extractEmailUrl, extractVerificationCode, waitForCapturedEmail } from "./helpers/sendgrid";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 test("invited external guest verifies the separate mailbox code before meeting entry", async ({ browser, page }) => {
-  await signInAsE2eAdmin(page, e2eAdminEmail("meeting-guest"));
+  await signInAsE2eStaff(page, e2eAdminEmail("meeting-guest"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const eventName = `E2E external guest meeting ${unique}`;
   const guestEmail = `meeting-guest-${unique}@example.test`;
@@ -125,7 +125,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
     await expect(guestPage.getByRole("heading", { name: "Provider reached" })).toBeVisible();
 
     // A verified occurrence-scoped guest capability is not a portal identity.
-    const portalSession = await guestPage.request.get("/api/v1/auth/portal/session");
+    const portalSession = await guestPage.request.get("/api/v1/auth/session");
     expect(portalSession.status()).toBe(401);
     await guestPage.goto(`/portal/#/groups/${GROUP_ID}/overview`);
     await expect(guestPage.locator("#portal-inp-email")).toBeVisible();

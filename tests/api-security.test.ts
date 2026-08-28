@@ -21,10 +21,12 @@ import { SELF, env } from "cloudflare:test";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { PERMISSION_DENIED_MESSAGE } from "../assets/shared/auth-errors";
-import { signAdminSessionToken } from "../functions/_lib/auth/admin";
+import { signUserSessionToken } from "../functions/_lib/auth/user-session";
+import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
+import { signJwt } from "../functions/_lib/utils/jwt";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Public endpoint handlers ──────────────────────────────────────────────────
@@ -63,6 +65,12 @@ function bearerGet(url: string, token: string): Request {
   return new Request(url, { headers: { authorization: `Bearer ${token}` } });
 }
 
+function mcpBearerGet(url: string, token: string): Request {
+  return new Request(url, {
+    headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp" },
+  });
+}
+
 /** Makes a PATCH request with no Authorization header. */
 function anonPatch(url: string, body: unknown = {}): Request {
   return new Request(url, {
@@ -88,7 +96,7 @@ async function insertSession(
   _db: DatabaseLike,
   userId: string,
   rawToken: string,
-  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
+  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[] } = {},
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -102,12 +110,20 @@ async function insertSession(
   `,
   ).run();
 
-  return signAdminSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
-    admin: { identityType: "user", id: userId, email: "admin@example.test", role: "admin" },
-    sessionId,
-    expiresAt,
-    scopes: opts.scopes,
-    scopeRestricted: opts.scopeRestricted,
+  if (opts.scopes) {
+    return signMcpSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+      sub: userId,
+      sid: sessionId,
+      email: "admin@example.test",
+      role: "admin",
+      scopes: opts.scopes,
+      exp: Math.floor(new Date(expiresAt).getTime() / 1000),
+    });
+  }
+  return signUserSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+    sub: userId,
+    sid: sessionId,
+    exp: Math.floor(new Date(expiresAt).getTime() / 1000),
   });
 }
 
@@ -154,10 +170,6 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet("https://app.test/api/v1/organizations/content-reviews")),
     ],
     ["GET /api/v1/email/templates", () => callApp(anonGet("https://app.test/api/v1/email/templates"))],
-    [
-      "GET /api/v1/system/email-templates (retired)",
-      () => callApp(anonGet("https://app.test/api/v1/system/email-templates")),
-    ],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
     [
       "GET /api/v1/admin/events/:slug/registrations",
@@ -355,50 +367,26 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
     ],
     // ── permission, role, and user-role endpoints ───────────
-    [
-      "GET /api/v1/permissions/grants",
-      () => callApp(anonGet("https://app.test/api/v1/permissions/grants")),
-    ],
-    [
-      "POST /api/v1/permissions/grants",
-      () => callApp(anonPost("https://app.test/api/v1/permissions/grants")),
-    ],
+    ["GET /api/v1/permissions/grants", () => callApp(anonGet("https://app.test/api/v1/permissions/grants"))],
+    ["POST /api/v1/permissions/grants", () => callApp(anonPost("https://app.test/api/v1/permissions/grants"))],
     [
       "DELETE /api/v1/permissions/grants/:id",
       () => callApp(anonDelete(`https://app.test/api/v1/permissions/grants/${grantId}`)),
     ],
-    [
-      "GET /api/v1/permissions/subjects",
-      () => callApp(anonGet("https://app.test/api/v1/permissions/subjects")),
-    ],
+    ["GET /api/v1/permissions/subjects", () => callApp(anonGet("https://app.test/api/v1/permissions/subjects"))],
     [
       "GET /api/v1/permissions/targets",
       () => callApp(anonGet("https://app.test/api/v1/permissions/targets?contextType=event")),
     ],
-    [
-      "GET /api/v1/roles",
-      () => callApp(anonGet("https://app.test/api/v1/roles")),
-    ],
-    [
-      "POST /api/v1/roles",
-      () => callApp(anonPost("https://app.test/api/v1/roles")),
-    ],
-    [
-      "DELETE /api/v1/roles/:id",
-      () => callApp(anonDelete(`https://app.test/api/v1/roles/${roleId}`)),
-    ],
+    ["GET /api/v1/roles", () => callApp(anonGet("https://app.test/api/v1/roles"))],
+    ["POST /api/v1/roles", () => callApp(anonPost("https://app.test/api/v1/roles"))],
+    ["DELETE /api/v1/roles/:id", () => callApp(anonDelete(`https://app.test/api/v1/roles/${roleId}`))],
     [
       "GET /api/v1/roles/:id/assignments",
       () => callApp(anonGet(`https://app.test/api/v1/roles/${roleId}/assignments`)),
     ],
-    [
-      "GET /api/v1/users/:userId/roles",
-      () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/roles`)),
-    ],
-    [
-      "POST /api/v1/users/:userId/roles",
-      () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/roles`)),
-    ],
+    ["GET /api/v1/users/:userId/roles", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/roles`))],
+    ["POST /api/v1/users/:userId/roles", () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/roles`))],
     [
       "DELETE /api/v1/users/:userId/roles/:userRoleId",
       () => callApp(anonDelete(`https://app.test/api/v1/users/${userId}/roles/${userRoleId}`)),
@@ -472,6 +460,18 @@ describe("session-token validation", () => {
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_INVALID");
   });
 
+  it("rejects a cryptographically valid legacy human admin-session JWT", async () => {
+    const legacyToken = await signJwt(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+      typ: "admin-session",
+      sub: adminId,
+      sid: crypto.randomUUID(),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const response = await callUsers(legacyToken);
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_INVALID" } });
+  });
+
   it("rejects an expired session → AUTH_EXPIRED", async () => {
     const expiredAt = new Date(Date.now() - 1000).toISOString(); // 1 s in the past
     const token = await insertSession(env.DB, adminId, "expired-token", { expiresAt: expiredAt });
@@ -533,9 +533,8 @@ describe("session-token validation", () => {
   it("rejects scoped sessions when the endpoint requires a different scope", async () => {
     const token = await insertSession(env.DB, adminId, "proposal-read-token", {
       scopes: ["proposals:read"],
-      scopeRestricted: true,
     });
-    const response = await callUsers(token);
+    const response = await callApp(mcpBearerGet("https://app.test/api/v1/users", token));
     expect(response.status).toBe(403);
     expect((await response.json()) as { error?: { code?: string; message?: string } }).toEqual({
       error: {
@@ -549,10 +548,9 @@ describe("session-token validation", () => {
   it("requires proposal access in addition to event access for presentation archives", async () => {
     const token = await insertSession(env.DB, adminId, "event-read-token", {
       scopes: ["events:read"],
-      scopeRestricted: true,
     });
     const response = await callApp(
-      bearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
+      mcpBearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
     );
 
     expect(response.status).toBe(403);

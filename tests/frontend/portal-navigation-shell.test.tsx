@@ -33,7 +33,7 @@ afterEach(() => {
 function mountNavigation(): void {
   void act(() =>
     render(
-      <PortalNavigationShell session={portalSessionFixture({ admin: true })} displayName="Portal Tester">
+      <PortalNavigationShell session={portalSessionFixture({ staff: true })} displayName="Portal Tester">
         <p>Page content</p>
       </PortalNavigationShell>,
       container,

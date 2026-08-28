@@ -128,7 +128,7 @@ describe("admin API client", () => {
       ),
     );
 
-    await expect(api("/api/v1/admin/auth/session", adminAuthSessionResponseSchema)).rejects.toBeInstanceOf(z.ZodError);
+    await expect(api("/api/v1/auth/session", adminAuthSessionResponseSchema)).rejects.toBeInstanceOf(z.ZodError);
   });
 
   it("parses canonical API errors without trusting malformed error bodies", async () => {

@@ -21,7 +21,7 @@ export function requireGroupManagementActor(context: GroupResourceContext): Auth
 
 export function requireGroupParticipantMember(context: GroupResourceContext): AuthMember {
   if (!context.member) {
-    throw new AppError(403, "GROUP_PARTICIPATION_REQUIRED", "A member portal session is required for participation");
+    throw new AppError(403, "GROUP_PARTICIPATION_REQUIRED", "An active membership capacity is required");
   }
   return context.member;
 }
@@ -40,7 +40,7 @@ export async function requireGroupResourceContext(
     db,
     {
       userId: resolved.userId,
-      ...(resolved.kind === "admin" ? { admin: resolved.admin } : {}),
+      ...(resolved.staff ? { admin: resolved.staff } : {}),
     },
     groupIdOrSlug,
   );
@@ -49,8 +49,8 @@ export async function requireGroupResourceContext(
     capabilities: context.capabilities,
     viewer: {
       userId: resolved.userId,
-      ...(resolved.kind === "admin" ? { admin: resolved.admin } : {}),
+      ...(resolved.staff ? { admin: resolved.staff } : {}),
     },
-    ...(resolved.kind === "member" ? { member: resolved.member } : {}),
+    ...(resolved.member ? { member: resolved.member } : {}),
   };
 }

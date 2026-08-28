@@ -83,7 +83,7 @@ export function PortalNavigationShell({ children, displayName, session }: Portal
               setSignOutError(null);
               setSigningOut(true);
               try {
-                await postJson("/api/v1/auth/portal/logout", {}, successResponseSchema);
+                await postJson("/api/v1/auth/logout", {}, successResponseSchema);
                 clearAuth();
                 window.location.assign("/portal/");
               } catch {

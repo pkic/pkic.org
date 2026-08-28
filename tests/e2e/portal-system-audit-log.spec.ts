@@ -13,7 +13,7 @@ test("a permitted staff identity uses the system audit log only through the port
     if (pathname === "/api/v1/admin/audit-log") legacyAuditRequests.push(`${request.method()} ${pathname}`);
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-system-audit"));
+  await signInToPortal(page, e2eAdminEmail("portal-system-audit-list"));
   await page.goto("/portal/#/system/audit-log");
 
   await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
@@ -31,7 +31,7 @@ test("a permitted staff identity uses the system audit log only through the port
 });
 
 test("renders loading, empty, and paginated audit-log states", async ({ page }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-system-audit"));
+  await signInToPortal(page, e2eAdminEmail("portal-system-audit-states"));
 
   let releaseInitialRequest!: () => void;
   const initialRequestReleased = new Promise<void>((resolve) => {

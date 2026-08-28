@@ -27,13 +27,13 @@ import type {
   electionRoundTallySchema,
   electionVoteResultSchema,
 } from "../../../shared/schemas/votes";
-import type { portalSessionResponseSchema } from "../../../shared/schemas/portal-auth";
+import type { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 
 export type OrganizationRepresentative = z.infer<typeof myOrganizationRepresentativeSchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type MyProfileUpdateInput = z.infer<typeof myProfileUpdateSchema>;
 export type NotificationPreferences = z.infer<typeof myNotificationPreferencesSchema>;
-export type PortalSession = z.infer<typeof portalSessionResponseSchema>;
+export type PortalSession = z.infer<typeof userAuthSessionResponseSchema>;
 
 export type MyApplicationSummary = z.infer<typeof myApplicationSummarySchema>;
 export type MyApplicationTimelineEntry = z.infer<typeof myApplicationTimelineEntrySchema>;

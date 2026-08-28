@@ -29,6 +29,14 @@ import { groupContextNavigation } from "./group-context-navigation";
 
 const OVERVIEW_VIEW = "overview";
 
+/** Prevents a delayed selector response from overriding navigation to another portal section. */
+export function managementRouteOwnsHash(groupId: string | undefined, hash: string): boolean {
+  const path = hash.replace(/^#/, "").split("?", 1)[0].replace(/\/$/, "");
+  if (!groupId) return path === "/management";
+  const groupPath = `/groups/${encodeURIComponent(groupId)}`;
+  return path === groupPath || path.startsWith(`${groupPath}/`);
+}
+
 function GroupContextHeader({ group }: { group: Group }) {
   return (
     <div class="portal-management-context card border-0 shadow-sm">
@@ -64,9 +72,10 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
   const [, navigate] = useHashLocation();
   const selectGroup = useCallback(
     (group: Group | null) => {
+      if (!managementRouteOwnsHash(groupId, window.location.hash)) return;
       navigate(group ? `/groups/${encodeURIComponent(group.id)}/${OVERVIEW_VIEW}` : "/management");
     },
-    [navigate],
+    [groupId, navigate],
   );
   const detail = useData(
     () =>

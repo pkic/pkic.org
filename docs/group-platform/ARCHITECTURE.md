@@ -378,6 +378,15 @@ resource or actor does not require a portal change. The former admin component,
 schema, service, and API route are removed; its hash URL is only a temporary
 bookmark redirect.
 
+Membership workflow configuration remains at
+`/portal/#/system/membership-settings`, but its APIs are domain-based:
+`/api/v1/membership/settings` and `/api/v1/membership/categories`. Both use
+the exact live `membership:read` and `membership:write` permissions, require a
+user-backed identity for changes, and apply revision compare-and-swap with
+attributed audit. The D1-backed category catalog is the single mutable voting
+policy source; System is only the portal-navigation grouping and exposes no
+membership-settings or membership-categories API aliases.
+
 The separate admin application is retired incrementally:
 
 1. add portal routes and group-scoped REST endpoints backed by shared services;

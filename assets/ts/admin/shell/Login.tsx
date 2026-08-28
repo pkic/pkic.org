@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { saveAuth } from "../state";
 import { authenticateWithPasskey } from "../../shared/passkey-authentication";
-import { adminSessionEstablishedResponseSchema } from "../../../shared/schemas/admin-auth";
+import { userAuthEstablishedResponseSchema } from "../../../shared/schemas/user-auth";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { postJson } from "../../shared/api-client";
 
@@ -11,12 +11,12 @@ async function requestMagicLink(email: string): Promise<void> {
   // belongs to an admin, to prevent enumeration — so a non-ok response
   // here is a genuine failure (rate limited, validation, 5xx), not a
   // "does this admin exist" signal, and is safe to surface.
-  await postJson("/api/v1/admin/auth/request-link", { email }, successResponseSchema);
+  await postJson("/api/v1/auth/request-link", { email }, successResponseSchema);
 }
 
 async function verifyMagicLink(token: string): Promise<void> {
-  const d = await postJson("/api/v1/admin/auth/verify-link", { token }, adminSessionEstablishedResponseSchema);
-  saveAuth(d.admin?.email ?? null);
+  const d = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
+  saveAuth(d.staff?.email ?? null);
   history.replaceState({}, "", "/admin/");
 }
 
@@ -26,8 +26,8 @@ async function verifyMagicLink(token: string): Promise<void> {
  */
 async function signInWithPasskey(): Promise<void> {
   const result = await authenticateWithPasskey();
-  if (!result.admin) throw new Error("This passkey isn't registered to a staff account.");
-  saveAuth(result.admin.email ?? null);
+  if (!result.staff) throw new Error("This passkey isn't registered to a staff account.");
+  saveAuth(result.staff.email ?? null);
   history.replaceState({}, "", "/admin/");
 }
 

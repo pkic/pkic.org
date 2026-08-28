@@ -7,8 +7,11 @@
   unique index enforces a single active version for each template key.
 - Referral links use short base62 codes (default length 7).
 - Calendar replies received through signed RSVP addresses are recorded per event day. Decline/tentative automation is bounded, day-scoped, and atomic with its audit/outbox effects; delivery bounces never change attendance. A day without a configured fallback is removed without changing or cancelling the registration-wide aggregate, even when it is the final selected day.
-- Admin authentication uses allowlisted email magic links.
-- User and session persistence use generic `users`/`sessions` tables (admin auth is a role policy, not a schema fork).
+- Human authentication uses one allowlisted email magic-link and passkey flow;
+  live staff and member capacities are resolved independently for the same
+  user identity.
+- User and session persistence use generic `users`/`sessions` tables (staff
+  authorization is a policy, not a schema fork).
 - Global user role is intentionally minimal: `admin|user|guest`; event-specific roles are modeled in `event_participants`.
 - User names are stored as `first_name` + `last_name` (+ optional `preferred_name`) for personalization and gamification.
 - Unsubscribes use a generic `unsubscribes` table scoped by `channel` and `scope`.
@@ -28,7 +31,8 @@
 
 ## Trade-offs
 
-- Opaque DB-backed session tokens are used for admin API auth to keep implementation simple and revocable.
+- Signed JWT session cookies reference revocable D1 session rows for human API
+  authentication; machine API keys remain a separate transport.
 - D1 stores template content and metadata together so version creation,
   activation, authorization, and audit remain one atomic command boundary.
 - Cross-provider RSVP truth reconciliation remains deferred. The current workflow trusts only signed inbound routing context, fails closed for ambiguous legacy replies, and keeps explicit registration management as the attendee override.

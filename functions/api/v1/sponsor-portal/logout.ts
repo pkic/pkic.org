@@ -6,8 +6,8 @@
  * is deliberately scoped to SPONSOR_PORTAL_SESSION_COOKIE_PATH
  * ("/api/v1/sponsor-portal") — a route outside that prefix would never
  * actually receive the cookie from a real browser, only from a test that
- * sets the Cookie header manually. Otherwise mirrors auth/member/logout.ts:
- * revokes the session server-side (if the cookie is present and valid) and
+ * sets the Cookie header manually. It revokes the sponsor session server-side
+ * (if the cookie is present and valid) and
  * clears the cookie either way.
  */
 import {

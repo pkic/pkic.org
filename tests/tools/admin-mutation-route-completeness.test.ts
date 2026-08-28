@@ -3,11 +3,7 @@ import { describe, expect, it } from "vitest";
 import { listTypeScriptFiles, readTypeScriptSource, REPOSITORY_ROOT } from "./helpers/source-files";
 
 const ADMIN_API_ROOT = join(REPOSITORY_ROOT, "functions/api/v1/admin");
-const ALLOWED_AUTH_MUTATIONS = new Set([
-  "functions/api/v1/admin/auth/router.ts:post:/request-link",
-  "functions/api/v1/admin/auth/router.ts:post:/logout",
-  "functions/api/v1/admin/auth/router.ts:post:/verify-link",
-]);
+const ALLOWED_AUTH_MUTATIONS = new Set<string>();
 
 function rawAdminMutationRegistrations(): string[] {
   return listTypeScriptFiles(ADMIN_API_ROOT).flatMap((path) => {
@@ -20,7 +16,7 @@ function rawAdminMutationRegistrations(): string[] {
 }
 
 describe("admin mutation route completeness", () => {
-  it("allows only the three auth bootstrap/session mutations", () => {
+  it("has no local auth bootstrap/session mutations", () => {
     const registrations = rawAdminMutationRegistrations();
     expect(registrations.filter((registration) => !ALLOWED_AUTH_MUTATIONS.has(registration))).toEqual([]);
     expect(registrations.sort()).toEqual([...ALLOWED_AUTH_MUTATIONS].sort());

@@ -6,15 +6,13 @@ import {
 } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod";
 import { permissionSchema } from "../../../assets/shared/schemas/permissions";
+import { getCurrentUserBackedAdmin, getCachedAdminAuthTransport, requireAdminFromRequest } from "../auth/admin";
 import {
-  getAdminBySessionClaims,
-  getCachedAdminAuthTransport,
-  queueAdminSignInCapability,
-  requireAdminFromRequest,
-  signAdminSessionToken,
-  redeemAdminSignInCapability,
-  verifyAdminSessionToken,
-} from "../auth/admin";
+  queueMcpSignInCapability,
+  redeemMcpSignInCapability,
+  signMcpSessionToken,
+  verifyMcpSessionToken,
+} from "../auth/mcp-session";
 import { isSecureRequest, parseCookieHeader } from "../auth/session-engine";
 import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
 import { getConfig, resolveAppBaseUrl } from "../config";
@@ -243,13 +241,16 @@ export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<
     return null;
   }
 
-  const verified = await verifyAdminSessionToken(env.INTERNAL_SIGNING_SECRET, token);
+  const verified = await verifyMcpSessionToken(env.INTERNAL_SIGNING_SECRET, token);
   if (!verified.ok) {
     return null;
   }
 
   try {
-    return await getAdminBySessionClaims(env.DB, verified.claims);
+    const admin = await getCurrentUserBackedAdmin(env.DB, verified.claims.sub, verified.claims.sid);
+    return admin
+      ? { ...admin, scopes: verified.claims.scopes, scopeRestricted: true, state: verified.claims.state ?? null }
+      : null;
   } catch {
     return null;
   }
@@ -338,17 +339,16 @@ export async function sendMcpAuthorizeMagicLink(options: {
     hashOptional(clientIp, secret),
     hashOptional(getUserAgent(options.request), secret),
   ]);
-  const magic = await queueAdminSignInCapability(options.env.DB, {
+  const magic = await queueMcpSignInCapability(options.env.DB, {
     email: options.email,
     ipHash,
     userAgentHash,
     ttlMinutes: config.magicLinkTtlMinutes,
     signingSecret: secret,
-    purpose: "mcp_oauth_sign_in",
     returnTo: sanitizeAuthorizeReturnTo(options.returnTo),
   });
 
-  if (!magic.queuedToken || !magic.admin) {
+  if (!magic.queuedToken || !magic.staff) {
     return;
   }
 
@@ -360,13 +360,13 @@ export async function sendMcpAuthorizeMagicLink(options: {
   });
   const outboxId = await queueEmail(options.env.DB, {
     templateKey: "admin_magic_link",
-    recipientEmail: magic.admin.email,
+    recipientEmail: magic.staff.email,
     recipientUserId: null,
     eventId: null,
     messageType: "transactional",
     subject: "Your PKI Consortium admin sign-in link",
     data: {
-      email: magic.admin.email,
+      email: magic.staff.email,
       magicLinkUrl,
       expiresInMinutes: config.magicLinkTtlMinutes,
     },
@@ -377,12 +377,12 @@ export async function sendMcpAuthorizeMagicLink(options: {
   await writeAuditLog(
     options.env.DB,
     "admin",
-    magic.admin.id,
-    "admin_magic_link_requested",
-    "admin_user",
-    magic.admin.id,
+    magic.staff.id,
+    "mcp_oauth_link_requested",
+    "mcp_session",
+    magic.staff.id,
     {
-      email: magic.admin.email,
+      email: magic.staff.email,
       channel: "mcp_oauth",
     },
   );
@@ -402,21 +402,22 @@ export async function verifyMcpAuthorizeMagicLink(
     hashOptional(getClientIp(request), secret),
     hashOptional(getUserAgent(request), secret),
   ]);
-  const verified = await redeemAdminSignInCapability(env.DB, {
+  const verified = await redeemMcpSignInCapability(env.DB, {
     token,
     signingSecret: secret,
     sessionTtlHours: 8,
     ipHash,
     userAgentHash,
-    purpose: "mcp_oauth_sign_in",
   });
 
   return {
-    admin: verified.admin,
-    sessionToken: await signAdminSessionToken(secret, {
-      admin: verified.admin,
-      sessionId: verified.sessionId,
-      expiresAt: verified.expiresAt,
+    admin: verified.staff,
+    sessionToken: await signMcpSessionToken(secret, {
+      sub: verified.staff.id,
+      sid: verified.sessionId,
+      exp: Math.floor(new Date(verified.expiresAt).getTime() / 1000),
+      email: verified.staff.email,
+      role: verified.staff.role,
       scopes: [...AUTH_SCOPES],
     }),
     expiresAt: verified.expiresAt,

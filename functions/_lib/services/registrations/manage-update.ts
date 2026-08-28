@@ -23,7 +23,7 @@ export interface ManageRegistrationUpdateInput {
   registration: RegistrationRecord;
   manageToken: string;
   isAdminManageJwt: boolean;
-  authenticatedActor: { kind: "admin" | "member"; id: string } | null;
+  authenticatedActor: { kind: "user"; id: string } | null;
   actorUserId: string;
   body: RegistrationManageBody;
   appBaseUrl: string;

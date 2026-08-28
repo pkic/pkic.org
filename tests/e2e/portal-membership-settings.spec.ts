@@ -35,7 +35,7 @@ test("a permitted staff identity reads and updates membership settings through t
     }
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-system-audit"));
+  await signInToPortal(page, e2eAdminEmail("portal-membership-settings"));
   await page.goto("/portal/#/system/membership-settings");
 
   await expect(page.getByRole("link", { name: "Membership Settings" })).toBeVisible();
@@ -95,7 +95,7 @@ test("publishes membership application form edits to the public join flow", asyn
     }
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-system-audit"));
+  await signInToPortal(page, e2eAdminEmail("portal-membership-form"));
   await page.goto("/portal/#/system/membership-settings");
   await expect(page.getByRole("heading", { name: "Membership application form" })).toBeVisible();
 

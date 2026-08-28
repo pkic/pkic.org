@@ -19,7 +19,9 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   await page.goto(`/portal/#/groups/${GROUP_ID}/mailing-lists`);
 
   const management = page.getByRole("region", { name: "Mailing-list management" });
+  await expect(page.getByRole("heading", { name: "Post-Quantum Cryptography Working Group" })).toBeVisible();
   await expect(management).toBeVisible();
+  await expect(management.getByRole("row").filter({ hasText: "pqc@lists.pkic.org" })).toBeVisible();
   await management.getByRole("button", { name: "Add mailing list" }).click();
 
   const createForm = management.locator("form").filter({ hasText: "New group mailing list" });
@@ -30,7 +32,13 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   await createForm.getByLabel("Email").fill(email);
   await createForm.getByLabel("Label").fill(label);
   await createForm.getByLabel("Purpose").selectOption("group");
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === `/api/v1/groups/${GROUP_ID}/mailing-lists`,
+  );
   await createForm.getByRole("button", { name: "Create mailing list" }).click();
+  expect((await createResponse).status()).toBe(201);
 
   const row = management.getByRole("row").filter({ hasText: email });
   await expect(row).toBeVisible();

@@ -18,15 +18,25 @@ import { AppError } from "../errors";
 import { all, first } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
+import { normalizeEmail } from "../validation";
+import { resolveIdentityCapacities } from "../auth/identity-capacities";
 import {
-  prepareIdentityCapacitySessions,
-  resolveIdentityCapacities,
-  type PreparedIdentityCapacitySessions,
-} from "../auth/identity-capacities";
+  prepareUserSession,
+  signUserSessionToken,
+  userStaffExpiresAt,
+  type UserSessionResult,
+} from "../auth/user-session";
+import { resolveMemberSessionTtlHours } from "../auth/session-policy";
+import { staffSignInAuthorizationEvidence, memberSignInAuthorizationEvidence } from "../auth/identity-capacities";
+import { AUTH_SCOPES } from "../auth/scopes";
+import { createUserBackedAuthAdmin } from "../auth/admin-identity";
+import { computeGrantsForUser } from "../auth/permissions";
+import { prepareAuthorizationGuard } from "../db/authorization-guard";
+import { sessionExpiresAtToExp } from "../auth/session-engine";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
-import type { DatabaseLike, Env, StatementLike } from "../types";
+import type { DatabaseLike, Env } from "../types";
 import {
   issuePasskeyChallengeToken,
   passkeyChallengeAlreadyUsedError,
@@ -137,7 +147,7 @@ export async function beginPasskeyRegistration(
 export async function completePasskeyRegistration(
   db: DatabaseLike,
   env: WebAuthnEnv,
-  actor: { id: string; kind: "admin" | "member" },
+  actor: { id: string; kind: "user" },
   payload: { challengeToken: string; response: RegistrationResponseInput; deviceName?: string | null },
 ): Promise<PasskeySummary> {
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
@@ -193,7 +203,7 @@ export async function completePasskeyRegistration(
  */
 export async function persistVerifiedPasskeyCredential(
   db: DatabaseLike,
-  actor: { id: string; kind: "admin" | "member" },
+  actor: { id: string; kind: "user" },
   credential: VerifiedPasskeyCredentialInput,
   challenge?: PasskeyChallengeUse,
 ): Promise<PasskeySummary> {
@@ -302,7 +312,10 @@ export async function beginPasskeyAuthentication(
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
 
-export type PasskeyAuthenticationResult = PreparedIdentityCapacitySessions;
+export interface PasskeyAuthenticationResult {
+  session: UserSessionResult;
+  token: string;
+}
 
 export async function completePasskeyAuthentication(
   db: DatabaseLike,
@@ -369,17 +382,24 @@ export async function completePasskeyAuthentication(
   if (!resolved) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
-  const sessions = await prepareIdentityCapacitySessions(db, resolved, env.MEMBER_SESSION_TTL_HOURS);
+  const prepared = await prepareUserSession(
+    db,
+    resolved.identity.id,
+    resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
+  );
+  const capacities: Array<"admin" | "member"> = [
+    ...(resolved.staff ? ["admin" as const] : []),
+    ...(resolved.member ? ["member" as const] : []),
+  ];
 
   const lastUsedAt = nowIso();
   const challenge = toPasskeyChallengeUse(claims);
   const persistAuthentication = async (input: {
-    actorType: "admin" | "member";
+    actorType: "user";
     actorId: string;
     auditSessionId: string;
     expiresAt: string;
     capacities: Array<"admin" | "member">;
-    sessionStatements: StatementLike[];
   }) => {
     try {
       await db.batch([
@@ -401,7 +421,23 @@ export async function completePasskeyAuthentication(
           { capacities: input.capacities, expiresAt: input.expiresAt },
           lastUsedAt,
         ),
-        ...input.sessionStatements,
+        ...(resolved.staff
+          ? [
+              prepareAuthorizationGuard(
+                db,
+                staffSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
+              ),
+            ]
+          : []),
+        ...(resolved.member
+          ? [
+              prepareAuthorizationGuard(
+                db,
+                memberSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
+              ),
+            ]
+          : []),
+        prepared.statement,
         prepareExpiredPasskeyChallengeCleanup(db, lastUsedAt),
       ]);
     } catch (error) {
@@ -420,16 +456,40 @@ export async function completePasskeyAuthentication(
   };
 
   await persistAuthentication({
-    actorType: sessions.admin ? "admin" : "member",
+    actorType: "user",
     actorId: credentialRow.user_id,
-    auditSessionId: (sessions.admin ?? sessions.member)!.sessionId,
-    expiresAt: sessions.expiresAt,
-    capacities: [...(sessions.admin ? (["admin"] as const) : []), ...(sessions.member ? (["member"] as const) : [])],
-    sessionStatements: [sessions.admin?.statement, sessions.member?.statement].filter(
-      (statement): statement is StatementLike => Boolean(statement),
-    ),
+    auditSessionId: prepared.sessionId,
+    expiresAt: prepared.expiresAt,
+    capacities,
   });
-  return sessions;
+  const session: UserSessionResult = {
+    identity: resolved.identity,
+    sessionId: prepared.sessionId,
+    expiresAt: prepared.expiresAt,
+    ...(resolved.staff
+      ? {
+          staff: createUserBackedAuthAdmin({
+            id: resolved.staff.id,
+            email: resolved.staff.email,
+            role: resolved.staff.role,
+            scopes: resolved.staff.role === "admin" ? [...AUTH_SCOPES] : [],
+            grants: await computeGrantsForUser(db, resolved.staff.id),
+            sessionId: prepared.sessionId,
+            expiresAt: userStaffExpiresAt(prepared.createdAt, prepared.expiresAt),
+          }),
+        }
+      : {}),
+    ...(resolved.member
+      ? { member: { ...resolved.member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } }
+      : {}),
+  };
+  const token = await signUserSessionToken(signingSecret, {
+    sub: resolved.identity.id,
+    sid: prepared.sessionId,
+    exp: sessionExpiresAtToExp(prepared.expiresAt),
+    memberId: resolved.member?.memberId,
+  });
+  return { session, token };
 }
 
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {
@@ -447,7 +507,7 @@ export async function listPasskeysForUser(db: DatabaseLike, userId: string): Pro
 
 export async function revokePasskey(
   db: DatabaseLike,
-  actor: { id: string; kind: "admin" | "member" },
+  actor: { id: string; kind: "user" },
   passkeyId: string,
 ): Promise<void> {
   const row = await first<{ id: string; user_id: string }>(

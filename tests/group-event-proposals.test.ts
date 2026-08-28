@@ -24,7 +24,7 @@ import {
 import { proposalDecisionPreviewResponseSchema } from "../assets/shared/schemas/proposal-decisions";
 import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
 import app from "../functions/router";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMcpSession } from "./helpers/auth";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { queryAll } from "./helpers/context";
@@ -157,17 +157,25 @@ function routeAt(
   );
 }
 
-async function scopedToken(
-  fixture: Fixture,
-  permissions: readonly string[],
-  options: { scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
-): Promise<string> {
+async function scopedToken(fixture: Fixture, permissions: readonly string[]): Promise<string> {
   const actor = await user("proposal-route-scoped-actor");
   for (const permission of permissions) await grant(actor.id, fixture.eventId, permission);
-  return createAdminSession(env.DB, actor.id, "proposal-route-scoped-" + crypto.randomUUID(), undefined, {
-    scopes: options.scopes,
-    scopeRestricted: options.scopeRestricted,
-  });
+  return createAdminSession(env.DB, actor.id, "proposal-route-scoped-" + crypto.randomUUID());
+}
+
+async function scopedMcpToken(
+  fixture: Fixture,
+  permissions: readonly string[],
+  scopes: readonly AuthScope[],
+): Promise<string> {
+  const actor = await user("proposal-route-scoped-mcp-actor");
+  for (const permission of permissions) await grant(actor.id, fixture.eventId, permission);
+  return createMcpSession(
+    env.DB,
+    { ...actor, role: "user" },
+    "proposal-route-scoped-mcp-" + crypto.randomUUID(),
+    scopes,
+  );
 }
 
 async function addCurrentRoundReviews(fixture: Fixture, count: number): Promise<void> {
@@ -981,10 +989,7 @@ describe("group event proposal routes", () => {
     const readOnlyToken = await scopedToken(fixture, ["proposals:read"]);
     const reviewerToken = await scopedToken(fixture, ["proposals:read", "proposals:score"]);
     const genericToken = await scopedToken(fixture, ["events:read"]);
-    const scopeRestrictedToken = await scopedToken(fixture, ["proposals:manage"], {
-      scopes: ["proposals:read"],
-      scopeRestricted: true,
-    });
+    const scopeRestrictedToken = await scopedMcpToken(fixture, ["proposals:manage"], ["proposals:read"]);
 
     expect(
       (
@@ -1019,6 +1024,7 @@ describe("group event proposal routes", () => {
           "/" + fixture.proposalId + "/finalize-preview",
           {
             method: "POST",
+            headers: { "x-pkic-machine-auth": "mcp" },
             body: JSON.stringify({ finalStatus: "accepted" }),
           },
           scopeRestrictedToken,

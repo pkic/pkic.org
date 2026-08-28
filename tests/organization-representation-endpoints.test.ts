@@ -113,7 +113,7 @@ describe("organization representation API", () => {
     expect(
       (await jsonRequest(`/api/v1/organizations/${organizationId}/representatives`, contactToken, "POST", directEmail))
         .status,
-    ).toBe(401);
+    ).toBe(403);
     expect(
       (
         await jsonRequest(

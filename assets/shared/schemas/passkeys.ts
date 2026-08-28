@@ -9,6 +9,7 @@
  * fully modeled field-by-field.
  */
 import { z } from "zod";
+import { userIdentitySchema } from "./user-auth";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
 import { publicAuthAdminSchema } from "./admin-auth";
@@ -76,10 +77,11 @@ export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySu
 export const passkeyAuthenticateCompleteBaseResponseSchema = successResponseSchema.extend({ expiresAt: z.string() });
 export const passkeyAuthenticateCompleteResponseSchema = passkeyAuthenticateCompleteBaseResponseSchema
   .extend({
-    admin: publicAuthAdminSchema.optional(),
+    identity: userIdentitySchema,
+    staff: publicAuthAdminSchema.optional(),
     member: authMemberSchema.optional(),
   })
-  .refine((value) => value.admin !== undefined || value.member !== undefined, {
+  .refine((value) => value.staff !== undefined || value.member !== undefined, {
     message: "At least one authenticated capacity is required",
   });
 
@@ -128,7 +130,7 @@ export const passkeyAuthenticateCompleteRouteSchema = {
   tags: ["Passkeys"],
   summary: "Complete passkey authentication",
   description:
-    "Verifies the assertion and creates every currently eligible staff/member session capacity for the identity.",
+    "Verifies the assertion and creates one user session with every currently eligible staff/member capacity.",
   request: {
     body: { content: { "application/json": { schema: passkeyAuthenticateCompleteSchema } }, required: true },
   },

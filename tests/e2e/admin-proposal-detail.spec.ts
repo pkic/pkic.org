@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { adminAuthSessionResponseSchema } from "../../assets/shared/schemas/admin-auth";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { adminEventDetailResponseSchema } from "../../assets/shared/schemas/admin-events";
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 
-const adminSessionResponse = adminAuthSessionResponseSchema.parse({
+const adminSessionResponse = userAuthSessionResponseSchema.parse({
   success: true,
-  admin: {
+  identity: { id: "10000000000000000000000000000001", email: "admin@pkic.org" },
+  staff: {
     id: "admin-1",
     email: "admin@pkic.org",
     role: "admin",
@@ -65,7 +66,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     }) as typeof window.open;
   });
 
-  await page.route("**/api/v1/admin/auth/session**", async (route) => {
+  await page.route("**/api/v1/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -492,7 +493,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
 });
 
 test("offers an event-level presentation ZIP from the proposals overview", async ({ page }) => {
-  await page.route("**/api/v1/admin/auth/session**", async (route) => {
+  await page.route("**/api/v1/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

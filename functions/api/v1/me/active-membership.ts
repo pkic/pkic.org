@@ -4,12 +4,14 @@
  * organizations) the current session acts as.
  */
 import { json } from "../../../_lib/http";
+import { requireMemberFromRequest, switchActiveMembership } from "../../../_lib/auth/member";
 import {
-  requireMemberFromRequest,
-  switchActiveMembership,
-  signMemberSessionToken,
-  serializeMemberSessionCookie,
-} from "../../../_lib/auth/member";
+  getUserSessionToken,
+  signUserSessionToken,
+  serializeUserSessionCookie,
+  verifyUserSessionToken,
+} from "../../../_lib/auth/user-session";
+import { sessionExpiresAtToExp } from "../../../_lib/auth/session-engine";
 import { getMyProfile } from "../../../_lib/services/member-self-service";
 import { requireInternalSecret } from "../../../_lib/request";
 import { myActiveMembershipSwitchRouteSchema } from "../../../../assets/shared/schemas/me";
@@ -24,16 +26,19 @@ export const MeActiveMembershipSwitch = openApiRoute(
     const switched = await switchActiveMembership(db, member, data.body.memberId);
 
     const secret = requireInternalSecret(c.env);
-    const token = await signMemberSessionToken(secret, {
-      userId: switched.userId,
-      sessionId: switched.sessionId!,
-      expiresAt: switched.expiresAt!,
-      activeMemberId: switched.memberId,
+    const currentToken = getUserSessionToken(c.req.raw);
+    const currentClaims = currentToken ? await verifyUserSessionToken(secret, currentToken) : null;
+    const token = await signUserSessionToken(secret, {
+      sub: switched.userId,
+      sid: switched.sessionId!,
+      exp: sessionExpiresAtToExp(switched.expiresAt!),
+      memberId: switched.memberId,
+      state: currentClaims?.ok ? currentClaims.claims.state : undefined,
     });
 
     const profile = await getMyProfile(db, switched);
     const response = json(profile);
-    response.headers.append("Set-Cookie", serializeMemberSessionCookie(token, c.req.raw));
+    response.headers.append("Set-Cookie", serializeUserSessionCookie(token, c.req.raw));
     return response;
   },
 );

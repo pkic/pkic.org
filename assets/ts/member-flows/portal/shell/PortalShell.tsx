@@ -53,7 +53,7 @@ function PortalRouteRedirect({ to }: { to: string }) {
 
 export function PortalShell() {
   const hasMemberCapacity = Boolean(portalSession.value?.member);
-  const hasAdminCapacity = Boolean(portalSession.value?.admin);
+  const hasAdminCapacity = Boolean(portalSession.value?.staff);
   const defaultPath = portalDefaultPath(portalSession.value);
   const displayName =
     profile.value?.preferredName ||

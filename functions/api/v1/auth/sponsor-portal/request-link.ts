@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/auth/sponsor-portal/request-link.
- * Mirrors auth/member/request-link.ts, targeting an active event
- * sponsorship's contact email instead of a member (see
+ * Targets an active event sponsorship's contact email as a distinct sponsor
+ * capability identity (see
  * _lib/auth/sponsor-portal.ts). Used for re-requesting a link after the
  * initial sponsor-portal-access email (sent automatically when the
  * sponsorship first goes active — see admin/sponsorships/[id]/stage.ts)

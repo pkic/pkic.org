@@ -410,7 +410,7 @@ describe("admin event management endpoints", () => {
     });
     expect(settingsResponse.status).toBe(403);
     await expect(settingsResponse.json()).resolves.toMatchObject({
-      error: { code: "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP" },
+      error: { code: "PORTAL_EVENT_FORMS_OWNED_BY_GROUP" },
     });
 
     const formResponse = await callAdmin("/api/v1/admin/events/pqc-2026/forms", {
@@ -425,7 +425,7 @@ describe("admin event management endpoints", () => {
     });
     expect(formResponse.status).toBe(403);
     await expect(formResponse.json()).resolves.toMatchObject({
-      error: { code: "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP" },
+      error: { code: "PORTAL_EVENT_FORMS_OWNED_BY_GROUP" },
     });
   });
 

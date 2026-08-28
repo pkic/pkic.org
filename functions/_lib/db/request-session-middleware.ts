@@ -1,25 +1,24 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
+import { getCachedAdminAuthTransport, getCachedAdminForRequest, requireAdminFromRequest } from "../auth/admin";
 import {
-  getCachedAdminAuthTransport,
-  getCachedAdminForRequest,
-  requireAdminFromRequest,
-  serializeAdminSessionCookie,
-  signAdminSessionToken,
-} from "../auth/admin";
+  getUserSessionToken,
+  USER_SESSION_TOKEN_HEADER,
+  serializeUserSessionCookie,
+  signUserSessionToken,
+  verifyUserSessionToken,
+} from "../auth/user-session";
+import { signMcpSessionToken, verifyMcpSessionToken } from "../auth/mcp-session";
+import { getBearerToken } from "../auth/session-engine";
 import { isUserBackedAuthAdmin } from "../auth/admin-identity";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "./context";
 import { primaryFirstDb, readReplicaDb, type DatabaseSessionLike } from "./session";
 
-const ADMIN_TOKEN_HEADER = "x-admin-token";
-
 export interface RequestSessionMiddlewareOptions {
   /**
    * Called after staff authentication on the primary binding, before the
-   * route uses the request-scoped D1 session. Use for legacy route policy.
+   * route uses the request-scoped D1 session.
    */
   authorize?: (c: Context<RequestDbContext>) => void | Promise<void>;
-  /** Legacy authentication endpoints create sessions and must remain public. */
-  skipAuthorization?: (c: Context<RequestDbContext>) => boolean;
 }
 
 function bookmarkFromAdmin(c: Context<RequestDbContext>): string | null {
@@ -44,19 +43,40 @@ async function rotateSessionState(c: Context<RequestDbContext>, sessionDb: Datab
     return;
   }
 
-  const token = await signAdminSessionToken(c.env.INTERNAL_SIGNING_SECRET, {
-    admin,
-    sessionId: admin.sessionId,
-    expiresAt: admin.expiresAt,
-    state,
-  });
-  const headers = new Headers(c.res.headers);
-  if (transport === "cookie") {
-    headers.append("Set-Cookie", serializeAdminSessionCookie(token, c.req.raw));
-  } else {
-    headers.set(ADMIN_TOKEN_HEADER, token);
+  const userToken = getUserSessionToken(c.req.raw);
+  const verified =
+    userToken && c.env.INTERNAL_SIGNING_SECRET
+      ? await verifyUserSessionToken(c.env.INTERNAL_SIGNING_SECRET, userToken)
+      : null;
+  if (verified?.ok) {
+    const token = await signUserSessionToken(c.env.INTERNAL_SIGNING_SECRET, {
+      sub: admin.id,
+      sid: admin.sessionId,
+      exp: verified.claims.exp,
+      memberId: verified.claims.mid,
+      state,
+    });
+    const headers = new Headers(c.res.headers);
+    if (transport === "cookie") {
+      headers.append("Set-Cookie", serializeUserSessionCookie(token, c.req.raw));
+    } else {
+      headers.set(USER_SESSION_TOKEN_HEADER, token);
+    }
+    c.res = new Response(c.res.body, { status: c.res.status, headers });
+    return;
   }
-  c.res = new Response(c.res.body, { status: c.res.status, headers });
+
+  const mcpToken = getBearerToken(c.req.raw);
+  const verifiedMcp = mcpToken ? await verifyMcpSessionToken(c.env.INTERNAL_SIGNING_SECRET, mcpToken) : null;
+  if (verifiedMcp?.ok) {
+    const token = await signMcpSessionToken(c.env.INTERNAL_SIGNING_SECRET, {
+      ...verifiedMcp.claims,
+      state,
+    });
+    const headers = new Headers(c.res.headers);
+    headers.set("x-mcp-token", token);
+    c.res = new Response(c.res.body, { status: c.res.status, headers });
+  }
 }
 
 /**
@@ -69,20 +89,17 @@ export function createRequestScopedD1SessionMiddleware(
 ): MiddlewareHandler<RequestDbContext> {
   return async (c, next: Next): Promise<void> => {
     const isWrite = c.req.method !== "GET" && c.req.method !== "HEAD";
-    const skipAuthorization = options.skipAuthorization?.(c) ?? false;
     const primaryDb = c.env.DB;
     let sessionDb: DatabaseSessionLike;
 
     if (isWrite) {
       sessionDb = primaryFirstDb(primaryDb);
       c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
-      if (!skipAuthorization) {
-        await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
-        await options.authorize?.(c);
-      }
+      await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
+      await options.authorize?.(c);
     } else {
       await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
-      if (!skipAuthorization) await options.authorize?.(c);
+      await options.authorize?.(c);
       sessionDb = readReplicaDb(primaryDb, bookmarkFromAdmin(c));
       c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
     }

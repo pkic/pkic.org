@@ -130,7 +130,7 @@ export interface Env {
   SENDGRID_WEBHOOK_VERIFICATION_KEY?: string;
   FEEDBACK_IDENTITY_SECRET_V1?: string;
   /**
-   * Static API key for headless/programmatic admin access (stats collection, CI, etc.).
+   * Static API key for headless/programmatic service access (stats collection, CI, etc.).
    * Set as a Cloudflare secret. When provided, a request bearing this value as
    * a Bearer token is granted admin privileges without a DB session lookup.
    */
@@ -216,18 +216,17 @@ export interface PermissionGrant {
 }
 
 /**
- * Resolved identity for the member-facing session
- * — a parallel, non-staff auth path to AuthAdmin. Self-service `/api/v1/me/*`
+ * Resolved member capacity on the shared human session. Self-service `/api/v1/me/*`
  * endpoints are identity-gated (a valid session backed by an active
  * `members` row), not `resource:action` permission-gated — the `member`/
  * `interested_parties` roles carry no `role_permissions` rows (see
- * functions/_lib/auth/member.ts).
+ * functions/_lib/auth/user-session.ts).
  */
 /**
  * One aggregate a user is eligible to act as: their own org-less individual
  * membership, or an organization they actively represent. A user can hold
  * more than one of these concurrently (multi-organization representation is
- * a supported product case — see functions/_lib/auth/member.ts).
+ * a supported product case — see functions/_lib/auth/user-session.ts).
  */
 export interface EligibleMembership {
   memberId: string;
@@ -249,7 +248,7 @@ export interface AuthMember {
    * organizations by earliest joined_at) — memberId/organizationId above
    * are always exactly the first entry unless the caller explicitly
    * selected a different one (see selectActiveMembership in
-   * functions/_lib/auth/member.ts). Always has at least one entry.
+   * functions/_lib/auth/user-session.ts). Always has at least one entry.
    */
   activeMemberships: EligibleMembership[];
   sessionId?: string;

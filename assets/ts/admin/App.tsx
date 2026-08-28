@@ -3,7 +3,7 @@ import { authStatus, clearAuth, isAuthed, saveAuth, setAuthChecking } from "./st
 import { Login } from "./shell/Login";
 import { McpOauth } from "./shell/McpOauth";
 import { AdminShell } from "./shell/AdminShell";
-import { adminAuthSessionResponseSchema } from "../../shared/schemas/admin-auth";
+import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { api } from "./api";
 
 /**
@@ -26,8 +26,8 @@ export function App() {
     async function loadSession() {
       setAuthChecking();
       try {
-        const data = await api("/api/v1/admin/auth/session", adminAuthSessionResponseSchema);
-        if (!cancelled) saveAuth(data.admin?.email ?? null);
+        const data = await api("/api/v1/auth/session", userAuthSessionResponseSchema);
+        if (!cancelled) saveAuth(data.staff?.email ?? null);
       } catch {
         if (!cancelled) clearAuth();
       }

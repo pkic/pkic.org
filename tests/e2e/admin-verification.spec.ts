@@ -33,7 +33,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
-import { expectAdminSessionLanding } from "./helpers/admin-auth";
+import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -85,29 +85,8 @@ async function waitForEmail(
   );
 }
 
-function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string {
-  const content = email.payload.content as Array<{ type: string; value: string }> | undefined;
-  const html = content?.find((c) => c.type === "text/html")?.value ?? "";
-  const hrefRe = /href="([^"]+)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = hrefRe.exec(html)) !== null) {
-    if (match[1].includes(urlSubstring)) return match[1];
-  }
-  throw new Error(`No URL containing "${urlSubstring}" found in email to <${email.to}>`);
-}
-
 async function signInAsAdmin(page: Page): Promise<void> {
-  await page.goto("/admin/");
-  await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#inp-email").fill(ADMIN_EMAIL);
-  const since = await outboxLength();
-  await page.locator("#btn-send").click();
-  await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
-
-  const magicEmail = await waitForEmail(ADMIN_EMAIL, "sign-in", { since });
-  const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
-  await page.goto(magicUrl);
-  await expectAdminSessionLanding(page);
+  await signInAsE2eStaff(page, ADMIN_EMAIL);
 }
 
 /**
@@ -247,7 +226,7 @@ test.describe("Admin browser-verification pass", () => {
     // about:blank, where relative-URL fetches have nothing to resolve
     // against.
     await page.goto("/admin/");
-    await expectAdminSessionLanding(page);
+    await expectStaffSessionLanding(page);
 
     // Member proposal submission requires the owning group's canonical
     // min_endorsers_for_ballot policy to be enabled. Configure the group,
@@ -424,7 +403,8 @@ test.describe("Admin browser-verification pass", () => {
     });
 
     await page.goto("/admin/");
-    await expectAdminSessionLanding(page);
+    await expectStaffSessionLanding(page);
+    const staffCookies = await page.context().cookies();
 
     const stamp = Date.now();
     const email = `e2e-content-review-${stamp}@e2e-content-review-${stamp}.test`;
@@ -446,7 +426,9 @@ test.describe("Admin browser-verification pass", () => {
     expect(editStatus).toBe(200);
 
     await page.context().clearCookies();
-    await signInToPortal(page, ADMIN_EMAIL);
+    await page.context().addCookies(staffCookies);
+    await page.reload();
+    await expectStaffSessionLanding(page);
     await page.goto("/portal/#/system/organization-content-reviews");
     await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
@@ -487,7 +469,7 @@ test.describe("Admin browser-verification pass", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
     await page.goto("/admin/");
-    await expectAdminSessionLanding(page);
+    await expectStaffSessionLanding(page);
 
     const stamp = Date.now();
     const primaryEmail = `e2e-primary-${stamp}@e2e-users-${stamp}.test`;
@@ -538,7 +520,8 @@ test.describe("Admin browser-verification pass", () => {
     });
     page.on("dialog", (d) => d.accept());
     await page.goto("/admin/");
-    await expectAdminSessionLanding(page);
+    await expectStaffSessionLanding(page);
+    const staffCookies = await page.context().cookies();
 
     const stamp = Date.now();
     const email = `e2e-approve-onboarding-${stamp}@e2e-approve-onboarding-${stamp}.test`;
@@ -553,7 +536,9 @@ test.describe("Admin browser-verification pass", () => {
 
     const since = await outboxLength();
     await page.context().clearCookies();
-    await signInToPortal(page, ADMIN_EMAIL);
+    await page.context().addCookies(staffCookies);
+    await page.reload();
+    await expectStaffSessionLanding(page);
 
     await page.goto("/portal/#/system/membership-applications");
     await expect(page.getByRole("heading", { name: "System" })).toBeVisible();

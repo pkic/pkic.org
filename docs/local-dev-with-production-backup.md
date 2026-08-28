@@ -46,7 +46,7 @@ rm -rf .wrangler/state/v3/d1
 to start.** KV, cache, and other local storage under `.wrangler/state/v3`
 are implemented the same way D1 is — as SQLite-backed Durable Objects —
 and old copies left over from before a `miniflare`/`workerd` dependency
-bump are not forward-compatible. A stale copy will crash the *entire* dev
+bump are not forward-compatible. A stale copy will crash the _entire_ dev
 server at startup with an error like:
 
 ```
@@ -122,32 +122,31 @@ This runs Vite with `CLOUDFLARE_ENV=local`, which builds the Hugo site and
 runs the Worker (with the D1 binding pointed at `pkic-db-local`) via
 `@cloudflare/vite-plugin`. Open http://localhost:8788/ once it's up.
 
-## 7. Log in to the admin console
+## 7. Sign in to the portal
 
 Locally there's no real email provider configured (`.dev.vars.example` ships
-with `SENDGRID_API_KEY` commented out) and passkeys aren't implemented, so
-the normal magic-link email never actually gets delivered. You don't need
-either: `queueEmail()` (`functions/_lib/email/outbox.ts`) writes the
+with `SENDGRID_API_KEY` commented out), so the normal magic-link email never
+actually gets delivered. You don't need a provider: `queueEmail()`
+(`functions/_lib/email/outbox.ts`) writes the
 rendered email — including the plaintext magic-link URL — into the
-`email_outbox` table *before* attempting to send it, so the token is always
+`email_outbox` table _before_ attempting to send it, so the token is always
 recoverable from local D1 even when sending fails.
 
 **Request the link from the same browser you'll open it in, not `curl`.**
 `request-link` hashes the requester's `User-Agent` header and stores it
 alongside the token; `verify-link` re-hashes the `User-Agent` on the
 follow-up request and rejects the token on a mismatch
-(`functions/_lib/auth/admin.ts`, `MAGIC_LINK_CONTEXT_MISMATCH`). A plain
+(`functions/_lib/auth/user-session.ts`, `MAGIC_LINK_CONTEXT_MISMATCH`). A plain
 `curl` request sends `curl/8.x` as its `User-Agent`, which will never match
 the browser you paste the link into, and verification will fail with
 "Magic link is not valid from this browser".
 
-1. Open http://localhost:8788/admin/ in the browser you intend to sign in
-   with, open its DevTools console, and request a link for an existing
-   active admin user (see `users` table, `role = 'admin'`) from there so the
-   `User-Agent` matches:
+1. Open http://localhost:8788/portal/ in the browser you intend to sign in
+   with, open its DevTools console, and request a link for an existing active
+   user capacity from there so the `User-Agent` matches:
 
    ```js
-   fetch("/api/v1/admin/auth/request-link", {
+   fetch("/api/v1/auth/request-link", {
      method: "POST",
      headers: { "Content-Type": "application/json" },
      body: JSON.stringify({ email: "you@pkic.org" }),
@@ -158,16 +157,16 @@ the browser you paste the link into, and verification will fail with
 
    ```bash
    pnpm exec wrangler d1 execute DB --env local --local --command \
-     "SELECT payload_json FROM email_outbox WHERE template_key='admin_magic_link' ORDER BY created_at DESC LIMIT 1;"
+     "SELECT payload_json FROM email_outbox WHERE template_key='user_magic_link' ORDER BY created_at DESC LIMIT 1;"
    ```
 
    The `payload_json` column contains a `magicLinkUrl` field like
-   `http://localhost:8788/admin/?token=<token>`.
+   `http://localhost:8788/portal/#/verify?token=<token>`.
 
-3. Open that URL in the same browser you used in step 1. The admin SPA
-   (`assets/ts/admin/shell/Login.tsx`) detects the `?token=` param on load
-   and calls `verify-link` automatically, which sets the `pkic_admin_session`
-   cookie and drops you into `/admin/`.
+3. Open that URL in the same browser you used in step 1. The portal SPA
+   (`assets/ts/member-flows/portal/App.tsx`) reads the `?token=` parameter
+   from the URL fragment and calls `verify-link` automatically, which sets
+   the `pkic_session` cookie and drops you into `/portal/`.
 
 Tokens are single-use and expire after `MAGIC_LINK_TTL_MINUTES` (15 minutes
 by default) — just repeat the steps above to get a fresh one.

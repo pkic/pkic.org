@@ -4,8 +4,10 @@ Base path: `/api/v1`
 
 ## Auth
 
-- `POST /admin/auth/request-link`
-- `POST /admin/auth/verify-link`
+- `POST /auth/request-link`
+- `POST /auth/verify-link`
+- `GET /auth/session`
+- `POST /auth/logout`
 
 ## Admin event management
 

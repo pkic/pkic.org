@@ -70,6 +70,24 @@ describe("portal event management", () => {
     expect(container.textContent).not.toContain("Registration is available");
   });
 
+  it("preserves input entered before mount effects finish", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ profiles: [] })),
+    );
+    const container = mount(<GroupEventEditor groupId={GROUP_ID} event={null} onSaved={vi.fn()} />);
+    const name = container.querySelector<HTMLInputElement>("#group-event-name-new")!;
+    name.value = "Fast architecture workshop";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+
+    await settle();
+
+    expect(name.value).toBe("Fast architecture workshop");
+    expect(container.querySelector<HTMLInputElement>("#group-event-slug-new")?.value).toBe(
+      "fast-architecture-workshop",
+    );
+  });
+
   it("creates and updates events through the shared group event contracts", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     vi.stubGlobal(

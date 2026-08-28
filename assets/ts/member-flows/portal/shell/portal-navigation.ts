@@ -117,7 +117,7 @@ const CAPACITY_ROUTE_PATHS = new Set([
 
 /** Mirrors the backend's global-permission semantics for navigation only. */
 export function portalHasGlobalPermission(session: PortalSession | null, permission: string): boolean {
-  const staff = session?.admin;
+  const staff = session?.staff;
   if (!staff) return false;
   if (staff.role === "admin") return true;
   return staff.grants.some(
@@ -147,9 +147,9 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
   const systemHome = portalSystemNavigationItems(session)[0];
   return [
     ...(session?.member ? MEMBER_NAV_ITEMS : []),
-    ...(session?.admin ? [MANAGEMENT_NAV_ITEM] : []),
+    ...(session?.staff ? [MANAGEMENT_NAV_ITEM] : []),
     ...(systemHome ? [{ ...systemHome, label: "System" }] : []),
-    ...(session?.member || session?.admin ? [ACCOUNT_NAV_ITEM] : []),
+    ...(session?.member || session?.staff ? [ACCOUNT_NAV_ITEM] : []),
   ];
 }
 
@@ -169,14 +169,14 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
   const isSelectedGroupRoute = location.startsWith("/groups/");
   if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute && !isSystemRoute && !isSelectedGroupRoute) return null;
   if (portalNavigationItems(session).some((item) => item.path === location)) return null;
-  if (isManagementRoute && session?.admin) return null;
+  if (isManagementRoute && session?.staff) return null;
   if (isSystemRoute && portalHasSystemManagement(session)) return null;
-  if (isSelectedGroupRoute && (session?.member || session?.admin)) return null;
+  if (isSelectedGroupRoute && (session?.member || session?.staff)) return null;
   return portalDefaultPath(session);
 }
 
 export function portalActiveSection(location: string, session?: PortalSession | null): string {
-  if (location.startsWith("/groups/") && !session?.member && session?.admin) return "management";
+  if (location.startsWith("/groups/") && !session?.member && session?.staff) return "management";
   const top = location.replace(/^\//, "").split("/")[0];
   return top || "profile";
 }

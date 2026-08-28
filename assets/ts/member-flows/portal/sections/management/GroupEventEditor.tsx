@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   standaloneEventProfileKeySchema,
   type EventRegistrationPolicy,
@@ -100,6 +100,8 @@ export function GroupEventEditor({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const eventRevision = `${groupId}:${event?.id ?? "new"}:${event?.updatedAt ?? ""}`;
+  const renderedEventRevision = useRef(eventRevision);
   const isCreate = event === null;
   const profileCatalog = useData(
     () =>
@@ -121,10 +123,12 @@ export function GroupEventEditor({
   }, [isCreate, profileCatalog.data]);
 
   useEffect(() => {
+    if (renderedEventRevision.current === eventRevision) return;
+    renderedEventRevision.current = eventRevision;
     setDraft(initialDraft(event));
     setError(null);
     setStatus("");
-  }, [event?.id, event?.updatedAt]);
+  }, [eventRevision]);
 
   function update<Key extends keyof EventDraft>(key: Key, value: EventDraft[Key]): void {
     setDraft((current) => ({ ...current, [key]: value }));

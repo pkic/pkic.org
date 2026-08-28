@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 import adminRouter from "../functions/api/v1/admin/router";
 import usersRouter from "../functions/api/v1/users/router";
-import {
-  cacheAdminForRequest,
-  requireAdminFromRequest,
-  signAdminSessionToken,
-  verifyAdminSessionToken,
-} from "../functions/_lib/auth/admin";
+import { cacheAdminForRequest, requireAdminFromRequest } from "../functions/_lib/auth/admin";
+import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../functions/_lib/types";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 
@@ -14,10 +10,10 @@ const signingSecret = "test-admin-signing-secret";
 const adminTokenExpiresAt = "2999-01-01T00:00:00.000Z";
 
 async function createAdminToken(state?: string | null): Promise<string> {
-  return signAdminSessionToken(signingSecret, {
-    admin: createUserBackedAuthAdmin({ id: "admin-user", email: "admin@example.test", role: "admin" }),
-    sessionId: "admin-session",
-    expiresAt: adminTokenExpiresAt,
+  return signUserSessionToken(signingSecret, {
+    sub: "admin-user",
+    sid: "admin-session",
+    exp: Math.floor(new Date(adminTokenExpiresAt).getTime() / 1000),
     state,
   });
 }
@@ -46,11 +42,18 @@ function emptyStatement(query: string, queries: string[], options: StatementOpti
       if (query.includes("FROM sessions")) {
         return {
           id: "admin-session",
-          user_id: "admin-user",
+          subject_id: "admin-user",
           expires_at: adminTokenExpiresAt,
+          created_at: new Date().toISOString(),
           revoked_at: null,
+        } as T;
+      }
+      if (query.includes("SELECT id, email, role, active FROM users u WHERE u.id")) {
+        return {
+          id: "admin-user",
           email: "admin@example.test",
           role: "admin",
+          active: 1,
         } as T;
       }
       options.onQuery?.();
@@ -164,9 +167,9 @@ describe("D1 read replication", () => {
 
     expect(response.status).toBe(200);
     expect(withSessionCalls).toEqual(["prior/bookmark"]);
-    const rotatedToken = response.headers.get("x-admin-token");
+    const rotatedToken = response.headers.get("x-user-token");
     expect(rotatedToken).toBeTruthy();
-    const verified = await verifyAdminSessionToken(signingSecret, rotatedToken!);
+    const verified = await verifyUserSessionToken(signingSecret, rotatedToken!);
     expect(verified.ok && verified.claims.state).toBe("next/bookmark");
     expect(response.headers.has("set-cookie")).toBe(false);
   });
@@ -187,8 +190,8 @@ describe("D1 read replication", () => {
     expect(withSessionCalls).toEqual(["users/prior-bookmark"]);
     expect(primaryQueries.some((query) => query.includes("FROM sessions"))).toBe(true);
     expect(sessionQueries.some((query) => query.includes("FROM sessions"))).toBe(false);
-    const rotatedToken = response.headers.get("x-admin-token");
-    const verified = await verifyAdminSessionToken(signingSecret, rotatedToken!);
+    const rotatedToken = response.headers.get("x-user-token");
+    const verified = await verifyUserSessionToken(signingSecret, rotatedToken!);
     expect(verified.ok && verified.claims.state).toBe("users/next-bookmark");
   });
 

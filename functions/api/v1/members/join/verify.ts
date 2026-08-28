@@ -2,11 +2,10 @@ import {
   memberJoinVerifyResponseSchema,
   memberJoinVerifyRouteSchema,
 } from "../../../../../assets/shared/schemas/member-join";
-import {
-  createIdentitySessionEstablishedResponse,
-  prepareMagicLinkVerificationHttp,
-} from "../../../../_lib/auth/http-flow";
+import { createSessionEstablishedResponse, prepareMagicLinkVerificationHttp } from "../../../../_lib/auth/http-flow";
 import { findEligibleMemberById } from "../../../../_lib/auth/member";
+import { serializeUserSessionCookie, signUserSessionToken } from "../../../../_lib/auth/user-session";
+import { sessionExpiresAtToExp } from "../../../../_lib/auth/session-engine";
 import { resolveMemberSessionTtlHours } from "../../../../_lib/auth/session-policy";
 import { AppError } from "../../../../_lib/errors";
 import { jsonPrivate } from "../../../../_lib/http";
@@ -35,14 +34,11 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
     expiresAt: result.expiresAt,
     member: { ...member, sessionId: result.sessionId, expiresAt: result.expiresAt },
   });
-  return createIdentitySessionEstablishedResponse({
-    secret: http.secret,
-    request: c.req.raw,
-    body,
-    member: {
-      member: { ...member, sessionId: result.sessionId, expiresAt: result.expiresAt },
-      sessionId: result.sessionId,
-      expiresAt: result.expiresAt,
-    },
+  const token = await signUserSessionToken(http.secret, {
+    sub: result.userId,
+    sid: result.sessionId,
+    exp: sessionExpiresAtToExp(result.expiresAt),
+    memberId: result.memberId,
   });
+  return createSessionEstablishedResponse(body, serializeUserSessionCookie(token, c.req.raw));
 });

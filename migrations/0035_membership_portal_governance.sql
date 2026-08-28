@@ -3239,18 +3239,8 @@ You have joined {{groupName}}. If this group has meetings, you can view upcoming
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
-    lower(hex(randomblob(16))), 'member_magic_link', 1,
-    'Your PKI Consortium member sign-in link',
-    'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
-
-[Sign in]({{magicLinkUrl}})
-
-If you did not request this link, you can safely ignore this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
-  ),
-  (
-    lower(hex(randomblob(16))), 'portal_magic_link', 1,
-    'Your PKI Consortium portal sign-in link',
+    lower(hex(randomblob(16))), 'user_magic_link', 1,
+    'Your PKI Consortium sign-in link',
     'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
 
 [Sign in]({{magicLinkUrl}})

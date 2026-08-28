@@ -12,8 +12,8 @@ import { emailFromSubmitEvent } from "../../../shared/form/helpers";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 
 async function requestMagicLink(email: string): Promise<void> {
-  await postJson("/api/v1/auth/portal/request-link", { email }, successResponseSchema);
-  // Always show success to prevent email enumeration (mirrors admin Login).
+  await postJson("/api/v1/auth/request-link", { email }, successResponseSchema);
+  // Always show success to prevent email enumeration (as in the shared auth flow).
 }
 
 async function signInWithPasskey(): Promise<void> {

@@ -9,7 +9,7 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
-  const emailMessage = await waitForCapturedEmail(email, "portal sign-in link", { since });
+  const emailMessage = await waitForCapturedEmail(email, "sign-in link", { since });
   await page.goto(extractEmailUrl(emailMessage, "/portal/"));
   // A user normally opens the email in a new tab. In this helper the portal
   // application is already mounted, and a hash-only navigation does not rerun
@@ -18,5 +18,6 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
   await expect(page.locator("#portal-inp-email")).toHaveCount(0, { timeout: 15_000 });
-  await expect(page.getByText(email, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
 }

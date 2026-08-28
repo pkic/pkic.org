@@ -1,6 +1,6 @@
 /**
  * Member self-service. All endpoints operate on the
- * caller's own identity, resolved from a member session — never a
+ * caller's own identity, resolved from the shared human session — never a
  * target-user path parameter.
  */
 import { z } from "zod";
@@ -30,7 +30,7 @@ export const myOrganizationRepresentativeSchema = z.object({
 
 // One membership context (own org-less membership, or an organization
 // actively represented) a member can act as. A person can hold more than
-// one at once — see functions/_lib/auth/member.ts.
+// one at once — see functions/_lib/auth/user-session.ts.
 export const myActiveMembershipSchema = z.object({
   memberId: databaseIdSchema,
   organizationId: databaseIdSchema.nullable(),
@@ -85,7 +85,7 @@ export const myActiveMembershipSwitchRouteSchema = {
   tags: ["Me"],
   summary: "Switch my active membership context",
   description:
-    "Only meaningful for a member who represents more than one organization (or an organization plus an individual membership) concurrently. Re-verifies memberId against the caller's own live eligible memberships — a member can never select one they don't actually hold — then reissues the session cookie scoped to it.",
+    "Only meaningful for a user who represents more than one organization (or an organization plus an individual membership) concurrently. Re-verifies memberId against the caller's own live eligible memberships — a user can never select one they don't actually hold — then reissues the shared human session cookie scoped to it.",
   request: {
     body: { content: { "application/json": { schema: myActiveMembershipSwitchSchema } }, required: true },
   },

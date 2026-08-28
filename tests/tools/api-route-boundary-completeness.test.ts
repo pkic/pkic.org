@@ -5,14 +5,7 @@ import { listTypeScriptFiles, readTypeScriptSource, REPOSITORY_ROOT, sourceLine 
 
 const API_ROOT = join(REPOSITORY_ROOT, "functions/api/v1");
 const RAW_ROUTE_ALLOWLIST = new Set([
-  "functions/api/v1/admin/auth/router.ts:get:/session",
-  "functions/api/v1/admin/auth/router.ts:post:/logout",
-  "functions/api/v1/admin/auth/router.ts:post:/request-link",
-  "functions/api/v1/admin/auth/router.ts:post:/verify-link",
   "functions/api/v1/admin/events/[eventSlug]/registrations/router.ts:get:/export",
-  "functions/api/v1/auth/member/router.ts:post:/logout",
-  "functions/api/v1/auth/member/router.ts:post:/request-link",
-  "functions/api/v1/auth/member/router.ts:post:/verify-link",
   "functions/api/v1/auth/sponsor-portal/router.ts:post:/request-link",
   "functions/api/v1/auth/sponsor-portal/router.ts:post:/verify-link",
   "functions/api/v1/headshots/[userId]/router.ts:get:/:file",
@@ -23,10 +16,6 @@ const RAW_ROUTE_ALLOWLIST = new Set([
   "functions/api/v1/sponsor-portal/router.ts:post:/logout",
 ]);
 const MANUAL_JSON_ALLOWLIST = new Set([
-  "functions/api/v1/admin/auth/request-link.ts",
-  "functions/api/v1/admin/auth/verify-link.ts",
-  "functions/api/v1/auth/member/request-link.ts",
-  "functions/api/v1/auth/member/verify-link.ts",
   "functions/api/v1/auth/passkeys/register-complete.ts",
   "functions/api/v1/auth/sponsor-portal/request-link.ts",
   "functions/api/v1/auth/sponsor-portal/verify-link.ts",

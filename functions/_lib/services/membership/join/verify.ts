@@ -9,7 +9,7 @@ import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { prepareVerifiedDomainAssociationStatements } from "../../organization-representations";
 import { prepareAuditLog } from "../../audit";
 import { prepareOneTimeAuditLog } from "../../audit";
-import { prepareMemberSession } from "../../../auth/member";
+import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
 import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } from "./capabilities";
 
@@ -132,7 +132,7 @@ export async function verifyMemberJoin(
   );
   if (!activeRepresentative) return { status: "support_required" };
 
-  const session = await prepareMemberSession(db, preparedUser.user.id, input.sessionTtlHours);
+  const session = await prepareUserSession(db, preparedUser.user.id, input.sessionTtlHours);
   try {
     await db.batch([
       prepareOneTimeAuditLog(

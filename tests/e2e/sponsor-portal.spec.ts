@@ -15,7 +15,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { expectAdminSessionLanding } from "./helpers/admin-auth";
+import { signInAsE2eStaff } from "./helpers/staff-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -65,17 +65,7 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
-  const adminEmail = e2eAdminEmail("sponsor-portal");
-  await page.goto("/admin/");
-  await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#inp-email").fill(adminEmail);
-  await page.locator("#btn-send").click();
-  await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
-
-  const magicEmail = await waitForEmail(adminEmail, "sign-in");
-  const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
-  await page.goto(magicUrl);
-  await expectAdminSessionLanding(page);
+  await signInAsE2eStaff(page, e2eAdminEmail("sponsor-portal"));
 }
 
 test.describe("sponsor portal", () => {

@@ -54,8 +54,8 @@ export function userRecordColumns(tableAlias?: string): string {
  * recorded in `user_emails` (admin-managed aliases) -- so admin
  * find-or-create flows (adding a
  * representative, the Interim Admin Tool) recognize a person by any known
- * address instead of creating a duplicate `users` row. Login lookups
- * (magic-link request/verify in `_lib/auth/admin.ts`/`_lib/auth/member.ts`)
+ * address instead of creating a duplicate `users` row. Human login lookups
+ * (magic-link request/verify in `_lib/auth/user-session.ts`)
  * deliberately do NOT go through this helper -- secondary emails are
  * admin/display/search only and must not grant login via an alias.
  */

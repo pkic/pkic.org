@@ -47,7 +47,7 @@ type Persona = {
   email: string;
   capabilities: Array<"view" | "participate" | "manage">;
   member: boolean;
-  admin: boolean;
+  staff: boolean;
 };
 
 const PERSONAS: Record<string, Persona> = {
@@ -56,35 +56,35 @@ const PERSONAS: Record<string, Persona> = {
     email: "synthetic-participant@example.test",
     capabilities: ["view", "participate"],
     member: true,
-    admin: false,
+    staff: false,
   },
   directManager: {
     label: "direct group manager",
     email: "synthetic-chair@example.test",
     capabilities: ["view", "manage"],
     member: true,
-    admin: true,
+    staff: true,
   },
   inheritedManager: {
     label: "inherited manager",
     email: "synthetic-parent-chair@example.test",
     capabilities: ["view", "manage"],
     member: false,
-    admin: true,
+    staff: true,
   },
   localOnly: {
     label: "local-only child participant",
     email: "synthetic-local-only@example.test",
     capabilities: ["view", "participate"],
     member: true,
-    admin: false,
+    staff: false,
   },
   staffOnly: {
     label: "staff-only manager",
     email: "synthetic-staff@example.test",
     capabilities: ["view", "manage"],
     member: false,
-    admin: true,
+    staff: true,
   },
 };
 
@@ -96,9 +96,9 @@ function sessionFor(persona: Persona): Record<string, unknown> {
   return {
     success: true,
     identity: { id: USER_ID, email: persona.email },
-    ...(persona.admin
+    ...(persona.staff
       ? {
-          admin: {
+          staff: {
             id: USER_ID,
             email: persona.email,
             role: "staff",
@@ -156,7 +156,7 @@ function profileFor(persona: Persona): Record<string, unknown> {
 async function installPersona(page: Page, persona: Persona): Promise<void> {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname === "/api/v1/auth/portal/session") {
+    if (url.pathname === "/api/v1/auth/session") {
       await json(route, sessionFor(persona));
       return;
     }
@@ -232,7 +232,7 @@ test.describe("selected-group portal personas", () => {
   });
 
   test("unauthorized identity stays on login and cannot render a selected group", async ({ page }) => {
-    await page.route("**/api/v1/auth/portal/session", async (route) => {
+    await page.route("**/api/v1/auth/session", async (route) => {
       await json(route, { error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
     });
     await page.goto(`/portal/#/groups/${GROUP_ID}/overview`);

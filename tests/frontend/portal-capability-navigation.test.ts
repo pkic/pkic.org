@@ -19,7 +19,7 @@ describe("portal capability-derived navigation", () => {
   });
 
   it("shows management but no member actions to a staff-only identity", () => {
-    const labels = portalNavigationItems(portalSessionFixture({ admin: true })).map((item) => item.label);
+    const labels = portalNavigationItems(portalSessionFixture({ staff: true })).map((item) => item.label);
     expect(labels).toContain("Management");
     expect(labels).toContain("System");
     expect(labels).toContain("Account Settings");
@@ -28,13 +28,13 @@ describe("portal capability-derived navigation", () => {
 
   it("shows system management only for the matching global permission", () => {
     const globalAudit = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "audit:read", contextType: null, contextId: null }],
     });
     const contextualAudit = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "audit:read", contextType: "group", contextId: "group-1" }],
     });
     expect(portalHasGlobalPermission(globalAudit, "audit:read")).toBe(true);
@@ -46,8 +46,8 @@ describe("portal capability-derived navigation", () => {
 
   it("shows only the system-management tabs granted to a staff identity", () => {
     const contentReviewer = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "organizations:content-review", contextType: null, contextId: null }],
     });
     expect(portalHasSystemManagement(contentReviewer)).toBe(true);
@@ -68,13 +68,13 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes System Analytics only to a global analytics reader", () => {
     const reader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "analytics:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -87,18 +87,18 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes Donations to global readers or synchronizers", () => {
     const reader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "donations:read", contextType: null, contextId: null }],
     });
     const synchronizer = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "donations:sync", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "donations:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -121,26 +121,26 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes Sponsorships to global readers or writers", () => {
     const reader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "sponsorships:read", contextType: null, contextId: null }],
     });
     const writer = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [
         { permission: "sponsorships:read", contextType: null, contextId: null },
         { permission: "sponsorships:write", contextType: null, contextId: null },
       ],
     });
     const writeOnly = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "sponsorships:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "sponsorships:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -163,18 +163,18 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes Organizations to global readers or membership writers", () => {
     const reader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "organizations:read", contextType: null, contextId: null }],
     });
     const membershipWriter = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "membership:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "organizations:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -195,8 +195,8 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes Users only to a global reader, while retaining action permissions after entry", () => {
     const actionOnly = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [
         { permission: "users:write", contextType: null, contextId: null },
         { permission: "users:anonymize", contextType: null, contextId: null },
@@ -204,8 +204,8 @@ describe("portal capability-derived navigation", () => {
       ],
     });
     const readerAndWriter = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [
         { permission: "users:read", contextType: null, contextId: null },
         { permission: "users:write", contextType: null, contextId: null },
@@ -225,13 +225,13 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes membership applications only to a global membership reader", () => {
     const reader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "membership:read", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "membership:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -252,26 +252,26 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes email templates to a global reader or writer", () => {
     const reader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "email-templates:read", contextType: null, contextId: null }],
     });
     const writer = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [
         { permission: "email-templates:read", contextType: null, contextId: null },
         { permission: "email-templates:write", contextType: null, contextId: null },
       ],
     });
     const writeOnly = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "email-templates:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "email-templates:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -292,23 +292,23 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes System Operations for either global email or operations read authority", () => {
     const emailReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "email:read", contextType: null, contextId: null }],
     });
     const operationsReader = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "operations:read", contextType: null, contextId: null }],
     });
     const writeOnly = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "email:manage", contextType: null, contextId: null }],
     });
     const contextual = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "operations:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -332,18 +332,18 @@ describe("portal capability-derived navigation", () => {
 
   it("exposes Access Control for either global grant or revoke authority, never contextual authority", () => {
     const grantOnly = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "access:grant", contextType: null, contextId: null }],
     });
     const revokeOnly = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "access:revoke", contextType: null, contextId: null }],
     });
     const contextual = portalSessionFixture({
-      admin: true,
-      adminRole: "user",
+      staff: true,
+      staffRole: "user",
       grants: [{ permission: "access:grant", contextType: "group", contextId: "group-1" }],
     });
 
@@ -393,14 +393,14 @@ describe("portal capability-derived navigation", () => {
   });
 
   it("shows both navigation capacities to one dual-capacity identity", () => {
-    const labels = portalNavigationItems(portalSessionFixture({ admin: true, member: true })).map((item) => item.label);
+    const labels = portalNavigationItems(portalSessionFixture({ staff: true, member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
     expect(labels).toContain("Management");
     expect(labels).toContain("Account Settings");
   });
 
   it("keeps shared selected-group routes after member-capacity loss", () => {
-    const staffOnly = portalSessionFixture({ admin: true });
+    const staffOnly = portalSessionFixture({ staff: true });
     expect(portalDefaultPath(staffOnly)).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
     expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
@@ -420,12 +420,12 @@ describe("portal capability-derived navigation", () => {
   });
 
   it("keeps selected-group routes for staff and highlights their management entry", () => {
-    const staffOnly = portalSessionFixture({ admin: true });
+    const staffOnly = portalSessionFixture({ staff: true });
     expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/overview")).toBeNull();
     expect(portalActiveSection("/groups/group-id/overview", staffOnly)).toBe("management");
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {
-    expect(portalCapacityFallbackPath(portalSessionFixture({ admin: true }), "/not-a-portal-route")).toBeNull();
+    expect(portalCapacityFallbackPath(portalSessionFixture({ staff: true }), "/not-a-portal-route")).toBeNull();
   });
 });

@@ -1,9 +1,9 @@
 import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 
 interface PortalSessionFixtureOptions {
-  admin?: boolean;
+  staff?: boolean;
   member?: boolean;
-  adminRole?: string;
+  staffRole?: string;
   grants?: Array<{ permission: string; contextType: string | null; contextId: string | null }>;
 }
 
@@ -12,11 +12,11 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
   return {
     success: true,
     identity,
-    ...(capacities.admin
+    ...(capacities.staff
       ? {
-          admin: {
+          staff: {
             ...identity,
-            role: capacities.adminRole ?? "admin",
+            role: capacities.staffRole ?? "admin",
             scopes: [],
             grants: capacities.grants ?? [],
             expiresAt: "2026-08-26T00:00:00.000Z",

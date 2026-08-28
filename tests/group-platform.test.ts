@@ -1121,7 +1121,7 @@ describe("group route contracts", () => {
 
     const replace = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
       method: "PUT",
-      headers,
+      headers: { ...sessionHeaders, "content-type": "application/json" },
       body: JSON.stringify({
         expectedRevision: 1,
         rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
@@ -1139,6 +1139,12 @@ describe("group route contracts", () => {
     });
 
     const participantUserId = await insertUser(env.DB, "category-rules-participant@example.test");
+    const participantMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Category Rules Participant Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, participantMemberId, participantUserId);
     const participantToken = await createMemberSession(env.DB, participantUserId, "category-rules-participant-token");
     const denied = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
       headers: { authorization: `Bearer ${participantToken}` },
@@ -1147,7 +1153,7 @@ describe("group route contracts", () => {
 
     const staleReplace = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
       method: "PUT",
-      headers,
+      headers: { ...sessionHeaders, "content-type": "application/json" },
       body: JSON.stringify({ expectedRevision: 1, rules: [] }),
     });
     expect(staleReplace.status).toBe(409);

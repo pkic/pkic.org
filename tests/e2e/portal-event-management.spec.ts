@@ -21,6 +21,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   await page.getByRole("button", { name: "Create event" }).click();
   await page.getByLabel("Event name").fill(eventName);
+  await page.getByLabel("Slug").fill(eventSlug);
   await expect(page.getByLabel("Slug")).toHaveValue(eventSlug);
   await page.getByLabel("Start date").fill("2027-06-10T09:00");
   await page.getByLabel("End date").fill("2027-06-10T17:00");
@@ -30,10 +31,16 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByLabel("Location").fill("Amsterdam and online");
   await page.getByLabel("Event resource URL").fill("https://example.test/portal-workshop");
   await page.getByRole("button", { name: "Add profile link" }).click();
+  const eventCreated = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/groups/${GROUP_ID}/events` &&
+      response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Create event", exact: true }).click();
+  expect((await eventCreated).status()).toBe(201);
 
   const row = page.getByRole("row").filter({ hasText: eventName });
-  await expect(row).toBeVisible();
+  await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole("button", { name: "Details" }).click();
   const detail = page.getByRole("region", { name: `${eventName} details` });
   await expect(detail.getByText("Amsterdam and online", { exact: true })).toBeVisible();

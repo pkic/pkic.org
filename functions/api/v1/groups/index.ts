@@ -15,7 +15,7 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 export const GroupsList = openApiRoute(groupsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const viewer = await resolveOptionalGroupViewer(db, c.req.raw, c.env);
-  if (data.query.manageable && viewer.kind !== "admin") {
+  if (data.query.manageable && (viewer.kind !== "user" || !viewer.staff)) {
     throw new AppError(401, "MANAGEMENT_AUTH_REQUIRED", "An authenticated management identity is required");
   }
   const query = viewer.canReadAll || data.query.manageable ? data.query : { ...data.query, active: true };
@@ -23,8 +23,8 @@ export const GroupsList = openApiRoute(groupsListRouteSchema, async (c: AdminCon
     userId: viewer.userId,
     canReadAll: viewer.canReadAll,
     requiredAuthorization:
-      data.query.manageable && viewer.kind === "admin"
-        ? groupManagementCandidateAuthorizationEvidence(viewer.admin)
+      data.query.manageable && viewer.kind === "user" && viewer.staff
+        ? groupManagementCandidateAuthorizationEvidence(viewer.staff)
         : undefined,
   });
   return json(

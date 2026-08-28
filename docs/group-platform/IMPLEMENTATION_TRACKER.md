@@ -817,12 +817,11 @@ Status: In progress
 
 Status: In progress
 
-- [x] Make portal authentication identity-based.
-      The neutral `/api/v1/auth/portal/*` flow uses one purpose-bound magic
-      link, resolves staff and member eligibility independently, and atomically
-      establishes every current capacity. Passkeys follow the same model.
-      Staff-only and member-only clients retain their existing cookie/token
-      contracts during migration; mixed-identity cookies fail closed.
+- [x] Make human authentication identity-based.
+      The neutral `/api/v1/auth/*` flow uses one purpose-bound magic link,
+      resolves staff and member eligibility independently, and atomically
+      establishes every current capacity in one `pkic_session`. Passkeys follow
+      the same model.
 - [x] Gate member actions separately from staff management permissions.
       Portal session status exposes live capacities, the shell derives its
       navigation from them, and staff-only identities never probe or receive
@@ -1403,17 +1402,23 @@ Status: In progress
       out separately in ARCHITECTURE.md.
 - [ ] Add temporary legacy redirects where needed.
 - [ ] Remove the admin shell and its separate navigation.
-- [ ] Remove duplicate admin and member session assumptions.
-      Progress: request-scoped D1 bookmark handling is no longer implemented
-      inside the legacy admin router. One neutral middleware now authenticates
-      staff against primary D1, applies a prior bookmark or
-      `first-unconstrained` session for reads, uses `first-primary` for writes,
-      and rotates user-backed cookie or bearer state without rotating API-key
-      identities. The legacy router and canonical Users domain both use this
-      boundary, with focused regressions proving primary authentication,
-      causal reads, token rotation, and an unmodified shared environment
-      binding. Separate admin/member session token assumptions and the legacy
-      admin authentication URLs remain, so the parent item stays open.
+- [x] Remove duplicate admin and member session assumptions.
+      Evidence: `/api/v1/auth/request-link`, `/verify-link`, `/session`, and
+      `/logout` are the only human authentication routes. Magic links and
+      passkeys establish one `pkic_session` and one revocable `sessions` row;
+      live staff and member capacities are resolved independently on every
+      request, so loss of one capacity does not invent or preserve a separate
+      identity session. The former `/api/v1/admin/auth/*`,
+      `/api/v1/auth/member/*`, and `/api/v1/auth/portal/*` handlers, schemas,
+      cookies, JWT types, and services are removed. A dedicated signed MCP
+      session and the explicit service API key remain machine transports, not
+      alternate human sessions. One neutral request-scoped D1 middleware
+      authenticates staff on primary D1, applies causal read bookmarks, uses
+      `first-primary` for writes, and rotates the already verified user or MCP
+      token without a redundant replica session lookup. Focused tests cover
+      staff-only, member-only, and combined capacities, retired routes,
+      rejection of a validly signed legacy human JWT, live revocation and
+      expiry, D1 bookmark rotation, passkeys, and email-change invalidation.
 - [ ] Remove legacy admin API routes after canonical consumers migrate.
 - [x] Browser-test member, chair, inherited leader, local-only leader, staff,
       guest, and unauthorized navigation.
@@ -1567,10 +1572,9 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the final security
-      remediation, donation cutover, and duplicate admin analytics retirement with 2,218 backend
-      tests (one skipped), 297 frontend tests,
-      and 80 tooling tests. Type checks, ESLint, SQL projection,
+      Current evidence: the complete gate passes after the unified human
+      authentication cutover with 2,267 backend tests (one skipped), 333
+      frontend tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
       An earlier combined run exposed a nondeterministic Google Groups boundary
@@ -1596,8 +1600,8 @@ Status: In progress
       journey signs in as an event program manager, reads proposals through the
       selected-group API, edits an accepted abstract, previews and records a
       final decision, and reads the resulting audit history without an admin API
-      fallback. The global system-audit journey signs in through the neutral
-      portal flow, renders D1 audit data through the canonical system API, and
+      fallback. The global audit-log journey signs in through the neutral
+      portal flow, renders D1 audit data through the canonical audit-log API, and
       proves both direct portal navigation and the old admin bookmark redirect
       make no request to the removed admin audit endpoint.
       The current seven-test browser checkpoint also covers membership-setting
@@ -1613,7 +1617,7 @@ Status: In progress
       follows the legacy bookmark redirect, and proves that no removed admin
       endpoint is requested. The proposal-moderation browser journey now uses
       an exact action-bearing row locator so the expanded detail row cannot be
-      mistaken for its parent proposal row. The complete 43-test Playwright
+      mistaken for its parent proposal row. The complete 51-test Playwright
       gate now passes against one freshly seeded Worker/D1 environment. That
       run also exposed four event-management specs sharing one mailbox against
       the production-equivalent three-request email rate limit; each spec now
@@ -1628,18 +1632,18 @@ Status: In progress
       is requested. Stripe remains mocked and SendGrid remains intercepted.
 - [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: all 44 previously existing browser tests passed in one
-      uninterrupted 11.1-minute run against freshly seeded local Worker, D1,
-      R2, and intercepted SendGrid environments. The new forty-fifth real
-      persona test first exposed two invalid fixture assumptions: local-only
-      governance requires explicit local leadership, and the top-level
-      Management link remains visible when the actor manages another group.
-      The corrected fixture follows the real governance transition and asserts
-      selected-group navigation; its focused rerun passes. The guest test's new
-      portal-isolation assertion also passes in a focused rerun. The current
-      45-test inventory is therefore reconciled across the uninterrupted
-      44-test run and the two affected focused reruns; no product assertion
-      remains failing.
+      Current evidence: all 51 browser tests pass in one uninterrupted
+      2.7-minute run against freshly seeded local Worker, D1, R2, and
+      intercepted SendGrid environments. This checkpoint includes the unified
+      user sign-in path, staff/member/dual-capacity personas, group management,
+      public event flows, and every permission-derived global destination. The
+      full run exposed and now covers two real client races: event profile data
+      can no longer reset a create form after the user starts typing, and a
+      delayed managed-group auto-selection can no longer override navigation to
+      another portal section. The mailing-list journey also waits for the
+      requested group and its server-backed table before editing, then asserts
+      the canonical create response. Browser, Worker, and Wrangler temporary
+      state for this checkpoint was kept on `/Volumes/ScanDisk`.
 - [x] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Evidence: the identity phase covers real-browser desktop and 390x844
@@ -1705,14 +1709,13 @@ Status: In progress
       complete. The shared resource evaluator covers the canonical group form,
       event, vote, and mailing-list paths, but legacy global/admin domain
       endpoints remain. The admin shell still exposes Events and Forms, and
-      the admin router still mounts those domains plus authentication and
-      proposal compatibility routes. Ownerless/global event actions and the
+      the admin router still mounts those domains plus proposal compatibility
+      routes. Ownerless/global event actions and the
       remaining proposal adapter therefore still require deliberate
       portal/domain cutovers or explicit retirement.
-      Temporary redirects, separate admin/
-      member session assumptions, compatibility API removal, and final shell
-      removal remain the concrete differences from the accepted Portal and API
-      completion requirements. Migration 0035 remains consolidated and locally
+      Temporary redirects, compatibility API removal, and final shell removal
+      remain the concrete differences from the accepted Portal and API completion
+      requirements. Migration 0035 remains consolidated and locally
       verified, but its preview and production ledger state must be reverified
       at handoff. The open §8 and §10 items above are the authoritative
       remaining architecture work; completing this audit does not close them.

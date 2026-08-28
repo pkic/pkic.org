@@ -1,7 +1,7 @@
 /**
  * Admin API client.
  *
- * Thin fetch wrapper that sends same-origin admin session cookies and handles
+ * Thin fetch wrapper that sends the same canonical user session cookie and handles
  * 401 responses by clearing auth (triggering a re-render to Login).
  */
 import { clearAuth } from "./state";

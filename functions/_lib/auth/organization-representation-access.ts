@@ -20,7 +20,9 @@ export async function requireRepresentativeManagerActor(
       staffAuthorized: true,
     };
   } catch (error) {
-    if (!(error instanceof AppError) || error.status !== 401) throw error;
+    if (!(error instanceof AppError) || (error.status !== 401 && error.code !== "PERMISSION_REQUIRED")) {
+      throw error;
+    }
   }
   const member = await requireMemberFromRequest(db, request, env);
   return {

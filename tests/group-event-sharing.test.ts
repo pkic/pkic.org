@@ -495,7 +495,7 @@ describe("group event sharing", () => {
     expect(attendancePlan.results.map((row) => row.detail).join("\n")).toContain("idx_event_occurrence_attendance");
 
     const memberAttendance = await authenticatedRequest(fixture.memberToken, attendancePath);
-    expect(memberAttendance.status).toBe(401);
+    expect(memberAttendance.status).toBe(403);
 
     const attendance = await authenticatedRequest(fixture.leaderToken, `${attendancePath}?q=example&verified=false`);
     expect(attendance.status, await attendance.clone().text()).toBe(200);

@@ -30,7 +30,7 @@ export async function createAdminRegistrationManageUrl(
   const [iphash, uahash] = await Promise.all([sha256Hex(payload.ip), sha256Hex(payload.userAgent)]);
   const sessionId = isUserBackedAuthAdmin(payload.actor) ? payload.actor.sessionId : undefined;
   if (isUserBackedAuthAdmin(payload.actor) && !sessionId) {
-    throw new AppError(401, "AUTH_INVALID", "The admin session cannot delegate registration management access");
+    throw new AppError(401, "AUTH_INVALID", "The staff user session cannot delegate registration management access");
   }
   const token = await signAdminManageJwt(payload.signingSecret, {
     sub: registration.id,

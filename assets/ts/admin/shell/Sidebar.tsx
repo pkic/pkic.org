@@ -200,7 +200,7 @@ export function Sidebar() {
           class="btn btn-sm btn-outline-secondary w-100"
           onClick={async () => {
             try {
-              await apiCommand("/api/v1/admin/auth/logout", { method: "POST" });
+              await apiCommand("/api/v1/auth/logout", { method: "POST" });
             } finally {
               clearAuth();
               window.location.assign("/admin/");

@@ -59,6 +59,10 @@ describe("cache policy middleware", () => {
     "/api/v1/organizations/content-reviews",
     "/api/v1/email/outbox",
     "/api/v1/operations/due-work",
+    "/api/v1/permissions/grants",
+    "/api/v1/permissions/targets",
+    "/api/v1/roles",
+    "/api/v1/users/user-1/roles",
     "/api/v1/leadership/positions",
   ])("adds no-store to anonymous failures from the staff-only %s family", async (pathname) => {
     const response = await apiMiddlewareOnRequest(
@@ -72,7 +76,7 @@ describe("cache policy middleware", () => {
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
   });
 
-  it.each(["pkic_admin_session", "pkic_member_session", "pkic_sponsor_portal_session"])(
+  it.each(["pkic_session", "pkic_sponsor_portal_session"])(
     "overrides cacheable responses when the %s cookie is present",
     async (cookieName) => {
       const response = await apiMiddlewareOnRequest(

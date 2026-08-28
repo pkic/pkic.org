@@ -143,7 +143,7 @@ describe("verified-email-first membership join", () => {
     const response = await verifyJoin(testEnv, token);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie")).toContain("pkic_member_session=");
+    expect(response.headers.get("set-cookie")).toContain("pkic_session=");
     const body = memberJoinVerifyResponseSchema.parse(await response.json());
     expect(body).toMatchObject({ status: "organization_access_ready", member: { memberId } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);

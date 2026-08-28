@@ -33,12 +33,8 @@ function isInternalPath(path: string): boolean {
   return path.startsWith("/api/v1/internal/");
 }
 
-function isAdminAuthPath(path: string): boolean {
-  return path.startsWith("/api/v1/admin/auth");
-}
-
 function isMcpDefaultReadablePath(path: string): boolean {
-  return isAdminPath(path) && !isAdminAuthPath(path);
+  return isAdminPath(path);
 }
 
 function isBearerAuthPath(path: string): boolean {

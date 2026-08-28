@@ -4,8 +4,7 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
-import { signAdminSessionToken } from "../auth/admin";
-import { createUserBackedAuthAdmin } from "../auth/admin-identity";
+import { signMcpSessionToken } from "../auth/mcp-session";
 import { AUTH_SCOPES } from "../auth/scopes";
 import { filterOpenApiSpecForMcp } from "../openapi/mcp";
 import type { Env } from "../types";
@@ -67,6 +66,7 @@ function apiRequestFromMcp(
     const headers = new Headers({ accept: "application/json" });
     if (authorization) {
       headers.set("authorization", authorization);
+      headers.set("x-pkic-machine-auth", "mcp");
     }
 
     let requestBody: BodyInit | undefined;
@@ -105,21 +105,14 @@ async function authorizationHeaderForMcp(
     return null;
   }
 
-  const token = await signAdminSessionToken(env.INTERNAL_SIGNING_SECRET, {
-    admin: createUserBackedAuthAdmin({
-      id: oauthProps.id,
-      email: oauthProps.email,
-      role: oauthProps.role,
-      scopes: oauthProps.scopes,
-      sessionId: oauthProps.sessionId,
-      expiresAt: oauthProps.sessionExpiresAt,
-      state: oauthProps.state ?? null,
-    }),
-    sessionId: oauthProps.sessionId,
-    expiresAt: oauthProps.sessionExpiresAt,
-    state: oauthProps.state ?? null,
+  const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
+    sub: oauthProps.id,
+    sid: oauthProps.sessionId,
+    exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
+    email: oauthProps.email,
+    role: oauthProps.role,
+    state: oauthProps.state ?? undefined,
     scopes: oauthProps.scopes,
-    scopeRestricted: true,
   });
 
   return `Bearer ${token}`;

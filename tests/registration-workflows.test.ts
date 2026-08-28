@@ -215,7 +215,7 @@ describe("registration workflows", () => {
     const response = await patchManage(
       confirmed.manageToken,
       { action: "update", email: "member-new@example.test" },
-      { cookie: `pkic_member_session=${encodeURIComponent(memberSession)}` },
+      { cookie: `pkic_session=${encodeURIComponent(memberSession)}` },
     );
 
     expect(response.status).toBe(200);
@@ -269,7 +269,7 @@ describe("registration workflows", () => {
     const rejected = await patchManage(
       confirmed.manageToken,
       { action: "update", email: "org-target-new@example.test" },
-      { cookie: `pkic_member_session=${encodeURIComponent(ordinarySession)}` },
+      { cookie: `pkic_session=${encodeURIComponent(ordinarySession)}` },
     );
     expect(rejected.status).toBe(403);
     await expect(rejected.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
@@ -278,7 +278,7 @@ describe("registration workflows", () => {
     const accepted = await patchManage(
       confirmed.manageToken,
       { action: "update", email: "org-target-new@example.test" },
-      { cookie: `pkic_member_session=${encodeURIComponent(contactSession)}` },
+      { cookie: `pkic_session=${encodeURIComponent(contactSession)}` },
     );
     expect(accepted.status).toBe(200);
     await expect(
@@ -1413,7 +1413,7 @@ describe("registration workflows", () => {
           firstName: "After",
           email: "email-after@example.test",
         },
-        { cookie: `pkic_member_session=${encodeURIComponent(memberSession)}` },
+        { cookie: `pkic_session=${encodeURIComponent(memberSession)}` },
       );
       expect(response.status).toBe(500);
       const [registration] = await queryAll<{

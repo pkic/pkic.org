@@ -1,7 +1,7 @@
 /**
  * Minimal HS256 JWT utility using the Web Crypto API (Workers-compatible).
- * Used for signed admin tokens where tamper-proof claims need to travel through
- * the client.
+ * Used for signed capability and session tokens where tamper-proof claims need
+ * to travel through the client.
  */
 
 import { hmacSha256Bytes } from "./crypto";
@@ -95,7 +95,7 @@ export interface AdminManageClaims {
   sub: string;
   /** Admin user ID that opened the management session. */
   actor: string;
-  /** Issuing admin session. Omitted only for the API-key service principal. */
+  /** Issuing user session. Omitted only for the API-key service principal. */
   sid?: string;
   /** Event slug */
   event: string;

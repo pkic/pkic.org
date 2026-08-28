@@ -51,7 +51,7 @@ describe("portal account settings capacity cutover", () => {
         throw new Error(`Unexpected member API request: ${url}`);
       }),
     );
-    portalSession.value = portalSessionFixture({ admin: true });
+    portalSession.value = portalSessionFixture({ staff: true });
 
     mount(<AccountSettings />);
     await settle();
@@ -64,7 +64,7 @@ describe("portal account settings capacity cutover", () => {
 
   it.each([
     ["member-only", { member: true }],
-    ["dual-capacity", { admin: true, member: true }],
+    ["dual-capacity", { staff: true, member: true }],
   ] as const)("loads notification preferences for a %s identity", async (_label, capacities) => {
     const requests: string[] = [];
     vi.stubGlobal(

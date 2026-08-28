@@ -543,7 +543,7 @@ describe("Sponsorship sales pipeline", () => {
     expect((await call(adminToken, `/api/v1/sponsorships/${crypto.randomUUID()}/events`)).status).toBe(404);
 
     const memberToken = await createMemberSession(env.DB, userId, "sponsorship-history-member-token");
-    expect((await call(memberToken, `/api/v1/sponsorships/${id}/events`)).status).toBe(401);
+    expect((await call(memberToken, `/api/v1/sponsorships/${id}/events`)).status).toBe(403);
   });
 
   it("paginates equal-timestamp history deterministically in either schema-allowed order", async () => {

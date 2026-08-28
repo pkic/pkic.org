@@ -1,0 +1,341 @@
+/**
+ * Canonical human identity session.
+ *
+ * A user may currently have staff and/or member capacity. Those capacities
+ * are deliberately projections of live database state, never JWT authority.
+ * The token only identifies the user/session and carries non-authoritative
+ * context hints used by the read-replica and membership-context adapters.
+ */
+import type { PublicAuthAdmin } from "../../../assets/shared/schemas/admin-auth";
+import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
+import { first } from "../db/queries";
+import { AppError } from "../errors";
+import { normalizeEmail } from "../validation";
+import { nowIso } from "../utils/time";
+import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
+import { createUserBackedAuthAdmin, publicAuthAdmin } from "./admin-identity";
+import {
+  findEligibleStaffUserById,
+  staffSignInAuthorizationEvidence,
+  findEligibleMemberById,
+  memberSignInAuthorizationEvidence,
+  type EligibleStaffUser,
+} from "./identity-capacities";
+import { computeGrantsForUser } from "./permissions";
+import { AUTH_SCOPES } from "./scopes";
+import {
+  assertSessionActive,
+  fetchSessionRow,
+  getBearerToken,
+  getSessionCookieToken,
+  prepareSessionRow,
+  serializeExpiredSessionCookie,
+  serializeSessionCookie,
+  sessionExpiresAtToExp,
+  type SessionTableConfig,
+} from "./session-engine";
+import { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH } from "./session-cookies";
+import {
+  assertEmailAuthCapabilityEmail,
+  commitEmailAuthRedemption,
+  queueEmailAuthCapability,
+  verifyEmailAuthCapabilityToken,
+} from "./email-auth-capabilities";
+import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
+import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
+
+const USER_SESSIONS: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
+const STAFF_CAPACITY_TTL_HOURS = 8;
+const USER_SESSION_TOKEN_TYPE = "user-session";
+export const USER_SESSION_TOKEN_HEADER = "x-user-token";
+
+export interface UserSessionTokenClaims {
+  typ: typeof USER_SESSION_TOKEN_TYPE;
+  sub: string;
+  sid: string;
+  exp: number;
+  /** Non-authoritative selected membership hint. Revalidated on every request. */
+  mid?: string;
+  /** Non-authoritative D1 read-replica bookmark hint. */
+  state?: string;
+}
+
+export interface UserSessionResult {
+  identity: { id: string; email: string };
+  sessionId: string;
+  expiresAt: string;
+  staff?: UserBackedAuthAdmin;
+  member?: AuthMember;
+}
+
+export interface PreparedUserSession {
+  sessionId: string;
+  expiresAt: string;
+  createdAt: string;
+  statement: StatementLike;
+}
+
+function isUserSessionClaims(claims: object): claims is UserSessionTokenClaims {
+  const candidate = claims as Partial<UserSessionTokenClaims>;
+  return (
+    candidate.typ === USER_SESSION_TOKEN_TYPE &&
+    typeof candidate.sub === "string" &&
+    typeof candidate.sid === "string" &&
+    typeof candidate.exp === "number" &&
+    (candidate.mid === undefined || typeof candidate.mid === "string") &&
+    (candidate.state === undefined || typeof candidate.state === "string")
+  );
+}
+
+export async function signUserSessionToken(
+  secret: string,
+  payload: Pick<UserSessionTokenClaims, "sub" | "sid" | "exp"> & { memberId?: string | null; state?: string | null },
+): Promise<string> {
+  return signJwt(secret, {
+    typ: USER_SESSION_TOKEN_TYPE,
+    sub: payload.sub,
+    sid: payload.sid,
+    exp: payload.exp,
+    ...(payload.memberId ? { mid: payload.memberId } : {}),
+    ...(payload.state ? { state: payload.state } : {}),
+  });
+}
+
+export async function verifyUserSessionToken(
+  secret: string,
+  token: string,
+): Promise<JwtVerifyResult<UserSessionTokenClaims>> {
+  const result = await verifyJwt<object>(secret, token);
+  if (!result.ok) return result;
+  return isUserSessionClaims(result.claims) ? { ok: true, claims: result.claims } : { ok: false, reason: "invalid" };
+}
+
+export function getUserSessionCookieToken(request: Request): string | null {
+  return getSessionCookieToken(request, USER_SESSION_COOKIE_NAME);
+}
+
+export function getUserSessionToken(request: Request): string | null {
+  return (
+    request.headers.get(USER_SESSION_TOKEN_HEADER) ?? getUserSessionCookieToken(request) ?? getBearerToken(request)
+  );
+}
+
+export function serializeUserSessionCookie(token: string, request: Request): string {
+  return serializeSessionCookie(USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, token, request);
+}
+
+export function serializeExpiredUserSessionCookie(request: Request): string {
+  return serializeExpiredSessionCookie(USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, request);
+}
+
+export function prepareUserSession(
+  db: DatabaseLike,
+  userId: string,
+  sessionTtlHours: number,
+): Promise<PreparedUserSession> {
+  return prepareSessionRow(db, USER_SESSIONS, userId, sessionTtlHours);
+}
+
+export function userStaffExpiresAt(createdAt: string, sessionExpiresAt: string): string {
+  const elevatedExpiresAt = new Date(new Date(createdAt).getTime() + STAFF_CAPACITY_TTL_HOURS * 60 * 60 * 1000);
+  const sessionExpiry = new Date(sessionExpiresAt);
+  return (elevatedExpiresAt < sessionExpiry ? elevatedExpiresAt : sessionExpiry).toISOString();
+}
+
+async function toStaff(
+  db: DatabaseLike,
+  staff: EligibleStaffUser,
+  sessionId: string,
+  expiresAt: string,
+  state?: string | null,
+): Promise<UserBackedAuthAdmin> {
+  return createUserBackedAuthAdmin({
+    id: staff.id,
+    email: staff.email,
+    role: staff.role,
+    scopes: staff.role === "admin" ? [...AUTH_SCOPES] : [],
+    grants: await computeGrantsForUser(db, staff.id),
+    sessionId,
+    expiresAt,
+    ...(state ? { state } : {}),
+  });
+}
+
+/** Resolve identity and capacities from one session row and live D1 state. */
+export async function resolveUserSessionFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<UserSessionResult> {
+  const token = getUserSessionToken(request);
+  if (!token) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
+  if (!env.INTERNAL_SIGNING_SECRET) {
+    throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
+  }
+  const verified = await verifyUserSessionToken(env.INTERNAL_SIGNING_SECRET, token);
+  if (!verified.ok) {
+    throw new AppError(
+      401,
+      verified.reason === "expired" ? "AUTH_EXPIRED" : "AUTH_INVALID",
+      verified.reason === "expired" ? "User session expired" : "Invalid user session token",
+    );
+  }
+  const row = assertSessionActive(
+    await fetchSessionRow(db, USER_SESSIONS, verified.claims.sid, verified.claims.sub),
+    "user",
+  );
+  const [staff, member] = await Promise.all([
+    findEligibleStaffUserById(db, verified.claims.sub),
+    findEligibleMemberById(db, verified.claims.sub, verified.claims.mid),
+  ]);
+  if (!staff && !member) {
+    throw new AppError(401, "AUTH_INVALID", "This user session no longer has an active capacity");
+  }
+  const elevatedStaffExpiry = userStaffExpiresAt(row.createdAt, row.expiresAt);
+  const staffActive = new Date(elevatedStaffExpiry).getTime() > Date.now();
+  if (!staffActive && !member) {
+    throw new AppError(403, "AUTH_FORBIDDEN", "This account has no active portal capacity");
+  }
+  const staffActor =
+    staff && staffActive ? await toStaff(db, staff, row.id, elevatedStaffExpiry, verified.claims.state) : null;
+  return {
+    identity: { id: verified.claims.sub, email: staff?.email ?? member!.email },
+    sessionId: row.id,
+    expiresAt: row.expiresAt,
+    ...(staffActor ? { staff: staffActor } : {}),
+    ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
+  };
+}
+
+export function publicUserSession(result: UserSessionResult): {
+  identity: { id: string; email: string };
+  staff?: PublicAuthAdmin;
+  member?: AuthMember;
+} {
+  return {
+    identity: result.identity,
+    ...(result.staff ? { staff: publicAuthAdmin(result.staff) } : {}),
+    ...(result.member ? { member: result.member } : {}),
+  };
+}
+
+export async function queueUserSignInCapability(payload: {
+  db: DatabaseLike;
+  email: string;
+  ttlMinutes: number;
+  signingSecret: string;
+  ipHash?: string | null;
+  userAgentHash?: string | null;
+}): Promise<{
+  queuedToken: string;
+  identity: { id: string; email: string };
+  capacities: Array<"staff" | "member">;
+} | null> {
+  const identity = await first<{ id: string; email: string }>(
+    payload.db,
+    "SELECT id, email FROM users WHERE normalized_email = ? AND active = 1",
+    [normalizeEmail(payload.email)],
+  );
+  if (!identity) return null;
+  const [staff, member] = await Promise.all([
+    findEligibleStaffUserById(payload.db, identity.id),
+    findEligibleMemberById(payload.db, identity.id),
+  ]);
+  if (!staff && !member) return null;
+  const capability = await queueEmailAuthCapability({
+    signingSecret: payload.signingSecret,
+    purpose: "user_sign_in",
+    subjectId: identity.id,
+    email: identity.email,
+    ttlSeconds: payload.ttlMinutes * 60,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  return {
+    queuedToken: capability.queuedToken,
+    identity,
+    capacities: [...(staff ? ["staff" as const] : []), ...(member ? ["member" as const] : [])],
+  };
+}
+
+export async function redeemUserSignInCapability(
+  db: DatabaseLike,
+  payload: {
+    token: string;
+    signingSecret: string;
+    sessionTtlHours: number;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+  },
+): Promise<{ session: UserSessionResult; token: string }> {
+  const capability = await verifyEmailAuthCapabilityToken({
+    signingSecret: payload.signingSecret,
+    purpose: "user_sign_in",
+    token: payload.token,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  const [staff, member] = await Promise.all([
+    findEligibleStaffUserById(db, capability.subjectId),
+    findEligibleMemberById(db, capability.subjectId),
+  ]);
+  if (!staff && !member) throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has portal access");
+  const identity = { id: capability.subjectId, email: staff?.email ?? member!.email };
+  await assertEmailAuthCapabilityEmail({
+    signingSecret: payload.signingSecret,
+    capability,
+    currentEmail: identity.email,
+  });
+  const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
+  const verifiedAt = nowIso();
+  const authorizationEvidence = [
+    ...(staff ? [staffSignInAuthorizationEvidence(identity.id, normalizeEmail(identity.email))] : []),
+    ...(member ? [memberSignInAuthorizationEvidence(identity.id, normalizeEmail(identity.email))] : []),
+  ];
+  await commitEmailAuthRedemption(db, {
+    purpose: "user_sign_in",
+    capabilityId: capability.capabilityId,
+    actorType: "user",
+    actorId: identity.id,
+    action: "user_magic_link_verified",
+    entityType: "identity_session",
+    entityId: prepared.sessionId,
+    details: {
+      capacities: [...(staff ? ["staff"] : []), ...(member ? ["member"] : [])],
+      expiresAt: prepared.expiresAt,
+    },
+    createdAt: verifiedAt,
+    authorizationEvidence,
+    statements: [
+      prepareVerifyPrimaryEmailStatement(db, {
+        userId: identity.id,
+        normalizedEmail: normalizeEmail(identity.email),
+        method: "magic_link",
+        verifiedAt,
+      }),
+      ...(await prepareVerifiedDomainAssociationStatements(db, {
+        userId: identity.id,
+        normalizedEmail: normalizeEmail(identity.email),
+        at: verifiedAt,
+      })),
+      prepared.statement,
+    ],
+  });
+  const staffExpiry = staff ? userStaffExpiresAt(prepared.createdAt, prepared.expiresAt) : null;
+  const session: UserSessionResult = {
+    identity,
+    sessionId: prepared.sessionId,
+    expiresAt: prepared.expiresAt,
+    ...(staff && staffExpiry ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry) } : {}),
+    ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
+  };
+  const token = await signUserSessionToken(payload.signingSecret, {
+    sub: identity.id,
+    sid: prepared.sessionId,
+    exp: sessionExpiresAtToExp(prepared.expiresAt),
+    memberId: member?.memberId,
+  });
+  return { session, token };
+}
+
+export { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH } from "./session-cookies";

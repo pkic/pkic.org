@@ -18,13 +18,10 @@ import { Login } from "./shell/Login";
 import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
-import {
-  portalSessionEstablishedResponseSchema,
-  portalSessionResponseSchema,
-} from "../../../shared/schemas/portal-auth";
+import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 
 async function verifyMagicLink(token: string): Promise<void> {
-  const session = await postJson("/api/v1/auth/portal/verify-link", { token }, portalSessionEstablishedResponseSchema);
+  const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
   savePortalSession(session);
 }
 
@@ -39,7 +36,7 @@ export function App() {
 
   async function loadPortalSession(): Promise<boolean> {
     try {
-      const session = await getJson("/api/v1/auth/portal/session", portalSessionResponseSchema);
+      const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
       savePortalSession(session);
       if (session.member) {
         saveProfile(await getJson("/api/v1/me", myProfileSchema));
