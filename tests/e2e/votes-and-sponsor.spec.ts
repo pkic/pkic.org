@@ -21,6 +21,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { expectAdminSessionLanding } from "./helpers/admin-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -70,7 +71,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   const magicEmail = await waitForEmail(adminEmail, "sign-in");
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }
 
 test.describe("public votes pages", () => {

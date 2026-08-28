@@ -1375,18 +1375,19 @@ Status: In progress
       The affected System Analytics and membership-join browser journeys pass
       together in a focused three-test run, including all three focused
       analytics endpoints and the legacy bookmark redirect.
-- [ ] Run the complete pnpm run test:e2e gate because navigation and portal
+- [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: the prior 43 real-browser tests passed in one
-      uninterrupted run against the freshly seeded local Worker, D1, R2, and
-      intercepted SendGrid environment. This round adds the System Analytics
-      journey, bringing the suite to 44 tests. Its full-run attempt passed the
-      first 19 tests before the local Wrangler proxy lost its connection after
-      five minutes; the remaining failures were connection refusals. The two
-      initially ambiguous membership-join locators were corrected and the
-      affected join plus analytics journeys pass 3/3 against a fresh server.
-      The current 44-test gate must still complete, potentially as documented
-      fresh-server batches, before final handoff.
+      Current evidence: every one of the current 44 real-browser tests passes
+      against freshly seeded local Worker, D1, R2, and intercepted SendGrid
+      environments. Because Wrangler 4.123.0's local proxy terminated during
+      longer combined runs, the complete inventory was reconciled across
+      explicit fresh-server batches of 9, 12, 2, 4, 10, 6, and 1 unique tests.
+      The first rendering batch exposed three stale waits for the retired
+      `#admin-root`; one shared helper now verifies the canonical portal
+      analytics landing, and the rerun passes 9/9. Two larger-batch invitation
+      and checkout interruptions reproduced as `Network connection lost`, then
+      passed in focused fresh-server reruns. No product assertion remains
+      failing, and the batch inventory covers all 44 tests exactly once.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Current evidence: the identity phase has real-browser desktop rendering,

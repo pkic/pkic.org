@@ -33,6 +33,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
+import { expectAdminSessionLanding } from "./helpers/admin-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -106,7 +107,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   const magicEmail = await waitForEmail(ADMIN_EMAIL, "sign-in", { since });
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }
 
 /**
@@ -246,7 +247,7 @@ test.describe("Admin browser-verification pass", () => {
     // about:blank, where relative-URL fetches have nothing to resolve
     // against.
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     // Member proposal submission requires the owning group's canonical
     // min_endorsers_for_ballot policy to be enabled. Configure the group,
@@ -410,7 +411,7 @@ test.describe("Admin browser-verification pass", () => {
     });
 
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     const stamp = Date.now();
     const email = `e2e-content-review-${stamp}@e2e-content-review-${stamp}.test`;
@@ -474,7 +475,7 @@ test.describe("Admin browser-verification pass", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     const stamp = Date.now();
     const primaryEmail = `e2e-primary-${stamp}@e2e-users-${stamp}.test`;
@@ -525,7 +526,7 @@ test.describe("Admin browser-verification pass", () => {
     });
     page.on("dialog", (d) => d.accept());
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     const stamp = Date.now();
     const email = `e2e-approve-onboarding-${stamp}@e2e-approve-onboarding-${stamp}.test`;
