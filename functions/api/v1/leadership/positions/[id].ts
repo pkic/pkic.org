@@ -1,6 +1,6 @@
 /**
- * PATCH  /api/v1/system/leadership-positions/:id — edit title/from/till
- * DELETE /api/v1/system/leadership-positions/:id — remove a position
+ * PATCH  /api/v1/leadership/positions/:id — edit title/from/till
+ * DELETE /api/v1/leadership/positions/:id — remove a position
  *
  * See ./index.ts for the create/list side and
  * functions/_lib/services/leadership.ts for the design rationale.

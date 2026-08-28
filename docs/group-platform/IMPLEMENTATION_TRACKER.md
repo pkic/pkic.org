@@ -1231,9 +1231,9 @@ Status: In progress
       Global Board and Executive Council leadership is the seventh
       permission-derived System destination. The dated roster editor and route
       handlers moved rather than being copied to
-      `/api/v1/system/leadership-positions`; the former admin components, route
-      mount, and handlers are removed, and the old bookmark is only a portal
-      redirect. One neutral schema and service remain the source of truth for
+      `/api/v1/leadership/positions`; the former System route mount and handler
+      sources are removed, and the old bookmark is only a portal redirect. One
+      neutral schema and service remain the source of truth for
       the System editor and public leadership projection. User-backed staff
       holding either the live global `access:grant` or `access:revoke`
       permission may inspect the bounded, searchable, sortable, and paginated
@@ -1802,7 +1802,8 @@ The final PR description must include, at minimum:
 - create, update, and remove current and past Board and Executive Council
   positions, with and without an organization affiliation, and confirm the
   public roster displays the same current and historical state;
-- verify `/api/v1/admin/leadership-positions` and its nested paths return 404,
+- verify `/api/v1/system/leadership-positions`, `/api/v1/admin/leadership-positions`,
+  and their nested paths return 404,
   and the old `/admin/#/leadership` bookmark redirects without making a legacy
   API request;
 - inspect the System Analytics overview with an `analytics:read` staff user and

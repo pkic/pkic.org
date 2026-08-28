@@ -35,7 +35,7 @@ describe("portal System leadership", () => {
           location.origin,
         );
         paths.push(`${url.pathname}${url.search}`);
-        if (url.pathname.includes("/leadership-positions")) {
+        if (url.pathname.includes("/leadership/positions")) {
           const positions =
             url.searchParams.get("body") === "board" && url.searchParams.get("status") === "current"
               ? [
@@ -75,7 +75,7 @@ describe("portal System leadership", () => {
     expect(container.textContent).not.toContain("Add");
     expect(container.textContent).not.toContain("Group leadership");
     expect(paths.some((path) => path.startsWith("/api/v1/groups"))).toBe(false);
-    expect(paths.every((path) => path.startsWith("/api/v1/system/leadership-positions"))).toBe(true);
+    expect(paths.every((path) => path.startsWith("/api/v1/leadership/positions"))).toBe(true);
     expect(paths.some((path) => path.startsWith("/api/v1/admin/"))).toBe(false);
   });
 });

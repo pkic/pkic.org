@@ -141,6 +141,10 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   const cases: [string, () => Promise<Response>][] = [
     ["GET /api/v1/users", () => callApp(anonGet("https://app.test/api/v1/users"))],
     ["GET /api/v1/analytics/summary", () => callApp(anonGet("https://app.test/api/v1/analytics/summary"))],
+    [
+      "GET /api/v1/leadership/positions",
+      () => callApp(anonGet("https://app.test/api/v1/leadership/positions?body=board")),
+    ],
     ["GET /api/v1/donations", () => callApp(anonGet("https://app.test/api/v1/donations"))],
     ["GET /api/v1/audit-log", () => callApp(anonGet("https://app.test/api/v1/audit-log"))],
     ["GET /api/v1/membership/settings", () => callApp(anonGet("https://app.test/api/v1/membership/settings"))],

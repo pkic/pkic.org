@@ -16,7 +16,7 @@ import {
   type LeadershipPositionsListResponse,
 } from "../../../../../shared/schemas/leadership";
 
-const API_BASE = "/api/v1/system/leadership-positions";
+const API_BASE = "/api/v1/leadership/positions";
 const USER_CATALOG_ENDPOINT = "/api/v1/system/access-control/users";
 
 /** ISO date -> "1 Jun 2022" for display (starts_at/ends_at are date-only, no time component). */

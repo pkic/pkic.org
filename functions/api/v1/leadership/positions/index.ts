@@ -1,10 +1,10 @@
 /**
- * GET  /api/v1/system/leadership-positions?body=board|executive_council
- * POST /api/v1/system/leadership-positions
+ * GET  /api/v1/leadership/positions?body=board|executive_council
+ * POST /api/v1/leadership/positions
  *
- * System CRUD for the Board of Directors / Executive Council rosters
- * (consolidated migration 0035) — see functions/_lib/services/leadership.ts for the
- * design rationale (why a dedicated table instead of user_roles). Gated by
+ * Staff CRUD for the Board of Directors / Executive Council rosters
+ * (consolidated migration 0035) — see functions/_lib/services/leadership.ts for
+ * the design rationale (why a dedicated table instead of user_roles). Gated by
  * the same access:grant/access:revoke permissions the existing chair
  * assignment endpoints use, since this is the same kind of designation
  * management.

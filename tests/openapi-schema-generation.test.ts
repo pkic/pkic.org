@@ -66,11 +66,13 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/access-control/roles"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/users"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/contexts"].get).toBeDefined();
-    expect(spec.paths["/api/v1/system/leadership-positions"].get).toBeDefined();
-    expect(spec.paths["/api/v1/system/leadership-positions"].post).toBeDefined();
-    expect(spec.paths["/api/v1/system/leadership-positions/{id}"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/system/leadership-positions/{id}"].delete).toBeDefined();
-    expect(spec.paths["/api/v1/system/leadership-positions/users/{userId}/affiliations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/leadership/positions"].get).toBeDefined();
+    expect(spec.paths["/api/v1/leadership/positions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/leadership/positions/{id}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/leadership/positions/{id}"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/leadership/positions/users/{userId}/affiliations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/analytics/summary"].get).toBeDefined();
     expect(spec.paths["/api/v1/analytics/registrations"].get).toBeDefined();
     expect(spec.paths["/api/v1/analytics/donations"].get).toBeDefined();
