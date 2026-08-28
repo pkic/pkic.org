@@ -1,8 +1,9 @@
 import { all } from "../db/queries";
-import { formatCustomAnswerValue, isCustomAnswerRecord, parseCustomAnswerRecord } from "./custom-answer-display";
-import { getActiveFormForEvent } from "../services/forms";
+import { formatCustomAnswerValue, isCustomAnswerRecord } from "./custom-answer-display";
+import { resolveEventFormResponse } from "../services/forms";
 import type { DatabaseLike } from "../types";
-import type { EventFormResolutionEvent, FormFieldDefinition } from "../services/forms/read";
+import type { EventFormResponseInput } from "../services/forms";
+import type { FormFieldDefinition } from "../services/forms/read";
 
 export interface CustomAnswerRow {
   label: string;
@@ -86,18 +87,15 @@ export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, regi
 }
 
 /**
- * Fetch the active registration form for an event and map the stored
- * custom_answers_json to display rows with human-readable labels.
+ * Resolve the exact response set when available, then map its normalized
+ * answer values to human-readable rows. Current event configuration is used
+ * only for legacy registrations without a stored response-set attribution.
  */
 export async function getCustomAnswerRows(
   db: DatabaseLike,
-  event: EventFormResolutionEvent,
-  customAnswersJson: string | null | undefined,
+  input: Omit<EventFormResponseInput, "source">,
 ): Promise<CustomAnswerRow[]> {
-  if (!customAnswersJson) return [];
-  const form = await getActiveFormForEvent(db, event, "event_registration");
-  if (!form) return [];
-  const parsed = parseCustomAnswerRecord(customAnswersJson);
-  if (!parsed) return [];
-  return buildCustomAnswerRows(parsed, form.fields);
+  const response = await resolveEventFormResponse(db, { ...input, source: "registration" });
+  if (!response?.form) return [];
+  return buildCustomAnswerRows(response.answers, response.form.fields);
 }

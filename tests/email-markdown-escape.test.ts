@@ -124,23 +124,21 @@ describe("untrusted Markdown email text", () => {
   });
 
   it("protects proposal and profile fields in speaker campaign templates", async () => {
-    const data = buildSpeakerTemplateData(
-      {
-        email: "speaker@example.test",
-        first_name: "Speaker",
-        last_name: "Person",
-        organization_name: '<img src="https://attacker.invalid/org.gif">',
-        job_title: "Engineer",
-        speaker_status: "confirmed",
-        proposal_title: "[Review](https://attacker.invalid/title)",
-        proposal_abstract: '<script src="https://attacker.invalid/script.js"></script>',
-        proposal_type: "Talk",
-        details_json: null,
-        proposal_updated_at: null,
-        speaker_confirmed_at: null,
-      },
-      undefined,
-    );
+    const data = buildSpeakerTemplateData({
+      email: "speaker@example.test",
+      first_name: "Speaker",
+      last_name: "Person",
+      organization_name: '<img src="https://attacker.invalid/org.gif">',
+      job_title: "Engineer",
+      speaker_status: "confirmed",
+      proposal_title: "[Review](https://attacker.invalid/title)",
+      proposal_abstract: '<script src="https://attacker.invalid/script.js"></script>',
+      proposal_type: "Talk",
+      details_json: null,
+      proposal_updated_at: null,
+      speaker_confirmed_at: null,
+      formResponse: { answers: null, fields: null },
+    });
     const payload = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
     for (const contentType of ["markdown", "html"] as const) {
       const rendered = await renderEmail(
@@ -172,34 +170,40 @@ describe("untrusted Markdown email text", () => {
             interests: '<script src="https://attacker.invalid/answer.js"></script>',
             registrationUrl: "https://attacker.invalid/shadowed-route",
           }),
-        },
-      ],
-      [
-        {
-          id: "10000000-0000-4000-8000-000000000001",
-          key: "interests",
-          label: "Interests",
-          fieldType: "text",
-          required: false,
-          options: null,
-          optionSource: null,
-          validation: null,
-          sortOrder: 0,
-          updatedAt: "2027-01-01T00:00:00.000Z",
-          archivedAt: null,
-        },
-        {
-          id: "10000000-0000-4000-8000-000000000002",
-          key: "registrationUrl",
-          label: "Registration URL",
-          fieldType: "text",
-          required: false,
-          options: null,
-          optionSource: null,
-          validation: null,
-          sortOrder: 1,
-          updatedAt: "2027-01-01T00:00:00.000Z",
-          archivedAt: null,
+          formResponse: {
+            answers: {
+              interests: '<script src="https://attacker.invalid/answer.js"></script>',
+              registrationUrl: "https://attacker.invalid/shadowed-route",
+            },
+            fields: [
+              {
+                id: "10000000-0000-4000-8000-000000000001",
+                key: "interests",
+                label: "Interests",
+                fieldType: "text",
+                required: false,
+                options: null,
+                optionSource: null,
+                validation: null,
+                sortOrder: 0,
+                updatedAt: "2027-01-01T00:00:00.000Z",
+                archivedAt: null,
+              },
+              {
+                id: "10000000-0000-4000-0000-000000000002",
+                key: "registrationUrl",
+                label: "Registration URL",
+                fieldType: "text",
+                required: false,
+                options: null,
+                optionSource: null,
+                validation: null,
+                sortOrder: 1,
+                updatedAt: "2027-01-01T00:00:00.000Z",
+                archivedAt: null,
+              },
+            ],
+          },
         },
       ],
       { attendanceByRegistration: new Map(), waitlistByRegistration: new Map() },

@@ -4,9 +4,13 @@ import {
   buildRegistrationEmailStatusData,
 } from "../../utils/attendance";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../../utils/registration-email";
-import { parseJsonSafe } from "../../utils/json";
 import type { FormFieldDefinition } from "../forms/read";
-import type { AttendeeCampaignRow, AttendeeDayProjections, CampaignRecipient, SpeakerCampaignRow } from "./types";
+import type {
+  AttendeeDayProjections,
+  CampaignRecipient,
+  ResolvedAttendeeCampaignRow,
+  ResolvedSpeakerCampaignRow,
+} from "./types";
 import { emailPlainText } from "../../email/plain-text";
 
 /**
@@ -45,8 +49,7 @@ function buildSafeCustomAnswerData(
 }
 
 export function buildAttendeeCampaignRecipients(
-  rows: AttendeeCampaignRow[],
-  formFields: FormFieldDefinition[] | undefined,
+  rows: ResolvedAttendeeCampaignRow[],
   projections: AttendeeDayProjections,
 ): CampaignRecipient[] {
   return rows.map((row) => ({
@@ -58,7 +61,6 @@ export function buildAttendeeCampaignRecipients(
     lastName: (row.last_name ?? "").trim(),
     templateData: buildAttendeeTemplateData(
       row,
-      formFields,
       projections.attendanceByRegistration.get(row.registration_id) ?? [],
       projections.waitlistByRegistration.get(row.registration_id) ?? [],
     ),
@@ -66,15 +68,17 @@ export function buildAttendeeCampaignRecipients(
 }
 
 function buildAttendeeTemplateData(
-  row: AttendeeCampaignRow,
-  formFields: FormFieldDefinition[] | undefined,
+  row: ResolvedAttendeeCampaignRow,
   dayAttendanceRaw: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
   dayWaitlist: Array<{ dayDate: string; status: string }>,
 ): Record<string, unknown> {
-  const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null);
+  const customAnswers = row.formResponse.answers;
   const attendanceType = row.attendance_type ?? "";
   const attendanceData = buildAttendanceEmailData(attendanceType, dayAttendanceRaw, dayWaitlist);
-  const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(customAnswers, formFields);
+  const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(
+    customAnswers,
+    row.formResponse.fields ?? undefined,
+  );
   return {
     // Custom field keys are configurable. Put them first so they cannot shadow
     // canonical recipient values used by campaign templates.
@@ -92,12 +96,12 @@ function buildAttendeeTemplateData(
   };
 }
 
-export function buildSpeakerTemplateData(
-  row: SpeakerCampaignRow,
-  formFields: FormFieldDefinition[] | undefined,
-): Record<string, unknown> {
-  const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.details_json, null);
-  const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(customAnswers, formFields);
+export function buildSpeakerTemplateData(row: ResolvedSpeakerCampaignRow): Record<string, unknown> {
+  const customAnswers = row.formResponse.answers;
+  const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(
+    customAnswers,
+    row.formResponse.fields ?? undefined,
+  );
   return {
     // Preserve configurable custom tags without allowing them to replace the
     // canonical speaker fields below.

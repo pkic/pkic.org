@@ -4,6 +4,7 @@ import { adminEventCampaignPreviewSchema } from "../../../../assets/shared/schem
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import type { EventRecord } from "../events";
 import type { ResolvedEmailTemplate } from "../../email/templates";
+import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
 
 export type AdminCampaignInput = z.infer<typeof adminEventCampaignPreviewSchema>;
 
@@ -21,6 +22,12 @@ export interface CampaignRecipient {
   firstName: string;
   lastName: string;
   templateData: Record<string, unknown>;
+}
+
+/** Form values/labels resolved from the recipient's stored response set. */
+export interface CampaignFormResponseData {
+  answers: Record<string, unknown> | null;
+  fields: FormFieldDefinition[] | null;
 }
 
 export interface CampaignAudienceFilter {
@@ -44,7 +51,12 @@ export interface AttendeeCampaignRow {
   status: string;
   attendance_type: string | null;
   custom_answers_json: string | null;
+  formResponse?: CampaignFormResponseData;
 }
+
+export type ResolvedAttendeeCampaignRow = Omit<AttendeeCampaignRow, "formResponse"> & {
+  formResponse: CampaignFormResponseData;
+};
 
 export interface AttendeeDayAttendanceRow {
   registration_id: string;
@@ -88,7 +100,12 @@ export interface SpeakerCampaignRow {
   details_json: string | null;
   proposal_updated_at: string | null;
   speaker_confirmed_at: string | null;
+  formResponse?: CampaignFormResponseData;
 }
+
+export type ResolvedSpeakerCampaignRow = Omit<SpeakerCampaignRow, "formResponse"> & {
+  formResponse: CampaignFormResponseData;
+};
 
 export type CampaignTemplate = Pick<
   ResolvedEmailTemplate,

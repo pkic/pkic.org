@@ -2,7 +2,7 @@ import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { buildSpeakerTemplateData, buildAttendeeCampaignRecipients } from "./template-data";
 import { projectAttendeeDayState } from "./attendance-projection";
-import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
+import { resolveEventFormResponses, type EventFormResponse } from "../forms";
 import type { DatabaseLike } from "../../types";
 import { proposalSpeakerEffectiveProfileExpression } from "../proposal-speakers";
 import type {
@@ -12,6 +12,16 @@ import type {
   CampaignRecipient,
   SpeakerCampaignRow,
 } from "./types";
+
+type AttributedAttendeeCampaignRow = AttendeeCampaignRow & { form_placement_id: string | null };
+type AttributedSpeakerCampaignRow = SpeakerCampaignRow & { proposal_id: string; form_placement_id: string | null };
+
+function campaignFormResponse(response: EventFormResponse | null) {
+  return {
+    answers: response?.answers ?? null,
+    fields: response?.form?.fields ?? null,
+  };
+}
 
 function dayWaitlistFilterSql(scope: "registration" | "day"): string {
   const dayClause = scope === "day" ? " AND w.event_day_id = ed.id" : "";
@@ -55,11 +65,6 @@ async function listAttendeeRecipients(
   filter: CampaignAudienceFilter,
   maxRecipients: number,
 ): Promise<CampaignRecipient[]> {
-  const form = await getActiveFormForEvent(
-    db,
-    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
-    "event_registration",
-  );
   const attendeeStatus = filter.attendeeStatus ?? "registered";
   const dayWaitlistStatus = filter.dayWaitlistStatus ?? "all";
   const fetchLimit = maxRecipients + 1;
@@ -70,12 +75,12 @@ async function listAttendeeRecipients(
   const attendanceFilter = filter.dayDate
     ? "AND (? = 'all' OR rda.attendance_type = ?)"
     : "AND (? = 'all' OR r.attendance_type = ?)";
-  const rows = await all<AttendeeCampaignRow>(
+  const rows = await all<AttributedAttendeeCampaignRow>(
     db,
     `WITH ranked_recipients AS (
            SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
                   u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-                  r.status, r.attendance_type, r.custom_answers_json,
+                  r.status, r.attendance_type, r.custom_answers_json, r.form_placement_id,
                   ROW_NUMBER() OVER (
                     PARTITION BY lower(trim(u.email))
                     ORDER BY datetime(r.created_at) DESC, r.id ASC
@@ -91,7 +96,7 @@ async function listAttendeeRecipients(
              ${dayWaitlistFilterSql(filter.dayDate ? "day" : "registration")}
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
-                job_title, status, attendance_type, custom_answers_json
+                job_title, status, attendance_type, custom_answers_json, form_placement_id
          FROM ranked_recipients
          WHERE recipient_rank = 1
          ORDER BY lower(email) ASC
@@ -109,11 +114,26 @@ async function listAttendeeRecipients(
   );
 
   assertCampaignRecipientLimit(rows, maxRecipients);
-  const projections = await projectAttendeeDayState(
-    db,
-    rows.map((row) => row.registration_id),
+  const [projections, formResponses] = await Promise.all([
+    projectAttendeeDayState(
+      db,
+      rows.map((row) => row.registration_id),
+    ),
+    resolveEventFormResponses(
+      db,
+      rows.map((row) => ({
+        source: "registration" as const,
+        sourceId: row.registration_id,
+        event: { id: event.id, source_mode: event.source_mode ?? null },
+        formPlacementId: row.form_placement_id,
+        answersJson: row.custom_answers_json,
+      })),
+    ),
+  ]);
+  return buildAttendeeCampaignRecipients(
+    rows.map((row) => ({ ...row, formResponse: campaignFormResponse(formResponses.get(row.registration_id) ?? null) })),
+    projections,
   );
-  return buildAttendeeCampaignRecipients(rows, form?.fields, projections);
 }
 
 async function listSpeakerRecipients(
@@ -126,16 +146,12 @@ async function listSpeakerRecipients(
     throw new AppError(400, "CAMPAIGN_DAY_FILTER_UNSUPPORTED", "Day filter is only supported for attendee audience.");
   }
 
-  const form = await getActiveFormForEvent(
-    db,
-    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
-    "proposal_submission",
-  );
   const speakerStatus = filter.speakerStatus ?? "confirmed";
-  const rows = await all<SpeakerCampaignRow>(
+  const rows = await all<AttributedSpeakerCampaignRow>(
     db,
     `WITH ranked_recipients AS (
-       SELECT u.email,
+       SELECT sp.id AS proposal_id, sp.form_placement_id,
+              u.email,
               ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} AS first_name,
               ${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")} AS last_name,
               ${proposalSpeakerEffectiveProfileExpression("u", "ps", "organizationName", "organization_name")} AS organization_name,
@@ -162,7 +178,7 @@ async function listSpeakerRecipients(
          AND (? = 'all' OR ps.status = ?)
          AND u.email IS NOT NULL
      )
-     SELECT email, first_name, last_name, organization_name, job_title,
+     SELECT proposal_id, form_placement_id, email, first_name, last_name, organization_name, job_title,
             speaker_status, proposal_title, proposal_abstract, proposal_type,
             details_json, proposal_updated_at, speaker_confirmed_at
      FROM ranked_recipients
@@ -173,11 +189,25 @@ async function listSpeakerRecipients(
   );
 
   assertCampaignRecipientLimit(rows, maxRecipients);
+  const proposalInputs = [...new Map(rows.map((row) => [row.proposal_id, row])).values()];
+  const formResponses = await resolveEventFormResponses(
+    db,
+    proposalInputs.map((row) => ({
+      source: "proposal" as const,
+      sourceId: row.proposal_id,
+      event: { id: event.id, source_mode: event.source_mode ?? null },
+      formPlacementId: row.form_placement_id,
+      answersJson: row.details_json,
+    })),
+  );
   return rows.map((row) => ({
     email: row.email.trim().toLowerCase(),
     firstName: (row.first_name ?? "").trim(),
     lastName: (row.last_name ?? "").trim(),
-    templateData: buildSpeakerTemplateData(row, form?.fields),
+    templateData: buildSpeakerTemplateData({
+      ...row,
+      formResponse: campaignFormResponse(formResponses.get(row.proposal_id) ?? null),
+    }),
   }));
 }
 

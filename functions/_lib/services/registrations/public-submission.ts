@@ -13,7 +13,6 @@ import { buildRegistrationIcs } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
-import { toEventFormResolutionEvent } from "../forms";
 import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
 import { registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
@@ -134,11 +133,12 @@ export async function submitEventRegistration(
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
-  const customAnswerRows = await getCustomAnswerRows(
-    db,
-    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
-    registration.custom_answers_json,
-  );
+  const customAnswerRows = await getCustomAnswerRows(db, {
+    sourceId: registration.id,
+    event: { id: event.id, source_mode: event.source_mode ?? null },
+    formPlacementId: registration.form_placement_id,
+    answersJson: registration.custom_answers_json,
+  });
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),

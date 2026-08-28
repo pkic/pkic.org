@@ -12,7 +12,6 @@ import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserProfilePatch } from "../users";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
-import { toEventFormResolutionEvent } from "../forms";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 
@@ -87,11 +86,12 @@ async function loadRegistrationEmailContext(
   const [dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText] = await Promise.all([
     overrides.dayAttendance ?? getRegistrationDayAttendance(db, registration.id),
     overrides.dayWaitlist ?? listDayWaitlistForRegistration(db, registration.id),
-    getCustomAnswerRows(
-      db,
-      toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
-      registration.custom_answers_json,
-    ),
+    getCustomAnswerRows(db, {
+      sourceId: registration.id,
+      event: { id: event.id, source_mode: event.source_mode ?? null },
+      formPlacementId: registration.form_placement_id,
+      answersJson: registration.custom_answers_json,
+    }),
     getAcceptedTermsTextForRegistration(db, registration.id),
   ]);
   return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };

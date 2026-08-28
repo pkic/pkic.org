@@ -68,3 +68,11 @@ export {
   prepareReplaceContextFormSubmission,
   prepareUpdateFormSubmission,
 } from "./submission-command";
+
+export {
+  resolveEventFormResponse,
+  resolveEventFormResponses,
+  type EventFormResponse,
+  type EventFormResponseInput,
+  type EventFormResponseSource,
+} from "./response-attribution";

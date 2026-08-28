@@ -9,7 +9,7 @@ import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { getRegistrationDayAttendance, listConfiguredEventDaysWithCounts } from "../event-days";
-import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
+import { resolveEventFormResponse } from "../forms";
 import { getEventById } from "../events";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
@@ -32,6 +32,7 @@ export interface AdminRegistrationDetailRow {
   rsvp_status: string | null;
   rsvp_by_day_json: string | null;
   custom_answers_json: string | null;
+  form_placement_id: string | null;
 }
 
 export async function fetchAdminRegistrationWithDetails(
@@ -42,7 +43,7 @@ export async function fetchAdminRegistrationWithDetails(
   return first<AdminRegistrationDetailRow>(
     db,
     `SELECT r.id, r.event_id, r.user_id, r.status, r.cancellation_reason_code, r.attendance_type, r.source_type,
-            r.custom_answers_json, r.created_at, r.updated_at,
+            r.custom_answers_json, r.form_placement_id, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             ${registrationReferralCodeSql} AS referral_code,
@@ -102,6 +103,10 @@ export async function getRegistrationNormalizedEmail(
 
 export function toAdminRegistrationDetail(
   registration: AdminRegistrationDetailRow,
+  customAnswers: Record<string, unknown> | null = parseJsonSafe<Record<string, unknown> | null>(
+    registration.custom_answers_json,
+    null,
+  ),
 ): EventRegistrationDetailResponse["registration"] {
   return {
     id: registration.id,
@@ -121,7 +126,7 @@ export function toAdminRegistrationDetail(
       registration.rsvp_by_day_json,
       [],
     ),
-    customAnswers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
+    customAnswers,
   };
 }
 
@@ -138,22 +143,24 @@ export async function getAdminRegistrationDetail(
     listDayWaitlistForRegistration(db, registration.id),
   ]);
   const event = await getEventById(db, eventId);
-  const registrationForm = await getActiveFormForEvent(
-    db,
-    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
-    "event_registration",
-  );
+  const formResponse = await resolveEventFormResponse(db, {
+    source: "registration",
+    sourceId: registration.id,
+    event: { id: event.id, source_mode: event.source_mode ?? null },
+    formPlacementId: registration.form_placement_id,
+    answersJson: registration.custom_answers_json,
+  });
 
   return eventRegistrationDetailResponseSchema.parse({
-    registration: toAdminRegistrationDetail(registration),
+    registration: toAdminRegistrationDetail(registration, formResponse?.answers ?? null),
     form:
-      registrationForm == null
+      formResponse?.form == null
         ? null
         : {
-            id: registrationForm.id,
-            title: registrationForm.title,
-            description: registrationForm.description,
-            fields: registrationForm.fields,
+            id: formResponse.form.id,
+            title: formResponse.form.title,
+            description: formResponse.form.description,
+            fields: formResponse.form.fields,
           },
     dayAttendance,
     dayWaitlist,
