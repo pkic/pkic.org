@@ -904,6 +904,10 @@ Status: In progress
       and managers can use the same group-scoped proposal list with only the
       actions advertised by the backend. The duplicate admin Votes navigation
       and components are removed, while the old URL redirects to the portal.
+      The unused global `/api/v1/admin/vote-proposals` adapter is also removed;
+      its admin-only route contracts and unscoped read model no longer remain as
+      a second implementation. The selected-group and member portal routes now
+      compose the neutral canonical proposal list and rejection schemas.
       Portal membership and leadership selectors no longer cross the global
       admin-user boundary: one group-scoped catalog returns only active users'
       selection fields after required server-side search, enforces an eight-row
@@ -1460,14 +1464,17 @@ Status: In progress
       45-test inventory is therefore reconciled across the uninterrupted
       44-test run and the two affected focused reruns; no product assertion
       remains failing.
-- [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
+- [x] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
-      Current evidence: the identity phase has real-browser desktop rendering,
-      390x844 rendering, accessible drawer and keyboard behavior, error-free
-      staff/member/dual-capacity login and logout, cross-identity rejection,
-      and live-capacity-loss coverage. Empty, loading, pagination, and the
-      remaining rendering-state matrix are still pending; the role/persona
-      matrix is covered by the real Worker/D1 evidence above.
+      Evidence: the identity phase covers real-browser desktop and 390x844
+      rendering, accessible drawer and keyboard behavior, staff/member/dual-
+      capacity login and logout, cross-identity rejection, and live-capacity-
+      loss states. A real portal sign-in plus an isolated audit-log transport
+      fixture now exercises the shared server collection through a delayed
+      loading state, exact empty state with no pager, first and second bounded
+      pages with server offsets and content replacement, and an API failure
+      rendered as an assertive error alert. The role/persona matrix is covered
+      by the real Worker/D1 evidence above.
 - [ ] Run a final security diff review and resolve validated findings.
       Evidence so far: Codex Security scan
       `7f6a9db1-1349-49f6-8ac0-cd9437915ee8` reviewed the complete delegated
