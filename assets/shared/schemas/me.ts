@@ -23,6 +23,7 @@ export const myOrganizationRepresentativeSchema = z.object({
   userId: databaseIdSchema,
   name: z.string().nullable(),
   email: z.string(),
+  showOnOrgProfile: z.boolean(),
   isPrimaryContact: z.boolean(),
   isSecondaryContact: z.boolean(),
 });

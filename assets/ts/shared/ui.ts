@@ -14,3 +14,12 @@ export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
   return new Date(value).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" });
 }
+
+/** Escape a value before inserting it into an intentionally generated HTML or SVG string. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

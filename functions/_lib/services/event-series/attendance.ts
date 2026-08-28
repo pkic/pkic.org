@@ -11,7 +11,7 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import {
   commitEventResourceManagementBatch,
   queryEventResourceManagementPage,
@@ -168,7 +168,7 @@ export async function verifyOccurrenceAttendance(
       ),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "MEETING_JOIN_CONFIRMATION_CHANGED",

@@ -20,7 +20,7 @@ import { runReminderCycle } from "../functions/_lib/services/reminders";
 import { runInviteReminders } from "../functions/_lib/services/reminders/invite-reminders";
 import type { Env } from "../functions/_lib/types";
 import { listDueWork } from "../functions/_lib/services/due-work-read-model";
-import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";
+import { dueWorkListQuerySchema as adminDueWorkListQuerySchema } from "../assets/shared/schemas/operations";
 import { renderEmail } from "../functions/_lib/email/render";
 
 const db = (env as unknown as Env).DB;

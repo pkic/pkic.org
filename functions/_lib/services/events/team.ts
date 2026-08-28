@@ -19,7 +19,8 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { normalizeEmail } from "../../validation";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
-import { prepareAuditLog } from "../audit";
+import { prepareAuditLogAfterOneChange } from "../audit";
+import { commitAccessControlMutation } from "../access-control/authorization";
 import { getEventBySlug } from "../events";
 import { findUserByEmail } from "../users";
 
@@ -120,35 +121,40 @@ export async function grantEventTeamRole(
   const now = nowIso();
   const expiresAt = input.expiresAt ?? null;
   try {
-    await db.batch([
-      ...(user
-        ? []
-        : [
-            db
-              .prepare(
-                `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+    await commitAccessControlMutation(
+      db,
+      actor,
+      [{ permission: "events:manage", context: { type: "event", id: event.id } }],
+      [
+        ...(user
+          ? []
+          : [
+              db
+                .prepare(
+                  `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
                  VALUES (?, ?, ?, 'user', 1, ?, ?)`,
-              )
-              .bind(userId, normalizedEmail, normalizedEmail, now, now),
-          ]),
-      db
-        .prepare(
-          `INSERT INTO user_roles
+                )
+                .bind(userId, normalizedEmail, normalizedEmail, now, now),
+            ]),
+        db
+          .prepare(
+            `INSERT INTO user_roles
              (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, created_at)
            VALUES (?, ?, ?, 'event', ?, ?, ?, ?)`,
-        )
-        .bind(id, userId, roleId, event.id, adminDatabaseUserId(actor), expiresAt, now),
-      prepareAuditLog(
-        db,
-        "admin",
-        actor.id,
-        "event_permission_granted",
-        "event",
-        event.id,
-        { email: normalizedEmail, permission: input.permission, expiresAt },
-        now,
-      ),
-    ]);
+          )
+          .bind(id, userId, roleId, event.id, adminDatabaseUserId(actor), expiresAt, now),
+        prepareAuditLogAfterOneChange(
+          db,
+          "admin",
+          actor.id,
+          "event_permission_granted",
+          "event",
+          event.id,
+          { email: normalizedEmail, permission: input.permission, expiresAt },
+          now,
+        ),
+      ],
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
       if (error.message.includes("users.")) {
@@ -179,11 +185,16 @@ export async function revokeEventTeamRole(
   );
   if (!row) throw new AppError(404, "NOT_FOUND", "Permission grant not found");
   const now = nowIso();
-  await db.batch([
-    db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
-    prepareAuditLog(db, "admin", actor.id, "event_permission_revoked", "event", event.id, {
-      email: row.user_email,
-      role_id: row.role_id,
-    }),
-  ]);
+  await commitAccessControlMutation(
+    db,
+    actor,
+    [{ permission: "events:manage", context: { type: "event", id: event.id } }],
+    [
+      db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
+      prepareAuditLogAfterOneChange(db, "admin", actor.id, "event_permission_revoked", "event", event.id, {
+        email: row.user_email,
+        role_id: row.role_id,
+      }),
+    ],
+  );
 }

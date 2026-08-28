@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { ActivityChartCard } from "../../assets/ts/admin/components/ActivityChartCard";
+import { ActivityChartCard } from "../../assets/ts/components/analytics/ActivityChartCard";
 import { AuditLogTable } from "../../assets/ts/admin/components/AuditLogTable";
 import { FilterSelect } from "../../assets/ts/admin/components/FilterSelect";
 import { StatusTabs } from "../../assets/ts/admin/components/StatusTabs";
@@ -13,7 +13,7 @@ import { FormActions } from "../../assets/ts/admin/components/FormActions";
 import { RegistrationActionCard } from "../../assets/ts/admin/sections/events/detail/registration-detail/RegistrationActionCard";
 import { AdminSettingsEditor } from "../../assets/ts/admin/components/AdminSettingsEditor";
 import { Tabs } from "../../assets/ts/components/Tabs";
-import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/admin/promoter-ranking";
+import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
 
 const mounted: HTMLElement[] = [];

@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { booleanQueryFlagSchema, normalizedEmailSchema, successResponseSchema, trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const ORGANIZATION_REPRESENTATION_SOURCES = [
@@ -68,10 +69,27 @@ export const organizationRepresentativeSchema = z.object({
 });
 export type OrganizationRepresentative = z.infer<typeof organizationRepresentativeSchema>;
 
-export const representativeAssociateSchema = z.object({
-  userId: databaseIdSchema,
-  showOnOrganizationProfile: z.boolean().default(true),
-});
+/**
+ * Associate an existing user, or let an attributable membership manager
+ * provision a representative by email. The email variant is deliberately
+ * staff-only at the route boundary; organization contacts retain only the
+ * existing-user association path.
+ */
+export const representativeAssociateSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("existing_user"),
+    userId: databaseIdSchema,
+    showOnOrganizationProfile: z.boolean().default(true),
+  }),
+  z.object({
+    kind: z.literal("email"),
+    email: normalizedEmailSchema,
+    name: trimmedString(1, 200),
+    jobTitle: trimmedString(0, 200).optional(),
+    links: linksSchema.optional(),
+    showOnOrganizationProfile: z.boolean().default(true),
+  }),
+]);
 export const representativeProfileUpdateSchema = z.object({ showOnOrganizationProfile: z.boolean() });
 export const representativeRemoveSchema = z.object({ reason: trimmedString(1, 500).optional() });
 export const representativeRestoreSchema = z.object({ reason: trimmedString(1, 500).optional() });

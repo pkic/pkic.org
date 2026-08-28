@@ -206,7 +206,7 @@ export async function getCandidates(db: DatabaseLike, voteId: string): Promise<C
   return rows.map(toCandidateSummary);
 }
 
-/** Bulk-loads candidates for several votes in one query instead of one query per vote — used by listVotesForAdmin. */
+/** Bulk-loads candidates for several vote read models without an N+1 query. */
 export async function getCandidatesForVotes(
   db: DatabaseLike,
   voteIds: string[],

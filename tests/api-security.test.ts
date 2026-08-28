@@ -27,11 +27,6 @@ import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
-// ── Admin endpoint handlers ───────────────────────────────────────────────────
-import { onRequest as internalEmailRetryRequest } from "../functions/api/v1/internal/email/retry";
-import { onRequest as internalJobsRequest } from "../functions/api/v1/internal/jobs/run";
-import { onRequest as internalEmailResetRequest } from "../functions/api/v1/internal/email/reset-failed";
-
 // ── Public endpoint handlers ──────────────────────────────────────────────────
 import { onRequestGet as eventTermsGet } from "../functions/api/v1/events/[eventSlug]/terms";
 import {
@@ -55,14 +50,26 @@ function anonPost(url: string): Request {
   return new Request(url, { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
 }
 
+function anonPostBody(url: string, body: unknown): Request {
+  return new Request(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
+}
+
 /** Makes a GET request with a Bearer token. */
 function bearerGet(url: string, token: string): Request {
   return new Request(url, { headers: { authorization: `Bearer ${token}` } });
 }
 
 /** Makes a PATCH request with no Authorization header. */
-function anonPatch(url: string): Request {
-  return new Request(url, { method: "PATCH", body: "{}", headers: { "content-type": "application/json" } });
+function anonPatch(url: string, body: unknown = {}): Request {
+  return new Request(url, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
 }
 
 /** Makes a DELETE request with no Authorization header. */
@@ -132,11 +139,14 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
 
   // Each entry: [description, thunk that invokes the real router with no auth]
   const cases: [string, () => Promise<Response>][] = [
-    ["GET /api/v1/admin/users", () => callApp(anonGet("https://app.test/api/v1/admin/users"))],
-    ["GET /api/v1/admin/stats", () => callApp(anonGet("https://app.test/api/v1/admin/stats"))],
-    ["GET /api/v1/admin/donations", () => callApp(anonGet("https://app.test/api/v1/admin/donations"))],
+    ["GET /api/v1/users", () => callApp(anonGet("https://app.test/api/v1/users"))],
+    [
+      "GET /api/v1/system/analytics/summary",
+      () => callApp(anonGet("https://app.test/api/v1/system/analytics/summary")),
+    ],
+    ["GET /api/v1/donations", () => callApp(anonGet("https://app.test/api/v1/donations"))],
     ["GET /api/v1/system/audit-log", () => callApp(anonGet("https://app.test/api/v1/system/audit-log"))],
-    ["GET /api/v1/admin/email-templates", () => callApp(anonGet("https://app.test/api/v1/admin/email-templates"))],
+    ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
     [
       "GET /api/v1/admin/events/:slug/registrations",
@@ -146,29 +156,40 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/events/:slug/forms",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/forms`)),
     ],
-    ["GET /api/v1/admin/users/:id", () => callApp(anonGet(`https://app.test/api/v1/admin/users/${userId}`))],
-    ["POST /api/v1/internal/email/retry", () => callApp(anonPost("https://app.test/api/v1/internal/email/retry"))],
-    ["POST /api/v1/internal/jobs/run", () => callApp(anonPost("https://app.test/api/v1/internal/jobs/run"))],
-    ["POST /api/v1/internal/reminders/run", () => callApp(anonPost("https://app.test/api/v1/internal/reminders/run"))],
-    ["POST /api/v1/internal/retention/run", () => callApp(anonPost("https://app.test/api/v1/internal/retention/run"))],
+    ["GET /api/v1/users/:id", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}`))],
+    ["POST /api/v1/email/outbox/process", () => callApp(anonPost("https://app.test/api/v1/email/outbox/process"))],
     [
-      "POST /api/v1/internal/email/reset-failed",
-      () => callApp(anonPost("https://app.test/api/v1/internal/email/reset-failed")),
+      "POST /api/v1/operations/reminders/run",
+      () => callApp(anonPost("https://app.test/api/v1/operations/reminders/run")),
+    ],
+    [
+      "POST /api/v1/operations/retention/run",
+      () => callApp(anonPost("https://app.test/api/v1/operations/retention/run")),
+    ],
+    [
+      "POST /api/v1/email/outbox/reset-failed",
+      () => callApp(anonPostBody("https://app.test/api/v1/email/outbox/reset-failed", { ids: [crypto.randomUUID()] })),
     ],
     // ── Additional admin endpoints ──────────────────────────────────────────
     ["POST /api/v1/admin/events", () => callApp(anonPost("https://app.test/api/v1/admin/events"))],
-    ["POST /api/v1/admin/donations/sync", () => callApp(anonPost("https://app.test/api/v1/admin/donations/sync"))],
+    ["POST /api/v1/donations/sync", () => callApp(anonPost("https://app.test/api/v1/donations/sync"))],
     [
-      "POST /api/v1/admin/email-templates/preview",
-      () => callApp(anonPost("https://app.test/api/v1/admin/email-templates/preview")),
+      "POST /api/v1/system/email-templates/preview",
+      () => callApp(anonPostBody("https://app.test/api/v1/system/email-templates/preview", { content: "preview" })),
     ],
     [
-      "POST /api/v1/admin/email-templates/:key/activate",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/email-templates/${templateKey}/activate`)),
+      "POST /api/v1/system/email-templates/:key/activate",
+      () =>
+        callApp(anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/activate`, { version: 1 })),
     ],
     [
-      "POST /api/v1/admin/email-templates/:key/versions",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/email-templates/${templateKey}/versions`)),
+      "POST /api/v1/system/email-templates/:key/versions",
+      () =>
+        callApp(
+          anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/versions`, {
+            content: "version",
+          }),
+        ),
     ],
     ["GET /api/v1/admin/forms/:formKey", () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}`))],
     ["PATCH /api/v1/admin/forms/:formKey", () => callApp(anonPatch(`https://app.test/api/v1/admin/forms/${formKey}`))],
@@ -181,25 +202,22 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}/submissions`)),
     ],
     [
-      "PATCH /api/v1/admin/users/:userId (global role)",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/users/${userId}`)),
+      "PATCH /api/v1/users/:userId (global role)",
+      () => callApp(anonPatch(`https://app.test/api/v1/users/${userId}`, { role: "user" })),
     ],
     [
-      "PATCH /api/v1/admin/users/:userId (detail+role)",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/users/${userId}`)),
+      "PATCH /api/v1/users/:userId (detail+role)",
+      () => callApp(anonPatch(`https://app.test/api/v1/users/${userId}`, { firstName: "Unauthenticated" })),
     ],
     [
-      "POST /api/v1/admin/users/:userId/anonymize",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/users/${userId}/anonymize`)),
+      "POST /api/v1/users/:userId/anonymize",
+      () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/anonymize`)),
     ],
     [
-      "POST /api/v1/admin/users/:userId/gravatar",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/users/${userId}/gravatar`)),
+      "POST /api/v1/users/:userId/gravatar",
+      () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/gravatar`)),
     ],
-    [
-      "* /api/v1/admin/users/:userId/headshot",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/users/${userId}/headshot`)),
-    ],
+    ["* /api/v1/users/:userId/headshot", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/headshot`))],
     [
       "POST /api/v1/admin/events/sync-from-hugo",
       () => callApp(anonPost("https://app.test/api/v1/admin/events/sync-from-hugo")),
@@ -326,27 +344,42 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/proposals/:proposalId/speakers",
       () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
     ],
-    // ── access control endpoints ────────────────────────────
-    ["GET /api/v1/admin/access-grants", () => callApp(anonGet("https://app.test/api/v1/admin/access-grants"))],
-    ["POST /api/v1/admin/access-grants", () => callApp(anonPost("https://app.test/api/v1/admin/access-grants"))],
+    // ── system access control endpoints ─────────────────────
     [
-      "DELETE /api/v1/admin/access-grants/:id",
-      () => callApp(anonDelete(`https://app.test/api/v1/admin/access-grants/${grantId}`)),
-    ],
-    ["GET /api/v1/admin/roles", () => callApp(anonGet("https://app.test/api/v1/admin/roles"))],
-    ["POST /api/v1/admin/roles", () => callApp(anonPost("https://app.test/api/v1/admin/roles"))],
-    ["DELETE /api/v1/admin/roles/:id", () => callApp(anonDelete(`https://app.test/api/v1/admin/roles/${roleId}`))],
-    [
-      "GET /api/v1/admin/users/:userId/roles",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/users/${userId}/roles`)),
+      "GET /api/v1/system/access-control/grants",
+      () => callApp(anonGet("https://app.test/api/v1/system/access-control/grants")),
     ],
     [
-      "POST /api/v1/admin/users/:userId/roles",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/users/${userId}/roles`)),
+      "POST /api/v1/system/access-control/grants",
+      () => callApp(anonPost("https://app.test/api/v1/system/access-control/grants")),
     ],
     [
-      "DELETE /api/v1/admin/users/:userId/roles/:userRoleId",
-      () => callApp(anonDelete(`https://app.test/api/v1/admin/users/${userId}/roles/${userRoleId}`)),
+      "DELETE /api/v1/system/access-control/grants/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/grants/${grantId}`)),
+    ],
+    [
+      "GET /api/v1/system/access-control/roles",
+      () => callApp(anonGet("https://app.test/api/v1/system/access-control/roles")),
+    ],
+    [
+      "POST /api/v1/system/access-control/roles",
+      () => callApp(anonPost("https://app.test/api/v1/system/access-control/roles")),
+    ],
+    [
+      "DELETE /api/v1/system/access-control/roles/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/roles/${roleId}`)),
+    ],
+    [
+      "GET /api/v1/system/access-control/users/:userId/roles",
+      () => callApp(anonGet(`https://app.test/api/v1/system/access-control/users/${userId}/roles`)),
+    ],
+    [
+      "POST /api/v1/system/access-control/users/:userId/roles",
+      () => callApp(anonPost(`https://app.test/api/v1/system/access-control/users/${userId}/roles`)),
+    ],
+    [
+      "DELETE /api/v1/system/access-control/users/:userId/roles/:userRoleId",
+      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/users/${userId}/roles/${userRoleId}`)),
     ],
     // ── passkey endpoints ───────────────────────────────────
     // authenticate/begin and authenticate/complete are deliberately excluded
@@ -379,7 +412,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Session-token validation — all rejection modes + API key acceptance
-// (tested via GET /api/v1/admin/users as the representative endpoint)
+// (tested via GET /api/v1/users as the representative endpoint)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("session-token validation", () => {
@@ -396,7 +429,7 @@ describe("session-token validation", () => {
   });
 
   function callUsers(token: string): Promise<Response> {
-    return callApp(bearerGet("https://app.test/api/v1/admin/users", token));
+    return callApp(bearerGet("https://app.test/api/v1/users", token));
   }
 
   it("rejects a garbage / non-existent token → AUTH_INVALID", async () => {
@@ -459,9 +492,10 @@ describe("session-token validation", () => {
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_INVALID");
   });
 
-  it("accepts a valid ADMIN_API_KEY as a bearer token", async () => {
+  it("rejects a shared ADMIN_API_KEY where a user-backed identity is required", async () => {
     const response = await callUsers(env.ADMIN_API_KEY ?? "test-admin-key");
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
   });
 
   it("accepts a valid active admin session token", async () => {
@@ -519,21 +553,20 @@ describe("HTTP method enforcement", () => {
     adminId = row.id;
   });
 
-  it("rejects POST to GET-only /api/v1/admin/users", async () => {
+  it("rejects POST to GET-only /api/v1/users", async () => {
     // P6M-P2-08: this route moved from a hand-rolled onRequest (which
     // explicitly 405'd unsupported methods) onto chanfana's openApiRoute —
-    // registered as a GET-only OpenAPIRoute (see admin/router.ts's
-    // `openapi.get("/users", UsersList)`), so there is no exported
+    // registered as a GET-only OpenAPIRoute, so there is no exported
     // onRequest to call directly any more; go through the full router,
     // authenticated, instead. Hono has no handler for POST on this path, so
     // the unmatched method falls through to its default not-found response
-    // rather than an explicit 405 — same as every other chanfana-only admin
-    // list route (e.g. POST /api/v1/admin/organizations), none of which get
+    // rather than an explicit 405 — same as every other Chanfana-only
+    // list route, none of which get
     // a 405 here either. The security-relevant invariant is just that POST
     // is not silently accepted as if it were GET.
     const token = await createAdminSession(env.DB, adminId, "method-enforcement-token");
     const response = await callApp(
-      new Request("https://app.test/api/v1/admin/users", {
+      new Request("https://app.test/api/v1/users", {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       }),
@@ -541,10 +574,10 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects POST to GET-only /api/v1/admin/stats", async () => {
+  it("rejects POST to GET-only /api/v1/system/analytics/summary", async () => {
     const token = await createAdminSession(env.DB, adminId, "stats-method-enforcement-token");
     const response = await callApp(
-      new Request("https://app.test/api/v1/admin/stats", {
+      new Request("https://app.test/api/v1/system/analytics/summary", {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       }),
@@ -552,25 +585,17 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects GET to POST-only /api/v1/internal/email/retry → 405", async () => {
-    const response = await internalEmailRetryRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/internal/email/retry", { method: "GET" }), {}),
+  it.each([
+    "/api/v1/email/outbox/process",
+    "/api/v1/email/outbox/reset-failed",
+    "/api/v1/operations/reminders/run",
+    "/api/v1/operations/retention/run",
+  ])("does not accept GET on POST-only %s", async (path) => {
+    const token = await createAdminSession(env.DB, adminId, `method-${path}`);
+    const response = await callApp(
+      new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${token}` } }),
     );
-    expect(response.status).toBe(405);
-  });
-
-  it("rejects GET to POST-only /api/v1/internal/jobs/run → 405", async () => {
-    const response = await internalJobsRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/internal/jobs/run", { method: "GET" }), {}),
-    );
-    expect(response.status).toBe(405);
-  });
-
-  it("rejects GET to POST-only /api/v1/internal/email/reset-failed → 405", async () => {
-    const response = await internalEmailResetRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/internal/email/reset-failed", { method: "GET" }), {}),
-    );
-    expect(response.status).toBe(405);
+    expect(response.status).not.toBe(200);
   });
 
   it("rejects POST to GET-only /api/v1/events/:slug/forms → 405", async () => {

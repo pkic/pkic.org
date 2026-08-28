@@ -33,7 +33,6 @@ export {
   getProposalGroupForPermissionCheck,
   getVoteProposalDetail,
   getVoteProposalDetailForMember,
-  listAllVoteProposalsForAdmin,
   listVoteProposals,
 } from "./proposal-read";
 export type { ProposalSummary, VoteProposalListParams } from "./proposal-read";

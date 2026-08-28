@@ -2,7 +2,7 @@
  * Self-service coworker enrollment (member portal).
  *
  * Deliberately self-contained rather than reusing
- * `admin-organizations.ts`'s representative logic — the caller-eligibility
+ * the organization-management representative logic — the caller-eligibility
  * check here is the self-service rule: only the org's own primary or
  * secondary contact may enroll a coworker or manage contact
  * designations, never an arbitrary representative.
@@ -114,7 +114,7 @@ export async function addCoworker(
  * Primary contact nominates (or withdraws a nomination for) a secondary
  * contact. Held in `organization_secondary_contact_nominations` (one
  * pending row per organization) until a staff admin confirms it via
- * `POST /api/v1/admin/organizations/:id/confirm-secondary-contact` — the
+ * `POST /api/v1/organizations/:organizationId/confirm-secondary-contact` — the
  * primary contact cannot promote someone directly.
  */
 export async function nominateSecondaryContact(

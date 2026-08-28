@@ -1,5 +1,5 @@
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { queryPage } from "../../db/pagination";
+import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
@@ -13,6 +13,7 @@ import {
   MERGED_SUBMISSION_COLUMNS,
   resolveFormSubmissionPopulation,
   selectFromSubmissionPopulation,
+  type FormSubmissionPopulation,
   type MergedSubmissionRow,
 } from "./population-query";
 
@@ -73,11 +74,11 @@ async function attachSubmissionAnswers(
   }));
 }
 
-export async function listFormSubmissions(
-  db: DatabaseLike,
-  params: ListFormSubmissionsParams,
-): Promise<ListFormSubmissionsResult> {
-  const population = await resolveFormSubmissionPopulation(db, params);
+/** Build the canonical merged submission page/count pair for runtime and D1 plan regressions. */
+export function buildFormSubmissionsPageQuery(
+  population: FormSubmissionPopulation,
+  params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset">,
+): OffsetPageQuery {
   const orderBy = resolveOrderBy(
     params.sort,
     FORM_SUBMISSIONS_SORT_COLUMNS,
@@ -85,12 +86,20 @@ export async function listFormSubmissions(
     "source ASC, source_id ASC",
   );
   const pageQuery = selectFromSubmissionPopulation(population, `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged`);
-  const page = await queryPage<MergedSubmissionRow>(db, {
+  return {
     ...pageQuery,
     orderBy,
     limit: params.limit,
     offset: params.offset,
-  });
+  };
+}
+
+export async function listFormSubmissions(
+  db: DatabaseLike,
+  params: ListFormSubmissionsParams,
+): Promise<ListFormSubmissionsResult> {
+  const population = await resolveFormSubmissionPopulation(db, params);
+  const page = await queryPage<MergedSubmissionRow>(db, buildFormSubmissionsPageQuery(population, params));
   const submissions = page.rows.length
     ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => adminFormSubmissionSchema.parse(submission))
     : [];

@@ -4,7 +4,7 @@ import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import { requireAdminDatabaseUserId } from "../auth/admin-identity";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import type {
   PresentationVersion,
   PresentationVersionWithStorageKey,
@@ -437,7 +437,7 @@ export async function deletePresentationVersion(
         .bind(proposalId, version.isCurrent ? 1 : 0),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       const current = await getPresentationVersion(db, versionId);
       if (current.latestReview?.status === "approved") {
         throw new AppError(409, "CANNOT_DELETE_APPROVED", "Cannot delete the currently approved presentation version");

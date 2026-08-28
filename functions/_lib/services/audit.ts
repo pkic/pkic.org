@@ -353,11 +353,6 @@ export function isAuditChangeGuardFailure(error: unknown): boolean {
   return error instanceof Error && error.message.includes(AUDIT_CHANGE_GUARD_ERROR);
 }
 
-/** Backward-compatible classifier name for existing one-row callers. */
-export function isAuditOneChangeGuardFailure(error: unknown): boolean {
-  return isAuditChangeGuardFailure(error);
-}
-
 /**
  * Builds an audit INSERT guarded by a static caller-owned EXISTS predicate.
  * This lets compare-and-set command batches avoid recording a losing write.

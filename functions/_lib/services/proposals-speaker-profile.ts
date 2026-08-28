@@ -1,7 +1,7 @@
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { isConsentAcceptanceContextConflict, prepareConsentStatements, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
@@ -155,7 +155,7 @@ export async function confirmSpeakerParticipation(
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (
-      isAuditOneChangeGuardFailure(error) ||
+      isAuditChangeGuardFailure(error) ||
       isEventParticipantSourceConflict(error) ||
       isProposalSpeakerRosterConflict(error) ||
       isConsentAcceptanceContextConflict(error)
@@ -248,7 +248,7 @@ export async function declineSpeakerParticipation(
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
-    if (!isAuditOneChangeGuardFailure(error) && !isEventParticipantSourceConflict(error)) throw error;
+    if (!isAuditChangeGuardFailure(error) && !isEventParticipantSourceConflict(error)) throw error;
 
     const currentCount = await first<{ total: number }>(
       db,
@@ -300,7 +300,7 @@ export async function updateSpeakerProfile(
   try {
     await db.batch(statements);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "PROPOSAL_SPEAKER_CONFLICT",

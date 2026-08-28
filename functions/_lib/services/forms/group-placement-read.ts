@@ -6,7 +6,7 @@ import {
   type GroupFormsListQuery,
 } from "../../../../assets/shared/schemas/group-forms";
 import type { FormGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
-import { queryPage } from "../../db/pagination";
+import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -16,6 +16,7 @@ import {
   buildLiveAccessibleGroupResourceIdsCte,
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
+  guardGroupResourceViewerDatabase,
   isResourceGrantCapability,
   liveGroupResourceContextAccess,
   type GroupResourceViewer,
@@ -110,6 +111,16 @@ export async function listGroupFormPlacements(
   groupId: string,
   query: GroupFormsListQuery,
 ): Promise<{ forms: GroupFormPlacementSummary[]; total: number }> {
+  const page = await queryPage<GroupFormPlacementRow>(db, buildGroupFormPlacementsPageQuery(viewer, groupId, query));
+  return { forms: page.rows.map((row) => mapGroupFormPlacement(row, groupId)), total: page.total };
+}
+
+/** Production page/count query shared by the route and D1 plan regressions. */
+export function buildGroupFormPlacementsPageQuery(
+  viewer: GroupFormViewer,
+  groupId: string,
+  query: GroupFormsListQuery,
+): OffsetPageQuery {
   const accessiblePlacements = buildLiveAccessibleGroupResourceIdsCte(
     "formPlacement",
     groupId,
@@ -157,7 +168,7 @@ export async function listGroupFormPlacements(
       ON grant_row.placement_id = placement.id AND grant_row.group_id = ?
     WHERE ${conditions.join(" AND ")}
     GROUP BY placement.id`;
-  const page = await queryPage<GroupFormPlacementRow>(db, {
+  return {
     sql,
     bindings,
     orderBy: resolveMappedOrderBy(
@@ -174,8 +185,7 @@ export async function listGroupFormPlacements(
     ),
     limit: query.limit,
     offset: query.offset,
-  });
-  return { forms: page.rows.map((row) => mapGroupFormPlacement(row, groupId)), total: page.total };
+  };
 }
 
 export async function getGroupFormDefinition(
@@ -206,7 +216,23 @@ export async function getGroupFormDefinition(
   );
   if (!row) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
   const summary = mapGroupFormPlacement(row, groupId);
-  const definition = await getFormDefinitionByPlacement(db, placementId);
+  let definition: Awaited<ReturnType<typeof getFormDefinitionByPlacement>>;
+  try {
+    const guardedDb = guardGroupResourceViewerDatabase(
+      db,
+      viewer,
+      groupId,
+      "formPlacement",
+      placementId,
+      "view_definition",
+    );
+    definition = await getFormDefinitionByPlacement(guardedDb, placementId);
+  } catch (error) {
+    if (error instanceof AppError && error.code === "RESOURCE_CAPABILITY_REQUIRED") {
+      throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
+    }
+    throw error;
+  }
   if (!definition) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
   return groupFormDefinitionResponseSchema.parse({ ...summary, fields: definition.fields });
 }

@@ -2,7 +2,7 @@ import { AppError } from "../../errors";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import type { D1StatementResult, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { getGroup } from "../groups";
 import { prepareGroupManagementAuthorizationGuard } from "../groups/governance";
 import { getResourceGrantDefinition, isResourceGrantCapability, type ResourceGrantKind } from "./definitions";
@@ -128,7 +128,7 @@ export async function revokeResourceGroupGrant<K extends ResourceGrantKind>(
       ...reconciliation,
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(404, "RESOURCE_GRANT_NOT_FOUND", "Resource grant not found");
     }
     throw error;

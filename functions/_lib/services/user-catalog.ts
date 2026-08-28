@@ -41,6 +41,20 @@ export function buildUserCatalogPageQuery(query: UserCatalogListQuery): OffsetPa
   };
 }
 
+export function serializeUserCatalogPage(query: UserCatalogListQuery, rows: UserCatalogRow[], total: number) {
+  return userCatalogListResponseSchema.parse({
+    users: rows,
+    page: buildPageInfo(query.limit, query.offset, total, rows.length),
+  });
+}
+
+/** Data-minimized active-user catalog for global System administration. */
+export async function listUserCatalog(db: DatabaseLike, query: UserCatalogListQuery) {
+  const [pageResult, countResult] = await db.batch(buildOffsetPageStatements(db, buildUserCatalogPageQuery(query)));
+  const { rows, total } = decodeOffsetPageResults<UserCatalogRow>(pageResult, countResult);
+  return serializeUserCatalogPage(query, rows, total);
+}
+
 export async function listGroupUserCatalog(
   db: DatabaseLike,
   actor: AuthAdmin,
@@ -63,8 +77,5 @@ export async function listGroupUserCatalog(
     throw error;
   }
   const { rows, total } = decodeOffsetPageResults<UserCatalogRow>(results[1], results[2]);
-  return userCatalogListResponseSchema.parse({
-    users: rows,
-    page: buildPageInfo(query.limit, query.offset, total, rows.length),
-  });
+  return serializeUserCatalogPage(query, rows, total);
 }

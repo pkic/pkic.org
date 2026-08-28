@@ -7,15 +7,23 @@ import {
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { getFormSubmissionStats, listFormSubmissions } from "../form-submissions";
-import { requireGroupResourceAccess } from "../resource-grants";
+import { guardManagedGroupResourceDatabase, requireGroupResourceAccess } from "../resource-grants";
 import { getFormDefinitionByPlacement } from "./read";
 import { AppError } from "../../errors";
 
 async function requireReportableForm(db: DatabaseLike, actor: AuthAdmin, groupId: string, placementId: string) {
   await requireGroupResourceAccess(db, actor, "formPlacement", placementId, "view_responses", groupId);
-  const form = await getFormDefinitionByPlacement(db, placementId);
+  const reportingDb = guardManagedGroupResourceDatabase(
+    db,
+    actor,
+    groupId,
+    "formPlacement",
+    placementId,
+    "view_responses",
+  );
+  const form = await getFormDefinitionByPlacement(reportingDb, placementId);
   if (!form?.placement) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
-  return form;
+  return { form, reportingDb };
 }
 
 function formReference(form: NonNullable<Awaited<ReturnType<typeof getFormDefinitionByPlacement>>>) {
@@ -37,8 +45,8 @@ export async function listGroupFormResponses(
   placementId: string,
   query: GroupFormSubmissionsQuery,
 ) {
-  const form = await requireReportableForm(db, actor, groupId, placementId);
-  const result = await listFormSubmissions(db, { formKey: form.key, placementId, ...query });
+  const { form, reportingDb } = await requireReportableForm(db, actor, groupId, placementId);
+  const result = await listFormSubmissions(reportingDb, { formKey: form.key, placementId, ...query });
   return groupFormSubmissionsResponseSchema.parse({
     form: formReference(form),
     placement: form.placement,
@@ -54,8 +62,8 @@ export async function getGroupFormResponseStatistics(
   placementId: string,
   query: GroupFormSubmissionStatsQuery,
 ) {
-  const form = await requireReportableForm(db, actor, groupId, placementId);
-  const result = await getFormSubmissionStats(db, { formKey: form.key, placementId, ...query });
+  const { form, reportingDb } = await requireReportableForm(db, actor, groupId, placementId);
+  const result = await getFormSubmissionStats(reportingDb, { formKey: form.key, placementId, ...query });
   return groupFormSubmissionStatsResponseSchema.parse({
     form: formReference(form),
     placement: form.placement,

@@ -367,6 +367,7 @@ export const VOTE_PROPOSALS_LIST_SORT_COLUMNS = ["title", "status", "endorsement
 
 export const listProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
   ownerGroupId: groupIdSchema.optional(),
+  status: voteProposalStatusSchema.optional(),
 });
 export type ListProposalsQuery = z.infer<typeof listProposalsQuerySchema>;
 
@@ -383,6 +384,7 @@ export const endorseProposalResponseSchema = z.object({
 });
 export const withdrawEndorsementResponseSchema = successResponseSchema;
 export const withdrawProposalResponseSchema = successResponseSchema;
+export const voteProposalRejectSchema = z.object({ reason: z.string().trim().min(1).max(2000) });
 
 export const listProposalsRouteSchema = {
   tags: ["Vote Proposals"],

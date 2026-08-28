@@ -11,7 +11,7 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { prepareProposalRoleCapacityForSpeakerChange, proposalParticipantStatus } from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
@@ -378,7 +378,7 @@ export async function editProposalSpeaker(
       throw registrationChangedError();
     }
     if (
-      isAuditOneChangeGuardFailure(error) ||
+      isAuditChangeGuardFailure(error) ||
       isEventParticipantSourceConflict(error) ||
       isAuthorizationGuardFailure(error)
     ) {

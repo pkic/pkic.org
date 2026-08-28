@@ -6,7 +6,7 @@ import {
   fetchAdminRegistrationWithDetails,
   toAdminRegistrationDetail,
 } from "../functions/_lib/services/registrations/admin-detail";
-import { listAdminEventRegistrations } from "../functions/_lib/services/registrations/admin-list";
+import { listEventRegistrations } from "../functions/_lib/services/registrations/event-registrations";
 import { listDueRsvpEnforcementCandidates } from "../functions/_lib/services/rsvp-enforcement/candidates";
 import { buildRsvpDayAction, commitRsvpDayAction } from "../functions/_lib/services/rsvp-enforcement/day-action";
 import type { Env } from "../functions/_lib/types";
@@ -409,7 +409,7 @@ describe("day-scoped RSVP enforcement", () => {
     const seeded = await seedTwoDayRegistration();
     await recordResponse(seeded, "declined", seeded.dayOneDate, hoursFromNow(-4), "list-day-one");
     await recordResponse(seeded, "accepted", seeded.dayTwoDate, hoursFromNow(-3), "list-day-two");
-    const listed = await listAdminEventRegistrations(env.DB, seeded.eventId, { limit: 10, offset: 0 });
+    const listed = await listEventRegistrations(env.DB, seeded.eventId, { limit: 10, offset: 0 });
     const registration = listed.registrations.find((item) => item.id === seeded.registrationId);
     expect(registration).toBeDefined();
     const rsvpByDay = JSON.parse(registration!.rsvp_events_json ?? "[]") as Array<{

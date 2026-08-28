@@ -1,6 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 
+export async function expectAdminSessionLanding(page: Page): Promise<void> {
+  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/portal\/#\/system\/analytics(?:$|[/?])/);
+}
+
 export async function signInAsE2eAdmin(page: Page, email: string): Promise<void> {
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
@@ -10,5 +15,5 @@ export async function signInAsE2eAdmin(page: Page, email: string): Promise<void>
   await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
   const emailMessage = await waitForCapturedEmail(email, "sign-in", { since });
   await page.goto(extractEmailUrl(emailMessage, "/admin/"));
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }

@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import { processPendingOutbox } from "../functions/_lib/email/outbox";
-import {
-  activateTemplateVersion,
-  createTemplateVersion,
-  invalidateTemplateCache,
-} from "../functions/_lib/email/templates";
+import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import {
   queueWeeklyWgChairDigest,
   resolveWgChairDigestWindow,
@@ -146,13 +142,11 @@ async function readDigestOutbox(): Promise<
 
 describe("weekly WG chair membership-change digest", () => {
   beforeEach(async () => {
-    invalidateTemplateCache();
     await resetDb();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    invalidateTemplateCache();
   });
 
   it("uses the most recently closed Monday 08:00 UTC window", () => {

@@ -58,8 +58,8 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
     );
     const token = await createAdminSession(env.DB, admin.id, "p4r01-admin-token");
 
-    // /api/v1/admin/donations is legacy-scope-gated (requires admin:read).
-    const response = await callAppGet("/api/v1/admin/donations", token);
+    // /api/v1/admin/events remains legacy-scope-gated (requires admin:read).
+    const response = await callAppGet("/api/v1/admin/events", token);
     expect(response.status).toBe(200);
   });
 
@@ -70,7 +70,7 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
     // Same legacy-scope-gated path — a role='user' actor with no admin:read
     // scope must be denied, proving the token's scopes claim reflects the
     // real DB role rather than always granting full AUTH_SCOPES.
-    const response = await callAppGet("/api/v1/admin/donations", token);
+    const response = await callAppGet("/api/v1/admin/events", token);
     expect(response.status).toBe(403);
   });
 });

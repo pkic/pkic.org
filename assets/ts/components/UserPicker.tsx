@@ -14,7 +14,7 @@ export function UserPicker({
   onChange,
   disabled,
   placeholder = "Search by email or name…",
-  endpoint = "/api/v1/admin/users",
+  endpoint = "/api/v1/users",
 }: {
   value: PickedUser | null;
   onChange: (user: PickedUser | null) => void;
@@ -95,7 +95,7 @@ export function UserPicker({
         aria-autocomplete="list"
       />
       {open && results.length > 0 && (
-        <div class="list-group position-absolute w-100 shadow-sm adm-user-picker-results">
+        <div class="list-group position-absolute w-100 shadow-sm portal-user-picker-results">
           {results.map((user) => (
             <button
               key={user.id}

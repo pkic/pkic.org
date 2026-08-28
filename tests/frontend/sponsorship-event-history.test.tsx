@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
-import { SponsorshipDetail } from "../../assets/ts/admin/sections/Sponsorships/SponsorshipDetail";
-import { useSponsorshipEventHistory } from "../../assets/ts/admin/sections/Sponsorships/useSponsorshipEventHistory";
+import { SponsorshipDetail } from "../../assets/ts/member-flows/portal/sections/system-sponsorships/SponsorshipDetail";
+import { useSponsorshipEventHistory } from "../../assets/ts/member-flows/portal/sections/system-sponsorships/useSponsorshipEventHistory";
 
 type HistoryState = ReturnType<typeof useSponsorshipEventHistory>;
 
@@ -91,8 +91,8 @@ describe("sponsorship event history", () => {
     await act(() => render(h(Harness, { id: "sponsor-a", onState }), container));
     await act(() => render(h(Harness, { id: "sponsor-b", onState }), container));
     expect(pending.map(({ url }) => url)).toEqual([
-      "/api/v1/admin/sponsorships/sponsor-a/events?limit=25&offset=0",
-      "/api/v1/admin/sponsorships/sponsor-b/events?limit=25&offset=0",
+      "/api/v1/sponsorships/sponsor-a/events?limit=25&offset=0",
+      "/api/v1/sponsorships/sponsor-b/events?limit=25&offset=0",
     ]);
 
     await act(async () => {
@@ -134,7 +134,7 @@ describe("sponsorship event history", () => {
       latest.loadMore();
     });
     expect(pending).toHaveLength(2);
-    expect(pending[1].url).toBe("/api/v1/admin/sponsorships/sponsor/events?limit=25&offset=1");
+    expect(pending[1].url).toBe("/api/v1/sponsorships/sponsor/events?limit=25&offset=1");
     await act(async () => {
       pending[1].resolve(historyResponse([event("00000000000000000000000000000001", "new_inquiry")], 2, 1, 1));
       await flush();
@@ -191,7 +191,7 @@ describe("sponsorship event history", () => {
     );
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(h(SponsorshipDetail, { id, onChanged: vi.fn() }), container));
+    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
     await act(flush);
 
     expect(container.textContent).toContain("Acme Sponsor");
@@ -220,7 +220,7 @@ describe("sponsorship event history", () => {
       ),
     );
     const container = document.createElement("div");
-    await act(() => render(h(SponsorshipDetail, { id, onChanged: vi.fn() }), container));
+    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
     await act(flush);
 
     const section = container.querySelector("section");

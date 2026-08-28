@@ -1,10 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
-import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
+import type { EmailMessageType } from "../../../../../shared/schemas/email-templates";
 import type { EventRegistrationStatusFilter } from "../../../../../shared/schemas/event-registrations";
 import type { AttendanceType } from "../../../../../shared/schemas/registration";
 import { api } from "../../../api";
 import { adminEventEmailSupportDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
-import type { TemplateHelperCategory } from "../../../email-template-helpers";
+import type { TemplateHelperCategory } from "../../../../shared/email-template-helpers";
 
 export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 export const PERSONAL_ONLY_HELPERS = new Set([

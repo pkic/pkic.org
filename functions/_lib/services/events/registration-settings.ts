@@ -11,7 +11,7 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import {
   commitEventResourceManagementBatch,
   guardEventResourceManagementDatabase,
@@ -393,7 +393,7 @@ export async function replaceGroupEventRegistrationSettings(
         "Event registration settings changed; reload and retry",
       );
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "EVENT_REGISTRATION_SETTINGS_CHANGED",
@@ -481,7 +481,7 @@ export async function createGroupEventRegistrationForm(
     ) {
       throw new AppError(409, "EVENT_REGISTRATION_SETTINGS_CHANGED", "Event settings changed; reload and retry");
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_REGISTRATION_SETTINGS_CHANGED", "Event settings changed; reload and retry");
     }
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {

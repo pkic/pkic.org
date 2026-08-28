@@ -21,6 +21,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { expectAdminSessionLanding } from "./helpers/admin-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -70,7 +71,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   const magicEmail = await waitForEmail(adminEmail, "sign-in");
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }
 
 test.describe("public votes pages", () => {
@@ -98,7 +99,7 @@ test.describe("public votes pages", () => {
 
     const created = await page.evaluate(
       async ({ title, closesAt }) => {
-        const res = await fetch("/api/v1/admin/votes", {
+        const res = await fetch("/api/v1/groups/20000000-0000-4000-8000-000000000001/votes", {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -106,7 +107,6 @@ test.describe("public votes pages", () => {
             title,
             description: "An end-to-end test motion vote.",
             voteType: "motion",
-            ownerGroupId: "20000000-0000-4000-8000-000000000001",
             electorateMode: "per_member",
             thresholdType: "simple_majority",
             closesAt,
@@ -121,7 +121,7 @@ test.describe("public votes pages", () => {
     const slug = created.vote!.slug;
 
     const visibilityStatus = await page.evaluate(async (voteId) => {
-      const res = await fetch(`/api/v1/admin/votes/${voteId}/visibility`, {
+      const res = await fetch(`/api/v1/groups/20000000-0000-4000-8000-000000000001/votes/${voteId}/visibility`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",

@@ -33,6 +33,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
+import { expectAdminSessionLanding } from "./helpers/admin-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -106,7 +107,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   const magicEmail = await waitForEmail(ADMIN_EMAIL, "sign-in", { since });
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }
 
 /**
@@ -246,7 +247,7 @@ test.describe("Admin browser-verification pass", () => {
     // about:blank, where relative-URL fetches have nothing to resolve
     // against.
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     // Member proposal submission requires the owning group's canonical
     // min_endorsers_for_ballot policy to be enabled. Configure the group,
@@ -298,7 +299,13 @@ test.describe("Admin browser-verification pass", () => {
     await page.goto(`/portal/#/groups/${groupId}/votes`);
     await page.getByRole("button", { name: "Proposals", exact: true }).click();
 
-    const proposalRow = page.getByRole("row").filter({ hasText: title });
+    // The expanded detail is a second table row containing the same title.
+    // Anchor the locator to the data row's Details action so it remains
+    // unique before and after expansion.
+    const proposalRow = page
+      .getByRole("row")
+      .filter({ hasText: title })
+      .filter({ has: page.getByRole("button", { name: "Details", exact: true }) });
     await expect(proposalRow).toBeVisible();
     await proposalRow.getByRole("button", { name: "Details" }).click();
     const detail = page.locator("div.p-3.bg-body-tertiary").filter({ hasText: title });
@@ -316,8 +323,17 @@ test.describe("Admin browser-verification pass", () => {
 
   test("sponsorships: create an event sponsorship and advance its pipeline stage", async ({ page }) => {
     const contactName = `E2E Sponsor Contact ${Date.now()}`;
+    const canonicalRequests: string[] = [];
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/sponsorships")) canonicalRequests.push(`${request.method()} ${pathname}`);
+      if (pathname.startsWith("/api/v1/admin/sponsorships")) legacyRequests.push(`${request.method()} ${pathname}`);
+    });
 
-    await page.goto("/admin/#/sponsorships");
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto("/portal/#/system/sponsorships");
     await page.getByRole("button", { name: "Create sponsorship" }).click();
 
     // Labels aren't `<label for>`-linked to their inputs here either —
@@ -355,6 +371,10 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
     await expect(detail.locator("span.badge", { hasText: "contacted" })).toBeVisible();
     await expect(detail.getByText(/new inquiry\s*→\s*contacted/)).toBeVisible();
+    expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsorships/companies"]));
+    expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsorships"))).toBe(true);
+    expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsorships/"))).toBe(true);
+    expect(legacyRequests).toEqual([]);
   });
 
   test("sponsor tiers: add a tier on the real seeded event and confirm it persists", async ({ page }) => {
@@ -404,7 +424,7 @@ test.describe("Admin browser-verification pass", () => {
     });
 
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     const stamp = Date.now();
     const email = `e2e-content-review-${stamp}@e2e-content-review-${stamp}.test`;
@@ -468,7 +488,7 @@ test.describe("Admin browser-verification pass", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     const stamp = Date.now();
     const primaryEmail = `e2e-primary-${stamp}@e2e-users-${stamp}.test`;
@@ -519,7 +539,7 @@ test.describe("Admin browser-verification pass", () => {
     });
     page.on("dialog", (d) => d.accept());
     await page.goto("/admin/");
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+    await expectAdminSessionLanding(page);
 
     const stamp = Date.now();
     const email = `e2e-approve-onboarding-${stamp}@e2e-approve-onboarding-${stamp}.test`;
@@ -584,7 +604,7 @@ test.describe("Admin browser-verification pass", () => {
     // application's organizationName, not just the application row's own
     // status flag.
     const usersLookup = await page.evaluate(async (q) => {
-      const res = await fetch(`/api/v1/admin/users?q=${encodeURIComponent(q)}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/users?q=${encodeURIComponent(q)}`, { credentials: "same-origin" });
       const body = (await res.json()) as {
         users: Array<{ email: string; membership: { organizationName: string | null } | null }>;
       };

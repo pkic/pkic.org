@@ -138,16 +138,26 @@ export function buildCreateIndividualMemberStatements(
   userId: string,
   categoryCode: string,
   now: string,
+  targetEligibility?: { sql: string; bindings: readonly unknown[] },
 ): { memberId: string; statements: StatementLike[] } {
   assertCategoryCompatible(categoryCode, true);
   const memberId = uuid();
+  const memberInsert = targetEligibility
+    ? db
+        .prepare(
+          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+           SELECT ?, 'individual', ?, 'active', ?, ?
+            WHERE EXISTS (${targetEligibility.sql})`,
+        )
+        .bind(memberId, userId, now, now, ...targetEligibility.bindings)
+    : db
+        .prepare(
+          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+           VALUES (?, 'individual', ?, 'active', ?, ?)`,
+        )
+        .bind(memberId, userId, now, now);
   const statements: StatementLike[] = [
-    db
-      .prepare(
-        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-         VALUES (?, 'individual', ?, 'active', ?, ?)`,
-      )
-      .bind(memberId, userId, now, now),
+    memberInsert,
     db
       .prepare(
         `INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at)

@@ -1,7 +1,7 @@
 import { all } from "../../db/queries";
 import { buildEventEmailVariables } from "../events";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { queueRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "../registrations/status-notifications";
 import { registrationConfirmationUrl } from "../registrations/capability-urls";
 import {
@@ -141,7 +141,7 @@ export async function runConfirmationReminders(
         cancelledConfirmations.push(row);
         confirmationCancellationsProcessed += 1;
       } catch (error) {
-        if (!isRegistrationTransitionConflict(error) && !isAuditOneChangeGuardFailure(error)) throw error;
+        if (!isRegistrationTransitionConflict(error) && !isAuditChangeGuardFailure(error)) throw error;
       }
     }
 
@@ -342,7 +342,7 @@ export async function runConfirmationReminders(
       }),
       now,
       {
-        isExpectedConflict: (error) => isRegistrationTransitionConflict(error) || isAuditOneChangeGuardFailure(error),
+        isExpectedConflict: (error) => isRegistrationTransitionConflict(error) || isAuditChangeGuardFailure(error),
       },
     );
     return {

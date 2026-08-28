@@ -1,7 +1,7 @@
 import { getConfig } from "../config";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
-import type { AdminDueWorkListQuery, AdminDueWorkRow } from "../../../assets/shared/schemas/admin-due-work";
+import type { DueWorkListQuery, DueWorkRow } from "../../../assets/shared/schemas/operations";
 import type { DatabaseLike, Env } from "../types";
 import { REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL } from "./registrations/recipient-email";
 import { proposalSpeakerEffectiveProfileExpression } from "./proposal-speakers";
@@ -13,7 +13,7 @@ const ONE_DAY_MS = 86_400_000;
 interface DueWorkQueryRow {
   record_kind: number;
   page_position: number;
-  bucket: AdminDueWorkRow["bucket"] | null;
+  bucket: DueWorkRow["bucket"] | null;
   type_label: string | null;
   title: string | null;
   subtitle: string | null;
@@ -27,6 +27,11 @@ interface DueWorkQueryRow {
   outbox_count: number;
   reminders_count: number;
   cleanup_count: number;
+}
+
+export interface DueWorkQueryStatement {
+  sql: string;
+  bindings: readonly unknown[];
 }
 
 /**
@@ -306,7 +311,7 @@ const DUE_WORK_CTE = `
     FROM cleanup_candidates
   )`;
 
-function queryBindings(env: Env, appBaseUrl: string, options: AdminDueWorkListQuery): unknown[] {
+function queryBindings(env: Env, appBaseUrl: string, options: DueWorkListQuery): unknown[] {
   const config = getConfig({ ...env, APP_BASE_URL: appBaseUrl });
   const now = new Date();
   const confirmationIntervalDays = Math.max(1, config.pendingConfirmationReminderIntervalDays);
@@ -340,7 +345,7 @@ function orderTerms(sort: string | undefined): string {
   return `${column} ${direction}, title COLLATE NOCASE ${direction}, context COLLATE NOCASE ${direction}, source_id ${direction}`;
 }
 
-function toApiRow(row: DueWorkQueryRow): AdminDueWorkRow {
+function toApiRow(row: DueWorkQueryRow): DueWorkRow {
   return {
     bucket: row.bucket!,
     typeLabel: row.type_label!,
@@ -354,7 +359,11 @@ function toApiRow(row: DueWorkQueryRow): AdminDueWorkRow {
   };
 }
 
-export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string, options: AdminDueWorkListQuery) {
+/**
+ * Builds the exact production due-work statement so D1 query-plan tests can
+ * inspect the same SQL and bindings that the API executes.
+ */
+export function buildDueWorkQuery(env: Env, appBaseUrl: string, options: DueWorkListQuery): DueWorkQueryStatement {
   const search = options.q
     ? buildD1TextSearchFilter(options.q, ["type_label", "title", "subtitle", "context", "detail"])
     : null;
@@ -401,14 +410,21 @@ export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string
     FROM paged CROSS JOIN counts CROSS JOIN page_totals
     ORDER BY record_kind, page_position`;
 
-  const bindings = [
-    ...queryBindings(env, appBaseUrl, options),
-    ...(search?.bindings ?? []),
-    options.bucket,
-    options.bucket,
-    options.limit,
-    options.offset,
-  ];
+  return {
+    sql,
+    bindings: [
+      ...queryBindings(env, appBaseUrl, options),
+      ...(search?.bindings ?? []),
+      options.bucket,
+      options.bucket,
+      options.limit,
+      options.offset,
+    ],
+  };
+}
+
+export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string, options: DueWorkListQuery) {
+  const { sql, bindings } = buildDueWorkQuery(env, appBaseUrl, options);
   const result = await db
     .prepare(sql)
     .bind(...bindings)

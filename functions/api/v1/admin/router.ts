@@ -13,27 +13,11 @@ import { handleError } from "../../../_lib/http";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
-import { AdminDueWorkList } from "./due-work";
-import { EmailTemplatesList } from "./email-templates";
 import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
-import { AdminStatsGet } from "./stats";
-import { UsersList } from "./users";
-import access_grants_Router from "./access-grants/router";
 import auth_Router from "./auth/router";
-import donations_Router from "./donations/router";
-import email_Router from "./email/router";
-import email_templates_Router from "./email-templates/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
-import leadership_positions_Router from "./leadership-positions/router";
-import members_Router from "./members/router";
-import organizations_Router from "./organizations/router";
 import proposals_Router from "./proposals/router";
-import roles_Router from "./roles/router";
-import sponsorships_Router from "./sponsorships/router";
-import users_Router from "./users/router";
-import votes_Router from "./votes/router";
-import vote_proposals_Router from "./vote-proposals/router";
 
 const app = new Hono<RequestDbContext>();
 app.onError((error, _c) => handleError(error));
@@ -133,27 +117,11 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 
 app.use("*", useRequestScopedD1Session);
 
-openapi.get("/email-templates", EmailTemplatesList);
 openapi.get("/events", AdminEventsListGet);
 openapi.post("/events", AdminEventsCreatePost);
-openapi.get("/stats", AdminStatsGet);
-openapi.get("/due-work", AdminDueWorkList);
-openapi.get("/users", UsersList);
-openapi.route("/access-grants", access_grants_Router);
 openapi.route("/auth", auth_Router);
-openapi.route("/donations", donations_Router);
-openapi.route("/email", email_Router);
-openapi.route("/email-templates", email_templates_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
-openapi.route("/leadership-positions", leadership_positions_Router);
-openapi.route("/members", members_Router);
-openapi.route("/organizations", organizations_Router);
 openapi.route("/proposals", proposals_Router);
-openapi.route("/roles", roles_Router);
-openapi.route("/sponsorships", sponsorships_Router);
-openapi.route("/users", users_Router);
-openapi.route("/votes", votes_Router);
-openapi.route("/vote-proposals", vote_proposals_Router);
 
 export default openapi;

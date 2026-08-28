@@ -6,7 +6,7 @@ import { uuid } from "../utils/ids";
 import { stringifyJson } from "../utils/json";
 import { nowIso } from "../utils/time";
 import type { QueuedEmailAttachment } from "./attachments";
-import type { EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { EmailMessageType } from "../../../assets/shared/schemas/email-templates";
 
 export interface CalendarPayload {
   registrationId: string;

@@ -3,7 +3,7 @@ import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/sc
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import {
   assertProposalSpeakerRoleTransition,
   prepareProposalSpeakerRoleChange,
@@ -245,7 +245,7 @@ export async function updateProposalSpeakerByProposer(
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
-    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+    if (isAuditChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the role was updated");
     }
     throw error;

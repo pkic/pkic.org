@@ -122,11 +122,25 @@ export async function requireOrganizationRepresentativeManagement(
 }
 
 export async function resolveOrganizationMemberId(db: DatabaseLike, organizationId: string): Promise<string> {
-  const member = await first<{ id: string }>(
+  const aggregate = await first<{ id: string | null; status: string | null; category_code: string | null }>(
     db,
-    "SELECT id FROM members WHERE organization_id = ? AND status = 'active'",
+    `SELECT member.id, member.status, category.category_code
+       FROM organizations organization
+       LEFT JOIN members member ON member.organization_id = organization.id
+       LEFT JOIN member_category_assignments category ON category.member_id = member.id
+      WHERE organization.id = ?`,
     [organizationId],
   );
-  if (!member) throw new AppError(404, "ORGANIZATION_MEMBERSHIP_NOT_FOUND", "Active organization membership not found");
-  return member.id;
+  if (!aggregate) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found");
+  if (!aggregate.id || !aggregate.category_code) {
+    throw new AppError(
+      422,
+      "ORG_CATEGORY_NOT_SET",
+      "Set the organization's membership category before adding representatives",
+    );
+  }
+  if (aggregate.status !== "active") {
+    throw new AppError(409, "ORGANIZATION_MEMBERSHIP_INACTIVE", "Organization membership is not active");
+  }
+  return aggregate.id;
 }

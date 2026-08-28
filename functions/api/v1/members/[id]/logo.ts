@@ -17,13 +17,13 @@ import {
   storedRasterImageResponse,
 } from "../../../../_lib/services/image-response";
 
-// `headshots/...` keys are written by the admin self-service headshot upload
-// endpoint (functions/api/v1/admin/users/[userId]/headshot.ts) into
+// `headshots/...` keys are written by the staff user-headshot upload
+// endpoint (functions/api/v1/users/[userId]/headshot.ts) into
 // SPEAKER_UPLOADS_BUCKET. Every other prefix (member-photos/, org-logos/,
 // sponsor-logos/) is written by scripts/migrate-members-yaml-to-d1.mjs into
 // ASSETS_BUCKET. `users.headshot_r2_key` can be populated by either pipeline,
 // so this picks the bucket that actually holds the key instead of assuming
-// ASSETS_BUCKET for everything (which 404s on admin-uploaded headshots).
+// ASSETS_BUCKET for everything (which 404s on staff-uploaded headshots).
 function bucketFor(c: any, r2Key: string): R2Bucket | undefined {
   return r2Key.startsWith("headshots/") ? c.env.SPEAKER_UPLOADS_BUCKET : c.env.ASSETS_BUCKET;
 }

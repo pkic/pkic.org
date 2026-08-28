@@ -1,11 +1,20 @@
 import { hasPermission } from "../../auth/permissions";
-import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
+import { guardDatabaseBatches } from "../../db/guarded-database";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { activeGroupMembershipAuthorizationEvidence, hasActiveGroupMembership } from "../groups/access";
-import { canManageAnyGroup, groupManagementAuthorizationEvidence } from "../groups/governance";
-import type { LiveGroupResourceContextAccess } from "./access-query";
+import {
+  canManageAnyGroup,
+  groupManagementAuthorizationEvidence,
+  groupPermissionAuthorizationEvidence,
+} from "../groups/governance";
+import { buildLiveAccessibleGroupResourceIdsCte, type LiveGroupResourceContextAccess } from "./access-query";
 import {
   getResourceGrantDefinition,
   isManagerResourceCapability,
@@ -115,6 +124,69 @@ export function prepareMemberGroupResourceAuthorizationGuard<K extends ResourceG
   );
 }
 
+/**
+ * Preserves the exact member-or-manager policy used by group resource read
+ * models when a protected response requires multiple D1 statements.
+ */
+export function groupResourceViewerAuthorizationEvidence<K extends ResourceGrantKind>(
+  viewer: GroupResourceViewer,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): AuthorizationEvidence {
+  const accessible = buildLiveAccessibleGroupResourceIdsCte(
+    kind,
+    groupId,
+    liveGroupResourceContextAccess(viewer, groupId),
+    capability,
+  );
+  return {
+    sql: `WITH ${accessible.sql}
+          SELECT 1 FROM accessible_resource WHERE resource_id = ? LIMIT 1`,
+    bindings: [...accessible.bindings, resourceId],
+  };
+}
+
+export function prepareGroupResourceViewerAuthorizationGuard<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): StatementLike {
+  return prepareAuthorizationGuard(
+    db,
+    groupResourceViewerAuthorizationEvidence(viewer, groupId, kind, resourceId, capability),
+  );
+}
+
+/** Rechecks the same live viewer/resource relationship in every protected read batch. */
+export function guardGroupResourceViewerDatabase<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): DatabaseLike {
+  return guardDatabaseBatches(db, async (statements) => {
+    try {
+      const [, ...results] = await db.batch([
+        prepareGroupResourceViewerAuthorizationGuard(db, viewer, groupId, kind, resourceId, capability),
+        ...statements,
+      ]);
+      return results;
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required");
+      }
+      throw error;
+    }
+  });
+}
+
 /** Proves that a resource is still owned by or shared with one managed group. */
 export function groupResourceContextAuthorizationEvidence<K extends ResourceGrantKind>(
   groupId: string,
@@ -160,6 +232,95 @@ export function prepareGroupResourceContextAuthorizationGuard<K extends Resource
     db,
     groupResourceContextAuthorizationEvidence(groupId, kind, resourceId, capability),
   );
+}
+
+/**
+ * Live selected-group management evidence for an exact resource context.
+ * An optional domain permission applies only when the selected group owns the
+ * resource; it can never authorize management through a grantee group.
+ */
+export function managedGroupResourceAuthorizationEvidence<K extends ResourceGrantKind>(
+  actor: AuthAdmin,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+  options: { ownerPermission?: string } = {},
+): AuthorizationEvidence {
+  const definition = getResourceGrantDefinition(kind);
+  const resource = groupResourceContextAuthorizationEvidence(groupId, kind, resourceId, capability);
+  const management = groupManagementAuthorizationEvidence(actor, [groupId]);
+  const permission = options.ownerPermission
+    ? groupPermissionAuthorizationEvidence(actor, [groupId], options.ownerPermission)
+    : null;
+  return {
+    sql: `SELECT 1
+            WHERE EXISTS (${resource.sql})
+              AND (
+                EXISTS (${management.sql})
+                ${
+                  permission
+                    ? `OR (
+                         EXISTS (
+                           SELECT 1 FROM ${definition.resourceTable} owned_resource
+                            WHERE owned_resource.id = ?
+                              AND owned_resource.${definition.ownerGroupColumn} = ?
+                         )
+                         AND EXISTS (${permission.sql})
+                       )`
+                    : ""
+                }
+              )`,
+    bindings: [
+      ...resource.bindings,
+      ...management.bindings,
+      ...(permission ? [resourceId, groupId, ...permission.bindings] : []),
+    ],
+  };
+}
+
+export function prepareManagedGroupResourceAuthorizationGuard<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+  options: { ownerPermission?: string } = {},
+): StatementLike {
+  return prepareAuthorizationGuard(
+    db,
+    managedGroupResourceAuthorizationEvidence(actor, groupId, kind, resourceId, capability, options),
+  );
+}
+
+/**
+ * Rechecks selected-group management and the exact resource relationship in
+ * every protected read batch. This keeps delayed enrichment and aggregate
+ * reads behind the same live manager-only capability as their preflight.
+ */
+export function guardManagedGroupResourceDatabase<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): DatabaseLike {
+  return guardDatabaseBatches(db, async (statements) => {
+    try {
+      const [, ...results] = await db.batch([
+        prepareManagedGroupResourceAuthorizationGuard(db, actor, groupId, kind, resourceId, capability),
+        ...statements,
+      ]);
+      return results;
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required");
+      }
+      throw error;
+    }
+  });
 }
 
 async function resourceOwnerGroupId<K extends ResourceGrantKind>(

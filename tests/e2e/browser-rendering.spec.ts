@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { expectAdminSessionLanding } from "./helpers/admin-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -392,7 +393,7 @@ async function signInAsAdmin(page: Page, scope: "browser-waitlist" | "browser-pr
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
 
   await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }
 
 async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string; slug: string; groupId: string }> {
@@ -1116,10 +1117,10 @@ test.describe("browser workflows", () => {
     const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
 
     // Navigating to the magic link URL triggers the DOMContentLoaded handler
-    // which reads ?token=, calls /api/v1/admin/auth/verify-link, and shows the admin root
+    // which reads ?token=, calls /api/v1/admin/auth/verify-link, and enters the canonical portal
     await page.goto(magicUrl);
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
-    await screenshot("02-admin-dashboard-loaded");
+    await expectAdminSessionLanding(page);
+    await screenshot("02-system-analytics-loaded");
 
     errorMonitor.assertClean();
   });

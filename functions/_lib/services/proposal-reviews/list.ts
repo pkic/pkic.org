@@ -1,7 +1,12 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import type { ProposalReview, ProposalReviewsListQuery } from "../../../../assets/shared/schemas/proposal-reviews";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
-import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
+import {
+  batchFirst,
+  buildOffsetPageStatements,
+  decodeOffsetPageResults,
+  type OffsetPageQuery,
+} from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -15,15 +20,12 @@ interface ReviewAggregateRow {
   reject_count: number;
 }
 
-export async function listProposalReviews(
-  db: DatabaseLike,
-  actor: AuthAdmin,
+/** Build the canonical bounded review page/count pair for runtime and D1 plan regressions. */
+export function buildProposalReviewsPageQuery(
   proposalId: string,
+  reviewRound: number,
   query: ProposalReviewsListQuery,
-  minReviewsRequired: number,
-) {
-  const reviewerUserId = adminDatabaseUserId(actor);
-  const context = await getReviewContext(db, actor, proposalId);
+): OffsetPageQuery {
   const search = query.q
     ? buildD1TextSearchFilter(query.q, [
         "u.email",
@@ -35,7 +37,7 @@ export async function listProposalReviews(
       ])
     : null;
   const filters = ["pr.proposal_id = ?", "pr.review_round = ?"];
-  const bindings: unknown[] = [proposalId, context.reviewRound];
+  const bindings: unknown[] = [proposalId, reviewRound];
   if (query.recommendation) {
     filters.push("pr.recommendation = ?");
     bindings.push(query.recommendation);
@@ -57,13 +59,28 @@ export async function listProposalReviews(
     "pr.updated_at DESC",
     "pr.id ASC",
   );
-  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
+  return {
     sql: `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM} ${where}`,
     bindings,
     orderBy,
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listProposalReviews(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  proposalId: string,
+  query: ProposalReviewsListQuery,
+  minReviewsRequired: number,
+) {
+  const reviewerUserId = adminDatabaseUserId(actor);
+  const context = await getReviewContext(db, actor, proposalId);
+  const [pageStatement, countStatement] = buildOffsetPageStatements(
+    db,
+    buildProposalReviewsPageQuery(proposalId, context.reviewRound, query),
+  );
   const [pageResult, countResult, aggregateResult, myReviewResult] = await db.batch([
     pageStatement,
     countStatement,

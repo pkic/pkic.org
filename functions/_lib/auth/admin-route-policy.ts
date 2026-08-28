@@ -26,20 +26,25 @@ const DELEGATED_MODULES = new Map<string, string>([
   ["applications", "membership application router"],
   ["consortium", "consortium router"],
   ["events", "event router"],
-  ["leadership-positions", "leadership router"],
   ["members", "membership router"],
   ["organizations", "organization router"],
   ["proposals", "proposal router"],
   ["roles", "role router"],
   ["sponsorships", "sponsorship router"],
-  ["vote-proposals", "vote proposal router"],
-  ["votes", "vote router"],
 ]);
 
 // Retired modules retain only a fail-closed policy tombstone until the admin
 // router itself is removed. This lets the absent route return an ordinary 404
 // instead of misreporting a server policy-configuration failure.
-const RETIRED_MODULES = new Set(["membership-settings"]);
+const RETIRED_MODULES = new Set([
+  "donations",
+  "email-templates",
+  "leadership-positions",
+  "membership-settings",
+  "stats",
+  "votes",
+  "vote-proposals",
+]);
 
 function normalizedPolicyPath(path: string): string {
   const adminPrefix = "/api/v1/admin";
@@ -79,18 +84,6 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
   if (module === "audit-log") {
     return { kind: "permission", permission: "audit:read" };
   }
-  if (module === "donations") {
-    return {
-      kind: "permission",
-      permission: readOrWrite(normalizedMethod, "donations:read", "donations:sync"),
-    };
-  }
-  if (module === "email-templates") {
-    return {
-      kind: "permission",
-      permission: readOrWrite(normalizedMethod, "email-templates:read", "email-templates:write"),
-    };
-  }
   if (module === "users" && isDelegatedUserPath(normalizedPath)) {
     return { kind: "delegated", boundary: "user subresource router" };
   }
@@ -106,13 +99,7 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
       permission: readOrWrite(normalizedMethod, "admin:read", "admin:write"),
     };
   }
-  if (
-    module === "docs" ||
-    module === "redocs" ||
-    module.startsWith("openapi.") ||
-    module === "due-work" ||
-    module === "stats"
-  ) {
+  if (module === "docs" || module === "redocs" || module.startsWith("openapi.") || module === "due-work") {
     return { kind: "permission", permission: "admin:read" };
   }
 

@@ -15,6 +15,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { expectAdminSessionLanding } from "./helpers/admin-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -74,7 +75,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   const magicEmail = await waitForEmail(adminEmail, "sign-in");
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+  await expectAdminSessionLanding(page);
 }
 
 test.describe("sponsor portal", () => {
@@ -94,7 +95,7 @@ test.describe("sponsor portal", () => {
     }, EVENT_SLUG);
 
     const tierStatus = await page.evaluate(async (slug) => {
-      const res = await fetch(`/api/v1/admin/events/${slug}/sponsor-tiers`, {
+      const res = await fetch(`/api/v1/events/${slug}/sponsor-tiers`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
@@ -107,7 +108,7 @@ test.describe("sponsor portal", () => {
     // ── Create + activate an event sponsorship (triggers sponsor-portal-access email) ─
     const sponsorship = await page.evaluate(
       async ({ eventId, contactEmail, renewalDate }) => {
-        const createRes = await fetch("/api/v1/admin/sponsorships", {
+        const createRes = await fetch("/api/v1/sponsorships", {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -121,7 +122,7 @@ test.describe("sponsor portal", () => {
           }),
         });
         const created = (await createRes.json()) as { sponsorship: { id: string } };
-        const stageRes = await fetch(`/api/v1/admin/sponsorships/${created.sponsorship.id}/stage`, {
+        const stageRes = await fetch(`/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",

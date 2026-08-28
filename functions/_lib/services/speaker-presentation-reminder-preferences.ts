@@ -1,6 +1,6 @@
 import type { DatabaseLike } from "../types";
 import { addHours, nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { AppError } from "../errors";
 import { getSpeakerByManageToken } from "./proposals";
 
@@ -53,7 +53,7 @@ export async function setSpeakerPresentationReminderPreference(
       ),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "PROPOSAL_SPEAKER_CONFLICT",

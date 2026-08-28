@@ -406,6 +406,17 @@ describe("Google Groups sync", () => {
       succeeded: 3,
     });
 
+    // This test exercises grouping at the page boundary, not the UUID tie-breaker.
+    // Give the two recipient groups an explicit order because all intents created
+    // by one sync pass can otherwise share the same timestamp.
+    await env.DB.prepare(
+      `UPDATE google_groups_enrollment_notification_intents
+            SET created_at = CASE user_id WHEN ? THEN ? ELSE ? END
+          WHERE user_id IN (?, ?)`,
+    )
+      .bind(firstUserId, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:01.000Z", firstUserId, secondUserId)
+      .run();
+
     expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(2);
     const outbox = await queryAll<{ recipient_email: string; payload_json: string }>(
       env.DB,

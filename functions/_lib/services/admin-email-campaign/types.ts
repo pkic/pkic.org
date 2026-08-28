@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { EmailMessageType } from "../../../../assets/shared/schemas/admin-email-templates";
+import type { EmailMessageType } from "../../../../assets/shared/schemas/email-templates";
 import { adminEventCampaignPreviewSchema } from "../../../../assets/shared/schemas/admin-events";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import type { EventRecord } from "../events";

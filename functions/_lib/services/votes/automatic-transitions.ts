@@ -2,7 +2,7 @@ import { all, first } from "../../db/queries";
 import { createDurableJobLease } from "../../jobs/lease";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { VOTE_ELECTION_TALLY_QUERY, VOTE_MOTION_TALLY_QUERY, VOTE_STANDING_CANDIDATES_QUERY } from "./due-queries";
 import type { CandidateRow, VoteRow } from "./shared";
 import { computeMotionResultFromCounts, tallyElectionRoundFromCounts, type ElectionRoundTally } from "./tally";
@@ -71,7 +71,7 @@ export async function openDueVote(db: DatabaseLike, vote: VoteRow, now: string):
     ]);
     return true;
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return false;
+    if (isAuditChangeGuardFailure(error)) return false;
     throw error;
   }
 }
@@ -193,7 +193,7 @@ async function finalizeMotionOrConsultation(
     ]);
     return "closed";
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return "stale";
+    if (isAuditChangeGuardFailure(error)) return "stale";
     throw error;
   }
 }
@@ -238,7 +238,7 @@ async function advanceOrFinalizeElection(
       ]);
       return "closed";
     } catch (error) {
-      if (isAuditOneChangeGuardFailure(error)) return "stale";
+      if (isAuditChangeGuardFailure(error)) return "stale";
       throw error;
     }
   }
@@ -308,7 +308,7 @@ async function advanceOrFinalizeElection(
     await db.batch([...(context.authorizationGuard ? [context.authorizationGuard] : []), ...statements]);
     return "round-advanced";
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return "stale";
+    if (isAuditChangeGuardFailure(error)) return "stale";
     throw error;
   }
 }

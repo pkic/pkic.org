@@ -10,7 +10,7 @@ import { resolveAppBaseUrl } from "../../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { json } from "../../../../../../_lib/http";
 import { editProposalSpeaker } from "../../../../../../_lib/services/proposal-speaker-admin";
-import { removeAdminProposalSpeaker } from "../../../../../../_lib/services/proposal-speaker-removal";
+import { removeProposalSpeakerByManager } from "../../../../../../_lib/services/proposal-speaker-removal";
 
 export async function onRequestPatch(
   c: AdminContext,
@@ -38,7 +38,7 @@ export async function onRequestDelete(
 ): Promise<Response> {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const result = await removeAdminProposalSpeaker(db, {
+  const result = await removeProposalSpeakerByManager(db, {
     actor: admin,
     proposalId: data.params.proposalId,
     userId: data.params.userId,

@@ -113,7 +113,7 @@ test("a selected-group manager changes one attendee day through portal routes", 
     }
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-event"));
+  await signInToPortal(page, e2eAdminEmail("portal-event-attendee-management"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const event = await createConfiguredEvent(page, unique);
   const attendeeEmail = `portal-attendee-${unique}@pkic.org`;

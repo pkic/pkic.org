@@ -18,7 +18,7 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { getGroup } from "../groups";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import {
@@ -27,6 +27,7 @@ import {
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
   isResourceGrantCapability,
+  liveGroupResourceContextAccess,
   type GroupResourceContextAccess,
   type GroupResourceViewer,
   type LiveGroupResourceContextAccess,
@@ -37,7 +38,6 @@ import {
   type EventResourceManagementContext,
 } from "./management";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
-import { liveEventResourceContextAccess } from "./read-access";
 
 type EventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
 type EventSeriesUpdateInput = z.infer<typeof eventSeriesUpdateSchema>;
@@ -130,7 +130,7 @@ export async function listGroupEventSeries(
 ): Promise<{ series: GroupEventSeries[]; total: number }> {
   const { rows, total } = await queryPage<GroupEventSeriesRow>(
     db,
-    buildGroupEventSeriesPageQuery(groupId, liveEventResourceContextAccess(viewer, groupId), query),
+    buildGroupEventSeriesPageQuery(groupId, liveGroupResourceContextAccess(viewer, groupId), query),
   );
   return { series: rows.map((row) => toGroupEventSeries(row, groupId)), total };
 }
@@ -164,7 +164,7 @@ export async function getAccessibleGroupEventSeries(
   throughGroupId: string,
   seriesId: string,
 ): Promise<EventSeries> {
-  const access = liveEventResourceContextAccess(viewer, throughGroupId);
+  const access = liveGroupResourceContextAccess(viewer, throughGroupId);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", throughGroupId, access, "view");
   const row = await first<EventSeriesRow>(
     db,
@@ -404,7 +404,7 @@ export async function updateGroupEventSeries(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while the update was being saved");
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       if (scheduleChanged) {
         throw new AppError(
           409,

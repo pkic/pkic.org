@@ -177,7 +177,7 @@ async function manageInvitation(
 }
 
 test("a selected-group manager manages an attendee invitation without admin APIs", async ({ page }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-event"));
+  await signInToPortal(page, e2eAdminEmail("portal-event-invitations"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const event = await createPublicGroupEvent(page, unique);
   await manageInvitation(page, event, "attendee", "Portal Invitee", `portal-invitee-${unique}@pkic.org`);

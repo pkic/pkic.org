@@ -6,7 +6,7 @@ import { renderEmail, renderSubject } from "../../../../../../../_lib/email/rend
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { applyCampaignCustomText } from "../../../../../../../_lib/email/campaign-custom";
-import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
+import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/email-templates";
 import { loadEmailRenderResources } from "../../../../../../../_lib/email/partials";
 import {
   proposalPageUrl,

@@ -12,7 +12,7 @@ import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
 import { ACTIVE_VOTING_MEMBER_CAPACITY_SELECT, isActiveVotingMemberCapacity } from "../categories";
 
 export interface MemberApplicationRow {
@@ -290,7 +290,7 @@ export async function submitApplicationConcern(
       ),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "CONCERN_ELIGIBILITY_CHANGED",

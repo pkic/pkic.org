@@ -6,10 +6,10 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
  * Leadership positions (consolidated migration 0035) — Board of Directors and Executive
- * Council rosters, admin-managed and publicly readable. Replaces the static
+ * Council rosters, system-managed and publicly readable. Replaces the static
  * `content/about/board.md` / `executive-council.md` person-card lists the
  * same way consolidated migration 0035's group chairs replaced static frontmatter:
- * assigned in the admin portal, rendered client-side on the public site.
+ * assigned in the System portal, rendered client-side on the public site.
  */
 
 export const leadershipBodySchema = z.enum(["board", "executive_council"]);
@@ -82,8 +82,8 @@ export const leadershipAffiliationsRouteSchema = {
   },
 };
 
-export const ADMIN_LEADERSHIP_POSITION_SORT_COLUMNS = ["name", "title", "starts_at", "ends_at", "created_at"] as const;
-export const leadershipPositionsListQuerySchema = listQuerySchema(ADMIN_LEADERSHIP_POSITION_SORT_COLUMNS).extend({
+export const LEADERSHIP_POSITION_SORT_COLUMNS = ["name", "title", "starts_at", "ends_at", "created_at"] as const;
+export const leadershipPositionsListQuerySchema = listQuerySchema(LEADERSHIP_POSITION_SORT_COLUMNS).extend({
   body: leadershipBodySchema,
   status: z.enum(["current", "past"]).optional(),
 });
@@ -97,7 +97,7 @@ export type LeadershipPositionsListResponse = z.infer<typeof leadershipPositions
 
 export const leadershipPositionsListRouteSchema = {
   tags: ["Leadership"],
-  summary: "List Board / Executive Council positions (admin)",
+  summary: "List Board / Executive Council positions",
   description: "A searchable, sortable, bounded page of positions for the requested body.",
   request: { query: leadershipPositionsListQuerySchema },
   responses: {

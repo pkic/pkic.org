@@ -18,16 +18,16 @@ import { effectiveMeetingGuestInviteExpirySql } from "../../invite-validity";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import {
   buildLiveAccessibleGroupResourceIdsCte,
+  liveGroupResourceContextAccess,
   type GroupResourceViewer,
   type LiveGroupResourceContextAccess,
 } from "../resource-grants";
 import { commitEventResourceManagementBatch } from "./management";
 import { sealProviderJoinUrl } from "./provider-url";
 import { type EventOccurrenceRow, toEventOccurrence } from "./record";
-import { liveEventResourceContextAccess } from "./read-access";
 import { getGroupEventSeries, getManagedGroupEventSeries } from "./series";
 
 type OccurrenceCreateInput = z.infer<typeof eventOccurrenceCreateSchema>;
@@ -104,7 +104,7 @@ export async function listSeriesOccurrences(
   seriesId: string,
   query: OccurrenceListQuery,
 ) {
-  const access = liveEventResourceContextAccess(viewer, groupIdOrSlug);
+  const access = liveGroupResourceContextAccess(viewer, groupIdOrSlug);
   const pageQuery = buildSeriesOccurrencesPageQuery(groupIdOrSlug, access, seriesId, query);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupIdOrSlug, access, "view");
   const [pageResult, countResult, accessResult] = await db.batch([
@@ -208,7 +208,7 @@ export async function createSeriesOccurrence(
         .bind(seriesId, seriesId, now, series.eventId),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
     }
     throw error;
@@ -289,7 +289,7 @@ export async function updateSeriesOccurrence(
         .bind(seriesId, seriesId, now, current.series.eventId),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
     }
     throw error;

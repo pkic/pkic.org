@@ -2,11 +2,11 @@
  * leadership.test.ts
  *
  * Board of Directors / Executive Council leadership positions (consolidated
- * migration 0035) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
+ * migration 0035) — System CRUD (functions/api/v1/system/leadership-positions) and the
  * public roster + consortium-chairs reads (functions/api/v1/leadership). See
  * functions/_lib/services/leadership.ts for the design (a dedicated table
  * instead of user_roles, since Board/EC need many simultaneous holders, an
- * explicit admin-set "from" date, and a free-text title).
+ * explicit staff-set "from" date, and a free-text title).
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -101,7 +101,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
   it("creates a position, requiring the target user to exist", async () => {
     const memberId = await insertUser("chair@example.test", ["Chris", "Bailey"]);
 
-    const missingUser = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const missingUser = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({
         body: "board",
@@ -112,7 +112,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     });
     expect(missingUser.status).toBe(404);
 
-    const created = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const created = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId: memberId, title: "Board Chair", startsAt: "2025-03-01" }),
     });
@@ -132,7 +132,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
 
     const affiliationsResponse = await call(
       adminToken,
-      `/api/v1/admin/leadership-positions/users/${userId}/affiliations`,
+      `/api/v1/system/leadership-positions/users/${userId}/affiliations`,
     );
     expect(affiliationsResponse.status).toBe(200);
     const affiliations = leadershipAffiliationsResponseSchema.parse(await affiliationsResponse.json());
@@ -140,14 +140,14 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
       [firstMemberId, secondMemberId].sort(),
     );
 
-    const ambiguous = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const ambiguous = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2026-01-01" }),
     });
     expect(ambiguous.status).toBe(422);
     expect(await ambiguous.json()).toMatchObject({ error: { code: "AFFILIATION_REQUIRED" } });
 
-    const createdResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const createdResponse = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({
         body: "board",
@@ -179,7 +179,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     ).run();
 
     try {
-      const response = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      const response = await call(adminToken, "/api/v1/system/leadership-positions", {
         method: "POST",
         body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2026-01-01" }),
       });
@@ -194,22 +194,22 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const boardMember = await insertUser("board-only@example.test", ["Board", "Only"]);
     const ecMember = await insertUser("ec-only@example.test", ["Ec", "Only"]);
 
-    await call(adminToken, "/api/v1/admin/leadership-positions", {
+    await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId: boardMember, title: "Board Member", startsAt: "2022-06-01" }),
     });
-    await call(adminToken, "/api/v1/admin/leadership-positions", {
+    await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "executive_council", userId: ecMember, title: "EC Member", startsAt: "2022-06-01" }),
     });
 
     const boardList = leadershipPositionsListResponseSchema.parse(
-      await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json(),
+      await (await call(adminToken, "/api/v1/system/leadership-positions?body=board")).json(),
     );
     expect(boardList.positions.map((p) => p.name)).toEqual(["Board Only"]);
 
     const ecList = leadershipPositionsListResponseSchema.parse(
-      await (await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")).json(),
+      await (await call(adminToken, "/api/v1/system/leadership-positions?body=executive_council")).json(),
     );
     expect(ecList.positions.map((p) => p.name)).toEqual(["Ec Only"]);
 
@@ -217,7 +217,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
       await (
         await call(
           adminToken,
-          "/api/v1/admin/leadership-positions?body=board&status=current&q=Board&limit=1&sort=-starts_at",
+          "/api/v1/system/leadership-positions?body=board&status=current&q=Board&limit=1&sort=-starts_at",
         )
       ).json(),
     );
@@ -226,19 +226,19 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
   });
 
   it("rejects an unknown body value", async () => {
-    const response = await call(adminToken, "/api/v1/admin/leadership-positions?body=not-a-body");
+    const response = await call(adminToken, "/api/v1/system/leadership-positions?body=not-a-body");
     expect(response.status).toBe(400);
   });
 
   it("updates a position's title and dates, and moving endsAt into the past turns it into a past position", async () => {
     const userId = await insertUser("editable@example.test", ["Ed", "Itable"]);
-    const createResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const createResponse = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2022-06-01" }),
     });
     const created = (await createResponse.json()) as { id: string };
 
-    const patchResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${created.id}`, {
+    const patchResponse = await call(adminToken, `/api/v1/system/leadership-positions/${created.id}`, {
       method: "PATCH",
       body: JSON.stringify({ title: "Board Chair", endsAt: "2026-01-01" }),
     });
@@ -247,20 +247,20 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(patched.title).toBe("Board Chair");
     expect(patched.endsAt).toBe("2026-01-01");
 
-    const list = (await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json()) as {
+    const list = (await (await call(adminToken, "/api/v1/system/leadership-positions?body=board")).json()) as {
       positions: Array<{ endsAt: string | null }>;
     };
     expect(list.positions[0].endsAt).toBe("2026-01-01");
   });
 
   it("PATCH/DELETE on an unknown position id returns 404", async () => {
-    const patchResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${crypto.randomUUID()}`, {
+    const patchResponse = await call(adminToken, `/api/v1/system/leadership-positions/${crypto.randomUUID()}`, {
       method: "PATCH",
       body: JSON.stringify({ title: "X" }),
     });
     expect(patchResponse.status).toBe(404);
 
-    const deleteResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${crypto.randomUUID()}`, {
+    const deleteResponse = await call(adminToken, `/api/v1/system/leadership-positions/${crypto.randomUUID()}`, {
       method: "DELETE",
     });
     expect(deleteResponse.status).toBe(404);
@@ -268,19 +268,19 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
 
   it("deletes a position", async () => {
     const userId = await insertUser("removable@example.test", ["Rem", "Ovable"]);
-    const createResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const createResponse = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "executive_council", userId, title: "EC Member", startsAt: "2022-06-01" }),
     });
     const created = (await createResponse.json()) as { id: string };
 
-    const deleteResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${created.id}`, {
+    const deleteResponse = await call(adminToken, `/api/v1/system/leadership-positions/${created.id}`, {
       method: "DELETE",
     });
     expect(deleteResponse.status).toBe(200);
 
     const list = (await (
-      await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")
+      await call(adminToken, "/api/v1/system/leadership-positions?body=executive_council")
     ).json()) as { positions: unknown[] };
     expect(list.positions).toHaveLength(0);
   });
@@ -290,10 +290,10 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     await assignRole(staffUserId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-no-grant-token");
 
-    expect((await call(staffToken, "/api/v1/admin/leadership-positions?body=board")).status).toBe(403);
+    expect((await call(staffToken, "/api/v1/system/leadership-positions?body=board")).status).toBe(403);
     expect(
       (
-        await call(staffToken, "/api/v1/admin/leadership-positions", {
+        await call(staffToken, "/api/v1/system/leadership-positions", {
           method: "POST",
           body: JSON.stringify({ body: "board", userId: staffUserId, title: "Board Member", startsAt: "2022-06-01" }),
         })
@@ -319,14 +319,65 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-with-grant-token");
 
-    const createResponse = await call(staffToken, "/api/v1/admin/leadership-positions", {
+    const createResponse = await call(staffToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId: targetUserId, title: "Board Member", startsAt: "2022-06-01" }),
     });
     expect(createResponse.status).toBe(201);
 
-    const listResponse = await call(staffToken, "/api/v1/admin/leadership-positions?body=board");
+    const listResponse = await call(staffToken, "/api/v1/system/leadership-positions?body=board");
     expect(listResponse.status).toBe(200);
+  });
+
+  it("lets a revoke-only staff user inspect and remove positions without creating or editing them", async () => {
+    const staffUserId = await insertUser("staff-with-revoke@example.test");
+    const targetUserId = await insertUser("revoke-target@example.test");
+    const createdResponse = await call(adminToken, "/api/v1/system/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId: targetUserId, title: "Board Member", startsAt: "2022-06-01" }),
+    });
+    const created = leadershipPositionResponseSchema.parse(await createdResponse.json());
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'access:revoke', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-with-revoke-token");
+
+    expect((await call(staffToken, "/api/v1/system/leadership-positions?body=board")).status).toBe(200);
+    expect(
+      (
+        await call(staffToken, "/api/v1/system/leadership-positions", {
+          method: "POST",
+          body: JSON.stringify({
+            body: "board",
+            userId: targetUserId,
+            title: "Another position",
+            startsAt: "2026-01-01",
+          }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call(staffToken, `/api/v1/system/leadership-positions/${created.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ title: "Changed" }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await call(staffToken, `/api/v1/system/leadership-positions/${created.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
+  });
+
+  it("rejects anonymous and API-key access and leaves the retired admin route unavailable", async () => {
+    expect((await call(null, "/api/v1/system/leadership-positions?body=board")).status).toBe(401);
+    expect(
+      (await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/system/leadership-positions?body=board")).status,
+    ).toBe(403);
+    expect((await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).status).toBe(404);
   });
 
   it("public GET /api/v1/leadership/:body returns current and past positions with organization enrichment, isolated per body", async () => {
@@ -335,11 +386,11 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     await insertMember(chairUserId, orgId);
     const pastUserId = await insertUser("kirk@example.test", ["Kirk", "Hall"]);
 
-    await call(adminToken, "/api/v1/admin/leadership-positions", {
+    await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId: chairUserId, title: "Board Chair", startsAt: "2025-03-01" }),
     });
-    await call(adminToken, "/api/v1/admin/leadership-positions", {
+    await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({
         body: "board",
@@ -376,7 +427,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const orgId = await insertOrganization("Unsafe Leadership Org", "javascript:alert(1)");
     const userId = await insertUser("unsafe-leader@example.test", ["Unsafe", "Leader"]);
     await insertMember(userId, orgId);
-    const createResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+    const createResponse = await call(adminToken, "/api/v1/system/leadership-positions", {
       method: "POST",
       body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2026-01-01" }),
     });

@@ -12,7 +12,7 @@ import { runSponsorshipDueWork } from "../functions/_lib/services/sponsorship-sc
 import { nowIso } from "../functions/_lib/utils/time";
 import { initialRenewalActionDueAt } from "../functions/_lib/services/sponsorship/renewal-policy";
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
-import { advanceSponsorshipStage, updateAdminSponsorship } from "../functions/_lib/services/sponsorship/admin-pipeline";
+import { advanceSponsorshipStage, updateSponsorship } from "../functions/_lib/services/sponsorship/pipeline";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { renderEmail } from "../functions/_lib/email/render";
@@ -299,7 +299,7 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     const staleRun = runSponsorshipDueWork(gate.db, env as any);
     await gate.reached;
 
-    await updateAdminSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: replacementRenewalDate });
+    await updateSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: replacementRenewalDate });
     gate.release();
 
     expect((await staleRun).reminders60Sent).toBe(0);
@@ -450,11 +450,11 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     expect((await runSponsorshipDueWork(env.DB, env as any)).reminders60Sent).toBe(1);
 
     const firstLapseDate = isoDaysFromNow(-1);
-    await updateAdminSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: firstLapseDate });
+    await updateSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: firstLapseDate });
     expect((await runSponsorshipDueWork(env.DB, env as any)).autoLapsed).toBe(1);
 
     const secondRenewalDate = isoDaysFromNow(46);
-    await updateAdminSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: secondRenewalDate });
+    await updateSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: secondRenewalDate });
     await env.DB.prepare("UPDATE sponsorships SET start_date = '2025-01-01T00:00:00.000Z' WHERE id = ?")
       .bind(sponsorshipId)
       .run();
@@ -471,7 +471,7 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     expect((await runSponsorshipDueWork(env.DB, env as any)).reminders60Sent).toBe(1);
 
     const secondLapseDate = isoDaysFromNow(-2);
-    await updateAdminSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: secondLapseDate });
+    await updateSponsorship(env.DB, staffUserId, sponsorshipId, { renewalDate: secondLapseDate });
     expect((await runSponsorshipDueWork(env.DB, env as any)).autoLapsed).toBe(1);
     const effectKeys = (
       await queryAll<{ effect_key: string }>(

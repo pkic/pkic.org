@@ -66,6 +66,163 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(contentReviewer, "/system/organization-content-reviews")).toBeNull();
   });
 
+  it("exposes System Analytics only to a global analytics reader", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "analytics:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toEqual([
+      { path: "/system/analytics", section: "system", label: "Analytics" },
+    ]);
+    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+    expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/management");
+  });
+
+  it("exposes Donations to global readers or synchronizers", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "donations:read", contextType: null, contextId: null }],
+    });
+    const synchronizer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "donations:sync", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "donations:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/donations",
+      section: "system",
+      label: "Donations",
+    });
+    expect(portalSystemNavigationItems(synchronizer)).toContainEqual({
+      path: "/system/donations",
+      section: "system",
+      label: "Donations",
+    });
+    expect(portalHasGlobalPermission(reader, "donations:read")).toBe(true);
+    expect(portalHasGlobalPermission(synchronizer, "donations:read")).toBe(false);
+    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/donations" }),
+    );
+  });
+
+  it("exposes Sponsorships to global readers or writers", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "sponsorships:read", contextType: null, contextId: null }],
+    });
+    const writer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "sponsorships:read", contextType: null, contextId: null },
+        { permission: "sponsorships:write", contextType: null, contextId: null },
+      ],
+    });
+    const writeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "sponsorships:write", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "sponsorships:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/sponsorships",
+      section: "system",
+      label: "Sponsorships",
+    });
+    expect(portalHasGlobalPermission(reader, "sponsorships:write")).toBe(false);
+    expect(portalHasGlobalPermission(writer, "sponsorships:write")).toBe(true);
+    expect(portalSystemNavigationItems(writeOnly)).toContainEqual({
+      path: "/system/sponsorships",
+      section: "system",
+      label: "Sponsorships",
+    });
+    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/sponsorships" }),
+    );
+  });
+
+  it("exposes Organizations to global readers or membership writers", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "organizations:read", contextType: null, contextId: null }],
+    });
+    const membershipWriter = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "membership:write", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "organizations:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/organizations",
+      section: "system",
+      label: "Organizations",
+    });
+    expect(portalSystemNavigationItems(membershipWriter)).toContainEqual({
+      path: "/system/organizations",
+      section: "system",
+      label: "Organizations",
+    });
+    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/organizations" }),
+    );
+  });
+
+  it("exposes Users only to a global reader, while retaining action permissions after entry", () => {
+    const actionOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "users:write", contextType: null, contextId: null },
+        { permission: "users:anonymize", contextType: null, contextId: null },
+        { permission: "membership:write", contextType: null, contextId: null },
+      ],
+    });
+    const readerAndWriter = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "users:read", contextType: null, contextId: null },
+        { permission: "users:write", contextType: null, contextId: null },
+      ],
+    });
+
+    expect(portalSystemNavigationItems(actionOnly)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/users" }),
+    );
+    expect(portalSystemNavigationItems(readerAndWriter)).toContainEqual({
+      path: "/system/users",
+      section: "system",
+      label: "Users",
+    });
+    expect(portalHasGlobalPermission(readerAndWriter, "users:write")).toBe(true);
+  });
+
   it("exposes membership applications only to a global membership reader", () => {
     const reader = portalSessionFixture({
       admin: true,
@@ -91,6 +248,132 @@ describe("portal capability-derived navigation", () => {
       },
     ]);
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+  });
+
+  it("exposes email templates to a global reader or writer", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email-templates:read", contextType: null, contextId: null }],
+    });
+    const writer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "email-templates:read", contextType: null, contextId: null },
+        { permission: "email-templates:write", contextType: null, contextId: null },
+      ],
+    });
+    const writeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email-templates:write", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email-templates:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/email-templates",
+      section: "system",
+      label: "Email Templates",
+    });
+    expect(portalHasGlobalPermission(reader, "email-templates:write")).toBe(false);
+    expect(portalHasGlobalPermission(writer, "email-templates:write")).toBe(true);
+    expect(portalSystemNavigationItems(writeOnly)).toContainEqual({
+      path: "/system/email-templates",
+      section: "system",
+      label: "Email Templates",
+    });
+    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+  });
+
+  it("exposes System Operations for either global email or operations read authority", () => {
+    const emailReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email:read", contextType: null, contextId: null }],
+    });
+    const operationsReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "operations:read", contextType: null, contextId: null }],
+    });
+    const writeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email:manage", contextType: null, contextId: null }],
+    });
+    const contextual = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "operations:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(emailReader)).toContainEqual({
+      path: "/system/operations",
+      section: "system",
+      label: "Operations",
+    });
+    expect(portalSystemNavigationItems(operationsReader)).toContainEqual({
+      path: "/system/operations",
+      section: "system",
+      label: "Operations",
+    });
+    expect(portalSystemNavigationItems(writeOnly)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/operations" }),
+    );
+    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/operations" }),
+    );
+  });
+
+  it("exposes Access Control for either global grant or revoke authority, never contextual authority", () => {
+    const grantOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "access:grant", contextType: null, contextId: null }],
+    });
+    const revokeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "access:revoke", contextType: null, contextId: null }],
+    });
+    const contextual = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "access:grant", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
+      path: "/system/access-control",
+      section: "system",
+      label: "Access Control",
+    });
+    expect(portalSystemNavigationItems(revokeOnly)).toContainEqual({
+      path: "/system/access-control",
+      section: "system",
+      label: "Access Control",
+    });
+    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/access-control" }),
+    );
+    expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/management");
+    expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
+      path: "/system/leadership",
+      section: "system",
+      label: "Leadership",
+    });
+    expect(portalSystemNavigationItems(revokeOnly)).toContainEqual({
+      path: "/system/leadership",
+      section: "system",
+      label: "Leadership",
+    });
+    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/leadership" }),
+    );
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {

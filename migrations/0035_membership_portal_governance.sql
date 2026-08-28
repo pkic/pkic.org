@@ -2025,7 +2025,7 @@ A member of our team will follow up with you shortly to discuss next steps.',
 - Tier: {{tierText}}
 - Notes: {{notesText}}
 
-[View in admin]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   );
 
@@ -2440,6 +2440,12 @@ CREATE TABLE permission_grants (
 
 CREATE INDEX idx_permission_grants_user ON permission_grants(user_id);
 CREATE INDEX idx_permission_grants_context ON permission_grants(context_type, context_id);
+-- A user can hold one active direct permission per global or scoped context.
+-- Retained revoked rows remain available for audit history and can be followed
+-- by a later re-grant without weakening this effective-authority invariant.
+CREATE UNIQUE INDEX uq_permission_grants_active_user_permission_context
+  ON permission_grants(user_id, permission, COALESCE(context_type, ''), COALESCE(context_id, ''))
+  WHERE revoked_at IS NULL;
 
 CREATE TRIGGER validate_permission_grant_context_insert
 BEFORE INSERT ON permission_grants
@@ -2589,12 +2595,17 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'groups:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email:manage', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'donations:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'donations:sync', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'users:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'users:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'users:anonymize', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'audit:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'analytics:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'operations:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'operations:run', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:grant', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:revoke', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'organizations:read', datetime('now')),
@@ -3916,7 +3927,7 @@ VALUES
     'Sponsorship renewal due in 60 days',
     'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (60 days from now).
 
-[View sponsorship]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -3924,7 +3935,7 @@ VALUES
     'Sponsorship renewal due in 30 days',
     'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (30 days from now).
 
-[View sponsorship]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -3932,7 +3943,7 @@ VALUES
     'Sponsorship lapsed',
     'The {{tierText}} sponsorship for {{organizationNameText}} passed its renewal date ({{renewalDate}}) with no renewal recorded and has been automatically marked lapsed.
 
-[View sponsorship]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -5534,3 +5545,25 @@ VALUES (
 Actions you take in this representative capacity are attributed to {{organizationName}}. No acceptance is required. If this change is unexpected, please contact an authorized contact for the organization.',
   'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
 );
+
+-- Email rendering has one canonical active version per template. Normalize any
+-- branch-local duplicate active rows before enforcing the invariant; this is an
+-- in-place status correction and does not rebuild the table.
+WITH ranked_active_templates AS (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY template_key
+           ORDER BY version DESC, created_at DESC, id DESC
+         ) AS active_rank
+  FROM email_template_versions
+  WHERE status = 'active'
+)
+UPDATE email_template_versions
+SET status = 'archived'
+WHERE id IN (
+  SELECT id FROM ranked_active_templates WHERE active_rank > 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_template_versions_one_active
+  ON email_template_versions(template_key)
+  WHERE status = 'active';

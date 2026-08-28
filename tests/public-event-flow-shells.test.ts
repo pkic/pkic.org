@@ -39,7 +39,9 @@ const NO_DB = {
   },
 } as unknown as DatabaseLike;
 
-function assetsFor(options: { staticPaths?: string[]; missingShell?: string } = {}): AssetRecorder {
+function assetsFor(
+  options: { staticPaths?: string[]; missingShell?: string; throwOnPath?: string } = {},
+): AssetRecorder {
   const calls: Request[] = [];
   const staticPaths = new Set(options.staticPaths ?? []);
   const assets: AssetRecorder = {
@@ -47,6 +49,7 @@ function assetsFor(options: { staticPaths?: string[]; missingShell?: string } = 
     fetch: vi.fn(async (request: Request) => {
       calls.push(request);
       const pathname = new URL(request.url).pathname;
+      if (options.throwOnPath === pathname) throw new Error("sensitive upstream asset failure");
       if (staticPaths.has(pathname)) {
         return new Response("existing Hugo event page", {
           status: 200,
@@ -187,6 +190,8 @@ describe("portal event public flow shells", () => {
     expectPrivateNoStoreHeaders(response);
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
+    expect(response.headers.get("content-security-policy")).toContain("https://js.stripe.com");
+    expect(response.headers.get("content-security-policy")).toContain("frame-src https://js.stripe.com");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
@@ -232,6 +237,27 @@ describe("portal event public flow shells", () => {
     );
     expect(unavailableResponse.status).toBe(503);
     expectPrivateNoStoreHeaders(unavailableResponse);
+  });
+
+  it("fails closed with a sanitized response when the shared shell is unavailable", async () => {
+    const shellPath = "/_event-flow-shells/registration/";
+
+    for (const assets of [assetsFor({ missingShell: shellPath }), assetsFor({ throwOnPath: shellPath })]) {
+      const response = await app.fetch(request(`${EVENT_BASE_PATH}register/`), workerEnv(assets, NO_DB), {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("content-type")).toContain("text/plain");
+      expectPrivateNoStoreHeaders(response);
+      expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      await expect(response.text()).resolves.toBe("Event page temporarily unavailable.");
+      expect(assets.calls.map((call) => new URL(call.url).pathname)).toEqual([
+        `${EVENT_BASE_PATH}register/`,
+        shellPath,
+      ]);
+    }
   });
 
   it("serves a generic shell for disabled or unknown event state", async () => {

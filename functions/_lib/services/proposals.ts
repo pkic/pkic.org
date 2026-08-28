@@ -21,7 +21,7 @@ import {
 } from "../../../assets/shared/schemas/proposal-status";
 import type { ProposalType } from "../../../assets/shared/schemas/proposal-management";
 import { parseJsonSafe } from "../utils/json";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import { recordProposalDecision } from "./proposal-decisions";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
@@ -312,7 +312,7 @@ export async function updateProposalForVerifiedOwner(
         throw registrationChangedError();
       }
       if (
-        isAuditOneChangeGuardFailure(error) ||
+        isAuditChangeGuardFailure(error) ||
         isEventParticipantSourceConflict(error) ||
         isProposalSpeakerRosterConflict(error)
       ) {
@@ -431,7 +431,7 @@ export async function updateProposalForVerifiedOwner(
     if (isFormSubmissionContextConflict(error)) {
       throw formSubmissionContextChangedError();
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was processed");
     }
     throw error;

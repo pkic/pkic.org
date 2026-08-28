@@ -137,14 +137,15 @@ describe("OpenAPI auth decoration", () => {
     expect(operation[MCP_EXTENSION].scopesAnyOf).toEqual(alternatives);
   });
 
-  it("marks internal admin routes and leaves non-admin token workflows as schema-documented inputs", () => {
+  it("preserves explicit canonical operation scopes and leaves non-admin token workflows schema-documented", () => {
     const decorated = decorateOpenApiSpec({
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
       paths: {
-        "/api/v1/internal/email/retry": {
+        "/api/v1/operations/reminders/run": {
           post: {
-            operationId: "retryEmail",
+            operationId: "runReminders",
+            [AUTH_EXTENSION]: { required: true, scopes: ["operations:read", "operations:run"] },
           },
         },
         "/api/v1/events/{eventSlug}/invites": {
@@ -159,12 +160,12 @@ describe("OpenAPI auth decoration", () => {
       },
     });
 
-    const internalOperation = decorated.paths["/api/v1/internal/email/retry"].post;
-    expect(internalOperation.security).toEqual([{ BearerAuth: ["admin:read"] }]);
-    expect(internalOperation[AUTH_EXTENSION]).toEqual({
+    const operationsCommand = decorated.paths["/api/v1/operations/reminders/run"].post;
+    expect(operationsCommand.security).toEqual([{ BearerAuth: ["operations:read", "operations:run"] }]);
+    expect(operationsCommand[AUTH_EXTENSION]).toEqual({
       required: true,
       scheme: "BearerAuth",
-      scopes: ["admin:read"],
+      scopes: ["operations:read", "operations:run"],
     });
 
     const inviteOperation = decorated.paths["/api/v1/events/{eventSlug}/invites"].post;

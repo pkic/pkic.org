@@ -8,6 +8,7 @@ import {
   groupManagementCandidateAuthorizationEvidence,
   groupPermissionAuthorizationEvidence,
 } from "../groups/governance";
+import { managedGroupResourceAuthorizationEvidence } from "../resource-grants/access";
 import { getResourceGrantDefinition, memberResourceGrantCapabilitiesFor } from "../resource-grants/definitions";
 
 const VOTE_GRANTS = getResourceGrantDefinition("vote");
@@ -110,33 +111,10 @@ function managementEvidence(actor: AuthAdmin, voteId: string, context: VoteManag
   };
 }
 
-function exactManagementEvidence(
-  actor: AuthAdmin,
-  voteId: string,
-  context: VoteManagementContext,
-  throughGroupId: string,
-): AuthorizationEvidence {
-  const groupManagement = groupManagementAuthorizationEvidence(actor, [throughGroupId]);
-  if (context.ownerGroupId === throughGroupId) {
-    const votePermission = groupPermissionAuthorizationEvidence(actor, [throughGroupId], "votes:manage");
-    return {
-      sql: `SELECT 1
-              FROM votes managed_vote
-             WHERE managed_vote.id = ?
-               AND managed_vote.owner_group_id = ?
-               AND (EXISTS (${votePermission.sql}) OR EXISTS (${groupManagement.sql}))`,
-      bindings: [voteId, throughGroupId, ...votePermission.bindings, ...groupManagement.bindings],
-    };
-  }
-  return {
-    sql: `SELECT 1
-            FROM vote_group_grants active_grant
-           WHERE active_grant.vote_id = ?
-             AND active_grant.group_id = ?
-             AND active_grant.capability = 'manage'
-             AND EXISTS (${groupManagement.sql})`,
-    bindings: [voteId, throughGroupId, ...groupManagement.bindings],
-  };
+function exactManagementEvidence(actor: AuthAdmin, voteId: string, throughGroupId: string): AuthorizationEvidence {
+  return managedGroupResourceAuthorizationEvidence(actor, throughGroupId, "vote", voteId, "manage", {
+    ownerPermission: "votes:manage",
+  });
 }
 
 export async function voteManagementAuthorizationEvidence(
@@ -145,11 +123,10 @@ export async function voteManagementAuthorizationEvidence(
   voteId: string,
   throughGroupId?: string,
 ): Promise<AuthorizationEvidence | null> {
+  if (throughGroupId) return exactManagementEvidence(actor, voteId, throughGroupId);
   const context = await resolveVoteManagementContext(db, voteId);
   if (!context) return null;
-  return throughGroupId
-    ? exactManagementEvidence(actor, voteId, context, throughGroupId)
-    : managementEvidence(actor, voteId, context);
+  return managementEvidence(actor, voteId, context);
 }
 
 export async function hasVoteManagementAuthorization(

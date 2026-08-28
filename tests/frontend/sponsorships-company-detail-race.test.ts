@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
-import { useCompanySponsorships } from "../../assets/ts/admin/sections/Sponsorships/useCompanySponsorships";
-import type { Sponsorship, SponsorshipCompany } from "../../assets/ts/admin/types";
+import { useCompanySponsorships } from "../../assets/ts/member-flows/portal/sections/system-sponsorships/useCompanySponsorships";
+import type { Sponsorship, SponsorshipCompany } from "../../assets/shared/schemas/sponsorship-management";
 
 /**
  * P7-R01 (Phase 7 line-by-line review): the company-detail panel's "Load

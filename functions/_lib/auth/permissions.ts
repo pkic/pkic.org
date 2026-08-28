@@ -6,7 +6,12 @@
  * can further restrict (never expand) those effective permissions.
  */
 import { all } from "../db/queries";
-import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../db/authorization-guard";
+import { guardDatabaseBatches } from "../db/guarded-database";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, PermissionGrant, StatementLike } from "../types";
 import { isUserBackedAuthAdmin } from "./admin-identity";
@@ -224,6 +229,31 @@ export function preparePermissionsAuthorizationGuard(
   requirements: readonly PermissionRequirement[],
 ): StatementLike {
   return prepareAuthorizationGuard(db, permissionsAuthorizationEvidence(actor, requirements));
+}
+
+/**
+ * Rechecks permission requirements before every batch issued by a mutation
+ * service. The guard and the caller's statements commit or roll back as one D1
+ * batch, while each domain retains its own public error code and message.
+ */
+export function guardPermissionMutationDatabase(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  requirements: readonly PermissionRequirement[],
+  authorizationChangedError: () => AppError,
+): DatabaseLike {
+  return guardDatabaseBatches(db, async (statements) => {
+    try {
+      const [, ...results] = await db.batch([
+        preparePermissionsAuthorizationGuard(db, actor, requirements),
+        ...statements,
+      ]);
+      return results;
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) throw authorizationChangedError();
+      throw error;
+    }
+  });
 }
 
 interface EmailRow {

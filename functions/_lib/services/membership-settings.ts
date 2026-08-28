@@ -11,7 +11,7 @@ import { adminDatabaseUserId } from "../auth/admin-identity";
 import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import type { AuthAdmin, DatabaseLike } from "../types";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 
 export interface MembershipSettingsRow {
   id: string;
@@ -132,7 +132,7 @@ export async function updateMembershipSettings(
         "Membership-management permission changed while the settings were being saved",
       );
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership settings changed; reload and retry");
     }
     throw error;

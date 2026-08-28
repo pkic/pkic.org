@@ -3,18 +3,6 @@ import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
-import { Dashboard } from "../sections/Dashboard";
-import { Stats } from "../sections/Stats";
-import { Donations } from "../sections/Donations";
-import { DonationDetailPage } from "../sections/DonationDetailPage";
-import { Email } from "../sections/Email";
-import { DueWork } from "../sections/DueWork";
-import { Templates } from "../sections/Templates";
-import { Users, UserDetailView } from "../sections/Users";
-import { AccessControl } from "../sections/access-control";
-import { Leadership } from "../sections/access-control/Leadership";
-import { Organizations } from "../sections/Organizations";
-import { Sponsorships } from "../sections/Sponsorships";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -22,12 +10,22 @@ import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDe
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
+  ADMIN_ANALYTICS_REDIRECT_TARGET,
+  ADMIN_ACCESS_CONTROL_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+  ADMIN_LEADERSHIP_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+  ADMIN_ORGANIZATIONS_REDIRECT_TARGET,
+  ADMIN_DONATIONS_REDIRECT_TARGET,
+  ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET,
+  ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
+  ADMIN_OPERATIONS_REDIRECT_TARGET,
+  ADMIN_USERS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
@@ -71,17 +69,19 @@ export function AdminShell() {
             <Route
               path="/"
               component={() => (
-                <SectionWrapper title="Dashboard">
-                  <Dashboard />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
             <Route
               path="/dashboard"
               component={() => (
-                <SectionWrapper title="Dashboard">
-                  <Dashboard />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
 
@@ -164,92 +164,113 @@ export function AdminShell() {
             <Route
               path="/email"
               component={() => (
-                <SectionWrapper title="Email">
-                  <Email />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_OPERATIONS_REDIRECT_TARGET}
+                  message="Operations have moved to the portal."
+                />
+              )}
+            />
+            <Route
+              path="/email/outbox"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_OPERATIONS_REDIRECT_TARGET}
+                  message="Operations have moved to the portal."
+                />
               )}
             />
             <Route
               path="/email/templates"
               component={() => (
-                <SectionWrapper title="Email Templates">
-                  <Templates />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET}
+                  message="Email templates have moved to the portal."
+                />
               )}
             />
             <Route
               path="/duework"
               component={() => (
-                <SectionWrapper title="Due Work">
-                  <DueWork />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_OPERATIONS_REDIRECT_TARGET}
+                  message="Operations have moved to the portal."
+                />
               )}
             />
             <Route
               path="/stats/:subTab"
-              component={({ params }: { params: { subTab: string } }) => (
-                <SectionWrapper title="Stats">
-                  <Stats subTab={params.subTab} />
-                </SectionWrapper>
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
             <Route
               path="/stats"
               component={() => (
-                <SectionWrapper title="Stats">
-                  <Stats />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
             <Route
               path="/donations/detail/:id"
               component={({ params }: { params: { id: string } }) => (
-                <SectionWrapper title="Donation">
-                  <DonationDetailPage donationId={params.id} />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={`${ADMIN_DONATIONS_REDIRECT_TARGET}/detail/${encodeURIComponent(params.id)}`}
+                  message="Donation details have moved to the portal."
+                />
               )}
             />
             <Route
               path="/donations/:subTab"
               component={({ params }: { params: { subTab: string } }) => (
-                <SectionWrapper title="Donations">
-                  <Donations subTab={params.subTab} />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={
+                    params.subTab === "promoters"
+                      ? ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET
+                      : ADMIN_DONATIONS_REDIRECT_TARGET
+                  }
+                  message="Donations have moved to the portal."
+                />
               )}
             />
             <Route
               path="/donations"
               component={() => (
-                <SectionWrapper title="Donations">
-                  <Donations />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_DONATIONS_REDIRECT_TARGET}
+                  message="Donations have moved to the portal."
+                />
               )}
             />
             <Route
               path="/users/detail/:id"
-              component={({ params }: { params: { id: string } }) => {
-                const [, navigate] = useHashLocation();
-                return (
-                  <SectionWrapper title="Users">
-                    <UserDetailView userId={params.id} onBack={() => navigate("/users")} />
-                  </SectionWrapper>
-                );
-              }}
+              component={({ params }: { params: { id: string } }) => (
+                <PortalRedirect
+                  target={`${ADMIN_USERS_REDIRECT_TARGET}/${encodeURIComponent(params.id)}`}
+                  message="User management has moved to the portal."
+                />
+              )}
             />
             <Route
               path="/users"
               component={() => (
-                <SectionWrapper title="Users">
-                  <Users />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_USERS_REDIRECT_TARGET}
+                  message="User management has moved to the portal."
+                />
               )}
             />
             <Route
               path="/organizations"
               component={() => (
-                <SectionWrapper title="Organizations">
-                  <Organizations />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ORGANIZATIONS_REDIRECT_TARGET}
+                  message="Organizations have moved to the portal."
+                />
               )}
             />
             <Route
@@ -262,11 +283,21 @@ export function AdminShell() {
               )}
             />
             <Route
+              path="/sponsorships/:id"
+              component={({ params }: { params: { id: string } }) => (
+                <PortalRedirect
+                  target={`${ADMIN_SPONSORSHIPS_REDIRECT_TARGET}/${encodeURIComponent(params.id)}`}
+                  message="Sponsorship management has moved to the portal."
+                />
+              )}
+            />
+            <Route
               path="/sponsorships"
               component={() => (
-                <SectionWrapper title="Sponsorships">
-                  <Sponsorships />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_SPONSORSHIPS_REDIRECT_TARGET}
+                  message="Sponsorship management has moved to the portal."
+                />
               )}
             />
             <Route
@@ -317,17 +348,19 @@ export function AdminShell() {
             <Route
               path="/access-control"
               component={() => (
-                <SectionWrapper title="Access Control">
-                  <AccessControl />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ACCESS_CONTROL_REDIRECT_TARGET}
+                  message="Access Control has moved to the portal."
+                />
               )}
             />
             <Route
               path="/leadership"
               component={() => (
-                <SectionWrapper title="Leadership">
-                  <Leadership />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_LEADERSHIP_REDIRECT_TARGET}
+                  message="Leadership management has moved to the portal."
+                />
               )}
             />
             <Route

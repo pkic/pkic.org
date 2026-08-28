@@ -9,7 +9,7 @@ import {
   type EventInvitePreviewInput,
   type EventInviteType,
 } from "./event-invite-preview";
-import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import type { DatabaseLike } from "../types";
 import { resolveEventInviteExpiry } from "../invite-validity";
 import { EVENT_INVITE_SEND_BATCH_SIZE } from "../../../assets/shared/schemas/event-invite-bulk";

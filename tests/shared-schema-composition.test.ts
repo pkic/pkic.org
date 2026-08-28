@@ -10,13 +10,13 @@ import {
 } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationDetailSchema } from "../assets/shared/schemas/event-registration-detail";
 import { registrationRecordContextSchema } from "../assets/shared/schemas/registration-record";
-import { adminOrganizationLogoPutRouteSchema } from "../assets/shared/schemas/admin-organizations";
+import { organizationManagementLogoPutRouteSchema } from "../assets/shared/schemas/organization-management";
 import {
   sponsorshipCreateSchema,
   sponsorshipEditableFieldsSchema,
   sponsorshipLogoPutRouteSchema,
   sponsorshipUpdateSchema,
-} from "../assets/shared/schemas/admin-sponsorships";
+} from "../assets/shared/schemas/sponsorship-management";
 import { logoUploadResponseSchema } from "../assets/shared/schemas/images";
 import {
   eventSeriesCreateSchema,
@@ -36,9 +36,9 @@ import { successResponseSchema } from "../assets/shared/schemas/api-common";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
 import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
-import { adminMemberMutationResponseSchema } from "../assets/shared/schemas/admin-members";
-import { adminEmailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/admin-email-templates";
-import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
+import { memberCapacityMutationResponseSchema } from "../assets/shared/schemas/membership-management";
+import { emailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/email-templates";
+import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
 import { eventInviteValiditySchema } from "../assets/shared/schemas/event-invite-validity";
@@ -65,14 +65,14 @@ describe("canonical shared schema composition", () => {
   });
 
   it("uses one event identity contract across event workflow responses", () => {
-    expect(adminEventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
+    expect(eventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(eventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(adminEventStatsResponseSchema.shape.event).toBe(eventSummarySchema);
 
     const valid = { id: ID, slug: "pqc-2026", name: "PQC Conference 2026" };
     expect(eventSummarySchema.parse(valid)).toEqual(valid);
     for (const schema of [
-      adminEventProposalsResponseSchema.shape.event,
+      eventProposalsResponseSchema.shape.event,
       eventRegistrationsListResponseSchema.shape.event,
       adminEventStatsResponseSchema.shape.event,
     ]) {
@@ -95,7 +95,7 @@ describe("canonical shared schema composition", () => {
 
   it("keeps admin mutation payloads explicit instead of treating them as success-only commands", () => {
     expect(
-      adminMemberMutationResponseSchema.parse({
+      memberCapacityMutationResponseSchema.parse({
         member: {
           id: ID,
           userId: SECOND_ID,
@@ -109,7 +109,7 @@ describe("canonical shared schema composition", () => {
     ).toBe("H5");
 
     expect(
-      adminEmailTemplateVersionCreateResponseSchema.parse({
+      emailTemplateVersionCreateResponseSchema.parse({
         success: true,
         version: {
           id: ID,
@@ -213,7 +213,7 @@ describe("canonical shared schema composition", () => {
 
   it("uses one stored-logo response on organization and sponsorship uploads", () => {
     const organizationResponse =
-      adminOrganizationLogoPutRouteSchema.responses["200"].content["application/json"].schema;
+      organizationManagementLogoPutRouteSchema.responses["200"].content["application/json"].schema;
     const sponsorshipResponse = sponsorshipLogoPutRouteSchema.responses["200"].content["application/json"].schema;
     expect(organizationResponse).toBe(logoUploadResponseSchema);
     expect(sponsorshipResponse).toBe(logoUploadResponseSchema);

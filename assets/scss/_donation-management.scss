@@ -1,0 +1,106 @@
+$adm-surface: #fff !default;
+$adm-border: #dee2e6 !default;
+$adm-muted: #6c757d !default;
+$adm-green: #198754 !default;
+
+#admin-main,
+#portal-main {
+  .adm-donation-action-btn {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .adm-donation-detail {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    background: var(--bs-body-bg);
+  }
+
+  .adm-donation-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+
+    .lbl {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--bs-secondary-color);
+      margin-bottom: 0.1rem;
+    }
+
+    .val {
+      font-size: 0.85rem;
+    }
+  }
+
+  // Donation-management cards are shared by the portal and the retiring
+  // admin shell. Keep this visual vocabulary in one stylesheet so moving a
+  // destination does not create a second, subtly different implementation.
+  .adm-promoter-card {
+    background: $adm-surface;
+    border: 1px solid $adm-border;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .adm-promoter-info {
+    min-width: 0;
+    flex: 1 1 120px;
+
+    .name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: $adm-green;
+    }
+  }
+
+  .adm-promoter-stats {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+
+  .adm-promoter-group,
+  .adm-promoter-impact {
+    border-left: 2px solid #e9ecef;
+    padding-left: 0.75rem;
+  }
+
+  .adm-promoter-group-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #adb5bd;
+    margin-bottom: 0.2rem;
+  }
+
+  .adm-promoter-stat {
+    text-align: center;
+
+    .val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #212529;
+    }
+
+    .lbl {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: $adm-muted;
+      margin-top: 0.15rem;
+    }
+  }
+}

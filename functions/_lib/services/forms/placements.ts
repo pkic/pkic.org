@@ -13,12 +13,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import {
-  isAuditOneChangeGuardFailure,
-  prepareAuditLog,
-  prepareAuditLogAfterOneChange,
-  type AuditScope,
-} from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange, type AuditScope } from "../audit";
 
 export interface FormPlacementRow {
   id: string;
@@ -266,7 +261,7 @@ export async function updateManagedFormPlacement(
       ),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "FORM_PLACEMENT_CHANGED", "The form placement changed; reload and retry");
     }
     const message = error instanceof Error ? error.message : "";

@@ -1,0 +1,60 @@
+import { expect, test } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { signInToPortal } from "./helpers/portal-auth";
+
+const SYSTEM_ACCESS_API = "/api/v1/system/access-control";
+const REMOVED_ADMIN_PREFIXES = ["/api/v1/admin/access-grants", "/api/v1/admin/roles", "/api/v1/admin/users"];
+
+test("permitted staff manage a custom role through the System portal", async ({ page }) => {
+  const systemRequests: string[] = [];
+  const removedAdminRequests: string[] = [];
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === SYSTEM_ACCESS_API || pathname.startsWith(`${SYSTEM_ACCESS_API}/`)) {
+      systemRequests.push(`${request.method()} ${pathname}`);
+    }
+    if (REMOVED_ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+      removedAdminRequests.push(`${request.method()} ${pathname}`);
+    }
+  });
+
+  await signInToPortal(page, e2eAdminEmail("portal-access-control"));
+  await page.getByRole("link", { name: "System", exact: true }).click();
+  await page.getByRole("link", { name: "Access Control" }).click();
+  await page.getByRole("tab", { name: "Roles" }).click();
+
+  const roleName = `e2e_access_${Date.now()}`;
+  const createCard = page
+    .getByText("Create a custom role", { exact: true })
+    .locator("..", { has: page.locator("form") });
+  await createCard.getByLabel("Name").fill(roleName);
+  await createCard.getByLabel("Description").fill("Temporary browser-test role");
+
+  const createResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `${SYSTEM_ACCESS_API}/roles` && response.request().method() === "POST",
+  );
+  await createCard.getByRole("button", { name: "Create role" }).click();
+  expect((await createResponse).status()).toBe(201);
+
+  const roleRow = page.getByRole("row").filter({ has: page.getByText(roleName, { exact: true }) });
+  await expect(roleRow).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept());
+  const deleteResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.startsWith(`${SYSTEM_ACCESS_API}/roles/`) &&
+      response.request().method() === "DELETE",
+  );
+  await roleRow.getByRole("button", { name: "Delete" }).click();
+  expect((await deleteResponse).status()).toBe(200);
+  await expect(roleRow).toHaveCount(0);
+
+  await page.goto("/admin/#/access-control");
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control$/);
+  await expect(page.getByRole("link", { name: "Access Control" })).toBeVisible();
+
+  expect(systemRequests).toEqual(
+    expect.arrayContaining([`GET ${SYSTEM_ACCESS_API}/grants`, `GET ${SYSTEM_ACCESS_API}/roles`]),
+  );
+  expect(removedAdminRequests).toEqual([]);
+});

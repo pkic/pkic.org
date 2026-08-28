@@ -27,7 +27,7 @@ import {
   prepareUpdateFormSubmission,
   validateCustomAnswersAgainstForm,
 } from "../../forms";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
 import {
   getOrganizationDomainClaim,
   prepareClaimDomainForApplication,
@@ -453,7 +453,7 @@ export async function updateMembershipApplication(
     if (isFormSubmissionContextConflict(error)) {
       throw formSubmissionContextChangedError();
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "APPLICATION_CHANGED", "Application changed while this edit was being prepared");
     }
     if (organizationDomainChanged && nextOrganizationDomain) {

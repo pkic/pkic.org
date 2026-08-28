@@ -1,7 +1,7 @@
 /**
- * admin-donations.test.ts
+ * donations-management.test.ts
  *
- * Covers GET /api/v1/admin/donations (P6M-P2-02) — migrated from an
+ * Covers permission-derived donation management under the canonical resource API.
  * unbounded/manually-parsed handler onto the shared Chanfana query schema
  * + openApiRoute pattern every other admin list endpoint uses (see
  * functions/api/v1/admin/organizations/index.ts).
@@ -14,8 +14,11 @@ import { createAdminSession } from "./helpers/auth";
 import {
   donationPromotersListResponseSchema,
   donationsListResponseSchema,
-} from "../assets/shared/schemas/admin-donations";
+} from "../assets/shared/schemas/donation-management";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { insertUser } from "./helpers/membership";
+import { getCurrentUserBackedAdmin } from "../functions/_lib/auth/admin";
+import { reconcileDonations } from "../functions/_lib/services/donations/reconciliation";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -32,6 +35,33 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
+}
+
+async function createStaffToken(permission: "donations:read" | "donations:sync" | "audit:read") {
+  const userId = await insertUser(
+    env.DB,
+    `donations-${permission.replace(":", "-")}-${crypto.randomUUID()}@test.invalid`,
+  );
+  const grantId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO permission_grants
+       (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, NULL, NULL, ?, datetime('now'))`,
+  )
+    .bind(grantId, userId, permission, userId)
+    .run();
+  const sessionId = `donations-staff-${crypto.randomUUID()}`;
+  const token = await createAdminSession(env.DB, userId, sessionId);
+  const session = await env.DB.prepare("SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+    .bind(userId)
+    .first<{ id: string }>();
+  if (!session) throw new Error("Donation staff session was not created");
+  return {
+    userId,
+    grantId,
+    sessionId: session.id,
+    token,
+  };
 }
 
 async function insertDonation(opts: {
@@ -73,7 +103,7 @@ function stripeCheckoutSession(sessionId: string, paymentStatus: "paid" | "unpai
   };
 }
 
-describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
+describe("GET /api/v1/donations", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -108,7 +138,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("lists every donation with a status-count summary, default sort newest-first", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations");
+    const response = await call(adminToken, "/api/v1/donations");
     expect(response.status).toBe(200);
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_3", "cs_2", "cs_1"]);
@@ -121,7 +151,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("filters by status", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?status=pending");
+    const response = await call(adminToken, "/api/v1/donations?status=pending");
     expect(response.status).toBe(200);
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
@@ -135,18 +165,18 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("rejects an unknown status value instead of silently matching nothing", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?status=bogus");
+    const response = await call(adminToken, "/api/v1/donations?status=bogus");
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("sorts by an allowlisted column ascending/descending", async () => {
-    const asc = await call(adminToken, "/api/v1/admin/donations?sort=gross_amount");
+    const asc = await call(adminToken, "/api/v1/donations?sort=gross_amount");
     const ascBody = (await asc.json()) as { donations: Array<{ checkout_session_id: string }> };
     expect(ascBody.donations.map((d) => d.checkout_session_id)).toEqual(["cs_1", "cs_3", "cs_2"]);
 
-    const desc = await call(adminToken, "/api/v1/admin/donations?sort=-gross_amount");
+    const desc = await call(adminToken, "/api/v1/donations?sort=-gross_amount");
     const descBody = (await desc.json()) as { donations: Array<{ checkout_session_id: string }> };
     expect(descBody.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2", "cs_3", "cs_1"]);
   });
@@ -154,7 +184,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   it("rejects an unknown/unsafe sort column with a 400 instead of silently falling back", async () => {
     const response = await call(
       adminToken,
-      `/api/v1/admin/donations?sort=${encodeURIComponent("id; DROP TABLE donations; --")}`,
+      `/api/v1/donations?sort=${encodeURIComponent("id; DROP TABLE donations; --")}`,
     );
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
@@ -165,7 +195,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("bounds results with limit/offset", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?q=donor&limit=1&offset=1&sort=created_at");
+    const response = await call(adminToken, "/api/v1/donations?q=donor&limit=1&offset=1&sort=created_at");
     expect(response.status).toBe(200);
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
@@ -174,7 +204,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("applies free-text search in D1 through the shared list contract", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?q=zed");
+    const response = await call(adminToken, "/api/v1/donations?q=zed");
     expect(response.status).toBe(200);
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((donation) => donation.checkout_session_id)).toEqual(["cs_2"]);
@@ -182,12 +212,86 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("uses the shared maximum page size", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?limit=201");
+    const response = await call(adminToken, "/api/v1/donations?limit=201");
     expect(response.status).toBe(400);
   });
 });
 
-describe("POST /api/v1/admin/donations/sync", () => {
+describe("donation-management authorization", () => {
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("separates live read and sync permissions and rejects service identities", async () => {
+    const reader = await createStaffToken("donations:read");
+    const synchronizer = await createStaffToken("donations:sync");
+    const unrelated = await createStaffToken("audit:read");
+
+    expect((await call(reader.token, "/api/v1/donations")).status).toBe(200);
+    expect((await call(reader.token, "/api/v1/donations/sync", { method: "POST", body: "{}" })).status).toBe(403);
+    expect((await call(synchronizer.token, "/api/v1/donations")).status).toBe(403);
+    expect((await call(synchronizer.token, "/api/v1/donations/sync", { method: "POST", body: "{}" })).status).toBe(200);
+    expect((await call(unrelated.token, "/api/v1/donations")).status).toBe(403);
+    expect((await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/donations")).status).toBe(403);
+    await expect(
+      env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'donations_reconciled' AND actor_id = ?")
+        .bind(synchronizer.userId)
+        .first("count"),
+    ).resolves.toBe(1);
+  });
+
+  it("removes the legacy admin donation routes", async () => {
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const token = await createAdminSession(env.DB, admin.id, `legacy-donation-${crypto.randomUUID()}`);
+    expect((await call(token, "/api/v1/admin/donations")).status).toBe(404);
+    expect((await call(token, "/api/v1/admin/donations/sync", { method: "POST", body: "{}" })).status).toBe(404);
+  });
+
+  it("rechecks donations:sync after Stripe I/O and rolls back a revoked operation", async () => {
+    const staff = await createStaffToken("donations:sync");
+    const actor = await getCurrentUserBackedAdmin(env.DB, staff.userId, staff.sessionId);
+    expect(actor).not.toBeNull();
+    await insertDonation({ checkoutSessionId: "cs_permission_race", status: "pending", email: "" });
+    vi.stubGlobal("fetch", async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(staff.grantId)
+        .run();
+      return Response.json({
+        id: "cs_permission_race",
+        status: "open",
+        payment_status: "unpaid",
+        payment_intent: null,
+        amount_total: 5000,
+        currency: "usd",
+        customer_email: "",
+      });
+    });
+
+    await expect(
+      reconcileDonations(
+        env.DB,
+        env as any,
+        { sessionIds: ["cs_permission_race"] },
+        {
+          actor: actor!,
+          stripeKey: "sk_test_permission_race",
+          appBaseUrl: "https://app.test",
+          limit: 50,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "DONATION_SYNC_AUTHORIZATION_CHANGED" });
+    await expect(
+      env.DB.prepare("SELECT status FROM donations WHERE checkout_session_id = ?")
+        .bind("cs_permission_race")
+        .first("status"),
+    ).resolves.toBe("pending");
+  });
+});
+
+describe("POST /api/v1/donations/sync", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -200,13 +304,13 @@ describe("POST /api/v1/admin/donations/sync", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("rejects malformed or over-limit input instead of treating it as sync-all", async () => {
-    const malformed = await call(adminToken, "/api/v1/admin/donations/sync", {
+    const malformed = await call(adminToken, "/api/v1/donations/sync", {
       method: "POST",
       body: "{broken",
     });
     expect(malformed.status).toBe(400);
 
-    const overLimit = await call(adminToken, "/api/v1/admin/donations/sync", {
+    const overLimit = await call(adminToken, "/api/v1/donations/sync", {
       method: "POST",
       body: JSON.stringify({ sessionIds: Array.from({ length: 51 }, (_, index) => `cs_${index}`) }),
     });
@@ -242,7 +346,7 @@ describe("POST /api/v1/admin/donations/sync", () => {
     );
     vi.stubGlobal("fetch", stripeFetch);
 
-    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+    const response = await call(adminToken, "/api/v1/donations/sync", {
       method: "POST",
       body: JSON.stringify({ pendingOnly: true }),
     });
@@ -262,7 +366,7 @@ describe("POST /api/v1/admin/donations/sync", () => {
       .mockResolvedValueOnce(new Response(providerBodySentinel, { status: 429 }));
     vi.stubGlobal("fetch", stripeFetch);
 
-    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+    const response = await call(adminToken, "/api/v1/donations/sync", {
       method: "POST",
       body: JSON.stringify({ sessionIds: ["cs_sync_unpaid_failure"] }),
     });
@@ -293,7 +397,7 @@ describe("POST /api/v1/admin/donations/sync", () => {
       .mockResolvedValueOnce(new Response("SECRET_PROVIDER_BODY", { status: 503 }));
     vi.stubGlobal("fetch", stripeFetch);
 
-    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+    const response = await call(adminToken, "/api/v1/donations/sync", {
       method: "POST",
       body: JSON.stringify({ sessionIds: ["cs_sync_paid_failure"] }),
     });
@@ -315,7 +419,7 @@ describe("POST /api/v1/admin/donations/sync", () => {
       .mockResolvedValueOnce(new Response("SECRET_PROVIDER_BODY", { status: 503 }));
     vi.stubGlobal("fetch", stripeFetch);
 
-    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+    const response = await call(adminToken, "/api/v1/donations/sync", {
       method: "POST",
       body: JSON.stringify({ sessionIds: ["cs_sync_backfill_failure"] }),
     });
@@ -332,7 +436,7 @@ describe("POST /api/v1/admin/donations/sync", () => {
   });
 });
 
-describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
+describe("GET /api/v1/donations/promoters", () => {
   let adminToken: string;
 
   async function insertPromoter(code: string, clicks: number): Promise<void> {
@@ -358,7 +462,7 @@ describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
   });
 
   it("lists promoters ordered by clicks descending with a page envelope", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations/promoters");
+    const response = await call(adminToken, "/api/v1/donations/promoters");
     expect(response.status).toBe(200);
     const body = donationPromotersListResponseSchema.parse(await response.json());
     expect(body.promoters.map((p) => p.code)).toEqual(["promoA1", "promoB2", "promoC3"]);
@@ -373,7 +477,7 @@ describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
   });
 
   it("bounds results with limit/offset instead of returning every promoter unbounded", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations/promoters?q=promo&limit=1&offset=1");
+    const response = await call(adminToken, "/api/v1/donations/promoters?q=promo&limit=1&offset=1");
     expect(response.status).toBe(200);
     const body = donationPromotersListResponseSchema.parse(await response.json());
     expect(body.promoters.map((p) => p.code)).toEqual(["promoB2"]);
@@ -381,7 +485,7 @@ describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
   });
 
   it("rejects an invalid limit", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations/promoters?limit=0");
+    const response = await call(adminToken, "/api/v1/donations/promoters?limit=0");
     expect(response.status).toBe(400);
   });
 });

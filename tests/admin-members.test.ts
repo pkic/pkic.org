@@ -1,8 +1,7 @@
 /**
- * admin-members.test.ts
- *
- * "Interim Admin Tool — Manual Member Management" —
- * POST/GET /api/v1/admin/members, gated by the existing `membership:write`
+ * Membership provisioning and capacity management —
+ * POST /api/v1/members and GET /api/v1/members/capacities, gated by
+ * the existing `membership:write`/`membership:read`
  * permission (held by `admin` and `membership_processor` roles).
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -11,7 +10,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { adminMembersListResponseSchema } from "../assets/shared/schemas/admin-members";
+import { memberCapacityListResponseSchema } from "../assets/shared/schemas/membership-management";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -99,7 +98,7 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
+describe("membership provisioning and capacities", () => {
   let adminToken: string;
   let adminId: string;
 
@@ -118,7 +117,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
 
   it("creates an organization, representative, and member row for an org-tied category", async () => {
     await seedWorkingGroup("future-wg", "Future Working Group");
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody({ workingGroupSlugs: ["pqc", "future-wg"] })),
     });
@@ -142,7 +141,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(aggregateRows).toHaveLength(1);
     expect(aggregateRows[0].member_type).toBe("organization");
     expect(aggregateRows[0].status).toBe("active");
-    // Regression guard: createAdminMember used to accept `memberSince` in the
+    // Regression guard: the old provisioning route accepted `memberSince` in the
     // request but never write it anywhere (consolidated migration 0035 added the column,
     // now on `members`, not `organizations`).
     expect(aggregateRows[0].member_since).toBe("2026-01-15");
@@ -162,7 +161,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(primaryContactRows[0].user_id).toBe(body.members[0].userId);
 
     // body.members[0].id is this representative's own organization_representatives.id
-    // (see admin-organizations.ts's toOrgDetail comment) — not the shared aggregate id.
+    // — not the shared aggregate id.
     const repRows = await queryAll<{ show_on_org_profile: number; left_at: string | null }>(
       env.DB,
       "SELECT show_on_org_profile, left_at FROM organization_representatives WHERE id = ?",
@@ -194,7 +193,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("creates no organization row for an individual (H6) category", async () => {
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
@@ -232,7 +231,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     async ({ category, organizationName, representative }) => {
       const before = await provisioningRowCounts();
 
-      const response = await call(adminToken, "/api/v1/admin/members", {
+      const response = await call(adminToken, "/api/v1/members", {
         method: "POST",
         body: JSON.stringify(
           orgMemberBody({
@@ -257,7 +256,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   );
 
   it("adds category A to the CA working group once while ignoring duplicate and unknown slugs", async () => {
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
@@ -282,7 +281,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("rejects an individual category with an organization name", async () => {
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody({ membershipCategory: "H6" })),
     });
@@ -290,13 +289,13 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("reuses an existing organization when the normalized name already exists", async () => {
-    const first = await call(adminToken, "/api/v1/admin/members", {
+    const first = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });
     const firstBody = (await first.json()) as { organizationId: string };
 
-    const second = await call(adminToken, "/api/v1/admin/members", {
+    const second = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody({ representatives: [{ name: "Second Rep", email: "second@acme.test" }] })),
     });
@@ -309,7 +308,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("assigns primary and secondary contact from the first two representatives in one submission", async () => {
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
@@ -340,11 +339,11 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("returns 409 when the same email is already an active representative of this exact organization", async () => {
-    await call(adminToken, "/api/v1/admin/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+    await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
 
     // Reusing the same organization (same normalized name) with the same
     // representative email is a duplicate-representative conflict.
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });
@@ -352,9 +351,9 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("does not conflict when the same person represents a different organization (multi-org representation is allowed)", async () => {
-    await call(adminToken, "/api/v1/admin/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+    await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
 
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody({ organizationName: "Other Corp" })),
     });
@@ -365,11 +364,11 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("lists created members unfiltered by status", async () => {
-    await call(adminToken, "/api/v1/admin/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+    await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
 
-    const response = await call(adminToken, "/api/v1/admin/members");
+    const response = await call(adminToken, "/api/v1/members/capacities");
     expect(response.status).toBe(200);
-    const body = adminMembersListResponseSchema.parse(await response.json());
+    const body = memberCapacityListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
     expect(body.members[0].email).toBe("jane@acme.test");
   });
@@ -379,13 +378,13 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     await assignRole(staffId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffId, "staff-membership-token");
 
-    const createResponse = await call(staffToken, "/api/v1/admin/members", {
+    const createResponse = await call(staffToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });
     expect(createResponse.status).toBe(201);
 
-    const listResponse = await call(staffToken, "/api/v1/admin/members");
+    const listResponse = await call(staffToken, "/api/v1/members/capacities");
     expect(listResponse.status).toBe(200);
   });
 
@@ -397,7 +396,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
 
-    const response = await call(staffToken, "/api/v1/admin/members", {
+    const response = await call(staffToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });
@@ -408,7 +407,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     const staffId = await insertUser("no-permission@example.test");
     const staffToken = await createAdminSession(env.DB, staffId, "staff-no-permission-token");
 
-    const response = await call(staffToken, "/api/v1/admin/members", {
+    const response = await call(staffToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });

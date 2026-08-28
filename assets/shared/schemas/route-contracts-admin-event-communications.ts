@@ -29,7 +29,7 @@ export const adminEventCampaignPreviewRouteSchema = {
       content: { "application/json": { schema: adminEventCampaignPreviewResponseSchema } },
     },
     "400": { description: "Invalid campaign or message content." },
-    "422": { description: "Recipient limit or broadcast safety policy rejected the campaign." },
+    "422": { description: "Recipient limit, broadcast safety policy, or email-renderer limit rejected the campaign." },
   },
 };
 
@@ -54,6 +54,6 @@ export const adminEventCampaignSendRouteSchema = {
     },
     "400": { description: "Invalid campaign content, token, or recipient set." },
     "409": { description: "Campaign preview token expired or is stale." },
-    "422": { description: "Recipient limit or broadcast safety policy rejected the campaign." },
+    "422": { description: "Recipient limit, broadcast safety policy, or email-renderer limit rejected the campaign." },
   },
 };

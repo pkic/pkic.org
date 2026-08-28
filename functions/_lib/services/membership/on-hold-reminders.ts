@@ -6,7 +6,7 @@ import type { DatabaseLike, Env } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { getMembershipSettings } from "../membership-settings";
 import {
   ON_HOLD_SUBTYPE_EMAIL_TEMPLATES,
@@ -173,7 +173,7 @@ async function claimOnHoldReminder(
     ]);
     return true;
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return false;
+    if (isAuditChangeGuardFailure(error)) return false;
     throw error;
   }
 }

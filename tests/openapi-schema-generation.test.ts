@@ -34,6 +34,82 @@ describe("OpenAPI schema generation", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
     expect(spec.paths["/api/v1/admin/events"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/activate"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/grants"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/grants"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/roles"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/users"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/contexts"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/{id}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/{id}"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/users/{userId}/affiliations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/analytics/summary"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/analytics/registrations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/analytics/donations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/{id}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/promoters"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/sync"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/outbox"].get).toBeDefined();
+    expect(spec.paths["/api/v1/email/outbox/process"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/outbox/reset-failed"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/due-work"].get).toBeDefined();
+    expect(spec.paths["/api/v1/operations/reminders/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/reminders/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/retention/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/consultation/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/ec-review/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/wg-chair-digest/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/consultation/run"].post[AUTH_EXTENSION]).toMatchObject({
+      scopes: ["operations:read", "operations:run", "membership:write"],
+    });
+    expect(spec.paths["/api/v1/operations/membership-batches/ec-review/run"].post[AUTH_EXTENSION]).toMatchObject({
+      scopes: ["operations:read", "operations:run", "membership:approve"],
+    });
+    expect(spec.paths["/api/v1/operations/membership-batches/wg-chair-digest/run"].post[AUTH_EXTENSION]).toMatchObject({
+      scopes: ["operations:read", "operations:run"],
+    });
+    expect(spec.paths["/api/v1/admin/donations"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/donations/{id}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/donations/promoters"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/donations/sync"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/stats"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email/outbox"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/due-work"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/email/retry"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/email/reset-failed"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/jobs/run"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/reminders/run"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/retention/run"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/votes"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/votes/{id}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/votes/{id}/visibility"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/votes/{id}/ballots"]).toBeUndefined();
+    expect(spec.paths["/api/v1/donations"].get[AUTH_EXTENSION]).toMatchObject({
+      required: true,
+      scopes: ["donations:read"],
+    });
+    expect(spec.paths["/api/v1/donations/sync"].post[AUTH_EXTENSION]).toMatchObject({
+      required: true,
+      scopes: ["donations:sync"],
+    });
+    expect(spec.paths["/api/v1/admin/access-grants"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/roles"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/roles/{id}/assignments"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/roles"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/roles/{userRoleId}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/leadership-positions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/leadership-positions/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
@@ -42,8 +118,13 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].put).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].get).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].put).toBeDefined();
-    expect(spec.paths["/api/v1/admin/users/{userId}"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/users"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/members"]).toBeUndefined();
+    expect(spec.paths["/api/v1/users/{userId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/users/{userId}/gravatar"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/capacities"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/bulk"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"]).toBeUndefined();
@@ -106,7 +187,7 @@ describe("OpenAPI schema generation", () => {
 
   it("documents role ids as plain strings, not uuid()-formatted, so built-in system roles are valid per the spec (Phase 3 §3.1)", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
-    const rolesGet = spec.paths["/api/v1/admin/roles"].get;
+    const rolesGet = spec.paths["/api/v1/system/access-control/roles"].get;
     const roleIdSchema =
       rolesGet.responses["200"].content["application/json"].schema.properties.roles.items.properties.id;
 

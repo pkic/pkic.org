@@ -34,7 +34,7 @@ function expectStatus(result: ApiResult, status: number): Record<string, unknown
 }
 
 test("portal proposal detail uses canonical me/groups routes without admin fallback", async ({ page }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-event"));
+  await signInToPortal(page, e2eAdminEmail("portal-event-proposals"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const createdEvent = expectStatus(
     await api(page, `/api/v1/groups/${GROUP_ID}/events`, "POST", {

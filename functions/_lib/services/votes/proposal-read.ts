@@ -7,7 +7,6 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import type { VoteProposalStatus, VoteType } from "./shared";
 import type { ListProposalsQuery, ProposalSummary } from "../../../../assets/shared/schemas/votes";
-import type { AdminListProposalsQuery } from "../../../../assets/shared/schemas/votes-admin";
 import { parseJsonSafe } from "../../utils/json";
 import { activeGroupVoterSql } from "./voter-eligibility";
 
@@ -135,7 +134,7 @@ export async function getProposalGroupForPermissionCheck(db: DatabaseLike, id: s
   return row.owner_group_id;
 }
 
-export type VoteProposalListParams = ListProposalsQuery & Partial<Pick<AdminListProposalsQuery, "status">>;
+export type VoteProposalListParams = ListProposalsQuery;
 export type { ProposalSummary } from "../../../../assets/shared/schemas/votes";
 
 async function queryProposalPage(
@@ -192,13 +191,6 @@ export function listVoteProposals(
   params: ListProposalsQuery,
 ): Promise<{ proposals: ProposalSummary[]; total: number }> {
   return queryProposalPage(db, params, true, memberUserId);
-}
-
-export function listAllVoteProposalsForAdmin(
-  db: DatabaseLike,
-  params: AdminListProposalsQuery,
-): Promise<{ proposals: ProposalSummary[]; total: number }> {
-  return queryProposalPage(db, params, false);
 }
 
 export async function getVoteProposalDetail(

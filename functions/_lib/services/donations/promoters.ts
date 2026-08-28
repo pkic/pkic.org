@@ -1,9 +1,9 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import type {
-  AdminDonationPromoter,
+  DonationPromoter,
   DonationPromotersListQuery,
   DonationPromotersListResponse,
-} from "../../../../assets/shared/schemas/admin-donations";
+} from "../../../../assets/shared/schemas/donation-management";
 import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -115,7 +115,7 @@ export async function listDonationPromoters(
       .bind(...bindings),
   ]);
 
-  const { rows: promoters, total } = decodeOffsetPageResults<AdminDonationPromoter>(pageResult, countResult);
+  const { rows: promoters, total } = decodeOffsetPageResults<DonationPromoter>(pageResult, countResult);
   const summary = batchFirst<PromoterSummaryRow>(summaryResult);
   return {
     promoters,

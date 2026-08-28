@@ -6,6 +6,11 @@ export interface PortalNavItem {
   label: string;
 }
 
+interface SystemNavItem extends PortalNavItem {
+  permission?: string;
+  permissions?: readonly string[];
+}
+
 const MEMBER_NAV_ITEMS: PortalNavItem[] = [
   { path: "/profile", section: "profile", label: "My Profile" },
   { path: "/organization", section: "organization", label: "My Organization" },
@@ -20,7 +25,25 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   label: "Management",
 };
 
-const SYSTEM_NAV_ITEMS = [
+const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
+  {
+    path: "/system/analytics",
+    section: "system",
+    label: "Analytics",
+    permission: "analytics:read",
+  },
+  {
+    path: "/system/donations",
+    section: "system",
+    label: "Donations",
+    permissions: ["donations:read", "donations:sync"],
+  },
+  {
+    path: "/system/sponsorships",
+    section: "system",
+    label: "Sponsorships",
+    permissions: ["sponsorships:read", "sponsorships:write"],
+  },
   {
     path: "/system/membership-applications",
     section: "system",
@@ -39,7 +62,43 @@ const SYSTEM_NAV_ITEMS = [
     label: "Content Reviews",
     permission: "organizations:content-review",
   },
+  {
+    path: "/system/organizations",
+    section: "system",
+    label: "Organizations",
+    permissions: ["organizations:read", "membership:write"],
+  },
+  {
+    path: "/system/users",
+    section: "system",
+    label: "Users",
+    permission: "users:read",
+  },
   { path: "/system/audit-log", section: "system", label: "Audit Log", permission: "audit:read" },
+  {
+    path: "/system/email-templates",
+    section: "system",
+    label: "Email Templates",
+    permissions: ["email-templates:read", "email-templates:write"],
+  },
+  {
+    path: "/system/operations",
+    section: "system",
+    label: "Operations",
+    permissions: ["email:read", "operations:read"],
+  },
+  {
+    path: "/system/access-control",
+    section: "system",
+    label: "Access Control",
+    permissions: ["access:grant", "access:revoke"],
+  },
+  {
+    path: "/system/leadership",
+    section: "system",
+    label: "Leadership",
+    permissions: ["access:grant", "access:revoke"],
+  },
 ] as const;
 
 const ACCOUNT_NAV_ITEM: PortalNavItem = { path: "/account", section: "account", label: "Account Settings" };
@@ -66,10 +125,18 @@ export function portalHasGlobalPermission(session: PortalSession | null, permiss
   );
 }
 
+export function portalHasAnyGlobalPermission(session: PortalSession | null, permissions: readonly string[]): boolean {
+  return permissions.some((permission) => portalHasGlobalPermission(session, permission));
+}
+
 export function portalSystemNavigationItems(session: PortalSession | null): PortalNavItem[] {
-  return SYSTEM_NAV_ITEMS.filter((item) => portalHasGlobalPermission(session, item.permission)).map(
-    ({ path, section, label }) => ({ path, section, label }),
-  );
+  return SYSTEM_NAV_ITEMS.filter((item) =>
+    item.permissions
+      ? portalHasAnyGlobalPermission(session, item.permissions)
+      : item.permission
+        ? portalHasGlobalPermission(session, item.permission)
+        : false,
+  ).map(({ path, section, label }) => ({ path, section, label }));
 }
 
 export function portalHasSystemManagement(session: PortalSession | null): boolean {

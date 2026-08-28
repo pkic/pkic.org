@@ -9,7 +9,7 @@ import {
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { registrationManageCapability } from "../registrations/capability-urls";
 import { HAS_NEWER_ACCEPT_SQL, type RsvpEnforcementCandidate } from "./candidates";
 import { rsvpOutboxId } from "./command-utils";
@@ -96,7 +96,7 @@ export async function ignoreRsvpCandidate(
     ]);
     return true;
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return false;
+    if (isAuditChangeGuardFailure(error)) return false;
     throw error;
   }
 }
@@ -133,7 +133,7 @@ export async function recordRsvpDeliveryBounce(
     ]);
     return true;
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return false;
+    if (isAuditChangeGuardFailure(error)) return false;
     throw error;
   }
 }
@@ -196,7 +196,7 @@ export async function sendRsvpWarning(
     await db.batch(statements);
     return true;
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) return false;
+    if (isAuditChangeGuardFailure(error)) return false;
     throw error;
   }
 }

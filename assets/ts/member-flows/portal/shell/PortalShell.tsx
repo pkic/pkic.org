@@ -13,12 +13,14 @@ import { AccountSettings } from "../sections/AccountSettings";
 import { SystemManagement } from "../sections/SystemManagement";
 import { Management } from "../sections/management/Management";
 import { GroupEventProposals } from "../sections/management/GroupEventProposals";
+import { DonationDetailPage } from "../sections/system-donations/DonationDetailPage";
 import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
 import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,
   portalDefaultPath,
+  portalHasGlobalPermission,
   portalHasSystemManagement,
 } from "./portal-navigation";
 
@@ -75,14 +77,24 @@ export function PortalShell() {
           )}
           {portalHasSystemManagement(portalSession.value) && (
             <Route
-              path="/system/membership-applications/:resourceId"
-              component={({ params }: { params: { resourceId: string } }) => (
-                <SectionWrapper title="System">
-                  <SystemManagement
-                    session={portalSession.value}
-                    view="membership-applications"
-                    resourceId={params.resourceId}
+              path="/system/donations/detail/:donationId"
+              component={({ params }: { params: { donationId: string } }) => (
+                <SectionWrapper title="Donation">
+                  <DonationDetailPage
+                    donationId={params.donationId}
+                    canRead={portalHasGlobalPermission(portalSession.value, "donations:read")}
+                    canSync={portalHasGlobalPermission(portalSession.value, "donations:sync")}
                   />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {portalHasSystemManagement(portalSession.value) && (
+            <Route
+              path="/system/:view/:resourceId"
+              component={({ params }: { params: { view: string; resourceId: string } }) => (
+                <SectionWrapper title="System">
+                  <SystemManagement session={portalSession.value} view={params.view} resourceId={params.resourceId} />
                 </SectionWrapper>
               )}
             />

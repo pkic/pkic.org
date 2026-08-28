@@ -17,12 +17,6 @@ export type ManagementLink =
   | { kind: "sponsorship-list" }
   | { kind: "sponsorship"; id: string };
 
-function adminHashUrl(appBaseUrl: string, path: string): URL {
-  const url = new URL(ADMIN_UI_PATH, appBaseUrl);
-  url.hash = `#${path.startsWith("/") ? path : `/${path}`}`;
-  return url;
-}
-
 function portalHashUrl(appBaseUrl: string, path: string): URL {
   const url = new URL("/portal/", appBaseUrl);
   url.hash = `#${path.startsWith("/") ? path : `/${path}`}`;
@@ -50,8 +44,8 @@ export function buildManagementLink(appBaseUrl: string, link: ManagementLink): s
     case "membership-application":
       return portalHashUrl(appBaseUrl, `/system/membership-applications/${encodeURIComponent(link.id)}`).toString();
     case "sponsorship-list":
-      return adminHashUrl(appBaseUrl, "/sponsorships").toString();
+      return portalHashUrl(appBaseUrl, "/system/sponsorships").toString();
     case "sponsorship":
-      return adminHashUrl(appBaseUrl, `/sponsorships/${encodeURIComponent(link.id)}`).toString();
+      return portalHashUrl(appBaseUrl, `/system/sponsorships/${encodeURIComponent(link.id)}`).toString();
   }
 }

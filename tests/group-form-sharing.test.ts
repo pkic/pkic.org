@@ -1,20 +1,29 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  groupFormSubmissionStatsQuerySchema,
+  groupFormSubmissionsQuerySchema,
+} from "../assets/shared/schemas/group-forms";
+import {
+  buildGroupFormPlacementsPageQuery,
   createManagedForm,
   createManagedFormPlacement,
   createGroupFormDefinition,
+  getGroupFormDefinition,
+  getGroupFormResponseStatistics,
+  listGroupFormResponses,
   submitGroupFormResponse,
   updateGroupFormDefinition,
   updateGroupFormPlacement,
 } from "../functions/_lib/services/forms";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateAfterNextStatement, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -124,6 +133,40 @@ function authenticatedRequest(token: string, path: string, init: RequestInit = {
 beforeEach(resetDb);
 
 describe("group form sharing", () => {
+  it("uses indexed owner, grant, and live-membership paths for the production page and count queries", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "view_definition",
+    });
+    const query = buildGroupFormPlacementsPageQuery({ userId: fixture.memberId }, fixture.grantee.id, {
+      active: "true",
+      q: "shared",
+      sort: "title",
+      limit: 20,
+      offset: 0,
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all<{ detail: string }>(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...countBindings)
+        .all<{ detail: string }>(),
+    ]);
+
+    for (const plan of [pagePlan, countPlan]) {
+      const details = plan.results.map((row) => row.detail).join("\n");
+      expect(details).toContain("idx_form_placements_owner_active");
+      expect(details).toContain("idx_form_placement_group_grants_group");
+      expect(details).toContain("idx_group_memberships_user_active");
+      expect(details).not.toMatch(/(?:^|\n)SCAN form_placements(?:$|\s)/);
+      expect(details).not.toMatch(/(?:^|\n)SCAN form_placement_group_grants(?:$|\s)/);
+      expect(details).not.toMatch(/(?:^|\n)SCAN group_memberships(?:$|\s)/);
+    }
+  });
+
   it("lets effective group leadership create and edit an owned form without accepting owner overrides", async () => {
     const fixture = await createFixture();
     const leader = await userActor("owner-form-leader");
@@ -331,6 +374,73 @@ describe("group form sharing", () => {
     expect(deniedSubmit.status).toBe(403);
   });
 
+  it("returns no form fields when live group definition authority changes after the summary read", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "view_definition",
+    });
+
+    const revokedGrantDb = mutateAfterNextStatement(env.DB, () =>
+      env.DB.prepare(
+        `DELETE FROM form_placement_group_grants
+          WHERE placement_id = ? AND group_id = ? AND capability = 'view_definition'`,
+      )
+        .bind(fixture.placementId, fixture.grantee.id)
+        .run(),
+    );
+    await expect(
+      getGroupFormDefinition(revokedGrantDb, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId),
+    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_FOUND" });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "manage",
+    });
+    const revokedLeaderDb = mutateAfterNextStatement(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE user_roles SET revoked_at = datetime('now')
+          WHERE user_id = ? AND role_id = 'role-group_lead' AND context_type = 'group' AND context_id = ?`,
+      )
+        .bind(fixture.leader.id, fixture.grantee.id)
+        .run(),
+    );
+    await expect(
+      getGroupFormDefinition(
+        revokedLeaderDb,
+        { userId: fixture.leader.id, admin: fixture.leader },
+        fixture.grantee.id,
+        fixture.placementId,
+      ),
+    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_FOUND" });
+
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = NULL WHERE user_id = ? AND context_id = ?")
+      .bind(fixture.leader.id, fixture.grantee.id)
+      .run();
+    const revokedMembershipDb = mutateAfterNextStatement(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE group_memberships
+            SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+          WHERE user_id = ? AND group_id = ? AND left_at IS NULL`,
+      )
+        .bind(fixture.memberId, fixture.grantee.id)
+        .run(),
+    );
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "view_definition",
+    });
+    await expect(
+      getGroupFormDefinition(
+        revokedMembershipDb,
+        { userId: fixture.memberId },
+        fixture.grantee.id,
+        fixture.placementId,
+      ),
+    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_FOUND" });
+  });
+
   it("keeps response reporting and placement management separate and owner-immutable", async () => {
     const fixture = await createFixture();
     await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
@@ -405,6 +515,63 @@ describe("group form sharing", () => {
       `/api/v1/groups/${fixture.owner.id}/forms/${fixture.placementId}/submissions?limit=20`,
     );
     expect(wrongContext.status).toBe(403);
+  });
+
+  it("returns no response data when reporting authority changes after preflight", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+    await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.grantee.id}/forms/${fixture.placementId}/submissions`,
+      { method: "POST", body: JSON.stringify({ answers: { topic: "Protected response" } }) },
+    );
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "view_responses",
+    });
+
+    const revokedGrantDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `DELETE FROM form_placement_group_grants
+          WHERE placement_id = ? AND group_id = ? AND capability = 'view_responses'`,
+      )
+        .bind(fixture.placementId, fixture.grantee.id)
+        .run(),
+    );
+    await expect(
+      listGroupFormResponses(
+        revokedGrantDb,
+        fixture.leader,
+        fixture.grantee.id,
+        fixture.placementId,
+        groupFormSubmissionsQuerySchema.parse({ limit: 20 }),
+      ),
+    ).rejects.toMatchObject({ status: 403, code: "RESOURCE_CAPABILITY_REQUIRED" });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "view_responses",
+    });
+    const revokedLeaderDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE user_roles SET revoked_at = datetime('now')
+          WHERE user_id = ? AND role_id = 'role-group_lead' AND context_type = 'group' AND context_id = ?`,
+      )
+        .bind(fixture.leader.id, fixture.grantee.id)
+        .run(),
+    );
+    await expect(
+      getGroupFormResponseStatistics(
+        revokedLeaderDb,
+        fixture.leader,
+        fixture.grantee.id,
+        fixture.placementId,
+        groupFormSubmissionStatsQuerySchema.parse({ q: "Protected" }),
+      ),
+    ).rejects.toMatchObject({ status: 403, code: "RESOURCE_CAPABILITY_REQUIRED" });
   });
 
   it("rolls back a response when its group grant is revoked before the D1 batch commits", async () => {

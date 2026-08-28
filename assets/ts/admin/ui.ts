@@ -1,4 +1,4 @@
-import { formatDateTime, showToast, type ToastType } from "../shared/ui";
+import { escapeHtml, formatDateTime, showToast, type ToastType } from "../shared/ui";
 export type { ToastType } from "../shared/ui";
 
 export function toast(message: string, type: ToastType = "info"): void {
@@ -12,9 +12,5 @@ export function fmt(value: string | null | undefined): string {
 
 /** HTML-escape a value (for SVG/HTML string builders only). */
 export function esc(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return escapeHtml(value);
 }

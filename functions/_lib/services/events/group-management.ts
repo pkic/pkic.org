@@ -4,7 +4,7 @@ import type {
   GroupEventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/group-events";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLog } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLog } from "../audit";
 import { getGroup, prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups";
 import { deriveEventBasePath, getEventById, prepareEventCreateStatement } from "../events";
 import {
@@ -156,7 +156,7 @@ export async function updateGroupManagedEventSettings(
         "The event became managed by a meeting series before the update was saved",
       );
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "GROUP_EVENT_CHANGED", "The event changed; reload before saving");
     }
     throw error;

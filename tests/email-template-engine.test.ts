@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { compileSimpleTemplate, renderEmail, renderSubject } from "../functions/_lib/email/render";
+import {
+  EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
+  compileSimpleTemplate,
+  renderEmail,
+  renderSubject,
+} from "../functions/_lib/email/render";
+
+function expectRenderLimit(action: () => unknown): void {
+  let thrown: unknown;
+  try {
+    action();
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toMatchObject({ code: "EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED", status: 422 });
+}
 
 describe("email template engine (compileSimpleTemplate)", () => {
   describe("variable substitution", () => {
@@ -235,6 +250,55 @@ describe("email template engine (compileSimpleTemplate)", () => {
         attendees: [{ name: "Alice" }, { name: "Bob" }],
       });
       expect(result).toBe("Name: Alice, Name: Bob, ");
+    });
+
+    it("keeps normal high-cardinality server-owned loops within the shared budget", () => {
+      const items = Array.from({ length: 50 }, (_, index) => `item-${index}`);
+      const result = compileSimpleTemplate("{{#each items}}{{this}}\n{{/each}}", { items });
+      expect(result.split("\n").filter(Boolean)).toEqual(items);
+    });
+
+    it("rejects excessive loop work even when every iteration renders empty output", () => {
+      expectRenderLimit(() =>
+        compileSimpleTemplate("{{#each items}}{{/each}}", {
+          items: Array.from({ length: EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS + 1 }, () => null),
+        }),
+      );
+    });
+
+    it("rejects bounded input whose loop would amplify beyond the output budget", () => {
+      expectRenderLimit(() =>
+        compileSimpleTemplate(`{{#each items}}${"x".repeat(2_001)}{{/each}}`, {
+          items: Array.from({ length: EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS }, () => null),
+        }),
+      );
+    });
+
+    it("rejects cumulative loop work when a near-500K false conditional is repeated", () => {
+      const falseConditionalBody = `{{#if neverTrue}}${"x".repeat(499_000)}{{/if}}`;
+      expectRenderLimit(() =>
+        compileSimpleTemplate(`{{#each items}}${falseConditionalBody}{{/each}}`, {
+          neverTrue: false,
+          items: Array.from({ length: EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS }, () => null),
+        }),
+      );
+    });
+
+    it("shares the expansion budget with loops inside partials", () => {
+      expectRenderLimit(() =>
+        compileSimpleTemplate("{{> list}}", {
+          _partials: { list: "{{#each items}}{{/each}}" },
+          items: Array.from({ length: EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS }, () => null),
+        }),
+      );
+    });
+
+    it("applies the same loop budget to subjects", () => {
+      expectRenderLimit(() =>
+        renderSubject("{{#each items}}{{this}}{{/each}}", "Fallback", {
+          items: Array.from({ length: EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS + 1 }, () => "x"),
+        }),
+      );
     });
   });
 
@@ -499,6 +563,14 @@ Line 2
         __subjectOverride: "Custom subject variant",
       });
       expect(subject).toBe("Custom subject variant");
+    });
+
+    it("rejects an oversized explicit subject override", () => {
+      expectRenderLimit(() =>
+        renderSubject("Ignored {{eventName}}", "Fallback", {
+          __subjectOverride: "x".repeat(8_193),
+        }),
+      );
     });
   });
 });

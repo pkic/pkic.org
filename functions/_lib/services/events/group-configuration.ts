@@ -7,7 +7,7 @@ import { first } from "../../db/queries";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { isAuditOneChangeGuardFailure } from "../audit";
+import { isAuditChangeGuardFailure } from "../audit";
 import { listConfiguredEventDaysWithCounts } from "../event-days";
 import {
   guardEventResourceManagementDatabase,
@@ -77,7 +77,7 @@ function mapConfigurationWriteError(error: unknown): never {
       "The event became managed by a meeting series before the configuration was saved",
     );
   }
-  if (isAuditOneChangeGuardFailure(error)) {
+  if (isAuditChangeGuardFailure(error)) {
     throw new AppError(409, "GROUP_EVENT_CHANGED", "The event changed; reload before saving");
   }
   throw error;

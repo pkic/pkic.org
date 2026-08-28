@@ -1,8 +1,11 @@
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { buildLiveAccessibleGroupResourceIdsCte, type GroupResourceViewer } from "../resource-grants";
-import { liveEventResourceContextAccess } from "./read-access";
+import {
+  buildLiveAccessibleGroupResourceIdsCte,
+  liveGroupResourceContextAccess,
+  type GroupResourceViewer,
+} from "../resource-grants";
 
 interface CalendarOccurrenceRow {
   event_name: string;
@@ -48,7 +51,7 @@ export async function generateGroupSeriesIcs(
   seriesId: string,
   baseUrl: string,
 ): Promise<string> {
-  const access = liveEventResourceContextAccess(viewer, throughGroup.id);
+  const access = liveGroupResourceContextAccess(viewer, throughGroup.id);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", throughGroup.id, access, "view");
   const rows = await all<CalendarOccurrenceRow>(
     db,

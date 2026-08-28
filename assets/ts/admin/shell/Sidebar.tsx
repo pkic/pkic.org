@@ -33,11 +33,6 @@ const icons = {
       <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0" />
     </svg>
   ),
-  templates: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z" />
-    </svg>
-  ),
   forms: (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
       <path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1z" />
@@ -81,12 +76,6 @@ const icons = {
       <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6m-5.784 6A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904A5 5 0 0 0 5 10c-4 0-5 3-5 4s1 1 1 1zM4.5 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5" />
     </svg>
   ),
-  leadership: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M12 4a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3.5 2.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M3 4a1 1 0 1 1-2 0 1 1 0 0 1 2 0" />
-      <path d="M2 5a1.5 1.5 0 0 0-1.5 1.5v3A1.5 1.5 0 0 0 2 11h1v3.5a.5.5 0 0 0 1 0V11h1a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 5 5zm6.5 1a1.5 1.5 0 0 0-1.5 1.5v3A1.5 1.5 0 0 0 8.5 12h.5v2.5a.5.5 0 0 0 1 0V12h.5v2.5a.5.5 0 0 0 1 0V12h.5a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12 6z" />
-    </svg>
-  ),
   chevron: (
     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
       <path
@@ -108,29 +97,8 @@ interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { path: "/", sec: "dashboard", label: "Dashboard", icon: "dashboard" },
   { path: "/events", sec: "events", label: "Events", icon: "events" },
   { path: "/forms", sec: "forms", label: "Forms", icon: "forms" },
-  {
-    path: "/email",
-    sec: "email",
-    label: "Email",
-    icon: "email",
-    children: [{ path: "/email/templates", sec: "templates", label: "Templates", icon: "templates" }],
-  },
-  { path: "/duework", sec: "duework", label: "Due Work", icon: "duework" },
-  { path: "/stats", sec: "stats", label: "Stats", icon: "stats" },
-  { path: "/donations", sec: "donations", label: "Donations", icon: "donations" },
-  { path: "/users", sec: "users", label: "Users", icon: "users" },
-  {
-    path: "/organizations",
-    sec: "organizations",
-    label: "Organizations",
-    icon: "organizations",
-  },
-  { path: "/sponsorships", sec: "sponsorships", label: "Sponsorships", icon: "donations" },
-  { path: "/leadership", sec: "leadership", label: "Leadership", icon: "leadership" },
-  { path: "/access-control", sec: "access-control", label: "Access Control", icon: "accesscontrol" },
 ];
 
 function closeSidebar() {
@@ -209,7 +177,6 @@ function NavLink({ item, activeSec }: { item: NavItem; activeSec: string }) {
 function activeSectionFor(location: string): string {
   if (location === "/" || location === "") return "dashboard";
   const top = location.replace(/^\//, "").split("/")[0];
-  if (top === "email" && location.includes("/templates")) return "templates";
   if (top === "membership" && location.includes("/applications")) return "membership-applications";
   if (top === "membership" && location.includes("/settings")) return "membership-settings";
   return top;

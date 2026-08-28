@@ -14,7 +14,7 @@ import {
   type PresentationCommitAuthority,
   type PresentationProposalContext,
 } from "./presentation-versions";
-import { isAuditOneChangeGuardFailure } from "./audit";
+import { isAuditChangeGuardFailure } from "./audit";
 import { withStorageUploadCompensation } from "./storage-deletion-outbox";
 
 const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
@@ -238,7 +238,7 @@ export async function uploadProposalPresentation(
         ).statements,
     });
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "PRESENTATION_UPLOAD_CONFLICT",

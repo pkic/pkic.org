@@ -1,6 +1,6 @@
 import type { ProposalDecisionPreviewResponse } from "../../../../assets/shared/schemas/proposal-decisions";
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
-import type { EmailContentType } from "../../../../assets/shared/schemas/admin-email-templates";
+import type { EmailContentType } from "../../../../assets/shared/schemas/email-templates";
 import {
   EMAIL_LAYOUT_TEMPLATE_KEY,
   EMAIL_PARTIAL_TEMPLATE_KEYS,

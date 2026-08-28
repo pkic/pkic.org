@@ -4,7 +4,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
 import { storedRasterImageResponse } from "./image-response";
 import {
   prepareStorageDeletion,
@@ -39,6 +39,9 @@ export interface UserHeadshotRecord {
   id: string;
   email: string;
   headshot_r2_key: string | null;
+  pii_redacted_at: string | null;
+  merged_into_user_id: string | null;
+  updated_at: string;
 }
 
 export function requireUserHeadshotBucket(env: Pick<Env, "SPEAKER_UPLOADS_BUCKET">): R2Bucket {
@@ -74,18 +77,28 @@ export function publicUserHeadshotUrl(
 }
 
 export async function getUserHeadshotRecord(db: DatabaseLike, userId: string): Promise<UserHeadshotRecord> {
-  const row = await first<UserHeadshotRecord>(db, "SELECT id, email, headshot_r2_key FROM users WHERE id = ?", [
-    userId,
-  ]);
+  const row = await first<UserHeadshotRecord>(
+    db,
+    "SELECT id, email, headshot_r2_key, pii_redacted_at, merged_into_user_id, updated_at FROM users WHERE id = ?",
+    [userId],
+  );
   if (!row) throw new AppError(404, "NOT_FOUND", "User not found");
   return row;
+}
+
+/** Rechecks that the target identity is still live when committing its image pointer. */
+export function userHeadshotTargetGuard(user: UserHeadshotRecord): { sql: string; bindings: unknown[] } {
+  return {
+    sql: "pii_redacted_at IS NULL AND merged_into_user_id IS NULL AND updated_at = ?",
+    bindings: [user.updated_at],
+  };
 }
 
 export async function getUserHeadshotPointer(db: DatabaseLike, userId: string): Promise<string | null> {
   return (await getUserHeadshotRecord(db, userId)).headshot_r2_key;
 }
 
-export async function adminUserHeadshotResponse(db: DatabaseLike, bucket: R2Bucket, userId: string) {
+export async function userHeadshotResponse(db: DatabaseLike, bucket: R2Bucket, userId: string) {
   const user = await getUserHeadshotRecord(db, userId);
   if (!user.headshot_r2_key) throw new AppError(404, "NOT_FOUND", "No headshot on file");
   return privateUserHeadshotResponse(bucket, user.headshot_r2_key);
@@ -154,7 +167,7 @@ export async function replaceUserHeadshot(
       },
     });
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw await headshotConflictError(context.db, context.userId);
     }
     throw error;
@@ -193,7 +206,7 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
   try {
     [updateResult] = await context.db.batch(statements);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw await headshotConflictError(context.db, context.userId);
     }
     throw error;

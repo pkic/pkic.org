@@ -23,7 +23,7 @@ import {
   resolveIdentityCapacities,
   type PreparedIdentityCapacitySessions,
 } from "../auth/identity-capacities";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
 import type { DatabaseLike, Env, StatementLike } from "../types";
@@ -253,7 +253,7 @@ export async function persistVerifiedPasskeyCredential(
     if (challenge && (await wasPasskeyChallengeConsumed(db, challenge.challengeId))) {
       throw passkeyChallengeAlreadyUsedError();
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       if (await findDuplicate()) {
         throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
       }
@@ -408,7 +408,7 @@ export async function completePasskeyAuthentication(
       if (await wasPasskeyChallengeConsumed(db, challenge.challengeId)) {
         throw passkeyChallengeAlreadyUsedError();
       }
-      if (isAuditOneChangeGuardFailure(error)) {
+      if (isAuditChangeGuardFailure(error)) {
         throw new AppError(
           400,
           "PASSKEY_SIGN_COUNT_REUSED",

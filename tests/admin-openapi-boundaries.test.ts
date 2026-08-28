@@ -46,17 +46,34 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("publishes contracts for the previously raw admin mutations", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
-    expect(spec.paths["/api/v1/admin/email-templates/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/organizations/{id}/logo"].put).toBeDefined();
-    expect(spec.paths["/api/v1/admin/organizations/{id}/logo"].delete).toBeDefined();
-    expect(spec.paths["/api/v1/admin/users/{userId}/anonymize"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/activate"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/email-templates"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/organizations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations"].post).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/logo"].put).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/logo"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/admin/organizations"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/organizations/{id}/logo"]).toBeUndefined();
+    expect(spec.paths["/api/v1/users/{userId}/anonymize"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/anonymize"]).toBeUndefined();
     expect(
-      spec.paths["/api/v1/admin/organizations/{id}/logo"].delete.responses["200"].content["application/json"].schema,
+      spec.paths["/api/v1/organizations/{organizationId}/logo"].delete.responses["200"].content["application/json"]
+        .schema,
     ).toMatchObject({ required: ["success"] });
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/preview"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/preview"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/{inviteId}/resend"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals/{id}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals/{id}/approve"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals/{id}/reject"]).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/speakers/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/preview"].post).toBeDefined();
@@ -66,14 +83,14 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("rejects invalid JSON bodies at the preview and version contract boundaries", async () => {
     await setupAdmin();
 
-    const preview = await callAdmin("/api/v1/admin/email-templates/preview", {
+    const preview = await callAdmin("/api/v1/system/email-templates/preview", {
       method: "POST",
       body: JSON.stringify({ content: "" }),
     });
     expect(preview.status).toBe(400);
     await expect(preview.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
 
-    const version = await callAdmin("/api/v1/admin/email-templates/example/versions", {
+    const version = await callAdmin("/api/v1/system/email-templates/example/versions", {
       method: "POST",
       body: JSON.stringify({ content: "" }),
     });
@@ -84,11 +101,11 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("validates path parameters before anonymization or binary logo processing", async () => {
     await setupAdmin();
 
-    const anonymize = await callAdmin("/api/v1/admin/users/not-a-database-id/anonymize", { method: "POST" });
+    const anonymize = await callAdmin("/api/v1/users/not-a-database-id/anonymize", { method: "POST" });
     expect(anonymize.status).toBe(400);
     await expect(anonymize.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
 
-    const logo = await callAdmin("/api/v1/admin/organizations/not-a-database-id/logo", {
+    const logo = await callAdmin("/api/v1/organizations/not-a-database-id/logo", {
       method: "PUT",
       headers: { "content-type": "image/jpeg" },
       body: validJpegBytes(),
@@ -145,6 +162,20 @@ describe("admin OpenAPI mutation boundaries", () => {
     });
   });
 
+  it("leaves the retired global vote-proposal adapter unmounted", async () => {
+    await setupAdmin();
+
+    const response = await callAdmin("/api/v1/admin/vote-proposals");
+    expect(response.status).toBe(404);
+  });
+
+  it("leaves the retired admin organization API unmounted", async () => {
+    await setupAdmin();
+
+    const response = await callAdmin("/api/v1/admin/organizations");
+    expect(response.status).toBe(404);
+  });
+
   it("mounts organization logo handlers without consuming the binary request body as JSON", async () => {
     await setupAdmin();
     const organizationId = crypto.randomUUID();
@@ -155,7 +186,7 @@ describe("admin OpenAPI mutation boundaries", () => {
       .bind(organizationId)
       .run();
 
-    const put = await callAdmin(`/api/v1/admin/organizations/${organizationId}/logo`, {
+    const put = await callAdmin(`/api/v1/organizations/${organizationId}/logo`, {
       method: "PUT",
       headers: { "content-type": "image/jpeg" },
       body: validJpegBytes(),
@@ -164,7 +195,7 @@ describe("admin OpenAPI mutation boundaries", () => {
     const putBody = (await put.json()) as { success: boolean; r2Key: string; logoUrl: string };
     expect(putBody).toMatchObject({ success: true, logoUrl: `/api/v1/members/${organizationId}/logo` });
 
-    const remove = await callAdmin(`/api/v1/admin/organizations/${organizationId}/logo`, { method: "DELETE" });
+    const remove = await callAdmin(`/api/v1/organizations/${organizationId}/logo`, { method: "DELETE" });
     expect(remove.status).toBe(200);
     await expect(remove.json()).resolves.toEqual({ success: true });
   });

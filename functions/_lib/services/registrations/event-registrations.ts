@@ -57,8 +57,6 @@ export interface EventRegistrationsListResult {
   total: number;
   stats: EventRegistrationsStats;
 }
-/** @deprecated Use EventRegistrationsListResult. */
-export type AdminEventRegistrationsListResult = EventRegistrationsListResult;
 
 const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
        FROM email_outbox eo

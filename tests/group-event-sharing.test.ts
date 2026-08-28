@@ -20,7 +20,6 @@ import {
   inviteOccurrenceGuest,
   listOccurrenceAttendance,
   listOccurrenceGuests,
-  liveEventResourceContextAccess,
   materializeSeriesOccurrences,
   updateGroupEventSeries,
 } from "../functions/_lib/services/event-series";
@@ -37,9 +36,13 @@ import {
   prepareGroupEventRegistrationGuard,
   prepareVerifiedRegistrationUserGuard,
 } from "../functions/_lib/services/registrations/authorization";
-import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
+import {
+  grantResourceToGroup,
+  liveGroupResourceContextAccess,
+  revokeResourceGroupGrant,
+} from "../functions/_lib/services/resource-grants";
 import { createManagedForm, createManagedFormPlacement } from "../functions/_lib/services/forms";
-import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
@@ -158,6 +161,18 @@ function authenticatedRequest(token: string, path: string, init: RequestInit = {
   return callApi(env, path, { ...init, headers });
 }
 
+function authenticatedRequestWithDatabase(
+  db: DatabaseLike,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body) headers.set("content-type", "application/json");
+  return callApi({ ...env, DB: db } as Env, path, { ...init, headers });
+}
+
 function registrationSubmissionMetadata() {
   return {
     clientIp: null,
@@ -194,7 +209,7 @@ describe("group event sharing", () => {
 
     const occurrenceQuery = buildSeriesOccurrencesPageQuery(
       fixture.granteeId,
-      liveEventResourceContextAccess({ userId: fixture.memberId }, fixture.granteeId),
+      liveGroupResourceContextAccess({ userId: fixture.memberId }, fixture.granteeId),
       fixture.seriesId,
       eventOccurrencesListQuerySchema.parse({ status: "scheduled", limit: 20 }),
     );
@@ -945,6 +960,47 @@ describe("group event sharing", () => {
       .bind(fixture.eventId)
       .run();
     expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(404);
+  });
+
+  it("returns no registration configuration when register access changes after preflight", async () => {
+    const fixture = await createFixture();
+    const path = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registration-config`;
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    expect((await callApi(env, `/api/v1/events/${fixture.eventSlug}/forms`)).status).toBe(200);
+
+    const revokedGrantDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `DELETE FROM event_group_grants
+          WHERE event_id = ? AND group_id = ? AND capability = 'register'`,
+      )
+        .bind(fixture.eventId, fixture.granteeId)
+        .run(),
+    );
+    const revokedGrant = await authenticatedRequestWithDatabase(revokedGrantDb, fixture.memberToken, path);
+    expect(revokedGrant.status).toBe(403);
+    expect(await revokedGrant.json()).toMatchObject({
+      error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" },
+    });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const revokedMembershipDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        "UPDATE group_memberships SET left_at = joined_at WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+      )
+        .bind(fixture.granteeId, fixture.memberId)
+        .run(),
+    );
+    const revokedMembership = await authenticatedRequestWithDatabase(revokedMembershipDb, fixture.memberToken, path);
+    expect(revokedMembership.status).toBe(403);
+    expect(await revokedMembership.json()).toMatchObject({
+      error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" },
+    });
   });
 
   it("rolls back the canonical group adapter when grant, membership, or ownership changes before commit", async () => {

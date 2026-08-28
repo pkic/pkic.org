@@ -5,10 +5,14 @@ import {
   adminEventEmailPreviewResponseSchema,
   adminEventEmailSendResponseSchema,
 } from "../../../../../shared/schemas/admin-events";
-import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../../email-template-helpers";
+import {
+  TEMPLATE_HELPERS,
+  TEMPLATE_PARTIALS,
+  type TemplateHelperItem,
+} from "../../../../shared/email-template-helpers";
 import { toast } from "../../../ui";
-import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
-import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../email-preview-tabs";
+import type { EmailMessageType } from "../../../../../shared/schemas/email-templates";
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
 import {
   HELPER_CATEGORIES,
   PERSONAL_ONLY_HELPERS,
@@ -26,7 +30,7 @@ import {
   type EventRegistrationStatusFilter,
 } from "../../../../../shared/schemas/event-registrations";
 import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
-import { adminEmailTemplateCatalog, getAdminEmailTemplateEditorVersion } from "../../../services/catalogs";
+import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../../../shared/email-template-catalog";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -109,7 +113,7 @@ export function EventEmail({
     const requestId = templateRequestIdRef.current + 1;
     templateRequestIdRef.current = requestId;
     try {
-      const version = await getAdminEmailTemplateEditorVersion(key);
+      const version = await getEmailTemplateEditorVersion(key);
       if (templateRequestIdRef.current !== requestId) {
         return;
       }
@@ -221,7 +225,7 @@ export function EventEmail({
       <div class="row g-2 mb-2">
         <div class="col-md-6">
           <ServerSearchSelect
-            catalog={adminEmailTemplateCatalog("msg_")}
+            catalog={emailTemplateCatalog("msg_")}
             label="Template"
             value={templateKey}
             selectedLabel={templateKey}

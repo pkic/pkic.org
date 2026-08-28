@@ -5,9 +5,8 @@
  *  - PATCH /api/v1/system/membership-applications/:id (Fix 3: correct applicant-submitted
  *    fields without transitioning stage)
  *  - GET /api/v1/system/membership-applications?sort=... (Fix 4: sortable columns)
- *  - POST /api/v1/internal/jobs/run with runConsultationBatch/runEcReviewBatch
- *    (Fix 5b: manual off-cycle triggers for the twice-weekly membership
- *    batches)
+ *  - POST /api/v1/operations/membership-batches/:kind/run
+ *    (manual off-cycle triggers for the twice-weekly membership batches)
  *
  * Structure mirrors tests/admin-members.test.ts and
  * tests/application-stage-machine.test.ts.
@@ -612,32 +611,26 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
   });
 });
 
-describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBatch (Fix 5b)", () => {
+describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
   let adminToken: string;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-jobs-token");
+    adminToken = await createAdminSession(env.DB, adminRow.id, "operations-membership-batch-token");
   });
 
   it("runConsultationBatch queues a consultation-batch email for applications in_consultation", async () => {
     await createApplication({ stage: "in_consultation" });
 
-    const response = await call(adminToken, "/api/v1/internal/jobs/run", {
+    const response = await call(adminToken, "/api/v1/operations/membership-batches/consultation/run", {
       method: "POST",
-      body: JSON.stringify({
-        runReminders: false,
-        runRetention: false,
-        runOutbox: false,
-        runConsultationBatch: true,
-        dryRun: false,
-      }),
+      body: JSON.stringify({}),
     });
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { consultationBatch: { applicationsNotified: number } };
-    expect(body.consultationBatch.applicationsNotified).toBe(1);
+    const body = (await response.json()) as { applicationsNotified: number };
+    expect(body.applicationsNotified).toBe(1);
 
     const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
     expect(outbox).toHaveLength(1);
@@ -653,38 +646,26 @@ describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBat
       .bind(new Date(Date.now() - 10 * 86_400_000).toISOString(), id)
       .run();
 
-    const response = await call(adminToken, "/api/v1/internal/jobs/run", {
+    const response = await call(adminToken, "/api/v1/operations/membership-batches/ec-review/run", {
       method: "POST",
-      body: JSON.stringify({
-        runReminders: false,
-        runRetention: false,
-        runOutbox: false,
-        runEcReviewBatch: true,
-        dryRun: false,
-      }),
+      body: JSON.stringify({}),
     });
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { ecReviewBatch: { transitioned: number } };
-    expect(body.ecReviewBatch.transitioned).toBe(1);
+    const body = (await response.json()) as { transitioned: number };
+    expect(body.transitioned).toBe(1);
 
     const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(rows[0].stage).toBe("ec_review");
   });
 
-  it("does not run the membership batches when their flags are omitted (defaults false)", async () => {
+  it("rejects an unknown batch kind without running another batch", async () => {
     await createApplication({ stage: "in_consultation" });
 
-    const response = await call(adminToken, "/api/v1/internal/jobs/run", {
+    const response = await call(adminToken, "/api/v1/operations/membership-batches/everything/run", {
       method: "POST",
-      body: JSON.stringify({ runReminders: false, runRetention: false, runOutbox: false, dryRun: false }),
+      body: JSON.stringify({}),
     });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      consultationBatch: { applicationsNotified: number };
-      ecReviewBatch: { transitioned: number };
-    };
-    expect(body.consultationBatch.applicationsNotified).toBe(0);
-    expect(body.ecReviewBatch.transitioned).toBe(0);
+    expect(response.status).toBe(404);
 
     const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
     expect(outbox).toHaveLength(0);

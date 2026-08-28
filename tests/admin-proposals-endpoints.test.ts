@@ -3,17 +3,19 @@ import { resetDb } from "./helpers/reset-db";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import {
-  adminProposalDetailResponseSchema,
-  adminProposalSpeakerPatchResponseSchema,
-  adminProposalSpeakersResponseSchema,
-} from "../assets/shared/schemas/admin-event-proposals";
+  proposalSpeakerPatchResponseSchema,
+  proposalSpeakersResponseSchema,
+} from "../assets/shared/schemas/proposal-speakers";
 import app from "../functions/router";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { addProposalSpeaker, createProposal, getProposalByManageToken } from "../functions/_lib/services/proposals";
-import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
+import {
+  eventProposalDetailResponseSchema,
+  eventProposalsResponseSchema,
+} from "../assets/shared/schemas/event-proposals";
 import {
   proposalCommentCreateResponseSchema,
   proposalCommentsListResponseSchema,
@@ -21,9 +23,10 @@ import {
 import { proposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
-import { buildAdminEventProposalsPageQuery } from "../functions/_lib/services/admin-event-proposals";
+import { buildEventProposalsPageQuery } from "../functions/_lib/services/event-proposals-list";
+import { buildProposalReviewsPageQuery } from "../functions/_lib/services/proposal-reviews/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
-import { editAdminProposal } from "../functions/_lib/services/proposal-admin-edit";
+import { editProposal } from "../functions/_lib/services/proposal-edit";
 import { cancelAcceptedProposal } from "../functions/_lib/services/proposal-cancellation";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { renderEmail } from "../functions/_lib/email/render";
@@ -327,7 +330,7 @@ describe("admin proposal endpoints", () => {
     const raw = (await response.json()) as { proposals: Array<Record<string, unknown>> };
     expect(raw.proposals[0]).not.toHaveProperty("manage_link_secret");
     expect(raw.proposals[0]).not.toHaveProperty("referral_code");
-    const payload = adminEventProposalsResponseSchema.parse(raw);
+    const payload = eventProposalsResponseSchema.parse(raw);
 
     expect(payload.proposals.length).toBe(1);
     expect(payload.proposals[0].proposer_email).toBe("speaker@pkic.org");
@@ -348,7 +351,7 @@ describe("admin proposal endpoints", () => {
 
   it("keeps proposal count predicates while excluding page-only review projections", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const query = buildAdminEventProposalsPageQuery({
+    const query = buildEventProposalsPageQuery({
       eventId,
       limit: 10,
       offset: 0,
@@ -371,7 +374,7 @@ describe("admin proposal endpoints", () => {
     expect(pagePlan.results.length).toBeGreaterThan(0);
     expect(countPlan.results.length).toBeGreaterThan(0);
 
-    const filteredQuery = buildAdminEventProposalsPageQuery({
+    const filteredQuery = buildEventProposalsPageQuery({
       eventId,
       limit: 10,
       offset: 0,
@@ -514,7 +517,7 @@ describe("admin proposal endpoints", () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = adminProposalSpeakerPatchResponseSchema.parse(await response.json());
+    const payload = proposalSpeakerPatchResponseSchema.parse(await response.json());
     expect(payload.speaker).toMatchObject({
       userId: speakerId,
       firstName: "Updated",
@@ -592,7 +595,7 @@ describe("admin proposal endpoints", () => {
     const response = await callAdminProposalSpeakers(adminToken, proposalId);
 
     expect(response.status).toBe(200);
-    const payload = adminProposalSpeakersResponseSchema.parse(await response.json());
+    const payload = proposalSpeakersResponseSchema.parse(await response.json());
     expect(payload.summary).toMatchObject({ total: 1, confirmed: 1, pending: 0, declined: 0 });
     expect(payload.speakers[0]).toMatchObject({ userId: speakerId, role: "speaker", links: [] });
   });
@@ -750,7 +753,7 @@ describe("admin proposal endpoints", () => {
 
     expect(response.status).toBe(200);
     const rawPayload = await response.json();
-    const payload = adminProposalDetailResponseSchema.parse(rawPayload);
+    const payload = eventProposalDetailResponseSchema.parse(rawPayload);
 
     expect(payload.proposal.details).toEqual(proposalDetails);
     expect(rawPayload).not.toHaveProperty("proposal.manage_link_secret");
@@ -821,6 +824,24 @@ describe("admin proposal endpoints", () => {
       minReviewsRequired: 2,
       quorumMet: true,
     });
+
+    const reviewQuery = buildProposalReviewsPageQuery(proposalId, 1, {
+      limit: 1,
+      offset: 1,
+      q: "deployment",
+      sort: "-score",
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(reviewQuery);
+    const [pagePlan, countPlan] = await Promise.all([
+      queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [...bindings, 1, 1]),
+      queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${countSql}`, [...countBindings]),
+    ]);
+    for (const plan of [pagePlan, countPlan]) {
+      const details = plan.map((row) => row.detail).join("\n");
+      expect(details).toContain("idx_proposal_reviews_proposal_round");
+      expect(details).not.toMatch(/SCAN (?:TABLE )?proposal_reviews\b/i);
+      expect(details).not.toMatch(/SCAN (?:TABLE )?users\b/i);
+    }
   });
 
   it("stores and returns internal proposal comments", async () => {
@@ -999,7 +1020,7 @@ describe("admin proposal endpoints", () => {
     );
 
     await expect(
-      editAdminProposal(racingDb, editor.actor, proposalId, { abstract: "This edit must roll back." }),
+      editProposal(racingDb, editor.actor, proposalId, { abstract: "This edit must roll back." }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_AUTHORIZATION_CHANGED" });
     const [proposal] = await queryAll<{ abstract: string }>(
       env.DB,
@@ -1024,7 +1045,7 @@ describe("admin proposal endpoints", () => {
     );
 
     await expect(
-      editAdminProposal(racingDb, editor.actor, proposalId, { abstract: "This stale edit must not win." }),
+      editProposal(racingDb, editor.actor, proposalId, { abstract: "This stale edit must not win." }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_EDIT_CONFLICT" });
     const [proposal] = await queryAll<{ status: string; abstract: string }>(
       env.DB,
@@ -1136,7 +1157,7 @@ describe("admin proposal endpoints", () => {
 
     const detailResponse = await callAdminProposalDetail(adminToken, proposalId);
     expect(detailResponse.status).toBe(200);
-    const detail = adminProposalDetailResponseSchema.parse(await detailResponse.json());
+    const detail = eventProposalDetailResponseSchema.parse(await detailResponse.json());
     expect(detail.proposal.status).toBe("canceled");
     expect(detail.proposal.decision_status).toBe("accepted");
     expect(detail.proposal.cancellation_comment).toContain("speaker is unavailable");
@@ -1146,7 +1167,7 @@ describe("admin proposal endpoints", () => {
       "/api/v1/admin/events/pqc-2026/proposals?status=canceled",
     );
     expect(listResponse.status).toBe(200);
-    const list = adminEventProposalsResponseSchema.parse(await listResponse.json());
+    const list = eventProposalsResponseSchema.parse(await listResponse.json());
     expect(list.proposals).toHaveLength(1);
     expect(list.proposals[0]).toMatchObject({ id: proposalId, status: "canceled", decision_status: "accepted" });
   });

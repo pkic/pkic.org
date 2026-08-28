@@ -1,10 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { adminAuthSessionResponseSchema } from "../../assets/shared/schemas/admin-auth";
 import { adminEventDetailResponseSchema } from "../../assets/shared/schemas/admin-events";
-import {
-  adminEventProposalsResponseSchema,
-  adminProposalSpeakersResponseSchema,
-} from "../../assets/shared/schemas/admin-event-proposals";
+import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
+import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 
 const adminSessionResponse = adminAuthSessionResponseSchema.parse({
   success: true,
@@ -193,7 +191,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        adminProposalSpeakersResponseSchema.parse({
+        proposalSpeakersResponseSchema.parse({
           proposal: {
             id: proposalId,
             title: "Operational PKI at Internet Scale",
@@ -534,7 +532,7 @@ test("offers an event-level presentation ZIP from the proposals overview", async
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        adminEventProposalsResponseSchema.parse({
+        eventProposalsResponseSchema.parse({
           proposals: [],
           page: { offset: 0, limit: 50, total: 0, hasMore: false },
           event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference 2026" },

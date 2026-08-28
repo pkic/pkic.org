@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/me/organization/logo — propose a new organization logo.
  * Held in R2 under a staging key until a staff admin approves
- * the content review it's attached to — mirrors admin/organizations/[id]/
+ * the content review it's attached to — mirrors the canonical organization logo route.
  * logo.ts's upload pipeline but writes to a staging key instead of the live
  * one, and folds into the org's moderation queue instead of applying
  * immediately.

@@ -1,11 +1,11 @@
-import { requirePermission } from "../auth/permissions";
-import type { AuthAdmin, DatabaseLike } from "../types";
+import type { DatabaseLike, UserBackedAuthAdmin } from "../types";
 import {
   getStoredImagePointer,
   removeStoredImagePointer,
   replaceStoredImagePointer,
   type StoredImagePointerDefinition,
 } from "./stored-image-pointer";
+import { authorizedOrganizationMutationDb } from "./organization-management/authorization";
 
 const ORGANIZATION_LOGO: StoredImagePointerDefinition = {
   table: "organizations",
@@ -22,14 +22,13 @@ export function getOrganizationLogoPointer(db: DatabaseLike, id: string) {
 
 export async function replaceOrganizationLogo(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   bucket: R2Bucket,
   id: string,
   image: { buffer: ArrayBuffer; contentType: string },
 ) {
-  requirePermission(actor, "organizations:write");
   return replaceStoredImagePointer({
-    db,
+    db: authorizedOrganizationMutationDb(db, actor, "organizations:write"),
     bucket,
     bucketName: "assets",
     definition: ORGANIZATION_LOGO,
@@ -39,10 +38,9 @@ export async function replaceOrganizationLogo(
   });
 }
 
-export async function removeOrganizationLogo(db: DatabaseLike, actor: AuthAdmin, id: string) {
-  requirePermission(actor, "organizations:write");
+export async function removeOrganizationLogo(db: DatabaseLike, actor: UserBackedAuthAdmin, id: string) {
   return removeStoredImagePointer({
-    db,
+    db: authorizedOrganizationMutationDb(db, actor, "organizations:write"),
     bucketName: "assets",
     definition: ORGANIZATION_LOGO,
     id,

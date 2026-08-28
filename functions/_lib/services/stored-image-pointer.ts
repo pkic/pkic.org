@@ -4,7 +4,7 @@ import type { DatabaseLike } from "../types";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "./audit";
 import {
   prepareStorageDeletion,
   processStorageDeletionForKey,
@@ -105,7 +105,7 @@ export async function replaceStoredImagePointer(input: {
       },
     });
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "IMAGE_CHANGED", "The stored image changed while this request was processed");
     }
     throw error;

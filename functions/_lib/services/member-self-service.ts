@@ -21,6 +21,7 @@ export interface MyOrganizationRepresentative {
   userId: string;
   name: string | null;
   email: string;
+  showOnOrgProfile: boolean;
   isPrimaryContact: boolean;
   isSecondaryContact: boolean;
 }
@@ -78,6 +79,7 @@ interface OrganizationRepresentativeRow {
   last_name: string | null;
   preferred_name: string | null;
   email: string;
+  show_on_org_profile: number;
 }
 
 function representativeDisplayName(row: OrganizationRepresentativeRow): string | null {
@@ -144,7 +146,8 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     const [repRows, holders] = await Promise.all([
       all<OrganizationRepresentativeRow>(
         db,
-        `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name, u.email
+        `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name, u.email,
+                r.show_on_org_profile
          FROM organization_representatives r
          JOIN users u ON u.id = r.user_id
          WHERE r.member_id = ? AND r.left_at IS NULL
@@ -157,6 +160,7 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
       userId: r.user_id,
       name: representativeDisplayName(r),
       email: r.email,
+      showOnOrgProfile: r.show_on_org_profile === 1,
       isPrimaryContact: r.user_id === holders.primaryContactUserId,
       isSecondaryContact: r.user_id === holders.secondaryContactUserId,
     }));
