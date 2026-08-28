@@ -20,7 +20,7 @@ import {
 import { processStorageDeletionForKey } from "../../../_lib/services/storage-deletion-outbox";
 import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
-export const SystemOrganizationContentReviewsList = openApiRoute(
+export const OrganizationContentReviewsList = openApiRoute(
   organizationContentReviewsListRouteSchema,
   async (c: AdminContext, data) => {
     const { db } = await requireStaffPermission(c, "organizations:content-review");
@@ -35,7 +35,7 @@ export const SystemOrganizationContentReviewsList = openApiRoute(
   },
 );
 
-export const SystemOrganizationContentReviewGet = openApiRoute(
+export const OrganizationContentReviewGet = openApiRoute(
   organizationContentReviewGetRouteSchema,
   async (c: AdminContext, data) => {
     const { db } = await requireStaffPermission(c, "organizations:content-review");
@@ -43,7 +43,7 @@ export const SystemOrganizationContentReviewGet = openApiRoute(
   },
 );
 
-export const SystemOrganizationContentReviewApprove = openApiRoute(
+export const OrganizationContentReviewApprove = openApiRoute(
   organizationContentReviewApproveRouteSchema,
   async (c: AdminContext, data) => {
     const { db, staff: reviewer } = await requireStaffPermission(c, "organizations:content-review");
@@ -58,7 +58,7 @@ export const SystemOrganizationContentReviewApprove = openApiRoute(
   },
 );
 
-export const SystemOrganizationContentReviewReject = openApiRoute(
+export const OrganizationContentReviewReject = openApiRoute(
   organizationContentReviewRejectRouteSchema,
   async (c: AdminContext, data) => {
     const { db, staff: reviewer } = await requireStaffPermission(c, "organizations:content-review");

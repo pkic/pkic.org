@@ -45,6 +45,7 @@ describe("cache policy middleware", () => {
     "/api/v1/analytics/summary",
     "/api/v1/audit-log",
     "/api/v1/membership/settings",
+    "/api/v1/organizations/content-reviews",
     "/api/v1/email/outbox",
     "/api/v1/operations/due-work",
   ])("adds no-store to anonymous failures from the staff-only %s family", async (pathname) => {

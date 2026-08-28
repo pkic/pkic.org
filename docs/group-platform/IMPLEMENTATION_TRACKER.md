@@ -1113,8 +1113,10 @@ Status: In progress
       Organization-content moderation is the second
       permission-derived System destination. One neutral shared schema now owns
       its list, detail, decision, route, and paginated response contracts; the
-      portal consumes a canonical `/api/v1/system/organization-content-reviews`
-      API guarded by the live global `organizations:content-review` permission.
+      portal consumes a canonical
+      `/api/v1/organizations/content-reviews` API guarded by the live global
+      `organizations:content-review` permission. System is only the portal
+      navigation grouping; the former System API route is absent.
       Search, status, sorting, counting, and pagination remain in D1, and the
       existing atomic moderation service records an attributable user-backed
       reviewer. The old admin component, API handlers, route mounts, service

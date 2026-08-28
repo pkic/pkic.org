@@ -145,6 +145,10 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ["GET /api/v1/audit-log", () => callApp(anonGet("https://app.test/api/v1/audit-log"))],
     ["GET /api/v1/membership/settings", () => callApp(anonGet("https://app.test/api/v1/membership/settings"))],
     ["GET /api/v1/membership/categories", () => callApp(anonGet("https://app.test/api/v1/membership/categories"))],
+    [
+      "GET /api/v1/organizations/content-reviews",
+      () => callApp(anonGet("https://app.test/api/v1/organizations/content-reviews")),
+    ],
     ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
     [

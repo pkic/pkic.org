@@ -35,9 +35,10 @@ export const organizationContentReviewsListResponseSchema = paginatedResponseSch
 );
 
 export const organizationContentReviewsListRouteSchema = {
-  tags: ["System organization content reviews"],
+  tags: ["Organization content reviews"],
   summary: "List organization content moderation submissions",
   description: "Permission-scoped moderation queue. Defaults to pending submissions.",
+  "x-pkic-auth": { required: true, scopes: ["organizations:content-review"] },
   request: { query: organizationContentReviewsListQuerySchema },
   responses: {
     "200": {
@@ -77,8 +78,9 @@ export type OrganizationContentReviewDetail = z.infer<typeof organizationContent
 export const organizationContentReviewIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const organizationContentReviewGetRouteSchema = {
-  tags: ["System organization content reviews"],
+  tags: ["Organization content reviews"],
   summary: "Get an organization content review and its field diff",
+  "x-pkic-auth": { required: true, scopes: ["organizations:content-review"] },
   request: { params: organizationContentReviewIdParamsSchema },
   responses: {
     "200": {
@@ -92,8 +94,9 @@ export const organizationContentReviewGetRouteSchema = {
 };
 
 export const organizationContentReviewApproveRouteSchema = {
-  tags: ["System organization content reviews"],
+  tags: ["Organization content reviews"],
   summary: "Approve and publish an organization content submission",
+  "x-pkic-auth": { required: true, scopes: ["organizations:content-review"] },
   request: { params: organizationContentReviewIdParamsSchema },
   responses: {
     "200": {
@@ -112,8 +115,9 @@ export const organizationContentReviewRejectSchema = z.object({
 });
 
 export const organizationContentReviewRejectRouteSchema = {
-  tags: ["System organization content reviews"],
+  tags: ["Organization content reviews"],
   summary: "Reject an organization content submission",
+  "x-pkic-auth": { required: true, scopes: ["organizations:content-review"] },
   request: {
     params: organizationContentReviewIdParamsSchema,
     body: {

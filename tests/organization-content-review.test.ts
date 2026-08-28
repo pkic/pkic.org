@@ -724,7 +724,7 @@ describe("Organization content moderation", () => {
     expect(resubmit.status).toBe(200);
   });
 
-  it("staff admin can list, approve, and apply a pending review", async () => {
+  it("staff admin reaches the static content-review collection before dynamic organization IDs, then approves a review", async () => {
     const { organizationId, userId } = await seedOrgWithContact("primary5@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "approve-flow-token");
     const submitResponse = await call(token, "/api/v1/me/organization", {
@@ -735,14 +735,14 @@ describe("Organization content moderation", () => {
 
     const listResponse = await call(
       adminToken,
-      "/api/v1/system/organization-content-reviews?status=pending&q=primary5&limit=1&sort=organizationName",
+      "/api/v1/organizations/content-reviews?status=pending&q=primary5&limit=1&sort=organizationName",
     );
     expect(listResponse.status).toBe(200);
     const listBody = organizationContentReviewsListResponseSchema.parse(await listResponse.json());
     expect(listBody.reviews.map((r) => r.id)).toContain(review.id);
     expect(listBody.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
 
-    const detailResponse = await call(adminToken, `/api/v1/system/organization-content-reviews/${review.id}`);
+    const detailResponse = await call(adminToken, `/api/v1/organizations/content-reviews/${review.id}`);
     expect(detailResponse.status).toBe(200);
     const detailBody = (await detailResponse.json()) as {
       review: { diff: Array<{ field: string; current: unknown; proposed: unknown }> };
@@ -751,7 +751,7 @@ describe("Organization content moderation", () => {
     expect(descriptionDiff?.current).toBe("Old description");
     expect(descriptionDiff?.proposed).toBe("Approved description");
 
-    const approveResponse = await call(adminToken, `/api/v1/system/organization-content-reviews/${review.id}/approve`, {
+    const approveResponse = await call(adminToken, `/api/v1/organizations/content-reviews/${review.id}/approve`, {
       method: "POST",
     });
     expect(approveResponse.status).toBe(200);
@@ -776,7 +776,7 @@ describe("Organization content moderation", () => {
     expect(reviewRows[0].reviewer_user_id).toBe(adminId);
   });
 
-  it("requires an attributable staff identity and removes the legacy admin API", async () => {
+  it("requires an attributable staff identity and removes the legacy API routes", async () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
     const organization = await seedOrgWithContact("api-key-review@example.test", "F");
     const memberToken = await createMemberSession(env.DB, organization.userId, "api-key-review-token");
@@ -788,10 +788,12 @@ describe("Organization content moderation", () => {
 
     const serviceIdentityResponse = await call(
       apiKey,
-      `/api/v1/system/organization-content-reviews/${submitted.review.id}/approve`,
+      `/api/v1/organizations/content-reviews/${submitted.review.id}/approve`,
       { method: "POST" },
     );
     expect(serviceIdentityResponse.status).toBe(403);
+
+    expect((await call(adminToken, "/api/v1/system/organization-content-reviews")).status).toBe(404);
 
     expect(
       await queryAll<{ status: string; reviewer_user_id: string | null }>(
@@ -818,7 +820,7 @@ describe("Organization content moderation", () => {
     });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
 
-    const rejectResponse = await call(adminToken, `/api/v1/system/organization-content-reviews/${review.id}/reject`, {
+    const rejectResponse = await call(adminToken, `/api/v1/organizations/content-reviews/${review.id}/reject`, {
       method: "POST",
       body: JSON.stringify({ reviewerNote: "Too promotional" }),
     });
@@ -860,7 +862,7 @@ describe("Organization content moderation", () => {
        END`,
     ).run();
 
-    const response = await call(adminToken, `/api/v1/system/organization-content-reviews/${review.id}/approve`, {
+    const response = await call(adminToken, `/api/v1/organizations/content-reviews/${review.id}/approve`, {
       method: "POST",
     });
     expect(response.status).toBe(500);
@@ -898,8 +900,8 @@ describe("Organization content moderation", () => {
     const { review } = (await submitResponse.json()) as { review: { id: string } };
 
     const responses = await Promise.all([
-      call(adminToken, `/api/v1/system/organization-content-reviews/${review.id}/approve`, { method: "POST" }),
-      call(adminToken, `/api/v1/system/organization-content-reviews/${review.id}/reject`, {
+      call(adminToken, `/api/v1/organizations/content-reviews/${review.id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/organizations/content-reviews/${review.id}/reject`, {
         method: "POST",
         body: JSON.stringify({ reviewerNote: "Race rejection" }),
       }),
@@ -953,7 +955,7 @@ describe("Organization content moderation", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "unprivileged-staff-token");
 
-    const response = await call(staffToken, "/api/v1/system/organization-content-reviews");
+    const response = await call(staffToken, "/api/v1/organizations/content-reviews");
     expect(response.status).toBe(403);
   });
 
@@ -973,7 +975,7 @@ describe("Organization content moderation", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "content-review-staff-token");
 
-    const response = await call(staffToken, "/api/v1/system/organization-content-reviews?limit=1");
+    const response = await call(staffToken, "/api/v1/organizations/content-reviews?limit=1");
     expect(response.status).toBe(200);
     expect(organizationContentReviewsListResponseSchema.parse(await response.json()).page).toEqual({
       limit: 1,

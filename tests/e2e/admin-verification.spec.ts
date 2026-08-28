@@ -415,7 +415,7 @@ test.describe("Admin browser-verification pass", () => {
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
-      if (pathname.startsWith("/api/v1/system/organization-content-reviews")) {
+      if (pathname.startsWith("/api/v1/organizations/content-reviews")) {
         canonicalRequests.push(`${request.method()} ${pathname}`);
       }
       if (pathname.startsWith("/api/v1/admin/organizations/content-reviews")) {
@@ -466,11 +466,10 @@ test.describe("Admin browser-verification pass", () => {
 
     await page.getByLabel("Review status").selectOption("approved");
     await expect(page.getByRole("button", { name: orgName })).toBeVisible();
-    expect(canonicalRequests).toContain("GET /api/v1/system/organization-content-reviews");
+    expect(canonicalRequests).toContain("GET /api/v1/organizations/content-reviews");
     expect(
       canonicalRequests.some(
-        (request) =>
-          request.startsWith("POST /api/v1/system/organization-content-reviews/") && request.endsWith("/approve"),
+        (request) => request.startsWith("POST /api/v1/organizations/content-reviews/") && request.endsWith("/approve"),
       ),
     ).toBe(true);
     expect(legacyRequests).toEqual([]);

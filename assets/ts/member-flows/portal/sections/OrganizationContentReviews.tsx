@@ -14,7 +14,7 @@ import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
 import { fmt, toast } from "../ui";
 
-const API_BASE = "/api/v1/system/organization-content-reviews";
+const API_BASE = "/api/v1/organizations/content-reviews";
 type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
 
 function formatDiffValue(value: unknown): string {

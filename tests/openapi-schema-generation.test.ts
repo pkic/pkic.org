@@ -74,6 +74,11 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/analytics/donations"]).toBeUndefined();
     expect(spec.paths["/api/v1/audit-log"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/audit-log"]).toBeUndefined();
+    expect(spec.paths["/api/v1/organizations/content-reviews"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/content-reviews/{id}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/content-reviews/{id}/approve"].post).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/content-reviews/{id}/reject"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/organization-content-reviews"]).toBeUndefined();
     expect(spec.paths["/api/v1/membership/settings"].get).toBeDefined();
     expect(spec.paths["/api/v1/membership/settings"].patch).toBeDefined();
     expect(spec.paths["/api/v1/membership/categories"].get).toBeDefined();
@@ -138,6 +143,14 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/membership/categories/{categoryCode}"].patch[AUTH_EXTENSION]).toMatchObject({
       required: true,
       scopes: ["membership:write"],
+    });
+    expect(spec.paths["/api/v1/organizations/content-reviews"].get[AUTH_EXTENSION]).toMatchObject({
+      required: true,
+      scopes: ["organizations:content-review"],
+    });
+    expect(spec.paths["/api/v1/organizations/content-reviews/{id}/approve"].post[AUTH_EXTENSION]).toMatchObject({
+      required: true,
+      scopes: ["organizations:content-review"],
     });
     expect(spec.paths["/api/v1/donations/sync"].post[AUTH_EXTENSION]).toMatchObject({
       required: true,
