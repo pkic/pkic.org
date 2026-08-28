@@ -8,7 +8,6 @@ import { AdminUsersUserIdHeadshotDelete } from "./headshot";
 import { AdminUsersUserIdGet } from "./index";
 import { AdminUsersUserIdPatch } from "./index";
 import { UserMembershipGrant } from "./membership";
-import roles_Router from "./roles/router";
 import emails_Router from "./emails/router";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 
@@ -23,7 +22,6 @@ openapi.delete("/headshot", AdminUsersUserIdHeadshotDelete);
 openapi.get("/", AdminUsersUserIdGet);
 openapi.patch("/", AdminUsersUserIdPatch);
 openapi.post("/membership", UserMembershipGrant);
-openapi.route("/roles", roles_Router);
 openapi.route("/emails", emails_Router);
 
 export default openapi;

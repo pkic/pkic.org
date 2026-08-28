@@ -40,6 +40,16 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].post).toBeDefined();
     expect(spec.paths["/api/v1/system/email-templates/{key}/activate"].post).toBeDefined();
     expect(spec.paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/grants"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/grants"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/roles"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/users"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/access-control/contexts"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/access-grants"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/roles"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/roles/{id}/assignments"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/roles"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/roles/{userRoleId}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/email-templates"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/email-templates/preview"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
@@ -115,7 +125,7 @@ describe("OpenAPI schema generation", () => {
 
   it("documents role ids as plain strings, not uuid()-formatted, so built-in system roles are valid per the spec (Phase 3 §3.1)", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
-    const rolesGet = spec.paths["/api/v1/admin/roles"].get;
+    const rolesGet = spec.paths["/api/v1/system/access-control/roles"].get;
     const roleIdSchema =
       rolesGet.responses["200"].content["application/json"].schema.properties.roles.items.properties.id;
 

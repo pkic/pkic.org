@@ -24,6 +24,21 @@ $portal-green: #198754;
   max-width: 320px;
 }
 
+.portal-access-role-user-picker {
+  max-width: 400px;
+}
+
+.portal-access-role-permissions {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.portal-user-picker-results {
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 #portal-root {
   display: flex;
   min-height: calc(100vh - var(--pkic-navbar-height, 57px));

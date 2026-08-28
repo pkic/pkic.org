@@ -95,7 +95,7 @@ export function UserPicker({
         aria-autocomplete="list"
       />
       {open && results.length > 0 && (
-        <div class="list-group position-absolute w-100 shadow-sm adm-user-picker-results">
+        <div class="list-group position-absolute w-100 shadow-sm portal-user-picker-results">
           {results.map((user) => (
             <button
               key={user.id}

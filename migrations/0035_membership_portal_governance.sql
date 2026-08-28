@@ -2440,6 +2440,12 @@ CREATE TABLE permission_grants (
 
 CREATE INDEX idx_permission_grants_user ON permission_grants(user_id);
 CREATE INDEX idx_permission_grants_context ON permission_grants(context_type, context_id);
+-- A user can hold one active direct permission per global or scoped context.
+-- Retained revoked rows remain available for audit history and can be followed
+-- by a later re-grant without weakening this effective-authority invariant.
+CREATE UNIQUE INDEX uq_permission_grants_active_user_permission_context
+  ON permission_grants(user_id, permission, COALESCE(context_type, ''), COALESCE(context_id, ''))
+  WHERE revoked_at IS NULL;
 
 CREATE TRIGGER validate_permission_grant_context_insert
 BEFORE INSERT ON permission_grants

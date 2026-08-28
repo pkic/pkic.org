@@ -1,5 +1,5 @@
 import {
-  ADMIN_ACCESS_GRANTS_SORT_COLUMNS,
+  ACCESS_GRANTS_SORT_COLUMNS,
   accessGrantResponseSchema,
   type AccessGrant,
   type AccessGrantCreateInput,
@@ -16,7 +16,7 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
-import { commitAccessControlMutation } from "./authorization";
+import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 
 interface GrantRow {
@@ -28,6 +28,10 @@ interface GrantRow {
   context_id: string | null;
   expires_at: string | null;
   created_at: string;
+}
+
+function isActiveAccessGrantConflict(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("uq_permission_grants_active_user_permission_context");
 }
 
 function serializeGrant(row: GrantRow): AccessGrant {
@@ -48,9 +52,7 @@ export async function listAccessGrants(
   actor: AuthAdmin,
   query: AccessGrantsListQuery,
 ): Promise<{ grants: AccessGrant[]; page: PageInfo }> {
-  if (!hasPermission(actor, "access:grant") && !hasPermission(actor, "access:revoke")) {
-    requirePermission(actor, "access:grant");
-  }
+  requireAccessControlRead(actor);
 
   const { userId, q, sort, limit, offset } = query;
   const orderBy = resolveMappedOrderBy(
@@ -61,7 +63,7 @@ export async function listAccessGrants(
       context_type: "g.context_type",
       expires_at: "g.expires_at",
       created_at: "g.created_at",
-    } satisfies Record<(typeof ADMIN_ACCESS_GRANTS_SORT_COLUMNS)[number], string>,
+    } satisfies Record<(typeof ACCESS_GRANTS_SORT_COLUMNS)[number], string>,
     "g.created_at DESC",
     "g.id ASC",
   );
@@ -125,33 +127,46 @@ export async function createAccessGrant(
   const contextType = input.contextType ?? null;
   const contextId = input.contextId ?? null;
   const expiresAt = input.expiresAt ?? null;
-  await commitAccessControlMutation(
-    db,
-    actor,
-    [
-      { permission: "access:grant" },
-      ...(context ? [{ permission: input.permission, context }] : [{ permission: input.permission }]),
-    ],
-    [
-      db
-        .prepare(
-          `INSERT INTO permission_grants
-           (id, user_id, permission, context_type, context_id, granted_by_user_id, expires_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(id, input.userId, input.permission, contextType, contextId, adminDatabaseUserId(actor), expiresAt, now),
-      prepareAuditLog(
-        db,
-        "admin",
-        actor.id,
-        "access_grant_created",
-        "permission_grant",
-        id,
-        { userId: input.userId, permission: input.permission, contextType, contextId, expiresAt },
-        now,
-      ),
-    ],
-  );
+  try {
+    await commitAccessControlMutation(
+      db,
+      actor,
+      [
+        { permission: "access:grant" },
+        ...(context ? [{ permission: input.permission, context }] : [{ permission: input.permission }]),
+      ],
+      [
+        db
+          .prepare(
+            `INSERT INTO permission_grants
+             (id, user_id, permission, context_type, context_id, granted_by_user_id, expires_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(id, input.userId, input.permission, contextType, contextId, adminDatabaseUserId(actor), expiresAt, now),
+        prepareAuditLog(
+          db,
+          "admin",
+          actor.id,
+          "access_grant_created",
+          "permission_grant",
+          id,
+          {
+            userId: input.userId,
+            permission: input.permission,
+            contextType,
+            contextId,
+            expiresAt,
+          },
+          now,
+        ),
+      ],
+    );
+  } catch (error) {
+    if (isActiveAccessGrantConflict(error)) {
+      throw new AppError(409, "ACCESS_GRANT_EXISTS", "An active matching access grant already exists");
+    }
+    throw error;
+  }
 
   return accessGrantResponseSchema.parse({
     id,
@@ -167,11 +182,11 @@ export async function createAccessGrant(
 
 export async function revokeAccessGrant(db: DatabaseLike, actor: AuthAdmin, grantId: string): Promise<void> {
   requirePermission(actor, "access:revoke");
-  const grant = await first<{ id: string; user_id: string; permission: string }>(
-    db,
-    "SELECT id, user_id, permission FROM permission_grants WHERE id = ? AND revoked_at IS NULL",
-    [grantId],
-  );
+  const grant = await first<{
+    id: string;
+    user_id: string;
+    permission: string;
+  }>(db, "SELECT id, user_id, permission FROM permission_grants WHERE id = ? AND revoked_at IS NULL", [grantId]);
   if (!grant) throw new AppError(404, "NOT_FOUND", "Grant not found");
 
   const now = nowIso();

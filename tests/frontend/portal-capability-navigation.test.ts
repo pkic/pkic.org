@@ -123,6 +123,39 @@ describe("portal capability-derived navigation", () => {
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });
 
+  it("exposes Access Control for either global grant or revoke authority, never contextual authority", () => {
+    const grantOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "access:grant", contextType: null, contextId: null }],
+    });
+    const revokeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "access:revoke", contextType: null, contextId: null }],
+    });
+    const contextual = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "access:grant", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
+      path: "/system/access-control",
+      section: "system",
+      label: "Access Control",
+    });
+    expect(portalSystemNavigationItems(revokeOnly)).toContainEqual({
+      path: "/system/access-control",
+      section: "system",
+      label: "Access Control",
+    });
+    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/access-control" }),
+    );
+    expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/management");
+  });
+
   it("shows member actions but no management entry to a member-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");

@@ -1,5 +1,5 @@
 import {
-  ADMIN_ROLES_SORT_COLUMNS,
+  ROLES_SORT_COLUMNS,
   roleResponseSchema,
   type Role,
   type RoleCreateInput,
@@ -16,7 +16,7 @@ import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
-import { commitAccessControlMutation } from "./authorization";
+import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 
 interface RoleRow {
@@ -44,9 +44,9 @@ export async function listRoles(
   actor: AuthAdmin,
   query: RolesListQuery,
 ): Promise<{ roles: Role[]; page: PageInfo }> {
-  requirePermission(actor, "access:grant");
+  requireAccessControlRead(actor);
   const { q, sort, limit, offset } = query;
-  const orderBy = resolveOrderBy(sort, ADMIN_ROLES_SORT_COLUMNS, "ORDER BY name ASC", "id ASC");
+  const orderBy = resolveOrderBy(sort, ROLES_SORT_COLUMNS, "ORDER BY name ASC", "id ASC");
   const search = q ? buildD1TextSearchFilter(q, ["name", "description"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const bindings = search?.bindings ?? [];

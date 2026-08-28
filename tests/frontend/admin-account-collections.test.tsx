@@ -3,7 +3,7 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UserRoles } from "../../assets/ts/admin/sections/access-control/UserRoles";
+import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
 import { UserEmailAddressesPanel } from "../../assets/ts/admin/sections/users/UserAccountPanels";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
@@ -54,7 +54,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("admin account collection pagination", () => {
+describe("portal access-control collection pagination", () => {
   it("loads user role history through the page envelope and exposes search and final-page navigation", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
@@ -62,7 +62,7 @@ describe("admin account collection pagination", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
         requests.push(url);
-        if (url.pathname === "/api/v1/admin/users") {
+        if (url.pathname === "/api/v1/system/access-control/users") {
           return jsonResponse({
             users: [
               {
@@ -88,7 +88,7 @@ describe("admin account collection pagination", () => {
             page: page(url, 1, 1),
           });
         }
-        if (url.pathname === "/api/v1/admin/roles") {
+        if (url.pathname === "/api/v1/system/access-control/roles") {
           return jsonResponse({
             roles: [
               {
@@ -103,7 +103,7 @@ describe("admin account collection pagination", () => {
             page: page(url, 1, 1),
           });
         }
-        if (url.pathname === `/api/v1/admin/users/${USER_ID}/roles`) {
+        if (url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`) {
           return jsonResponse({
             roles: [
               {
@@ -125,13 +125,13 @@ describe("admin account collection pagination", () => {
     );
 
     const container = mount(<UserRoles />);
-    const picker = container.querySelector('.adm-role-user-picker input[type="text"]') as HTMLInputElement;
+    const picker = container.querySelector('.portal-access-role-user-picker input[type="text"]') as HTMLInputElement;
     dispatchInput(picker, "history");
     await settle(300);
-    void act(() => (container.querySelector(".adm-user-picker-results button") as HTMLButtonElement).click());
+    void act(() => (container.querySelector(".portal-user-picker-results button") as HTMLButtonElement).click());
     await settle();
 
-    const initial = requests.find((url) => url.pathname === `/api/v1/admin/users/${USER_ID}/roles`);
+    const initial = requests.find((url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`);
     expect(initial?.searchParams.get("limit")).toBe("25");
     expect(initial?.searchParams.get("offset")).toBe("0");
     expect(initial?.searchParams.get("sort")).toBe("-created_at");
@@ -141,7 +141,9 @@ describe("admin account collection pagination", () => {
       (container.querySelector(".adm-pager .pagination .page-item:last-child button") as HTMLButtonElement).click(),
     );
     await settle();
-    const roleRequests = requests.filter((url) => url.pathname === `/api/v1/admin/users/${USER_ID}/roles`);
+    const roleRequests = requests.filter(
+      (url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`,
+    );
     expect(roleRequests.at(-1)?.searchParams.get("offset")).toBe("25");
 
     const search = container.querySelector('input[placeholder="Search role assignments…"]') as HTMLInputElement;
@@ -151,9 +153,11 @@ describe("admin account collection pagination", () => {
     });
     await settle();
     expect(roleRequests.length).toBeLessThan(
-      requests.filter((url) => url.pathname === `/api/v1/admin/users/${USER_ID}/roles`).length,
+      requests.filter((url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`).length,
     );
-    const searched = requests.filter((url) => url.pathname === `/api/v1/admin/users/${USER_ID}/roles`).at(-1);
+    const searched = requests
+      .filter((url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`)
+      .at(-1);
     expect(searched?.searchParams.get("q")).toBe("membership");
     expect(searched?.searchParams.get("offset")).toBe("0");
   });

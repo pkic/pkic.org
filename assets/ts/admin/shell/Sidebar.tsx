@@ -124,7 +124,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { path: "/sponsorships", sec: "sponsorships", label: "Sponsorships", icon: "donations" },
   { path: "/leadership", sec: "leadership", label: "Leadership", icon: "leadership" },
-  { path: "/access-control", sec: "access-control", label: "Access Control", icon: "accesscontrol" },
 ];
 
 function closeSidebar() {

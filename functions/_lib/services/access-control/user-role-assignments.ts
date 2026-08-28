@@ -1,6 +1,7 @@
 import {
-  ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS,
-  ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS,
+  ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS,
+  USER_ROLE_ASSIGNMENTS_SORT_COLUMNS,
+  SYSTEM_ROLE_IDS,
   roleAssignmentSchema,
   type RoleAssignment,
   type RoleAssignmentsListQuery,
@@ -21,7 +22,7 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
-import { commitAccessControlMutation } from "./authorization";
+import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
 import { buildAssignRepresentativeRoleStatements, isRepresentativeRoleId } from "../membership/representative-roles";
 import {
   prepareOrganizationRepresentativeManagementGuard,
@@ -52,23 +53,19 @@ interface RoleAssignmentHolderRow {
   created_at: string;
 }
 
-const USER_ROLE_ASSIGNMENT_SORT_EXPRESSIONS: Record<(typeof ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS)[number], string> =
-  {
-    role_name: "LOWER(r.name)",
-    context_type: "ur.context_type",
-    context_id: "ur.context_id",
-    expires_at: "ur.expires_at",
-    created_at: "ur.created_at",
-  };
+const USER_ROLE_ASSIGNMENT_SORT_EXPRESSIONS: Record<(typeof USER_ROLE_ASSIGNMENTS_SORT_COLUMNS)[number], string> = {
+  role_name: "LOWER(r.name)",
+  context_type: "ur.context_type",
+  context_id: "ur.context_id",
+  expires_at: "ur.expires_at",
+  created_at: "ur.created_at",
+};
 
 const ROLE_ASSIGNMENT_HOLDER_NAME_EXPRESSION =
   "CASE WHEN TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) = '' " +
   "THEN u.email ELSE TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) END";
 
-const ROLE_ASSIGNMENT_HOLDER_SORT_EXPRESSIONS: Record<
-  (typeof ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS)[number],
-  string
-> = {
+const ROLE_ASSIGNMENT_HOLDER_SORT_EXPRESSIONS: Record<(typeof ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS)[number], string> = {
   name: `LOWER(${ROLE_ASSIGNMENT_HOLDER_NAME_EXPRESSION})`,
   email: "LOWER(u.email)",
   context_type: "ur.context_type",
@@ -136,7 +133,7 @@ export async function listUserRoleAssignments(
   userId: string,
   query: UserRolesListQuery,
 ): Promise<{ roles: UserRoleAssignment[]; page: PageInfo }> {
-  requirePermission(actor, "access:grant");
+  requireAccessControlRead(actor);
   const search = query.q ? buildD1TextSearchFilter(query.q, ["r.name", "ur.context_type", "ur.context_id"]) : null;
   const { rows, total } = await queryPage<UserRoleRow>(db, {
     sql: `SELECT ur.id, ur.user_id, ur.role_id, r.name AS role_name, ur.context_type, ur.context_id, ur.expires_at, ur.created_at
@@ -157,7 +154,7 @@ export async function listActiveRoleAssignmentHolders(
   roleId: string,
   query: RoleAssignmentsListQuery,
 ): Promise<{ assignments: RoleAssignment[]; page: PageInfo }> {
-  requirePermission(actor, "access:grant");
+  requireAccessControlRead(actor);
   if (!(await first<{ id: string }>(db, "SELECT id FROM roles WHERE id = ?", [roleId]))) {
     throw new AppError(404, "NOT_FOUND", "Role not found");
   }
@@ -359,12 +356,22 @@ export async function revokeUserRoleAssignment(
     row.context_type,
     row.context_id,
   );
+  const retiresLegacyAdminAuthority =
+    row.role_id === SYSTEM_ROLE_IDS.admin && row.context_type === null && row.context_id === null;
   await commitAccessControlMutation(
     db,
     actor,
     [{ permission: "access:revoke" }],
     [
       ...semanticGuards,
+      ...(retiresLegacyAdminAuthority
+        ? [
+            db
+              .prepare("UPDATE users SET role = 'user', updated_at = ? WHERE id = ? AND role = 'admin'")
+              .bind(now, userId),
+            db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, userId),
+          ]
+        : []),
       db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
       prepareAuditLogAfterOneChange(
         db,
@@ -373,7 +380,7 @@ export async function revokeUserRoleAssignment(
         "user_role_revoked",
         "user_roles",
         row.id,
-        { userId, roleId: row.role_id },
+        { userId, roleId: row.role_id, retiredLegacyAdminAuthority: retiresLegacyAdminAuthority },
         now,
       ),
     ],

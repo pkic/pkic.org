@@ -6,6 +6,7 @@ import { SystemAuditLog } from "./SystemAuditLog";
 import { MembershipApplications } from "./membership-applications";
 import { MembershipConfiguration } from "./MembershipConfiguration";
 import { EmailTemplates } from "./email-templates/EmailTemplates";
+import { AccessControl } from "./access-control";
 
 export function SystemManagement({
   session,
@@ -58,6 +59,11 @@ export function SystemManagement({
         <SystemAuditLog />
       ) : selected.path === "/system/email-templates" ? (
         <EmailTemplates canWrite={portalHasGlobalPermission(session, "email-templates:write")} />
+      ) : selected.path === "/system/access-control" ? (
+        <AccessControl
+          canGrant={portalHasGlobalPermission(session, "access:grant")}
+          canRevoke={portalHasGlobalPermission(session, "access:revoke")}
+        />
       ) : null}
     </div>
   );

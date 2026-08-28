@@ -1136,6 +1136,26 @@ Status: In progress
       editor consumes the canonical System catalog. Mounted route, concurrency,
       rollback, contract, permission, frontend, and real Worker/D1 browser
       regressions provide the cutover evidence.
+      Access Control is the sixth permission-derived System destination. The
+      roles, role assignments, and direct-grant screens and handlers moved
+      rather than being copied to `/api/v1/system/access-control`; the former
+      admin components, route mounts, and handlers are removed, and the old
+      bookmark is only a portal redirect. One neutral schema owns every list,
+      mutation, catalog, and pagination contract. Operators with either the
+      live global `access:grant` or `access:revoke` permission may inspect the
+      destination, while create/assign and revoke/delete operations retain
+      their exact permission boundaries and reject API-key identities. User,
+      role, event, group, and organization-capacity selectors use bounded
+      server-side D1 search rather than loading collections in the browser.
+      A partial unique index prevents duplicate active direct grants, including
+      concurrent requests. Revoking the global administrator role also retires
+      the transitional `users.role='admin'` authority and every active session
+      for that user in the same guarded batch; a failed target race rolls the
+      demotion and session revocation back. Event-team grants and revocations
+      now use the same live authorization and exact-target guards. Mounted
+      backend, migration, concurrency, permission, frontend, and browser tests
+      cover the canonical routes, revoke-only inspection, role management,
+      route removal, redirect, and absence of legacy API requests.
       Other global management destinations
       remain, so this item is deliberately still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1262,17 +1282,17 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,191 backend tests pass with one skipped, 281 frontend tests
-      pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
-      dependency architecture, API-contract, changed-scope duplication, formatting,
-      frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
-      combined run identified one 607-line test file; the meeting cases
-      were separated into a focused file. The complete composite gate was then
-      rerun successfully after the selected-group authorization, account
-      cutover, centralized management destinations, group creation, category
-      rule regressions, removal of the duplicate admin invitation surface, and
-      the canonical System email-template cutover were added. The email renderer
+      Current evidence: the complete gate passes after the canonical System
+      Access Control cutover with 2,201 backend tests (one skipped), 286 frontend
+      tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
+      dependency architecture, API-contract, changed-scope duplication,
+      formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
+      An earlier combined run exposed a nondeterministic Google Groups boundary
+      fixture that ordered same-timestamp groups by random user UUID. The test
+      now gives the recipient groups an explicit order; its focused suite and
+      the subsequent uninterrupted complete gate both pass. An earlier combined
+      run also identified one 607-line test file; the meeting cases were
+      separated into a focused file. The email renderer
       now applies shared output, expansion, cumulative-work, depth, and subject
       budgets across body, partial, loop, layout, campaign-custom-text, preview,
       and outbox paths. Focused regressions prove abusive expansion fails closed
@@ -1397,6 +1417,19 @@ The final PR description must include, at minimum:
   writes leave neither partial state nor an audit record;
 - verify `/api/v1/admin/email-templates` and its nested paths return 404 and the
   old `/admin/#/email/templates` bookmark redirects without making a legacy API
+  request;
+- inspect Access Control with separate `access:grant`-only and
+  `access:revoke`-only staff identities, confirming each mutation control is
+  shown only for its exact permission;
+- create and remove a custom role, assign and revoke a role for a staff user,
+  and create and revoke an event-, group-, and organization-scoped direct
+  permission through `/portal/#/system/access-control`;
+- revoke a global administrator role and confirm the target's existing session
+  stops working immediately, while an intentionally raced failed revocation
+  leaves the target's authority and session unchanged;
+- verify `/api/v1/admin/access-grants`, `/api/v1/admin/roles`, and nested admin
+  user-role paths return 404 for an authenticated operator, and the old
+  `/admin/#/access-control` bookmark redirects without making a legacy API
   request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;

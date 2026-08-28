@@ -6,6 +6,11 @@ export interface PortalNavItem {
   label: string;
 }
 
+interface SystemNavItem extends PortalNavItem {
+  permission?: string;
+  permissions?: readonly string[];
+}
+
 const MEMBER_NAV_ITEMS: PortalNavItem[] = [
   { path: "/profile", section: "profile", label: "My Profile" },
   { path: "/organization", section: "organization", label: "My Organization" },
@@ -20,7 +25,7 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   label: "Management",
 };
 
-const SYSTEM_NAV_ITEMS = [
+const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   {
     path: "/system/membership-applications",
     section: "system",
@@ -45,6 +50,12 @@ const SYSTEM_NAV_ITEMS = [
     section: "system",
     label: "Email Templates",
     permission: "email-templates:read",
+  },
+  {
+    path: "/system/access-control",
+    section: "system",
+    label: "Access Control",
+    permissions: ["access:grant", "access:revoke"],
   },
 ] as const;
 
@@ -72,10 +83,18 @@ export function portalHasGlobalPermission(session: PortalSession | null, permiss
   );
 }
 
+export function portalHasAnyGlobalPermission(session: PortalSession | null, permissions: readonly string[]): boolean {
+  return permissions.some((permission) => portalHasGlobalPermission(session, permission));
+}
+
 export function portalSystemNavigationItems(session: PortalSession | null): PortalNavItem[] {
-  return SYSTEM_NAV_ITEMS.filter((item) => portalHasGlobalPermission(session, item.permission)).map(
-    ({ path, section, label }) => ({ path, section, label }),
-  );
+  return SYSTEM_NAV_ITEMS.filter((item) =>
+    item.permissions
+      ? portalHasAnyGlobalPermission(session, item.permissions)
+      : item.permission
+        ? portalHasGlobalPermission(session, item.permission)
+        : false,
+  ).map(({ path, section, label }) => ({ path, section, label }));
 }
 
 export function portalHasSystemManagement(session: PortalSession | null): boolean {

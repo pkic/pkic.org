@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_ACCESS_CONTROL_REDIRECT_TARGET,
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
@@ -11,6 +12,11 @@ import {
 } from "../../assets/ts/admin/shell/legacy-redirects";
 
 describe("legacy admin route redirects", () => {
+  it("moves Access Control to the portal", () => {
+    expect(legacyAdminRedirectTarget("/access-control")).toBe(ADMIN_ACCESS_CONTROL_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/access-control?from=bookmark")).toBe(ADMIN_ACCESS_CONTROL_REDIRECT_TARGET);
+  });
+
   it("moves account settings to the canonical portal route while preserving unrelated routes", () => {
     expect(legacyAdminRedirectTarget("/account")).toBe(ADMIN_ACCOUNT_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/account?from=bookmark")).toBe(ADMIN_ACCOUNT_REDIRECT_TARGET);

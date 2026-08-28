@@ -10,7 +10,6 @@ import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Users, UserDetailView } from "../sections/Users";
-import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
 import { Organizations } from "../sections/Organizations";
 import { Sponsorships } from "../sections/Sponsorships";
@@ -21,6 +20,7 @@ import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDe
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
+  ADMIN_ACCESS_CONTROL_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
@@ -318,9 +318,10 @@ export function AdminShell() {
             <Route
               path="/access-control"
               component={() => (
-                <SectionWrapper title="Access Control">
-                  <AccessControl />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ACCESS_CONTROL_REDIRECT_TARGET}
+                  message="Access Control has moved to the portal."
+                />
               )}
             />
             <Route

@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import { rolesListResponseSchema, type Role } from "../../../shared/schemas/access-control";
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
 import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
@@ -52,16 +51,6 @@ export const adminEventCatalog: AdminCatalog<AdminEventSummary, z.infer<typeof a
   endpoint: "/api/v1/admin/events",
   responseSchema: adminEventsListResponseSchema,
   resolveItems: (response) => response.events,
-  resolvePage: (response) => response.page,
-  itemKey: (item) => item.id,
-  itemLabel: (item) => item.name,
-  sort: "name",
-};
-
-export const adminRoleCatalog: AdminCatalog<Role, z.infer<typeof rolesListResponseSchema>> = {
-  endpoint: "/api/v1/admin/roles",
-  responseSchema: rolesListResponseSchema,
-  resolveItems: (response) => response.roles,
   resolvePage: (response) => response.page,
   itemKey: (item) => item.id,
   itemLabel: (item) => item.name,

@@ -25,10 +25,6 @@ $adm-danger: #dc3545;
   max-width: 320px;
 }
 
-.adm-role-user-picker {
-  max-width: 400px;
-}
-
 .adm-email-input {
   max-width: 280px;
 }
@@ -36,11 +32,6 @@ $adm-danger: #dc3545;
 .adm-diff-cell {
   max-width: 320px;
   white-space: pre-wrap;
-}
-
-.adm-role-permissions {
-  max-height: 180px;
-  overflow-y: auto;
 }
 
 .adm-leadership-slot-label {
@@ -1414,12 +1405,6 @@ $adm-danger: #dc3545;
 }
 
 @import "admin-shell-extras";
-
-.adm-user-picker-results {
-  z-index: 20;
-  max-height: 220px;
-  overflow-y: auto;
-}
 
 .adm-leadership-user {
   min-width: 220px;

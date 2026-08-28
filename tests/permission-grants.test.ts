@@ -73,9 +73,9 @@ describe("permission_grants (Access grants)", () => {
     staffUserId = await insertUser("staff@example.test");
   });
 
-  it("POST /api/v1/admin/access-grants creates a grant with context and expiry", async () => {
+  it("POST /api/v1/system/access-control/grants creates a grant with context and expiry", async () => {
     const expiresAt = new Date(Date.now() + 3600_000).toISOString();
-    const response = await call(adminToken, "/api/v1/admin/access-grants", {
+    const response = await call(adminToken, "/api/v1/system/access-control/grants", {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
@@ -87,7 +87,9 @@ describe("permission_grants (Access grants)", () => {
     });
 
     expect(response.status).toBe(201);
-    const payload = (await response.json()) as { grant: { id: string; permission: string; contextId: string } };
+    const payload = (await response.json()) as {
+      grant: { id: string; permission: string; contextId: string };
+    };
     expect(payload.grant.permission).toBe("events:write");
     expect(payload.grant.contextId).toBe(eventAId);
 
@@ -100,28 +102,26 @@ describe("permission_grants (Access grants)", () => {
     expect(rows[0].expires_at).toBe(expiresAt);
   });
 
-  it("keeps API-key audit identity out of the nullable grantor user foreign key", async () => {
-    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/admin/access-grants", {
+  it("rejects API-key authentication because System access control requires a user-backed session", async () => {
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/system/access-control/grants", {
       method: "POST",
-      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
     });
 
-    expect(response.status).toBe(201);
-    const payload = (await response.json()) as { grant: { id: string } };
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      error: { code: "USER_BACKED_ADMIN_REQUIRED" },
+    });
     expect(
-      await queryAll<{ granted_by_user_id: string | null }>(
+      await queryAll(
         env.DB,
-        "SELECT granted_by_user_id FROM permission_grants WHERE id = ?",
-        payload.grant.id,
+        "SELECT id FROM permission_grants WHERE user_id = ? AND permission = 'donations:read'",
+        staffUserId,
       ),
-    ).toEqual([{ granted_by_user_id: null }]);
-    expect(
-      await queryAll<{ actor_id: string | null }>(
-        env.DB,
-        "SELECT actor_id FROM audit_log WHERE entity_id = ? AND action = 'access_grant_created'",
-        payload.grant.id,
-      ),
-    ).toEqual([{ actor_id: "api-key" }]);
+    ).toHaveLength(0);
   });
 
   it("rolls back an access grant when its required audit record cannot be written", async () => {
@@ -135,9 +135,12 @@ describe("permission_grants (Access grants)", () => {
     ).run();
 
     try {
-      const response = await call(adminToken, "/api/v1/admin/access-grants", {
+      const response = await call(adminToken, "/api/v1/system/access-control/grants", {
         method: "POST",
-        body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+        body: JSON.stringify({
+          userId: staffUserId,
+          permission: "donations:read",
+        }),
       });
       expect(response.status).toBe(500);
       expect(
@@ -152,7 +155,37 @@ describe("permission_grants (Access grants)", () => {
     }
   });
 
-  it("GET /api/v1/admin/access-grants returns a bounded page envelope and filters by userId", async () => {
+  it("returns a precise conflict when an active matching grant already exists", async () => {
+    const first = await call(adminToken, "/api/v1/system/access-control/grants", {
+      method: "POST",
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
+    });
+    expect(first.status).toBe(201);
+
+    const duplicate = await call(adminToken, "/api/v1/system/access-control/grants", {
+      method: "POST",
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
+    });
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({
+      error: { code: "ACCESS_GRANT_EXISTS" },
+    });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM permission_grants WHERE user_id = ? AND permission = ? AND revoked_at IS NULL",
+        [staffUserId, "donations:read"],
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("GET /api/v1/system/access-control/grants returns a bounded page envelope and filters by userId", async () => {
     const otherUserId = await insertUser("other@example.test");
     for (const permission of ["events:read", "events:write", "events:manage"] as const) {
       await env.DB.prepare(
@@ -169,16 +202,21 @@ describe("permission_grants (Access grants)", () => {
       .bind(crypto.randomUUID(), otherUserId, adminId)
       .run();
 
-    const boundedResponse = await call(adminToken, "/api/v1/admin/access-grants?limit=2&offset=0");
+    const boundedResponse = await call(adminToken, "/api/v1/system/access-control/grants?limit=2&offset=0");
     expect(boundedResponse.status).toBe(200);
     const boundedPayload = (await boundedResponse.json()) as {
       grants: { id: string }[];
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
     expect(boundedPayload.grants).toHaveLength(2);
-    expect(boundedPayload.page).toEqual({ limit: 2, offset: 0, total: 4, hasMore: true });
+    expect(boundedPayload.page).toEqual({
+      limit: 2,
+      offset: 0,
+      total: 4,
+      hasMore: true,
+    });
 
-    const filteredResponse = await call(adminToken, `/api/v1/admin/access-grants?userId=${otherUserId}`);
+    const filteredResponse = await call(adminToken, `/api/v1/system/access-control/grants?userId=${otherUserId}`);
     expect(filteredResponse.status).toBe(200);
     const filteredPayload = (await filteredResponse.json()) as {
       grants: { userId: string }[];
@@ -186,15 +224,20 @@ describe("permission_grants (Access grants)", () => {
     };
     expect(filteredPayload.grants).toHaveLength(1);
     expect(filteredPayload.grants[0].userId).toBe(otherUserId);
-    expect(filteredPayload.page).toEqual({ limit: 50, offset: 0, total: 1, hasMore: false });
+    expect(filteredPayload.page).toEqual({
+      limit: 50,
+      offset: 0,
+      total: 1,
+      hasMore: false,
+    });
   });
 
-  it("GET /api/v1/admin/access-grants rejects a non-UUID userId filter", async () => {
-    const response = await call(adminToken, "/api/v1/admin/access-grants?userId=not-a-uuid");
+  it("GET /api/v1/system/access-control/grants rejects a non-UUID userId filter", async () => {
+    const response = await call(adminToken, "/api/v1/system/access-control/grants?userId=not-a-uuid");
     expect(response.status).toBe(400);
   });
 
-  it("GET /api/v1/admin/access-grants applies shared search in D1", async () => {
+  it("GET /api/v1/system/access-control/grants applies shared search in D1", async () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
@@ -206,9 +249,12 @@ describe("permission_grants (Access grants)", () => {
       ).bind(crypto.randomUUID(), staffUserId, adminId),
     ]);
 
-    const response = await call(adminToken, `/api/v1/admin/access-grants?q=${eventAId}`);
+    const response = await call(adminToken, `/api/v1/system/access-control/grants?q=${eventAId}`);
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { grants: Array<{ permission: string }>; page: { total: number } };
+    const payload = (await response.json()) as {
+      grants: Array<{ permission: string }>;
+      page: { total: number };
+    };
     expect(payload.grants.map(({ permission }) => permission)).toEqual(["events:read"]);
     expect(payload.page.total).toBe(1);
   });
@@ -261,7 +307,7 @@ describe("permission_grants (Access grants)", () => {
     const eventBId = await insertEvent("cbom-2027");
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-context-token");
 
-    const grantResponse = await call(adminToken, "/api/v1/admin/access-grants", {
+    const grantResponse = await call(adminToken, "/api/v1/system/access-control/grants", {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
@@ -286,7 +332,13 @@ describe("permission_grants (Access grants)", () => {
       id: "wg-chair-user",
       email: "chair@example.test",
       role: "user",
-      grants: [{ permission: "groups:write", contextType: "group", contextId: "group-pqc" }],
+      grants: [
+        {
+          permission: "groups:write",
+          contextType: "group",
+          contextId: "group-pqc",
+        },
+      ],
     };
 
     expect(hasPermission(actor, "groups:write", { type: "group", id: "group-pqc" })).toBe(true);
@@ -308,14 +360,17 @@ describe("permission_grants (Access grants)", () => {
     expect(hasPermission(delegatedAdmin, "events:write")).toBe(false);
   });
 
-  it("DELETE /api/v1/admin/access-grants/:id sets revoked_at and writes to audit_log", async () => {
-    const createResponse = await call(adminToken, "/api/v1/admin/access-grants", {
+  it("DELETE /api/v1/system/access-control/grants/:id sets revoked_at and writes to audit_log", async () => {
+    const createResponse = await call(adminToken, "/api/v1/system/access-control/grants", {
       method: "POST",
-      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
     });
     const created = (await createResponse.json()) as { grant: { id: string } };
 
-    const deleteResponse = await call(adminToken, `/api/v1/admin/access-grants/${created.grant.id}`, {
+    const deleteResponse = await call(adminToken, `/api/v1/system/access-control/grants/${created.grant.id}`, {
       method: "DELETE",
     });
     expect(deleteResponse.status).toBe(200);
@@ -347,13 +402,60 @@ describe("permission_grants (Access grants)", () => {
     );
 
     await expect(
-      createAccessGrant(racingDb, actor, { userId: staffUserId, permission: "donations:read" }),
-    ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+      createAccessGrant(racingDb, actor, {
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+    });
     expect(
       await queryAll(
         env.DB,
         "SELECT id FROM permission_grants WHERE user_id = ? AND permission = 'donations:read'",
         staffUserId,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("returns ACCESS_GRANT_EXISTS without an audit record when a concurrent writer creates the same active grant", async () => {
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      role: "admin",
+    };
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, adminId)
+        .run(),
+    );
+
+    await expect(
+      createAccessGrant(racingDb, actor, {
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_GRANT_EXISTS",
+    });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM permission_grants WHERE user_id = ? AND permission = ? AND revoked_at IS NULL",
+        [staffUserId, "donations:read"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'access_grant_created' AND entity_id IN (SELECT id FROM permission_grants WHERE user_id = ?)",
+        [staffUserId],
       ),
     ).toHaveLength(0);
   });
@@ -418,6 +520,7 @@ describe("permission_grants (Access grants)", () => {
 
   it("only a user with access:grant can create a grant, and only access:revoke can revoke one", async () => {
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-perm-token");
+    const granteeUserId = await insertUser("grant-target@example.test");
     // Baseline unrelated grant keeps the user eligible for a session even
     // before they hold any access:* permission — see STAFF_ACCESS_CONDITION.
     await env.DB.prepare(
@@ -427,9 +530,12 @@ describe("permission_grants (Access grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
 
-    const deniedCreate = await call(staffToken, "/api/v1/admin/access-grants", {
+    const deniedCreate = await call(staffToken, "/api/v1/system/access-control/grants", {
       method: "POST",
-      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
     });
     expect(deniedCreate.status).toBe(403);
 
@@ -442,9 +548,12 @@ describe("permission_grants (Access grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
 
-    const deniedUncontained = await call(staffToken, "/api/v1/admin/access-grants", {
+    const deniedUncontained = await call(staffToken, "/api/v1/system/access-control/grants", {
       method: "POST",
-      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "donations:read",
+      }),
     });
     expect(deniedUncontained.status).toBe(403);
 
@@ -456,15 +565,18 @@ describe("permission_grants (Access grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
 
-    const createResponse = await call(staffToken, "/api/v1/admin/access-grants", {
+    const createResponse = await call(staffToken, "/api/v1/system/access-control/grants", {
       method: "POST",
-      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+      body: JSON.stringify({
+        userId: granteeUserId,
+        permission: "donations:read",
+      }),
     });
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { grant: { id: string } };
 
     // access:grant alone must not authorize revocation.
-    const deniedRevoke = await call(staffToken, `/api/v1/admin/access-grants/${created.grant.id}`, {
+    const deniedRevoke = await call(staffToken, `/api/v1/system/access-control/grants/${created.grant.id}`, {
       method: "DELETE",
     });
     expect(deniedRevoke.status).toBe(403);
@@ -476,7 +588,7 @@ describe("permission_grants (Access grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
 
-    const allowedRevoke = await call(staffToken, `/api/v1/admin/access-grants/${created.grant.id}`, {
+    const allowedRevoke = await call(staffToken, `/api/v1/system/access-control/grants/${created.grant.id}`, {
       method: "DELETE",
     });
     expect(allowedRevoke.status).toBe(200);

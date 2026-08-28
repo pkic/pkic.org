@@ -794,7 +794,7 @@ describe("group leadership inheritance", () => {
     const details = plan.results.map((row) => row.detail).join("\n");
     expect(details).toMatch(/SEARCH active_actor USING INDEX sqlite_autoindex_users_1/);
     expect(details).toMatch(/SEARCH actor_role USING INDEX idx_user_roles_user/);
-    expect(details).toMatch(/SEARCH direct_grant USING INDEX idx_permission_grants_user/);
+    expect(details).toMatch(/SEARCH direct_grant USING INDEX uq_permission_grants_active_user_permission_context/);
     expect(details).not.toMatch(/SCAN (?:users|user_roles|permission_grants|groups)\b/);
     expect(details).not.toMatch(/USE TEMP B-TREE/);
 

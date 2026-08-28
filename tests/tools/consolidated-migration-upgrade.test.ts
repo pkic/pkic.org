@@ -544,6 +544,13 @@ describe("consolidated pending migration upgrade", () => {
     ).toEqual([{ name: "uq_user_roles_active_user_role_context" }]);
     expect(
       db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uq_permission_grants_active_user_permission_context'",
+        )
+        .all(),
+    ).toEqual([{ name: "uq_permission_grants_active_user_permission_context" }]);
+    expect(
+      db
         .prepare("PRAGMA table_info(user_roles)")
         .all()
         .map((column: any) => ({ name: column.name, notnull: column.notnull }))

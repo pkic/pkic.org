@@ -1,17 +1,19 @@
 /**
- * Access-control admin API schemas: permission_grants
+ * Access-control System API schemas: permission_grants
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
 import { trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema, searchTermSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
+import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "./user-catalog";
 
 export const authorizationContextTypeSchema = z.enum(["event", "group", "organization"]);
 
 /** Stable identifiers for system roles seeded by the membership migration. */
 export const SYSTEM_ROLE_IDS = {
+  admin: "role-admin",
   groupLead: "role-group_lead",
   groupDeputyLead: "role-group_deputy_lead",
 } as const;
@@ -30,7 +32,10 @@ export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 export const roleIdSchema = trimmedString(1, 80);
 export const roleIdParamsSchema = z.object({ id: roleIdSchema });
 export const userIdRolesParamsSchema = z.object({ userId: databaseIdSchema });
-export const userRoleIdParamsSchema = z.object({ userId: databaseIdSchema, userRoleId: databaseIdSchema });
+export const userRoleIdParamsSchema = z.object({
+  userId: databaseIdSchema,
+  userRoleId: databaseIdSchema,
+});
 
 const scopedContextFields = {
   contextType: authorizationContextTypeSchema.nullable().optional(),
@@ -72,7 +77,9 @@ export const accessGrantResponseSchema = z.object({
   createdAt: z.string(),
 });
 export type AccessGrant = z.infer<typeof accessGrantResponseSchema>;
-export const accessGrantCreateResponseSchema = z.object({ grant: accessGrantResponseSchema });
+export const accessGrantCreateResponseSchema = z.object({
+  grant: accessGrantResponseSchema,
+});
 
 // Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
@@ -80,19 +87,24 @@ export const accessGrantsCreateRouteSchema = {
   summary: "Create a permission grant",
   description: "Grants a single permission to a user, optionally scoped and time-bounded.",
   request: {
-    body: { content: { "application/json": { schema: accessGrantCreateSchema } }, required: true },
+    body: {
+      content: { "application/json": { schema: accessGrantCreateSchema } },
+      required: true,
+    },
   },
   responses: {
     "201": {
       description: "Grant created.",
-      content: { "application/json": { schema: accessGrantCreateResponseSchema } },
+      content: {
+        "application/json": { schema: accessGrantCreateResponseSchema },
+      },
     },
     "403": { description: "Missing access:grant permission." },
   },
 };
 
-/** Allowlisted sort columns for GET /api/v1/admin/access-grants — see permission_grants' access-grants/index.ts. */
-export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
+/** Allowlisted sort columns for the System permission-grant catalog. */
+export const ACCESS_GRANTS_SORT_COLUMNS = [
   "user_id",
   "permission",
   "context_type",
@@ -100,7 +112,7 @@ export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const accessGrantsListQuerySchema = listQuerySchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS).extend({
+export const accessGrantsListQuerySchema = listQuerySchema(ACCESS_GRANTS_SORT_COLUMNS).extend({
   userId: databaseIdSchema.optional(),
 });
 export type AccessGrantsListQuery = z.infer<typeof accessGrantsListQuerySchema>;
@@ -112,8 +124,10 @@ export const accessGrantsListRouteSchema = {
   request: { query: accessGrantsListQuerySchema },
   responses: {
     "200": {
-      description: "Active grants.",
-      content: { "application/json": { schema: accessGrantsListResponseSchema } },
+      description: "Non-revoked grants, including expired history.",
+      content: {
+        "application/json": { schema: accessGrantsListResponseSchema },
+      },
     },
   },
 };
@@ -144,25 +158,33 @@ export const roleResponseSchema = z.object({
   createdAt: z.string(),
 });
 export type Role = z.infer<typeof roleResponseSchema>;
-export const roleResponseEnvelopeSchema = z.object({ role: roleResponseSchema });
+export const roleResponseEnvelopeSchema = z.object({
+  role: roleResponseSchema,
+});
 
 export const rolesCreateRouteSchema = {
   tags: ["Access Control"],
   summary: "Create a custom role",
   description: "Custom roles bundle permissions that can be assigned via user_roles.",
   request: {
-    body: { content: { "application/json": { schema: roleCreateSchema } }, required: true },
+    body: {
+      content: { "application/json": { schema: roleCreateSchema } },
+      required: true,
+    },
   },
   responses: {
-    "201": { description: "Role created.", content: { "application/json": { schema: roleResponseEnvelopeSchema } } },
+    "201": {
+      description: "Role created.",
+      content: { "application/json": { schema: roleResponseEnvelopeSchema } },
+    },
     "409": { description: "A role with this name already exists." },
   },
 };
 
-/** Allowlisted sort columns for GET /api/v1/admin/roles — see roles/index.ts. */
-export const ADMIN_ROLES_SORT_COLUMNS = ["name", "description"] as const;
+/** Allowlisted sort columns for the System role catalog. */
+export const ROLES_SORT_COLUMNS = ["name", "description"] as const;
 
-export const rolesListQuerySchema = listQuerySchema(ADMIN_ROLES_SORT_COLUMNS);
+export const rolesListQuerySchema = listQuerySchema(ROLES_SORT_COLUMNS);
 export type RolesListQuery = z.infer<typeof rolesListQuerySchema>;
 export const rolesListResponseSchema = paginatedResponseSchema("roles", roleResponseSchema);
 
@@ -185,7 +207,9 @@ export const roleDeleteRouteSchema = {
   responses: {
     "200": { description: "Role deleted." },
     "404": { description: "Role not found." },
-    "409": { description: "System roles and roles with assignment history cannot be deleted." },
+    "409": {
+      description: "System roles and roles with assignment history cannot be deleted.",
+    },
   },
 };
 
@@ -206,7 +230,7 @@ export const roleAssignmentSchema = roleAssignmentContextSchema.extend({
 
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 
-export const ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS = [
+export const ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS = [
   "name",
   "email",
   "context_type",
@@ -215,7 +239,7 @@ export const ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const roleAssignmentsListQuerySchema = listQuerySchema(ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS, {
+export const roleAssignmentsListQuerySchema = listQuerySchema(ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS, {
   limit: 25,
 });
 export type RoleAssignmentsListQuery = z.infer<typeof roleAssignmentsListQuerySchema>;
@@ -225,13 +249,18 @@ export const roleAssignmentsListRouteSchema = {
   tags: ["Access Control"],
   summary: "List every active holder of a role",
   description:
-    "Reverse lookup of user_roles by role — who currently holds this role, and in which context. Powers admin " +
-    "screens that need to show a role's current holders without already knowing the user.",
-  request: { params: roleIdParamsSchema, query: roleAssignmentsListQuerySchema },
+    "Reverse lookup of user_roles by role — who currently holds this role, and in which context. Powers System " +
+    "management views that show a role's current holders without already knowing the user.",
+  request: {
+    params: roleIdParamsSchema,
+    query: roleAssignmentsListQuerySchema,
+  },
   responses: {
     "200": {
       description: "Active assignments of this role.",
-      content: { "application/json": { schema: roleAssignmentsListResponseSchema } },
+      content: {
+        "application/json": { schema: roleAssignmentsListResponseSchema },
+      },
     },
     "404": { description: "Role not found." },
   },
@@ -254,10 +283,12 @@ export const userRoleResponseSchema = roleAssignmentContextSchema.extend({
 
 export type UserRoleAssignment = z.infer<typeof userRoleResponseSchema>;
 /** Response envelope returned by role assignment and expiry-update commands. */
-export const userRoleResponseEnvelopeSchema = z.object({ role: userRoleResponseSchema });
+export const userRoleResponseEnvelopeSchema = z.object({
+  role: userRoleResponseSchema,
+});
 export type UserRoleResponseEnvelope = z.infer<typeof userRoleResponseEnvelopeSchema>;
 
-export const ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS = [
+export const USER_ROLE_ASSIGNMENTS_SORT_COLUMNS = [
   "role_name",
   "context_type",
   "context_id",
@@ -265,7 +296,7 @@ export const ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const userRolesListQuerySchema = listQuerySchema(ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS, { limit: 25 });
+export const userRolesListQuerySchema = listQuerySchema(USER_ROLE_ASSIGNMENTS_SORT_COLUMNS, { limit: 25 });
 export type UserRolesListQuery = z.infer<typeof userRolesListQuerySchema>;
 export const userRolesListResponseSchema = paginatedResponseSchema("roles", userRoleResponseSchema);
 
@@ -275,12 +306,17 @@ export const userRolesAssignRouteSchema = {
   description: "user_roles — a user may hold multiple roles simultaneously, optionally context-scoped.",
   request: {
     params: userIdRolesParamsSchema,
-    body: { content: { "application/json": { schema: userRoleAssignSchema } }, required: true },
+    body: {
+      content: { "application/json": { schema: userRoleAssignSchema } },
+      required: true,
+    },
   },
   responses: {
     "201": {
       description: "Role assigned.",
-      content: { "application/json": { schema: userRoleResponseEnvelopeSchema } },
+      content: {
+        "application/json": { schema: userRoleResponseEnvelopeSchema },
+      },
     },
   },
 };
@@ -324,13 +360,68 @@ export const userRoleUpdateExpiryRouteSchema = {
     "that had no expiry set, or one whose term end is being changed. Does not affect revoked_at.",
   request: {
     params: userRoleIdParamsSchema,
-    body: { content: { "application/json": { schema: userRoleUpdateExpirySchema } }, required: true },
+    body: {
+      content: { "application/json": { schema: userRoleUpdateExpirySchema } },
+      required: true,
+    },
   },
   responses: {
     "200": {
       description: "Expiry updated.",
-      content: { "application/json": { schema: userRoleResponseEnvelopeSchema } },
+      content: {
+        "application/json": { schema: userRoleResponseEnvelopeSchema },
+      },
     },
     "404": { description: "Assignment not found." },
+  },
+};
+
+/** Bounded, data-minimized user search for global access-control assignments. */
+export const accessControlUsersListRouteSchema = {
+  tags: ["Access Control"],
+  summary: "Search active users for a global access-control assignment",
+  description: "Returns only the identity fields needed by an access-control user selector.",
+  request: { query: userCatalogListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of active user identities.",
+      content: {
+        "application/json": { schema: userCatalogListResponseSchema },
+      },
+    },
+  },
+};
+
+export const accessControlContextsSortColumns = ["name"] as const;
+export const accessControlContextsListQuerySchema = listQuerySchema(accessControlContextsSortColumns, {
+  limit: 25,
+  maxLimit: 50,
+}).extend({
+  contextType: authorizationContextTypeSchema,
+  q: searchTermSchema,
+});
+export type AccessControlContextsListQuery = z.infer<typeof accessControlContextsListQuerySchema>;
+
+export const accessControlContextSchema = z.object({
+  id: databaseIdSchema,
+  type: authorizationContextTypeSchema,
+  name: z.string(),
+});
+export type AccessControlContext = z.infer<typeof accessControlContextSchema>;
+export const accessControlContextsListResponseSchema = paginatedResponseSchema("contexts", accessControlContextSchema);
+
+export const accessControlContextsListRouteSchema = {
+  tags: ["Access Control"],
+  summary: "Search assignable authorization contexts",
+  description:
+    "Returns a bounded page of event, group, or organization-capacity contexts. Organization context identifiers are members.id values.",
+  request: { query: accessControlContextsListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of assignable contexts.",
+      content: {
+        "application/json": { schema: accessControlContextsListResponseSchema },
+      },
+    },
   },
 };

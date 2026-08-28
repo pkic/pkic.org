@@ -99,7 +99,7 @@ export type AccessGrant = CanonicalAccessGrant;
 
 export type UserRoleAssignment = CanonicalUserRoleAssignment;
 
-/** GET /api/v1/admin/roles/:id/assignments — reverse lookup: who holds this role. */
+/** GET /api/v1/system/access-control/roles/:id/assignments — reverse lookup: who holds this role. */
 export type RoleAssignment = CanonicalRoleAssignment;
 
 /** GET/POST/PATCH /api/v1/admin/leadership-positions — Board / Executive Council roster (consolidated migration 0035). */

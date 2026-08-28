@@ -16,6 +16,10 @@ import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { adminEventCreateResponseSchema } from "../assets/shared/schemas/admin-events";
 import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
+import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/services/events/team";
+import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { insertUser } from "./helpers/membership";
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -47,6 +51,29 @@ async function setupAdmin(): Promise<{ baseEventId: string }> {
   )[0];
   ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { baseEventId: eventId };
+}
+
+async function createScopedEventManager(eventId: string) {
+  const email = `event-manager-${crypto.randomUUID()}@example.test`;
+  const userId = await insertUser(env.DB, email);
+  const roleAssignmentId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'role-event_organizer', 'event', ?, ?, datetime('now'))`,
+  )
+    .bind(roleAssignmentId, userId, eventId, userId)
+    .run();
+
+  return {
+    actor: createUserBackedAuthAdmin({
+      id: userId,
+      email,
+      role: "user",
+      scopes: [],
+      grants: [{ permission: "events:manage", contextType: "event", contextId: eventId }],
+    }),
+    roleAssignmentId,
+  };
 }
 
 describe("admin event management endpoints", () => {
@@ -530,6 +557,90 @@ describe("admin event management endpoints", () => {
         "SELECT actor_id FROM audit_log WHERE action = 'event_permission_granted' AND entity_type = 'event'",
       ),
     ).toEqual([{ actor_id: "api-key" }]);
+  });
+
+  it("rolls back an event-team grant when the scoped manager loses authority before commit", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
+    const targetEmail = `event-team-create-race-${crypto.randomUUID()}@example.test`;
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleAssignmentId).run(),
+    );
+
+    await expect(
+      grantEventTeamRole(racedDb, actor, "pqc-2026", { userEmail: targetEmail, permission: "organizer" }),
+    ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [targetEmail])).toHaveLength(0);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT ur.id
+           FROM user_roles ur
+           JOIN users u ON u.id = ur.user_id
+          WHERE u.normalized_email = ? AND ur.context_type = 'event' AND ur.context_id = ?`,
+        [targetEmail, eventId],
+      ),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_granted' AND entity_id = ?", [
+        eventId,
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("reports a conflict without a false event-team revoke audit when the target is concurrently revoked", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { actor } = await createScopedEventManager(eventId);
+    const targetEmail = `event-team-target-race-${crypto.randomUUID()}@example.test`;
+    const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
+      userEmail: targetEmail,
+      permission: "organizer",
+    });
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(created.id).run(),
+    );
+
+    await expect(revokeEventTeamRole(racedDb, actor, "pqc-2026", created.id)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_TARGET_CHANGED",
+    });
+    expect(
+      await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
+        created.id,
+      ]),
+    ).toEqual([expect.objectContaining({ revoked_at: expect.any(String) })]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_revoked' AND entity_id = ?", [
+        eventId,
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back an event-team revoke when the scoped manager loses authority before commit", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
+    const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
+      userEmail: `event-team-revoke-race-${crypto.randomUUID()}@example.test`,
+      permission: "organizer",
+    });
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleAssignmentId).run(),
+    );
+
+    await expect(revokeEventTeamRole(racedDb, actor, "pqc-2026", created.id)).rejects.toMatchObject({
+      status: 409,
+      code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+    });
+    expect(
+      await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
+        created.id,
+      ]),
+    ).toEqual([{ revoked_at: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_revoked' AND entity_id = ?", [
+        eventId,
+      ]),
+    ).toHaveLength(0);
   });
 
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {

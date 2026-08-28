@@ -1,16 +1,20 @@
 import { useRef, useState } from "preact/hooks";
-import { api, apiCommand } from "../../api";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
+import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
+import { deleteJson, postJson } from "../../../../shared/api-client";
+import { successResponseSchema } from "../../../../../shared/schemas/api-common";
+import {
+  userRoleResponseEnvelopeSchema,
+  userRolesListResponseSchema,
+  type UserRoleAssignment,
+} from "../../../../../shared/schemas/access-control";
 import { fmt, toast } from "../../ui";
-import type { UserRoleAssignment } from "../../types";
-import { UserPicker, type PickedUser } from "../../../components/UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
-import { adminRoleCatalog } from "../../services/catalogs";
-import { ServerSearchSelect } from "../../components/ServerSearchSelect";
-import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { userRoleResponseEnvelopeSchema, userRolesListResponseSchema } from "../../../../shared/schemas/access-control";
+import { systemRoleCatalog } from "./catalogs";
 
 /** Staff management: assign built-in roles, override individual permissions. */
-export function UserRoles() {
+export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
   const [user, setUser] = useState<PickedUser | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
   const [roleId, setRoleId] = useState("");
@@ -28,15 +32,16 @@ export function UserRoles() {
     }
     setSubmitting(true);
     try {
-      await api(`/api/v1/admin/users/${user.id}/roles`, userRoleResponseEnvelopeSchema, {
-        method: "POST",
-        body: JSON.stringify({
+      await postJson(
+        `/api/v1/system/access-control/users/${user.id}/roles`,
+        {
           roleId,
           contextType: context.contextType,
           contextId: context.contextId,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-        }),
-      });
+        },
+        userRoleResponseEnvelopeSchema,
+      );
       toast("Role assigned", "success");
       setContext({ contextType: null, contextId: null });
       setExpiresAt("");
@@ -52,7 +57,7 @@ export function UserRoles() {
     if (!user) return;
     if (!confirm(`Revoke role "${assignment.roleName}"?`)) return;
     try {
-      await apiCommand(`/api/v1/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
+      await deleteJson(`/api/v1/system/access-control/users/${user.id}/roles/${assignment.id}`, successResponseSchema);
       toast("Role revoked", "success");
       await tableRef.current?.reload();
     } catch (e) {
@@ -64,54 +69,56 @@ export function UserRoles() {
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Staff management — assign roles</div>
       <div class="card-body">
-        <div class="mb-3 adm-role-user-picker">
+        <div class="mb-3 portal-access-role-user-picker">
           <label class="form-label small fw-semibold">User</label>
-          <UserPicker value={user} onChange={setUser} />
+          <UserPicker endpoint="/api/v1/system/access-control/users" value={user} onChange={setUser} />
         </div>
 
         {!user ? (
           <p class="text-muted small mb-0">Pick a user to view and manage their role assignments.</p>
         ) : (
           <>
-            <form onSubmit={handleAssign} class="row g-2 align-items-end mb-3">
-              <div class="col-md-3">
-                <ServerSearchSelect
-                  catalog={adminRoleCatalog}
-                  label="Role"
-                  value={roleId}
-                  selectedLabel={roleLabel}
-                  disabled={submitting}
-                  allowEmpty={false}
-                  autoSelectFirst
-                  onChange={(role) => {
-                    setRoleId(role?.id ?? "");
-                    setRoleLabel(role?.name);
-                  }}
-                />
-              </div>
-              <div class="col-md-5">
-                <label class="form-label small fw-semibold">Context</label>
-                <ContextPicker value={context} onChange={setContext} disabled={submitting} />
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small fw-semibold">Expires (optional)</label>
-                <input
-                  class="form-control form-control-sm"
-                  type="datetime-local"
-                  value={expiresAt}
-                  onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
-                  disabled={submitting}
-                />
-              </div>
-              <div class="col-md-2">
-                <button type="submit" class="btn btn-sm btn-success w-100" disabled={submitting || !roleId}>
-                  {submitting ? "Assigning…" : "Assign"}
-                </button>
-              </div>
-            </form>
+            {canGrant && (
+              <form onSubmit={handleAssign} class="row g-2 align-items-end mb-3">
+                <div class="col-md-3">
+                  <ServerSearchSelect
+                    catalog={systemRoleCatalog}
+                    label="Role"
+                    value={roleId}
+                    selectedLabel={roleLabel}
+                    disabled={submitting}
+                    allowEmpty={false}
+                    autoSelectFirst
+                    onChange={(role) => {
+                      setRoleId(role?.id ?? "");
+                      setRoleLabel(role?.name);
+                    }}
+                  />
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label small fw-semibold">Context</label>
+                  <ContextPicker value={context} onChange={setContext} disabled={submitting} />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label small fw-semibold">Expires (optional)</label>
+                  <input
+                    class="form-control form-control-sm"
+                    type="datetime-local"
+                    value={expiresAt}
+                    onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
+                    disabled={submitting}
+                  />
+                </div>
+                <div class="col-md-2">
+                  <button type="submit" class="btn btn-sm btn-success w-100" disabled={submitting || !roleId}>
+                    {submitting ? "Assigning…" : "Assign"}
+                  </button>
+                </div>
+              </form>
+            )}
 
             <ApiDataTable
-              endpoint={`/api/v1/admin/users/${user.id}/roles`}
+              endpoint={`/api/v1/system/access-control/users/${user.id}/roles`}
               responseSchema={userRolesListResponseSchema}
               resolve={(response) => response.roles}
               resolvePage={(response) => response.page}
@@ -157,11 +164,12 @@ export function UserRoles() {
                 },
                 {
                   header: "",
-                  cell: (assignment) => (
-                    <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(assignment)}>
-                      Revoke
-                    </button>
-                  ),
+                  cell: (assignment) =>
+                    canRevoke ? (
+                      <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(assignment)}>
+                        Revoke
+                      </button>
+                    ) : null,
                 },
               ]}
             />

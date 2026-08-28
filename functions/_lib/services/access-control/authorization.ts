@@ -1,8 +1,20 @@
-import { preparePermissionsAuthorizationGuard, type PermissionRequirement } from "../../auth/permissions";
+import {
+  hasPermission,
+  preparePermissionsAuthorizationGuard,
+  requirePermission,
+  type PermissionRequirement,
+} from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { isAuditChangeGuardFailure } from "../audit";
+
+/** Permit access-control catalog reads to operators who can either grant or revoke. */
+export function requireAccessControlRead(actor: AuthAdmin): void {
+  if (!hasPermission(actor, "access:grant") && !hasPermission(actor, "access:revoke")) {
+    requirePermission(actor, "access:grant");
+  }
+}
 
 /** Commits an RBAC mutation only while every preflight permission remains live. */
 export async function commitAccessControlMutation(
