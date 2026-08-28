@@ -20,6 +20,9 @@
 - Filtering, searching, sorting, aggregation, and pagination belong in bounded backend D1 queries. The frontend renders server results and must not process a fetched full dataset as a substitute for a query.
 - Flexible profile links use the shared link schema and JSON codec. Keep identity, authorization, uniqueness, joins, state transitions, and indexed filter fields normalized.
 - Keep routes thin: validate the shared contract, resolve auth context, call one focused use case, and serialize the shared response. Business transitions and SQL do not belong in routes.
+- Model API paths around stable business and resource domains. Do not create top-level route families named after UI shells, navigation groupings, actor types, authorization levels, or vague technical buckets such as `admin`, `portal`, `system`, `me`, or `operations` unless the term is the actual product domain and the user explicitly approves it. Authentication is the `/api/v1/auth` domain; identity-specific resources belong under the relevant resource, such as `/api/v1/users/current`.
+- Keep route naming independent from permissions and UI placement. The same canonical domain endpoint serves every authorized user; backend permission guards control each action and the UI exposes only the actions granted to the current user.
+- Remove superseded route handlers, mounts, callers, contracts, tests, and documentation in the same cutover. Do not retain compatibility aliases in this unreleased application unless the user explicitly approves a compatibility requirement.
 - Keep configurable product policy in shared domain modules or reference data. Do not scatter status, role, category, URL, email-template, or feature-policy literals through routes and components.
 - A state-changing use case owns one atomic D1 command boundary. External effects use the durable outbox and one explicit retry owner.
 
