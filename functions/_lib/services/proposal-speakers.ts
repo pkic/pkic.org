@@ -9,7 +9,7 @@ import {
   signCapabilityToken,
 } from "../auth/capability-links";
 import { prepareProposalRoleCapacityForSpeakerChange, proposalParticipantStatus } from "./proposal-role-capacity";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import {
   eventParticipantSourceConflictError,
@@ -397,7 +397,7 @@ export async function updateProposalSpeakerRole(
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
-    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+    if (isAuditChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the role was updated");
     }
     throw error;

@@ -5,7 +5,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { AuthAdmin } from "../types";
 import { nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
 import { speakerManagePageUrl, speakerPresentationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
@@ -247,7 +247,7 @@ export async function sendProposalSpeakerReminders(
     try {
       await db.batch(withProposalWriteContextGuard(payload.authorization, statements));
     } catch (error) {
-      if (isAuthorizationGuardFailure(error) || isAuditOneChangeGuardFailure(error)) {
+      if (isAuthorizationGuardFailure(error) || isAuditChangeGuardFailure(error)) {
         throw new AppError(
           409,
           "PROPOSAL_SPEAKER_CONFLICT",
@@ -388,7 +388,7 @@ export async function remindProposalSpeakerByProposer(
       ),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "PROPOSAL_SPEAKER_CONFLICT",

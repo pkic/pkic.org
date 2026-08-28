@@ -6,7 +6,6 @@ import {
   rawVoteBallotSchema,
   rawVoteBallotsListQuerySchema,
   rawVoteBallotsListResponseSchema,
-  voteCandidateInputSchema,
   voteCreateInputSchema,
   voteMutationResponseSchema,
   voteUpdateInputSchema,
@@ -23,8 +22,6 @@ import {
   voteStatusSchema,
   voteSummaryFieldsSchema,
 } from "./votes";
-
-export const adminCandidateInputSchema = voteCandidateInputSchema;
 
 export const ADMIN_VOTES_SORT_COLUMNS = [
   "title",

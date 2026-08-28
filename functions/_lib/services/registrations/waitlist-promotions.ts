@@ -1,7 +1,7 @@
 import { all, run } from "../../db/queries";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { listEventDays } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
@@ -59,7 +59,7 @@ export async function promoteEventWaitlistWithNotifications(
         eventId: payload.event.id,
         eventDayId,
         claimWindowHours: payload.claimWindowHours,
-        isCommitConflict: isAuditOneChangeGuardFailure,
+        isCommitConflict: isAuditChangeGuardFailure,
         prepareCommitGuard: (promotion) =>
           prepareAuditLogAfterOneChange(
             db,

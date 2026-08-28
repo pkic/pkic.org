@@ -4,7 +4,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
 import { storedRasterImageResponse } from "./image-response";
 import {
   prepareStorageDeletion,
@@ -154,7 +154,7 @@ export async function replaceUserHeadshot(
       },
     });
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw await headshotConflictError(context.db, context.userId);
     }
     throw error;
@@ -193,7 +193,7 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
   try {
     [updateResult] = await context.db.batch(statements);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw await headshotConflictError(context.db, context.userId);
     }
     throw error;

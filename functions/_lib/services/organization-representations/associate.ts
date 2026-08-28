@@ -2,7 +2,7 @@ import type { OrganizationRepresentative } from "../../../../assets/shared/schem
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildAddRepresentativeStatement } from "../membership/representatives";
 import {
@@ -72,7 +72,7 @@ export async function associateOrganizationRepresentative(
         "Representative-management access changed while the update was being saved",
       );
     }
-    if (isConcurrentRepresentationConflict(error) || isAuditOneChangeGuardFailure(error)) {
+    if (isConcurrentRepresentationConflict(error) || isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "ORGANIZATION_REPRESENTATION_CONFLICT",

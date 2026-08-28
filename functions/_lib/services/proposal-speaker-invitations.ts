@@ -11,7 +11,7 @@ import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { AppError } from "../errors";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { effectiveStoredInviteExpiry, eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
@@ -166,7 +166,7 @@ async function inviteProposalSpeakerOnce(
         throw new ConcurrentSpeakerInvitation();
       }
     }
-    if (isAuditOneChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_CHANGED", "Proposal changed while the speaker was being invited");
     }
     throw error;

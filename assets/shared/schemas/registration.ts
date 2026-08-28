@@ -188,9 +188,6 @@ export const registrationDayStateSchema = z.object({
   dayWaitlist: z.array(dayWaitlistItemSchema),
 });
 
-/** Backward-compatible name for the canonical portal-managed form answer contract. */
-export const customAnswersSchema = formAnswersSchema;
-
 export const userProfileSchema = z.object({
   firstName: firstNameSchema,
   lastName: lastNameSchema,
@@ -242,7 +239,7 @@ export const attendeeRegistrationFieldsSchema = z.object({
   jobTitle: jobTitleSchema.optional(),
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  customAnswers: customAnswersSchema.optional(),
+  customAnswers: formAnswersSchema.optional(),
   consents: z.array(consentItemSchema).min(1).max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
@@ -330,7 +327,7 @@ export const registrationManageSchema = z.object({
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
   claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
-  customAnswers: customAnswersSchema.optional(),
+  customAnswers: formAnswersSchema.optional(),
   sourceRef: trimmedString(2, 200).optional(),
   email: normalizedEmailSchema.optional(),
   firstName: firstNameSchema.optional(),
@@ -346,7 +343,7 @@ export const registrationManageRegistrationSchema = z.object({
   status: registrationLifecycleStatusSchema,
   cancellation_reason_code: z.string().nullable(),
   attendance_type: attendanceTypeSchema,
-  custom_answers: customAnswersSchema.nullable(),
+  custom_answers: formAnswersSchema.nullable(),
   isEmailVerified: z.boolean(),
 });
 

@@ -20,7 +20,7 @@ import {
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { commitEventResourceManagementBatch, queryEventResourceManagementPage } from "./management";
 import { prepareMeetingGuestInvitationDelivery } from "./guest-delivery";
 import { type EventGuestRow, toEventGuest } from "./record";
@@ -236,7 +236,7 @@ export async function inviteOccurrenceGuest(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "EVENT_GUEST_WINDOW_CHANGED", "The guest invitation window changed while saving");
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_GUEST_CHANGED", "The guest invitation changed while it was being saved");
     }
     throw error;
@@ -296,7 +296,7 @@ export async function revokeOccurrenceGuest(
         .bind(now, guestId),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_GUEST_CHANGED", "The guest invitation changed while it was being revoked");
     }
     throw error;

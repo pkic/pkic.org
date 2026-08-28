@@ -2,7 +2,7 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
@@ -77,7 +77,7 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
   try {
     await db.batch(statements);
   } catch (error) {
-    if (!isAuditOneChangeGuardFailure(error)) throw error;
+    if (!isAuditChangeGuardFailure(error)) throw error;
     const current = await first<{ pii_redacted_at: string | null }>(
       db,
       "SELECT pii_redacted_at FROM users WHERE id = ?",

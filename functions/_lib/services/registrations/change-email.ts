@@ -18,7 +18,7 @@ import { checkEmailDomainMx } from "../../email/mx-check";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import {
   prepareRegistrationConfirmationEmail,
   prepareRegistrationEmailChangeNotice,
@@ -507,7 +507,7 @@ export async function finalizeEmailChange(
   try {
     await db.batch(prepared.statements);
   } catch (error) {
-    if (isRegistrationTransitionConflict(error) || isAuditOneChangeGuardFailure(error)) {
+    if (isRegistrationTransitionConflict(error) || isAuditChangeGuardFailure(error)) {
       throw registrationChangedError();
     }
     throw error;

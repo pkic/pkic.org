@@ -24,7 +24,7 @@ import { drainGoogleGroupsEnrollmentNotificationIntents, processGoogleGroupsSync
 import { buildConsultationBatchEmail, buildEcReviewBatchEmail } from "./notifications";
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env } from "../../types";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { buildManagementLink } from "../management-links";
 
 // ── Consultation batch (Mon/Wed 07:15 UTC) ─────────────────────
@@ -123,7 +123,7 @@ export async function runConsultationBatch(
     // Another scheduled/manual invocation claimed at least one of the same
     // stage entries. The guard rolls the partial marker update back, so the
     // next bounded pass can safely retry the remaining entries.
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       return { applicationsNotified: 0 };
     }
     throw error;

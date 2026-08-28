@@ -22,7 +22,7 @@ import {
 } from "../../../../assets/shared/schemas/membership-categories";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 
 /**
  * Category/aggregate-type compatibility, enforced once here rather than
@@ -218,7 +218,7 @@ export async function updateMembershipCategory(
         "Membership-management permission changed while the category was being saved",
       );
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership category changed; reload and retry");
     }
     throw error;

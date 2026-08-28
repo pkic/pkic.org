@@ -4,7 +4,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import {
   prepareOrganizationRepresentativeManagementGuard,
@@ -30,7 +30,7 @@ async function commitRepresentativeLifecycleBatch(db: DatabaseLike, statements: 
         "Representative-management access changed while the update was being saved",
       );
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "ORGANIZATION_REPRESENTATION_CHANGED",

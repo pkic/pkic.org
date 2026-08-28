@@ -18,7 +18,7 @@ import { effectiveMeetingGuestInviteExpirySql } from "../../invite-validity";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import {
   buildLiveAccessibleGroupResourceIdsCte,
   type GroupResourceViewer,
@@ -208,7 +208,7 @@ export async function createSeriesOccurrence(
         .bind(seriesId, seriesId, now, series.eventId),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
     }
     throw error;
@@ -289,7 +289,7 @@ export async function updateSeriesOccurrence(
         .bind(seriesId, seriesId, now, current.series.eventId),
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
     }
     throw error;

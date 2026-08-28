@@ -7,7 +7,7 @@ import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { resolveRenewalAction, utcDate, type ResolvedSponsorshipRenewalAction } from "./renewal-policy";
 import { prepareSponsorshipStageTransition } from "./stage-transition";
 import { buildManagementLink } from "../management-links";
@@ -216,7 +216,7 @@ export async function runSponsorshipDueWork(
         await db.batch(statements);
         result.autoLapsed += 1;
       } catch (error) {
-        if (!isAuditOneChangeGuardFailure(error)) throw error;
+        if (!isAuditChangeGuardFailure(error)) throw error;
       }
       continue;
     }
@@ -235,7 +235,7 @@ export async function runSponsorshipDueWork(
       if (action.action === "reminder-60") result.reminders60Sent += 1;
       else result.reminders30Sent += 1;
     } catch (error) {
-      if (!isAuditOneChangeGuardFailure(error)) throw error;
+      if (!isAuditChangeGuardFailure(error)) throw error;
     }
   }
 

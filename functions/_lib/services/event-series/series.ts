@@ -18,7 +18,7 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { getGroup } from "../groups";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import {
@@ -404,7 +404,7 @@ export async function updateGroupEventSeries(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while the update was being saved");
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       if (scheduleChanged) {
         throw new AppError(
           409,

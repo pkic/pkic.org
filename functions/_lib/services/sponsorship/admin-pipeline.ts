@@ -7,7 +7,7 @@ import { AppError } from "../../errors";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { getAdminSponsorship, type AdminSponsorshipRow } from "./admin-read-model";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { escapeMarkdownText } from "../../email/markdown";
 import { queueSponsorPortalSignInCapability } from "../../auth/sponsor-portal";
@@ -174,7 +174,7 @@ export async function updateAdminSponsorship(
       }
       await db.batch(statements);
     } catch (error) {
-      if (isAuditOneChangeGuardFailure(error)) throw sponsorshipChangedError();
+      if (isAuditChangeGuardFailure(error)) throw sponsorshipChangedError();
       throw error;
     }
   }
@@ -313,7 +313,7 @@ export async function advanceSponsorshipStage(
   try {
     await db.batch(statements);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) throw sponsorshipChangedError();
+    if (isAuditChangeGuardFailure(error)) throw sponsorshipChangedError();
     throw error;
   }
 

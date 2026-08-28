@@ -17,7 +17,7 @@ import {
   type AdminVoteBallotsListQuery,
   type AdminVotesListQuery,
 } from "../../../../assets/shared/schemas/votes-admin";
-import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareEffectiveGroupPermissionAuthorizationGuard } from "../groups/governance";
@@ -214,7 +214,7 @@ export async function updateVoteSettings(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before commit");
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
     }
     throw error;
@@ -267,7 +267,7 @@ export async function updateVoteVisibility(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before commit");
     }
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
     }
     throw error;

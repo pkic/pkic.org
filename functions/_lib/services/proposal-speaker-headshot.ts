@@ -3,7 +3,7 @@ import type { AuthAdmin, DatabaseLike } from "../types";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareStorageDeletion, withStorageUploadCompensation } from "./storage-deletion-outbox";
 import type { HeadshotAudit } from "./user-headshot";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
@@ -102,7 +102,7 @@ export async function replaceProposalSpeakerHeadshot(
       },
     });
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the headshot was uploaded");
     }
     throw error;
@@ -155,7 +155,7 @@ export async function removeProposalSpeakerHeadshot(input: ProposalSpeakerHeadsh
       ]),
     );
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the headshot was removed");
     }
     throw error;

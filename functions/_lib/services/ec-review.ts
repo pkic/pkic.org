@@ -13,7 +13,7 @@ import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import type { DatabaseLike } from "../types";
 import type { EcDecisionValue } from "../../../assets/shared/schemas/ec-review";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 
 export type { EcDecisionValue };
 
@@ -108,7 +108,7 @@ export async function recordEcDecision(
       decisionStatement,
     ]);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "APPLICATION_NOT_IN_EC_REVIEW",

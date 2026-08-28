@@ -12,11 +12,7 @@ import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/partici
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
-import {
-  isAuditOneChangeGuardFailure,
-  prepareAuditLogAfterOneChange,
-  prepareScopedAuditLogAfterOneChange,
-} from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
@@ -390,7 +386,7 @@ async function removeProposalSpeaker(
       throw registrationChangedError();
     }
     if (
-      isAuditOneChangeGuardFailure(error) ||
+      isAuditChangeGuardFailure(error) ||
       isEventParticipantSourceConflict(error) ||
       isAuthorizationGuardFailure(error)
     ) {

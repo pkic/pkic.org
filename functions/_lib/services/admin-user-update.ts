@@ -6,7 +6,7 @@ import { hasPermission, requirePermission } from "../auth/permissions";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { normalizeEmail } from "../validation";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
@@ -276,7 +276,7 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   try {
     await db.batch(statements);
   } catch (error) {
-    if (!isAuditOneChangeGuardFailure(error)) throw error;
+    if (!isAuditChangeGuardFailure(error)) throw error;
     const current = await first<{ pii_redacted_at: string | null; merged_into_user_id: string | null }>(
       db,
       "SELECT pii_redacted_at, merged_into_user_id FROM users WHERE id = ?",

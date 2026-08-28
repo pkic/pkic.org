@@ -4,7 +4,7 @@ import { createDurableJobLease } from "../../jobs/lease";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { closeClaimedVote, releaseClaimedVote, type ClaimedVote } from "./automatic-transitions";
 import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
 import { getVoteRowOrThrow, toVoteSummary, type VoteRow, type VoteSummary } from "./shared";
@@ -67,7 +67,7 @@ async function openManagedVote(
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) throw managementChangedError();
-    if (isAuditOneChangeGuardFailure(error)) throw voteChangedError();
+    if (isAuditChangeGuardFailure(error)) throw voteChangedError();
     throw error;
   }
   return { vote: toVoteSummary(await getVoteRowOrThrow(db, vote.id)), outcome: "opened" };
@@ -123,7 +123,7 @@ async function cancelManagedVote(
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) throw managementChangedError();
-    if (isAuditOneChangeGuardFailure(error)) throw voteChangedError();
+    if (isAuditChangeGuardFailure(error)) throw voteChangedError();
     throw error;
   }
   return { vote: toVoteSummary(await getVoteRowOrThrow(db, vote.id)), outcome: "cancelled" };
@@ -175,7 +175,7 @@ async function claimManagedVoteClose(
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) throw managementChangedError();
-    if (isAuditOneChangeGuardFailure(error)) throw voteChangedError();
+    if (isAuditChangeGuardFailure(error)) throw voteChangedError();
     throw error;
   }
   return {

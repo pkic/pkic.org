@@ -7,7 +7,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "../audit";
 import { prepareCancelProposalEmails } from "../proposal-email-cancellation";
 import {
   assertProposalDecisionAllowed,
@@ -336,7 +336,7 @@ export async function recordProposalDecision(
     }
     if (
       !isCurrentProposalDecisionConflict(error) &&
-      !isAuditOneChangeGuardFailure(error) &&
+      !isAuditChangeGuardFailure(error) &&
       !isEventParticipantSourceConflict(error) &&
       !isProposalSpeakerRosterConflict(error)
     ) {

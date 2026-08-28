@@ -3,7 +3,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
 import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
-import { isAuditOneChangeGuardFailure, prepareAuditLog } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
 import {
   isStaleInviteTransition,
@@ -28,7 +28,7 @@ export interface PreparedRegistrationConfirmation {
 }
 
 export function isStaleRegistrationTransition(error: unknown): boolean {
-  return isRegistrationTransitionConflict(error) || isAuditOneChangeGuardFailure(error);
+  return isRegistrationTransitionConflict(error) || isAuditChangeGuardFailure(error);
 }
 
 export async function prepareConfirmRegistrationByToken(
