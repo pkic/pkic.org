@@ -15,7 +15,6 @@ import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
 import { AdminDueWorkList } from "./due-work";
 import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
-import { AdminStatsGet } from "./stats";
 import { UsersList } from "./users";
 import auth_Router from "./auth/router";
 import email_Router from "./email/router";
@@ -128,7 +127,6 @@ app.use("*", useRequestScopedD1Session);
 
 openapi.get("/events", AdminEventsListGet);
 openapi.post("/events", AdminEventsCreatePost);
-openapi.get("/stats", AdminStatsGet);
 openapi.get("/due-work", AdminDueWorkList);
 openapi.get("/users", UsersList);
 openapi.route("/auth", auth_Router);

@@ -1221,12 +1221,11 @@ Status: In progress
       consumers are removed from the admin shell, and their old bookmarks
       redirect to `/portal/#/system/analytics`. Mounted contract, permission,
       section-isolation, query-plan, frontend, escaping, and real Worker/D1
-      browser regressions cover the new path. This is not yet a fully canonical
-      or DRY cutover: the compatibility `/api/v1/admin/stats` contract, its
-      separate 13-query read model, and overlapping platform schema remain
-      mounted even though no production frontend calls them. Their removal is
-      an explicit remaining §10 legacy-API cleanup; do not describe this
-      destination as complete while that duplication exists.
+      browser regressions cover the new path. The compatibility
+      `/api/v1/admin/stats` route, its separate 13-query read model, and its
+      duplicate platform-wide response contract are now removed rather than
+      retained as an unused second implementation. Event-specific statistics
+      remain a separate event-scoped projection.
       Donation management now appears under the portal's System navigation,
       but System is only the interface grouping: the canonical resource API is
       `/api/v1/donations`, with collection, detail, promoter, and reconciliation
@@ -1417,7 +1416,8 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the final security
-      remediation and donation cutover with 2,217 backend tests (one skipped), 297 frontend tests,
+      remediation, donation cutover, and duplicate admin analytics retirement with 2,218 backend
+      tests (one skipped), 297 frontend tests,
       and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1554,8 +1554,7 @@ Status: In progress
       event, vote, and mailing-list paths, but legacy global/admin domain
       endpoints remain. The admin shell still exposes Events, Forms, Email, Due
       Work, Users, Organizations, and Sponsorships, and the admin router still
-      mounts those domains plus votes and the duplicate platform-
-      statistics read model. Ownerless/global event actions, email delivery/
+      mounts those domains plus votes. Ownerless/global event actions, email delivery/
       outbox operations, user and organization management, sponsorship
       operations, and Due Work therefore still require deliberate System
       cutovers or explicit retirement. Temporary redirects, separate admin/

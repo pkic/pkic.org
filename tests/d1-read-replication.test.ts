@@ -71,8 +71,10 @@ function createDbWithSessionRecorder(options: StatementOptions = {}) {
       }
       return emptyStatement(query, sessionQueries, options);
     },
-    async batch() {
-      return [];
+    async batch(statements) {
+      options.onQuery?.();
+      await options.waitForQuery?.();
+      return statements.map(() => ({ success: true, results: [], meta: { changes: 0 } }));
     },
     getBookmark() {
       return options.bookmark ?? null;
@@ -101,7 +103,7 @@ describe("D1 read replication", () => {
     const adminToken = await createAdminToken();
 
     const response = await adminRouter.fetch(
-      new Request("https://app.test/stats", {
+      new Request("https://app.test/events", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
@@ -112,7 +114,7 @@ describe("D1 read replication", () => {
     expect(withSessionCalls).toEqual(["first-unconstrained"]);
     expect(primaryQueries.some((query) => query.includes("FROM sessions"))).toBe(true);
     expect(sessionQueries.some((query) => query.includes("FROM sessions"))).toBe(false);
-    expect(sessionQueries.some((query) => query.includes("FROM registrations"))).toBe(true);
+    expect(sessionQueries.some((query) => query.includes("FROM events"))).toBe(true);
   });
 
   it("does not mutate the shared env DB binding while admin GET reads are in flight", async () => {
@@ -132,7 +134,7 @@ describe("D1 read replication", () => {
     const adminToken = await createAdminToken();
 
     const responsePromise = adminRouter.fetch(
-      new Request("https://app.test/stats", {
+      new Request("https://app.test/events", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       env,
@@ -152,7 +154,7 @@ describe("D1 read replication", () => {
     const adminToken = await createAdminToken("prior/bookmark");
 
     const response = await adminRouter.fetch(
-      new Request("https://app.test/stats", {
+      new Request("https://app.test/events", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,

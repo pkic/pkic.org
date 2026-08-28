@@ -42,6 +42,7 @@ const RETIRED_MODULES = new Set([
   "email-templates",
   "leadership-positions",
   "membership-settings",
+  "stats",
   "vote-proposals",
 ]);
 
@@ -98,13 +99,7 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
       permission: readOrWrite(normalizedMethod, "admin:read", "admin:write"),
     };
   }
-  if (
-    module === "docs" ||
-    module === "redocs" ||
-    module.startsWith("openapi.") ||
-    module === "due-work" ||
-    module === "stats"
-  ) {
+  if (module === "docs" || module === "redocs" || module.startsWith("openapi.") || module === "due-work") {
     return { kind: "permission", permission: "admin:read" };
   }
 

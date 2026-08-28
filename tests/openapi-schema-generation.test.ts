@@ -61,6 +61,7 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/donations/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/donations/promoters"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/donations/sync"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/stats"]).toBeUndefined();
     expect(spec.paths["/api/v1/donations"].get[AUTH_EXTENSION]).toMatchObject({
       required: true,
       scopes: ["donations:read"],

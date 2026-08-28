@@ -4,55 +4,6 @@ import { eventSummarySchema } from "./event-read-models";
 
 const countMapSchema = z.record(z.string(), z.number());
 
-export const donationPeriodSchema = z.object({
-  count: z.number(),
-  completed: z.number(),
-  pending: z.number(),
-  failed: z.number(),
-  expired: z.number(),
-  gross: z.number(),
-  gross_usd: z.number(),
-  net_usd: z.number(),
-});
-
-export const adminStatsResponseSchema = z.object({
-  generatedAt: z.string(),
-  registrations: z.object({
-    byStatus: countMapSchema,
-    byAttendanceType: countMapSchema,
-    total: z.number(),
-    weekly: z.array(z.object({ week: z.string(), count: z.number() })),
-    monthly: z.array(z.object({ month: z.string(), count: z.number() })),
-  }),
-  invites: z.object({ byStatus: countMapSchema, total: z.number() }),
-  email: z.object({
-    outboxByStatus: countMapSchema,
-    totalQueued: z.number(),
-    totalFailed: z.number(),
-    totalBounced: z.number(),
-  }),
-  topEvents: z.array(z.object({ slug: z.string(), name: z.string(), confirmed: z.number(), total: z.number() })),
-  recentActivity: z.array(z.object({ date: z.string(), registrations: z.number(), invites: z.number() })),
-  donations: z.object({
-    byStatus: countMapSchema,
-    byCurrency: z.array(
-      z.object({
-        status: z.string(),
-        currency: z.string(),
-        count: z.number(),
-        total_gross: z.number(),
-        avg_gross: z.number(),
-        total_net: z.number().nullable(),
-        total_gross_usd: z.number().nullable(),
-      }),
-    ),
-    totals: z.object({ gross_usd: z.number(), net_usd: z.number() }),
-    daily: z.array(donationPeriodSchema.extend({ date: z.string() })),
-    weekly: z.array(donationPeriodSchema.extend({ week: z.string() })),
-    monthly: z.array(donationPeriodSchema.extend({ month: z.string() })),
-  }),
-});
-
 const attendanceChangeTransitionSchema = z.object({
   from_type: z.string(),
   to_type: z.string(),
@@ -150,18 +101,4 @@ export const adminEventStatsResponseSchema = z.object({
   }),
 });
 
-export type DonationPeriod = z.infer<typeof donationPeriodSchema>;
-export type AdminStatsResponse = z.infer<typeof adminStatsResponseSchema>;
 export type AdminEventStatsResponse = z.infer<typeof adminEventStatsResponseSchema>;
-
-export const adminStatsRouteSchema = {
-  tags: ["Admin analytics"],
-  summary: "Get platform statistics (admin)",
-  responses: {
-    "200": {
-      description: "Platform-wide registration, invitation, email, donation, and activity statistics.",
-      content: { "application/json": { schema: adminStatsResponseSchema } },
-    },
-    "401": { description: "Admin authorization required." },
-  },
-};

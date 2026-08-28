@@ -43,10 +43,16 @@ describe("admin read route OpenAPI contracts", () => {
     expect(paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
     expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
     expect(paths["/api/v1/system/analytics/summary"].get).toBeDefined();
-    expect(paths["/api/v1/admin/stats"].get).toBeDefined();
+    expect(paths["/api/v1/admin/stats"]).toBeUndefined();
     expect(paths["/api/v1/admin/events/{eventSlug}"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}/stats"].get).toBeDefined();
     expect(paths["/api/v1/admin/users/{userId}"].get).toBeDefined();
+  });
+
+  it("returns not found for the retired platform statistics endpoint", async () => {
+    const { token } = await setupAdmin();
+    const response = await call(token, "/api/v1/admin/stats");
+    expect(response.status).toBe(404);
   });
 
   it("rejects malformed identifiers with the canonical error envelope", async () => {
