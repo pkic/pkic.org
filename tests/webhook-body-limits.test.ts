@@ -34,6 +34,11 @@ async function call(path: string, size: number): Promise<Response> {
 }
 
 describe("webhook request body limits", () => {
+  it("does not expose the removed generic webhook routes", async () => {
+    expect((await call("/api/v1/webhooks/sendgrid", 0)).status).toBe(404);
+    expect((await call("/api/v1/webhooks/stripe", 0)).status).toBe(404);
+  });
+
   it("enforces the streaming limit even without a Content-Length header", async () => {
     const request = new Request("https://pkic.org/test", { method: "POST", body: new Uint8Array(6) });
     expect(request.headers.get("content-length")).toBeNull();
@@ -77,11 +82,13 @@ describe("webhook request body limits", () => {
   });
 
   it("rejects oversized SendGrid webhook bodies before signature work", async () => {
-    expect(await call("/api/v1/webhooks/sendgrid", SENDGRID_WEBHOOK_MAX_BYTES + 1)).toMatchObject({ status: 413 });
+    expect(await call("/api/v1/email/sendgrid/webhook", SENDGRID_WEBHOOK_MAX_BYTES + 1)).toMatchObject({ status: 413 });
   });
 
   it("rejects oversized donation Stripe webhook bodies before HMAC work", async () => {
-    expect(await call("/api/v1/webhooks/stripe", STRIPE_WEBHOOK_MAX_BYTES + 1)).toMatchObject({ status: 413 });
+    expect(await call("/api/v1/donations/payments/stripe/webhook", STRIPE_WEBHOOK_MAX_BYTES + 1)).toMatchObject({
+      status: 413,
+    });
   });
 
   it("rejects oversized sponsorship Stripe webhook bodies before HMAC work", async () => {

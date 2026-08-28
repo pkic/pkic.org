@@ -94,6 +94,10 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/membership-categories"]).toBeUndefined();
     expect(spec.paths["/api/v1/donations"].get).toBeDefined();
     expect(spec.paths["/api/v1/donations/{id}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/payments/stripe/webhook"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/sendgrid/webhook"].post).toBeDefined();
+    expect(spec.paths["/api/v1/webhooks/stripe"]).toBeUndefined();
+    expect(spec.paths["/api/v1/webhooks/sendgrid"]).toBeUndefined();
     expect(spec.paths["/api/v1/donations/promoters"].get).toBeDefined();
     expect(spec.paths["/api/v1/donations/sync"].post).toBeDefined();
     expect(spec.paths["/api/v1/email/outbox"].get).toBeDefined();

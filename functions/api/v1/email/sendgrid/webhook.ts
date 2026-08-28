@@ -7,17 +7,17 @@ import { OpenAPIRoute } from "chanfana";
 import {
   sendgridEventBatchSchema,
   sendgridWebhookPostRouteSchema,
-} from "../../../../assets/shared/schemas/route-contracts-webhooks";
-import { json } from "../../../_lib/http";
-import { readBoundedBody, SENDGRID_WEBHOOK_MAX_BYTES } from "../../../_lib/http-body";
-import { logError } from "../../../_lib/logging";
-import { processSendgridEvents } from "../../../_lib/services/sendgrid-webhook/processing";
+} from "../../../../../assets/shared/schemas/email-webhook";
+import { json } from "../../../../../functions/_lib/http";
+import { readBoundedBody, SENDGRID_WEBHOOK_MAX_BYTES } from "../../../../../functions/_lib/http-body";
+import { logError } from "../../../../../functions/_lib/logging";
+import { processSendgridEvents } from "../../../../../functions/_lib/services/sendgrid-webhook/processing";
 import {
   isLoopbackOrigin,
   normalizeOrigin,
   verifySendgridSignature,
-} from "../../../_lib/services/sendgrid-webhook/signature";
-import type { Env } from "../../../_lib/types";
+} from "../../../../../functions/_lib/services/sendgrid-webhook/signature";
+import type { Env } from "../../../../../functions/_lib/types";
 
 async function onRequestPost(c: any): Promise<Response> {
   const env = c.env as Env;
@@ -65,7 +65,7 @@ async function onRequestPost(c: any): Promise<Response> {
   }
 }
 
-export class WebhooksSendgridPost extends OpenAPIRoute {
+export class EmailSendgridWebhookPost extends OpenAPIRoute {
   schema = sendgridWebhookPostRouteSchema;
 
   async handle(c: any) {

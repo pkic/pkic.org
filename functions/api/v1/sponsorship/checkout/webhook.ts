@@ -2,7 +2,7 @@
  * POST /api/v1/sponsorship/checkout/webhook
  *
  * Stripe webhook for sponsorship self-service checkout.
- * Signature verification mirrors functions/api/v1/webhooks/stripe.ts
+ * Signature verification mirrors functions/api/v1/donations/payments/stripe/webhook.ts
  * (raw fetch + Web Crypto HMAC-SHA256, no SDK). Only
  * checkout.session.completed / async_payment_succeeded are handled — on
  * payment confirmation, the sponsorships record is created (idempotently,

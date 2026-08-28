@@ -1,7 +1,7 @@
 import {
   stripeCheckoutSessionSchema,
   stripeWebhookEnvelopeSchema,
-} from "../../../../assets/shared/schemas/route-contracts-webhooks";
+} from "../../../../assets/shared/schemas/donation-webhook";
 import { fetchStripePaymentDetails, type StripePaymentDetails } from "../../integrations/stripe/payment-details";
 import { AppError } from "../../errors";
 import {

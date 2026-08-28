@@ -33,7 +33,6 @@ import system_Router from "./system/router";
 import users_Router from "./users/router";
 import portal_Router from "./portal/router";
 import votes_Router from "./votes/router";
-import webhooks_Router from "./webhooks/router";
 
 const app = new Hono();
 export const openapi = fromHono(app);
@@ -78,6 +77,5 @@ openapi.route("/system", system_Router);
 openapi.route("/users", users_Router);
 openapi.route("/portal", portal_Router);
 openapi.route("/votes", votes_Router);
-openapi.route("/webhooks", webhooks_Router);
 
 export default openapi;

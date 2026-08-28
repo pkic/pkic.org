@@ -642,13 +642,13 @@ describe("POST /api/v1/donations/checkout", () => {
 
 // ── Stripe webhook ──────────────────────────────────────────────────────────
 
-describe("POST /api/v1/webhooks/stripe", () => {
+describe("POST /api/v1/donations/payments/stripe/webhook", () => {
   const originalFetch = globalThis.fetch;
 
   let webhookOnRequest: (ctx: PagesContext) => Promise<Response>;
 
   beforeAll(async () => {
-    const mod = await import("../functions/api/v1/webhooks/stripe.js");
+    const mod = await import("../functions/api/v1/donations/payments/stripe/webhook.js");
     webhookOnRequest = mod.onRequestPost;
   });
 
@@ -703,7 +703,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
 
   it("returns 503 when STRIPE_WEBHOOK_SECRET is not configured", async () => {
     const env = makeWebhookEnv({ STRIPE_WEBHOOK_SECRET: undefined });
-    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+    const request = new Request("https://pkic.org/api/v1/donations/payments/stripe/webhook", {
       method: "POST",
       headers: { "stripe-signature": "t=123,v1=abc" },
       body: JSON.stringify({ type: "checkout.session.completed" }),
@@ -715,7 +715,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
 
   it("returns 400 when stripe-signature header is missing", async () => {
     const env = makeWebhookEnv();
-    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+    const request = new Request("https://pkic.org/api/v1/donations/payments/stripe/webhook", {
       method: "POST",
       body: JSON.stringify({ type: "checkout.session.completed" }),
     });
@@ -726,7 +726,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
 
   it("returns 400 for an invalid/tampered signature", async () => {
     const env = makeWebhookEnv();
-    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+    const request = new Request("https://pkic.org/api/v1/donations/payments/stripe/webhook", {
       method: "POST",
       headers: { "stripe-signature": `t=${Math.floor(Date.now() / 1000)},v1=badhash` },
       body: '{"type":"checkout.session.completed"}',
@@ -754,7 +754,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
       },
     });
     const signature = await signStripePayload(body, env.STRIPE_WEBHOOK_SECRET!);
-    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+    const request = new Request("https://pkic.org/api/v1/donations/payments/stripe/webhook", {
       method: "POST",
       headers: { "stripe-signature": signature },
       body,
@@ -791,7 +791,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
       },
     });
     const signature = await signStripePayload(body, env.STRIPE_WEBHOOK_SECRET!);
-    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+    const request = new Request("https://pkic.org/api/v1/donations/payments/stripe/webhook", {
       method: "POST",
       headers: { "stripe-signature": signature },
       body,
@@ -840,7 +840,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
       },
     });
     const signature = await signStripePayload(body, env.STRIPE_WEBHOOK_SECRET!);
-    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+    const request = new Request("https://pkic.org/api/v1/donations/payments/stripe/webhook", {
       method: "POST",
       headers: { "stripe-signature": signature },
       body,

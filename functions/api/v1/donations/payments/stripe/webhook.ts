@@ -2,16 +2,19 @@ import { OpenAPIRoute } from "chanfana";
 import {
   stripeWebhookEnvelopeSchema,
   stripeWebhookPostRouteSchema,
-} from "../../../../assets/shared/schemas/route-contracts";
-import { resolveAppBaseUrl } from "../../../_lib/config";
-import { processSelectedOutboxBackground } from "../../../_lib/email/outbox";
-import { json } from "../../../_lib/http";
-import { readBoundedTextBody, STRIPE_WEBHOOK_MAX_BYTES } from "../../../_lib/http-body";
-import { verifyStripeWebhookSignature } from "../../../_lib/integrations/stripe/verify-webhook";
-import { handleDonationStripeEvent } from "../../../_lib/services/donations/stripe-webhook";
-import type { Env } from "../../../_lib/types";
+} from "../../../../../../assets/shared/schemas/donation-webhook";
+import { resolveAppBaseUrl } from "../../../../../../functions/_lib/config";
+import { processSelectedOutboxBackground } from "../../../../../../functions/_lib/email/outbox";
+import { json } from "../../../../../../functions/_lib/http";
+import { readBoundedTextBody, STRIPE_WEBHOOK_MAX_BYTES } from "../../../../../../functions/_lib/http-body";
+import { verifyStripeWebhookSignature } from "../../../../../../functions/_lib/integrations/stripe/verify-webhook";
+import { handleDonationStripeEvent } from "../../../../../../functions/_lib/services/donations/stripe-webhook";
+import type { Env } from "../../../../../../functions/_lib/types";
 
-/** Raw-body adapter; payment state and notifications live in the donation domain. */
+/** POST /api/v1/donations/payments/stripe/webhook.
+ *
+ * Raw-body adapter; payment state and notifications live in the donation domain.
+ */
 export async function onRequestPost(c: any): Promise<Response> {
   const env: Env = c.env;
   const request: Request = c.req.raw;
@@ -44,7 +47,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json(result.body);
 }
 
-export class WebhooksStripePost extends OpenAPIRoute {
+export class DonationsStripeWebhookPost extends OpenAPIRoute {
   schema = stripeWebhookPostRouteSchema;
 
   async handle(c: any) {
