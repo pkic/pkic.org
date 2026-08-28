@@ -7,14 +7,17 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { extractEmailUrl, capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import { signInToPortal } from "./helpers/portal-auth";
 
-const SETTINGS_API = "/api/v1/system/membership-settings";
-const CATEGORIES_API = "/api/v1/system/membership-categories";
+const SETTINGS_API = "/api/v1/membership/settings";
+const CATEGORIES_API = "/api/v1/membership/categories";
+const REMOVED_SYSTEM_SETTINGS_API = "/api/v1/system/membership-settings";
+const REMOVED_SYSTEM_CATEGORIES_API = "/api/v1/system/membership-categories";
 const REMOVED_ADMIN_SETTINGS_API = "/api/v1/admin/membership-settings";
 const APPLICATION_FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
 const LEGACY_ADMIN_FORMS_API = "/api/v1/admin/forms";
 
 test("a permitted staff identity reads and updates membership settings through the portal", async ({ page }) => {
-  const systemRequests: string[] = [];
+  const membershipRequests: string[] = [];
+  const removedSystemRequests: string[] = [];
   const removedAdminRequests: string[] = [];
 
   // Observe the real Worker requests without stubbing or delaying them: this
@@ -22,7 +25,10 @@ test("a permitted staff identity reads and updates membership settings through t
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname === SETTINGS_API || pathname === CATEGORIES_API || pathname.startsWith(`${CATEGORIES_API}/`)) {
-      systemRequests.push(`${request.method()} ${pathname}`);
+      membershipRequests.push(`${request.method()} ${pathname}`);
+    }
+    if (pathname === REMOVED_SYSTEM_SETTINGS_API || pathname === REMOVED_SYSTEM_CATEGORIES_API) {
+      removedSystemRequests.push(`${request.method()} ${pathname}`);
     }
     if (pathname === REMOVED_ADMIN_SETTINGS_API) {
       removedAdminRequests.push(`${request.method()} ${pathname}`);
@@ -60,7 +66,7 @@ test("a permitted staff identity reads and updates membership settings through t
   await expect(page.getByText("Category H8 saved", { exact: true })).toBeVisible();
   await expect(categoryLabel).toHaveValue(updatedLabel);
 
-  expect(systemRequests).toEqual(
+  expect(membershipRequests).toEqual(
     expect.arrayContaining([
       `GET ${SETTINGS_API}`,
       `GET ${CATEGORIES_API}`,
@@ -68,6 +74,7 @@ test("a permitted staff identity reads and updates membership settings through t
       `PATCH ${CATEGORIES_API}/H8`,
     ]),
   );
+  expect(removedSystemRequests).toEqual([]);
 
   await page.goto("/admin/#/membership/settings");
   await expect(page).toHaveURL(/\/portal\/#\/system\/membership-settings$/);

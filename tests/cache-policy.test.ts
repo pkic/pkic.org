@@ -41,20 +41,23 @@ describe("cache policy middleware", () => {
     expect(adminResponse.headers.get("cache-control")).toContain("no-store");
   });
 
-  it.each(["/api/v1/analytics/summary", "/api/v1/audit-log", "/api/v1/email/outbox", "/api/v1/operations/due-work"])(
-    "adds no-store to anonymous failures from the staff-only %s family",
-    async (pathname) => {
-      const response = await apiMiddlewareOnRequest(
-        createMiddlewareContext(
-          new Request(`https://app.test${pathname}`),
-          new Response(JSON.stringify({ error: { code: "UNAUTHORIZED" } }), { status: 401 }),
-        ),
-      );
+  it.each([
+    "/api/v1/analytics/summary",
+    "/api/v1/audit-log",
+    "/api/v1/membership/settings",
+    "/api/v1/email/outbox",
+    "/api/v1/operations/due-work",
+  ])("adds no-store to anonymous failures from the staff-only %s family", async (pathname) => {
+    const response = await apiMiddlewareOnRequest(
+      createMiddlewareContext(
+        new Request(`https://app.test${pathname}`),
+        new Response(JSON.stringify({ error: { code: "UNAUTHORIZED" } }), { status: 401 }),
+      ),
+    );
 
-      expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
-      expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
-    },
-  );
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
+  });
 
   it.each(["pkic_admin_session", "pkic_member_session", "pkic_sponsor_portal_session"])(
     "overrides cacheable responses when the %s cookie is present",

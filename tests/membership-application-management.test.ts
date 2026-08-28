@@ -571,7 +571,7 @@ describe("GET /api/v1/members/applications?sort=... (Fix 4 — sortable columns)
   });
 
   it("exposes the D1-backed category catalog to readers and never the legacy admin route", async () => {
-    const catalog = await call(adminToken, "/api/v1/system/membership-categories");
+    const catalog = await call(adminToken, "/api/v1/membership/categories");
     expect(catalog.status).toBe(200);
     const catalogBody = membershipCategoryCatalogResponseSchema.parse(await catalog.json());
     expect(catalogBody.categories[0]).toMatchObject({

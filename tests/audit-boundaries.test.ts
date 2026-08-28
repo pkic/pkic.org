@@ -79,7 +79,7 @@ describe("atomic service audit boundaries", () => {
       env.DB,
       "SELECT revision FROM membership_settings WHERE id = 'default'",
     );
-    const response = await call("/api/v1/system/membership-settings", {
+    const response = await call("/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: current.revision, consultationWindowDays: 31 }),
     });

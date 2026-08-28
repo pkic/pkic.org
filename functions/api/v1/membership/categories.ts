@@ -10,19 +10,16 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 import { listMembershipCategories, updateMembershipCategory } from "../../../_lib/services/membership/categories";
 import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
-export const SystemMembershipCategoriesList = openApiRoute(
-  membershipCategoryCatalogRouteSchema,
-  async (c: AdminContext) => {
-    const { db } = await requireStaffPermission(c, "membership:read");
-    return json(
-      membershipCategoryCatalogResponseSchema.parse({
-        categories: await listMembershipCategories(db),
-      }),
-    );
-  },
-);
+export const MembershipCategoriesList = openApiRoute(membershipCategoryCatalogRouteSchema, async (c: AdminContext) => {
+  const { db } = await requireStaffPermission(c, "membership:read");
+  return json(
+    membershipCategoryCatalogResponseSchema.parse({
+      categories: await listMembershipCategories(db),
+    }),
+  );
+});
 
-export const SystemMembershipCategoryUpdate = openApiRoute(
+export const MembershipCategoryUpdate = openApiRoute(
   membershipCategoryUpdateRouteSchema,
   async (c: AdminContext, data) => {
     const { db, staff } = await requireStaffPermission(c, "membership:write");

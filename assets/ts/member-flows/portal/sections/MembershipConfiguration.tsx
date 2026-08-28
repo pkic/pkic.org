@@ -24,8 +24,8 @@ import { FormDefinitionEditor, type EditableFormDetail } from "../../../componen
 import { getJson, patchJson } from "../../../shared/api-client";
 import { toast } from "../ui";
 
-const SETTINGS_API = "/api/v1/system/membership-settings";
-const CATEGORIES_API = "/api/v1/system/membership-categories";
+const SETTINGS_API = "/api/v1/membership/settings";
+const CATEGORIES_API = "/api/v1/membership/categories";
 const APPLICATION_FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
 
 function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {

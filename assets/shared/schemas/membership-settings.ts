@@ -45,6 +45,7 @@ export type MembershipSettingsUpdate = z.infer<typeof membershipSettingsUpdateSc
 export const membershipSettingsGetRouteSchema = {
   tags: ["Membership"],
   summary: "Get membership workflow settings",
+  "x-pkic-auth": { required: true, scopes: ["membership:read"] },
   responses: {
     "200": { description: "Current settings.", content: { "application/json": { schema: membershipSettingsSchema } } },
   },
@@ -53,6 +54,7 @@ export const membershipSettingsGetRouteSchema = {
 export const membershipSettingsUpdateRouteSchema = {
   tags: ["Membership"],
   summary: "Update membership workflow settings",
+  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
   request: {
     body: { content: { "application/json": { schema: membershipSettingsUpdateSchema } }, required: true },
   },

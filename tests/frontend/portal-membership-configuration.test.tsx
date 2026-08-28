@@ -97,7 +97,7 @@ afterEach(() => {
 });
 
 describe("portal membership configuration", () => {
-  it("uses canonical system APIs and sends revision-guarded settings and category updates", async () => {
+  it("uses canonical membership APIs and sends revision-guarded settings and category updates", async () => {
     const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
     vi.stubGlobal(
       "fetch",
@@ -117,8 +117,8 @@ describe("portal membership configuration", () => {
           }
           return json({ ...settings, ...body, revision: 4, updatedAt: NOW });
         }
-        if (url.pathname.endsWith("/membership-settings")) return json(settings);
-        if (url.pathname.endsWith("/membership-categories")) return json({ categories: [category] });
+        if (url.pathname === "/api/v1/membership/settings") return json(settings);
+        if (url.pathname === "/api/v1/membership/categories") return json({ categories: [category] });
         if (url.pathname.endsWith("/applications/form/definition")) return json(applicationForm);
         return new Response(null, { status: 404 });
       }),
@@ -149,7 +149,7 @@ describe("portal membership configuration", () => {
     await settle();
 
     expect(writes).toContainEqual({
-      path: "/api/v1/system/membership-categories/H1",
+      path: "/api/v1/membership/categories/H1",
       body: {
         expectedRevision: 4,
         label: "Government PKI participants",
@@ -158,8 +158,9 @@ describe("portal membership configuration", () => {
         isVoting: false,
       },
     });
-    expect(writes.find((write) => write.path.endsWith("membership-settings"))?.body.expectedRevision).toBe(3);
-    expect(writes.every((write) => write.path.startsWith("/api/v1/system/"))).toBe(true);
+    expect(writes.find((write) => write.path.endsWith("/membership/settings"))?.body.expectedRevision).toBe(3);
+    expect(writes.every((write) => write.path.startsWith("/api/v1/membership/"))).toBe(true);
+    expect(writes.some((write) => write.path.startsWith("/api/v1/system/"))).toBe(false);
   });
 
   it("renders the same data read-only without mutation controls", async () => {
@@ -170,8 +171,8 @@ describe("portal membership configuration", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
-        if (url.pathname.endsWith("/membership-settings")) return json(settings);
-        if (url.pathname.endsWith("/membership-categories")) return json({ categories: [category] });
+        if (url.pathname === "/api/v1/membership/settings") return json(settings);
+        if (url.pathname === "/api/v1/membership/categories") return json({ categories: [category] });
         if (url.pathname.endsWith("/applications/form/definition")) return json(applicationForm);
         return new Response(null, { status: 404 });
       }),
@@ -203,8 +204,8 @@ describe("portal membership configuration", () => {
         const method = init?.method ?? "GET";
         const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
         requests.push({ path: url.pathname, method, body });
-        if (url.pathname.endsWith("/membership-settings")) return json(settings);
-        if (url.pathname.endsWith("/membership-categories")) return json({ categories: [category] });
+        if (url.pathname === "/api/v1/membership/settings") return json(settings);
+        if (url.pathname === "/api/v1/membership/categories") return json({ categories: [category] });
         if (url.pathname.endsWith("/applications/form/definition") && method === "GET") return json(applicationForm);
         if (url.pathname.endsWith("/applications/form/definition") && method === "PATCH") {
           return json(applicationForm);

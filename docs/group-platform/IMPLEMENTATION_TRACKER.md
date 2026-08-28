@@ -1140,9 +1140,9 @@ Status: In progress
       the public application, email confirmation, staff sign-in, portal review,
       approval, organization provisioning, and welcome notification.
       Membership workflow configuration is the fourth permission-derived
-      System destination. The portal uses the canonical
-      `/api/v1/system/membership-settings` and
-      `/api/v1/system/membership-categories` collection and
+      System destination. System is a portal-navigation grouping: the canonical
+      domain APIs are `/api/v1/membership/settings` and the
+      `/api/v1/membership/categories` collection and
       `/:categoryCode` mutation contracts; the old
       admin component and API are removed, and the old bookmark only redirects
       to `/portal/#/system/membership-settings`. Reads and writes recheck live
@@ -1757,7 +1757,8 @@ The final PR description must include, at minimum:
 - enable and disable voting for a seeded non-voting category and confirm ballot,
   proposal, notification, concern, and statistics eligibility changes
   immediately;
-- verify `/api/v1/admin/membership-settings` returns 404 and the old admin
+- verify the retired `/api/v1/admin/membership-settings` and
+  `/api/v1/system/membership-settings` routes return 404, while the old admin
   bookmark redirects without making a legacy API request;
 - inspect the complete membership-application definition with
   `membership:read`, edit its title and dynamic questions with

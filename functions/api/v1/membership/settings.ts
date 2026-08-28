@@ -23,12 +23,12 @@ function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
   });
 }
 
-export const SystemMembershipSettingsGet = openApiRoute(membershipSettingsGetRouteSchema, async (c: AdminContext) => {
+export const MembershipSettingsGet = openApiRoute(membershipSettingsGetRouteSchema, async (c: AdminContext) => {
   const { db } = await requireStaffPermission(c, "membership:read");
   return json(toResponse(await getMembershipSettings(db)));
 });
 
-export const SystemMembershipSettingsUpdate = openApiRoute(
+export const MembershipSettingsUpdate = openApiRoute(
   membershipSettingsUpdateRouteSchema,
   async (c: AdminContext, data) => {
     const { db, staff } = await requireStaffPermission(c, "membership:write");
