@@ -9,7 +9,7 @@ import {
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { ValidatedData } from "chanfana";
-import { requireSystemPermission } from "../authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   return {
@@ -39,7 +39,7 @@ async function handlePreviewPost(
   c: AdminContext,
   data: ValidatedData<typeof emailTemplatePreviewRouteSchema>,
 ): Promise<Response> {
-  const { db } = await requireSystemPermission(c, "email-templates:write");
+  const { db } = await requireStaffPermission(c, "email-templates:write");
   const body = data.body;
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 

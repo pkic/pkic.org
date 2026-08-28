@@ -1240,11 +1240,10 @@ Status: In progress
       permission, frontend, public-roster, and real Worker/D1 browser tests
       cover exact capability separation, route removal, public projection,
       redirect behavior, and absence of legacy API requests.
-      The System Analytics portal is the eighth permission-derived System
-      destination. Three neutral, focused contracts and D1 services now serve
-      the overview,
-      registration, and donation projections under
-      `/api/v1/system/analytics`; each selected portal tab executes only its
+      Analytics appears in the portal's System interface grouping, but System
+      is not an API namespace: three neutral, focused contracts and D1
+      services serve the overview, registration, and donation projections
+      under `/api/v1/analytics`; each selected portal tab executes only its
       bounded query batch instead of the former 13-query all-purpose request.
       Live user-backed `analytics:read` authority is required and API-key
       identities fail closed. Registration and donation time windows are
@@ -1254,7 +1253,8 @@ Status: In progress
       consumers are removed from the admin shell, and their old bookmarks
       redirect to `/portal/#/system/analytics`. Mounted contract, permission,
       section-isolation, query-plan, frontend, escaping, and real Worker/D1
-      browser regressions cover the new path. The compatibility
+      browser regressions cover the domain path and the retired
+      `/api/v1/system/analytics` namespace. The compatibility
       `/api/v1/admin/stats` route, its separate 13-query read model, and its
       duplicate platform-wide response contract are now removed rather than
       retained as an unused second implementation. Event-specific statistics
@@ -1804,7 +1804,7 @@ The final PR description must include, at minimum:
   confirm an unrelated global permission, API key, and unauthenticated request
   cannot read it;
 - open Overview, Registrations, and Donations independently, confirm each tab
-  calls only its matching `/api/v1/system/analytics` endpoint, and verify the
+  calls only its matching `/api/v1/analytics` endpoint, and verify the
   displayed totals, trends, top events, and donation periods against seeded D1
   data;
 - verify `/admin/`, `/admin/#/dashboard`, and `/admin/#/stats` redirect to

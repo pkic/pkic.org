@@ -6,7 +6,7 @@ import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { reconcileDonations } from "../../../_lib/services/donations/reconciliation";
-import { requireSystemPermission as requireStaffPermission } from "../system/authorization";
+import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
 const DEFAULT_RECONCILIATION_LIMIT = 50;
 

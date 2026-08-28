@@ -6,10 +6,10 @@ import { Spinner } from "../../../../components/Spinner";
 import { StatCard } from "../../../../components/StatCard";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
-import { systemAnalyticsSummaryResponseSchema } from "../../../../../shared/schemas/system-analytics";
+import { analyticsSummaryResponseSchema } from "../../../../../shared/schemas/analytics";
 
 export function AnalyticsOverview() {
-  const state = useData(() => getJson("/api/v1/system/analytics/summary", systemAnalyticsSummaryResponseSchema), []);
+  const state = useData(() => getJson("/api/v1/analytics/summary", analyticsSummaryResponseSchema), []);
 
   if (state.loading) return <Spinner />;
   if (state.error) return <ErrorAlert error={state.error} />;

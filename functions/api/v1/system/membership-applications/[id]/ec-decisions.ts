@@ -10,12 +10,12 @@ import {
   staffEcDecisionCreateRouteSchema,
 } from "../../../../../../assets/shared/schemas/membership-application-management";
 import type { AdminContext } from "../../../../../_lib/db/context";
-import { requireSystemPermission } from "../../authorization";
+import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 
 export const MembershipApplicationEcDecisionsPost = openApiRoute(
   staffEcDecisionCreateRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, staff } = await requireSystemPermission(c, "membership:approve");
+    const { db, staff } = await requireStaffPermission(c, "membership:approve");
 
     const applicationId = data.params.id;
     const body = data.body;

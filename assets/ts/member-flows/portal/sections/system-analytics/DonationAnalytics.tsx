@@ -5,10 +5,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { DataTable, type Column } from "../../../../components/Table";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
-import {
-  systemDonationAnalyticsResponseSchema,
-  type DonationPeriod,
-} from "../../../../../shared/schemas/system-analytics";
+import { donationAnalyticsResponseSchema, type DonationPeriod } from "../../../../../shared/schemas/analytics";
 
 interface LabeledDonationPeriod extends DonationPeriod {
   date?: string;
@@ -61,7 +58,7 @@ const periodColumns: Column<LabeledDonationPeriod>[] = [
 ];
 
 export function DonationAnalytics() {
-  const state = useData(() => getJson("/api/v1/system/analytics/donations", systemDonationAnalyticsResponseSchema), []);
+  const state = useData(() => getJson("/api/v1/analytics/donations", donationAnalyticsResponseSchema), []);
 
   if (state.loading) return <Spinner />;
   if (state.error) return <ErrorAlert error={state.error} />;

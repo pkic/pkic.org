@@ -3,11 +3,13 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
 test("permitted staff use focused platform analytics through the System portal", async ({ page }) => {
-  const systemRequests: string[] = [];
+  const analyticsRequests: string[] = [];
+  const retiredSystemRequests: string[] = [];
   const legacyRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname.startsWith("/api/v1/system/analytics/")) systemRequests.push(pathname);
+    if (pathname.startsWith("/api/v1/analytics/")) analyticsRequests.push(pathname);
+    if (pathname.startsWith("/api/v1/system/analytics/")) retiredSystemRequests.push(pathname);
     if (pathname === "/api/v1/admin/stats") legacyRequests.push(pathname);
   });
 
@@ -29,12 +31,13 @@ test("permitted staff use focused platform analytics through the System portal",
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics$/);
   await expect(page.getByRole("heading", { name: "System Analytics" })).toBeVisible();
 
-  expect(systemRequests).toEqual(
+  expect(analyticsRequests).toEqual(
     expect.arrayContaining([
-      "/api/v1/system/analytics/summary",
-      "/api/v1/system/analytics/registrations",
-      "/api/v1/system/analytics/donations",
+      "/api/v1/analytics/summary",
+      "/api/v1/analytics/registrations",
+      "/api/v1/analytics/donations",
     ]),
   );
+  expect(retiredSystemRequests).toEqual([]);
   expect(legacyRequests).toEqual([]);
 });

@@ -15,7 +15,7 @@ import { readValidatedUploadedImage } from "../../../../_lib/utils/image-upload"
 import type { AdminContext } from "../../../../_lib/db/context";
 import { logoUploadResponseSchema } from "../../../../../assets/shared/schemas/images";
 import { successResponseSchema } from "../../../../../assets/shared/schemas/api-common";
-import { requireSystemPermission as requireStaffPermission } from "../../system/authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 interface ValidatedLogoData {
   params: { id: string };

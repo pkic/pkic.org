@@ -3,12 +3,12 @@ import { listLeadershipAffiliations } from "../../../../_lib/services/leadership
 import { leadershipAffiliationsRouteSchema } from "../../../../../assets/shared/schemas/leadership";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { requireSystemAnyPermission } from "../authorization";
+import { requireStaffAnyPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const LeadershipAffiliationsList = openApiRoute(
   leadershipAffiliationsRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
+    const { db } = await requireStaffAnyPermission(c, ["access:grant", "access:revoke"]);
 
     return json({ affiliations: await listLeadershipAffiliations(db, data.params.userId) });
   },

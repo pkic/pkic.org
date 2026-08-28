@@ -13,7 +13,7 @@ import {
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
-import { requireSystemPermission as requireStaffPermission } from "../../system/authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SponsorshipCompaniesList = openApiRoute(
   sponsorshipCompaniesListRouteSchema,

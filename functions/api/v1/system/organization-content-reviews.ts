@@ -18,12 +18,12 @@ import {
   rejectContentReview,
 } from "../../../_lib/services/organization-content";
 import { processStorageDeletionForKey } from "../../../_lib/services/storage-deletion-outbox";
-import { requireSystemPermission } from "./authorization";
+import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
 export const SystemOrganizationContentReviewsList = openApiRoute(
   organizationContentReviewsListRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemPermission(c, "organizations:content-review");
+    const { db } = await requireStaffPermission(c, "organizations:content-review");
     const { reviews, total } = await listContentReviews(db, data.query);
 
     return json(
@@ -38,7 +38,7 @@ export const SystemOrganizationContentReviewsList = openApiRoute(
 export const SystemOrganizationContentReviewGet = openApiRoute(
   organizationContentReviewGetRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemPermission(c, "organizations:content-review");
+    const { db } = await requireStaffPermission(c, "organizations:content-review");
     return json({ review: await getContentReviewDetail(db, data.params.id) });
   },
 );
@@ -46,7 +46,7 @@ export const SystemOrganizationContentReviewGet = openApiRoute(
 export const SystemOrganizationContentReviewApprove = openApiRoute(
   organizationContentReviewApproveRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, staff: reviewer } = await requireSystemPermission(c, "organizations:content-review");
+    const { db, staff: reviewer } = await requireStaffPermission(c, "organizations:content-review");
     const result = await approveContentReview(db, data.params.id, reviewer);
 
     if (result.promotedLogoR2Key && result.previousLiveLogoR2Key) {
@@ -61,7 +61,7 @@ export const SystemOrganizationContentReviewApprove = openApiRoute(
 export const SystemOrganizationContentReviewReject = openApiRoute(
   organizationContentReviewRejectRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, staff: reviewer } = await requireSystemPermission(c, "organizations:content-review");
+    const { db, staff: reviewer } = await requireStaffPermission(c, "organizations:content-review");
     const result = await rejectContentReview(db, data.params.id, reviewer, data.body.reviewerNote);
 
     if (result.staleLogoStagingR2Key) {

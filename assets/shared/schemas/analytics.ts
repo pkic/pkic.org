@@ -16,7 +16,7 @@ const donationTotalsSchema = z.object({
   netUsd: z.number(),
 });
 
-export const systemAnalyticsSummaryResponseSchema = generatedAnalyticsSchema.extend({
+export const analyticsSummaryResponseSchema = generatedAnalyticsSchema.extend({
   registrations: registrationStatusSummarySchema,
   invites: z.object({ byStatus: countMapSchema, total: z.number().int().nonnegative() }),
   email: z.object({
@@ -41,7 +41,7 @@ export const systemAnalyticsSummaryResponseSchema = generatedAnalyticsSchema.ext
   ),
 });
 
-export const systemRegistrationAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
+export const registrationAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
   registrations: registrationStatusSummarySchema.extend({
     byAttendanceType: countMapSchema,
     weekly: z.array(z.object({ week: z.string(), count: z.number().int().nonnegative() })),
@@ -60,7 +60,7 @@ export const donationPeriodSchema = z.object({
   netUsd: z.number(),
 });
 
-export const systemDonationAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
+export const donationAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
   donations: z.object({
     byStatus: countMapSchema,
     byCurrency: z.array(
@@ -81,14 +81,14 @@ export const systemDonationAnalyticsResponseSchema = generatedAnalyticsSchema.ex
   }),
 });
 
-export type SystemAnalyticsSummary = z.infer<typeof systemAnalyticsSummaryResponseSchema>;
-export type SystemRegistrationAnalytics = z.infer<typeof systemRegistrationAnalyticsResponseSchema>;
-export type SystemDonationAnalytics = z.infer<typeof systemDonationAnalyticsResponseSchema>;
+export type AnalyticsSummary = z.infer<typeof analyticsSummaryResponseSchema>;
+export type RegistrationAnalytics = z.infer<typeof registrationAnalyticsResponseSchema>;
+export type DonationAnalytics = z.infer<typeof donationAnalyticsResponseSchema>;
 export type DonationPeriod = z.infer<typeof donationPeriodSchema>;
 
 function analyticsRoute(summary: string, description: string, schema: z.ZodType) {
   return {
-    tags: ["System analytics"],
+    tags: ["Analytics"],
     summary,
     responses: {
       "200": { description, content: { "application/json": { schema } } },
@@ -98,20 +98,20 @@ function analyticsRoute(summary: string, description: string, schema: z.ZodType)
   };
 }
 
-export const systemAnalyticsSummaryRouteSchema = analyticsRoute(
+export const analyticsSummaryRouteSchema = analyticsRoute(
   "Get the platform analytics summary",
   "Bounded platform-wide registration, invitation, email, donation, event, and activity totals.",
-  systemAnalyticsSummaryResponseSchema,
+  analyticsSummaryResponseSchema,
 );
 
-export const systemRegistrationAnalyticsRouteSchema = analyticsRoute(
+export const registrationAnalyticsRouteSchema = analyticsRoute(
   "Get registration analytics",
   "Platform-wide registration totals and bounded weekly and monthly series.",
-  systemRegistrationAnalyticsResponseSchema,
+  registrationAnalyticsResponseSchema,
 );
 
-export const systemDonationAnalyticsRouteSchema = analyticsRoute(
+export const donationAnalyticsRouteSchema = analyticsRoute(
   "Get donation analytics",
   "Platform-wide donation totals and bounded daily, weekly, and monthly series.",
-  systemDonationAnalyticsResponseSchema,
+  donationAnalyticsResponseSchema,
 );

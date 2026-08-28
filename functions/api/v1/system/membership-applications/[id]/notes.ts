@@ -10,10 +10,10 @@ import {
   applicationNoteCreateRouteSchema,
 } from "../../../../../../assets/shared/schemas/membership-application-management";
 import type { AdminContext } from "../../../../../_lib/db/context";
-import { requireSystemPermission } from "../../authorization";
+import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 
 export const ApplicationNotesPost = openApiRoute(applicationNoteCreateRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireSystemPermission(c, "membership:write");
+  const { db, staff } = await requireStaffPermission(c, "membership:write");
 
   const body = data.body;
   const note = await addApplicationNoteWithAudit(db, {

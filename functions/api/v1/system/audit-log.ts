@@ -17,10 +17,10 @@ import type { AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { listSystemAuditLog } from "../../../_lib/services/system-audit-log";
 import { systemAuditLogListRouteSchema } from "../../../../assets/shared/schemas/system-audit-log";
-import { requireSystemPermission } from "./authorization";
+import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
 export const SystemAuditLogList = openApiRoute(systemAuditLogListRouteSchema, async (c: AdminContext, data) => {
-  const { db } = await requireSystemPermission(c, "audit:read");
+  const { db } = await requireStaffPermission(c, "audit:read");
 
   return json(await listSystemAuditLog(db, data.query));
 });

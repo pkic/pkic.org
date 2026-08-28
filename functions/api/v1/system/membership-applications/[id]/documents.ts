@@ -9,12 +9,12 @@ import { listStaffApplicationDocuments } from "../../../../../_lib/services/memb
 import { AppError } from "../../../../../_lib/errors";
 import { staffApplicationDocumentsListRouteSchema } from "../../../../../../assets/shared/schemas/membership-application-management";
 import type { AdminContext } from "../../../../../_lib/db/context";
-import { requireSystemPermission } from "../../authorization";
+import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 
 export const StaffApplicationDocumentsGet = openApiRoute(
   staffApplicationDocumentsListRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemPermission(c, "membership:read");
+    const { db } = await requireStaffPermission(c, "membership:read");
 
     const applicationId = data.params.id;
     const application = await getMemberApplicationById(db, applicationId);

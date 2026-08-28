@@ -10,7 +10,7 @@ import { authorizedSponsorshipMutationDb, updateTierConfig } from "../../../../_
 import { sponsorshipTierConfigUpdateRouteSchema } from "../../../../../assets/shared/schemas/sponsorship-management";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { requireSystemPermission as requireStaffPermission } from "../../system/authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SponsorshipTierConfigUpdate = openApiRoute(
   sponsorshipTierConfigUpdateRouteSchema,

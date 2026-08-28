@@ -8,12 +8,12 @@ import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { listAccessControlContexts } from "../../../../_lib/services/access-control/catalogs";
 import { listUserCatalog } from "../../../../_lib/services/user-catalog";
-import { requireSystemAnyPermission } from "../authorization";
+import { requireStaffAnyPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SystemAccessControlUsersList = openApiRoute(
   accessControlUsersListRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
+    const { db } = await requireStaffAnyPermission(c, ["access:grant", "access:revoke"]);
     return json(await listUserCatalog(db, data.query));
   },
 );
@@ -21,7 +21,7 @@ export const SystemAccessControlUsersList = openApiRoute(
 export const SystemAccessControlContextsList = openApiRoute(
   accessControlContextsListRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
+    const { db } = await requireStaffAnyPermission(c, ["access:grant", "access:revoke"]);
     return json(accessControlContextsListResponseSchema.parse(await listAccessControlContexts(db, data.query)));
   },
 );

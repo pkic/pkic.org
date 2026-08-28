@@ -16,7 +16,7 @@ import {
 import { sponsorshipStageUpdateRouteSchema } from "../../../../../assets/shared/schemas/sponsorship-management";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { requireInternalSecret } from "../../../../_lib/request";
-import { requireSystemPermission as requireStaffPermission } from "../../system/authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SponsorshipStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSchema, async (c: AdminContext, data) => {
   const { db, staff } = await requireStaffPermission(c, "sponsorships:write");

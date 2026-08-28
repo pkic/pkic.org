@@ -14,19 +14,19 @@ import {
   applicationUpdateRouteSchema,
 } from "../../../../../../assets/shared/schemas/membership-application-management";
 import type { AdminContext } from "../../../../../_lib/db/context";
-import { requireSystemPermission } from "../../authorization";
+import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 
 export const ApplicationDetailGet = openApiRoute(
   membershipApplicationDetailRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemPermission(c, "membership:read");
+    const { db } = await requireStaffPermission(c, "membership:read");
     const detail = await getMembershipApplicationDetail(db, data.params.id);
     return json(detail);
   },
 );
 
 export const ApplicationDetailPatch = openApiRoute(applicationUpdateRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireSystemPermission(c, "membership:write");
+  const { db, staff } = await requireStaffPermission(c, "membership:write");
 
   const id = data.params.id;
   const body = data.body;

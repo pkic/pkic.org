@@ -20,12 +20,12 @@ import {
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
-import { requireSystemAnyPermission, requireSystemPermission } from "../authorization";
+import { requireStaffAnyPermission, requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const LeadershipPositionsList = openApiRoute(
   leadershipPositionsListRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
+    const { db } = await requireStaffAnyPermission(c, ["access:grant", "access:revoke"]);
 
     const { positions, total } = await listLeadershipPositions(db, data.query);
     return json(
@@ -40,7 +40,7 @@ export const LeadershipPositionsList = openApiRoute(
 export const LeadershipPositionsCreate = openApiRoute(
   leadershipPositionsCreateRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, staff } = await requireSystemPermission(c, "access:grant");
+    const { db, staff } = await requireStaffPermission(c, "access:grant");
 
     const body = data.body;
     const position = await createLeadershipPosition(db, body, staff.id);

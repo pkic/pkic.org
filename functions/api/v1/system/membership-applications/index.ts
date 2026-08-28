@@ -10,10 +10,10 @@ import {
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
-import { requireSystemPermission } from "../authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const ApplicationsList = openApiRoute(membershipApplicationsListRouteSchema, async (c: AdminContext, data) => {
-  const { db } = await requireSystemPermission(c, "membership:read");
+  const { db } = await requireStaffPermission(c, "membership:read");
 
   const { applications, total } = await listMembershipApplications(db, data.query);
   return json(

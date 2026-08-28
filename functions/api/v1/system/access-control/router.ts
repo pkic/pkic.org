@@ -10,13 +10,13 @@ import {
   SystemUserRolesRevoke,
   SystemUserRolesUpdateExpiry,
 } from "./user-roles";
-import { requireSystemAnyPermission } from "../authorization";
+import { requireStaffAnyPermission } from "../../../../_lib/auth/staff-permissions";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.use("*", async (c, next) => {
-  await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
+  await requireStaffAnyPermission(c, ["access:grant", "access:revoke"]);
   await next();
 });
 

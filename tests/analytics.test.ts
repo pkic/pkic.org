@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import {
-  systemAnalyticsSummaryResponseSchema,
-  systemDonationAnalyticsResponseSchema,
-  systemRegistrationAnalyticsResponseSchema,
-} from "../assets/shared/schemas/system-analytics";
+  analyticsSummaryResponseSchema,
+  donationAnalyticsResponseSchema,
+  registrationAnalyticsResponseSchema,
+} from "../assets/shared/schemas/analytics";
 import {
   analyticsWindowBoundaries,
   buildAnalyticsSummaryQueries,
@@ -18,7 +18,7 @@ import {
   DONATIONS_MONTHLY_SQL,
   DONATIONS_WEEKLY_SQL,
   TOP_EVENTS_SQL,
-} from "../functions/_lib/services/system-analytics";
+} from "../functions/_lib/services/analytics";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -40,7 +40,7 @@ async function adminToken(): Promise<string> {
     env.DB,
     "SELECT id FROM users WHERE normalized_email = 'admin@pkic.org'",
   );
-  return createAdminSession(env.DB, admin.id, `system-analytics-${crypto.randomUUID()}`);
+  return createAdminSession(env.DB, admin.id, `analytics-${crypto.randomUUID()}`);
 }
 
 async function staffToken(permission: "analytics:read" | "audit:read"): Promise<string> {
@@ -55,32 +55,32 @@ async function staffToken(permission: "analytics:read" | "audit:read"): Promise<
   )
     .bind(crypto.randomUUID(), userId, permission, userId)
     .run();
-  return createAdminSession(env.DB, userId, `system-analytics-staff-${crypto.randomUUID()}`);
+  return createAdminSession(env.DB, userId, `analytics-staff-${crypto.randomUUID()}`);
 }
 
-describe("system analytics", () => {
+describe("analytics", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
   it("exposes three focused, schema-validated analytics projections", async () => {
     const token = await adminToken();
-    const summary = await call("/api/v1/system/analytics/summary", token);
-    const registrations = await call("/api/v1/system/analytics/registrations", token);
-    const donations = await call("/api/v1/system/analytics/donations", token);
+    const summary = await call("/api/v1/analytics/summary", token);
+    const registrations = await call("/api/v1/analytics/registrations", token);
+    const donations = await call("/api/v1/analytics/donations", token);
 
     expect(summary.status).toBe(200);
     expect(registrations.status).toBe(200);
     expect(donations.status).toBe(200);
-    expect(systemAnalyticsSummaryResponseSchema.parse(await summary.json()).topEvents).toEqual(
+    expect(analyticsSummaryResponseSchema.parse(await summary.json()).topEvents).toEqual(
       expect.arrayContaining([expect.objectContaining({ slug: "pqc-2026" })]),
     );
-    expect(systemRegistrationAnalyticsResponseSchema.parse(await registrations.json()).registrations).toMatchObject({
+    expect(registrationAnalyticsResponseSchema.parse(await registrations.json()).registrations).toMatchObject({
       total: 0,
       weekly: [],
       monthly: [],
     });
-    expect(systemDonationAnalyticsResponseSchema.parse(await donations.json()).donations).toMatchObject({
+    expect(donationAnalyticsResponseSchema.parse(await donations.json()).donations).toMatchObject({
       totals: { grossUsd: 0, netUsd: 0 },
       daily: [],
       weekly: [],
@@ -92,10 +92,15 @@ describe("system analytics", () => {
     const analyticsReader = await staffToken("analytics:read");
     const unrelatedReader = await staffToken("audit:read");
 
-    expect((await call("/api/v1/system/analytics/summary", analyticsReader)).status).toBe(200);
-    expect((await call("/api/v1/system/analytics/summary", unrelatedReader)).status).toBe(403);
-    expect((await call("/api/v1/system/analytics/summary")).status).toBe(401);
-    expect((await call("/api/v1/system/analytics/summary", env.ADMIN_API_KEY ?? "test-admin-key")).status).toBe(403);
+    expect((await call("/api/v1/analytics/summary", analyticsReader)).status).toBe(200);
+    expect((await call("/api/v1/analytics/summary", unrelatedReader)).status).toBe(403);
+    expect((await call("/api/v1/analytics/summary")).status).toBe(401);
+    expect((await call("/api/v1/analytics/summary", env.ADMIN_API_KEY ?? "test-admin-key")).status).toBe(403);
+  });
+
+  it("does not retain the former System API path", async () => {
+    const token = await adminToken();
+    expect((await call("/api/v1/system/analytics/summary", token)).status).toBe(404);
   });
 
   it("keeps every projection to one D1 batch with only the queries needed by that section", () => {

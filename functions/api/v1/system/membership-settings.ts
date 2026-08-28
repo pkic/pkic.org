@@ -7,7 +7,7 @@ import type { AdminContext } from "../../../_lib/db/context";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { getMembershipSettings, updateMembershipSettings } from "../../../_lib/services/membership-settings";
-import { requireSystemPermission } from "./authorization";
+import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
 function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
   return membershipSettingsSchema.parse({
@@ -24,14 +24,14 @@ function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
 }
 
 export const SystemMembershipSettingsGet = openApiRoute(membershipSettingsGetRouteSchema, async (c: AdminContext) => {
-  const { db } = await requireSystemPermission(c, "membership:read");
+  const { db } = await requireStaffPermission(c, "membership:read");
   return json(toResponse(await getMembershipSettings(db)));
 });
 
 export const SystemMembershipSettingsUpdate = openApiRoute(
   membershipSettingsUpdateRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, staff } = await requireSystemPermission(c, "membership:write");
+    const { db, staff } = await requireStaffPermission(c, "membership:write");
     return json(toResponse(await updateMembershipSettings(db, data.body, staff)));
   },
 );

@@ -11,12 +11,12 @@ import {
   listEmailTemplateVersions,
 } from "../../../../../_lib/services/email-template-management";
 import type { ValidatedData } from "chanfana";
-import { requireSystemPermission } from "../../authorization";
+import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 
 export const EmailTemplateVersionsList = openApiRoute(
   emailTemplateVersionsListRouteSchema,
   async (c: AdminContext, data) => {
-    const { db } = await requireSystemPermission(c, "email-templates:read");
+    const { db } = await requireStaffPermission(c, "email-templates:read");
     return json(await listEmailTemplateVersions(db, data.params.key, data.query));
   },
 );
@@ -25,7 +25,7 @@ async function handleVersionCreate(
   c: AdminContext,
   data: ValidatedData<typeof emailTemplateVersionCreateRouteSchema>,
 ): Promise<Response> {
-  const { db, staff } = await requireSystemPermission(c, "email-templates:write");
+  const { db, staff } = await requireStaffPermission(c, "email-templates:write");
   const body = data.body;
 
   const version = await createEmailTemplateVersion(db, staff, {

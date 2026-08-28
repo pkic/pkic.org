@@ -1,11 +1,11 @@
 import {
-  systemAnalyticsSummaryResponseSchema,
-  systemDonationAnalyticsResponseSchema,
-  systemRegistrationAnalyticsResponseSchema,
-  type SystemAnalyticsSummary,
-  type SystemDonationAnalytics,
-  type SystemRegistrationAnalytics,
-} from "../../../../assets/shared/schemas/system-analytics";
+  analyticsSummaryResponseSchema,
+  donationAnalyticsResponseSchema,
+  registrationAnalyticsResponseSchema,
+  type AnalyticsSummary,
+  type DonationAnalytics,
+  type RegistrationAnalytics,
+} from "../../../../assets/shared/schemas/analytics";
 import type { D1StatementResult, DatabaseLike } from "../../types";
 import {
   analyticsWindowBoundaries,
@@ -51,7 +51,7 @@ function donationTotals(result: D1StatementResult) {
 }
 
 /** Platform summary with no detailed time series. All reads use one D1 batch. */
-export async function getSystemAnalyticsSummary(db: DatabaseLike, now = new Date()): Promise<SystemAnalyticsSummary> {
+export async function getAnalyticsSummary(db: DatabaseLike, now = new Date()): Promise<AnalyticsSummary> {
   const [
     registrationsResult,
     invitesResult,
@@ -66,7 +66,7 @@ export async function getSystemAnalyticsSummary(db: DatabaseLike, now = new Date
   const email = resultRows<StatusCountRow>(emailResult);
   const donations = resultRows<StatusCountRow>(donationsResult);
 
-  return systemAnalyticsSummaryResponseSchema.parse({
+  return analyticsSummaryResponseSchema.parse({
     generatedAt: now.toISOString(),
     registrations: { byStatus: countMap(registrations), total: countTotal(registrations) },
     invites: { byStatus: countMap(invites), total: countTotal(invites) },
@@ -83,17 +83,14 @@ export async function getSystemAnalyticsSummary(db: DatabaseLike, now = new Date
 }
 
 /** Registration detail is loaded only when its analytics tab is selected. */
-export async function getSystemRegistrationAnalytics(
-  db: DatabaseLike,
-  now = new Date(),
-): Promise<SystemRegistrationAnalytics> {
+export async function getRegistrationAnalytics(db: DatabaseLike, now = new Date()): Promise<RegistrationAnalytics> {
   const [statusResult, attendanceResult, weeklyResult, monthlyResult] = await executeAnalyticsQueries(
     db,
     buildRegistrationAnalyticsQueries(analyticsWindowBoundaries(now)),
   );
   const statuses = resultRows<StatusCountRow>(statusResult);
 
-  return systemRegistrationAnalyticsResponseSchema.parse({
+  return registrationAnalyticsResponseSchema.parse({
     generatedAt: now.toISOString(),
     registrations: {
       byStatus: countMap(statuses),
@@ -111,12 +108,12 @@ export async function getSystemRegistrationAnalytics(
 }
 
 /** Donation detail is loaded only when its analytics tab is selected. */
-export async function getSystemDonationAnalytics(db: DatabaseLike, now = new Date()): Promise<SystemDonationAnalytics> {
+export async function getDonationAnalytics(db: DatabaseLike, now = new Date()): Promise<DonationAnalytics> {
   const [statusResult, currencyResult, totalsResult, dailyResult, weeklyResult, monthlyResult] =
     await executeAnalyticsQueries(db, buildDonationAnalyticsQueries(analyticsWindowBoundaries(now)));
   const statuses = resultRows<StatusCountRow>(statusResult);
 
-  return systemDonationAnalyticsResponseSchema.parse({
+  return donationAnalyticsResponseSchema.parse({
     generatedAt: now.toISOString(),
     donations: {
       byStatus: countMap(statuses),

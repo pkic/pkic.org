@@ -14,15 +14,15 @@ import {
   revokeUserRoleAssignment,
   updateUserRoleAssignmentExpiry,
 } from "../../../../_lib/services/access-control/user-role-assignments";
-import { requireSystemAnyPermission, requireSystemPermission } from "../authorization";
+import { requireStaffAnyPermission, requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SystemUserRolesList = openApiRoute(userRolesListRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
+  const { db, staff } = await requireStaffAnyPermission(c, ["access:grant", "access:revoke"]);
   return json(await listUserRoleAssignments(db, staff, data.params.userId, data.query));
 });
 
 export const SystemUserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireSystemPermission(c, "access:grant");
+  const { db, staff } = await requireStaffPermission(c, "access:grant");
   return json(
     userRoleResponseEnvelopeSchema.parse({
       role: await assignUserRole(db, staff, data.params.userId, data.body),
@@ -32,7 +32,7 @@ export const SystemUserRolesAssign = openApiRoute(userRolesAssignRouteSchema, as
 });
 
 export const SystemUserRolesRevoke = openApiRoute(userRoleRevokeRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireSystemPermission(c, "access:revoke");
+  const { db, staff } = await requireStaffPermission(c, "access:revoke");
   await revokeUserRoleAssignment(db, staff, data.params.userId, data.params.userRoleId);
   return json({ success: true });
 });
@@ -40,7 +40,7 @@ export const SystemUserRolesRevoke = openApiRoute(userRoleRevokeRouteSchema, asy
 export const SystemUserRolesUpdateExpiry = openApiRoute(
   userRoleUpdateExpiryRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, staff } = await requireSystemPermission(c, "access:grant");
+    const { db, staff } = await requireStaffPermission(c, "access:grant");
     return json(
       userRoleResponseEnvelopeSchema.parse({
         role: await updateUserRoleAssignmentExpiry(db, staff, data.params.userId, data.params.userRoleId, data.body),

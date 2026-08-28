@@ -8,7 +8,7 @@ import { listTierConfig } from "../../../../_lib/services/sponsorship";
 import { sponsorshipTierConfigListRouteSchema } from "../../../../../assets/shared/schemas/sponsorship-management";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { requireSystemPermission as requireStaffPermission } from "../../system/authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const { db } = await requireStaffPermission(c, "sponsorships:read");
