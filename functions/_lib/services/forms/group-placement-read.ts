@@ -16,6 +16,7 @@ import {
   buildLiveAccessibleGroupResourceIdsCte,
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
+  guardGroupResourceViewerDatabase,
   isResourceGrantCapability,
   liveGroupResourceContextAccess,
   type GroupResourceViewer,
@@ -215,7 +216,23 @@ export async function getGroupFormDefinition(
   );
   if (!row) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
   const summary = mapGroupFormPlacement(row, groupId);
-  const definition = await getFormDefinitionByPlacement(db, placementId);
+  let definition: Awaited<ReturnType<typeof getFormDefinitionByPlacement>>;
+  try {
+    const guardedDb = guardGroupResourceViewerDatabase(
+      db,
+      viewer,
+      groupId,
+      "formPlacement",
+      placementId,
+      "view_definition",
+    );
+    definition = await getFormDefinitionByPlacement(guardedDb, placementId);
+  } catch (error) {
+    if (error instanceof AppError && error.code === "RESOURCE_CAPABILITY_REQUIRED") {
+      throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
+    }
+    throw error;
+  }
   if (!definition) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
   return groupFormDefinitionResponseSchema.parse({ ...summary, fields: definition.fields });
 }
