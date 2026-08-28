@@ -1157,6 +1157,35 @@ Status: In progress
       journey changes workflow settings and category metadata through the
       portal, persists both changes, and proves the legacy bookmark does not
       call the removed admin endpoint.
+      The singleton membership-application form is managed in that portal
+      destination but remains a domain API, not a System API:
+      `/api/v1/members/applications/form/definition` is the sole staff
+      definition endpoint and `/api/v1/members/applications/form` is its public
+      projection. System is only the portal navigation grouping. The staff GET
+      requires the live `membership:read` permission; PATCH and its visible UI
+      controls require `membership:write`, a user-backed identity, revision
+      compare-and-swap, and a same-batch permission guard with attributed
+      audit. Both projections compose the shared form contracts and singleton
+      key. The former Admin Forms catalogue excludes this definition and every
+      legacy direct or placement mutation rejects it, so there is no second
+      writer. Public reads are uncached because validation immediately uses the
+      current D1 definition, require exactly one active installation placement,
+      and fail closed rather than creating unattributed answers. Archived fields
+      remain historical and cannot be restored by an unrelated editor save or
+      a crafted reuse of their former ID or key. The four bylaws,
+      code-of-conduct, IPR, and authority acknowledgements are workflow-owned,
+      mandatory read-only policy fields; every public and staff application
+      consumer fails closed unless they remain active required booleans with
+      explicit true acceptance.
+      Focused Worker/D1 tests cover permission separation, API-key rejection,
+      stale revision and permission races, status/placement synchronization,
+      malformed placement state, historical-field integrity, legacy-route
+      rejection, and correct legacy-list pagination; focused frontend tests
+      cover permission-derived edit controls, protected-field separation, and
+      a readable non-editing view. A real Worker/D1 browser regression edits a
+      dynamic question, completes email verification, observes the new question
+      immediately on the public join form, makes no legacy Admin Forms request,
+      and restores the original definition afterward.
       Email-template management is the fifth permission-derived System
       destination. One neutral shared contract, D1-backed service, and portal
       editor now own listing, server-side search/sort/pagination, version
@@ -1728,6 +1757,15 @@ The final PR description must include, at minimum:
   immediately;
 - verify `/api/v1/admin/membership-settings` returns 404 and the old admin
   bookmark redirects without making a legacy API request;
+- inspect the complete membership-application definition with
+  `membership:read`, edit its title and dynamic questions with
+  `membership:write`, and confirm the public join form reflects the change
+  immediately without an Admin Forms request;
+- deactivate and reactivate the membership-application definition, confirm
+  public collection closes and reopens coherently, and confirm archived
+  questions remain historical after later edits;
+- verify the legacy Admin Forms catalogue omits `membership-application` and
+  its direct and placement mutation URLs reject the domain-owned form;
 - list and search email templates with `email-templates:read`, then confirm a
   read-only staff user can inspect content and history but cannot preview,
   create, save, or activate a version;

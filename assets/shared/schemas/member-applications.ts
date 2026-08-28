@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { formFieldDefinitionSchema } from "./forms";
+import { activeFormSummarySchema } from "./forms";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "./membership-application-form";
 import { normalizedEmailSchema } from "./api-common";
 import {
   membershipCategorySchema,
@@ -192,22 +193,14 @@ export const memberApplicationStatusRouteSchema = {
 
 export const memberApplicationFormResponseSchema = z.object({
   categories: z.array(membershipCategoryCatalogEntrySchema),
-  form: z
-    .object({
-      id: z.string(),
-      key: z.string(),
-      title: z.string(),
-      description: z.string().nullable(),
-      fields: z.array(formFieldDefinitionSchema),
-    })
-    .nullable(),
+  form: activeFormSummarySchema.extend({ key: z.literal(MEMBERSHIP_APPLICATION_FORM_KEY) }).nullable(),
 });
 export type MemberApplicationFormResponse = z.infer<typeof memberApplicationFormResponseSchema>;
 
 export const memberApplicationFormRouteSchema = {
   tags: ["Members"],
   summary: "Get the current membership application form definition",
-  description: "Portal-managed form fields — staff-editable via the existing /api/v1/admin/forms endpoints.",
+  description: "Returns the active public membership application form definition.",
   responses: {
     "200": {
       description: "Active membership application form, or null if none configured.",

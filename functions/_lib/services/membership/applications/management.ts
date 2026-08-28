@@ -11,7 +11,9 @@ import { buildD1TextSearchFilter } from "../../../db/search";
 import { AppError } from "../../../errors";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
-import { emailDomain, INDIVIDUAL_MEMBERSHIP_CATEGORIES, MEMBERSHIP_APPLICATION_FORM_KEY } from "./create";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
+import { requireMembershipApplicationPolicyFields } from "../application-form";
+import { emailDomain, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
 import {
   getApplicationAnswers,
   getMemberApplicationById,
@@ -370,6 +372,7 @@ export async function updateMembershipApplication(
       if (!form) {
         throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
       }
+      requireMembershipApplicationPolicyFields(form.fields);
       const normalizedAnswers = await validateCustomAnswersAgainstForm(form, {
         customAnswers: mergedAnswers,
         errorStatus: 422,

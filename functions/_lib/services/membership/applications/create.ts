@@ -20,15 +20,14 @@ import {
 import { randomToken, sha256Hex } from "../../../utils/crypto";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
+import { requireMembershipApplicationPolicyFields } from "../application-form";
 import { getOrganizationDomainClaim, prepareClaimDomainForApplication } from "../organization-domain-claims";
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
 } from "../../../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike, StatementLike } from "../../../types";
-
-/** `forms.key` for the portal-managed membership application form. */
-export const MEMBERSHIP_APPLICATION_FORM_KEY = "membership-application";
 
 export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
@@ -87,6 +86,7 @@ export async function createMemberApplication(
   if (!form) {
     throw new AppError(503, "APPLICATION_FORM_UNAVAILABLE", "The membership application form is unavailable");
   }
+  requireMembershipApplicationPolicyFields(form.fields);
 
   const answers = await validateCustomAnswersAgainstForm(form, {
     customAnswers: input.answers,

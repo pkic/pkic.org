@@ -23,6 +23,7 @@ export function buildAdminFormsPageQuery(
   params: AdminFormsListQuery & {
     eventId?: string;
     includeGlobal?: boolean;
+    excludedFormKeys?: readonly string[];
   },
 ): OffsetPageQuery {
   const conditions: string[] = [];
@@ -52,6 +53,10 @@ export function buildAdminFormsPageQuery(
   if (params.status) {
     conditions.push("f.status = ?");
     bindings.push(params.status);
+  }
+  if (params.excludedFormKeys?.length) {
+    conditions.push(`f.key NOT IN (${params.excludedFormKeys.map(() => "?").join(", ")})`);
+    bindings.push(...params.excludedFormKeys);
   }
   if (params.q) {
     const search = buildD1TextSearchFilter(params.q, [
@@ -122,6 +127,7 @@ export async function listAdminForms(
   params: AdminFormsListQuery & {
     eventId?: string;
     includeGlobal?: boolean;
+    excludedFormKeys?: readonly string[];
   },
 ): Promise<{ forms: AdminFormSummaryRow[]; total: number }> {
   const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(db, buildAdminFormsPageQuery(params));

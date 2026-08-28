@@ -1,5 +1,5 @@
 import { all, first } from "../../db/queries";
-import { AppError } from "../../errors";
+import { AppError, isAppError } from "../../errors";
 import { parseJsonSafe } from "../../utils/json";
 import type { DatabaseLike } from "../../types";
 import type {
@@ -361,9 +361,9 @@ export function getActiveFormForResolution(
 }
 
 /**
- * Resolves the active global (non-event-scoped) form for a given `forms.key`
- * — used by forms like the membership application that aren't tied
- * to an event, so the `findActiveForm` event-scoping logic above doesn't apply.
+ * Resolves an active global form only when it has exactly one active
+ * installation placement. Global response flows must never create answers
+ * without a normalized response-set attribution.
  */
 export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {
   const form = await first<FormRow & { updated_at: string }>(
@@ -375,9 +375,16 @@ export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise
     [key],
   );
   if (!form) return null;
-  const placement = await findActiveFormPlacement(db, form.id, {
-    contextType: "installation",
-    contextRef: null,
-  });
+  let placement: FormPlacement | null;
+  try {
+    placement = await findActiveFormPlacement(db, form.id, {
+      contextType: "installation",
+      contextRef: null,
+    });
+  } catch (error) {
+    if (isAppError(error) && error.code === "FORM_PLACEMENT_REQUIRED") return null;
+    throw error;
+  }
+  if (!placement) return null;
   return loadFormDefinition(db, { form, placement });
 }

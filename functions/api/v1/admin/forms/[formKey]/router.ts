@@ -6,10 +6,19 @@ import { AdminFormsFormKeyDelete } from "./index";
 import { AdminFormsFormKeySubmissionsGet } from "./submissions";
 import { AdminFormsFormKeySubmissionStatsGet } from "./submission-stats";
 import { AdminFormPlacementCreate, AdminFormPlacementsList, AdminFormPlacementUpdate } from "./placements";
-import type { RequestDbContext } from "../../../../../_lib/db/context";
+import { requestDb, type RequestDbContext } from "../../../../../_lib/db/context";
+import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
+import { rejectLegacyMembershipApplicationFormRoute } from "../../../../../_lib/services/membership/application-form";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
+
+openapi.use("*", async (c, next) => {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const formKey = c.req.param("formKey");
+  if (formKey) rejectLegacyMembershipApplicationFormRoute(formKey);
+  await next();
+});
 
 openapi.get("/", AdminFormsFormKeyGet);
 openapi.patch("/", AdminFormsFormKeyPatch);

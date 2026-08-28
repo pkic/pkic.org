@@ -27,6 +27,8 @@ export interface ManagedFormMutationOptions {
   authorizationGuards?: StatementLike[];
   auditScope?: AuditScope;
   auditAction?: string;
+  /** Keeps one installation-owned placement usable when a singleton form is reactivated. */
+  synchronizeInstallationPlacementStatus?: boolean;
 }
 
 interface ManagedFormIdentity {
@@ -171,7 +173,17 @@ export async function updateManagedForm(
           form.id,
         ),
     );
-    if (input.status && input.status !== "active") {
+    if (options.synchronizeInstallationPlacementStatus && input.status) {
+      statements.push(
+        db
+          .prepare(
+            `UPDATE form_placements
+             SET active = ?, updated_at = ?
+             WHERE form_id = ? AND context_type = 'installation' AND context_ref IS NULL`,
+          )
+          .bind(input.status === "active" ? 1 : 0, now, form.id),
+      );
+    } else if (input.status && input.status !== "active") {
       statements.push(
         db
           .prepare("UPDATE form_placements SET active = 0, updated_at = ? WHERE form_id = ? AND active = 1")

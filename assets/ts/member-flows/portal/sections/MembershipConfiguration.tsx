@@ -12,13 +12,126 @@ import {
   membershipSettingsSchema,
   type MembershipSettings,
 } from "../../../../shared/schemas/membership-settings";
+import {
+  membershipApplicationFormDefinitionResponseSchema,
+  membershipApplicationFormDefinitionUpdateSchema,
+  type MembershipApplicationPolicyField,
+} from "../../../../shared/schemas/membership-application-form";
+import type { FormDefinitionUpdateInput } from "../../../../shared/schemas/forms";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
+import { FormDefinitionEditor, type EditableFormDetail } from "../../../components/forms/FormDefinitionEditor";
 import { getJson, patchJson } from "../../../shared/api-client";
 import { toast } from "../ui";
 
 const SETTINGS_API = "/api/v1/system/membership-settings";
 const CATEGORIES_API = "/api/v1/system/membership-categories";
+const APPLICATION_FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
+
+function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {
+  const [detail, setDetail] = useState<EditableFormDetail | null>(null);
+  const [policyFields, setPolicyFields] = useState<MembershipApplicationPolicyField[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await getJson(
+        APPLICATION_FORM_DEFINITION_API,
+        membershipApplicationFormDefinitionResponseSchema,
+      );
+      setDetail({ form: response.form, fields: response.fields });
+      setPolicyFields(response.policyFields);
+      setUpdatedAt(response.form.updatedAt);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => void load(), [load]);
+
+  async function save(payload: FormDefinitionUpdateInput): Promise<string> {
+    if (!detail || !updatedAt) throw new Error("The membership application form is unavailable.");
+    const input = membershipApplicationFormDefinitionUpdateSchema.parse({ ...payload, expectedUpdatedAt: updatedAt });
+    const response = await patchJson(
+      APPLICATION_FORM_DEFINITION_API,
+      input,
+      membershipApplicationFormDefinitionResponseSchema,
+    );
+    setDetail({ form: response.form, fields: response.fields });
+    setPolicyFields(response.policyFields);
+    setUpdatedAt(response.form.updatedAt);
+    toast("Membership application form saved", "success");
+    return response.form.key;
+  }
+
+  return (
+    <section class="card border-0 shadow-sm mb-4" aria-labelledby="membership-application-form-heading">
+      <div class="card-body">
+        <h5 id="membership-application-form-heading" class="card-title">
+          Membership application form
+        </h5>
+        <p class="small text-muted">
+          Configure the additional questions shown after email verification and category selection. Identity,
+          organization, category, and required policy fields remain owned by the membership workflow.
+        </p>
+        {loading ? (
+          <Spinner />
+        ) : error ? (
+          <ErrorAlert error={error} />
+        ) : detail ? (
+          <>
+            <div class="mb-3">
+              <h6>Required policy acknowledgements</h6>
+              <p class="small text-muted">
+                These workflow-owned consent fields are mandatory and cannot be changed here.
+              </p>
+              <ul class="list-group list-group-flush" aria-label="Required policy acknowledgements">
+                {policyFields.map((field) => (
+                  <li class="list-group-item px-0" key={field.key}>
+                    {field.label} <span class="badge text-bg-primary ms-2">Required</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {canWrite ? (
+              <FormDefinitionEditor
+                mode="edit"
+                detail={detail}
+                purposes={["application"]}
+                onSave={(payload) => save(payload as FormDefinitionUpdateInput)}
+                onSaved={() => undefined}
+                onCancel={() => void load()}
+                onError={(message) => toast(message, "error")}
+              />
+            ) : (
+              <div>
+                <div class="d-flex gap-2 align-items-center mb-2">
+                  <strong>{detail.form.title}</strong>
+                  <span class="badge text-bg-secondary">{detail.form.status}</span>
+                </div>
+                {detail.form.description && <p class="small text-muted">{detail.form.description}</p>}
+                <ul class="list-group list-group-flush" aria-label="Membership application form fields">
+                  {detail.fields.map((field) => (
+                    <li class="list-group-item px-0" key={field.key}>
+                      {field.label} <span class="text-muted">({field.fieldType})</span>
+                      {field.required && <span class="badge text-bg-primary ms-2">Required</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 function MembershipSettingsForm({ initial, canWrite }: { initial: MembershipSettings; canWrite: boolean }) {
   const [settings, setSettings] = useState(initial);
@@ -293,6 +406,7 @@ export function MembershipConfiguration({ canWrite }: { canWrite: boolean }) {
   return (
     <div>
       <MembershipSettingsForm initial={settings} canWrite={canWrite} />
+      <MembershipApplicationFormEditor canWrite={canWrite} />
       <div class="mb-3">
         <h5>Membership categories</h5>
         <p class="small text-muted mb-1">

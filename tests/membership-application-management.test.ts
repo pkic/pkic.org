@@ -160,6 +160,38 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     expect(rows[0].stage).toBe("pending");
   });
 
+  it("fails closed when answer edits encounter a weakened workflow policy field", async () => {
+    const formSubmissionId = await createApplicationFormSubmission({
+      job_title: "Engineer",
+      reason: "Original reason",
+    });
+    const { id } = await createApplication({ form_submission_id: formSubmissionId });
+    await env.DB.prepare(
+      `UPDATE form_fields
+       SET required = 0
+       WHERE form_id = (SELECT id FROM forms WHERE key = 'membership-application')
+         AND key = 'agrees_bylaws'`,
+    ).run();
+
+    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: { reason: "This must not persist" } }),
+    });
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "MEMBERSHIP_APPLICATION_POLICY_FIELDS_INVALID" },
+    });
+    expect(
+      await queryAll<{ data_json: string }>(
+        env.DB,
+        `SELECT answer.data_json
+         FROM form_submission_answers answer
+         WHERE answer.submission_id = ? AND answer.field_key = 'reason'`,
+        formSubmissionId,
+      ),
+    ).toEqual([{ data_json: JSON.stringify("Original reason") }]);
+  });
+
   it("serializes concurrent edits with the application transition revision", async () => {
     const { id } = await createApplication();
     const concurrentDb = gateBatchGroup(env.DB, 2);

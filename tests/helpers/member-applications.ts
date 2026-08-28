@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { queryAll } from "./context";
 import { isIndividualMembershipCategory } from "../../assets/shared/schemas/membership-categories";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../assets/shared/schemas/membership-application-form";
 import {
   issueMemberJoinApplicationToken,
   newMemberJoinCapabilityPayload,
@@ -11,13 +12,11 @@ import {
  * fix — see functions/_lib/services/membership/applications/queries.ts's
  * getApplicationAnswers); answers live in form_submissions/
  * form_submission_answers via the 'membership-application' global form
- * seeded by migrations/0034. resetDb() wipes forms/form_fields like every
+ * seeded by migrations/0035. resetDb() wipes forms/form_fields like every
  * other non-system table, so tests that need a real application answer must
  * re-seed the form themselves, the same convention tests already use for
  * working_groups (see reset-db.ts's EXCLUDED_TABLES comment).
  */
-
-const APPLICATION_FORM_KEY = "membership-application";
 
 export const requiredMembershipApplicationAnswers = {
   agrees_bylaws: true,
@@ -25,6 +24,16 @@ export const requiredMembershipApplicationAnswers = {
   agrees_ipr_policy: true,
   warranted_authority: true,
 } as const;
+
+async function seedMembershipApplicationFormPlacement(formId: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO form_placements
+       (id, form_id, owner_group_id, context_type, context_ref, audience, active, opens_at, closes_at, created_at, updated_at)
+     VALUES (?, ?, NULL, 'installation', NULL, 'prospective_member', 1, NULL, NULL, datetime('now'), datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), formId)
+    .run();
+}
 
 export async function verifiedMemberApplicationPayload<T extends Record<string, unknown>>(
   payload: T,
@@ -106,15 +115,22 @@ export async function seedMemberApplication(options: SeedMemberApplicationOption
 }
 
 export async function seedMembershipApplicationForm(): Promise<string> {
-  const existing = await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", APPLICATION_FORM_KEY);
-  if (existing.length > 0) return existing[0].id;
+  const existing = await queryAll<{ id: string }>(
+    env.DB,
+    "SELECT id FROM forms WHERE key = ?",
+    MEMBERSHIP_APPLICATION_FORM_KEY,
+  );
+  if (existing.length > 0) {
+    await seedMembershipApplicationFormPlacement(existing[0].id);
+    return existing[0].id;
+  }
 
   const formId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
      VALUES (?, ?, 'global', NULL, 'application', 'active', 'PKI Consortium Membership Application', NULL, datetime('now'), datetime('now'))`,
   )
-    .bind(formId, APPLICATION_FORM_KEY)
+    .bind(formId, MEMBERSHIP_APPLICATION_FORM_KEY)
     .run();
   const fields = [
     ["job_title", "Role / Job Title", "text", 0, null, null, null],
@@ -179,6 +195,7 @@ export async function seedMembershipApplicationForm(): Promise<string> {
       ),
     ),
   );
+  await seedMembershipApplicationFormPlacement(formId);
   return formId;
 }
 

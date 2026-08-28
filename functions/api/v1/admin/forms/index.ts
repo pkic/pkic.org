@@ -19,11 +19,16 @@ import {
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { rejectLegacyMembershipApplicationFormRoute } from "../../../../_lib/services/membership/application-form";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
 
 export const AdminFormsList = openApiRoute(adminFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const { forms, total } = await listAdminForms(requestDb(c), data.query);
+  const { forms, total } = await listAdminForms(requestDb(c), {
+    ...data.query,
+    excludedFormKeys: [MEMBERSHIP_APPLICATION_FORM_KEY],
+  });
 
   return json(
     adminFormsListResponseSchema.parse({
@@ -35,6 +40,7 @@ export const AdminFormsList = openApiRoute(adminFormsListRouteSchema, async (c: 
 
 export const AdminFormsCreate = openApiRoute(adminFormCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  rejectLegacyMembershipApplicationFormRoute(data.body.key);
   const form = await createManagedForm(requestDb(c), admin.id, { type: "global", ref: null }, data.body);
   return json(
     adminFormCreateResponseSchema.parse({
