@@ -11,7 +11,7 @@ import { signInToPortal } from "./helpers/portal-auth";
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-event"));
+  await signInToPortal(page, e2eAdminEmail("portal-event-management"));
   await page.goto(`/portal/#/groups/${GROUP_ID}/events`);
   await expect(page.getByRole("heading", { name: "Post-Quantum Cryptography Working Group" })).toBeVisible();
 

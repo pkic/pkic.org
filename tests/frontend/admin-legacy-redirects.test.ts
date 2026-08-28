@@ -5,6 +5,7 @@ import {
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+  ADMIN_LEADERSHIP_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
@@ -52,6 +53,11 @@ describe("legacy admin route redirects", () => {
   it("moves email templates to system management in the portal", () => {
     expect(legacyAdminRedirectTarget("/email/templates")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/email/templates?from=bookmark")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
+  });
+
+  it("moves global leadership management to the System portal", () => {
+    expect(legacyAdminRedirectTarget("/leadership")).toBe(ADMIN_LEADERSHIP_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/leadership?from=bookmark")).toBe(ADMIN_LEADERSHIP_REDIRECT_TARGET);
   });
 
   it("moves event invitation bookmarks to selected-group management", () => {

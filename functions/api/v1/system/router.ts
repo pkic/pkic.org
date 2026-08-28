@@ -8,6 +8,7 @@ import { SystemAuditLogList } from "./audit-log";
 import accessControl_Router from "./access-control/router";
 import { EmailTemplatesList } from "./email-templates";
 import emailTemplates_Router from "./email-templates/router";
+import leadershipPositions_Router from "./leadership-positions/router";
 import {
   SystemOrganizationContentReviewApprove,
   SystemOrganizationContentReviewGet,
@@ -22,6 +23,7 @@ openapi.get("/audit-log", SystemAuditLogList);
 openapi.route("/access-control", accessControl_Router);
 openapi.get("/email-templates", EmailTemplatesList);
 openapi.route("/email-templates", emailTemplates_Router);
+openapi.route("/leadership-positions", leadershipPositions_Router);
 openapi.get("/membership-categories", SystemMembershipCategoriesList);
 openapi.patch("/membership-categories/:categoryCode", SystemMembershipCategoryUpdate);
 openapi.get("/membership-settings", SystemMembershipSettingsGet);

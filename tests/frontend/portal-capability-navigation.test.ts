@@ -154,6 +154,19 @@ describe("portal capability-derived navigation", () => {
       expect.objectContaining({ path: "/system/access-control" }),
     );
     expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/management");
+    expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
+      path: "/system/leadership",
+      section: "system",
+      label: "Leadership",
+    });
+    expect(portalSystemNavigationItems(revokeOnly)).toContainEqual({
+      path: "/system/leadership",
+      section: "system",
+      label: "Leadership",
+    });
+    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/leadership" }),
+    );
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {

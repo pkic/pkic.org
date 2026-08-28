@@ -1,19 +1,23 @@
 import { useEffect, useState } from "preact/hooks";
-import { Spinner } from "../../../components/Spinner";
-import { ErrorAlert } from "../../../components/ErrorAlert";
-import { Pager } from "../../../components/Pager";
-import { useApiPage } from "../../../hooks/useApiPage";
-import { api, apiCommand } from "../../api";
+import { Spinner } from "../../../../components/Spinner";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Pager } from "../../../../components/Pager";
+import { useApiPage } from "../../../../hooks/useApiPage";
+import { deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
-import type { LeadershipPosition } from "../../types";
-import { UserPicker, type PickedUser } from "../../../components/UserPicker";
+import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
+import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
   leadershipAffiliationsResponseSchema,
   leadershipPositionResponseSchema,
   leadershipPositionsListResponseSchema,
   type LeadershipAffiliation,
+  type LeadershipPosition,
   type LeadershipPositionsListResponse,
-} from "../../../../shared/schemas/leadership";
+} from "../../../../../shared/schemas/leadership";
+
+const API_BASE = "/api/v1/system/leadership-positions";
+const USER_CATALOG_ENDPOINT = "/api/v1/system/access-control/users";
 
 /** ISO date -> "1 Jun 2022" for display (starts_at/ends_at are date-only, no time component). */
 function fmtDate(value: string | null): string {
@@ -52,7 +56,7 @@ function AffiliationPicker({
 
     setLoading(true);
     onChange(undefined);
-    void api(`/api/v1/admin/leadership-positions/users/${userId}/affiliations`, leadershipAffiliationsResponseSchema)
+    void getJson(`${API_BASE}/users/${encodeURIComponent(userId)}/affiliations`, leadershipAffiliationsResponseSchema)
       .then((data) => data.affiliations)
       .then((next) => {
         if (cancelled) return;
@@ -84,7 +88,7 @@ function AffiliationPicker({
 
   return (
     <select
-      class="form-select form-select-sm adm-leadership-affiliation"
+      class="form-select form-select-sm portal-leadership-affiliation"
       aria-label="Membership affiliation"
       value={value === undefined ? "" : (value ?? "none")}
       onChange={(event) => {
@@ -117,17 +121,18 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
     if (!picked || memberId === undefined || !title.trim() || !startsAt) return;
     setBusy(true);
     try {
-      await api("/api/v1/admin/leadership-positions", leadershipPositionResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({
+      await postJson(
+        API_BASE,
+        {
           body,
           userId: picked.id,
           memberId,
           title: title.trim(),
           startsAt,
           endsAt: endsAt || null,
-        }),
-      });
+        },
+        leadershipPositionResponseSchema,
+      );
       toast("Position added", "success");
       setPicked(null);
       setMemberId(undefined);
@@ -144,8 +149,9 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
 
   return (
     <form onSubmit={submit} class="d-flex gap-2 align-items-center flex-wrap border rounded p-2 bg-light">
-      <div class="adm-leadership-user">
+      <div class="portal-leadership-user">
         <UserPicker
+          endpoint={USER_CATALOG_ENDPOINT}
           value={picked}
           onChange={(user) => {
             setPicked(user);
@@ -162,7 +168,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         disabled={busy}
       />
       <input
-        class="form-control form-control-sm adm-leadership-title"
+        class="form-control form-control-sm portal-leadership-title"
         type="text"
         placeholder="Title (e.g. Board Member)"
         value={title}
@@ -170,7 +176,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         disabled={busy}
       />
       <input
-        class="form-control form-control-sm adm-leadership-date"
+        class="form-control form-control-sm portal-leadership-date"
         type="date"
         title="From"
         value={startsAt}
@@ -178,7 +184,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         disabled={busy}
       />
       <input
-        class="form-control form-control-sm adm-leadership-date"
+        class="form-control form-control-sm portal-leadership-date"
         type="date"
         title="Till (optional — leave blank for a current position)"
         placeholder="Till (optional)"
@@ -197,7 +203,17 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
   );
 }
 
-function PositionRow({ position, onChanged }: { position: LeadershipPosition; onChanged: () => void }) {
+function PositionRow({
+  position,
+  onChanged,
+  canGrant,
+  canRevoke,
+}: {
+  position: LeadershipPosition;
+  onChanged: () => void;
+  canGrant: boolean;
+  canRevoke: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(position.title);
   const [memberId, setMemberId] = useState<string | null | undefined>(position.memberId);
@@ -217,10 +233,11 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
     e.preventDefault();
     setBusy(true);
     try {
-      await api(`/api/v1/admin/leadership-positions/${position.id}`, leadershipPositionResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify({ memberId, title: title.trim(), startsAt, endsAt: endsAt || null }),
-      });
+      await patchJson(
+        `${API_BASE}/${encodeURIComponent(position.id)}`,
+        { memberId, title: title.trim(), startsAt, endsAt: endsAt || null },
+        leadershipPositionResponseSchema,
+      );
       toast("Position updated", "success");
       setEditing(false);
       onChanged();
@@ -235,7 +252,7 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
     if (!confirm(`Remove ${position.name} (${position.title})?`)) return;
     setBusy(true);
     try {
-      await apiCommand(`/api/v1/admin/leadership-positions/${position.id}`, { method: "DELETE" });
+      await deleteJson(`${API_BASE}/${encodeURIComponent(position.id)}`, successResponseSchema);
       toast("Position removed", "success");
       onChanged();
     } catch (err) {
@@ -248,7 +265,7 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
   if (editing) {
     return (
       <form onSubmit={save} class="d-flex gap-2 align-items-center flex-wrap border rounded p-2">
-        <span class="small fw-semibold adm-leadership-name">{position.name}</span>
+        <span class="small fw-semibold portal-leadership-name">{position.name}</span>
         <AffiliationPicker
           userId={position.userId}
           initialValue={position.memberId}
@@ -257,14 +274,14 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
           disabled={busy}
         />
         <input
-          class="form-control form-control-sm adm-leadership-title"
+          class="form-control form-control-sm portal-leadership-title"
           type="text"
           value={title}
           onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
           disabled={busy}
         />
         <input
-          class="form-control form-control-sm adm-leadership-date"
+          class="form-control form-control-sm portal-leadership-date"
           type="date"
           title="From"
           value={startsAt}
@@ -272,7 +289,7 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
           disabled={busy}
         />
         <input
-          class="form-control form-control-sm adm-leadership-date"
+          class="form-control form-control-sm portal-leadership-date"
           type="date"
           title="Till (optional)"
           value={endsAt}
@@ -300,25 +317,39 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
 
   return (
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="adm-leadership-name">{position.name}</span>
+      <span class="portal-leadership-name">{position.name}</span>
       <span class="text-muted small">{position.title}</span>
       {position.organizationName && <span class="text-muted small">{position.organizationName}</span>}
       <span class="text-muted small">
         {fmtDate(position.startsAt)} – {position.endsAt ? fmtDate(position.endsAt) : "present"}
       </span>
-      <button class="btn btn-sm btn-outline-secondary" disabled={busy} onClick={startEdit}>
-        Edit
-      </button>
-      <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
-        Remove
-      </button>
+      {canGrant && (
+        <button class="btn btn-sm btn-outline-secondary" disabled={busy} onClick={startEdit}>
+          Edit
+        </button>
+      )}
+      {canRevoke && (
+        <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
+          Remove
+        </button>
+      )}
     </div>
   );
 }
 
-export function LeadershipPositions({ body, label }: { body: "board" | "executive_council"; label: string }) {
+export function LeadershipPositions({
+  body,
+  label,
+  canGrant,
+  canRevoke,
+}: {
+  body: "board" | "executive_council";
+  label: string;
+  canGrant: boolean;
+  canRevoke: boolean;
+}) {
   const currentPage = useApiPage<LeadershipPositionsListResponse>(
-    "/api/v1/admin/leadership-positions",
+    API_BASE,
     {
       body,
       status: "current",
@@ -327,7 +358,7 @@ export function LeadershipPositions({ body, label }: { body: "board" | "executiv
     (data) => data.positions,
   );
   const pastPage = useApiPage<LeadershipPositionsListResponse>(
-    "/api/v1/admin/leadership-positions",
+    API_BASE,
     {
       body,
       status: "past",
@@ -353,17 +384,29 @@ export function LeadershipPositions({ body, label }: { body: "board" | "executiv
             <div class="d-flex flex-column gap-2">
               {current.length === 0 && <span class="text-muted fst-italic small">No current members</span>}
               {current.map((p) => (
-                <PositionRow key={p.id} position={p} onChanged={() => void reload()} />
+                <PositionRow
+                  key={p.id}
+                  position={p}
+                  onChanged={() => void reload()}
+                  canGrant={canGrant}
+                  canRevoke={canRevoke}
+                />
               ))}
             </div>
             {currentPage.pagerProps && <Pager {...currentPage.pagerProps} />}
-            <AddPositionForm body={body} onAdded={() => void reload()} />
+            {canGrant && <AddPositionForm body={body} onAdded={() => void reload()} />}
             {past.length > 0 && (
               <div>
                 <div class="small fw-semibold text-muted mb-2">Past positions</div>
                 <div class="d-flex flex-column gap-2">
                   {past.map((p) => (
-                    <PositionRow key={p.id} position={p} onChanged={() => void reload()} />
+                    <PositionRow
+                      key={p.id}
+                      position={p}
+                      onChanged={() => void reload()}
+                      canGrant={canGrant}
+                      canRevoke={canRevoke}
+                    />
                   ))}
                 </div>
                 {pastPage.pagerProps && <Pager {...pastPage.pagerProps} />}

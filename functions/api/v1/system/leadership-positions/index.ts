@@ -1,8 +1,8 @@
 /**
- * GET  /api/v1/admin/leadership-positions?body=board|executive_council
- * POST /api/v1/admin/leadership-positions
+ * GET  /api/v1/system/leadership-positions?body=board|executive_council
+ * POST /api/v1/system/leadership-positions
  *
- * Admin CRUD for the Board of Directors / Executive Council rosters
+ * System CRUD for the Board of Directors / Executive Council rosters
  * (consolidated migration 0035) — see functions/_lib/services/leadership.ts for the
  * design rationale (why a dedicated table instead of user_roles). Gated by
  * the same access:grant/access:revoke permissions the existing chair
@@ -10,26 +10,24 @@
  * management.
  */
 import { json } from "../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
-import { requirePermission } from "../../../../_lib/auth/permissions";
-import { listLeadershipPositionsAdmin, createLeadershipPosition } from "../../../../_lib/services/leadership";
+import { listLeadershipPositions, createLeadershipPosition } from "../../../../_lib/services/leadership";
 import {
   leadershipPositionResponseSchema,
   leadershipPositionsListResponseSchema,
   leadershipPositionsListRouteSchema,
   leadershipPositionsCreateRouteSchema,
 } from "../../../../../assets/shared/schemas/leadership";
-import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
+import { requireSystemAnyPermission, requireSystemPermission } from "../authorization";
 
 export const LeadershipPositionsList = openApiRoute(
   leadershipPositionsListRouteSchema,
   async (c: AdminContext, data) => {
-    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-    requirePermission(admin, "access:grant");
+    const { db } = await requireSystemAnyPermission(c, ["access:grant", "access:revoke"]);
 
-    const { positions, total } = await listLeadershipPositionsAdmin(requestDb(c), data.query);
+    const { positions, total } = await listLeadershipPositions(db, data.query);
     return json(
       leadershipPositionsListResponseSchema.parse({
         positions,
@@ -42,11 +40,10 @@ export const LeadershipPositionsList = openApiRoute(
 export const LeadershipPositionsCreate = openApiRoute(
   leadershipPositionsCreateRouteSchema,
   async (c: AdminContext, data) => {
-    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-    requirePermission(admin, "access:grant");
+    const { db, staff } = await requireSystemPermission(c, "access:grant");
 
     const body = data.body;
-    const position = await createLeadershipPosition(requestDb(c), body, admin.id);
+    const position = await createLeadershipPosition(db, body, staff.id);
 
     return json(leadershipPositionResponseSchema.parse(position), 201);
   },

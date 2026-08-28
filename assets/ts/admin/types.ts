@@ -5,7 +5,6 @@ import type {
   SponsorshipEvent as CanonicalSponsorshipEvent,
 } from "../../shared/schemas/admin-sponsorships";
 import type { EmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/email-templates";
-import type { LeadershipPosition as CanonicalLeadershipPosition } from "../../shared/schemas/leadership";
 import type {
   AdminUserListItem as CanonicalAdminUser,
   AdminUserMembership as CanonicalAdminUserMembership,
@@ -101,9 +100,6 @@ export type UserRoleAssignment = CanonicalUserRoleAssignment;
 
 /** GET /api/v1/system/access-control/roles/:id/assignments — reverse lookup: who holds this role. */
 export type RoleAssignment = CanonicalRoleAssignment;
-
-/** GET/POST/PATCH /api/v1/admin/leadership-positions — Board / Executive Council roster (consolidated migration 0035). */
-export type LeadershipPosition = CanonicalLeadershipPosition;
 
 export type ProposalSummary = CanonicalAdminEventProposalSummary;
 

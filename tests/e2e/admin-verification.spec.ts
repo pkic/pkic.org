@@ -298,7 +298,13 @@ test.describe("Admin browser-verification pass", () => {
     await page.goto(`/portal/#/groups/${groupId}/votes`);
     await page.getByRole("button", { name: "Proposals", exact: true }).click();
 
-    const proposalRow = page.getByRole("row").filter({ hasText: title });
+    // The expanded detail is a second table row containing the same title.
+    // Anchor the locator to the data row's Details action so it remains
+    // unique before and after expansion.
+    const proposalRow = page
+      .getByRole("row")
+      .filter({ hasText: title })
+      .filter({ has: page.getByRole("button", { name: "Details", exact: true }) });
     await expect(proposalRow).toBeVisible();
     await proposalRow.getByRole("button", { name: "Details" }).click();
     const detail = page.locator("div.p-3.bg-body-tertiary").filter({ hasText: title });

@@ -7,6 +7,7 @@ import { MembershipApplications } from "./membership-applications";
 import { MembershipConfiguration } from "./MembershipConfiguration";
 import { EmailTemplates } from "./email-templates/EmailTemplates";
 import { AccessControl } from "./access-control";
+import { Leadership } from "./leadership/Leadership";
 
 export function SystemManagement({
   session,
@@ -56,11 +57,21 @@ export function SystemManagement({
       ) : selected.path === "/system/organization-content-reviews" ? (
         <OrganizationContentReviews />
       ) : selected.path === "/system/audit-log" ? (
-        <SystemAuditLog />
+        <section aria-labelledby="system-audit-log-heading">
+          <h5 id="system-audit-log-heading" class="mb-3">
+            System Audit Log
+          </h5>
+          <SystemAuditLog />
+        </section>
       ) : selected.path === "/system/email-templates" ? (
         <EmailTemplates canWrite={portalHasGlobalPermission(session, "email-templates:write")} />
       ) : selected.path === "/system/access-control" ? (
         <AccessControl
+          canGrant={portalHasGlobalPermission(session, "access:grant")}
+          canRevoke={portalHasGlobalPermission(session, "access:revoke")}
+        />
+      ) : selected.path === "/system/leadership" ? (
+        <Leadership
           canGrant={portalHasGlobalPermission(session, "access:grant")}
           canRevoke={portalHasGlobalPermission(session, "access:revoke")}
         />

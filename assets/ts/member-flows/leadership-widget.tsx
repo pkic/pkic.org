@@ -2,7 +2,7 @@
  * Board of Directors / Executive Council / consortium chair display.
  * Replaces the static content/about/board.md, executive-council.md
  * person-card lists and _index.md's hardcoded "Chair and Vice Chair"
- * section — all three are now admin-managed (Admin → Leadership) and
+ * section — all three are now managed in the portal's System → Leadership section and
  * fetched client-side, the same pattern wg-chairs-widget.tsx already
  * established for working-group chairs (see that file's header comment
  * for the full rationale).

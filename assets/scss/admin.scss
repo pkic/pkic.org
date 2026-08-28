@@ -34,18 +34,6 @@ $adm-danger: #dc3545;
   white-space: pre-wrap;
 }
 
-.adm-leadership-slot-label {
-  min-width: 90px;
-}
-
-.adm-leadership-date {
-  width: 200px;
-}
-
-.adm-leadership-user {
-  min-width: 220px;
-}
-
 .adm-organization-logo {
   max-height: 160px;
 }
@@ -1405,23 +1393,6 @@ $adm-danger: #dc3545;
 }
 
 @import "admin-shell-extras";
-
-.adm-leadership-user {
-  min-width: 220px;
-}
-
-.adm-leadership-affiliation {
-  width: 220px;
-}
-
-.adm-leadership-title {
-  width: 180px;
-}
-
-.adm-leadership-date,
-.adm-leadership-name {
-  width: 160px;
-}
 
 .adm-due-work-limit {
   width: 78px;

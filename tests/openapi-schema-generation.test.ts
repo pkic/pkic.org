@@ -45,6 +45,11 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/access-control/roles"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/users"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/contexts"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/{id}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/{id}"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/system/leadership-positions/users/{userId}/affiliations"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/access-grants"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/roles"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/roles/{id}/assignments"]).toBeUndefined();
@@ -53,6 +58,8 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/email-templates"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/email-templates/preview"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/leadership-positions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/leadership-positions/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();

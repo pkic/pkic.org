@@ -1156,6 +1156,22 @@ Status: In progress
       backend, migration, concurrency, permission, frontend, and browser tests
       cover the canonical routes, revoke-only inspection, role management,
       route removal, redirect, and absence of legacy API requests.
+      Global Board and Executive Council leadership is the seventh
+      permission-derived System destination. The dated roster editor and route
+      handlers moved rather than being copied to
+      `/api/v1/system/leadership-positions`; the former admin components, route
+      mount, and handlers are removed, and the old bookmark is only a portal
+      redirect. One neutral schema and service remain the source of truth for
+      the System editor and public leadership projection. User-backed staff
+      holding either the live global `access:grant` or `access:revoke`
+      permission may inspect the bounded, searchable, sortable, and paginated
+      roster and affiliation catalogs. Create and update require `access:grant`,
+      while delete requires `access:revoke`; API-key identities fail closed.
+      The editor reuses the bounded System Access Control user catalog rather
+      than introducing another user lookup. Mounted backend, OpenAPI,
+      permission, frontend, public-roster, and real Worker/D1 browser tests
+      cover exact capability separation, route removal, public projection,
+      redirect behavior, and absence of legacy API requests.
       Other global management destinations
       remain, so this item is deliberately still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1283,7 +1299,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the canonical System
-      Access Control cutover with 2,201 backend tests (one skipped), 286 frontend
+      System Leadership cutover with 2,203 backend tests (one skipped), 287 frontend
       tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1320,10 +1336,23 @@ Status: In progress
       real Worker/D1 journeys that create and configure a standalone portal
       event, load all eight public flow shells, render the registration form,
       and follow an actual waitlist registration through emailed confirmation
-      and self-management URLs. These are focused checks; the complete
-      Playwright gate remains pending below.
-- [ ] Run the complete pnpm run test:e2e gate because navigation and portal
+      and self-management URLs. The System Leadership round also
+      signs in with real user-backed authority, creates and removes a Board
+      position through the canonical portal API, verifies the public roster,
+      follows the legacy bookmark redirect, and proves that no removed admin
+      endpoint is requested. The proposal-moderation browser journey now uses
+      an exact action-bearing row locator so the expanded detail row cannot be
+      mistaken for its parent proposal row. The complete 43-test Playwright
+      gate now passes against one freshly seeded Worker/D1 environment. That
+      run also exposed four event-management specs sharing one mailbox against
+      the production-equivalent three-request email rate limit; each spec now
+      uses its own explicitly seeded test identity without weakening the
+      production control.
+- [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
+      Current evidence: all 43 real-browser tests pass in one uninterrupted
+      run against the freshly seeded local Worker, D1, R2, and intercepted
+      SendGrid environment.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Current evidence: the identity phase has real-browser desktop rendering,
@@ -1431,6 +1460,15 @@ The final PR description must include, at minimum:
   user-role paths return 404 for an authenticated operator, and the old
   `/admin/#/access-control` bookmark redirects without making a legacy API
   request;
+- inspect the global leadership roster with separate `access:grant`-only and
+  `access:revoke`-only staff identities, confirming add/edit and remove controls
+  appear only for their exact permission;
+- create, update, and remove current and past Board and Executive Council
+  positions, with and without an organization affiliation, and confirm the
+  public roster displays the same current and historical state;
+- verify `/api/v1/admin/leadership-positions` and its nested paths return 404,
+  and the old `/admin/#/leadership` bookmark redirects without making a legacy
+  API request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

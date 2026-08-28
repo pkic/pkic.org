@@ -10,7 +10,6 @@ import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Users, UserDetailView } from "../sections/Users";
-import { Leadership } from "../sections/access-control/Leadership";
 import { Organizations } from "../sections/Organizations";
 import { Sponsorships } from "../sections/Sponsorships";
 import { EventList } from "../sections/events/EventList";
@@ -24,6 +23,7 @@ import {
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+  ADMIN_LEADERSHIP_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
@@ -327,9 +327,10 @@ export function AdminShell() {
             <Route
               path="/leadership"
               component={() => (
-                <SectionWrapper title="Leadership">
-                  <Leadership />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_LEADERSHIP_REDIRECT_TARGET}
+                  message="Leadership management has moved to the portal."
+                />
               )}
             />
             <Route

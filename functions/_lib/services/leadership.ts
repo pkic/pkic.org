@@ -1,6 +1,6 @@
 /**
  * Board of Directors / Executive Council leadership positions (consolidated
- * migration 0035) — admin CRUD plus the public roster read, and the consortium
+ * migration 0035) — System CRUD plus the public roster read, and the consortium
  * chair/vice-chair public read. The public leadership surface resolves the
  * explicitly published All Members group's canonical lead/deputy-lead roles;
  * there is no separate consortium authorization model.
@@ -28,7 +28,7 @@ import { SYSTEM_ROLE_IDS } from "../../../assets/shared/schemas/access-control";
 
 export type { LeadershipBody };
 
-export interface LeadershipPositionAdmin {
+export interface LeadershipPositionRecord {
   id: string;
   body: LeadershipBody;
   userId: string;
@@ -75,7 +75,7 @@ interface LeadershipPositionRow {
   updated_at: string;
 }
 
-const ADMIN_POSITION_SELECT = `
+const LEADERSHIP_POSITION_SELECT = `
   SELECT lp.id, lp.body, lp.user_id, lp.member_id, o.name AS organization_name,
          u.first_name, u.last_name, u.email,
          lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at
@@ -85,7 +85,7 @@ const ADMIN_POSITION_SELECT = `
   LEFT JOIN organizations o ON o.id = m.organization_id
 `;
 
-function toAdmin(row: LeadershipPositionRow): LeadershipPositionAdmin {
+function toLeadershipPosition(row: LeadershipPositionRow): LeadershipPositionRecord {
   return {
     id: row.id,
     body: row.body,
@@ -102,10 +102,10 @@ function toAdmin(row: LeadershipPositionRow): LeadershipPositionAdmin {
   };
 }
 
-export async function listLeadershipPositionsAdmin(
+export async function listLeadershipPositions(
   db: DatabaseLike,
   query: LeadershipPositionsListQuery,
-): Promise<{ positions: LeadershipPositionAdmin[]; total: number }> {
+): Promise<{ positions: LeadershipPositionRecord[]; total: number }> {
   const conditions = ["lp.body = ?"];
   const bindings: unknown[] = [query.body];
   if (query.status === "current") conditions.push("(lp.ends_at IS NULL OR lp.ends_at >= date('now'))");
@@ -136,13 +136,13 @@ export async function listLeadershipPositionsAdmin(
     "lp.id ASC",
   );
   const { rows, total } = await queryPage<LeadershipPositionRow>(db, {
-    sql: `${ADMIN_POSITION_SELECT} ${where}`,
+    sql: `${LEADERSHIP_POSITION_SELECT} ${where}`,
     bindings,
     orderBy,
     limit: query.limit,
     offset: query.offset,
   });
-  return { positions: rows.map(toAdmin), total };
+  return { positions: rows.map(toLeadershipPosition), total };
 }
 
 export async function createLeadershipPosition(
@@ -156,7 +156,7 @@ export async function createLeadershipPosition(
     endsAt?: string | null;
   },
   actorUserId: string,
-): Promise<LeadershipPositionAdmin> {
+): Promise<LeadershipPositionRecord> {
   const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [input.userId]);
   if (!user) {
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
@@ -185,8 +185,8 @@ export async function createLeadershipPosition(
     ),
   ]);
 
-  const row = await first<LeadershipPositionRow>(db, `${ADMIN_POSITION_SELECT} WHERE lp.id = ?`, [id]);
-  return toAdmin(row!);
+  const row = await first<LeadershipPositionRow>(db, `${LEADERSHIP_POSITION_SELECT} WHERE lp.id = ?`, [id]);
+  return toLeadershipPosition(row!);
 }
 
 export async function updateLeadershipPosition(
@@ -194,7 +194,7 @@ export async function updateLeadershipPosition(
   id: string,
   patch: { memberId?: string | null; title?: string; startsAt?: string; endsAt?: string | null },
   actorUserId: string,
-): Promise<LeadershipPositionAdmin> {
+): Promise<LeadershipPositionRecord> {
   const existing = await first<{ id: string; user_id: string; starts_at: string; ends_at: string | null }>(
     db,
     "SELECT id, user_id, starts_at, ends_at FROM leadership_positions WHERE id = ?",
@@ -238,8 +238,8 @@ export async function updateLeadershipPosition(
     prepareAuditLog(db, "admin", actorUserId, "leadership_position_updated", "leadership_position", id, patch, now),
   ]);
 
-  const row = await first<LeadershipPositionRow>(db, `${ADMIN_POSITION_SELECT} WHERE lp.id = ?`, [id]);
-  return toAdmin(row!);
+  const row = await first<LeadershipPositionRow>(db, `${LEADERSHIP_POSITION_SELECT} WHERE lp.id = ?`, [id]);
+  return toLeadershipPosition(row!);
 }
 
 export async function deleteLeadershipPosition(db: DatabaseLike, id: string, actorUserId: string): Promise<void> {

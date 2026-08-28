@@ -57,6 +57,12 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     label: "Access Control",
     permissions: ["access:grant", "access:revoke"],
   },
+  {
+    path: "/system/leadership",
+    section: "system",
+    label: "Leadership",
+    permissions: ["access:grant", "access:revoke"],
+  },
 ] as const;
 
 const ACCOUNT_NAV_ITEM: PortalNavItem = { path: "/account", section: "account", label: "Account Settings" };
