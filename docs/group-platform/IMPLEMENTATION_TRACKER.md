@@ -1399,10 +1399,9 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the compatibility and
-      guarded shared-resource read and vote-evaluator cleanup with 2,211 backend tests (one
-      skipped), 292 frontend tests, and 80 tooling tests. Type checks, ESLint,
-      SQL projection,
+      Current evidence: the complete gate passes after the final security
+      remediation with 2,214 backend tests (one skipped), 297 frontend tests,
+      and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
       An earlier combined run exposed a nondeterministic Google Groups boundary
@@ -1479,7 +1478,7 @@ Status: In progress
       pages with server offsets and content replacement, and an API failure
       rendered as an assertive error alert. The role/persona matrix is covered
       by the real Worker/D1 evidence above.
-- [ ] Run a final security diff review and resolve validated findings.
+- [x] Run a final security diff review and resolve validated findings.
       Evidence so far: Codex Security scan
       `7f6a9db1-1349-49f6-8ac0-cd9437915ee8` reviewed the complete delegated
       event-management diff and validated three low-severity findings. This
@@ -1505,8 +1504,19 @@ Status: In progress
       cover old-address reuse, fresh delivery to the new address, all canonical
       email-mutation paths, normal and bulk scheduling boundaries, and each
       stale in-flight speaker mutation. An independent post-fix bypass review
-      found no remaining path for the original finding. This is round evidence;
-      a final whole-PR security diff review remains required.
+      found no remaining path for the original finding.
+      Final Codex Security scan `d9ff8252-a67a-423a-a28e-fe94bdfd8b95`
+      reviewed all 1,008 source-like changed paths in the exact committed range
+      `bb22b0e8..7360f5bb` and reported one low-severity authorization race. A
+      group form definition could be authorized by its summary query and then
+      return confidential fields after its live grant, membership, or manager
+      role was revoked. Commit `16c05e34` now prepends the same canonical live
+      resource-capability evidence to every definition-enrichment D1 batch and
+      fails closed as `FORM_NOT_FOUND`. The original runtime reproducer now
+      returns that 404, deterministic tests cover all three revocation races,
+      positive owner/member/shared/manager access remains green, and an
+      independent post-fix bypass review found no remaining path. The complete
+      gate above passed on the fixed commit.
 - [ ] Audit every requirement in ARCHITECTURE.md against current evidence.
 
 ## 12. Pull-request handoff
