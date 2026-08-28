@@ -23,7 +23,7 @@ import { approveApplication } from "./applications/approve";
 import { drainGoogleGroupsEnrollmentNotificationIntents, processGoogleGroupsSyncQueue } from "../google-groups";
 import { buildConsultationBatchEmail, buildEcReviewBatchEmail } from "./notifications";
 import { logInfo } from "../../logging";
-import type { DatabaseLike, Env } from "../../types";
+import type { AuthAdmin, DatabaseLike, Env } from "../../types";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { buildManagementLink } from "../management-links";
 
@@ -58,6 +58,7 @@ export async function runConsultationBatch(
   db: DatabaseLike,
   env: Env,
   limit = getConfig(env).scheduledConsultationBatchLimit,
+  actor: AuthAdmin | null = null,
 ): Promise<{ applicationsNotified: number }> {
   const settings = await getMembershipSettings(db);
   const applications = await all<ConsultationApplicationRow>(db, CONSULTATION_BATCH_DUE_QUERY, [limit]);
@@ -110,8 +111,8 @@ export async function runConsultationBatch(
       queued.statement,
       prepareAuditLogAfterOneChange(
         db,
-        "system",
-        null,
+        actor ? "admin" : "system",
+        actor?.id ?? null,
         "consultation_batch_queued",
         "member_application_batch",
         null,
@@ -137,7 +138,12 @@ export async function runConsultationBatch(
 // Collects applications that have been in_consultation for 7+ days
 // (configurable), transitions them to ec_review, and notifies the EC.
 
-export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100): Promise<{ transitioned: number }> {
+export async function runEcReviewBatch(
+  db: DatabaseLike,
+  env: Env,
+  limit = 100,
+  actor: AuthAdmin | null = null,
+): Promise<{ transitioned: number }> {
   const settings = await getMembershipSettings(db);
   const cutoff = new Date(Date.now() - settings.consultation_window_days * 86_400_000).toISOString();
   const candidates = await all<EcReviewCandidateRow>(
@@ -158,7 +164,7 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100):
     prepareApplicationStageTransition(db, application, {
       applicationId: application.id,
       toStage: "ec_review",
-      actor: null,
+      actor,
       note: "Consultation window elapsed",
     }),
   );

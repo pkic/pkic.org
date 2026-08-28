@@ -128,7 +128,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
       "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsorship-new-inquiry' ORDER BY created_at DESC LIMIT 1",
     );
     expect(JSON.parse(staffPayload!.payload_json)).toMatchObject({
-      adminUrl: "https://app.test/admin/#/sponsorships",
+      managementUrl: "https://app.test/portal/#/system/sponsorships",
     });
 
     const brochureOutbox = await queryAll<{ recipient_email: string }>(

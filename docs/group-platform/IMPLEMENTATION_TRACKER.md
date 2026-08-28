@@ -1247,19 +1247,65 @@ Status: In progress
       Worker/D1 browser tests cover the canonical paths and prove no legacy
       donation request is made. This closes the donation slice only; complete
       removal of `/api/v1/admin` remains part of the open parent item.
-      Due Work remains in the admin shell pending a deliberate System
-      Operations permission and command design. Its current screen is now a
-      bounded D1 preview rather than two competing mount-time projections:
-      opening it performs only the pageable GET, while the detailed dry run is
-      requested explicitly. The table reuses the shared server-side search,
-      sort, pagination, stale-request cancellation, and reload abstraction;
-      bucket counts and search results deliberately describe each source's
-      bounded preview window rather than all historical queue rows. Focused
-      frontend and backend regressions prove that mounting the screen performs
-      no job POST, an explicit preview performs one dry-run command, and an
-      actual run reloads the table exactly once. This is preparatory cleanup,
-      not a System Operations cutover, so Due Work and its command boundary
-      remain in the open global-management scope.
+      Sponsorship pipeline management now also appears under the portal's
+      System navigation while retaining a domain API: the canonical staff
+      surface is `/api/v1/sponsorships`, distinct from the public singular
+      `/api/v1/sponsorship` inquiry/checkout API and sponsorship-scoped
+      `/api/v1/sponsor-portal` self-service API. One neutral management schema
+      and service boundary own the company drill-down, pipeline records,
+      history, stage transitions, non-member logos, and D1-backed tier pricing.
+      Reads require a live user-backed `sponsorships:read` permission; every
+      mutation requires `sponsorships:write` and repeats that authorization in
+      the same D1 batch as state, history, audit, projection, capability, and
+      outbox changes. The shared storage-pointer workflow compensates an R2
+      logo upload when the guarded D1 commit fails. Portal controls fail closed
+      without write permission, and tier price, currency, and activation are
+      now manageable without a migration. The former admin sponsorship UI,
+      API mount and handlers, and admin-prefixed schema/read-model names are
+      removed rather than retained as a second implementation; semantic
+      notification links and old bookmarks lead to the portal. Focused mounted
+      backend and frontend tests cover permission separation, API-key denial,
+      revocation-before-commit rollback, neutral contracts, tier management,
+      redirects, and absence of legacy sponsorship requests. The independent
+      real Worker/D1 browser journey creates and advances a sponsorship through
+      the portal and observes canonical API traffic without a legacy request.
+      Event-specific sponsor attendee-data entitlements use the canonical
+      `/api/v1/events/:eventSlug/sponsor-tiers` resource path with exact
+      event-scoped `events:read` and `events:write` permissions, API-key
+      denial, and a same-batch revocation guard. Its current editor remains in
+      the still-unmigrated event screen pending that broader UI cutover; it is
+      not a second sponsorship pipeline or the global pricing catalog.
+      Email delivery and scheduled operational work now share one
+      permission-derived Operations destination in the portal while retaining
+      domain APIs: `/api/v1/email` owns the durable outbox and
+      `/api/v1/operations` owns due-work previews, reminders, retention, and
+      named membership batches. Reads require the live global `email:read` or
+      `operations:read` permission. Outbox processing additionally requires
+      `email:manage`; operational commands require `operations:run`, and
+      retention, consultation, and EC-review commands retain their exact
+      `users:anonymize`, `membership:write`, or `membership:approve`
+      permissions. The portal renders each action only when all required
+      permissions are present. Every manual command requires a user-backed
+      staff session, rejects API keys and contextual grants, attributes intent
+      and completion to the actor, and rechecks all required permissions in
+      each D1 mutation batch. Outbox processing is bounded to 500 due rows or
+      100 explicit IDs; failed-message reset requires an explicit 100-row
+      selection and processes only rows actually reset, so it cannot become an
+      unbounded replay or send unrelated due mail. Reminder runs only queue
+      durable mail; delivery remains a separate outbox operation or scheduled
+      responsibility. Authorization for an external email side effect is fixed at the
+      successful guarded D1 claim: a permission revocation after that atomic
+      claim cannot recall a provider request already authorized and sent.
+      Claim tokens retain at-most-once processing, and every later D1 batch
+      still rechecks the live permissions. The former admin Email and Due Work
+      consumers and their
+      admin/internal handlers are removed rather than retained as parallel
+      implementations; only signed calendar RSVP ingestion remains under
+      `/api/v1/internal`. Old bookmarks redirect to the portal. Mounted
+      permission, revocation, audit, reset-isolation, concurrency, schema,
+      frontend, cache-policy, and route-removal regressions cover the cutover;
+      the focused real Worker/D1 browser journey also verifies canonical
+      traffic and the legacy bookmark redirect.
       Other global management destinations remain, so this item is deliberately
       still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1363,8 +1409,15 @@ Status: In progress
       expose their complete merged page/count builder to plan assertions; both
       use the form/context backfill index, native response-set index, and
       event/form-placement source indexes without scanning the correlated
-      submission, answer, registration, or proposal aliases. The reconciled
-      critical-query inventory is complete; unindexed substring search and a
+      submission, answer, registration, or proposal aliases. Due Work and
+      Email Outbox now also expose their exact production SQL
+      builders to D1 plan regressions: due candidate discovery uses the partial
+      outbox, co-speaker reminder, and event-retention indexes, while the
+      due-now outbox page, count, and status aggregate all use the partial
+      `idx_email_outbox_due` index. Complete status summaries intentionally
+      aggregate the filtered population rather than hiding that work in the
+      frontend. The reconciled critical-query inventory is complete; unindexed
+      substring search and a
       final bounded merge sort remain documented D1 limitations rather than
       hidden client-side work.
 - [x] Run migration tests against production-shaped databases.
@@ -1556,11 +1609,11 @@ Status: In progress
       committed range. The audit also confirms that implementation is not yet
       complete. The shared resource evaluator covers the canonical group form,
       event, vote, and mailing-list paths, but legacy global/admin domain
-      endpoints remain. The admin shell still exposes Events, Forms, Email, Due
-      Work, Users, Organizations, and Sponsorships, and the admin router still
-      mounts those domains plus votes. Ownerless/global event actions, email delivery/
-      outbox operations, user and organization management, sponsorship
-      operations, and Due Work therefore still require deliberate System
+      endpoints remain. The admin shell still exposes Events, Forms, Users, and
+      Organizations, and the admin router still mounts those
+      domains plus authentication, member, and proposal compatibility routes.
+      Ownerless/global event actions, user and organization management, and
+      proposal moderation therefore still require deliberate portal/domain
       cutovers or explicit retirement. Temporary redirects, separate admin/
       member session assumptions, compatibility API removal, and final shell
       removal remain the concrete differences from the accepted Portal and API
@@ -1669,6 +1722,34 @@ The final PR description must include, at minimum:
 - verify `/api/v1/admin/donations` and nested paths return 404 and the old
   donation and promoter bookmarks redirect without making a legacy API
   request;
+- inspect Sponsorships with a `sponsorships:read` staff user and confirm an
+  unrelated permission, API key, and unauthenticated request cannot read the
+  pipeline or tier-pricing catalog;
+- search, filter, sort, and paginate sponsor companies and sponsorships through
+  `/api/v1/sponsorships`, create and edit a record, advance its stage, inspect
+  its event history, and upload and remove a non-member logo with
+  `sponsorships:write`;
+- edit sponsorship tier amount, currency, and active state in the portal,
+  reload it, and confirm public checkout immediately uses the D1-backed value;
+- revoke `sponsorships:write` after route authentication but before the D1
+  mutation and confirm state, history, audit, outbox, and any newly uploaded R2
+  object are not retained;
+- verify `/api/v1/admin/sponsorships` and nested paths return 404, old list and
+  detail bookmarks redirect to `/portal/#/system/sponsorships`, and inquiry,
+  checkout, renewal, and activation emails contain portal management links;
+- inspect Operations with separate `email:read` and `operations:read` staff
+  users, confirming each sees only its readable tab and no command controls;
+- add `email:manage` and confirm the outbox exposes only bounded processing and
+  explicit selected-row reset, then verify a selected failed-row reset neither
+  resets nor sends an unrelated due message;
+- add `operations:run` and confirm reminder and chair-digest actions appear,
+  while retention, consultation, and EC-review remain hidden until
+  `users:anonymize`, `membership:write`, or `membership:approve` is also held;
+- revoke an operation permission between request authorization and its first D1
+  batch and confirm the command, its audit row, and queued work roll back;
+- verify `/api/v1/admin/email/outbox`, `/api/v1/admin/due-work`, and the retired
+  internal email/job/reminder/retention routes return 404, while the old Email
+  and Due Work bookmarks redirect without a legacy API request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

@@ -1,0 +1,21 @@
+import {
+  emailOutboxResetFailedResponseSchema,
+  emailOutboxResetFailedRouteSchema,
+} from "../../../../../assets/shared/schemas/email-outbox";
+import { requirePermission } from "../../../../_lib/auth/permissions";
+import type { AdminContext } from "../../../../_lib/db/context";
+import { json } from "../../../../_lib/http";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import { resetFailedEmailOutboxCommand } from "../../../../_lib/services/email-outbox";
+import { requireSystemPermission as requireStaffPermission } from "../../system/authorization";
+
+export const EmailOutboxResetFailedPost = openApiRoute(
+  emailOutboxResetFailedRouteSchema,
+  async (c: AdminContext, data) => {
+    const { db, staff } = await requireStaffPermission(c, "email:read");
+    requirePermission(staff, "email:manage");
+    return json(
+      emailOutboxResetFailedResponseSchema.parse(await resetFailedEmailOutboxCommand(db, c.env, staff, data.body.ids)),
+    );
+  },
+);

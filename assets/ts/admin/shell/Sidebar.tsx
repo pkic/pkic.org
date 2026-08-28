@@ -99,13 +99,6 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { path: "/events", sec: "events", label: "Events", icon: "events" },
   { path: "/forms", sec: "forms", label: "Forms", icon: "forms" },
-  {
-    path: "/email",
-    sec: "email",
-    label: "Email",
-    icon: "email",
-  },
-  { path: "/duework", sec: "duework", label: "Due Work", icon: "duework" },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
   {
     path: "/organizations",
@@ -113,7 +106,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Organizations",
     icon: "organizations",
   },
-  { path: "/sponsorships", sec: "sponsorships", label: "Sponsorships", icon: "donations" },
 ];
 
 function closeSidebar() {

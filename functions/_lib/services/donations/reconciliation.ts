@@ -1,7 +1,5 @@
 import type { DonationSyncRequest, DonationSyncResponse } from "../../../../assets/shared/schemas/donation-management";
-import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
-import { guardDatabaseBatches } from "../../db/guarded-database";
+import { guardPermissionMutationDatabase } from "../../auth/permissions";
 import { all } from "../../db/queries";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import {
@@ -36,24 +34,17 @@ export interface DonationReconciliationResult {
 const DONATION_SYNC_AUTHORIZATION_CHANGED = "DONATION_SYNC_AUTHORIZATION_CHANGED";
 
 function authorizedReconciliationDb(db: DatabaseLike, actor: UserBackedAuthAdmin): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([
-        preparePermissionsAuthorizationGuard(db, actor, [{ permission: "donations:sync" }]),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) {
-        throw new AppError(
-          409,
-          DONATION_SYNC_AUTHORIZATION_CHANGED,
-          "Donation reconciliation permission changed while the update was being saved",
-        );
-      }
-      throw error;
-    }
-  });
+  return guardPermissionMutationDatabase(
+    db,
+    actor,
+    [{ permission: "donations:sync" }],
+    () =>
+      new AppError(
+        409,
+        DONATION_SYNC_AUTHORIZATION_CHANGED,
+        "Donation reconciliation permission changed while the update was being saved",
+      ),
+  );
 }
 
 function isAuthorizationChange(error: unknown): boolean {

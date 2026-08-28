@@ -3,7 +3,7 @@ import type {
   SponsorshipEventsListQuery,
   SponsorshipEventsListResponse,
   SponsorshipPipelineStage,
-} from "../../../../assets/shared/schemas/admin-sponsorships";
+} from "../../../../assets/shared/schemas/sponsorship-management";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";

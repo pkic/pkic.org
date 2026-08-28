@@ -104,14 +104,14 @@ describe("Sponsor portal", () => {
     )[0];
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-sponsor-portal-token");
 
-    await callAdmin(adminToken, "/api/v1/admin/events/pqc-2026/sponsor-tiers", {
+    await callAdmin(adminToken, "/api/v1/events/pqc-2026/sponsor-tiers", {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
     });
   });
 
   async function createActiveEventSponsorship(tier: string, contactEmail: string): Promise<string> {
-    const createResponse = await callAdmin(adminToken, "/api/v1/admin/sponsorships", {
+    const createResponse = await callAdmin(adminToken, "/api/v1/sponsorships", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "event",
@@ -123,7 +123,7 @@ describe("Sponsor portal", () => {
       }),
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
-    await callAdmin(adminToken, `/api/v1/admin/sponsorships/${created.sponsorship.id}/stage`, {
+    await callAdmin(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -236,7 +236,7 @@ describe("Sponsor portal", () => {
     const sponsorshipRow = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM sponsorships WHERE contact_email = 'leader2@sponsor.test'")
     )[0];
-    await callAdmin(adminToken, `/api/v1/admin/sponsorships/${sponsorshipRow.id}/stage`, {
+    await callAdmin(adminToken, `/api/v1/sponsorships/${sponsorshipRow.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "lapsed" }),
     });

@@ -17,7 +17,7 @@ import type { EmailContentType, EmailMessageType } from "../../../assets/shared/
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
-import type { AdminEmailOutboxStatus } from "../../../assets/shared/schemas/admin-email-outbox";
+import type { EmailOutboxStatus } from "../../../assets/shared/schemas/email-outbox";
 
 export * from "./outbox-queue";
 
@@ -43,7 +43,7 @@ interface OutboxRow {
   message_type: EmailMessageType;
   provider: string;
   provider_message_id: string | null;
-  status: AdminEmailOutboxStatus;
+  status: EmailOutboxStatus;
   attempts: number;
   send_after: string;
   last_error: string | null;
@@ -500,29 +500,21 @@ export async function processPendingOutboxBackground(db: DatabaseLike, env: Env,
  * an operator has decided that replaying the external side effect is safe.
  *
  * @param db    - D1 database binding
- * @param ids   - Optional list of outbox IDs to reset. If omitted, resets all failed/unknown rows.
- * @returns     - Number of rows reset.
+ * @param ids   - Explicit bounded list of outbox IDs to reset.
+ * @returns     - Count and exact IDs of rows reset.
  */
-export async function resetFailedOutbox(db: DatabaseLike, ids?: string[]): Promise<{ reset: number }> {
+export async function resetFailedOutbox(db: DatabaseLike, ids: string[]): Promise<{ reset: number; ids: string[] }> {
   const now = nowIso();
-  if (ids && ids.length > 0) {
-    const idFilter = buildD1JsonMembershipFilter("id", ids);
-    const result = await run(
-      db,
+  const idFilter = buildD1JsonMembershipFilter("id", ids);
+  const statement = db
+    .prepare(
       `UPDATE email_outbox
-       SET status = 'retrying', attempts = 0, send_after = ?, updated_at = ?
-       WHERE status IN ('failed', 'delivery_unknown') AND ${idFilter.sql}`,
-      [now, now, ...idFilter.bindings],
-    );
-    return { reset: result.changes };
-  }
-
-  const result = await run(
-    db,
-    `UPDATE email_outbox
      SET status = 'retrying', attempts = 0, send_after = ?, updated_at = ?
-     WHERE status IN ('failed', 'delivery_unknown')`,
-    [now, now],
-  );
-  return { reset: result.changes };
+     WHERE status IN ('failed', 'delivery_unknown') AND ${idFilter.sql}
+     RETURNING id`,
+    )
+    .bind(now, now, ...idFilter.bindings);
+  const [result] = await db.batch([statement]);
+  const resetIds = (result.results ?? []).flatMap((row) => (typeof row.id === "string" ? [row.id] : []));
+  return { reset: resetIds.length, ids: resetIds };
 }

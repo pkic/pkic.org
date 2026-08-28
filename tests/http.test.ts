@@ -4,7 +4,6 @@ import { env } from "cloudflare:workers";
 import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
 import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eventSlug]/forms";
 import worker from "../functions/router";
-import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
 
@@ -50,13 +49,6 @@ describe("HTTP method dispatch", () => {
       method: "POST",
       allow: "GET",
       handler: eventFormsDispatch,
-    },
-    {
-      label: "POST-only",
-      path: "/retention",
-      method: "GET",
-      allow: "POST",
-      handler: retentionDispatch,
     },
     {
       label: "registration confirmation",

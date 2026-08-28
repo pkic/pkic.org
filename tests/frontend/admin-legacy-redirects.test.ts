@@ -12,6 +12,8 @@ import {
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+  ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
+  ADMIN_OPERATIONS_REDIRECT_TARGET,
   legacyAdminRedirectTarget,
 } from "../../assets/ts/admin/shell/legacy-redirects";
 
@@ -77,6 +79,23 @@ describe("legacy admin route redirects", () => {
   it("moves global leadership management to the System portal", () => {
     expect(legacyAdminRedirectTarget("/leadership")).toBe(ADMIN_LEADERSHIP_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/leadership?from=bookmark")).toBe(ADMIN_LEADERSHIP_REDIRECT_TARGET);
+  });
+
+  it("moves sponsorship bookmarks and detail links to System Sponsorships", () => {
+    expect(legacyAdminRedirectTarget("/sponsorships")).toBe(ADMIN_SPONSORSHIPS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/sponsorships?from=bookmark")).toBe(ADMIN_SPONSORSHIPS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/sponsorships/sponsor%2F1")).toBe(
+      `${ADMIN_SPONSORSHIPS_REDIRECT_TARGET}/sponsor%252F1`,
+    );
+    expect(legacyAdminRedirectTarget("/sponsorships/sponsor/1")).toBe(
+      `${ADMIN_SPONSORSHIPS_REDIRECT_TARGET}/sponsor%2F1`,
+    );
+  });
+
+  it("moves email and due-work bookmarks to System Operations", () => {
+    expect(legacyAdminRedirectTarget("/email")).toBe(ADMIN_OPERATIONS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/email/outbox?from=bookmark")).toBe(ADMIN_OPERATIONS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/duework")).toBe(ADMIN_OPERATIONS_REDIRECT_TARGET);
   });
 
   it("moves event invitation bookmarks to selected-group management", () => {

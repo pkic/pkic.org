@@ -14,8 +14,8 @@ import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
 import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
 import { ApplicationDocumentsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDocumentsCard";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
-import { Email } from "../../assets/ts/admin/sections/Email";
-import { DueWorkTable } from "../../assets/ts/admin/sections/due-work/DueWorkTable";
+import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
+import { DueWorkTable } from "../../assets/ts/member-flows/portal/sections/system-operations/DueWorkTable";
 import { Promoters } from "../../assets/ts/admin/sections/events/detail/Promoters";
 import { Pager } from "../../assets/ts/components/Pager";
 import { useApiPage } from "../../assets/ts/hooks/useApiPage";
@@ -58,6 +58,10 @@ function pageFor(url: URL, total = 60, rowCount = 1) {
 
 function nextButton(container: HTMLElement): HTMLButtonElement {
   return container.querySelector(".pagination .page-item:last-child button") as HTMLButtonElement;
+}
+
+function latestRequest(requests: URL[], pathname: string): URL {
+  return requests.filter((url) => url.pathname === pathname).at(-1)!;
 }
 
 afterEach(() => {
@@ -460,7 +464,7 @@ describe("canonical offset pagination", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
         requests.push(url);
-        if (url.pathname === "/api/v1/admin/email/outbox") {
+        if (url.pathname === "/api/v1/email/outbox") {
           return jsonResponse({
             outbox: [
               {
@@ -521,56 +525,50 @@ describe("canonical offset pagination", () => {
       }),
     );
 
-    const email = mount(<Email />);
+    const email = mount(<EmailOutbox canManage={false} />);
     await settle();
     expect(requests.some((url) => url.pathname === "/api/v1/admin/stats")).toBe(false);
     void act(() => nextButton(email).click());
     await settle();
-    expect(
-      requests
-        .filter((url) => url.pathname === "/api/v1/admin/email/outbox")
-        .at(-1)
-        ?.searchParams.get("offset"),
-    ).toBe("50");
-    const status = email.querySelector("select") as HTMLSelectElement;
-    status.value = "failed";
+    expect(latestRequest(requests, "/api/v1/email/outbox").searchParams.get("offset")).toBe("25");
+    const emailSearch = email.querySelector<HTMLInputElement>(
+      'input[placeholder="Search recipient, subject, template, event, or error…"]',
+    )!;
+    emailSearch.value = "ada";
     void act(() => {
-      status.dispatchEvent(new Event("change", { bubbles: true }));
+      emailSearch.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const apply = [...email.querySelectorAll("button")].find((button) => button.textContent === "Apply")!;
-    void act(() => apply.click());
     await settle();
-    const filteredEmailRequest = requests.filter((url) => url.pathname === "/api/v1/admin/email/outbox").at(-1)!;
-    expect(filteredEmailRequest.searchParams.get("status")).toBe("failed");
+    void act(() => {
+      emailSearch.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    const filteredEmailRequest = latestRequest(requests, "/api/v1/email/outbox");
+    expect(filteredEmailRequest.searchParams.get("q")).toBe("ada");
     expect(filteredEmailRequest.searchParams.get("offset")).toBe("0");
     void act(() => render(null, email));
 
     const dueWork = mount(<DueWorkTable reminderLimit={50} outboxLimit={50} includeRetention={false} />);
     await settle();
-    const initialDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    const initialDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
     expect(initialDueWorkRequest.searchParams.get("sort")).toBe("dueAt");
     expect(initialDueWorkRequest.searchParams.get("bucket")).toBe("all");
     void act(() => nextButton(dueWork).click());
     await settle();
-    expect(
-      requests
-        .filter((url) => url.pathname === "/api/v1/admin/due-work")
-        .at(-1)
-        ?.searchParams.get("offset"),
-    ).toBe("25");
+    expect(latestRequest(requests, "/api/v1/operations/due-work").searchParams.get("offset")).toBe("25");
     const pageSize = dueWork.querySelector(".adm-pager-size") as HTMLSelectElement;
     pageSize.value = "50";
     void act(() => {
       pageSize.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
-    const resizedDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    const resizedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
     expect(resizedDueWorkRequest.searchParams.get("limit")).toBe("50");
     expect(resizedDueWorkRequest.searchParams.get("offset")).toBe("0");
     const outboxTab = [...dueWork.querySelectorAll("button")].find((button) => button.textContent?.includes("Outbox"))!;
     void act(() => outboxTab.click());
     await settle();
-    const filteredDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    const filteredDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
     expect(filteredDueWorkRequest.searchParams.get("bucket")).toBe("outbox");
     expect(filteredDueWorkRequest.searchParams.get("offset")).toBe("0");
 
@@ -583,7 +581,7 @@ describe("canonical offset pagination", () => {
       search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     await settle();
-    const searchedDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    const searchedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
     expect(searchedDueWorkRequest.searchParams.get("q")).toBe("ada");
     expect(searchedDueWorkRequest.searchParams.get("offset")).toBe("0");
 
@@ -592,7 +590,7 @@ describe("canonical offset pagination", () => {
     )!;
     void act(() => titleSort.click());
     await settle();
-    const sortedDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    const sortedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
     expect(sortedDueWorkRequest.searchParams.get("sort")).toBe("-title");
     expect(sortedDueWorkRequest.searchParams.get("q")).toBe("ada");
   });

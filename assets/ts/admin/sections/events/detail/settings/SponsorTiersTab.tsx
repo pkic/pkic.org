@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { api } from "../../../../api";
-import { adminEventSponsorTiersResponseSchema } from "../../../../../../shared/schemas/admin-events";
+import { eventSponsorTiersResponseSchema } from "../../../../../../shared/schemas/sponsorship-management";
 import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
 import { saveAdminEditor } from "../../../../actions";
 import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
@@ -8,7 +8,7 @@ import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor"
 export function SponsorTiersTab({ slug }: { slug: string }) {
   const tiersResource = useAdminEditorResource(
     async () => {
-      const data = await api(`/api/v1/admin/events/${slug}/sponsor-tiers`, adminEventSponsorTiersResponseSchema);
+      const data = await api(`/api/v1/events/${slug}/sponsor-tiers`, eventSponsorTiersResponseSchema);
       return data.tiers ?? [];
     },
     [slug],
@@ -23,7 +23,7 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
       setSaving,
       setStatus: setSaveStatus,
       request: () =>
-        api(`/api/v1/admin/events/${slug}/sponsor-tiers`, adminEventSponsorTiersResponseSchema, {
+        api(`/api/v1/events/${slug}/sponsor-tiers`, eventSponsorTiersResponseSchema, {
           method: "PUT",
           body: JSON.stringify({ tiers: tiers.filter((tier) => tier.tierName.trim()) }),
         }),

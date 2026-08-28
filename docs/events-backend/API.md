@@ -74,11 +74,34 @@ Base path: `/api/v1`
 - `proposer` and `speakers[]` share the same user component (`firstName`, `lastName`, `email`, `organizationName`, `jobTitle`, `bio`, `links[]`).
 - `speakers[].role` supports `speaker`, `co_speaker`, `moderator`, `panelist` (plus proposer role in system internals).
 
-## Referral and internal jobs
+## Email delivery and operations
+
+- `GET /email/outbox`
+- `POST /email/outbox/process`
+- `POST /email/outbox/reset-failed`
+- Outbox reads require `email:read`; bounded processing and explicit selected-row
+  reset additionally require `email:manage`.
+- `GET /operations/due-work`
+- `POST /operations/reminders/preview`
+- `POST /operations/reminders/run`
+- `POST /operations/retention/run`
+- `POST /operations/membership-batches/consultation/run`
+- `POST /operations/membership-batches/ec-review/run`
+- `POST /operations/membership-batches/wg-chair-digest/run`
+- Due-work reads and reminder preview require `operations:read`. Runs additionally
+  require `operations:run`; retention, consultation, and EC review retain their
+  exact `users:anonymize`, `membership:write`, or `membership:approve`
+  permission.
+- Manual commands require a user-backed staff session. Service API keys cannot
+  invoke them.
+
+## Referral and signed internal ingestion
 
 - `GET /r/:code`
-- `POST /internal/email/retry`
-- `POST /internal/retention/run`
+- `POST /internal/calendar/rsvp`
+- The calendar endpoint uses its bounded, replay-protected request-signature
+  boundary. The retired internal email, reminder, job, and retention command
+  routes return 404.
 
 ## Legacy removal
 

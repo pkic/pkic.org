@@ -181,9 +181,6 @@ export const adminEventEmailSendResponseSchema = z.object({
   queuedRecipients: z.number().optional(),
   queuedBatches: z.number().optional(),
 });
-export const adminEventSponsorTiersResponseSchema = z.object({
-  tiers: z.array(z.object({ tierName: z.string(), hasAttendeeDataAccess: z.boolean() })),
-});
 
 export const adminEventPermissionSchema = z.object({
   userEmail: z.email().trim().toLowerCase(),

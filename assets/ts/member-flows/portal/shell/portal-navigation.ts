@@ -39,6 +39,12 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     permission: "donations:read",
   },
   {
+    path: "/system/sponsorships",
+    section: "system",
+    label: "Sponsorships",
+    permission: "sponsorships:read",
+  },
+  {
     path: "/system/membership-applications",
     section: "system",
     label: "Membership Applications",
@@ -62,6 +68,12 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     section: "system",
     label: "Email Templates",
     permission: "email-templates:read",
+  },
+  {
+    path: "/system/operations",
+    section: "system",
+    label: "Operations",
+    permissions: ["email:read", "operations:read"],
   },
   {
     path: "/system/access-control",

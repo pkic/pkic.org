@@ -27,7 +27,7 @@ import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/s
 import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
 import { formSubmissionsSortValueSchema } from "../assets/shared/schemas/admin-forms";
 import { adminFormSubmissionsQuerySchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
-import { adminDueWorkListQuerySchema } from "../assets/shared/schemas/admin-due-work";
+import { dueWorkListQuerySchema as adminDueWorkListQuerySchema } from "../assets/shared/schemas/operations";
 import { myApplicationsListQuerySchema } from "../assets/shared/schemas/me";
 import { presentationVersionsListQuerySchema } from "../assets/shared/schemas/presentation-versions";
 import { proposalCommentsListQuerySchema } from "../assets/shared/schemas/proposal-comments";
@@ -36,7 +36,7 @@ import { sponsorsListQuerySchema } from "../assets/shared/schemas/public-sponsor
 import { sponsorPortalAttendeesListQuerySchema } from "../assets/shared/schemas/sponsor-portal";
 import { publicVotesListQuerySchema } from "../assets/shared/schemas/votes";
 import { adminEventProposalsQuerySchema } from "../assets/shared/schemas/admin-events";
-import { adminEmailOutboxQuerySchema } from "../assets/shared/schemas/admin-email-outbox";
+import { emailOutboxQuerySchema as adminEmailOutboxQuerySchema } from "../assets/shared/schemas/email-outbox";
 import { eventPromotersListQuerySchema } from "../assets/shared/schemas/admin-event-promoters";
 import { membersListQuerySchema } from "../assets/shared/schemas/members-directory";
 import { applicationDocumentsListQuerySchema } from "../assets/shared/schemas/application-documents";

@@ -6,7 +6,6 @@ import { createTemplateVersion, activateTemplateVersion } from "../functions/_li
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
-import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal/email/retry";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import app from "../functions/router";
@@ -430,19 +429,17 @@ describe("full workflow", () => {
         },
       });
 
-      const retryResponse = await retryPendingEmail(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/internal/email/retry", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${adminSessionToken}`,
-            },
-            body: JSON.stringify({ limit: 50 }),
-          }),
-          {},
-        ),
+      const retryResponse = await app.fetch(
+        new Request("https://app.test/api/v1/email/outbox/process", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${adminSessionToken}`,
+          },
+          body: JSON.stringify({ limit: 50 }),
+        }),
+        env,
+        { passThroughOnException() {}, waitUntil() {} } as any,
       );
       expect(retryResponse.status).toBe(200);
 

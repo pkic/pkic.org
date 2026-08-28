@@ -12,6 +12,8 @@ export const ADMIN_LEADERSHIP_REDIRECT_TARGET = "/portal/#/system/leadership";
 export const ADMIN_ANALYTICS_REDIRECT_TARGET = "/portal/#/system/analytics";
 export const ADMIN_DONATIONS_REDIRECT_TARGET = "/portal/#/system/donations";
 export const ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET = "/portal/#/system/donations/promoters";
+export const ADMIN_SPONSORSHIPS_REDIRECT_TARGET = "/portal/#/system/sponsorships";
+export const ADMIN_OPERATIONS_REDIRECT_TARGET = "/portal/#/system/operations";
 
 export function legacyAdminRedirectTarget(path: string): string | null {
   const pathname = path.split("?", 1)[0];
@@ -28,8 +30,14 @@ export function legacyAdminRedirectTarget(path: string): string | null {
   }
   if (pathname === "/membership/settings") return ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET;
   if (pathname === "/email/templates") return ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET;
+  if (pathname === "/email" || pathname === "/email/outbox") return ADMIN_OPERATIONS_REDIRECT_TARGET;
+  if (pathname === "/duework") return ADMIN_OPERATIONS_REDIRECT_TARGET;
   if (pathname === "/donations") return ADMIN_DONATIONS_REDIRECT_TARGET;
   if (pathname === "/donations/promoters") return ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET;
+  if (pathname === "/sponsorships") return ADMIN_SPONSORSHIPS_REDIRECT_TARGET;
+  if (pathname.startsWith("/sponsorships/")) {
+    return `${ADMIN_SPONSORSHIPS_REDIRECT_TARGET}/${encodeURIComponent(pathname.slice("/sponsorships/".length))}`;
+  }
   if (pathname.startsWith("/donations/detail/")) {
     return `${ADMIN_DONATIONS_REDIRECT_TARGET}/detail/${encodeURIComponent(pathname.slice("/donations/detail/".length))}`;
   }

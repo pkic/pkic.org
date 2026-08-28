@@ -7,6 +7,7 @@ import { EventsEventSlugProposalsPost } from "./proposals";
 import { EventsEventSlugRegistrationsPost } from "./registrations";
 import { EventsEventSlugSpeakerInvitesPost } from "./speaker-invites";
 import { TermsGet } from "./terms";
+import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsor-tiers";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
 
@@ -19,6 +20,8 @@ openapi.post("/proposals", EventsEventSlugProposalsPost);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);
 openapi.post("/speaker-invites", EventsEventSlugSpeakerInvitesPost);
 openapi.get("/terms", TermsGet);
+openapi.get("/sponsor-tiers", EventSponsorTiersGet);
+openapi.put("/sponsor-tiers", EventSponsorTiersPut);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
 app.all("/registrations", () => methodNotAllowed(["POST"]));

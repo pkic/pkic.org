@@ -95,7 +95,7 @@ test.describe("sponsor portal", () => {
     }, EVENT_SLUG);
 
     const tierStatus = await page.evaluate(async (slug) => {
-      const res = await fetch(`/api/v1/admin/events/${slug}/sponsor-tiers`, {
+      const res = await fetch(`/api/v1/events/${slug}/sponsor-tiers`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
@@ -108,7 +108,7 @@ test.describe("sponsor portal", () => {
     // ── Create + activate an event sponsorship (triggers sponsor-portal-access email) ─
     const sponsorship = await page.evaluate(
       async ({ eventId, contactEmail, renewalDate }) => {
-        const createRes = await fetch("/api/v1/admin/sponsorships", {
+        const createRes = await fetch("/api/v1/sponsorships", {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -122,7 +122,7 @@ test.describe("sponsor portal", () => {
           }),
         });
         const created = (await createRes.json()) as { sponsorship: { id: string } };
-        const stageRes = await fetch(`/api/v1/admin/sponsorships/${created.sponsorship.id}/stage`, {
+        const stageRes = await fetch(`/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",

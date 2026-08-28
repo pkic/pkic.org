@@ -117,6 +117,46 @@ describe("portal capability-derived navigation", () => {
     );
   });
 
+  it("exposes Sponsorships only to global readers and keeps write controls separate", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "sponsorships:read", contextType: null, contextId: null }],
+    });
+    const writer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "sponsorships:read", contextType: null, contextId: null },
+        { permission: "sponsorships:write", contextType: null, contextId: null },
+      ],
+    });
+    const writeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "sponsorships:write", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "sponsorships:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/sponsorships",
+      section: "system",
+      label: "Sponsorships",
+    });
+    expect(portalHasGlobalPermission(reader, "sponsorships:write")).toBe(false);
+    expect(portalHasGlobalPermission(writer, "sponsorships:write")).toBe(true);
+    expect(portalSystemNavigationItems(writeOnly)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/sponsorships" }),
+    );
+    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/sponsorships" }),
+    );
+  });
+
   it("exposes membership applications only to a global membership reader", () => {
     const reader = portalSessionFixture({
       admin: true,
@@ -172,6 +212,46 @@ describe("portal capability-derived navigation", () => {
     expect(portalHasGlobalPermission(reader, "email-templates:write")).toBe(false);
     expect(portalHasGlobalPermission(writer, "email-templates:write")).toBe(true);
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+  });
+
+  it("exposes System Operations for either global email or operations read authority", () => {
+    const emailReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email:read", contextType: null, contextId: null }],
+    });
+    const operationsReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "operations:read", contextType: null, contextId: null }],
+    });
+    const writeOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email:manage", contextType: null, contextId: null }],
+    });
+    const contextual = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "operations:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(emailReader)).toContainEqual({
+      path: "/system/operations",
+      section: "system",
+      label: "Operations",
+    });
+    expect(portalSystemNavigationItems(operationsReader)).toContainEqual({
+      path: "/system/operations",
+      section: "system",
+      label: "Operations",
+    });
+    expect(portalSystemNavigationItems(writeOnly)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/operations" }),
+    );
+    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/operations" }),
+    );
   });
 
   it("exposes Access Control for either global grant or revoke authority, never contextual authority", () => {

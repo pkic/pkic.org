@@ -8,15 +8,17 @@ function isPublicCacheableGet(pathname: string): boolean {
 }
 
 /**
- * Returns true for routes that are architecturally admin/internal and must
- * never be cached regardless of whether the handler calls markSensitive().
+ * Returns true for staff-only and internal route families that must never be
+ * cached regardless of whether the handler calls markSensitive().
  * All other routes signal sensitivity by calling markSensitive(context) at
  * the top of their handler so the middleware reads it from context.data.
  */
 function isSensitiveArchitecturePath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/admin/") ||
+    pathname.startsWith("/api/v1/email/") ||
     pathname.startsWith("/api/v1/internal/") ||
+    pathname.startsWith("/api/v1/operations/") ||
     pathname.startsWith("/api/v1/system/")
   );
 }

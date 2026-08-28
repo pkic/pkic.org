@@ -10,6 +10,8 @@ import { AccessControl } from "./access-control";
 import { Leadership } from "./leadership/Leadership";
 import { SystemAnalytics } from "./system-analytics/SystemAnalytics";
 import { Donations } from "./system-donations/Donations";
+import { Sponsorships } from "./system-sponsorships";
+import { Operations } from "./system-operations";
 
 export function SystemManagement({
   session,
@@ -56,6 +58,8 @@ export function SystemManagement({
           canRead={portalHasGlobalPermission(session, "donations:read")}
           canSync={portalHasGlobalPermission(session, "donations:sync")}
         />
+      ) : selected.path === "/system/sponsorships" ? (
+        <Sponsorships detailId={resourceId} canWrite={portalHasGlobalPermission(session, "sponsorships:write")} />
       ) : selected.path === "/system/membership-applications" ? (
         <MembershipApplications
           initialApplicationId={resourceId}
@@ -75,6 +79,17 @@ export function SystemManagement({
         </section>
       ) : selected.path === "/system/email-templates" ? (
         <EmailTemplates canWrite={portalHasGlobalPermission(session, "email-templates:write")} />
+      ) : selected.path === "/system/operations" ? (
+        <Operations
+          initialTab={resourceId}
+          canReadEmail={portalHasGlobalPermission(session, "email:read")}
+          canManageEmail={portalHasGlobalPermission(session, "email:manage")}
+          canReadOperations={portalHasGlobalPermission(session, "operations:read")}
+          canRunOperations={portalHasGlobalPermission(session, "operations:run")}
+          canAnonymizeUsers={portalHasGlobalPermission(session, "users:anonymize")}
+          canWriteMembership={portalHasGlobalPermission(session, "membership:write")}
+          canApproveMembership={portalHasGlobalPermission(session, "membership:approve")}
+        />
       ) : selected.path === "/system/access-control" ? (
         <AccessControl
           canGrant={portalHasGlobalPermission(session, "access:grant")}

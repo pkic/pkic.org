@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleError } from "../functions/_lib/http";
 import { onRequest as organizationLogoRequest } from "../functions/api/v1/admin/organizations/[id]/logo";
-import { onRequest as sponsorshipLogoRequest } from "../functions/api/v1/admin/sponsorships/[id]/logo";
+import { onRequest as sponsorshipLogoRequest } from "../functions/api/v1/sponsorships/[id]/logo";
 import { createAdminSession } from "./helpers/auth";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { validJpegBytes } from "./helpers/raster-images";
@@ -108,7 +108,7 @@ describe("shared admin logo route transport", () => {
 
     const putResponse = await callLogoRoute(
       sponsorshipLogoRequest,
-      imageRequest(`/api/v1/admin/sponsorships/${id}/logo`, token, "PUT"),
+      imageRequest(`/api/v1/sponsorships/${id}/logo`, token, "PUT"),
       id,
     );
     expect(putResponse.status).toBe(200);
@@ -119,7 +119,7 @@ describe("shared admin logo route transport", () => {
 
     const deleteResponse = await callLogoRoute(
       sponsorshipLogoRequest,
-      imageRequest(`/api/v1/admin/sponsorships/${id}/logo`, token, "DELETE"),
+      imageRequest(`/api/v1/sponsorships/${id}/logo`, token, "DELETE"),
       id,
     );
     expect(deleteResponse.status).toBe(200);
@@ -153,7 +153,7 @@ describe("shared admin logo route transport", () => {
 
     const response = await callLogoRoute(
       sponsorshipLogoRequest,
-      imageRequest(`/api/v1/admin/sponsorships/${sponsorshipId}/logo`, token, "PUT"),
+      imageRequest(`/api/v1/sponsorships/${sponsorshipId}/logo`, token, "PUT"),
       sponsorshipId,
     );
     expect(response.status).toBe(422);

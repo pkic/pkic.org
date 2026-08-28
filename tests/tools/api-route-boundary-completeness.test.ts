@@ -16,10 +16,6 @@ const RAW_ROUTE_ALLOWLIST = new Set([
   "functions/api/v1/auth/sponsor-portal/router.ts:post:/request-link",
   "functions/api/v1/auth/sponsor-portal/router.ts:post:/verify-link",
   "functions/api/v1/headshots/[userId]/router.ts:get:/:file",
-  "functions/api/v1/internal/email/router.ts:post:/reset-failed",
-  "functions/api/v1/internal/jobs/router.ts:post:/run",
-  "functions/api/v1/internal/reminders/router.ts:post:/run",
-  "functions/api/v1/internal/retention/router.ts:post:/run",
   "functions/api/v1/og/donation/router.ts:get:/:session_id",
   "functions/api/v1/og/router.ts:get:/:code",
   "functions/api/v1/proposals/speaker/[token]/router.ts:get:/presentation/download",
@@ -34,10 +30,6 @@ const MANUAL_JSON_ALLOWLIST = new Set([
   "functions/api/v1/auth/passkeys/register-complete.ts",
   "functions/api/v1/auth/sponsor-portal/request-link.ts",
   "functions/api/v1/auth/sponsor-portal/verify-link.ts",
-  "functions/api/v1/internal/email/reset-failed.ts",
-  "functions/api/v1/internal/email/retry.ts",
-  "functions/api/v1/internal/jobs/run.ts",
-  "functions/api/v1/internal/reminders/run.ts",
 ]);
 
 type SourceDetails = {

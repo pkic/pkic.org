@@ -57,11 +57,37 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/donations/{id}"].get).toBeDefined();
     expect(spec.paths["/api/v1/donations/promoters"].get).toBeDefined();
     expect(spec.paths["/api/v1/donations/sync"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/outbox"].get).toBeDefined();
+    expect(spec.paths["/api/v1/email/outbox/process"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/outbox/reset-failed"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/due-work"].get).toBeDefined();
+    expect(spec.paths["/api/v1/operations/reminders/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/reminders/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/retention/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/consultation/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/ec-review/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/wg-chair-digest/run"].post).toBeDefined();
+    expect(spec.paths["/api/v1/operations/membership-batches/consultation/run"].post[AUTH_EXTENSION]).toMatchObject({
+      scopes: ["operations:read", "operations:run", "membership:write"],
+    });
+    expect(spec.paths["/api/v1/operations/membership-batches/ec-review/run"].post[AUTH_EXTENSION]).toMatchObject({
+      scopes: ["operations:read", "operations:run", "membership:approve"],
+    });
+    expect(spec.paths["/api/v1/operations/membership-batches/wg-chair-digest/run"].post[AUTH_EXTENSION]).toMatchObject({
+      scopes: ["operations:read", "operations:run"],
+    });
     expect(spec.paths["/api/v1/admin/donations"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/donations/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/donations/promoters"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/donations/sync"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/stats"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email/outbox"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/due-work"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/email/retry"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/email/reset-failed"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/jobs/run"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/reminders/run"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/retention/run"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}/visibility"]).toBeUndefined();

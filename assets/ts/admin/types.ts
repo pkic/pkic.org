@@ -1,9 +1,3 @@
-import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../../shared/schemas/admin-sponsorships";
-import type {
-  AdminSponsorship as CanonicalSponsorship,
-  SponsorshipCompany as CanonicalSponsorshipCompany,
-  SponsorshipEvent as CanonicalSponsorshipEvent,
-} from "../../shared/schemas/admin-sponsorships";
 import type { EmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/email-templates";
 import type {
   AdminUserListItem as CanonicalAdminUser,
@@ -32,10 +26,6 @@ import type {
   AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
   AdminOrganizationSummary as CanonicalAdminOrganizationSummary,
 } from "../../shared/schemas/admin-organizations";
-import type {
-  AdminEmailOutboxResponse as CanonicalAdminEmailOutboxResponse,
-  AdminEmailOutboxRow as CanonicalAdminEmailOutboxRow,
-} from "../../shared/schemas/admin-email-outbox";
 import type { EventProposalSummary as CanonicalAdminEventProposalSummary } from "../../shared/schemas/event-proposals";
 import type { ProposalAccess as CanonicalProposalAccess } from "../../shared/schemas/event-proposals";
 import type { ProposalSpeaker as CanonicalAdminProposalSpeaker } from "../../shared/schemas/proposal-speakers";
@@ -46,15 +36,8 @@ import type {
 } from "../../shared/schemas/admin-forms";
 import type { AdminMemberSummary as CanonicalAdminMemberSummary } from "../../shared/schemas/admin-members";
 import type { AdminEventStatsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/admin-analytics";
-import type {
-  AdminJobsRunResponse as CanonicalAdminJobsRunResponse,
-  AdminReminderPreviewRow as CanonicalAdminReminderPreviewRow,
-} from "../../shared/schemas/admin-jobs";
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
 import type { z } from "zod";
-
-export { SPONSORSHIP_PIPELINE_STAGES };
-export type { SponsorshipPipelineStage };
 
 export type EventSummary = CanonicalEventSummary;
 export type EventDetail = CanonicalAdminEventDetail;
@@ -101,12 +84,6 @@ export type ProposalAccess = CanonicalProposalAccess;
 
 export type InviteRecord = CanonicalInviteRecord;
 
-export type AdminEmailOutboxRow = CanonicalAdminEmailOutboxRow;
-export type AdminEmailOutboxResponse = CanonicalAdminEmailOutboxResponse;
-
-export type AdminJobsRunResponse = CanonicalAdminJobsRunResponse;
-export type AdminReminderPreviewRow = CanonicalAdminReminderPreviewRow;
-
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export type AdminUserMembership = CanonicalAdminUserMembership;
@@ -126,13 +103,6 @@ export type AdminOrganizationSummary = CanonicalAdminOrganizationSummary;
 export type AdminOrganizationRepresentative = CanonicalAdminOrganizationRepresentative;
 
 export type AdminOrganizationDetail = CanonicalAdminOrganizationDetail;
-
-export type Sponsorship = CanonicalSponsorship;
-
-// GET /api/v1/admin/sponsorships/companies — grouped/paginated in D1.
-export type SponsorshipCompany = CanonicalSponsorshipCompany;
-
-export type SponsorshipEvent = CanonicalSponsorshipEvent;
 
 // Interim Admin Tool — GET/POST /api/v1/admin/members
 export type AdminMemberSummary = CanonicalAdminMemberSummary;

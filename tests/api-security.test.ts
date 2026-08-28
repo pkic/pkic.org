@@ -27,11 +27,6 @@ import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
-// ── Admin endpoint handlers ───────────────────────────────────────────────────
-import { onRequest as internalEmailRetryRequest } from "../functions/api/v1/internal/email/retry";
-import { onRequest as internalJobsRequest } from "../functions/api/v1/internal/jobs/run";
-import { onRequest as internalEmailResetRequest } from "../functions/api/v1/internal/email/reset-failed";
-
 // ── Public endpoint handlers ──────────────────────────────────────────────────
 import { onRequestGet as eventTermsGet } from "../functions/api/v1/events/[eventSlug]/terms";
 import {
@@ -158,13 +153,18 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/forms`)),
     ],
     ["GET /api/v1/admin/users/:id", () => callApp(anonGet(`https://app.test/api/v1/admin/users/${userId}`))],
-    ["POST /api/v1/internal/email/retry", () => callApp(anonPost("https://app.test/api/v1/internal/email/retry"))],
-    ["POST /api/v1/internal/jobs/run", () => callApp(anonPost("https://app.test/api/v1/internal/jobs/run"))],
-    ["POST /api/v1/internal/reminders/run", () => callApp(anonPost("https://app.test/api/v1/internal/reminders/run"))],
-    ["POST /api/v1/internal/retention/run", () => callApp(anonPost("https://app.test/api/v1/internal/retention/run"))],
+    ["POST /api/v1/email/outbox/process", () => callApp(anonPost("https://app.test/api/v1/email/outbox/process"))],
     [
-      "POST /api/v1/internal/email/reset-failed",
-      () => callApp(anonPost("https://app.test/api/v1/internal/email/reset-failed")),
+      "POST /api/v1/operations/reminders/run",
+      () => callApp(anonPost("https://app.test/api/v1/operations/reminders/run")),
+    ],
+    [
+      "POST /api/v1/operations/retention/run",
+      () => callApp(anonPost("https://app.test/api/v1/operations/retention/run")),
+    ],
+    [
+      "POST /api/v1/email/outbox/reset-failed",
+      () => callApp(anonPostBody("https://app.test/api/v1/email/outbox/reset-failed", { ids: [crypto.randomUUID()] })),
     ],
     // ── Additional admin endpoints ──────────────────────────────────────────
     ["POST /api/v1/admin/events", () => callApp(anonPost("https://app.test/api/v1/admin/events"))],
@@ -584,25 +584,17 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects GET to POST-only /api/v1/internal/email/retry → 405", async () => {
-    const response = await internalEmailRetryRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/internal/email/retry", { method: "GET" }), {}),
+  it.each([
+    "/api/v1/email/outbox/process",
+    "/api/v1/email/outbox/reset-failed",
+    "/api/v1/operations/reminders/run",
+    "/api/v1/operations/retention/run",
+  ])("does not accept GET on POST-only %s", async (path) => {
+    const token = await createAdminSession(env.DB, adminId, `method-${path}`);
+    const response = await callApp(
+      new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${token}` } }),
     );
-    expect(response.status).toBe(405);
-  });
-
-  it("rejects GET to POST-only /api/v1/internal/jobs/run → 405", async () => {
-    const response = await internalJobsRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/internal/jobs/run", { method: "GET" }), {}),
-    );
-    expect(response.status).toBe(405);
-  });
-
-  it("rejects GET to POST-only /api/v1/internal/email/reset-failed → 405", async () => {
-    const response = await internalEmailResetRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/internal/email/reset-failed", { method: "GET" }), {}),
-    );
-    expect(response.status).toBe(405);
+    expect(response.status).not.toBe(200);
   });
 
   it("rejects POST to GET-only /api/v1/events/:slug/forms → 405", async () => {

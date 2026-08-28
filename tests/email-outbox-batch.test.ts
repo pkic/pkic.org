@@ -307,7 +307,7 @@ describe("email outbox batch processing", () => {
     const [outboxId] = await queueN(env.DB, eventId, 1);
     await env.DB.prepare("UPDATE email_outbox SET status = 'delivery_unknown' WHERE id = ?").bind(outboxId).run();
 
-    expect(await resetFailedOutbox(env.DB, [outboxId])).toEqual({ reset: 1 });
+    expect(await resetFailedOutbox(env.DB, [outboxId])).toEqual({ reset: 1, ids: [outboxId] });
     expect(
       await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [outboxId]),
     ).toEqual([{ status: "retrying" }]);

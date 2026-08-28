@@ -3,11 +3,8 @@ import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
-import { Email } from "../sections/Email";
-import { DueWork } from "../sections/DueWork";
 import { Users, UserDetailView } from "../sections/Users";
 import { Organizations } from "../sections/Organizations";
-import { Sponsorships } from "../sections/Sponsorships";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -27,6 +24,8 @@ import {
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
   ADMIN_DONATIONS_REDIRECT_TARGET,
   ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET,
+  ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
+  ADMIN_OPERATIONS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
@@ -165,9 +164,19 @@ export function AdminShell() {
             <Route
               path="/email"
               component={() => (
-                <SectionWrapper title="Email">
-                  <Email />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_OPERATIONS_REDIRECT_TARGET}
+                  message="Operations have moved to the portal."
+                />
+              )}
+            />
+            <Route
+              path="/email/outbox"
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_OPERATIONS_REDIRECT_TARGET}
+                  message="Operations have moved to the portal."
+                />
               )}
             />
             <Route
@@ -182,9 +191,10 @@ export function AdminShell() {
             <Route
               path="/duework"
               component={() => (
-                <SectionWrapper title="Due Work">
-                  <DueWork />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_OPERATIONS_REDIRECT_TARGET}
+                  message="Operations have moved to the portal."
+                />
               )}
             />
             <Route
@@ -273,11 +283,21 @@ export function AdminShell() {
               )}
             />
             <Route
+              path="/sponsorships/:id"
+              component={({ params }: { params: { id: string } }) => (
+                <PortalRedirect
+                  target={`${ADMIN_SPONSORSHIPS_REDIRECT_TARGET}/${encodeURIComponent(params.id)}`}
+                  message="Sponsorship management has moved to the portal."
+                />
+              )}
+            />
+            <Route
               path="/sponsorships"
               component={() => (
-                <SectionWrapper title="Sponsorships">
-                  <Sponsorships />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_SPONSORSHIPS_REDIRECT_TARGET}
+                  message="Sponsorship management has moved to the portal."
+                />
               )}
             />
             <Route

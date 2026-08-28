@@ -2025,7 +2025,7 @@ A member of our team will follow up with you shortly to discuss next steps.',
 - Tier: {{tierText}}
 - Notes: {{notesText}}
 
-[View in admin]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   );
 
@@ -2595,6 +2595,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'groups:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email:manage', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'donations:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'donations:sync', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'users:read', datetime('now')),
@@ -2602,6 +2604,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'users:anonymize', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'audit:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'analytics:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'operations:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'operations:run', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:grant', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:revoke', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'organizations:read', datetime('now')),
@@ -3923,7 +3927,7 @@ VALUES
     'Sponsorship renewal due in 60 days',
     'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (60 days from now).
 
-[View sponsorship]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -3931,7 +3935,7 @@ VALUES
     'Sponsorship renewal due in 30 days',
     'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (30 days from now).
 
-[View sponsorship]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -3939,7 +3943,7 @@ VALUES
     'Sponsorship lapsed',
     'The {{tierText}} sponsorship for {{organizationNameText}} passed its renewal date ({{renewalDate}}) with no renewal recorded and has been automatically marked lapsed.
 
-[View sponsorship]({{adminUrl}})',
+[View sponsorship]({{managementUrl}})',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (

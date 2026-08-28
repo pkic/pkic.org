@@ -13,17 +13,14 @@ import { handleError } from "../../../_lib/http";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
-import { AdminDueWorkList } from "./due-work";
 import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
 import { UsersList } from "./users";
 import auth_Router from "./auth/router";
-import email_Router from "./email/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
 import members_Router from "./members/router";
 import organizations_Router from "./organizations/router";
 import proposals_Router from "./proposals/router";
-import sponsorships_Router from "./sponsorships/router";
 import users_Router from "./users/router";
 
 const app = new Hono<RequestDbContext>();
@@ -126,16 +123,13 @@ app.use("*", useRequestScopedD1Session);
 
 openapi.get("/events", AdminEventsListGet);
 openapi.post("/events", AdminEventsCreatePost);
-openapi.get("/due-work", AdminDueWorkList);
 openapi.get("/users", UsersList);
 openapi.route("/auth", auth_Router);
-openapi.route("/email", email_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
 openapi.route("/members", members_Router);
 openapi.route("/organizations", organizations_Router);
 openapi.route("/proposals", proposals_Router);
-openapi.route("/sponsorships", sponsorships_Router);
 openapi.route("/users", users_Router);
 
 export default openapi;

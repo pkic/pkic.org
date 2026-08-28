@@ -144,7 +144,7 @@ describe("POST /api/v1/sponsorship/checkout/webhook", () => {
     );
 
     expect(JSON.parse(outbox!.payload_json)).toMatchObject({
-      adminUrl: "https://app.test/admin/#/sponsorships",
+      managementUrl: "https://app.test/portal/#/system/sponsorships",
     });
 
     expect(rendered.text).toContain("attacker.invalid");

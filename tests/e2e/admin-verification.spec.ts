@@ -323,8 +323,17 @@ test.describe("Admin browser-verification pass", () => {
 
   test("sponsorships: create an event sponsorship and advance its pipeline stage", async ({ page }) => {
     const contactName = `E2E Sponsor Contact ${Date.now()}`;
+    const canonicalRequests: string[] = [];
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/sponsorships")) canonicalRequests.push(`${request.method()} ${pathname}`);
+      if (pathname.startsWith("/api/v1/admin/sponsorships")) legacyRequests.push(`${request.method()} ${pathname}`);
+    });
 
-    await page.goto("/admin/#/sponsorships");
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto("/portal/#/system/sponsorships");
     await page.getByRole("button", { name: "Create sponsorship" }).click();
 
     // Labels aren't `<label for>`-linked to their inputs here either —
@@ -362,6 +371,10 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
     await expect(detail.locator("span.badge", { hasText: "contacted" })).toBeVisible();
     await expect(detail.getByText(/new inquiry\s*→\s*contacted/)).toBeVisible();
+    expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsorships/companies"]));
+    expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsorships"))).toBe(true);
+    expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsorships/"))).toBe(true);
+    expect(legacyRequests).toEqual([]);
   });
 
   test("sponsor tiers: add a tier on the real seeded event and confirm it persists", async ({ page }) => {

@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { sponsorshipsListResponseSchema } from "../../assets/shared/schemas/admin-sponsorships";
+import { sponsorshipsListResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
 import {
   companyDetailParams,
   buildCompanySponsorshipsUrl,
   mergeCompanySponsorshipsPage,
-} from "../../assets/ts/admin/sections/Sponsorships";
-import type { Sponsorship } from "../../assets/ts/admin/types";
+} from "../../assets/ts/member-flows/portal/sections/system-sponsorships";
+import type { Sponsorship } from "../../assets/shared/schemas/sponsorship-management";
 
 function sponsorship(id: string): Sponsorship {
   return {
@@ -52,17 +52,17 @@ describe("companyDetailParams", () => {
 describe("buildCompanySponsorshipsUrl", () => {
   it("builds a bounded, offset-paginated URL with no filters", () => {
     const url = buildCompanySponsorshipsUrl("org:abc-123", {}, 0);
-    expect(url).toBe("/api/v1/admin/sponsorships?organizationId=abc-123&limit=200&offset=0");
+    expect(url).toBe("/api/v1/sponsorships?organizationId=abc-123&limit=200&offset=0");
   });
 
   it("carries the offset forward for a 'Load more' page", () => {
     const url = buildCompanySponsorshipsUrl("org:abc-123", {}, 200);
-    expect(url).toBe("/api/v1/admin/sponsorships?organizationId=abc-123&limit=200&offset=200");
+    expect(url).toBe("/api/v1/sponsorships?organizationId=abc-123&limit=200&offset=200");
   });
 
   it("includes type/stage filters when set", () => {
     const url = buildCompanySponsorshipsUrl("nonmember:Acme", { type: "event", stage: "active" }, 0);
-    expect(url).toBe("/api/v1/admin/sponsorships?nonMemberName=Acme&limit=200&offset=0&type=event&stage=active");
+    expect(url).toBe("/api/v1/sponsorships?nonMemberName=Acme&limit=200&offset=0&type=event&stage=active");
   });
 });
 

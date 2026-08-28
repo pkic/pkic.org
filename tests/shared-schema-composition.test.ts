@@ -16,7 +16,7 @@ import {
   sponsorshipEditableFieldsSchema,
   sponsorshipLogoPutRouteSchema,
   sponsorshipUpdateSchema,
-} from "../assets/shared/schemas/admin-sponsorships";
+} from "../assets/shared/schemas/sponsorship-management";
 import { logoUploadResponseSchema } from "../assets/shared/schemas/images";
 import {
   eventSeriesCreateSchema,
