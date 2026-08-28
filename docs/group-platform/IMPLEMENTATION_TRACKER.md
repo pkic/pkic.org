@@ -1194,7 +1194,7 @@ Status: In progress
       destination. One neutral shared contract, D1-backed service, and portal
       editor now own listing, server-side search/sort/pagination, version
       history, preview, draft creation, and activation under
-      `/api/v1/system/email-templates`. Reads require the live global
+      `/api/v1/email/templates`. Reads require the live global
       `email-templates:read` permission; preview and mutations require
       `email-templates:write`. Every mutation repeats the user-backed permission
       and state predicates in the same D1 batch as the write and attributed

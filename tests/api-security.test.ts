@@ -149,7 +149,11 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/organizations/content-reviews",
       () => callApp(anonGet("https://app.test/api/v1/organizations/content-reviews")),
     ],
-    ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
+    ["GET /api/v1/email/templates", () => callApp(anonGet("https://app.test/api/v1/email/templates"))],
+    [
+      "GET /api/v1/system/email-templates (retired)",
+      () => callApp(anonGet("https://app.test/api/v1/system/email-templates")),
+    ],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
     [
       "GET /api/v1/admin/events/:slug/registrations",
@@ -177,19 +181,18 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ["POST /api/v1/admin/events", () => callApp(anonPost("https://app.test/api/v1/admin/events"))],
     ["POST /api/v1/donations/sync", () => callApp(anonPost("https://app.test/api/v1/donations/sync"))],
     [
-      "POST /api/v1/system/email-templates/preview",
-      () => callApp(anonPostBody("https://app.test/api/v1/system/email-templates/preview", { content: "preview" })),
+      "POST /api/v1/email/templates/preview",
+      () => callApp(anonPostBody("https://app.test/api/v1/email/templates/preview", { content: "preview" })),
     ],
     [
-      "POST /api/v1/system/email-templates/:key/activate",
-      () =>
-        callApp(anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/activate`, { version: 1 })),
+      "POST /api/v1/email/templates/:key/activate",
+      () => callApp(anonPostBody(`https://app.test/api/v1/email/templates/${templateKey}/activate`, { version: 1 })),
     ],
     [
-      "POST /api/v1/system/email-templates/:key/versions",
+      "POST /api/v1/email/templates/:key/versions",
       () =>
         callApp(
-          anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/versions`, {
+          anonPostBody(`https://app.test/api/v1/email/templates/${templateKey}/versions`, {
             content: "version",
           }),
         ),

@@ -50,12 +50,17 @@ describe("OpenAPI schema generation", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
     expect(spec.paths["/api/v1/admin/events"].post).toBeDefined();
-    expect(spec.paths["/api/v1/system/email-templates"].get).toBeDefined();
-    expect(spec.paths["/api/v1/system/email-templates/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].get).toBeDefined();
-    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].post).toBeDefined();
-    expect(spec.paths["/api/v1/system/email-templates/{key}/activate"].post).toBeDefined();
-    expect(spec.paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
+    expect(spec.paths["/api/v1/email/templates"].get).toBeDefined();
+    expect(spec.paths["/api/v1/email/templates/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/templates/{key}/versions"].get).toBeDefined();
+    expect(spec.paths["/api/v1/email/templates/{key}/versions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/templates/{key}/activate"].post).toBeDefined();
+    expect(spec.paths["/api/v1/email/templates/{key}/exists"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/email-templates/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/activate"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/exists"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/access-control/grants"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/grants"].post).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/roles"].get).toBeDefined();

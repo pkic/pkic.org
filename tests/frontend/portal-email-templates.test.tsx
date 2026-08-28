@@ -40,7 +40,7 @@ describe("portal email templates", () => {
           location.origin,
         );
         requests.push({ url, method: init?.method ?? "GET" });
-        if (url.pathname === `/api/v1/system/email-templates/${templateKey}/versions`) {
+        if (url.pathname === `/api/v1/email/templates/${templateKey}/versions`) {
           return json({
             success: true,
             version: {
@@ -86,7 +86,7 @@ describe("portal email templates", () => {
 
     expect(requests).toEqual([
       expect.objectContaining({
-        url: expect.objectContaining({ pathname: `/api/v1/system/email-templates/${templateKey}/versions` }),
+        url: expect.objectContaining({ pathname: `/api/v1/email/templates/${templateKey}/versions` }),
         method: "POST",
       }),
     ]);
@@ -117,7 +117,7 @@ describe("portal email templates", () => {
           location.origin,
         );
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-        if (url.pathname === "/api/v1/system/email-templates" && method === "GET") {
+        if (url.pathname === "/api/v1/email/templates" && method === "GET") {
           return json({ templates: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
         }
         if (url.pathname.endsWith(`/${templateKey}/exists`)) return json({ exists: false });
@@ -182,7 +182,7 @@ describe("portal email templates", () => {
           location.origin,
         );
         requests.push(url);
-        if (url.pathname === "/api/v1/system/email-templates") {
+        if (url.pathname === "/api/v1/email/templates") {
           return json({
             templates: [
               { template_key: "registration_confirm_email", active_version: 1, version_count: 1, draft_count: 0 },
@@ -231,7 +231,7 @@ describe("portal email templates", () => {
     });
     await settle();
 
-    expect(requests.every((url) => url.pathname.startsWith("/api/v1/system/email-templates"))).toBe(true);
+    expect(requests.every((url) => url.pathname.startsWith("/api/v1/email/templates"))).toBe(true);
     expect(container.querySelector("#email-template-editor-body")).not.toBeNull();
     expect(container.querySelector("#email-template-editor-body")?.getAttribute("readonly")).not.toBeNull();
     expect(container.querySelector("#email-template-preview-data")).toBeNull();

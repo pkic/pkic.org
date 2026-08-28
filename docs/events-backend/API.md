@@ -39,15 +39,15 @@ Base path: `/api/v1`
 
 ## Email templates
 
-- `GET /system/email-templates`
-- `GET /system/email-templates/:key/versions`
-- `POST /system/email-templates/:key/versions`
-- `POST /system/email-templates/:key/activate`
-- `POST /system/email-templates/preview`
+- `GET /email/templates`
+- `GET /email/templates/:key/versions`
+- `POST /email/templates/:key/versions`
+- `POST /email/templates/:key/activate`
+- `POST /email/templates/preview`
 - Reads require a user-backed staff session with `email-templates:read`.
 - Preview, version creation, and activation require `email-templates:write`.
-- The former `/admin/email-templates` API is removed; the portal is the only
-  management interface.
+- The former generic `/admin/email-templates` and `/system/email-templates`
+  APIs are removed; the portal is the only management interface.
 
 ## Registrations and invites
 

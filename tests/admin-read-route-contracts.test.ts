@@ -40,7 +40,7 @@ describe("admin read route OpenAPI contracts", () => {
     const paths = decorateOpenApiSpec(openapi.schema).paths;
     expect(paths["/api/v1/donations/{id}"].get).toBeDefined();
     expect(paths["/api/v1/admin/donations/{id}"]).toBeUndefined();
-    expect(paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
+    expect(paths["/api/v1/email/templates/{key}/exists"].get).toBeDefined();
     expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
     expect(paths["/api/v1/analytics/summary"].get).toBeDefined();
     expect(paths["/api/v1/system/analytics/summary"]).toBeUndefined();
@@ -105,7 +105,7 @@ describe("admin read route OpenAPI contracts", () => {
     expect(user.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await user.json()).error.code).toBe("VALIDATION_ERROR");
 
-    const key = await call(token, `/api/v1/system/email-templates/${"a".repeat(201)}/exists`);
+    const key = await call(token, `/api/v1/email/templates/${"a".repeat(201)}/exists`);
     expect(key.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await key.json()).error.code).toBe("VALIDATION_ERROR");
   });
@@ -124,7 +124,7 @@ describe("admin read route OpenAPI contracts", () => {
     expect(donation.status).toBe(200);
     expect(donationDetailResponseSchema.parse(await donation.json()).donation.id).toBe(donationId);
 
-    const exists = await call(token, "/api/v1/system/email-templates/unknown_template/exists");
+    const exists = await call(token, "/api/v1/email/templates/unknown_template/exists");
     expect(exists.status).toBe(200);
     expect(emailTemplateExistsResponseSchema.parse(await exists.json()).exists).toBe(false);
 

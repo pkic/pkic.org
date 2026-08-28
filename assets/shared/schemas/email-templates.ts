@@ -13,7 +13,7 @@ export { emailContentTypeSchema, emailMessageTypeSchema };
 export type { EmailContentType, EmailMessageType };
 
 /**
- * Allowlisted sort columns for GET /api/v1/system/email-templates.
+ * Allowlisted sort columns for GET /api/v1/email/templates.
  * `active_version`/`version_count`
  * are that query's own aggregate SELECT-list aliases (grouped by
  * `template_key`), not raw `email_template_versions` columns.
@@ -56,7 +56,7 @@ export const emailTemplatesListQuerySchema = searchableListQuerySchema(emailTemp
 export type EmailTemplatesListQuery = z.infer<typeof emailTemplatesListQuerySchema>;
 
 export const emailTemplatesListRouteSchema = {
-  tags: ["System email templates"],
+  tags: ["Email templates"],
   summary: "List email templates",
   "x-pkic-auth": { required: true, scopes: ["email-templates:read"] },
   description:
@@ -138,7 +138,7 @@ export const emailTemplatePreviewSchema = z.object({
 export const emailTemplateExistsResponseSchema = z.object({ exists: z.boolean() });
 
 export const emailTemplateExistsRouteSchema = {
-  tags: ["System email templates"],
+  tags: ["Email templates"],
   summary: "Check whether an email template exists",
   "x-pkic-auth": { required: true, scopes: ["email-templates:read"] },
   request: { params: emailTemplateKeyParamsSchema },
@@ -162,7 +162,7 @@ export const emailTemplatePreviewResponseSchema = successResponseSchema.extend({
 });
 
 export const emailTemplatePreviewRouteSchema = {
-  tags: ["System email templates"],
+  tags: ["Email templates"],
   summary: "Render an email template preview",
   "x-pkic-auth": { required: true, scopes: ["email-templates:write"] },
   description: "Renders the supplied template using preview data and the configured email partials/layout.",
@@ -221,7 +221,7 @@ export const emailTemplateVersionsListResponseSchema = paginatedResponseSchema(
 );
 
 export const emailTemplateVersionsListRouteSchema = {
-  tags: ["System email templates"],
+  tags: ["Email templates"],
   summary: "List a template's versions",
   "x-pkic-auth": { required: true, scopes: ["email-templates:read"] },
   description: "Paginated list of every version of a single template, newest version first.",
@@ -242,7 +242,7 @@ export const emailTemplateVersionsListRouteSchema = {
 };
 
 export const emailTemplateVersionCreateRouteSchema = {
-  tags: ["System email templates"],
+  tags: ["Email templates"],
   summary: "Create a template version",
   "x-pkic-auth": { required: true, scopes: ["email-templates:write"] },
   description: "Creates a new draft version of a single email template.",
@@ -265,7 +265,7 @@ export const emailTemplateVersionCreateRouteSchema = {
 };
 
 export const emailTemplateActivateRouteSchema = {
-  tags: ["System email templates"],
+  tags: ["Email templates"],
   summary: "Activate an email template version",
   "x-pkic-auth": { required: true, scopes: ["email-templates:write"] },
   description: "Marks a specific version as the only active version used for future rendering.",
