@@ -14,6 +14,7 @@ import { Sponsorships } from "./system-sponsorships";
 import { Operations } from "./system-operations";
 import { Organizations } from "./system-organizations/Organizations";
 import { OrganizationDetail } from "./system-organizations/OrganizationDetail";
+import { Users } from "./system-users/Users";
 
 export function SystemManagement({
   session,
@@ -90,6 +91,17 @@ export function SystemManagement({
             canCreate={portalHasGlobalPermission(session, "membership:write")}
           />
         )
+      ) : selected.path === "/system/users" ? (
+        <Users
+          userId={resourceId}
+          permissions={{
+            canRead: portalHasGlobalPermission(session, "users:read"),
+            canWrite: portalHasGlobalPermission(session, "users:write"),
+            canGrantAccess: portalHasGlobalPermission(session, "access:grant"),
+            canAnonymize: portalHasGlobalPermission(session, "users:anonymize"),
+            canManageMembership: portalHasGlobalPermission(session, "membership:write"),
+          }}
+        />
       ) : selected.path === "/system/audit-log" ? (
         <section aria-labelledby="system-audit-log-heading">
           <h5 id="system-audit-log-heading" class="mb-3">

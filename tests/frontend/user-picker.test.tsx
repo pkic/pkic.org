@@ -94,7 +94,7 @@ describe("UserPicker request ordering", () => {
     expect(container.textContent).not.toContain("old@example.test");
   });
 
-  it("uses an explicit scoped catalog while retaining the admin source as the migration default", async () => {
+  it("uses an explicit scoped catalog while retaining the canonical user source as the default", async () => {
     vi.useFakeTimers();
     vi.mocked(getJson).mockResolvedValue({ users: [] });
     const scoped = await mountPicker("/api/v1/groups/group%2Fone/user-catalog");
@@ -110,11 +110,9 @@ describe("UserPicker request ordering", () => {
     });
 
     vi.mocked(getJson).mockClear();
-    const admin = await mountPicker();
-    await search(admin.input, "admin@example.test");
-    expect(new URL(String(vi.mocked(getJson).mock.calls[0][0]), "https://app.test").pathname).toBe(
-      "/api/v1/admin/users",
-    );
+    const users = await mountPicker();
+    await search(users.input, "admin@example.test");
+    expect(new URL(String(vi.mocked(getJson).mock.calls[0][0]), "https://app.test").pathname).toBe("/api/v1/users");
   });
 
   it("does not clear a newer result when an older search fails", async () => {

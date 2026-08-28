@@ -604,7 +604,7 @@ test.describe("Admin browser-verification pass", () => {
     // application's organizationName, not just the application row's own
     // status flag.
     const usersLookup = await page.evaluate(async (q) => {
-      const res = await fetch(`/api/v1/admin/users?q=${encodeURIComponent(q)}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/users?q=${encodeURIComponent(q)}`, { credentials: "same-origin" });
       const body = (await res.json()) as {
         users: Array<{ email: string; membership: { organizationName: string | null } | null }>;
       };

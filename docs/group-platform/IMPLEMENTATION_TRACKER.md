@@ -1331,6 +1331,32 @@ Status: In progress
       and frontend tests cover the cutover. A focused real Worker/D1 browser
       journey creates an organization, adds a representative, verifies the
       legacy bookmark redirect, and observes no legacy organization request.
+      User and membership-capacity management now also appears under the
+      portal's System navigation while retaining domain APIs:
+      `/api/v1/users` owns account records, email aliases, headshots, access
+      state, and anonymization, while `/api/v1/members` owns membership
+      capacities. System remains only an interface grouping. Directory and
+      detail reads require `users:read`; ordinary profile, alias, and headshot
+      mutations require `users:write`; primary-email and transitional role
+      changes additionally require `access:grant`; anonymization requires
+      `users:anonymize`; and capacity creation, update, and removal require
+      `membership:write`. The portal renders each action only when its exact
+      permission set is present, and every API independently rechecks the same
+      live user-backed authority. One neutral schema family and focused service
+      boundary own D1-side search, filters, allowlisted sorting, counting,
+      pagination, flexible profile links, capacity aggregation, and mutation
+      guards. Email changes preserve the established verification flow and
+      revoke affected sessions and capabilities; secondary-email, headshot,
+      anonymization, and capacity mutations compare live identity and target
+      state in the same D1 batch as the write and audit record. Canonical user
+      responses do not expose R2 storage keys. The former admin Users and
+      Members components, API handlers, route mounts, and admin-prefixed schema
+      and service names are removed; old bookmarks only redirect to the portal.
+      Mounted authorization, API-key denial, lifecycle-race, query-plan,
+      storage-compensation, contract, and frontend tests cover the cutover. A
+      focused real Worker/D1 browser journey updates a user through the portal,
+      verifies persistence and the legacy bookmark redirect, and observes no
+      legacy Users or Members request.
       Other global management destinations remain, so this item is deliberately
       still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1634,11 +1660,11 @@ Status: In progress
       committed range. The audit also confirms that implementation is not yet
       complete. The shared resource evaluator covers the canonical group form,
       event, vote, and mailing-list paths, but legacy global/admin domain
-      endpoints remain. The admin shell still exposes Events, Forms, and Users,
-      and the admin router still mounts those domains plus authentication,
-      member, and proposal compatibility routes. Ownerless/global event
-      actions, user management, and proposal moderation therefore still
-      require deliberate portal/domain cutovers or explicit retirement.
+      endpoints remain. The admin shell still exposes Events and Forms, and
+      the admin router still mounts those domains plus authentication and
+      proposal compatibility routes. Ownerless/global event actions and the
+      remaining proposal adapter therefore still require deliberate
+      portal/domain cutovers or explicit retirement.
       Temporary redirects, separate admin/
       member session assumptions, compatibility API removal, and final shell
       removal remain the concrete differences from the accepted Portal and API
@@ -1788,6 +1814,23 @@ The final PR description must include, at minimum:
   global organization directory or staff-only direct-email provisioning;
 - verify `/api/v1/admin/organizations` and nested paths return 404 and the old
   Organizations bookmark redirects without making a legacy API request;
+- inspect Users with separate `users:read`, `users:write`, `access:grant`,
+  `users:anonymize`, and `membership:write` staff identities, confirming the
+  directory and every profile, email, role, anonymization, and membership
+  control appears only with its exact permission set;
+- search, filter, sort, and paginate `/api/v1/users`, then edit a user's profile
+  and flexible links, add and remove a secondary email, upload and remove a
+  headshot, and confirm the canonical responses never expose R2 storage keys;
+- change a primary email through the established verified-email workflow and
+  confirm the old address cannot authenticate, while an authorized staff
+  correction retains its intended behavior and revokes affected sessions and
+  capabilities;
+- create, update, and remove individual and organization-representative
+  capacities through `/api/v1/members`, then race identity deactivation,
+  anonymization, or permission revocation and confirm no partial capacity or
+  audit state is retained;
+- verify `/api/v1/admin/users`, `/api/v1/admin/members`, and nested paths return
+  404 and the old Users bookmark redirects without making a legacy API request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

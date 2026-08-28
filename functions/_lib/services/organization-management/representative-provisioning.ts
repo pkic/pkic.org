@@ -1,37 +1,32 @@
 /**
- * Admin Organizations representative/member provisioning — adding,
- * editing, and removing an organization's representatives
- * (`organization_representatives`, consolidated migration 0035), granting org-less
- * individual memberships, and confirming secondary-contact nominations.
+ * Organization representative provisioning — adding representatives and
+ * confirming secondary-contact nominations (`organization_representatives`,
+ * consolidated migration 0035).
  * Split from the prior combined organization module (PR #1 review, Phase 8) —
  * see queries.ts for reads and profile.ts for the organization
  * profile-update use case.
  *
- * `id` is ambiguous by design in updateAdminMember/removeAdminMember (see
- * the route header) — it may be an individual `members.id` or an
- * `organization_representatives.id`. Disambiguated by lookup here rather
- * than the route needing to know which.
+ * Membership capacity updates and removals are deliberately owned by
+ * `membership/capacities.ts`, so the organization service remains scoped to
+ * organization-context representative workflows.
  */
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../users";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
-import { buildCreateIndividualMemberStatements } from "../membership/memberships";
 import { isActiveRepresentative, buildAddRepresentativeStatement } from "../membership/representatives";
 import {
   REPRESENTATIVE_ROLE_IDS,
   resolveRepresentativeRoleHolders,
   buildAssignRepresentativeRoleStatements,
   buildAssignRepresentativeRoleStatementsForNewRepresentative,
-  buildRevokeRepresentativeRoleStatement,
 } from "../membership/representative-roles";
 import { prepareAuditLog } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { AuthAdmin, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { getOrgAggregate } from "./read-model";
-import { buildMembershipAccessOffboardingStatements } from "../membership/offboarding";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { authorizedOrganizationMutationDb } from "./authorization";
 
@@ -165,158 +160,6 @@ export async function addOrganizationRepresentative(
   };
 }
 
-export interface MemberUpdateInput {
-  membershipCategory?: string;
-  status?: string;
-  showOnOrgProfile?: boolean;
-}
-
-interface IndividualMemberRow {
-  id: string;
-  user_id: string;
-  status: string;
-}
-
-export async function updateAdminMember(db: DatabaseLike, actorUserId: string, id: string, input: MemberUpdateInput) {
-  const representative = await first<{ id: string; member_id: string; user_id: string; show_on_org_profile: number }>(
-    db,
-    "SELECT id, member_id, user_id, show_on_org_profile FROM organization_representatives WHERE id = ? AND left_at IS NULL",
-    [id],
-  );
-
-  if (representative) {
-    if (input.membershipCategory !== undefined || input.status !== undefined) {
-      throw new AppError(
-        422,
-        "REPRESENTATIVE_FIELD_NOT_EDITABLE",
-        "A representative's category/status follow their organization's aggregate — edit those on the organization instead",
-      );
-    }
-    if (input.showOnOrgProfile !== undefined) {
-      await db.batch([
-        db
-          .prepare("UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ? WHERE id = ?")
-          .bind(input.showOnOrgProfile ? 1 : 0, nowIso(), id),
-        prepareAuditLog(db, "admin", actorUserId, "member_updated", "member", id, input),
-      ]);
-    }
-    const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
-      representative.member_id,
-    ]);
-    return {
-      id,
-      userId: representative.user_id,
-      organizationId: orgRow?.organization_id ?? null,
-      membershipCategory: null,
-      status: "active",
-      showOnOrgProfile: input.showOnOrgProfile ?? representative.show_on_org_profile === 1,
-    };
-  }
-
-  const member = await first<IndividualMemberRow>(
-    db,
-    "SELECT id, user_id, status FROM members WHERE id = ? AND organization_id IS NULL",
-    [id],
-  );
-  if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
-
-  const statements: StatementLike[] = [];
-  const setClauses: string[] = [];
-  const values: unknown[] = [];
-  if (input.status !== undefined) {
-    setClauses.push("status = ?");
-    values.push(input.status);
-  }
-  if (setClauses.length > 0) {
-    setClauses.push("updated_at = ?");
-    values.push(nowIso());
-    values.push(id);
-    statements.push(db.prepare(`UPDATE members SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values));
-  }
-  if (input.membershipCategory !== undefined) {
-    statements.push(
-      db
-        .prepare(`UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?`)
-        .bind(input.membershipCategory, nowIso(), id),
-    );
-  }
-  if (input.membershipCategory !== undefined || input.status !== undefined) {
-    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, member.user_id, nowIso()));
-  }
-  if (member.status === "active" && input.status !== undefined && input.status !== "active") {
-    statements.push(
-      ...(await buildMembershipAccessOffboardingStatements(db, {
-        userId: member.user_id,
-        memberId: member.id,
-        causeKey: `member:${member.id}:status:${member.status}->${input.status}`,
-        at: nowIso(),
-      })),
-    );
-  }
-  statements.push(prepareAuditLog(db, "admin", actorUserId, "member_updated", "member", id, input));
-  await db.batch(statements);
-
-  return {
-    id,
-    userId: member.user_id,
-    organizationId: null,
-    membershipCategory: input.membershipCategory ?? null,
-    status: input.status ?? member.status,
-    showOnOrgProfile: true,
-  };
-}
-
-/**
- * Grants an org-less individual membership (H5/H6/H7) to an existing user,
- * from the Users detail view — the counterpart to
- * `addOrganizationRepresentative` for people with no organization.
- */
-export async function grantIndividualMembership(
-  db: DatabaseLike,
-  actorUserId: string,
-  userId: string,
-  membershipCategory: string,
-) {
-  const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]);
-  if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
-
-  const existingMember = await first<{ id: string }>(db, "SELECT id FROM members WHERE user_id = ?", [userId]);
-  if (existingMember) throw new AppError(409, "ALREADY_MEMBER", "This user already holds a membership");
-  const activeRepresentation = await first<{ id: string }>(
-    db,
-    "SELECT id FROM organization_representatives WHERE user_id = ? AND left_at IS NULL AND blocked_at IS NULL",
-    [userId],
-  );
-  if (activeRepresentation) {
-    throw new AppError(
-      409,
-      "ORGANIZATION_CAPACITY_CONFLICT",
-      "A user who represents an organization cannot also hold an individual membership",
-    );
-  }
-
-  const now = nowIso();
-  const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, membershipCategory, now);
-  statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, userId, now));
-  statements.push(
-    prepareAuditLog(db, "admin", actorUserId, "member_created", "member", memberId, {
-      userId,
-      membershipCategory,
-    }),
-  );
-  await db.batch(statements);
-
-  return {
-    id: memberId,
-    userId,
-    organizationId: null,
-    membershipCategory,
-    status: "active",
-    showOnOrgProfile: true,
-    createdAt: now,
-  };
-}
-
 export interface ConfirmSecondaryContactResult {
   organizationId: string;
   secondaryContactUserId: string;
@@ -391,91 +234,4 @@ export async function confirmSecondaryContact(
   await authorizedDb.batch(statements);
 
   return { organizationId, secondaryContactUserId: nomination.nominated_user_id, outboxId: preparedEmail?.id ?? null };
-}
-
-export async function removeAdminMember(
-  db: DatabaseLike,
-  actorUserId: string,
-  id: string,
-): Promise<{ user_id: string; organization_id: string | null }> {
-  const representative = await first<{ id: string; member_id: string; user_id: string }>(
-    db,
-    "SELECT id, member_id, user_id FROM organization_representatives WHERE id = ? AND left_at IS NULL",
-    [id],
-  );
-
-  if (representative) {
-    const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
-      representative.member_id,
-    ]);
-    const databaseActor = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [actorUserId]);
-    const now = nowIso();
-    const statements: StatementLike[] = [
-      db
-        .prepare(
-          `UPDATE organization_representatives
-              SET left_at = ?, blocked_at = ?, blocked_by_user_id = ?, updated_at = ?
-            WHERE id = ? AND left_at IS NULL AND blocked_at IS NULL`,
-        )
-        .bind(now, now, databaseActor?.id ?? null, now, representative.id),
-      buildRevokeRepresentativeRoleStatement(db, {
-        memberId: representative.member_id,
-        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
-        userId: representative.user_id,
-        now,
-      }),
-      buildRevokeRepresentativeRoleStatement(db, {
-        memberId: representative.member_id,
-        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
-        userId: representative.user_id,
-        now,
-      }),
-      db
-        .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
-        .bind(representative.member_id, representative.user_id),
-      ...(await buildMembershipAccessOffboardingStatements(db, {
-        userId: representative.user_id,
-        memberId: representative.member_id,
-        causeKey: `representative:${representative.id}:removed`,
-        at: now,
-      })),
-      ...prepareAutomaticGroupEnrollmentForUserStatements(db, representative.user_id, now),
-      prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
-        userId: representative.user_id,
-        organizationId: orgRow?.organization_id ?? null,
-      }),
-    ];
-    // The two role-revoke statements above are scoped to this
-    // representative's own user_id (0 rows affected if they didn't hold
-    // that role) — safe as no-ops, avoiding a read to check which role (if
-    // any) this rep held, and critically NOT clearing a role actually held
-    // by a different representative of the same organization.
-    await db.batch(statements);
-    return { user_id: representative.user_id, organization_id: orgRow?.organization_id ?? null };
-  }
-
-  const member = await first<{ id: string; user_id: string }>(
-    db,
-    "SELECT id, user_id FROM members WHERE id = ? AND organization_id IS NULL",
-    [id],
-  );
-  if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
-
-  const at = nowIso();
-  await db.batch([
-    ...(await buildMembershipAccessOffboardingStatements(db, {
-      userId: member.user_id,
-      memberId: member.id,
-      causeKey: `member:${member.id}:removed`,
-      at,
-    })),
-    db.prepare("UPDATE members SET status = 'inactive', updated_at = ? WHERE id = ?").bind(at, id),
-    ...prepareAutomaticGroupEnrollmentForUserStatements(db, member.user_id, at),
-    prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
-      userId: member.user_id,
-      organizationId: null,
-    }),
-  ]);
-
-  return { user_id: member.user_id, organization_id: null };
 }

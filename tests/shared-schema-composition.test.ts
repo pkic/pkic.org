@@ -36,7 +36,7 @@ import { successResponseSchema } from "../assets/shared/schemas/api-common";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
 import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
-import { adminMemberMutationResponseSchema } from "../assets/shared/schemas/admin-members";
+import { memberCapacityMutationResponseSchema } from "../assets/shared/schemas/membership-management";
 import { emailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/email-templates";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
@@ -95,7 +95,7 @@ describe("canonical shared schema composition", () => {
 
   it("keeps admin mutation payloads explicit instead of treating them as success-only commands", () => {
     expect(
-      adminMemberMutationResponseSchema.parse({
+      memberCapacityMutationResponseSchema.parse({
         member: {
           id: ID,
           userId: SECOND_ID,

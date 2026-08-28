@@ -1,12 +1,8 @@
 import { z } from "zod";
-import { adminUserIdParamsSchema, proposalSpeakerIdParamsSchema, successResponseSchema } from "./api-common";
+import { userIdParamsSchema, proposalSpeakerIdParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { proposalManageTokenParamsSchema } from "./proposal-management";
-import {
-  adminHeadshotUploadResponseSchema,
-  headshotImageUploadFormSchema,
-  headshotUploadResponseSchema,
-} from "./registration";
+import { headshotImageUploadFormSchema, headshotUploadResponseSchema } from "./registration";
 
 const rawHeadshotImageSchema = z.any().describe("Raw JPEG, PNG, or WebP image bytes");
 const headshotUploadRequestContent = {
@@ -22,44 +18,50 @@ const headshotImageResponseContent = {
   "image/webp": { schema: rawHeadshotImageSchema },
 };
 
-export const adminUserHeadshotGetRouteSchema = {
-  tags: ["Admin headshots"],
+export const userHeadshotGetRouteSchema = {
+  tags: ["Users", "Headshots"],
   summary: "Download a user headshot",
   description: "Returns the currently stored headshot image for a user, when one exists.",
+  "x-pkic-auth": { required: true, scopes: ["users:read"] },
   request: {
-    params: adminUserIdParamsSchema,
+    params: userIdParamsSchema,
   },
   responses: {
     "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
-    "401": { description: "Admin authorization required." },
+    "401": { description: "Staff authorization required." },
     "404": { description: "User or headshot not found." },
     "503": { description: "Uploads bucket is not configured." },
   },
 };
 
-export const adminUserGravatarImportResponseSchema = adminHeadshotUploadResponseSchema.extend({
+export const userGravatarImportResponseSchema = successResponseSchema.extend({
   source: z.literal("gravatar"),
 });
-export const adminUserGravatarImportRouteSchema = {
-  tags: ["Admin headshots"],
-  summary: "Import an admin user's Gravatar",
-  request: { params: adminUserIdParamsSchema },
+export const userGravatarImportRouteSchema = {
+  tags: ["Users", "Headshots"],
+  summary: "Import a user's Gravatar",
+  "x-pkic-auth": { required: true, scopes: ["users:write"] },
+  request: { params: userIdParamsSchema },
   responses: {
     "200": {
       description: "Gravatar imported.",
-      content: { "application/json": { schema: adminUserGravatarImportResponseSchema } },
+      content: { "application/json": { schema: userGravatarImportResponseSchema } },
     },
+    "400": { description: "Invalid user identifier." },
+    "401": { description: "Staff authorization required." },
+    "403": { description: "User update permission required." },
     "404": { description: "User or Gravatar not found." },
   },
 };
 
-export const adminUserHeadshotPutRouteSchema = {
-  tags: ["Admin headshots"],
+export const userHeadshotPutRouteSchema = {
+  tags: ["Users", "Headshots"],
   summary: "Upload or replace a user headshot",
   description:
-    "Uploads, resizes, stores, and activates a headshot image for a user from the admin console. Accepts a multipart file field or raw JPEG, PNG, WebP, or octet-stream image bytes; the handler validates the detected file signature.",
+    "Uploads, resizes, stores, and activates a headshot image for a user from the portal. Accepts a multipart file field or raw JPEG, PNG, WebP, or octet-stream image bytes; the handler validates the detected file signature.",
+  "x-pkic-auth": { required: true, scopes: ["users:write"] },
   request: {
-    params: adminUserIdParamsSchema,
+    params: userIdParamsSchema,
     body: {
       content: headshotUploadRequestContent,
       required: true,
@@ -70,13 +72,13 @@ export const adminUserHeadshotPutRouteSchema = {
       description: "Headshot uploaded successfully.",
       content: {
         "application/json": {
-          schema: adminHeadshotUploadResponseSchema,
+          schema: successResponseSchema,
         },
       },
     },
-    "401": { description: "Admin authorization required." },
+    "401": { description: "Staff authorization required." },
     "404": { description: "User not found." },
-    "413": { description: "File exceeds the admin upload size limit." },
+    "413": { description: "File exceeds the maximum upload size." },
     "415": { description: "Unsupported image MIME type." },
     "503": { description: "Uploads bucket is not configured or upload failed." },
   },
@@ -189,12 +191,13 @@ export const proposerManagedSpeakerHeadshotDeleteRouteSchema = headshotDeleteRou
   proposerManagedSpeakerHeadshotParamsSchema,
 );
 
-export const adminUserHeadshotDeleteRouteSchema = {
-  tags: ["Admin headshots"],
+export const userHeadshotDeleteRouteSchema = {
+  tags: ["Users", "Headshots"],
   summary: "Delete a user headshot",
-  description: "Clears the active headshot reference for a user and records an admin audit event.",
+  description: "Clears the active headshot reference for a user and records a staff audit event.",
+  "x-pkic-auth": { required: true, scopes: ["users:write"] },
   request: {
-    params: adminUserIdParamsSchema,
+    params: userIdParamsSchema,
   },
   responses: {
     "200": {
@@ -205,17 +208,18 @@ export const adminUserHeadshotDeleteRouteSchema = {
         },
       },
     },
-    "401": { description: "Admin authorization required." },
+    "401": { description: "Staff authorization required." },
+    "403": { description: "User update permission required." },
     "404": { description: "User not found." },
   },
 };
 
 const adminReviewResponses = {
-  "401": { description: "Admin authorization required." },
+  "401": { description: "Staff authorization required." },
   "403": { description: "Proposal review permission required." },
 };
 const adminManageResponses = {
-  "401": { description: "Admin authorization required." },
+  "401": { description: "Staff authorization required." },
   "403": { description: "Proposal management permission required." },
 };
 const adminProposalHeadshotOptions = {

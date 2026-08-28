@@ -16,7 +16,7 @@ import {
   sortColumnSchemaWithDefault,
 } from "../assets/shared/schemas/pagination";
 import { donationsListQuerySchema } from "../assets/shared/schemas/donation-management";
-import { usersListQuerySchema } from "../assets/shared/schemas/admin-users";
+import { usersListQuerySchema } from "../assets/shared/schemas/user-management";
 import { systemAuditLogListQuerySchema } from "../assets/shared/schemas/system-audit-log";
 import {
   emailTemplateVersionsListQuerySchema,

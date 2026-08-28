@@ -3,7 +3,6 @@ import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
-import { Users, UserDetailView } from "../sections/Users";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -26,6 +25,7 @@ import {
   ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET,
   ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
   ADMIN_OPERATIONS_REDIRECT_TARGET,
+  ADMIN_USERS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
@@ -248,21 +248,20 @@ export function AdminShell() {
             />
             <Route
               path="/users/detail/:id"
-              component={({ params }: { params: { id: string } }) => {
-                const [, navigate] = useHashLocation();
-                return (
-                  <SectionWrapper title="Users">
-                    <UserDetailView userId={params.id} onBack={() => navigate("/users")} />
-                  </SectionWrapper>
-                );
-              }}
+              component={({ params }: { params: { id: string } }) => (
+                <PortalRedirect
+                  target={`${ADMIN_USERS_REDIRECT_TARGET}/${encodeURIComponent(params.id)}`}
+                  message="User management has moved to the portal."
+                />
+              )}
             />
             <Route
               path="/users"
               component={() => (
-                <SectionWrapper title="Users">
-                  <Users />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_USERS_REDIRECT_TARGET}
+                  message="User management has moved to the portal."
+                />
               )}
             />
             <Route

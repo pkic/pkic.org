@@ -53,7 +53,7 @@
  *   - create `organizations`/`users`/`organization_representatives` rows for
  *     org-tied representatives with no domain-matched email at all — see the
  *     "unmatched" report section; these are finished one at a time via the
- *     Interim Admin Tool (`POST /api/v1/admin/members`). (Org-less
+ *     canonical membership provisioning (`POST /api/v1/members`). (Org-less
  *     individuals in the same situation *do* get a row now, via the
  *     sentinel-email path described above — the distinction is that an
  *     individual's own YAML file **is** their whole record, where an

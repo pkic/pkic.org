@@ -4,7 +4,7 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
-import { UserEmailAddressesPanel } from "../../assets/ts/admin/sections/users/UserAccountPanels";
+import { UserEmailAddressesPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAccountPanels";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000002";
@@ -169,7 +169,7 @@ describe("portal access-control collection pagination", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
         requests.push(url);
-        if (url.pathname !== `/api/v1/admin/users/${USER_ID}/emails`) throw new Error(`Unexpected request: ${url}`);
+        if (url.pathname !== `/api/v1/users/${USER_ID}/emails`) throw new Error(`Unexpected request: ${url}`);
         return jsonResponse({
           emails: [
             {
@@ -184,7 +184,7 @@ describe("portal access-control collection pagination", () => {
       }),
     );
 
-    const container = mount(<UserEmailAddressesPanel userId={USER_ID} primaryEmail="primary@example.test" />);
+    const container = mount(<UserEmailAddressesPanel userId={USER_ID} primaryEmail="primary@example.test" canWrite />);
     await settle();
     expect(requests[0].searchParams.get("limit")).toBe("10");
     expect(requests[0].searchParams.get("offset")).toBe("0");

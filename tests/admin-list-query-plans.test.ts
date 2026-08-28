@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { MAX_PAGE_LIMIT } from "../assets/shared/schemas/pagination";
 import { buildOffsetPageSql, type OffsetPageQuery } from "../functions/_lib/db/pagination";
 import { buildOrganizationsPageQuery } from "../functions/_lib/services/organization-management/read-model";
-import { buildAdminUsersPageQuery } from "../functions/_lib/services/admin-users-list";
+import { buildUsersPageQuery } from "../functions/_lib/services/user-management-list";
 import { buildAdminEventsPageQuery, buildAdminEventStatsQuery } from "../functions/_lib/services/events/admin-list";
 import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
 import { resetDb } from "./helpers/reset-db";
@@ -83,7 +83,7 @@ describe("admin list D1 query plans", () => {
 
   it("counts users from canonical filters without membership or participation projections", async () => {
     const { pageSql, countSql, bindings, countBindings } = await explainOffsetPage(
-      buildAdminUsersPageQuery({
+      buildUsersPageQuery({
         role: "user",
         type: "contact_only",
         q: "contact@example.test",

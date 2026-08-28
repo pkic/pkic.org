@@ -15,6 +15,7 @@ export const ADMIN_DONATIONS_REDIRECT_TARGET = "/portal/#/system/donations";
 export const ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET = "/portal/#/system/donations/promoters";
 export const ADMIN_SPONSORSHIPS_REDIRECT_TARGET = "/portal/#/system/sponsorships";
 export const ADMIN_OPERATIONS_REDIRECT_TARGET = "/portal/#/system/operations";
+export const ADMIN_USERS_REDIRECT_TARGET = "/portal/#/system/users";
 
 export function legacyAdminRedirectTarget(path: string): string | null {
   const pathname = path.split("?", 1)[0];
@@ -45,6 +46,10 @@ export function legacyAdminRedirectTarget(path: string): string | null {
   if (pathname === "/leadership") return ADMIN_LEADERSHIP_REDIRECT_TARGET;
   if (pathname === "/organizations/content-reviews") return ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET;
   if (pathname === "/organizations") return ADMIN_ORGANIZATIONS_REDIRECT_TARGET;
+  if (pathname === "/users") return ADMIN_USERS_REDIRECT_TARGET;
+  if (pathname.startsWith("/users/detail/")) {
+    return `${ADMIN_USERS_REDIRECT_TARGET}/${encodeURIComponent(pathname.slice("/users/detail/".length))}`;
+  }
   if (/^\/events\/[^/]+\/(?:proposals|registrations)\/invites$/.test(pathname)) {
     return ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET;
   }

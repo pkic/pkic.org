@@ -14,7 +14,7 @@ export function UserPicker({
   onChange,
   disabled,
   placeholder = "Search by email or name…",
-  endpoint = "/api/v1/admin/users",
+  endpoint = "/api/v1/users",
 }: {
   value: PickedUser | null;
   onChange: (user: PickedUser | null) => void;

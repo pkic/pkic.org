@@ -10,7 +10,7 @@ import {
   organizationProfileExtendedFieldsSchema,
   organizationProfileSummaryFieldsSchema,
 } from "./organization-profile";
-import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
+import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-management";
 import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpUrlSchema } from "./urls";
@@ -22,12 +22,7 @@ export const ORG_TIED_MEMBERSHIP_CATEGORIES = MEMBERSHIP_CATEGORIES.filter(
 ) as [string, ...string[]];
 export const orgTiedMembershipCategorySchema = z.enum(ORG_TIED_MEMBERSHIP_CATEGORIES);
 
-export const INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST = MEMBERSHIP_CATEGORIES.filter((c) =>
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(c),
-) as [string, ...string[]];
-export const individualMembershipCategorySchema = z.enum(INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST);
-
-export const memberIdParamsSchema = z.object({ id: databaseIdSchema });
+export { individualMembershipCategorySchema } from "./membership-management";
 
 // ── Organization list/detail ────────────────────────────────────────────────
 
@@ -107,79 +102,6 @@ export const organizationEditableUpdateSchema = organizationEditableContentSchem
 });
 
 // ── Add representative to an existing organization ─────────────────────────
-
-// ── Single-member edit/remove (used from both Organizations and Users UI) ──
-
-// membershipCategory is still accepted here — but only actually honored by
-// updateAdminMember for org-less (organization_id IS NULL) members; for
-// org-tied members it's controlled at the organization level instead (see
-// organizationEditableUpdateSchema) and this endpoint rejects it with a 422. It's
-// restricted to the individual-only category vocabulary since those are
-// the only categories this endpoint can still change.
-export const memberUpdateSchema = z.object({
-  membershipCategory: individualMembershipCategorySchema.optional(),
-  status: memberStatusSchema.optional(),
-  showOnOrgProfile: z.boolean().optional(),
-});
-
-export const memberUpdateRouteSchema = {
-  tags: ["Membership"],
-  summary: "Update a member's category/status/visibility",
-  request: {
-    params: memberIdParamsSchema,
-    body: { content: { "application/json": { schema: memberUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Member updated.",
-      content: { "application/json": { schema: z.object({ member: z.record(z.string(), z.unknown()) }) } },
-    },
-    "404": { description: "Member not found." },
-  },
-};
-
-// ── Logo upload/delete ──────────────────────────────────────────────────
-
-export const memberDeleteRouteSchema = {
-  tags: ["Membership"],
-  summary: "Remove a membership (detach a representative)",
-  description:
-    "Closes the org-less individual members row, or the organization_representatives row for an organization representative (:id is disambiguated by lookup, not by caller). The underlying user account and, for a representative, the organization's shared aggregate are untouched. If the removed person held the organization's primary or secondary contact role, that role's grant is revoked — but only if this person actually held it, never another representative's.",
-  request: { params: memberIdParamsSchema },
-  responses: {
-    "200": { description: "Membership removed." },
-    "404": { description: "Member not found." },
-  },
-};
-
-// ── Secondary contact nomination confirmation ──────────────────────
-
-// ── Grant an individual (org-less, H5/H6/H7) membership to an existing user ─
-
-export const userIdParamsSchema = z.object({ userId: databaseIdSchema });
-
-export const individualMembershipGrantSchema = z.object({
-  membershipCategory: individualMembershipCategorySchema,
-});
-
-export const userMembershipGrantRouteSchema = {
-  tags: ["Membership"],
-  summary: "Grant an individual (H5/H6/H7) membership to an existing user",
-  description:
-    "For organization-tied categories, associate an existing user through the canonical organization representative route instead.",
-  request: {
-    params: userIdParamsSchema,
-    body: { content: { "application/json": { schema: individualMembershipGrantSchema } }, required: true },
-  },
-  responses: {
-    "201": {
-      description: "Membership granted.",
-      content: { "application/json": { schema: z.object({ member: z.record(z.string(), z.unknown()) }) } },
-    },
-    "404": { description: "User not found." },
-    "409": { description: "This user already holds a membership." },
-  },
-};
 
 // ── Canonical domain routes ────────────────────────────────────────────────
 

@@ -2,9 +2,9 @@
  * Membership category vocabulary — the single source of truth for the
  * fixed A-G/H1-H8 category-code vocabulary and structural individual/org-less
  * policy. Editable labels, descriptions, ordering, and voting rights live in
- * D1. Previously independently declared
- * in admin-members.ts, member-applications.ts (both the shared schema and
- * the service), and admin-organizations.ts derived its org-tied filter from
+ * D1. Previously independently declared in membership provisioning,
+ * membership applications (both the shared schema and the service), and
+ * organization management derived its org-tied filter from
  * yet another copy — flagged in PR #1 review as a DRY violation across API
  * and service layers.
  */

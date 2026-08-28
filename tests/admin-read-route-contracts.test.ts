@@ -7,7 +7,7 @@ import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-an
 import { systemAnalyticsSummaryResponseSchema } from "../assets/shared/schemas/system-analytics";
 import { donationDetailResponseSchema } from "../assets/shared/schemas/donation-management";
 import { emailTemplateExistsResponseSchema } from "../assets/shared/schemas/email-templates";
-import { adminUserDetailResponseSchema } from "../assets/shared/schemas/admin-users";
+import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -50,7 +50,12 @@ describe("admin read route OpenAPI contracts", () => {
     expect(paths["/api/v1/admin/votes/{id}/ballots"]).toBeUndefined();
     expect(paths["/api/v1/admin/events/{eventSlug}"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}/stats"].get).toBeDefined();
-    expect(paths["/api/v1/admin/users/{userId}"].get).toBeDefined();
+    expect(paths["/api/v1/users"].get).toBeDefined();
+    expect(paths["/api/v1/users/{userId}"].get).toBeDefined();
+    expect(paths["/api/v1/members/capacities"].get).toBeDefined();
+    expect(paths["/api/v1/admin/users"]).toBeUndefined();
+    expect(paths["/api/v1/admin/users/{userId}"]).toBeUndefined();
+    expect(paths["/api/v1/admin/members"]).toBeUndefined();
   });
 
   it("returns not found for the retired platform statistics endpoint", async () => {
@@ -73,6 +78,19 @@ describe("admin read route OpenAPI contracts", () => {
     }
   });
 
+  it("returns not found for retired admin user and membership endpoints", async () => {
+    const { token } = await setupAdmin();
+    for (const [path, method] of [
+      ["/api/v1/admin/users", "GET"],
+      ["/api/v1/admin/users/00000000-0000-4000-8000-000000000000", "GET"],
+      ["/api/v1/admin/members", "GET"],
+      ["/api/v1/admin/members/00000000-0000-4000-8000-000000000000", "DELETE"],
+    ] as const) {
+      const response = await call(token, path, { method });
+      expect(response.status).toBe(404);
+    }
+  });
+
   it("rejects malformed identifiers with the canonical error envelope", async () => {
     const { token } = await setupAdmin();
 
@@ -80,7 +98,7 @@ describe("admin read route OpenAPI contracts", () => {
     expect(donation.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await donation.json()).error.code).toBe("VALIDATION_ERROR");
 
-    const user = await call(token, "/api/v1/admin/users/not-an-id");
+    const user = await call(token, "/api/v1/users/not-an-id");
     expect(user.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await user.json()).error.code).toBe("VALIDATION_ERROR");
 
@@ -119,9 +137,9 @@ describe("admin read route OpenAPI contracts", () => {
     expect(eventStats.status).toBe(200);
     expect(adminEventStatsResponseSchema.parse(await eventStats.json()).event.slug).toBe("pqc-2026");
 
-    const user = await call(token, `/api/v1/admin/users/${userId}`);
+    const user = await call(token, `/api/v1/users/${userId}`);
     expect(user.status).toBe(200);
-    expect(adminUserDetailResponseSchema.parse(await user.json()).user.id).toBe(userId);
+    expect(userDetailResponseSchema.parse(await user.json()).user.id).toBe(userId);
   });
 
   it("does not expose proposal statistics through generic event-read access", async () => {

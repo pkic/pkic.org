@@ -356,7 +356,7 @@ describe("Organization management — membership category on the aggregate (Phas
   });
 
   it("rejects adding a representative when the organization has no category set yet", async () => {
-    // A bare organization row created outside the Interim Admin Tool flow —
+    // A bare organization row created outside the membership provisioning flow —
     // no members aggregate, and therefore no category, exists for it yet.
     const organizationId = crypto.randomUUID();
     await env.DB.prepare(
@@ -382,7 +382,7 @@ describe("Organization management — membership category on the aggregate (Phas
   it("rejects membershipCategory and status on PATCH .../members/:id for a representative id — those live on the aggregate", async () => {
     const { memberId } = await createOrg();
 
-    const categoryResponse = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
+    const categoryResponse = await call(adminToken, `/api/v1/members/capacities/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify({ membershipCategory: "H5" }),
     });
@@ -391,7 +391,7 @@ describe("Organization management — membership category on the aggregate (Phas
       "REPRESENTATIVE_FIELD_NOT_EDITABLE",
     );
 
-    const statusResponse = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
+    const statusResponse = await call(adminToken, `/api/v1/members/capacities/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "inactive" }),
     });
@@ -404,7 +404,7 @@ describe("Organization management — membership category on the aggregate (Phas
   it("still allows showOnOrgProfile to be edited on a representative id", async () => {
     const { memberId } = await createOrg();
 
-    const response = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
+    const response = await call(adminToken, `/api/v1/members/capacities/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify({ showOnOrgProfile: false }),
     });
@@ -419,7 +419,7 @@ describe("Organization management — membership category on the aggregate (Phas
   });
 
   it("org-less individual (H5/H6/H7) category remains independently editable via PATCH .../members/:id", async () => {
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
@@ -433,7 +433,7 @@ describe("Organization management — membership category on the aggregate (Phas
     const created = (await response.json()) as { members: Array<{ id: string; organizationId: string | null }> };
     expect(created.members[0].organizationId).toBeNull();
 
-    const patchResponse = await call(adminToken, `/api/v1/admin/members/${created.members[0].id}`, {
+    const patchResponse = await call(adminToken, `/api/v1/members/capacities/${created.members[0].id}`, {
       method: "PATCH",
       body: JSON.stringify({ membershipCategory: "H7" }),
     });

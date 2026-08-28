@@ -6,7 +6,7 @@
 const ACTIVE_USER_CAPACITIES_BODY = `
   SELECT input.user_id, member.id AS member_id, member.member_type,
          NULL AS organization_name, category.category_code AS membership_category
-    FROM input
+    FROM eligible_input input
     JOIN members member ON member.user_id = input.user_id
      AND member.member_type = 'individual' AND member.status = 'active'
     JOIN member_category_assignments category ON category.member_id = member.id
@@ -18,7 +18,7 @@ const ACTIVE_USER_CAPACITIES_BODY = `
   UNION ALL
   SELECT input.user_id, member.id, member.member_type, organization.name,
          category.category_code
-    FROM input
+    FROM eligible_input input
     JOIN organization_representatives represented
       ON represented.user_id = input.user_id
      AND represented.left_at IS NULL AND represented.blocked_at IS NULL
@@ -28,6 +28,14 @@ const ACTIVE_USER_CAPACITIES_BODY = `
 
 export function activeUserCapacitiesCte(inputSql = "VALUES (?)"): string {
   return `WITH input(user_id) AS (${inputSql}),
+    eligible_input(user_id) AS (
+      SELECT input.user_id
+        FROM input
+        JOIN users user ON user.id = input.user_id
+       WHERE user.active = 1
+         AND user.pii_redacted_at IS NULL
+         AND user.merged_into_user_id IS NULL
+    ),
     active_user_capacities(
       user_id, member_id, member_type, organization_name, membership_category
     ) AS (${ACTIVE_USER_CAPACITIES_BODY}

@@ -9,8 +9,8 @@ import { buildCreateIndividualMemberStatements } from "../functions/_lib/service
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { signCapabilityToken, verifyDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
-import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
-import { anonymizeAdminUser } from "../functions/_lib/services/admin-user-anonymize";
+import { updateUser } from "../functions/_lib/services/user-management-update";
+import { anonymizeUser as anonymizeUserService } from "../functions/_lib/services/user-anonymization";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 let adminToken: string;
@@ -114,7 +114,7 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "target@example.test");
 
     const response = await patchUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { active: false }), { userId }),
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { active: false }), { userId }),
     );
 
     expect(response.status).toBe(200);
@@ -132,7 +132,7 @@ describe("admin user deactivation", () => {
     await env.DB.prepare(`UPDATE users SET active = 0 WHERE id = '${userId}'`).run();
 
     const response = await patchUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { active: true }), { userId }),
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { active: true }), { userId }),
     );
 
     expect(response.status).toBe(200);
@@ -145,7 +145,7 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "combo@example.test");
 
     const response = await patchUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { role: "guest", active: false }), {
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { role: "guest", active: false }), {
         userId,
       }),
     );
@@ -173,7 +173,7 @@ describe("admin user deactivation", () => {
     const staffToken = await createAdminSession(env.DB, staffId, "users-writer-session");
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { role: "admin" }, staffToken),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }, staffToken),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -203,7 +203,7 @@ describe("admin user deactivation", () => {
     const staffToken = await createAdminSession(env.DB, staffId, "self-promoter-session");
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${staffId}`, "PATCH", { role: "admin" }, staffToken),
+      adminRequest(`/api/v1/users/${staffId}`, "PATCH", { role: "admin" }, staffToken),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -219,7 +219,7 @@ describe("admin user deactivation", () => {
     const targetId = await seedUser(env.DB, "admin-promotion-target@example.test");
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { role: "admin" }),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -238,7 +238,7 @@ describe("admin user deactivation", () => {
     ).run();
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { role: "admin" }),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -266,7 +266,7 @@ describe("admin user deactivation", () => {
 
     const response = await app.fetch(
       adminRequest(
-        `/api/v1/admin/users/${targetId}`,
+        `/api/v1/users/${targetId}`,
         "PATCH",
         { biography: "Still editable by users:write staff." },
         staffToken,
@@ -303,7 +303,7 @@ describe("admin user deactivation", () => {
     const staffToken = await createAdminSession(env.DB, staffId, "email-editor-session");
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { email: "attacker@example.test" }, staffToken),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { email: "attacker@example.test" }, staffToken),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -340,7 +340,7 @@ describe("admin user deactivation", () => {
     const staffToken = await createAdminSession(env.DB, staffId, "identity-recovery-session");
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { email: "identity-after@example.test" }, staffToken),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { email: "identity-after@example.test" }, staffToken),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -396,12 +396,9 @@ describe("admin user deactivation", () => {
     ]);
     const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
-    await updateAdminUser(
-      env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
-      userId,
-      { email: "email-admin-set@example.test" },
-    );
+    await updateUser(env.DB, { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
+      email: "email-admin-set@example.test",
+    });
 
     expect(
       (
@@ -456,7 +453,7 @@ describe("admin user deactivation", () => {
     const response = await patchUser(
       createContext(
         env,
-        adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+        adminRequest(`/api/v1/users/${userId}`, "PATCH", {
           biography: "Admin maintained speaker biography.",
           links: ["https://example.test/profile", "https://github.com/profile"],
         }),
@@ -481,7 +478,7 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "router-profile@example.test");
 
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+      adminRequest(`/api/v1/users/${userId}`, "PATCH", {
         firstName: "Router",
         lastName: "Tested",
         jobTitle: "QA Lead",
@@ -511,7 +508,7 @@ describe("admin user deactivation", () => {
 
     await expect(
       patchUser(
-        createContext(env, adminRequest(`/api/v1/admin/users/${adminId}`, "PATCH", { active: false }), {
+        createContext(env, adminRequest(`/api/v1/users/${adminId}`, "PATCH", { active: false }), {
           userId: adminId,
         }),
       ),
@@ -523,7 +520,7 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "audit-deact@example.test");
 
     await patchUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { active: false }), { userId }),
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { active: false }), { userId }),
     );
 
     const entry = (
@@ -543,7 +540,7 @@ describe("admin user deactivation", () => {
     await patchUser(
       createContext(
         env,
-        adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+        adminRequest(`/api/v1/users/${userId}`, "PATCH", {
           email: "new-private@example.test",
           biography: "Sensitive private biography",
           links: ["https://private.example.test/profile"],
@@ -571,7 +568,7 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "ec-member@example.test");
 
     const setResponse = await patchUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { isEcMember: true }), { userId }),
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: true }), { userId }),
     );
     expect(setResponse.status).toBe(200);
     const setData = (await setResponse.json()) as { user: { isEcMember: boolean } };
@@ -583,7 +580,7 @@ describe("admin user deactivation", () => {
     expect(rowAfterSet.is_ec_member).toBe(1);
 
     const getResponse = await app.fetch(
-      adminRequest(`/api/v1/admin/users/${userId}`, "GET"),
+      adminRequest(`/api/v1/users/${userId}`, "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -591,7 +588,7 @@ describe("admin user deactivation", () => {
     expect(getData.user.isEcMember).toBe(true);
 
     const clearResponse = await patchUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { isEcMember: false }), { userId }),
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: false }), { userId }),
     );
     const clearData = (await clearResponse.json()) as { user: { isEcMember: boolean } };
     expect(clearData.user.isEcMember).toBe(false);
@@ -607,7 +604,7 @@ describe("admin user deactivation", () => {
     const userId = crypto.randomUUID();
 
     await expect(
-      patchUser(createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {}), { userId })),
+      patchUser(createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", {}), { userId })),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 });
@@ -624,7 +621,7 @@ describe("admin user anonymization", () => {
     const userId = await seedUser(env.DB, "pii-person@example.test");
 
     const response = await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
+      createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }),
     );
 
     expect(response.status).toBe(200);
@@ -656,9 +653,7 @@ describe("admin user anonymization", () => {
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     await addRepresentative(env.DB, memberId, userId);
 
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
 
     expect(
       await queryAll(
@@ -683,9 +678,7 @@ describe("admin user anonymization", () => {
     // Give the target user an active session
     await createAdminSession(env.DB, userId, "target-user-token");
 
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
 
     const sessions = await queryAll<{ revoked_at: string | null }>(
       env.DB,
@@ -746,9 +739,7 @@ describe("admin user anonymization", () => {
     ]);
     const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
 
     expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id = ?", userId)).toHaveLength(0);
@@ -801,7 +792,7 @@ describe("admin user anonymization", () => {
     await anonymizeUser(
       createContext(
         { ...(env as any), SPEAKER_UPLOADS_BUCKET: undefined },
-        adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"),
+        adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"),
         {
           userId,
         },
@@ -827,13 +818,11 @@ describe("admin user anonymization", () => {
     const userId = await seedUser(env.DB, "already-anon@example.test");
 
     // Anonymize once
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
 
     // Second attempt should be rejected
     await expect(
-      anonymizeUser(createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId })),
+      anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId })),
     ).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
   });
 
@@ -843,7 +832,7 @@ describe("admin user anonymization", () => {
     await env.DB.prepare("UPDATE users SET biography = ? WHERE id = ?").bind("Private biography", userId).run();
 
     const gate = gateNextBatch(env.DB);
-    const staleUpdate = updateAdminUser(
+    const staleUpdate = updateUser(
       gate.db,
       { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
@@ -855,7 +844,7 @@ describe("admin user anonymization", () => {
     );
     await gate.reached;
 
-    await anonymizeAdminUser(
+    await anonymizeUserService(
       env.DB,
       { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
@@ -884,22 +873,17 @@ describe("admin user anonymization", () => {
     const { adminId } = await setup();
     const userId = await seedUser(env.DB, "race-anonymize@example.test");
     const gate = gateNextBatch(env.DB);
-    const staleAnonymization = anonymizeAdminUser(
+    const staleAnonymization = anonymizeUserService(
       gate.db,
       { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
     );
     await gate.reached;
 
-    await updateAdminUser(
-      env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
-      userId,
-      {
-        email: "race-winner@example.test",
-        biography: "Winner biography",
-      },
-    );
+    await updateUser(env.DB, { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
+      email: "race-winner@example.test",
+      biography: "Winner biography",
+    });
     gate.release();
 
     await expect(staleAnonymization).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });
@@ -920,12 +904,44 @@ describe("admin user anonymization", () => {
     ).toHaveLength(0);
   });
 
+  it("rolls back a user update when users:write is revoked after request authorization", async () => {
+    await setup();
+    const actorId = await seedUser(env.DB, "revoked-user-write@example.test");
+    const targetUserId = await seedUser(env.DB, "revoked-user-write-target@example.test");
+    const grantId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'users:write', ?, datetime('now'))`,
+    )
+      .bind(grantId, actorId, actorId)
+      .run();
+
+    const gate = gateNextBatch(env.DB);
+    const mutation = updateUser(
+      gate.db,
+      { identityType: "user", id: actorId, email: "revoked-user-write@example.test", role: "user" },
+      targetUserId,
+      { biography: "This update must not commit" },
+    );
+    await gate.reached;
+    await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?").bind(grantId).run();
+    gate.release();
+
+    await expect(mutation).rejects.toMatchObject({ code: "USER_AUTHORIZATION_CHANGED", status: 409 });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_updated'", targetUserId),
+    ).toEqual([]);
+    expect(
+      await queryAll<{ biography: string | null }>(env.DB, "SELECT biography FROM users WHERE id = ?", targetUserId),
+    ).toEqual([{ biography: null }]);
+  });
+
   it("refuses to anonymize the calling admin's own account", async () => {
     const { env, adminId } = await setup();
 
     await expect(
       anonymizeUser(
-        createContext(env, adminRequest(`/api/v1/admin/users/${adminId}/anonymize`, "POST"), { userId: adminId }),
+        createContext(env, adminRequest(`/api/v1/users/${adminId}/anonymize`, "POST"), { userId: adminId }),
       ),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
@@ -935,7 +951,7 @@ describe("admin user anonymization", () => {
     const userId = crypto.randomUUID();
 
     await expect(
-      anonymizeUser(createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId })),
+      anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId })),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -943,9 +959,7 @@ describe("admin user anonymization", () => {
     await setup();
     const userId = await seedUser(env.DB, "audit-anon@example.test");
 
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
 
     const entry = (
       await queryAll<{ action: string; details_json: string }>(
@@ -965,14 +979,10 @@ describe("admin user anonymization", () => {
   it("does not allow an anonymized account to be repopulated or reactivated", async () => {
     await setup();
     const userId = await seedUser(env.DB, "cannot-restore@example.test");
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
 
     await expect(
-      patchUser(
-        createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { active: true }), { userId }),
-      ),
+      patchUser(createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { active: true }), { userId })),
     ).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
   });
 });
@@ -980,7 +990,7 @@ describe("admin user anonymization", () => {
 // ── Type filter (member vs. event-attendee vs. contact-only) ───────────────
 // Computed from the existing `members`/`event_participants` tables.
 
-describe("admin users list — type filter", () => {
+describe("users list — type filter", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -1014,7 +1024,7 @@ describe("admin users list — type filter", () => {
 
   async function listUsers(query: string): Promise<{ users: ListedUser[] }> {
     const response = await app.fetch(
-      adminRequest(`/api/v1/admin/users?${query}`, "GET"),
+      adminRequest(`/api/v1/users?${query}`, "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -1088,7 +1098,7 @@ describe("admin users list — type filter", () => {
     await setup();
 
     const response = await app.fetch(
-      adminRequest("/api/v1/admin/users?type=bogus", "GET"),
+      adminRequest("/api/v1/users?type=bogus", "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -1154,7 +1164,7 @@ describe("admin users list — type filter", () => {
     await env.DB.prepare("UPDATE users SET links_json = ? WHERE id = ?").bind("{not valid json", userId).run();
 
     const response = await app.fetch(
-      adminRequest("/api/v1/admin/users?q=type-malformed-links@example.test", "GET"),
+      adminRequest("/api/v1/users?q=type-malformed-links@example.test", "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -1170,7 +1180,7 @@ describe("admin users list — type filter", () => {
     await seedUser(env.DB, "sort-fallback@example.test");
 
     const response = await app.fetch(
-      adminRequest("/api/v1/admin/users?q=sort-fallback@example.test&sort=not_a_real_column", "GET"),
+      adminRequest("/api/v1/users?q=sort-fallback@example.test&sort=not_a_real_column", "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -1186,7 +1196,7 @@ describe("admin users list — type filter", () => {
     await seedUser(env.DB, "sort-b@example.test");
 
     const response = await app.fetch(
-      adminRequest("/api/v1/admin/users?q=sort-&sort=email", "GET"),
+      adminRequest("/api/v1/users?q=sort-&sort=email", "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );

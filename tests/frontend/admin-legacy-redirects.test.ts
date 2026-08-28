@@ -15,6 +15,7 @@ import {
   ADMIN_ORGANIZATIONS_REDIRECT_TARGET,
   ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
   ADMIN_OPERATIONS_REDIRECT_TARGET,
+  ADMIN_USERS_REDIRECT_TARGET,
   legacyAdminRedirectTarget,
 } from "../../assets/ts/admin/shell/legacy-redirects";
 
@@ -34,7 +35,11 @@ describe("legacy admin route redirects", () => {
   it("moves account settings to the canonical portal route while preserving unrelated routes", () => {
     expect(legacyAdminRedirectTarget("/account")).toBe(ADMIN_ACCOUNT_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/account?from=bookmark")).toBe(ADMIN_ACCOUNT_REDIRECT_TARGET);
-    expect(legacyAdminRedirectTarget("/users")).toBeNull();
+    expect(legacyAdminRedirectTarget("/users")).toBe(ADMIN_USERS_REDIRECT_TARGET);
+  });
+
+  it("moves user bookmarks to System Users", () => {
+    expect(legacyAdminRedirectTarget("/users/detail/user%2F1")).toBe(`${ADMIN_USERS_REDIRECT_TARGET}/user%252F1`);
   });
 
   it("moves the global audit log to permission-derived portal system management", () => {

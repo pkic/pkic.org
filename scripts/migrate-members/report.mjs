@@ -58,7 +58,7 @@ export function renderMarkdownReport(report) {
     lines.push(`- ${slug}: ${count}`);
   }
   lines.push("");
-  lines.push("## Unmatched — finish via `POST /api/v1/admin/members` (Interim Admin Tool)");
+  lines.push("## Unmatched — finish via canonical `POST /api/v1/members` membership provisioning");
   for (const item of report.totals.unmatched) {
     lines.push(
       `- **${item.name}** (\`${item.file}\`, category ${item.memberType || "unknown"}) — ${item.reason}. Representatives: ${item.representatives.map(formatRep).join("; ") || "(none listed)"}${item.workingGroupsHint?.length ? `. WG hint: ${item.workingGroupsHint.join(", ")}` : ""}`,

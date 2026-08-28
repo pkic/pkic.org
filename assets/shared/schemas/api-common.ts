@@ -117,7 +117,7 @@ export const formKeyParamsSchema = z.object({
   formKey: z.string().trim().min(1).max(120),
 });
 
-export const adminUserIdParamsSchema = z.object({
+export const userIdParamsSchema = z.object({
   userId: databaseIdSchema,
 });
 

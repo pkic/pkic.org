@@ -99,7 +99,7 @@ export const registrationHeadshotDeleteRouteSchema = {
   },
 };
 
-export const adminHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ headshotUrl: true });
+export const userHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ headshotUrl: true });
 
 export const ATTENDANCE_TYPES = ["in_person", "virtual", "on_demand"] as const;
 export const attendanceTypeSchema = z.enum(ATTENDANCE_TYPES);

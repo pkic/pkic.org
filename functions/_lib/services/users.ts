@@ -299,7 +299,7 @@ async function resolveUserWrite(
  * (unauthenticated) must never overwrite an existing user's profile — an
  * attacker could otherwise hijack someone else's name/org by submitting a
  * registration with their email address. Set allowProfileUpdate only in
- * authenticated or admin-controlled contexts.
+ * authenticated or staff-controlled contexts.
  */
 export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<UserRecord> {
   const resolved = await resolveUserWrite(db, payload);
@@ -312,8 +312,8 @@ export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUs
 /**
  * Same resolution as `findOrCreateUser`, but returns an unexecuted
  * statement instead of writing immediately — lets a caller that's already
- * assembling a larger atomic `db.batch()` (e.g. admin-members.ts's
- * createAdminMember, membership/provisioning.ts's provisionOrganizationMembership)
+ * assembling a larger atomic `db.batch()` (for example, membership
+ * provisioning or application approval)
  * fold the user write into that same transition instead of committing it
  * ahead of a batch that might still fail.
  */

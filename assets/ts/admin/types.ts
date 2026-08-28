@@ -1,8 +1,8 @@
 import type { EmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/email-templates";
 import type {
-  AdminUserListItem as CanonicalAdminUser,
-  AdminUserMembership as CanonicalAdminUserMembership,
-} from "../../shared/schemas/admin-users";
+  UserListItem as CanonicalUser,
+  UserMembership as CanonicalUserMembership,
+} from "../../shared/schemas/user-management";
 import type {
   AccessGrant as CanonicalAccessGrant,
   Role as CanonicalRole,
@@ -29,7 +29,7 @@ import type {
   AdminFormSubmission as CanonicalAdminFormSubmission,
   AdminFormSummary as CanonicalAdminEventFormSummary,
 } from "../../shared/schemas/admin-forms";
-import type { AdminMemberSummary as CanonicalAdminMemberSummary } from "../../shared/schemas/admin-members";
+import type { MemberCapacitySummary as CanonicalMemberCapacitySummary } from "../../shared/schemas/membership-management";
 import type { AdminEventStatsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/admin-analytics";
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
 import type { z } from "zod";
@@ -81,8 +81,8 @@ export type InviteRecord = CanonicalInviteRecord;
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-export type AdminUserMembership = CanonicalAdminUserMembership;
-export type AdminUser = CanonicalAdminUser;
+export type AdminUserMembership = CanonicalUserMembership;
+export type AdminUser = CanonicalUser;
 
 // ── Email templates ───────────────────────────────────────────────────────────
 
@@ -92,5 +92,5 @@ export type EmailTemplateVersion = CanonicalEmailTemplateVersion;
 
 export type EventStatsResponse = CanonicalEventStatsResponse;
 
-// Interim Admin Tool — GET/POST /api/v1/admin/members
-export type AdminMemberSummary = CanonicalAdminMemberSummary;
+// Membership-capacity data consumed by the temporary admin interface.
+export type AdminMemberSummary = CanonicalMemberCapacitySummary;

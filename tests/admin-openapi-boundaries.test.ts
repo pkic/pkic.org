@@ -61,7 +61,8 @@ describe("admin OpenAPI mutation boundaries", () => {
     expect(spec.paths["/api/v1/organizations/{organizationId}/logo"].delete).toBeDefined();
     expect(spec.paths["/api/v1/admin/organizations"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/organizations/{id}/logo"]).toBeUndefined();
-    expect(spec.paths["/api/v1/admin/users/{userId}/anonymize"].post).toBeDefined();
+    expect(spec.paths["/api/v1/users/{userId}/anonymize"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/anonymize"]).toBeUndefined();
     expect(
       spec.paths["/api/v1/organizations/{organizationId}/logo"].delete.responses["200"].content["application/json"]
         .schema,
@@ -100,7 +101,7 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("validates path parameters before anonymization or binary logo processing", async () => {
     await setupAdmin();
 
-    const anonymize = await callAdmin("/api/v1/admin/users/not-a-database-id/anonymize", { method: "POST" });
+    const anonymize = await callAdmin("/api/v1/users/not-a-database-id/anonymize", { method: "POST" });
     expect(anonymize.status).toBe(400);
     await expect(anonymize.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
 

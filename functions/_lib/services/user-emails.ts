@@ -1,11 +1,11 @@
 /**
- * Secondary email addresses on a user account -- admin/display/search
+ * Secondary email addresses on a user account -- staff-managed alias
  * only, does not affect login (magic-link/passkey auth continue to
  * resolve strictly off `users.normalized_email`). These aliases let staff
  * associate roster email variations without mutating or merging identities.
  */
 import {
-  ADMIN_USER_EMAILS_SORT_COLUMNS,
+  USER_EMAILS_SORT_COLUMNS,
   type UserEmailRecord,
   type UserEmailsListQuery,
   userEmailResponseSchema,
@@ -19,8 +19,9 @@ import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike } from "../types";
-import { prepareAuditLogAfterOneChange } from "./audit";
+import type { DatabaseLike, UserBackedAuthAdmin } from "../types";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { authorizedUserMutationDb } from "./user-management-authorization";
 
 interface UserEmailRow {
   id: string;
@@ -29,7 +30,7 @@ interface UserEmailRow {
   created_at: string;
 }
 
-const USER_EMAIL_SORT_EXPRESSIONS: Record<(typeof ADMIN_USER_EMAILS_SORT_COLUMNS)[number], string> = {
+const USER_EMAIL_SORT_EXPRESSIONS: Record<(typeof USER_EMAILS_SORT_COLUMNS)[number], string> = {
   email: "LOWER(email)",
   created_at: "created_at",
 };
@@ -104,11 +105,15 @@ export async function findUserEmailOwner(db: DatabaseLike, normalizedEmail: stri
 
 export async function addUserEmail(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   userId: string,
   email: string,
 ): Promise<UserEmailRecord> {
-  const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]);
+  const user = await first<{ id: string; updated_at: string }>(
+    db,
+    "SELECT id, updated_at FROM users WHERE id = ? AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+    [userId],
+  );
   if (!user) {
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
   }
@@ -122,14 +127,34 @@ export async function addUserEmail(
   const id = uuid();
   const now = nowIso();
   try {
-    await db.batch([
-      db
-        .prepare("INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(id, userId, email, normalized, now),
-      prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_added", "user", userId, { email }, now),
+    const authorizedDb = authorizedUserMutationDb(db, actor, ["users:write"]);
+    await authorizedDb.batch([
+      authorizedDb
+        .prepare(
+          `INSERT INTO user_emails (id, user_id, email, normalized_email, created_at)
+           SELECT ?, ?, ?, ?, ?
+            WHERE EXISTS (
+              SELECT 1 FROM users
+               WHERE id = ? AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL AND updated_at = ?
+            )`,
+        )
+        .bind(id, userId, email, normalized, now, userId, user.updated_at),
+      prepareAuditLogAfterOneChange(
+        authorizedDb,
+        "admin",
+        actor.id,
+        "user_email_added",
+        "user",
+        userId,
+        { email },
+        now,
+      ),
     ]);
   } catch (error) {
     if (isEmailReservationConflict(error)) throw emailTakenError();
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "USER_LIFECYCLE_CHANGED", "The user changed while the secondary email was being added");
+    }
     throw error;
   }
 
@@ -138,7 +163,7 @@ export async function addUserEmail(
 
 export async function removeUserEmail(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   userId: string,
   emailId: string,
 ): Promise<void> {
@@ -148,8 +173,9 @@ export async function removeUserEmail(
   ]);
   if (!existing) throw new AppError(404, "EMAIL_NOT_FOUND", "Secondary email not found for this user");
 
-  await db.batch([
-    db.prepare("DELETE FROM user_emails WHERE id = ? AND user_id = ?").bind(emailId, userId),
-    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_removed", "user", userId, { emailId }),
+  const authorizedDb = authorizedUserMutationDb(db, actor, ["users:write"]);
+  await authorizedDb.batch([
+    authorizedDb.prepare("DELETE FROM user_emails WHERE id = ? AND user_id = ?").bind(emailId, userId),
+    prepareAuditLogAfterOneChange(authorizedDb, "admin", actor.id, "user_email_removed", "user", userId, { emailId }),
   ]);
 }

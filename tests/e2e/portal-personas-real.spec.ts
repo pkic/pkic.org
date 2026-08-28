@@ -146,7 +146,7 @@ async function createGroup(
 /** Create a real staff identity, then detach its membership before assigning a scoped group role. */
 async function createStaffOnly(page: Page, groupIds: string[], stamp: string): Promise<string> {
   const email = `e2e-staff-${stamp}@persona.example.test`;
-  const created = await jsonResponse(page.request, "POST", "/api/v1/admin/members", {
+  const created = await jsonResponse(page.request, "POST", "/api/v1/members", {
     organizationName: `Staff Persona Organization ${stamp}`,
     membershipCategory: "A",
     memberSince: "2026-08-01",
@@ -159,10 +159,10 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
   const userId = stringProperty(member, "userId");
   const membershipId = stringProperty(member, "id");
 
-  // The DELETE is the real admin membership-offboarding API. It ends the
+  // The DELETE is the real membership-capacity offboarding API. It ends the
   // membership and leaves the active identity available for scoped staff
   // access, rather than pretending the global admin is a staff persona.
-  await jsonResponse(page.request, "DELETE", `/api/v1/admin/members/${membershipId}`);
+  await jsonResponse(page.request, "DELETE", `/api/v1/members/capacities/${membershipId}`);
   for (const groupId of groupIds) {
     await jsonResponse(page.request, "POST", `/api/v1/system/access-control/users/${userId}/roles`, {
       roleId: "role-group_lead",

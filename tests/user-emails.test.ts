@@ -13,6 +13,7 @@ import { createAdminSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { queueAdminSignInCapability, redeemAdminSignInCapability } from "../functions/_lib/auth/admin";
 import { addUserEmail, removeUserEmail } from "../functions/_lib/services/user-emails";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -59,23 +60,23 @@ describe("secondary user emails", () => {
   it("adds, lists, and removes a secondary email", async () => {
     const userId = await insertUser("primary@example.test");
 
-    const addResponse = await call(adminToken, `/api/v1/admin/users/${userId}/emails`, {
+    const addResponse = await call(adminToken, `/api/v1/users/${userId}/emails`, {
       method: "POST",
       body: JSON.stringify({ email: "secondary@example.test" }),
     });
     expect(addResponse.status).toBe(201);
     const added = (await addResponse.json()) as { email: { id: string; email: string } };
 
-    const listResponse = await call(adminToken, `/api/v1/admin/users/${userId}/emails`);
+    const listResponse = await call(adminToken, `/api/v1/users/${userId}/emails`);
     const list = (await listResponse.json()) as { emails: Array<{ id: string; email: string }> };
     expect(list.emails.some((e) => e.id === added.email.id && e.email === "secondary@example.test")).toBe(true);
 
-    const removeResponse = await call(adminToken, `/api/v1/admin/users/${userId}/emails/${added.email.id}`, {
+    const removeResponse = await call(adminToken, `/api/v1/users/${userId}/emails/${added.email.id}`, {
       method: "DELETE",
     });
     expect(removeResponse.status).toBe(200);
 
-    const afterRemove = (await (await call(adminToken, `/api/v1/admin/users/${userId}/emails`)).json()) as {
+    const afterRemove = (await (await call(adminToken, `/api/v1/users/${userId}/emails`)).json()) as {
       emails: Array<{ id: string }>;
     };
     expect(afterRemove.emails).toHaveLength(0);
@@ -90,7 +91,7 @@ describe("secondary user emails", () => {
 
   it("lists secondary emails with mounted-route search, sort, empty, and final-page envelopes", async () => {
     const userId = await insertUser("paged-emails@example.test");
-    const emptyResponse = await call(adminToken, `/api/v1/admin/users/${userId}/emails`);
+    const emptyResponse = await call(adminToken, `/api/v1/users/${userId}/emails`);
     expect(await emptyResponse.json()).toMatchObject({
       emails: [],
       page: { limit: 10, offset: 0, total: 0, hasMore: false },
@@ -109,19 +110,19 @@ describe("secondary user emails", () => {
         .run();
     }
 
-    const searched = await call(adminToken, `/api/v1/admin/users/${userId}/emails?q=middle&sort=email`);
+    const searched = await call(adminToken, `/api/v1/users/${userId}/emails?q=middle&sort=email`);
     expect(await searched.json()).toMatchObject({
       emails: [{ email: "middle-alias@example.test" }],
       page: { total: 1, hasMore: false },
     });
 
-    const firstPage = await call(adminToken, `/api/v1/admin/users/${userId}/emails?sort=email&limit=2&offset=0`);
+    const firstPage = await call(adminToken, `/api/v1/users/${userId}/emails?sort=email&limit=2&offset=0`);
     expect(await firstPage.json()).toMatchObject({
       emails: [{ email: "alpha-alias@example.test" }, { email: "middle-alias@example.test" }],
       page: { limit: 2, offset: 0, total: 3, hasMore: true },
     });
 
-    const finalPage = await call(adminToken, `/api/v1/admin/users/${userId}/emails?sort=email&limit=2&offset=2`);
+    const finalPage = await call(adminToken, `/api/v1/users/${userId}/emails?sort=email&limit=2&offset=2`);
     expect(await finalPage.json()).toMatchObject({
       emails: [{ email: "zulu-alias@example.test" }],
       page: { limit: 2, offset: 2, total: 3, hasMore: false },
@@ -163,21 +164,38 @@ describe("secondary user emails", () => {
     }
   });
 
+  it("does not attach a secondary email after the target is anonymized during the commit race", async () => {
+    const userId = await insertUser("email-target-race@example.test");
+    const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    const gate = gateNextBatch(env.DB);
+    const mutation = addUserEmail(gate.db, actor, userId, "must-not-attach@example.test");
+    await gate.reached;
+    await env.DB.prepare(
+      "UPDATE users SET pii_redacted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+    )
+      .bind(userId)
+      .run();
+    gate.release();
+
+    await expect(mutation).rejects.toMatchObject({ status: 409, code: "USER_LIFECYCLE_CHANGED" });
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toEqual([]);
+  });
+
   it("rejects adding an email that already belongs to another user's primary or secondary address", async () => {
     const userA = await insertUser("user-a@example.test");
     const userB = await insertUser("user-b@example.test");
 
-    const clashPrimary = await call(adminToken, `/api/v1/admin/users/${userA}/emails`, {
+    const clashPrimary = await call(adminToken, `/api/v1/users/${userA}/emails`, {
       method: "POST",
       body: JSON.stringify({ email: "user-b@example.test" }),
     });
     expect(clashPrimary.status).toBe(409);
 
-    await call(adminToken, `/api/v1/admin/users/${userB}/emails`, {
+    await call(adminToken, `/api/v1/users/${userB}/emails`, {
       method: "POST",
       body: JSON.stringify({ email: "shared-alias@example.test" }),
     });
-    const clashSecondary = await call(adminToken, `/api/v1/admin/users/${userA}/emails`, {
+    const clashSecondary = await call(adminToken, `/api/v1/users/${userA}/emails`, {
       method: "POST",
       body: JSON.stringify({ email: "shared-alias@example.test" }),
     });
@@ -200,13 +218,13 @@ describe("secondary user emails", () => {
       "alias-b@example.test",
     );
 
-    const crossAccount = await call(adminToken, `/api/v1/admin/users/${userA}`, {
+    const crossAccount = await call(adminToken, `/api/v1/users/${userA}`, {
       method: "PATCH",
       body: JSON.stringify({ email: "alias-b@example.test" }),
     });
     expect(crossAccount.status).toBe(409);
 
-    const ownAlias = await call(adminToken, `/api/v1/admin/users/${userA}`, {
+    const ownAlias = await call(adminToken, `/api/v1/users/${userA}`, {
       method: "PATCH",
       body: JSON.stringify({ email: "alias-a@example.test" }),
     });
@@ -262,7 +280,7 @@ describe("secondary user emails", () => {
   it("does not expose a generic account-merge route", async () => {
     const survivorId = await insertUser("no-merge-survivor@example.test");
     const sourceId = await insertUser("no-merge-source@example.test");
-    const response = await call(adminToken, `/api/v1/admin/users/${survivorId}/merge`, {
+    const response = await call(adminToken, `/api/v1/users/${survivorId}/merge`, {
       method: "POST",
       body: JSON.stringify({ sourceUserId: sourceId }),
     });
@@ -280,7 +298,7 @@ describe("secondary user emails", () => {
       .bind(sourceId, "legacy-source@deleted.invalid", "legacy-source@deleted.invalid", survivorId)
       .run();
 
-    const response = await call(adminToken, `/api/v1/admin/users/${sourceId}`, {
+    const response = await call(adminToken, `/api/v1/users/${sourceId}`, {
       method: "PATCH",
       body: JSON.stringify({ active: true }),
     });
@@ -303,7 +321,7 @@ describe("secondary user emails", () => {
       .bind(crypto.randomUUID(), userId, staffRole[0].id, adminId)
       .run();
 
-    await call(adminToken, `/api/v1/admin/users/${userId}/emails`, {
+    await call(adminToken, `/api/v1/users/${userId}/emails`, {
       method: "POST",
       body: JSON.stringify({ email: "alias@example.test" }),
     });
@@ -369,12 +387,12 @@ describe("secondary user emails", () => {
 
   it("Users list search matches a secondary email", async () => {
     const userId = await insertUser("findme-primary@example.test");
-    await call(adminToken, `/api/v1/admin/users/${userId}/emails`, {
+    await call(adminToken, `/api/v1/users/${userId}/emails`, {
       method: "POST",
       body: JSON.stringify({ email: "findme-alias@example.test" }),
     });
 
-    const searchResponse = await call(adminToken, "/api/v1/admin/users?q=findme-alias");
+    const searchResponse = await call(adminToken, "/api/v1/users?q=findme-alias");
     const results = (await searchResponse.json()) as { users: Array<{ id: string }> };
     expect(results.users.some((u) => u.id === userId)).toBe(true);
   });

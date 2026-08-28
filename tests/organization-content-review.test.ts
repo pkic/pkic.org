@@ -1152,7 +1152,7 @@ describe("Secondary contact nomination & confirmation", () => {
         nomineeUserId,
       )
     )[0];
-    const removeResponse = await call(adminToken, `/api/v1/admin/members/${nomineeRepRow.id}`, {
+    const removeResponse = await call(adminToken, `/api/v1/members/capacities/${nomineeRepRow.id}`, {
       method: "DELETE",
     });
     expect(removeResponse.status).toBe(200);

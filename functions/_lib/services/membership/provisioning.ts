@@ -5,8 +5,8 @@
  * for an individual-only category), primary/secondary contact role grants,
  * and group membership.
  *
- * Called identically by admin creation (admin-members.ts's
- * `createAdminMember`) and application-approval provisioning
+ * Called identically by membership provisioning and application-approval
+ * provisioning
  * (applications/approve.ts's `approveApplication`) — these were
  * previously two independent implementations of the same orchestration
  * (PR #1 review finding: duplicate `INSERT INTO members` logic with

@@ -233,7 +233,7 @@ unless noted:
    **also** already collecting a `memberSince` date from staff and silently
    dropping it — a pre-existing bug unrelated to this migration script, fixed
    alongside since it's the same underlying gap
-   (`functions/_lib/services/admin-members.ts`).
+   (`functions/_lib/services/membership-management-list.ts`).
 3. **Hugo shortcodes in YAML `content` are rewritten to plain URLs** before
    landing in `organizations.content_markdown` — `{{< youtube ID >}}` →
    `https://www.youtube.com/watch?v=ID`, `{{< vimeo ID >}}` →
@@ -288,7 +288,7 @@ many "bare"/"WG-only" roster users remain after this pass.
   Don't substitute `--preview`/`--production` unless you actually mean to
   touch those databases — no confirmation prompt gates that choice.
 - The unmatched org-tied representatives are **expected** to be left out.
-  The current `POST /api/v1/admin/members` path is a temporary compatibility
+  The canonical `POST /api/v1/members` path is the membership provisioning
   adapter for staff reconciliation, not the canonical long-term workflow.
 - Only a minority of active representatives have a photo file on disk under
   `assets/images/members/<orgSlug>/` — the rest simply never had a photo

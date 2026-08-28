@@ -3,11 +3,11 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
-import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
-import { removeAdminMember } from "../functions/_lib/services/organization-management/representative-provisioning";
+import { updateUser } from "../functions/_lib/services/user-management-update";
+import { removeMembershipCapacity } from "../functions/_lib/services/membership/capacities";
 import { buildUserAccessOffboardingStatements } from "../functions/_lib/services/membership/offboarding";
 import { reconcileMailingListSubscriptionsForUser } from "../functions/_lib/services/mailing-list-subscriptions";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 
 async function insertGroup(name: string, email: string): Promise<string> {
   const id = crypto.randomUUID();
@@ -55,13 +55,23 @@ async function establishDesiredSubscriptions(userId: string): Promise<number> {
   return total;
 }
 
+async function grantAdminRole(userId: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+     VALUES (?, ?, 'role-admin', ?, datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), userId, userId)
+    .run();
+}
+
 describe("membership access offboarding", () => {
   beforeEach(resetDb);
 
   it("atomically deactivates a user, closes every group capacity, and reconciles projected subscriptions", async () => {
     const actorId = await insertUser(env.DB, "offboarding-admin@example.test");
+    await grantAdminRole(actorId);
     const userId = await insertUser(env.DB, "offboarding-user@example.test");
-    const actor: AuthAdmin = {
+    const actor: UserBackedAuthAdmin = {
       identityType: "user",
       id: actorId,
       email: "offboarding-admin@example.test",
@@ -74,7 +84,7 @@ describe("membership access offboarding", () => {
     await joinGroupCapacity(groupId, userId, memberId);
     const desiredSubscriptionCount = await establishDesiredSubscriptions(userId);
 
-    await updateAdminUser(env.DB, actor, userId, { active: false });
+    await updateUser(env.DB, actor, userId, { active: false });
 
     expect(await queryAll(env.DB, "SELECT active FROM users WHERE id = ?", userId)).toEqual([{ active: 0 }]);
     expect(
@@ -103,8 +113,9 @@ describe("membership access offboarding", () => {
 
   it("rolls back access closure and subscription reconciliation when the audit cannot commit", async () => {
     const actorId = await insertUser(env.DB, "rollback-admin@example.test");
+    await grantAdminRole(actorId);
     const userId = await insertUser(env.DB, "rollback-user@example.test");
-    const actor: AuthAdmin = {
+    const actor: UserBackedAuthAdmin = {
       identityType: "user",
       id: actorId,
       email: "rollback-admin@example.test",
@@ -126,7 +137,7 @@ describe("membership access offboarding", () => {
     ).run();
 
     try {
-      await expect(updateAdminUser(env.DB, actor, userId, { active: false })).rejects.toThrow(
+      await expect(updateUser(env.DB, actor, userId, { active: false })).rejects.toThrow(
         "forced offboarding audit failure",
       );
       expect(await queryAll(env.DB, "SELECT active FROM users WHERE id = ?", userId)).toEqual([{ active: 1 }]);
@@ -186,6 +197,7 @@ describe("membership access offboarding", () => {
 
   it("removing one representative closes only that Member capacity and preserves other access", async () => {
     const actorId = await insertUser(env.DB, "representative-admin@example.test");
+    await grantAdminRole(actorId);
     const userId = await insertUser(env.DB, "multi-representative@example.test");
     const orgA = await insertOrganization(env.DB, "Representative Org A");
     const orgB = await insertOrganization(env.DB, "Representative Org B");
@@ -199,7 +211,16 @@ describe("membership access offboarding", () => {
     await joinGroupCapacity(groupB, userId, memberB);
     await establishDesiredSubscriptions(userId);
 
-    await removeAdminMember(env.DB, actorId, representativeA);
+    await removeMembershipCapacity(
+      env.DB,
+      {
+        identityType: "user",
+        id: actorId,
+        email: "representative-admin@example.test",
+        role: "admin",
+      },
+      representativeA,
+    );
 
     expect(
       await queryAll<{ member_id: string; closed: number }>(

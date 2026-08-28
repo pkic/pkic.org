@@ -193,6 +193,36 @@ describe("portal capability-derived navigation", () => {
     );
   });
 
+  it("exposes Users only to a global reader, while retaining action permissions after entry", () => {
+    const actionOnly = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "users:write", contextType: null, contextId: null },
+        { permission: "users:anonymize", contextType: null, contextId: null },
+        { permission: "membership:write", contextType: null, contextId: null },
+      ],
+    });
+    const readerAndWriter = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "users:read", contextType: null, contextId: null },
+        { permission: "users:write", contextType: null, contextId: null },
+      ],
+    });
+
+    expect(portalSystemNavigationItems(actionOnly)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/users" }),
+    );
+    expect(portalSystemNavigationItems(readerAndWriter)).toContainEqual({
+      path: "/system/users",
+      section: "system",
+      label: "Users",
+    });
+    expect(portalHasGlobalPermission(readerAndWriter, "users:write")).toBe(true);
+  });
+
   it("exposes membership applications only to a global membership reader", () => {
     const reader = portalSessionFixture({
       admin: true,

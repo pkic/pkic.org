@@ -2,15 +2,17 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UserMembershipPanel } from "../../assets/ts/admin/sections/users/UserMembershipPanel";
-import type { UserDetail, UserMembership } from "../../assets/ts/admin/sections/users/model";
+import { UserMembershipPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserMembershipPanel";
+import { UserMembershipCard } from "../../assets/ts/member-flows/portal/sections/system-users/UserMembershipCard";
+import type { UserDetail, UserMembership } from "../../assets/ts/member-flows/portal/sections/system-users/model";
+import type { MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 
 const mounted: HTMLElement[] = [];
 
 function membership(
   memberId: string,
   organizationName: string,
-  category: string,
+  category: MembershipCategory,
   groupSlug: string,
   groupName: string,
 ): UserMembership {
@@ -39,6 +41,7 @@ afterEach(() => {
     container.remove();
   }
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("UserMembershipPanel", () => {
@@ -55,8 +58,7 @@ describe("UserMembershipPanel", () => {
       links: [],
       role: "user",
       active: true,
-      headshot_r2_key: null,
-      headshot_updated_at: null,
+      isEcMember: false,
       headshotUrl: null,
       created_at: "2026-08-01T00:00:00.000Z",
       updated_at: "2026-08-01T00:00:00.000Z",
@@ -70,12 +72,57 @@ describe("UserMembershipPanel", () => {
     document.body.append(container);
     mounted.push(container);
 
-    void act(() => render(<UserMembershipPanel user={user} onChanged={vi.fn()} />, container));
+    void act(() => render(<UserMembershipPanel user={user} onChanged={vi.fn()} canManage />, container));
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("PQC Working Group");
     expect(container.textContent).toContain("Organization B");
     expect(container.textContent).toContain("Cryptographic Module Working Group");
     expect(container.textContent).toContain("Add organization representation");
+    expect(container.querySelectorAll("select")).toHaveLength(0);
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
+  });
+
+  it("updates a capacity through the canonical capacity route", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          "https://app.test",
+        );
+        requests.push(url);
+        return new Response(
+          JSON.stringify({
+            member: {
+              id: "member-individual",
+              userId: "user-1",
+              organizationId: null,
+              membershipCategory: "H5",
+              status: "active",
+              showOnOrgProfile: false,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+    const individual = membership("member-individual", "", "H5", "pqc", "PQC Working Group");
+    individual.organizationId = null;
+    individual.organizationName = null;
+    individual.showOnOrgProfile = false;
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() =>
+      render(<UserMembershipCard membership={individual} onChanged={async () => {}} canManage />, container),
+    );
+    const category = container.querySelector("select") as HTMLSelectElement;
+    category.value = "H6";
+    await act(async () => {
+      category.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(requests[0]?.pathname).toBe("/api/v1/members/capacities/member-individual");
   });
 });
