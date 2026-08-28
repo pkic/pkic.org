@@ -31,7 +31,6 @@ const DELEGATED_MODULES = new Map<string, string>([
   ["proposals", "proposal router"],
   ["roles", "role router"],
   ["sponsorships", "sponsorship router"],
-  ["votes", "vote router"],
 ]);
 
 // Retired modules retain only a fail-closed policy tombstone until the admin
@@ -43,6 +42,7 @@ const RETIRED_MODULES = new Set([
   "leadership-positions",
   "membership-settings",
   "stats",
+  "votes",
   "vote-proposals",
 ]);
 

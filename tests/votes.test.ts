@@ -103,12 +103,11 @@ describe("canonical group voting", () => {
   });
 
   it("creates a vote with one canonical owner group and explicit electorate", async () => {
-    const response = await call(adminToken, "/api/v1/admin/votes", {
+    const response = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes`, {
       method: "POST",
       body: JSON.stringify({
         title: "Canonical architecture vote",
         voteType: "motion",
-        ownerGroupId: TEST_GROUPS.pqc,
         electorateMode: "per_member",
         thresholdType: "simple_majority",
         closesAt: new Date(Date.now() + 60_000).toISOString(),
@@ -139,17 +138,17 @@ describe("canonical group voting", () => {
     };
     expect(
       (
-        await call(leaderToken, "/api/v1/admin/votes", {
+        await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes`, {
           method: "POST",
-          body: JSON.stringify({ ...body, ownerGroupId: TEST_GROUPS.pqc }),
+          body: JSON.stringify(body),
         })
       ).status,
     ).toBe(200);
     expect(
       (
-        await call(leaderToken, "/api/v1/admin/votes", {
+        await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes`, {
           method: "POST",
-          body: JSON.stringify({ ...body, title: "Wrong group", ownerGroupId: TEST_GROUPS.cm }),
+          body: JSON.stringify({ ...body, title: "Wrong group" }),
         })
       ).status,
     ).toBe(403);

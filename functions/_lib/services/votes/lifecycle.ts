@@ -3,15 +3,14 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
-import { buildOffsetPageStatements, decodeOffsetPageResults, queryPage } from "../../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
-import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
+import { resolveMappedOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { ADMIN_VOTES_SORT_COLUMNS, type AdminVotesListQuery } from "../../../../assets/shared/schemas/votes-admin";
 import {
   RAW_VOTE_BALLOT_SORT_COLUMNS,
   type RawVoteBallotsListQuery,
@@ -26,9 +25,6 @@ import {
   uniqueSlug,
   toVoteSummary,
   getVoteRowOrThrow,
-  getCandidatesForVotes,
-  VOTE_ROW_COLUMNS,
-  type VoteRow,
   type VoteType,
   type VoteElectorateMode,
   type ThresholdType,
@@ -36,7 +32,6 @@ import {
   type VoteVisibility,
   type PublicDetailLevel,
   type VoteSummary,
-  type CandidateSummary,
 } from "./shared";
 import { prepareVoteManagementAuthorizationGuard } from "./vote-access";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -274,64 +269,7 @@ export async function updateVoteVisibility(
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
-// ── Admin: list all votes ─────────────────────────────────────────────
-//
-// Not in endpoint table (which only lists POST/PATCH by id for the
-// admin votes surface) — added because the admin UI has nothing else to
-// list votes from; staff aren't necessarily also portal members, so the
-// member-only GET /api/v1/portal/votes can't stand in. Same "necessary
-// addition beyond the literal table" precedent as extra
-// sponsorship columns (see migration 0034's header).
-
-export interface AdminVoteSummary extends VoteSummary {
-  candidates: CandidateSummary[] | null;
-}
-
-export async function listVotesForAdmin(
-  db: DatabaseLike,
-  params: AdminVotesListQuery,
-): Promise<{ votes: AdminVoteSummary[]; total: number }> {
-  const conditions: string[] = [];
-  const whereArgs: unknown[] = [];
-  if (params.status) {
-    conditions.push("status = ?");
-    whereArgs.push(params.status);
-  }
-  if (params.q) {
-    const search = buildD1TextSearchFilter(params.q, [
-      "title",
-      "description",
-      "status",
-      "vote_type",
-      "electorate_mode",
-      "(SELECT name FROM groups owner_group WHERE owner_group.id = votes.owner_group_id)",
-    ]);
-    conditions.push(search.sql);
-    whereArgs.push(...search.bindings);
-  }
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(params.sort, ADMIN_VOTES_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
-
-  const { rows, total } = await queryPage<VoteRow>(db, {
-    sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes ${where}`,
-    bindings: whereArgs,
-    orderBy,
-    limit: params.limit,
-    offset: params.offset,
-  });
-
-  const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
-  const candidatesByVoteId = await getCandidatesForVotes(db, electionVoteIds);
-
-  const votes = rows.map((row) => ({
-    ...toVoteSummary(row),
-    candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
-  }));
-
-  return { votes, total };
-}
-
-// ── Admin: raw ballot audit ("Full ballot breakdown (staff only)") ────
+// ── Managed raw ballot audit ──────────────────────────────────────────
 
 export interface AdminBallotRow {
   id: string;

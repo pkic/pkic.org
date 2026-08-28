@@ -99,7 +99,7 @@ test.describe("public votes pages", () => {
 
     const created = await page.evaluate(
       async ({ title, closesAt }) => {
-        const res = await fetch("/api/v1/admin/votes", {
+        const res = await fetch("/api/v1/groups/20000000-0000-4000-8000-000000000001/votes", {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -107,7 +107,6 @@ test.describe("public votes pages", () => {
             title,
             description: "An end-to-end test motion vote.",
             voteType: "motion",
-            ownerGroupId: "20000000-0000-4000-8000-000000000001",
             electorateMode: "per_member",
             thresholdType: "simple_majority",
             closesAt,
@@ -122,7 +121,7 @@ test.describe("public votes pages", () => {
     const slug = created.vote!.slug;
 
     const visibilityStatus = await page.evaluate(async (voteId) => {
-      const res = await fetch(`/api/v1/admin/votes/${voteId}/visibility`, {
+      const res = await fetch(`/api/v1/groups/20000000-0000-4000-8000-000000000001/votes/${voteId}/visibility`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",

@@ -906,12 +906,16 @@ Status: In progress
       selected group. Managers can create and edit votes, set result visibility,
       inspect identifiable ballots, and apply lifecycle transitions; participants
       and managers can use the same group-scoped proposal list with only the
-      actions advertised by the backend. The duplicate admin Votes navigation
-      and components are removed, while the old URL redirects to the portal.
-      The unused global `/api/v1/admin/vote-proposals` adapter is also removed;
-      its admin-only route contracts and unscoped read model no longer remain as
-      a second implementation. The selected-group and member portal routes now
-      compose the neutral canonical proposal list and rejection schemas.
+      actions advertised by the backend. The duplicate admin Votes navigation,
+      components, and `/api/v1/admin/votes/**` compatibility API are removed,
+      while the old browser URL redirects to the portal. Vote creation,
+      settings, visibility, and identifiable-ballot audit now use only the
+      selected-group contracts; the unused global vote inventory contract and
+      read model are deleted. The unused global
+      `/api/v1/admin/vote-proposals` adapter is also removed; its admin-only
+      route contracts and unscoped read model no longer remain as a second
+      implementation. The selected-group and member portal routes now compose
+      the neutral canonical proposal list and rejection schemas.
       Portal membership and leadership selectors no longer cross the global
       admin-user boundary: one group-scoped catalog returns only active users'
       selection fields after required server-side search, enforces an eight-row

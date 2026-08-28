@@ -52,6 +52,10 @@ describe("admin route authorization policy", () => {
       kind: "delegated",
       boundary: "retired admin API tombstone",
     });
+    expect(adminAuthorizationForRequest("/api/v1/admin/votes", "GET")).toEqual({
+      kind: "delegated",
+      boundary: "retired admin API tombstone",
+    });
   });
 
   it("enforces named read and write permissions for centrally governed modules", () => {

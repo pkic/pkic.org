@@ -44,6 +44,10 @@ describe("admin read route OpenAPI contracts", () => {
     expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
     expect(paths["/api/v1/system/analytics/summary"].get).toBeDefined();
     expect(paths["/api/v1/admin/stats"]).toBeUndefined();
+    expect(paths["/api/v1/admin/votes"]).toBeUndefined();
+    expect(paths["/api/v1/admin/votes/{id}"]).toBeUndefined();
+    expect(paths["/api/v1/admin/votes/{id}/visibility"]).toBeUndefined();
+    expect(paths["/api/v1/admin/votes/{id}/ballots"]).toBeUndefined();
     expect(paths["/api/v1/admin/events/{eventSlug}"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}/stats"].get).toBeDefined();
     expect(paths["/api/v1/admin/users/{userId}"].get).toBeDefined();
@@ -53,6 +57,20 @@ describe("admin read route OpenAPI contracts", () => {
     const { token } = await setupAdmin();
     const response = await call(token, "/api/v1/admin/stats");
     expect(response.status).toBe(404);
+  });
+
+  it("returns not found for retired admin vote endpoints", async () => {
+    const { token } = await setupAdmin();
+    for (const [path, method] of [
+      ["/api/v1/admin/votes", "GET"],
+      ["/api/v1/admin/votes", "POST"],
+      ["/api/v1/admin/votes/legacy-vote", "PATCH"],
+      ["/api/v1/admin/votes/legacy-vote/visibility", "PATCH"],
+      ["/api/v1/admin/votes/legacy-vote/ballots", "GET"],
+    ] as const) {
+      const response = await call(token, path, { method });
+      expect(response.status).toBe(404);
+    }
   });
 
   it("rejects malformed identifiers with the canonical error envelope", async () => {
