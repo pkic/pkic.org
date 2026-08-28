@@ -46,7 +46,7 @@ export const adminDueWorkListRouteSchema = {
   tags: ["Admin due work"],
   summary: "List the bounded due-work batch",
   description:
-    "Returns one server-owned, filterable/sortable/pageable projection of due outbox, reminder, and optional retention work. Each source has an explicit candidate limit so historical D1 data is not joined into an unbounded Worker read model.",
+    "Returns one server-owned, filterable/sortable/pageable projection of due outbox, reminder, and optional retention work. Each source has an explicit candidate limit so historical D1 data is not joined into an unbounded Worker read model; search and bucket counts describe that bounded preview batch rather than all historical due rows.",
   request: { query: adminDueWorkListQuerySchema },
   responses: {
     "200": {

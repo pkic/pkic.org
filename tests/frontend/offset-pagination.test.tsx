@@ -545,8 +545,11 @@ describe("canonical offset pagination", () => {
     expect(filteredEmailRequest.searchParams.get("offset")).toBe("0");
     void act(() => render(null, email));
 
-    const dueWork = mount(<DueWorkTable reminderLimit={50} outboxLimit={50} includeRetention={false} refreshKey={0} />);
+    const dueWork = mount(<DueWorkTable reminderLimit={50} outboxLimit={50} includeRetention={false} />);
     await settle();
+    const initialDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    expect(initialDueWorkRequest.searchParams.get("sort")).toBe("dueAt");
+    expect(initialDueWorkRequest.searchParams.get("bucket")).toBe("all");
     void act(() => nextButton(dueWork).click());
     await settle();
     expect(
@@ -570,5 +573,27 @@ describe("canonical offset pagination", () => {
     const filteredDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
     expect(filteredDueWorkRequest.searchParams.get("bucket")).toBe("outbox");
     expect(filteredDueWorkRequest.searchParams.get("offset")).toBe("0");
+
+    const search = dueWork.querySelector<HTMLInputElement>('input[placeholder="Search this preview batch…"]')!;
+    search.value = "ada";
+    void act(() => {
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    void act(() => {
+      search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    const searchedDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    expect(searchedDueWorkRequest.searchParams.get("q")).toBe("ada");
+    expect(searchedDueWorkRequest.searchParams.get("offset")).toBe("0");
+
+    const titleSort = [...dueWork.querySelectorAll<HTMLButtonElement>(".tbl-sort-btn")].find((button) =>
+      button.textContent?.includes("Target"),
+    )!;
+    void act(() => titleSort.click());
+    await settle();
+    const sortedDueWorkRequest = requests.filter((url) => url.pathname === "/api/v1/admin/due-work").at(-1)!;
+    expect(sortedDueWorkRequest.searchParams.get("sort")).toBe("-title");
+    expect(sortedDueWorkRequest.searchParams.get("q")).toBe("ada");
   });
 });

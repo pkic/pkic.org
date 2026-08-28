@@ -1192,6 +1192,19 @@ Status: In progress
       mounted even though no production frontend calls them. Their removal is
       an explicit remaining §10 legacy-API cleanup; do not describe this
       destination as complete while that duplication exists.
+      Due Work remains in the admin shell pending a deliberate System
+      Operations permission and command design. Its current screen is now a
+      bounded D1 preview rather than two competing mount-time projections:
+      opening it performs only the pageable GET, while the detailed dry run is
+      requested explicitly. The table reuses the shared server-side search,
+      sort, pagination, stale-request cancellation, and reload abstraction;
+      bucket counts and search results deliberately describe each source's
+      bounded preview window rather than all historical queue rows. Focused
+      frontend and backend regressions prove that mounting the screen performs
+      no job POST, an explicit preview performs one dry-run command, and an
+      actual run reloads the table exactly once. This is preparatory cleanup,
+      not a System Operations cutover, so Due Work and its command boundary
+      remain in the open global-management scope.
       Other global management destinations remain, so this item is deliberately
       still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1322,8 +1335,8 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the System Analytics
-      portal cutover with 2,207 backend tests (one skipped), 291 frontend
+      Current evidence: the complete gate passes after the bounded Due Work
+      listing cleanup with 2,207 backend tests (one skipped), 292 frontend
       tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.

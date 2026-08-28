@@ -1,61 +1,23 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
-import { ErrorAlert } from "../../components/ErrorAlert";
-import { Spinner } from "../../components/Spinner";
+import { useRef, useState } from "preact/hooks";
 import { api } from "../api";
 import type { AdminJobsRunResponse } from "../types";
 import { adminJobsRunResponseSchema } from "../../../shared/schemas/admin-jobs";
 import { toast } from "../ui";
+import type { ApiTableActions } from "../components/ApiDataTable";
 import { DueWorkTable } from "./due-work/DueWorkTable";
 import { JobRunSummary } from "./due-work/JobRunSummary";
 
 export function DueWork() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [reminderLimit, setReminderLimit] = useState(120);
   const [outboxLimit, setOutboxLimit] = useState(120);
   const [includeRetention, setIncludeRetention] = useState(false);
   const [preview, setPreview] = useState<AdminJobsRunResponse | null>(null);
   const [lastRun, setLastRun] = useState<AdminJobsRunResponse | null>(null);
-  const [dueWorkRefreshKey, setDueWorkRefreshKey] = useState(0);
+  const dueWorkActionsRef = useRef<ApiTableActions | null>(null);
   const [running, setRunning] = useState(false);
   const [runningMembershipBatch, setRunningMembershipBatch] = useState<
     "consultation" | "ecReview" | "wgChairDigest" | null
   >(null);
-
-  const fetchPreview = useCallback(
-    async (rl: number, ol: number, retention: boolean): Promise<AdminJobsRunResponse> => {
-      return api("/api/v1/internal/jobs/run", adminJobsRunResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({
-          reminderLimit: rl,
-          outboxLimit: ol,
-          runReminders: true,
-          runRetention: retention,
-          runOutbox: true,
-          runRetentionMode: "always",
-          retentionHourUtc: 0,
-          dryRun: true,
-        }),
-      });
-    },
-    [],
-  );
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setPreview(await fetchPreview(reminderLimit, outboxLimit, includeRetention));
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [reminderLimit, outboxLimit, includeRetention, fetchPreview]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   async function doRunJobs(dryRun: boolean) {
     setRunning(true);
@@ -78,12 +40,11 @@ export function DueWork() {
         toast("Preview refreshed", "info");
       } else {
         setLastRun(result);
-        setDueWorkRefreshKey((value) => value + 1);
+        await dueWorkActionsRef.current?.reload();
         toast(
           `Done: ${result.reminders.processed} reminders, ${result.outbox.processed} outbox rows${includeRetention ? `, ${result.retention.redactedRegistrations} data redacted` : ""}`,
           "success",
         );
-        void load();
       }
     } catch (reason) {
       toast((reason as Error).message, "error");
@@ -127,9 +88,6 @@ export function DueWork() {
       setRunningMembershipBatch(null);
     }
   }
-
-  if (loading && !preview) return <Spinner />;
-  if (error && !preview) return <ErrorAlert error={error} />;
 
   return (
     <div>
@@ -210,7 +168,7 @@ export function DueWork() {
           reminderLimit={reminderLimit}
           outboxLimit={outboxLimit}
           includeRetention={includeRetention}
-          refreshKey={dueWorkRefreshKey}
+          actionsRef={dueWorkActionsRef}
         />
 
         <div class="mt-4">
@@ -226,13 +184,18 @@ export function DueWork() {
           )}
         </div>
 
-        {preview && (
+        {preview ? (
           <details class="mt-3">
             <summary class="small fw-semibold">Preview details</summary>
             <div class="mt-2">
               <JobRunSummary result={preview} title="Preview (Dry Run)" empty="No preview available." />
             </div>
           </details>
+        ) : (
+          <p class="small text-muted mt-3 mb-0">
+            The queue table is the bounded operational preview. Detailed job output is loaded only when you request a
+            dry-run preview.
+          </p>
         )}
       </div>
     </div>
