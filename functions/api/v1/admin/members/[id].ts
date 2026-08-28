@@ -9,11 +9,11 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { removeAdminMember, updateAdminMember } from "../../../../_lib/services/admin-organizations";
+import { removeAdminMember, updateAdminMember } from "../../../../_lib/services/organization-management";
 import {
   memberDeleteRouteSchema,
   memberUpdateRouteSchema,
-} from "../../../../../assets/shared/schemas/admin-organizations";
+} from "../../../../../assets/shared/schemas/organization-management";
 import { adminMemberMutationResponseSchema } from "../../../../../assets/shared/schemas/admin-members";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 

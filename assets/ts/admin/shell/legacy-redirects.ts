@@ -6,6 +6,7 @@ export const ADMIN_MAILING_LISTS_REDIRECT_TARGET = "/portal/#/management";
 export const ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET = "/portal/#/system/membership-applications";
 export const ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET = "/portal/#/system/membership-settings";
 export const ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET = "/portal/#/system/organization-content-reviews";
+export const ADMIN_ORGANIZATIONS_REDIRECT_TARGET = "/portal/#/system/organizations";
 export const ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET = "/portal/#/management";
 export const ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET = "/portal/#/system/email-templates";
 export const ADMIN_LEADERSHIP_REDIRECT_TARGET = "/portal/#/system/leadership";
@@ -43,6 +44,7 @@ export function legacyAdminRedirectTarget(path: string): string | null {
   }
   if (pathname === "/leadership") return ADMIN_LEADERSHIP_REDIRECT_TARGET;
   if (pathname === "/organizations/content-reviews") return ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET;
+  if (pathname === "/organizations") return ADMIN_ORGANIZATIONS_REDIRECT_TARGET;
   if (/^\/events\/[^/]+\/(?:proposals|registrations)\/invites$/.test(pathname)) {
     return ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET;
   }

@@ -1023,14 +1023,24 @@ describe("Secondary contact nomination & confirmation", () => {
     );
     expect(Number(secondaryBefore[0].total)).toBe(0);
 
-    const confirmResponse = await call(
-      adminToken,
-      `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`,
+    const dispatched: Promise<unknown>[] = [];
+    const confirmResponse = await app.fetch(
+      request(adminToken, `/api/v1/organizations/${organizationId}/confirm-secondary-contact`, { method: "POST" }),
+      env as any,
       {
-        method: "POST",
-      },
+        passThroughOnException: () => {},
+        waitUntil: (promise: Promise<unknown>) => {
+          dispatched.push(promise);
+          void promise.catch(() => undefined);
+        },
+      } as any,
     );
     expect(confirmResponse.status).toBe(200);
+    expect(await confirmResponse.json()).toEqual({
+      organizationId,
+      secondaryContactUserId: nomineeUserId,
+    });
+    expect(dispatched).toHaveLength(1);
 
     const secondaryAfter = await queryAll<{ user_id: string; granted_by_user_id: string | null }>(
       env.DB,
@@ -1048,7 +1058,7 @@ describe("Secondary contact nomination & confirmation", () => {
     expect(Number(nominationAfter[0].total)).toBe(0);
   });
 
-  it("keeps API-key audit identity out of the nullable confirmed-contact grantor foreign key", async () => {
+  it("rejects API-key confirmation because the canonical organization route requires a user-backed staff actor", async () => {
     const {
       organizationId,
       memberId,
@@ -1064,10 +1074,10 @@ describe("Secondary contact nomination & confirmation", () => {
 
     const confirmResponse = await call(
       env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`,
+      `/api/v1/organizations/${organizationId}/confirm-secondary-contact`,
       { method: "POST" },
     );
-    expect(confirmResponse.status).toBe(200);
+    expect(confirmResponse.status).toBe(403);
     expect(
       await queryAll<{ user_id: string; granted_by_user_id: string | null }>(
         env.DB,
@@ -1076,18 +1086,18 @@ describe("Secondary contact nomination & confirmation", () => {
            AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
         memberId,
       ),
-    ).toEqual([{ user_id: nomineeUserId, granted_by_user_id: null }]);
+    ).toEqual([]);
     expect(
       await queryAll<{ actor_id: string | null }>(
         env.DB,
         "SELECT actor_id FROM audit_log WHERE action = 'organization_secondary_contact_confirmed'",
       ),
-    ).toEqual([{ actor_id: "api-key" }]);
+    ).toEqual([]);
   });
 
   it("rejects confirmation with 409 when there is no pending nomination", async () => {
     const { organizationId } = await seedOrgWithContact("primary8@example.test", "F");
-    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`, {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/confirm-secondary-contact`, {
       method: "POST",
     });
     expect(response.status).toBe(409);

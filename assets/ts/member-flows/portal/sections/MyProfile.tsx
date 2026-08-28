@@ -6,7 +6,7 @@
  * visibility toggle live in the same tab nav table.
  */
 import { useState } from "preact/hooks";
-import { getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
+import { deleteJson, getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
 import { uploadFile } from "../../../shared/file-upload";
 import { Spinner } from "../../../components/Spinner";
@@ -21,6 +21,8 @@ import {
   myHeadshotUploadResponseSchema,
   myOrganizationVisibilityUpdateResponseSchema,
 } from "../../../../shared/schemas/me";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import { representativeMutationResponseSchema } from "../../../../shared/schemas/organization-representation";
 
 async function refreshProfile(): Promise<void> {
   const refreshed = await getJson("/api/v1/me", myProfileSchema);
@@ -236,24 +238,111 @@ export function MyProfile() {
         </div>
 
         {current.organizationRepresentatives && current.organizationRepresentatives.length > 0 && (
-          <div class="card border-0 shadow-sm mt-3">
-            <div class="card-body">
-              <h3 class="h6 mb-3">Organization representatives</h3>
-              <ul class="list-group list-group-flush">
-                {current.organizationRepresentatives.map((rep) => (
-                  <li key={rep.userId} class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <span>
-                      {rep.name ?? rep.email} <span class="text-muted small">({rep.email})</span>
-                    </span>
-                    {rep.isPrimaryContact && <span class="badge text-bg-success">Primary contact</span>}
-                    {rep.isSecondaryContact && <span class="badge text-bg-secondary">Secondary contact</span>}
-                  </li>
-                ))}
-              </ul>
-              {current.isOrgContact && <AddCoworkerForm />}
-            </div>
-          </div>
+          <OrganizationRepresentativesCard current={current} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function OrganizationRepresentativesCard({ current }: { current: MyProfileType }) {
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+
+  if (!current.organizationId || !current.organizationRepresentatives) return null;
+
+  async function updateVisibility(userId: string, showOnOrganizationProfile: boolean): Promise<void> {
+    setBusyUserId(userId);
+    try {
+      await patchJson(
+        `/api/v1/organizations/${encodeURIComponent(current.organizationId!)}/representatives/${encodeURIComponent(userId)}`,
+        { showOnOrganizationProfile },
+        representativeMutationResponseSchema,
+      );
+      await refreshProfile();
+      toast("Representative visibility updated", "success");
+    } catch (err) {
+      toast(err instanceof ApiClientError ? err.message : "Could not update representative visibility.", "error");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function removeRepresentative(
+    rep: NonNullable<MyProfileType["organizationRepresentatives"]>[number],
+  ): Promise<void> {
+    if (!confirm(`Remove ${rep.name ?? rep.email} as a representative? Their account is not deleted.`)) return;
+    setBusyUserId(rep.userId);
+    try {
+      await deleteJson(
+        `/api/v1/organizations/${encodeURIComponent(current.organizationId!)}/representatives/${encodeURIComponent(rep.userId)}`,
+        successResponseSchema,
+      );
+      await refreshProfile();
+      toast("Representative removed", "success");
+    } catch (err) {
+      toast(err instanceof ApiClientError ? err.message : "Could not remove representative.", "error");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  return (
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body">
+        <h3 class="h6 mb-3">Organization representatives</h3>
+        <ul class="list-group list-group-flush">
+          {current.organizationRepresentatives.map((rep) => {
+            const canRemove = current.isOrgContact && rep.userId !== current.userId && !rep.isPrimaryContact;
+            const busy = busyUserId === rep.userId;
+            return (
+              <li key={rep.userId} class="list-group-item px-0">
+                <div class="d-flex justify-content-between align-items-center gap-2">
+                  <span>
+                    {rep.name ?? rep.email} <span class="text-muted small">({rep.email})</span>
+                  </span>
+                  <span>
+                    {rep.isPrimaryContact && <span class="badge text-bg-success me-1">Primary contact</span>}
+                    {rep.isSecondaryContact && <span class="badge text-bg-secondary">Secondary contact</span>}
+                  </span>
+                </div>
+                {current.isOrgContact && (
+                  <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+                    <div class="form-check form-switch">
+                      <input
+                        id={`organization-representative-visibility-${rep.userId}`}
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        checked={rep.showOnOrgProfile}
+                        disabled={busy}
+                        onChange={(event) =>
+                          void updateVisibility(rep.userId, (event.target as HTMLInputElement).checked)
+                        }
+                      />
+                      <label
+                        class="form-check-label small"
+                        for={`organization-representative-visibility-${rep.userId}`}
+                      >
+                        Show on organization profile
+                      </label>
+                    </div>
+                    {canRemove && (
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        disabled={busy}
+                        onClick={() => void removeRepresentative(rep)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {current.isOrgContact && <AddCoworkerForm />}
       </div>
     </div>
   );

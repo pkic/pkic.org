@@ -1,9 +1,9 @@
 /**
- * Admin Organizations read model — list/detail projections over the
+ * Organization-management read model — list/detail projections over the
  * post-approval organization profile (data-bearing columns, pulled forward
  * by consolidated migration 0035) plus its representative roster
  * (`organization_representatives`, consolidated migration 0035). Split from the combined
- * admin-organizations.ts (PR #1 review, Phase 8) — see profile.ts for the
+ * prior combined organization module (PR #1 review, Phase 8) — see profile-update.ts for the
  * profile-update use case and representatives.ts for representative/member
  * provisioning; this file owns only reads.
  */
@@ -14,9 +14,9 @@ import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import {
-  ADMIN_ORGANIZATIONS_SORT_COLUMNS,
+  ORGANIZATIONS_SORT_COLUMNS,
   type OrganizationsListQuery,
-} from "../../../../assets/shared/schemas/admin-organizations";
+} from "../../../../assets/shared/schemas/organization-management";
 import { primaryContactProjection, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
 import { nowIso } from "../../utils/time";
@@ -90,11 +90,11 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
-export function buildAdminOrganizationsPageQuery(params: OrganizationsListQuery) {
+export function buildOrganizationsPageQuery(params: OrganizationsListQuery) {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
-  const orderBy = resolveOrderBy(params.sort, ADMIN_ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
+  const orderBy = resolveOrderBy(params.sort, ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
   const now = nowIso();
 
   return {
@@ -111,11 +111,11 @@ export function buildAdminOrganizationsPageQuery(params: OrganizationsListQuery)
   };
 }
 
-export async function listAdminOrganizations(
+export async function listOrganizations(
   db: DatabaseLike,
   params: OrganizationsListQuery,
 ): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
-  const pageQuery = buildAdminOrganizationsPageQuery(params);
+  const pageQuery = buildOrganizationsPageQuery(params);
   const { rows, total } = await queryPage<OrgSummaryRow>(db, pageQuery);
 
   return { organizations: rows.map(toOrgSummary), total };
@@ -202,7 +202,7 @@ async function toOrgDetail(
     representatives: representatives.map((r) => ({
       // representativeId is this representative's own
       // organization_representatives.id — the identifier PATCH/DELETE
-      // /api/v1/admin/members/:id expects — never the shared aggregate
+      // the canonical representative route expects — never the shared aggregate
       // members.id (every representative of this organization shares one
       // aggregate row, exposed separately below as membershipId).
       representativeId: r.representative_id,
@@ -221,7 +221,7 @@ async function toOrgDetail(
   };
 }
 
-export async function getAdminOrganization(db: DatabaseLike, id: string) {
+export async function getOrganization(db: DatabaseLike, id: string) {
   const row = await fetchOrgDetailRow(db, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Organization not found");
   const [representatives, aggregate] = await Promise.all([fetchRepresentatives(db, id), getOrgAggregate(db, id)]);

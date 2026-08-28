@@ -62,6 +62,12 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     label: "Content Reviews",
     permission: "organizations:content-review",
   },
+  {
+    path: "/system/organizations",
+    section: "system",
+    label: "Organizations",
+    permissions: ["organizations:read", "membership:write"],
+  },
   { path: "/system/audit-log", section: "system", label: "Audit Log", permission: "audit:read" },
   {
     path: "/system/email-templates",

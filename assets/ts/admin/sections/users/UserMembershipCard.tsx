@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
-import { MEMBER_STATUSES } from "../../../../shared/schemas/admin-organizations";
+import { MEMBER_STATUSES } from "../../../../shared/schemas/membership-categories";
 import { adminMemberMutationResponseSchema } from "../../../../shared/schemas/admin-members";
 import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";

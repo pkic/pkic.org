@@ -17,6 +17,7 @@ interface RepresentativeStateRow {
   id: string;
   left_at: string | null;
   blocked_at: string | null;
+  show_on_org_profile: number;
 }
 
 async function commitRepresentativeLifecycleBatch(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
@@ -48,7 +49,7 @@ async function requireRepresentation(
 ): Promise<RepresentativeStateRow> {
   const representative = await first<RepresentativeStateRow>(
     db,
-    `SELECT id, left_at, blocked_at
+    `SELECT id, left_at, blocked_at, show_on_org_profile
        FROM organization_representatives
       WHERE member_id = ? AND user_id = ?`,
     [memberId, userId],
@@ -169,4 +170,49 @@ export async function restoreOrganizationRepresentative(
     }),
     ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at),
   ]);
+}
+
+export async function updateOrganizationRepresentativeProfile(
+  db: DatabaseLike,
+  actor: RepresentativeManagerActor,
+  input: { memberId: string; userId: string; showOnOrganizationProfile: boolean },
+): Promise<string> {
+  await requireOrganizationRepresentativeManagement(db, {
+    memberId: input.memberId,
+    actorUserId: actor.userId,
+    databaseUserId: actor.databaseUserId,
+    staffAuthorized: actor.staffAuthorized,
+  });
+  const representative = await requireRepresentation(db, input.memberId, input.userId);
+  if (representative.left_at || representative.blocked_at) {
+    throw new AppError(409, "ORGANIZATION_REPRESENTATION_INACTIVE", "The representative is not active");
+  }
+  const at = nowIso();
+  await commitRepresentativeLifecycleBatch(db, [
+    prepareOrganizationRepresentativeManagementGuard(db, {
+      memberId: input.memberId,
+      actorUserId: actor.userId,
+      databaseUserId: actor.databaseUserId,
+      staffAuthorized: actor.staffAuthorized,
+    }),
+    db
+      .prepare(
+        `UPDATE organization_representatives
+            SET show_on_org_profile = ?, updated_at = ?
+          WHERE id = ? AND left_at IS NULL AND blocked_at IS NULL AND show_on_org_profile = ?`,
+      )
+      .bind(input.showOnOrganizationProfile ? 1 : 0, at, representative.id, representative.show_on_org_profile),
+    prepareScopedAuditLogAfterOneChange(
+      db,
+      { type: "organization", id: input.memberId },
+      actor.actorType,
+      actor.userId,
+      "organization_representative_profile_updated",
+      "organization_representative",
+      representative.id,
+      { userId: input.userId, showOnOrganizationProfile: input.showOnOrganizationProfile },
+      at,
+    ),
+  ]);
+  return representative.id;
 }

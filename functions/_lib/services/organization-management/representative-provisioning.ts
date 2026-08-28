@@ -3,7 +3,7 @@
  * editing, and removing an organization's representatives
  * (`organization_representatives`, consolidated migration 0035), granting org-less
  * individual memberships, and confirming secondary-contact nominations.
- * Split from the combined admin-organizations.ts (PR #1 review, Phase 8) —
+ * Split from the prior combined organization module (PR #1 review, Phase 8) —
  * see queries.ts for reads and profile.ts for the organization
  * profile-update use case.
  *
@@ -29,10 +29,11 @@ import {
 import { prepareAuditLog } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { prepareQueueEmailStatement } from "../../email/outbox";
-import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
-import { getOrgAggregate } from "./queries";
+import type { AuthAdmin, DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
+import { getOrgAggregate } from "./read-model";
 import { buildMembershipAccessOffboardingStatements } from "../membership/offboarding";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
+import { authorizedOrganizationMutationDb } from "./authorization";
 
 export interface AddRepresentativeInput {
   name: string;
@@ -324,7 +325,7 @@ export interface ConfirmSecondaryContactResult {
 
 export async function confirmSecondaryContact(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   organizationId: string,
 ): Promise<ConfirmSecondaryContactResult> {
   const org = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE id = ?", [organizationId]);
@@ -348,22 +349,33 @@ export async function confirmSecondaryContact(
     [nomination.nominated_user_id],
   );
 
+  const authorizedDb = authorizedOrganizationMutationDb(db, actor, "organizations:write");
   const now = nowIso();
   const statements: StatementLike[] = [
-    ...(await buildAssignRepresentativeRoleStatements(db, {
+    ...(await buildAssignRepresentativeRoleStatements(authorizedDb, {
       memberId: aggregate.id,
       userId: nomination.nominated_user_id,
       roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
       grantedByUserId: adminDatabaseUserId(actor),
       now,
     })),
-    db.prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?").bind(aggregate.id),
-    prepareAuditLog(db, "admin", actor.id, "organization_secondary_contact_confirmed", "organization", organizationId, {
-      secondaryContactUserId: nomination.nominated_user_id,
-    }),
+    authorizedDb
+      .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?")
+      .bind(aggregate.id),
+    prepareAuditLog(
+      authorizedDb,
+      "admin",
+      actor.id,
+      "organization_secondary_contact_confirmed",
+      "organization",
+      organizationId,
+      {
+        secondaryContactUserId: nomination.nominated_user_id,
+      },
+    ),
   ];
   const preparedEmail = contact
-    ? prepareQueueEmailStatement(db, {
+    ? prepareQueueEmailStatement(authorizedDb, {
         templateKey: "org-contact-assigned",
         recipientEmail: contact.email,
         recipientUserId: nomination.nominated_user_id,
@@ -376,7 +388,7 @@ export async function confirmSecondaryContact(
       })
     : null;
   if (preparedEmail) statements.push(preparedEmail.statement);
-  await db.batch(statements);
+  await authorizedDb.batch(statements);
 
   return { organizationId, secondaryContactUserId: nomination.nominated_user_id, outboxId: preparedEmail?.id ?? null };
 }

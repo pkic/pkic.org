@@ -2,13 +2,13 @@ import { useState } from "preact/hooks";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
 import { adminMemberMutationResponseSchema } from "../../../../shared/schemas/admin-members";
 import {
-  adminOrganizationsListResponseSchema,
-  adminOrganizationDetailResponseSchema,
-  organizationRepresentativeResponseSchema,
-} from "../../../../shared/schemas/admin-organizations";
+  organizationDetailResponseSchema,
+  organizationsListResponseSchema,
+  type OrganizationSummary,
+} from "../../../../shared/schemas/organization-management";
+import { representativeMutationResponseSchema } from "../../../../shared/schemas/organization-representation";
 import { api } from "../../api";
 import { toast } from "../../ui";
-import type { AdminOrganizationSummary } from "../../types";
 import type { UserDetail } from "./model";
 import { UserMembershipCard } from "./UserMembershipCard";
 
@@ -25,7 +25,7 @@ function GrantMembershipForm({
 }) {
   const [mode, setMode] = useState<string>(GRANT_MODE_ORG_TIED);
   const [orgQuery, setOrgQuery] = useState("");
-  const [orgResults, setOrgResults] = useState<AdminOrganizationSummary[]>([]);
+  const [orgResults, setOrgResults] = useState<OrganizationSummary[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState("");
   const [selectedOrgCategory, setSelectedOrgCategory] = useState<string | null | undefined>(undefined);
   const [searching, setSearching] = useState(false);
@@ -34,14 +34,13 @@ function GrantMembershipForm({
 
   const isIndividual = mode !== GRANT_MODE_ORG_TIED;
   const mayGrantIndividual = user.memberships.length === 0;
-  const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 
   async function searchOrgs() {
     setSearching(true);
     try {
       const data = await api(
-        `/api/v1/admin/organizations?limit=10${orgQuery.trim() ? `&q=${encodeURIComponent(orgQuery.trim())}` : ""}`,
-        adminOrganizationsListResponseSchema,
+        `/api/v1/organizations?limit=10${orgQuery.trim() ? `&q=${encodeURIComponent(orgQuery.trim())}` : ""}`,
+        organizationsListResponseSchema,
       );
       setOrgResults(data.organizations);
     } catch (error) {
@@ -56,7 +55,7 @@ function GrantMembershipForm({
     setSelectedOrgCategory(undefined);
     if (!orgId) return;
     try {
-      const data = await api(`/api/v1/admin/organizations/${orgId}`, adminOrganizationDetailResponseSchema);
+      const data = await api(`/api/v1/organizations/${orgId}`, organizationDetailResponseSchema);
       setSelectedOrgCategory(data.organization.membershipCategory);
     } catch (error) {
       toast((error as Error).message, "error");
@@ -82,12 +81,12 @@ function GrantMembershipForm({
           body: JSON.stringify({ membershipCategory: mode }),
         });
       } else {
-        await api(`/api/v1/admin/organizations/${selectedOrgId}/members`, organizationRepresentativeResponseSchema, {
+        await api(`/api/v1/organizations/${selectedOrgId}/representatives`, representativeMutationResponseSchema, {
           method: "POST",
           body: JSON.stringify({
-            name: displayName,
-            email: user.email,
-            ...(user.job_title ? { jobTitle: user.job_title } : {}),
+            kind: "existing_user",
+            userId: user.id,
+            showOnOrganizationProfile: true,
           }),
         });
       }

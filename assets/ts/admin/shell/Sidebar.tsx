@@ -100,12 +100,6 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/events", sec: "events", label: "Events", icon: "events" },
   { path: "/forms", sec: "forms", label: "Forms", icon: "forms" },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
-  {
-    path: "/organizations",
-    sec: "organizations",
-    label: "Organizations",
-    icon: "organizations",
-  },
 ];
 
 function closeSidebar() {

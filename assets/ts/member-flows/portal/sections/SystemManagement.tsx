@@ -12,6 +12,8 @@ import { SystemAnalytics } from "./system-analytics/SystemAnalytics";
 import { Donations } from "./system-donations/Donations";
 import { Sponsorships } from "./system-sponsorships";
 import { Operations } from "./system-operations";
+import { Organizations } from "./system-organizations/Organizations";
+import { OrganizationDetail } from "./system-organizations/OrganizationDetail";
 
 export function SystemManagement({
   session,
@@ -70,6 +72,20 @@ export function SystemManagement({
         <MembershipConfiguration canWrite={portalHasGlobalPermission(session, "membership:write")} />
       ) : selected.path === "/system/organization-content-reviews" ? (
         <OrganizationContentReviews />
+      ) : selected.path === "/system/organizations" ? (
+        resourceId ? (
+          <OrganizationDetail
+            organizationId={resourceId}
+            canRead={portalHasGlobalPermission(session, "organizations:read")}
+            canWrite={portalHasGlobalPermission(session, "organizations:write")}
+            canManageRepresentatives={portalHasGlobalPermission(session, "membership:write")}
+          />
+        ) : (
+          <Organizations
+            canRead={portalHasGlobalPermission(session, "organizations:read")}
+            canCreate={portalHasGlobalPermission(session, "membership:write")}
+          />
+        )
       ) : selected.path === "/system/audit-log" ? (
         <section aria-labelledby="system-audit-log-heading">
           <h5 id="system-audit-log-heading" class="mb-3">

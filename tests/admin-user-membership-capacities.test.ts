@@ -5,7 +5,7 @@ import { getAdminUserDetail } from "../functions/_lib/services/admin-user-detail
 import {
   addOrganizationRepresentative,
   grantIndividualMembership,
-} from "../functions/_lib/services/admin-organizations/representatives";
+} from "../functions/_lib/services/organization-management/representative-provisioning";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";
 import {

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { MAX_PAGE_LIMIT } from "../assets/shared/schemas/pagination";
 import { buildOffsetPageSql, type OffsetPageQuery } from "../functions/_lib/db/pagination";
-import { buildAdminOrganizationsPageQuery } from "../functions/_lib/services/admin-organizations/queries";
+import { buildOrganizationsPageQuery } from "../functions/_lib/services/organization-management/read-model";
 import { buildAdminUsersPageQuery } from "../functions/_lib/services/admin-users-list";
 import { buildAdminEventsPageQuery, buildAdminEventStatsQuery } from "../functions/_lib/services/events/admin-list";
 import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
@@ -71,7 +71,7 @@ describe("admin list D1 query plans", () => {
 
   it("counts organizations without roster or primary-contact projections", async () => {
     const { pageSql, countSql, bindings, countBindings } = await explainOffsetPage(
-      buildAdminOrganizationsPageQuery({ limit: 25, offset: 50, q: "Consortium", sort: "-member_count" }),
+      buildOrganizationsPageQuery({ limit: 25, offset: 50, q: "Consortium", sort: "-member_count" }),
     );
 
     expect(pageSql).toMatch(/organization_representatives|primary_contact|member_count/i);

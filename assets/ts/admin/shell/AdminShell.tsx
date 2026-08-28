@@ -4,7 +4,6 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { Users, UserDetailView } from "../sections/Users";
-import { Organizations } from "../sections/Organizations";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -22,6 +21,7 @@ import {
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+  ADMIN_ORGANIZATIONS_REDIRECT_TARGET,
   ADMIN_DONATIONS_REDIRECT_TARGET,
   ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET,
   ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
@@ -268,9 +268,10 @@ export function AdminShell() {
             <Route
               path="/organizations"
               component={() => (
-                <SectionWrapper title="Organizations">
-                  <Organizations />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ORGANIZATIONS_REDIRECT_TARGET}
+                  message="Organizations have moved to the portal."
+                />
               )}
             />
             <Route

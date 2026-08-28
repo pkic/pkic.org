@@ -12,6 +12,7 @@ import {
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+  ADMIN_ORGANIZATIONS_REDIRECT_TARGET,
   ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
   ADMIN_OPERATIONS_REDIRECT_TARGET,
   legacyAdminRedirectTarget,
@@ -53,6 +54,11 @@ describe("legacy admin route redirects", () => {
     expect(legacyAdminRedirectTarget("/organizations/content-reviews?from=bookmark")).toBe(
       ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
     );
+  });
+
+  it("moves organization management to the portal", () => {
+    expect(legacyAdminRedirectTarget("/organizations")).toBe(ADMIN_ORGANIZATIONS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/organizations?from=bookmark")).toBe(ADMIN_ORGANIZATIONS_REDIRECT_TARGET);
   });
 
   it("moves membership settings to system management in the portal", () => {

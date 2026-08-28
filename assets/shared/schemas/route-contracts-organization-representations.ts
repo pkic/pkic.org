@@ -5,6 +5,7 @@ import {
   organizationRepresentativesListQuerySchema,
   organizationRepresentativesListResponseSchema,
   representativeAssociateSchema,
+  representativeProfileUpdateSchema,
   representativeMutationResponseSchema,
   representativeRemoveSchema,
   representativeRestoreSchema,
@@ -36,7 +37,8 @@ export const organizationRepresentativesListRouteSchema = {
 export const organizationRepresentativeAssociateRouteSchema = {
   tags: ["Organizations"],
   summary: "Associate an organization representative",
-  description: "Association is immediate and does not require recipient acceptance.",
+  description:
+    "Association is immediate and does not require recipient acceptance. The direct-email variant requires an attributable membership:write staff session; organization contacts may only associate an existing user.",
   request: {
     params: organizationRepresentativeCollectionParamsSchema,
     body: { required: true, content: { "application/json": { schema: representativeAssociateSchema } } },
@@ -47,7 +49,26 @@ export const organizationRepresentativeAssociateRouteSchema = {
       content: { "application/json": { schema: representativeMutationResponseSchema } },
     },
     "403": jsonErrorResponse("An organization contact or authorized staff member is required."),
+    "404": jsonErrorResponse("Organization not found."),
     "409": jsonErrorResponse("The association is active or blocked."),
+    "422": jsonErrorResponse("The organization has no membership category."),
+  },
+};
+
+export const organizationRepresentativeUpdateRouteSchema = {
+  tags: ["Organizations"],
+  summary: "Update an organization representative profile setting",
+  request: {
+    params: organizationRepresentativeParamsSchema,
+    body: { required: true, content: { "application/json": { schema: representativeProfileUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Representative updated.",
+      content: { "application/json": { schema: representativeMutationResponseSchema } },
+    },
+    "403": jsonErrorResponse("An organization contact or authorized staff member is required."),
+    "409": jsonErrorResponse("The representation or authorization changed concurrently."),
   },
 };
 

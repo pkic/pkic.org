@@ -1306,6 +1306,31 @@ Status: In progress
       frontend, cache-policy, and route-removal regressions cover the cutover;
       the focused real Worker/D1 browser journey also verifies canonical
       traffic and the legacy bookmark redirect.
+      Organization directory and profile management now also appears under
+      the portal's System navigation while retaining the canonical domain API
+      `/api/v1/organizations`. System is an interface grouping, not an
+      authorization boundary. List and detail reads retain
+      `organizations:read`; profile, contact, and logo mutations retain
+      `organizations:write`; organization creation and staff representative
+      provisioning retain `membership:write`; and primary or secondary
+      organization contacts retain their existing organization-scoped
+      representative controls. The portal renders each allowed action from
+      the live permission set, including organization creation without a
+      directory read. One neutral schema and service boundary own the D1-side
+      search, allowlisted sorting, counting, pagination, revision
+      compare-and-swap, organization aggregate, flexible links, contacts,
+      logo, and representative transitions. Direct-email provisioning is
+      user-backed staff-only, does not verify the mailbox or enqueue mail, and
+      preserves the representative's optional job title and profile links.
+      Every mutation repeats its live permission and exact state predicates in
+      the same D1 batch as the write and attributed audit record. The former
+      admin Organization components, API handlers, route mount, and
+      admin-prefixed schema/service aliases are removed; old bookmarks only
+      redirect to the portal. Mounted permission, API-key denial,
+      revocation-race, revision-race, contract, query-plan, profile-contact,
+      and frontend tests cover the cutover. A focused real Worker/D1 browser
+      journey creates an organization, adds a representative, verifies the
+      legacy bookmark redirect, and observes no legacy organization request.
       Other global management destinations remain, so this item is deliberately
       still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1609,12 +1634,12 @@ Status: In progress
       committed range. The audit also confirms that implementation is not yet
       complete. The shared resource evaluator covers the canonical group form,
       event, vote, and mailing-list paths, but legacy global/admin domain
-      endpoints remain. The admin shell still exposes Events, Forms, Users, and
-      Organizations, and the admin router still mounts those
-      domains plus authentication, member, and proposal compatibility routes.
-      Ownerless/global event actions, user and organization management, and
-      proposal moderation therefore still require deliberate portal/domain
-      cutovers or explicit retirement. Temporary redirects, separate admin/
+      endpoints remain. The admin shell still exposes Events, Forms, and Users,
+      and the admin router still mounts those domains plus authentication,
+      member, and proposal compatibility routes. Ownerless/global event
+      actions, user management, and proposal moderation therefore still
+      require deliberate portal/domain cutovers or explicit retirement.
+      Temporary redirects, separate admin/
       member session assumptions, compatibility API removal, and final shell
       removal remain the concrete differences from the accepted Portal and API
       completion requirements. Migration 0035 remains consolidated and locally
@@ -1750,6 +1775,19 @@ The final PR description must include, at minimum:
 - verify `/api/v1/admin/email/outbox`, `/api/v1/admin/due-work`, and the retired
   internal email/job/reminder/retention routes return 404, while the old Email
   and Due Work bookmarks redirect without a legacy API request;
+- inspect Organizations with separate `organizations:read`,
+  `organizations:write`, and `membership:write` staff identities, confirming
+  list/detail, profile/logo/contact, and create/representative actions appear
+  only with their exact permissions;
+- create an organization with multiple representatives, job titles, flexible
+  profile links, and a membership category; then edit its profile and contacts,
+  add and remove a representative, and confirm stale revisions and permission
+  revocation cannot leave partial state or audit records;
+- confirm a primary or secondary organization contact can manage allowed
+  representative visibility/removal from My Profile without gaining the
+  global organization directory or staff-only direct-email provisioning;
+- verify `/api/v1/admin/organizations` and nested paths return 404 and the old
+  Organizations bookmark redirects without making a legacy API request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

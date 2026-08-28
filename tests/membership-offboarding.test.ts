@@ -4,7 +4,7 @@ import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
-import { removeAdminMember } from "../functions/_lib/services/admin-organizations/representatives";
+import { removeAdminMember } from "../functions/_lib/services/organization-management/representative-provisioning";
 import { buildUserAccessOffboardingStatements } from "../functions/_lib/services/membership/offboarding";
 import { reconcileMailingListSubscriptionsForUser } from "../functions/_lib/services/mailing-list-subscriptions";
 import type { AuthAdmin } from "../functions/_lib/types";

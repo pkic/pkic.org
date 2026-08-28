@@ -1,5 +1,5 @@
 /**
- * admin-organizations.test.ts
+ * organization-management.test.ts
  *
  * Phase 1 §1.4 corrected design — membership category lives once per
  * membership aggregate (member_category_assignments), not on
@@ -9,7 +9,7 @@
  *   - PATCH org membershipCategory updates the aggregate's single category
  *     assignment (no "cascade to every representative" — there's only ever
  *     one category per aggregate now).
- *   - POST .../organizations/:id/members (add representative) inherits the
+ *   - POST .../organizations/:organizationId/representatives inherits the
  *     org's category and rejects when the org has none set yet.
  *   - PATCH .../members/:id rejects membershipCategory/status for a
  *     representative id (those live on the aggregate now) but still allows
@@ -25,7 +25,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { adminOrganizationsListResponseSchema } from "../assets/shared/schemas/admin-organizations";
+import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -46,7 +46,7 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 
 function orgMemberBody(overrides: Record<string, unknown> = {}) {
   return {
-    organizationName: "Acme Corp",
+    name: "Acme Corp",
     membershipCategory: "F",
     memberSince: "2026-01-15",
     representatives: [{ name: "Jane Doe", email: "jane@acme.test" }],
@@ -55,26 +55,47 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("Admin Organizations — membership category on the aggregate (Phase 1 §1.4)", () => {
+describe("Organization management — membership category on the aggregate (Phase 1 §1.4)", () => {
   let adminToken: string;
   let adminId: string;
 
-  /** memberId here is the representative's own organization_representatives.id (see admin-organizations.ts). */
+  /** memberId is the representative's organization_representatives primary key. */
   async function createOrg(overrides: Record<string, unknown> = {}): Promise<{
     organizationId: string;
     memberId: string;
     userId: string;
+    revision: string;
   }> {
-    const response = await call(adminToken, "/api/v1/admin/members", {
+    const response = await call(adminToken, "/api/v1/organizations", {
       method: "POST",
       body: JSON.stringify(orgMemberBody(overrides)),
     });
     expect(response.status).toBe(201);
     const body = (await response.json()) as {
-      organizationId: string;
-      members: Array<{ id: string; userId: string }>;
+      organization: {
+        id: string;
+        updatedAt: string;
+        representatives: Array<{ representativeId: string; userId: string }>;
+      };
     };
-    return { organizationId: body.organizationId, memberId: body.members[0].id, userId: body.members[0].userId };
+    return {
+      organizationId: body.organization.id,
+      memberId: body.organization.representatives[0].representativeId,
+      userId: body.organization.representatives[0].userId,
+      revision: body.organization.updatedAt,
+    };
+  }
+
+  async function addRepresentative(
+    organizationId: string,
+    input: { name: string; email: string; jobTitle?: string; links?: string[] },
+  ): Promise<string> {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/representatives`, {
+      method: "POST",
+      body: JSON.stringify({ kind: "email", ...input, showOnOrganizationProfile: true }),
+    });
+    expect(response.status).toBe(201);
+    return ((await response.json()) as { representativeId: string }).representativeId;
   }
 
   async function aggregateIdFor(organizationId: string): Promise<string> {
@@ -105,7 +126,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     adminToken = await createAdminSession(env.DB, adminId, "admin-orgs-token");
   });
 
-  it("creating an organization via the Interim Admin Tool sets its aggregate's category assignment", async () => {
+  it("creating an organization sets its aggregate's category assignment", async () => {
     const { organizationId, userId } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
     expect(await categoryFor(aggregateId)).toBe("F");
@@ -120,66 +141,16 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     expect(
       await queryAll<{ actor_id: string | null }>(
         env.DB,
-        "SELECT actor_id FROM audit_log WHERE action = 'member_created' AND entity_id = ?",
+        "SELECT actor_id FROM audit_log WHERE action = 'organization_created' AND entity_id = ?",
         organizationId,
       ),
     ).toEqual([{ actor_id: adminId }]);
   });
 
-  it("keeps API-key audit identity out of nullable representative-role grantor foreign keys", async () => {
-    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
-    const createResponse = await call(apiKey, "/api/v1/admin/members", {
-      method: "POST",
-      body: JSON.stringify(
-        orgMemberBody({
-          organizationName: "API Key Organization",
-          representatives: [{ name: "API Key Primary", email: "api-key-primary@example.test" }],
-        }),
-      ),
-    });
-    expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as {
-      organizationId: string;
-      members: Array<{ userId: string }>;
-    };
-    const aggregateId = await aggregateIdFor(created.organizationId);
-
-    const addResponse = await call(apiKey, `/api/v1/admin/organizations/${created.organizationId}/members`, {
-      method: "POST",
-      body: JSON.stringify({ name: "API Key Secondary", email: "api-key-secondary@example.test" }),
-    });
-    expect(addResponse.status).toBe(201);
-    const added = (await addResponse.json()) as { representative: { userId: string } };
-
-    expect(
-      await queryAll<{ role_id: string; granted_by_user_id: string | null }>(
-        env.DB,
-        `SELECT role_id, granted_by_user_id FROM user_roles
-         WHERE user_id IN (?, ?) AND context_type = 'organization' AND context_id = ?
-         ORDER BY role_id`,
-        [created.members[0].userId, added.representative.userId, aggregateId],
-      ),
-    ).toEqual([
-      { role_id: "role-primary_contact", granted_by_user_id: null },
-      { role_id: "role-secondary_contact", granted_by_user_id: null },
-    ]);
-    expect(
-      await queryAll<{ action: string; actor_id: string | null }>(
-        env.DB,
-        `SELECT action, actor_id FROM audit_log
-         WHERE action IN ('member_created', 'organization_representative_added')
-         ORDER BY action`,
-      ),
-    ).toEqual([
-      { action: "member_created", actor_id: "api-key" },
-      { action: "organization_representative_added", actor_id: "api-key" },
-    ]);
-  });
-
   it("GET org detail surfaces membershipCategory once at the top level, not per representative", async () => {
     const { organizationId } = await createOrg();
 
-    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}`);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       organization: { membershipCategory: string | null; representatives: Array<Record<string, unknown>> };
@@ -198,7 +169,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
       .bind(aggregateId, userId)
       .run();
 
-    const detailResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    const detailResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`);
     expect(detailResponse.status).toBe(200);
     await expect(detailResponse.json()).resolves.toMatchObject({
       organization: {
@@ -208,7 +179,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
       },
     });
 
-    const listResponse = await call(adminToken, "/api/v1/admin/organizations");
+    const listResponse = await call(adminToken, "/api/v1/organizations");
     const listBody = (await listResponse.json()) as {
       organizations: Array<{ id: string; primaryContactEmail: string | null }>;
     };
@@ -222,13 +193,13 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     const aggregateId = await aggregateIdFor(organizationId);
 
     async function expectPrimaryContact(email: string | null, expectedUserId: string | null) {
-      const detailResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+      const detailResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`);
       expect(detailResponse.status).toBe(200);
       await expect(detailResponse.json()).resolves.toMatchObject({
         organization: { primaryContactEmail: email, primaryContactUserId: expectedUserId },
       });
 
-      const listResponse = await call(adminToken, "/api/v1/admin/organizations");
+      const listResponse = await call(adminToken, "/api/v1/organizations");
       const listBody = (await listResponse.json()) as {
         organizations: Array<{ id: string; primaryContactEmail: string | null }>;
       };
@@ -271,16 +242,16 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
   });
 
   it("GET organizations list surfaces membershipCategory and supports ?sort=", async () => {
-    const acme = await createOrg({ organizationName: "Acme Corp", membershipCategory: "F" });
+    const acme = await createOrg({ name: "Acme Corp", membershipCategory: "F" });
     const beta = await createOrg({
-      organizationName: "Beta Inc",
+      name: "Beta Inc",
       membershipCategory: "A",
       representatives: [{ name: "Bob Beta", email: "bob@beta.test" }],
     });
 
-    const listResponse = await call(adminToken, "/api/v1/admin/organizations");
+    const listResponse = await call(adminToken, "/api/v1/organizations");
     expect(listResponse.status).toBe(200);
-    const listBody = adminOrganizationsListResponseSchema.parse(await listResponse.json());
+    const listBody = organizationsListResponseSchema.parse(await listResponse.json());
     const byName = Object.fromEntries(listBody.organizations.map((o) => [o.name, o.membershipCategory]));
     expect(byName["Acme Corp"]).toBe("F");
     expect(byName["Beta Inc"]).toBe("A");
@@ -290,13 +261,13 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     expect(contactsById[acme.organizationId]).toBe("jane@acme.test");
     expect(contactsById[beta.organizationId]).toBe("bob@beta.test");
 
-    const sortedResponse = await call(adminToken, "/api/v1/admin/organizations?sort=membership_category");
-    const sortedBody = adminOrganizationsListResponseSchema.parse(await sortedResponse.json());
+    const sortedResponse = await call(adminToken, "/api/v1/organizations?sort=membership_category");
+    const sortedBody = organizationsListResponseSchema.parse(await sortedResponse.json());
     const categories = sortedBody.organizations.map((o) => o.membershipCategory);
     expect(categories).toEqual([...categories].sort());
   });
 
-  it("creating an organization via the Interim Admin Tool sets member_since on the aggregate (consolidated migration 0035, regression guard)", async () => {
+  it("creating an organization sets member_since on the aggregate", async () => {
     const { organizationId } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
 
@@ -307,18 +278,18 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     );
     expect(memberRows[0].member_since).toBe("2026-01-15");
 
-    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}`);
     const body = (await response.json()) as { organization: { memberSince: string } };
     expect(body.organization.memberSince).toBe("2026-01-15");
   });
 
   it("PATCH org memberSince updates the aggregate's stored value", async () => {
-    const { organizationId } = await createOrg();
+    const { organizationId, revision } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
 
-    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`, {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
       method: "PATCH",
-      body: JSON.stringify({ memberSince: "2020-03-01" }),
+      body: JSON.stringify({ memberSince: "2020-03-01", revision }),
     });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organization: { memberSince: string } };
@@ -333,20 +304,16 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
   });
 
   it("PATCH org membershipCategory updates the aggregate's single category assignment", async () => {
-    const { organizationId } = await createOrg();
+    const { organizationId, revision } = await createOrg();
 
     // Add a second representative under the original category first — both
     // representatives share the same aggregate, so there's nothing
     // per-representative to cascade to.
-    const addResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/members`, {
-      method: "POST",
-      body: JSON.stringify({ name: "Second Rep", email: "second@acme.test" }),
-    });
-    expect(addResponse.status).toBe(201);
+    await addRepresentative(organizationId, { name: "Second Rep", email: "second@acme.test" });
 
-    const patchResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`, {
+    const patchResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
       method: "PATCH",
-      body: JSON.stringify({ membershipCategory: "G" }),
+      body: JSON.stringify({ membershipCategory: "G", revision }),
     });
     expect(patchResponse.status).toBe(200);
     const patched = (await patchResponse.json()) as { organization: { membershipCategory: string | null } };
@@ -366,34 +333,26 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
   it("adding a representative inherits the organization's current category", async () => {
     const { organizationId } = await createOrg({ membershipCategory: "B" });
 
-    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/members`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: "New Rep",
-        email: "newrep@acme.test",
-        jobTitle: "Engineer",
-        links: ["https://github.com/newrep", "https://orcid.org/0000-0001-2345-6789"],
-      }),
+    const links = ["https://github.com/newrep", "https://orcid.org/0000-0001-2345-6789"];
+    const representativeId = await addRepresentative(organizationId, {
+      name: "New Rep",
+      email: "newrep@acme.test",
+      jobTitle: "Engineer",
+      links,
     });
-    expect(response.status).toBe(201);
-    const body = (await response.json()) as { representative: { representativeId: string; links: string[] } };
-    expect(body.representative).not.toHaveProperty("membershipCategory");
-    expect(body.representative.links).toEqual(["https://github.com/newrep", "https://orcid.org/0000-0001-2345-6789"]);
 
     const repRows = await queryAll<{ member_id: string }>(
       env.DB,
       "SELECT member_id FROM organization_representatives WHERE id = ?",
-      body.representative.representativeId,
+      representativeId,
     );
     expect(await categoryFor(repRows[0].member_id)).toBe("B");
 
-    const detailResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    const detailResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`);
     const detail = (await detailResponse.json()) as {
       organization: { representatives: Array<{ email: string; links: string[] }> };
     };
-    expect(detail.organization.representatives.find((rep) => rep.email === "newrep@acme.test")?.links).toEqual(
-      body.representative.links,
-    );
+    expect(detail.organization.representatives.find((rep) => rep.email === "newrep@acme.test")?.links).toEqual(links);
   });
 
   it("rejects adding a representative when the organization has no category set yet", async () => {
@@ -406,9 +365,14 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
       .bind(organizationId, "No Category Org", "no category org")
       .run();
 
-    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/members`, {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/representatives`, {
       method: "POST",
-      body: JSON.stringify({ name: "No Category Rep", email: "nocategory@acme.test" }),
+      body: JSON.stringify({
+        kind: "email",
+        name: "No Category Rep",
+        email: "nocategory@acme.test",
+        showOnOrganizationProfile: true,
+      }),
     });
     expect(response.status).toBe(422);
     const body = (await response.json()) as { error: { code: string } };
@@ -489,7 +453,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     const { organizationId } = await createOrg({ membershipCategory: "C" });
     const aggregateId = await aggregateIdFor(organizationId);
 
-    const secondResponse = await call(adminToken, "/api/v1/admin/members", {
+    const secondResponse = await call(adminToken, "/api/v1/organizations", {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
@@ -508,7 +472,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
   it("reusing an existing organization with the SAME category succeeds and adds the new representative", async () => {
     const { organizationId } = await createOrg({ membershipCategory: "C" });
 
-    const secondResponse = await call(adminToken, "/api/v1/admin/members", {
+    const secondResponse = await call(adminToken, "/api/v1/organizations", {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
@@ -518,8 +482,8 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
       ),
     });
     expect(secondResponse.status).toBe(201);
-    const secondBody = (await secondResponse.json()) as { organizationId: string };
-    expect(secondBody.organizationId).toBe(organizationId);
+    const secondBody = (await secondResponse.json()) as { organization: { id: string } };
+    expect(secondBody.organization.id).toBe(organizationId);
 
     const aggregateId = await aggregateIdFor(organizationId);
     const repCount = await queryAll<{ total: number }>(

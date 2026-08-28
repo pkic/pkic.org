@@ -16,6 +16,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-email-templates",
   "portal-leadership",
   "portal-mailing-lists",
+  "portal-organizations",
   "portal-system-operations",
   "portal-system-audit",
   "sponsor-portal",

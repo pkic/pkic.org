@@ -21,11 +21,6 @@ import type {
 import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
 import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
 import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
-import type {
-  AdminOrganizationDetail as CanonicalAdminOrganizationDetail,
-  AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
-  AdminOrganizationSummary as CanonicalAdminOrganizationSummary,
-} from "../../shared/schemas/admin-organizations";
 import type { EventProposalSummary as CanonicalAdminEventProposalSummary } from "../../shared/schemas/event-proposals";
 import type { ProposalAccess as CanonicalProposalAccess } from "../../shared/schemas/event-proposals";
 import type { ProposalSpeaker as CanonicalAdminProposalSpeaker } from "../../shared/schemas/proposal-speakers";
@@ -96,13 +91,6 @@ export type EmailTemplateVersion = CanonicalEmailTemplateVersion;
 // ── Event stats ───────────────────────────────────────────────────────────────
 
 export type EventStatsResponse = CanonicalEventStatsResponse;
-
-// Admin Organizations — GET /api/v1/admin/organizations[/:id]
-export type AdminOrganizationSummary = CanonicalAdminOrganizationSummary;
-
-export type AdminOrganizationRepresentative = CanonicalAdminOrganizationRepresentative;
-
-export type AdminOrganizationDetail = CanonicalAdminOrganizationDetail;
 
 // Interim Admin Tool — GET/POST /api/v1/admin/members
 export type AdminMemberSummary = CanonicalAdminMemberSummary;

@@ -10,7 +10,7 @@ import {
 } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationDetailSchema } from "../assets/shared/schemas/event-registration-detail";
 import { registrationRecordContextSchema } from "../assets/shared/schemas/registration-record";
-import { adminOrganizationLogoPutRouteSchema } from "../assets/shared/schemas/admin-organizations";
+import { organizationManagementLogoPutRouteSchema } from "../assets/shared/schemas/organization-management";
 import {
   sponsorshipCreateSchema,
   sponsorshipEditableFieldsSchema,
@@ -213,7 +213,7 @@ describe("canonical shared schema composition", () => {
 
   it("uses one stored-logo response on organization and sponsorship uploads", () => {
     const organizationResponse =
-      adminOrganizationLogoPutRouteSchema.responses["200"].content["application/json"].schema;
+      organizationManagementLogoPutRouteSchema.responses["200"].content["application/json"].schema;
     const sponsorshipResponse = sponsorshipLogoPutRouteSchema.responses["200"].content["application/json"].schema;
     expect(organizationResponse).toBe(logoUploadResponseSchema);
     expect(sponsorshipResponse).toBe(logoUploadResponseSchema);

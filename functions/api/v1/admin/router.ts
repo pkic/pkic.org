@@ -19,7 +19,6 @@ import auth_Router from "./auth/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
 import members_Router from "./members/router";
-import organizations_Router from "./organizations/router";
 import proposals_Router from "./proposals/router";
 import users_Router from "./users/router";
 
@@ -128,7 +127,6 @@ openapi.route("/auth", auth_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
 openapi.route("/members", members_Router);
-openapi.route("/organizations", organizations_Router);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/users", users_Router);
 

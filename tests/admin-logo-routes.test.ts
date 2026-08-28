@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleError } from "../functions/_lib/http";
-import { onRequest as organizationLogoRequest } from "../functions/api/v1/admin/organizations/[id]/logo";
+import { onRequest as organizationLogoRequest } from "../functions/api/v1/organizations/[organizationId]/logo";
 import { onRequest as sponsorshipLogoRequest } from "../functions/api/v1/sponsorships/[id]/logo";
 import { createAdminSession } from "./helpers/auth";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -42,8 +42,9 @@ async function callLogoRoute(
   handler: (context: any) => Promise<Response>,
   request: Request,
   id: string,
+  parameter = "id",
 ): Promise<Response> {
-  const context = createContext(env, request, { id });
+  const context = createContext(env, request, { [parameter]: id });
   const pending: Promise<unknown>[] = [];
   context.executionCtx.waitUntil = (promise: Promise<unknown>) => {
     pending.push(promise);
@@ -53,7 +54,7 @@ async function callLogoRoute(
   return response;
 }
 
-describe("shared admin logo route transport", () => {
+describe("shared organization logo route transport", () => {
   beforeEach(resetDb);
 
   it("uploads and removes an organization logo through the organization adapter", async () => {
@@ -68,8 +69,9 @@ describe("shared admin logo route transport", () => {
 
     const putResponse = await callLogoRoute(
       organizationLogoRequest,
-      imageRequest(`/api/v1/admin/organizations/${id}/logo`, token, "PUT"),
+      imageRequest(`/api/v1/organizations/${id}/logo`, token, "PUT"),
       id,
+      "organizationId",
     );
     expect(putResponse.status).toBe(200);
     const putBody = (await putResponse.json()) as { logoUrl: string; r2Key: string };
@@ -83,8 +85,9 @@ describe("shared admin logo route transport", () => {
 
     const deleteResponse = await callLogoRoute(
       organizationLogoRequest,
-      imageRequest(`/api/v1/admin/organizations/${id}/logo`, token, "DELETE"),
+      imageRequest(`/api/v1/organizations/${id}/logo`, token, "DELETE"),
       id,
+      "organizationId",
     );
     expect(deleteResponse.status).toBe(200);
     expect(await env.ASSETS_BUCKET!.get(putBody.r2Key)).toBeNull();
