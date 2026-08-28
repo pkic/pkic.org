@@ -28,7 +28,6 @@ import proposals_Router from "./proposals/router";
 import sponsorships_Router from "./sponsorships/router";
 import users_Router from "./users/router";
 import votes_Router from "./votes/router";
-import vote_proposals_Router from "./vote-proposals/router";
 
 const app = new Hono<RequestDbContext>();
 app.onError((error, _c) => handleError(error));
@@ -144,6 +143,5 @@ openapi.route("/proposals", proposals_Router);
 openapi.route("/sponsorships", sponsorships_Router);
 openapi.route("/users", users_Router);
 openapi.route("/votes", votes_Router);
-openapi.route("/vote-proposals", vote_proposals_Router);
 
 export default openapi;

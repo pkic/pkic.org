@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { groupIdSchema } from "./groups";
 import {
   rawVoteBallotsListQuerySchema,
   rawVoteBallotsListResponseSchema,
@@ -9,17 +8,7 @@ import {
   voteUpdateInputSchema,
   voteVisibilityUpdateInputSchema,
 } from "./vote-management";
-import {
-  VOTE_PROPOSALS_LIST_SORT_COLUMNS,
-  candidateSummarySchema,
-  proposalIdParamsSchema,
-  proposalDetailResponseSchema,
-  proposalSummarySchema,
-  voteIdParamsSchema,
-  voteProposalStatusSchema,
-  voteStatusSchema,
-  voteSummaryFieldsSchema,
-} from "./votes";
+import { candidateSummarySchema, voteIdParamsSchema, voteStatusSchema, voteSummaryFieldsSchema } from "./votes";
 
 export const ADMIN_VOTES_SORT_COLUMNS = [
   "title",
@@ -103,12 +92,6 @@ export const adminVoteVisibilityUpdateRouteSchema = {
     "404": { description: "Vote not found." },
   },
 };
-export const adminVoteProposalApproveResponseSchema = z.object({
-  proposal: proposalSummarySchema,
-  convertedVote: z.object(voteSummaryFieldsSchema),
-});
-export const adminVoteProposalRejectResponseSchema = z.object({ proposal: proposalSummarySchema });
-
 export const adminVoteBallotsRouteSchema = {
   tags: ["Admin Votes"],
   summary: "Full ballot breakdown for authorized vote managers",
@@ -120,74 +103,5 @@ export const adminVoteBallotsRouteSchema = {
       content: { "application/json": { schema: rawVoteBallotsListResponseSchema } },
     },
     "404": { description: "Vote not found." },
-  },
-};
-
-export const adminListProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
-  ownerGroupId: groupIdSchema.optional(),
-  status: voteProposalStatusSchema.optional(),
-});
-export type AdminListProposalsQuery = z.infer<typeof adminListProposalsQuerySchema>;
-export const adminVoteProposalsListResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
-
-export const adminListProposalsRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "List all proposals, filterable by status and owning group",
-  request: { query: adminListProposalsQuerySchema },
-  responses: {
-    "200": {
-      description: "Proposals.",
-      content: { "application/json": { schema: adminVoteProposalsListResponseSchema } },
-    },
-  },
-};
-
-export const adminProposalDetailRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "Proposal detail + endorsers",
-  request: { params: proposalIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Proposal detail.",
-      content: {
-        "application/json": { schema: proposalDetailResponseSchema },
-      },
-    },
-    "404": { description: "Proposal not found." },
-  },
-};
-
-export const adminApproveProposalRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "Convert a proposal to an active vote, bypassing the endorsement count",
-  request: { params: proposalIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Converted.",
-      content: {
-        "application/json": {
-          schema: adminVoteProposalApproveResponseSchema,
-        },
-      },
-    },
-    "409": { description: "Proposal is not open for endorsement." },
-  },
-};
-
-export const adminRejectProposalSchema = z.object({ reason: z.string().trim().min(1).max(2000) });
-
-export const adminRejectProposalRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "Reject a proposal with a reason; notifies the proposer",
-  request: {
-    params: proposalIdParamsSchema,
-    body: { content: { "application/json": { schema: adminRejectProposalSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Rejected.",
-      content: { "application/json": { schema: adminVoteProposalRejectResponseSchema } },
-    },
-    "409": { description: "Proposal is not open for endorsement." },
   },
 };

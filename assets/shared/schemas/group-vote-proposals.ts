@@ -5,12 +5,13 @@ import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema } from "./pagination";
 import {
   endorseProposalResponseSchema,
+  listProposalsQuerySchema,
   proposalDetailResponseSchema,
   proposalSummarySchema,
+  voteProposalRejectSchema,
   voteProposalFieldsSchema,
   voteProposalStatusSchema,
 } from "./votes";
-import { adminListProposalsQuerySchema, adminRejectProposalSchema } from "./votes-admin";
 
 export const GROUP_VOTE_PROPOSAL_CAPABILITIES = [
   "view",
@@ -30,7 +31,7 @@ export type GroupVoteProposal = z.infer<typeof groupVoteProposalSchema>;
 export const groupVoteProposalParamsSchema = groupReferenceParamsSchema.extend({ proposalId: databaseIdSchema });
 export const groupVoteProposalCreateSchema = voteProposalFieldsSchema;
 export const groupVoteProposalCreateResponseSchema = z.object({ proposal: groupVoteProposalSchema });
-export const groupVoteProposalsListQuerySchema = adminListProposalsQuerySchema.omit({ ownerGroupId: true });
+export const groupVoteProposalsListQuerySchema = listProposalsQuerySchema.omit({ ownerGroupId: true });
 export type GroupVoteProposalsListQuery = z.infer<typeof groupVoteProposalsListQuerySchema>;
 export const groupVoteProposalsListResponseSchema = paginatedResponseSchema("proposals", groupVoteProposalSchema);
 export const groupVoteProposalDetailResponseSchema = proposalDetailResponseSchema.extend({
@@ -44,7 +45,7 @@ export const groupVoteProposalApproveResponseSchema = z.object({
   proposal: groupVoteProposalSchema,
   convertedVote: endorseProposalResponseSchema.shape.convertedVote.unwrap(),
 });
-export const groupVoteProposalRejectSchema = adminRejectProposalSchema;
+export const groupVoteProposalRejectSchema = voteProposalRejectSchema;
 export const groupVoteProposalRejectResponseSchema = z.object({ proposal: groupVoteProposalSchema });
 
 export const groupVoteProposalsListRouteSchema = {

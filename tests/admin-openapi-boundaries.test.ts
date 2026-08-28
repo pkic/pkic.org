@@ -62,6 +62,10 @@ describe("admin OpenAPI mutation boundaries", () => {
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/preview"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/preview"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/{inviteId}/resend"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals/{id}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals/{id}/approve"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/vote-proposals/{id}/reject"]).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/speakers/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/preview"].post).toBeDefined();
@@ -148,6 +152,13 @@ describe("admin OpenAPI mutation boundaries", () => {
       batchCount: 0,
       sampleRecipients: [],
     });
+  });
+
+  it("leaves the retired global vote-proposal adapter unmounted", async () => {
+    await setupAdmin();
+
+    const response = await callAdmin("/api/v1/admin/vote-proposals");
+    expect(response.status).toBe(404);
   });
 
   it("mounts organization logo handlers without consuming the binary request body as JSON", async () => {
