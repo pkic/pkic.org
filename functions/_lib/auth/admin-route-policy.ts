@@ -39,7 +39,7 @@ const DELEGATED_MODULES = new Map<string, string>([
 // Retired modules retain only a fail-closed policy tombstone until the admin
 // router itself is removed. This lets the absent route return an ordinary 404
 // instead of misreporting a server policy-configuration failure.
-const RETIRED_MODULES = new Set(["membership-settings"]);
+const RETIRED_MODULES = new Set(["email-templates", "membership-settings"]);
 
 function normalizedPolicyPath(path: string): string {
   const adminPrefix = "/api/v1/admin";
@@ -83,12 +83,6 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
     return {
       kind: "permission",
       permission: readOrWrite(normalizedMethod, "donations:read", "donations:sync"),
-    };
-  }
-  if (module === "email-templates") {
-    return {
-      kind: "permission",
-      permission: readOrWrite(normalizedMethod, "email-templates:read", "email-templates:write"),
     };
   }
   if (module === "users" && isDelegatedUserPath(normalizedPath)) {

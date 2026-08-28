@@ -1,12 +1,10 @@
 import { AppError } from "../errors";
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { sha256Hex } from "../utils/crypto";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
-
-const TEMPLATE_CACHE_TTL_MS = 60_000;
+import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
 
 export interface ResolvedEmailTemplate {
   version: number;
@@ -19,22 +17,6 @@ export interface ResolvedEmailTemplate {
 export type EmailTemplateResolution =
   | { ok: true; template: ResolvedEmailTemplate }
   | { ok: false; code: "EMAIL_TEMPLATE_NOT_FOUND" | "EMAIL_TEMPLATE_MISSING_BODY"; message: string };
-
-interface CachedTemplateResolution {
-  expiresAt: number;
-  value: ResolvedEmailTemplate | null;
-}
-
-const activeTemplateCache = new Map<string, CachedTemplateResolution>();
-
-export function invalidateTemplateCache(templateKey?: string): void {
-  if (templateKey) {
-    activeTemplateCache.delete(templateKey);
-    return;
-  }
-
-  activeTemplateCache.clear();
-}
 
 export interface TemplateVersionRow {
   id: string;
@@ -121,7 +103,11 @@ export async function buildTemplateVersionCreate(
       `INSERT INTO email_template_versions (
         id, template_key, version, subject_template, body, content_type, message_type, r2_object_key,
         checksum_sha256, status, created_by_user_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE COALESCE((
+         SELECT MAX(version) FROM email_template_versions WHERE template_key = ?
+       ), 0) = ?`,
     )
     .bind(
       row.id,
@@ -136,6 +122,8 @@ export async function buildTemplateVersionCreate(
       row.status,
       row.created_by_user_id,
       row.created_at,
+      row.template_key,
+      row.version - 1,
     );
 
   return { row, statement };
@@ -146,7 +134,10 @@ export async function createTemplateVersion(
   payload: TemplateVersionCreateInput,
 ): Promise<TemplateVersionRow> {
   const prepared = await buildTemplateVersionCreate(db, payload);
-  await prepared.statement.run();
+  const result = await prepared.statement.run();
+  if (result.meta?.changes !== 1) {
+    throw new AppError(409, "EMAIL_TEMPLATE_VERSION_CHANGED", "Template versions changed; retry the operation");
+  }
   return prepared.row;
 }
 
@@ -164,16 +155,24 @@ export async function activateTemplateVersion(
     throw new AppError(404, "EMAIL_TEMPLATE_VERSION_NOT_FOUND", "Template version not found");
   }
 
-  await run(db, "UPDATE email_template_versions SET status = 'archived' WHERE template_key = ? AND status = 'active'", [
-    payload.templateKey,
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE email_template_versions
+            SET status = 'archived'
+          WHERE template_key = ?
+            AND status = 'active'
+            AND version <> ?`,
+      )
+      .bind(payload.templateKey, payload.version),
+    db
+      .prepare(
+        `UPDATE email_template_versions
+            SET status = 'active'
+          WHERE template_key = ? AND version = ?`,
+      )
+      .bind(payload.templateKey, payload.version),
   ]);
-
-  await run(db, "UPDATE email_template_versions SET status = 'active' WHERE template_key = ? AND version = ?", [
-    payload.templateKey,
-    payload.version,
-  ]);
-
-  invalidateTemplateCache(payload.templateKey);
 }
 
 export async function resolveTemplateSet(
@@ -182,25 +181,7 @@ export async function resolveTemplateSet(
 ): Promise<Map<string, EmailTemplateResolution>> {
   const templateKeys = [...new Set(requestedTemplateKeys)];
   const resolutions = new Map<string, EmailTemplateResolution>();
-  const unresolvedKeys: string[] = [];
-  const now = Date.now();
-
-  for (const templateKey of templateKeys) {
-    const cached = activeTemplateCache.get(templateKey);
-    if (!cached || cached.expiresAt <= now) {
-      unresolvedKeys.push(templateKey);
-    } else if (cached.value) {
-      resolutions.set(templateKey, { ok: true, template: cached.value });
-    } else {
-      resolutions.set(templateKey, {
-        ok: false,
-        code: "EMAIL_TEMPLATE_NOT_FOUND",
-        message: `No template configured for key '${templateKey}'`,
-      });
-    }
-  }
-
-  if (unresolvedKeys.length > 0) {
+  if (templateKeys.length > 0) {
     const activeRows = await all<TemplateVersionRow>(
       db,
       `WITH requested AS (
@@ -218,14 +199,13 @@ export async function resolveTemplateSet(
        SELECT id, template_key, version, subject_template, body, content_type, message_type,
               r2_object_key, checksum_sha256, status, created_by_user_id, created_at
        FROM ranked WHERE active_rank = 1`,
-      [JSON.stringify(unresolvedKeys)],
+      [JSON.stringify(templateKeys)],
     );
     const activeByKey = new Map(activeRows.map((row) => [row.template_key, row]));
 
-    for (const templateKey of unresolvedKeys) {
+    for (const templateKey of templateKeys) {
       const active = activeByKey.get(templateKey);
       if (!active) {
-        activeTemplateCache.set(templateKey, { expiresAt: now + TEMPLATE_CACHE_TTL_MS, value: null });
         resolutions.set(templateKey, {
           ok: false,
           code: "EMAIL_TEMPLATE_NOT_FOUND",
@@ -245,7 +225,6 @@ export async function resolveTemplateSet(
           subjectTemplate: active.subject_template,
           messageType: active.message_type ?? "transactional",
         };
-        activeTemplateCache.set(templateKey, { expiresAt: now + TEMPLATE_CACHE_TTL_MS, value: template });
         resolutions.set(templateKey, { ok: true, template });
       }
     }

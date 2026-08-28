@@ -22,7 +22,7 @@ import {
   emailTemplateVersionsListQuerySchema,
   emailTemplatesListQuerySchema,
   emailTemplatesSortValueSchema,
-} from "../assets/shared/schemas/admin-email-templates";
+} from "../assets/shared/schemas/email-templates";
 import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/shared/schemas/admin-events";
 import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
 import { formSubmissionsSortValueSchema } from "../assets/shared/schemas/admin-forms";

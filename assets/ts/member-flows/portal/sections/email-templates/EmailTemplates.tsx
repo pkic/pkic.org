@@ -1,18 +1,18 @@
-import { useState, useEffect, useRef } from "preact/hooks";
-import { Badge } from "../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
-import { api } from "../api";
-import { toast } from "../ui";
-import type { EmailTemplateVersion } from "../types";
+import { useState, useEffect } from "preact/hooks";
+import { Badge } from "../../../../components/Badge";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { getJson, postJson } from "../../../../shared/api-client";
+import { toast } from "../../ui";
+import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
 import {
-  adminEmailTemplatesListResponseSchema,
-  adminEmailTemplateExistsResponseSchema,
-  adminEmailTemplateVersionCreateResponseSchema,
+  emailTemplatesListResponseSchema,
+  emailTemplateExistsResponseSchema,
+  emailTemplateVersionCreateResponseSchema,
   type EmailContentType,
   type EmailMessageType,
-} from "../../../shared/schemas/admin-email-templates";
+} from "../../../../../shared/schemas/email-templates";
 import { TemplateEditor } from "./EmailTemplateEditor";
-import { getAdminEmailTemplateEditorVersion } from "../services/catalogs";
+import { EMAIL_TEMPLATES_API, getEmailTemplateEditorVersion } from "../../../../shared/email-template-catalog";
 
 // ────────────────────────────────────────────────────────
 // Create new template
@@ -34,7 +34,7 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
     }
     setKeyCheckStatus("checking");
     const timer = setTimeout(() => {
-      api(`/api/v1/admin/email-templates/${encodeURIComponent(key)}/exists`, adminEmailTemplateExistsResponseSchema)
+      getJson(`${EMAIL_TEMPLATES_API}/${encodeURIComponent(key)}/exists`, emailTemplateExistsResponseSchema)
         .then((data) => setKeyCheckStatus(data.exists ? "exists" : "available"))
         .catch(() => setKeyCheckStatus("idle"));
     }, 400);
@@ -63,18 +63,15 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
     }
     setSaving(true);
     try {
-      await api(
-        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
-        adminEmailTemplateVersionCreateResponseSchema,
+      await postJson(
+        `${EMAIL_TEMPLATES_API}/${encodeURIComponent(key)}/versions`,
         {
-          method: "POST",
-          body: JSON.stringify({
-            content: body,
-            subjectTemplate: subject || undefined,
-            contentType,
-            messageType,
-          }),
+          content: body,
+          subjectTemplate: subject || undefined,
+          contentType,
+          messageType,
         },
+        emailTemplateVersionCreateResponseSchema,
       );
       toast(`Template "${key}" created as draft v1`, "success");
       onCreated(key);
@@ -95,8 +92,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
       </div>
       <div class="card-body adm-template-create-form">
         <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1">Template key</label>
+          <label class="form-label small fw-semibold mb-1" for="email-template-key">
+            Template key
+          </label>
           <input
+            id="email-template-key"
             type="text"
             class={`form-control form-control-sm font-monospace${keyError ? " is-invalid" : keyCheckStatus === "available" ? " is-valid" : ""}`}
             value={key}
@@ -113,8 +113,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
         </div>
         <div class="row g-2 mb-3">
           <div class="col-md-6">
-            <label class="form-label small fw-semibold mb-1">Content type</label>
+            <label class="form-label small fw-semibold mb-1" for="email-template-content-type">
+              Content type
+            </label>
             <select
+              id="email-template-content-type"
               class="form-select form-select-sm"
               value={contentType}
               onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
@@ -125,8 +128,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
             </select>
           </div>
           <div class="col-md-6">
-            <label class="form-label small fw-semibold mb-1">Default message type</label>
+            <label class="form-label small fw-semibold mb-1" for="email-template-message-type">
+              Default message type
+            </label>
             <select
+              id="email-template-message-type"
               class="form-select form-select-sm"
               value={messageType}
               onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
@@ -137,8 +143,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
           </div>
         </div>
         <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1">Subject template</label>
+          <label class="form-label small fw-semibold mb-1" for="email-template-subject">
+            Subject template
+          </label>
           <input
+            id="email-template-subject"
             type="text"
             class="form-control form-control-sm font-monospace"
             value={subject}
@@ -147,8 +156,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
           />
         </div>
         <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1">Body</label>
+          <label class="form-label small fw-semibold mb-1" for="email-template-body">
+            Body
+          </label>
           <textarea
+            id="email-template-body"
             class="form-control font-monospace"
             rows={12}
             value={body}
@@ -174,13 +186,12 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
 
 type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
 
-export function Templates() {
+export function EmailTemplates({ canWrite }: { canWrite: boolean }) {
   const [view, setView] = useState<TemplatesView>("list");
-  const tableRef = useRef<ApiTableActions | null>(null);
 
   async function openEditor(key: string) {
     try {
-      setView({ key, initialVersion: await getAdminEmailTemplateEditorVersion(key) });
+      setView({ key, initialVersion: await getEmailTemplateEditorVersion(key) });
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -188,16 +199,20 @@ export function Templates() {
 
   if (view !== "list" && view !== "create") {
     return (
-      <TemplateEditor templateKey={view.key} initialVersion={view.initialVersion} onBack={() => setView("list")} />
+      <TemplateEditor
+        templateKey={view.key}
+        initialVersion={view.initialVersion}
+        canWrite={canWrite}
+        onBack={() => setView("list")}
+      />
     );
   }
 
-  if (view === "create") {
+  if (view === "create" && canWrite) {
     return (
       <CreateTemplate
-        onCreated={async (key) => {
-          await tableRef.current?.reload();
-          await openEditor(key);
+        onCreated={(key) => {
+          void openEditor(key);
         }}
         onCancel={() => setView("list")}
       />
@@ -206,18 +221,21 @@ export function Templates() {
 
   return (
     <ApiDataTable
-      endpoint="/api/v1/admin/email-templates"
-      responseSchema={adminEmailTemplatesListResponseSchema}
+      endpoint={EMAIL_TEMPLATES_API}
+      responseSchema={emailTemplatesListResponseSchema}
       resolve={(data) => data.templates}
       resolvePage={(data) => data.page}
       paginate
       searchPlaceholder="Search template key…"
-      actionsRef={tableRef}
-      toolbar={() => (
-        <button class="btn btn-success btn-sm ms-auto" onClick={() => setView("create")}>
-          + New Template
-        </button>
-      )}
+      toolbar={
+        canWrite
+          ? () => (
+              <button class="btn btn-success btn-sm ms-auto" onClick={() => setView("create")}>
+                + New Template
+              </button>
+            )
+          : undefined
+      }
       columns={[
         {
           header: "Template Key",
@@ -254,7 +272,7 @@ export function Templates() {
           header: "",
           cell: (t) => (
             <button class="btn btn-sm btn-outline-success" onClick={() => void openEditor(t.template_key)}>
-              Edit →
+              {canWrite ? "Edit" : "View"} →
             </button>
           ),
         },

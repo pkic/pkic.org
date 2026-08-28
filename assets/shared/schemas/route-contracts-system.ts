@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { adminEmailOutboxQuerySchema } from "./admin-email-outbox";
-import { adminEmailTemplateActivateSchema } from "./admin-email-templates";
-import { emailTemplateKeyParamsSchema } from "./api-common";
 import { adminEmailOutboxResponseSchema } from "./admin-email-outbox";
 import { internalCalendarRsvpIngestSchema } from "./calendar-rsvp";
 import { jsonResponse, requiredJsonBody } from "./openapi";
@@ -55,28 +53,5 @@ export const adminEmailOutboxGetRouteSchema = {
       content: { "application/json": { schema: adminEmailOutboxResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
-  },
-};
-
-export const adminEmailTemplateActivateRouteSchema = {
-  tags: ["Admin email templates"],
-  summary: "Activate an email template version",
-  description: "Marks a specific version of an email template as the active version used for future rendering.",
-  request: {
-    params: emailTemplateKeyParamsSchema,
-    body: {
-      content: {
-        "application/json": {
-          schema: adminEmailTemplateActivateSchema,
-        },
-      },
-      required: true,
-    },
-  },
-  responses: {
-    "200": { description: "Template version activated successfully." },
-    "400": { description: "Invalid activation payload." },
-    "401": { description: "Admin authorization required." },
-    "404": { description: "Template or version not found." },
   },
 };

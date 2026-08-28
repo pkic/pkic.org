@@ -5,7 +5,7 @@ import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { adminEventDetailResponseSchema } from "../assets/shared/schemas/admin-events";
 import { adminEventStatsResponseSchema, adminStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { donationDetailResponseSchema } from "../assets/shared/schemas/admin-donations";
-import { adminEmailTemplateExistsResponseSchema } from "../assets/shared/schemas/admin-email-templates";
+import { emailTemplateExistsResponseSchema } from "../assets/shared/schemas/email-templates";
 import { adminUserDetailResponseSchema } from "../assets/shared/schemas/admin-users";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import { createAdminSession } from "./helpers/auth";
@@ -38,7 +38,8 @@ describe("admin read route OpenAPI contracts", () => {
   it("documents all converted admin reads", () => {
     const paths = decorateOpenApiSpec(openapi.schema).paths;
     expect(paths["/api/v1/admin/donations/{id}"].get).toBeDefined();
-    expect(paths["/api/v1/admin/email-templates/{key}/exists"].get).toBeDefined();
+    expect(paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
+    expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
     expect(paths["/api/v1/admin/stats"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}/stats"].get).toBeDefined();
@@ -56,7 +57,7 @@ describe("admin read route OpenAPI contracts", () => {
     expect(user.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await user.json()).error.code).toBe("VALIDATION_ERROR");
 
-    const key = await call(token, `/api/v1/admin/email-templates/${"a".repeat(201)}/exists`);
+    const key = await call(token, `/api/v1/system/email-templates/${"a".repeat(201)}/exists`);
     expect(key.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await key.json()).error.code).toBe("VALIDATION_ERROR");
   });
@@ -75,9 +76,9 @@ describe("admin read route OpenAPI contracts", () => {
     expect(donation.status).toBe(200);
     expect(donationDetailResponseSchema.parse(await donation.json()).donation.id).toBe(donationId);
 
-    const exists = await call(token, "/api/v1/admin/email-templates/unknown_template/exists");
+    const exists = await call(token, "/api/v1/system/email-templates/unknown_template/exists");
     expect(exists.status).toBe(200);
-    expect(adminEmailTemplateExistsResponseSchema.parse(await exists.json()).exists).toBe(false);
+    expect(emailTemplateExistsResponseSchema.parse(await exists.json()).exists).toBe(false);
 
     const stats = await call(token, "/api/v1/admin/stats");
     expect(stats.status).toBe(200);

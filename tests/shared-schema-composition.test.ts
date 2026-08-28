@@ -37,7 +37,7 @@ import { headshotUploadResponseSchema } from "../assets/shared/schemas/registrat
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
 import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
 import { adminMemberMutationResponseSchema } from "../assets/shared/schemas/admin-members";
-import { adminEmailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/admin-email-templates";
+import { emailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/email-templates";
 import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
@@ -109,7 +109,7 @@ describe("canonical shared schema composition", () => {
     ).toBe("H5");
 
     expect(
-      adminEmailTemplateVersionCreateResponseSchema.parse({
+      emailTemplateVersionCreateResponseSchema.parse({
         success: true,
         version: {
           id: ID,

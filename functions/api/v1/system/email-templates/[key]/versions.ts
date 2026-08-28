@@ -1,24 +1,23 @@
 import { json } from "../../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
-  adminEmailTemplateVersionCreateResponseSchema,
+  emailTemplateVersionCreateResponseSchema,
   emailTemplateVersionCreateRouteSchema,
   emailTemplateVersionsListRouteSchema,
-} from "../../../../../../assets/shared/schemas/admin-email-templates";
-import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+} from "../../../../../../assets/shared/schemas/email-templates";
+import type { AdminContext } from "../../../../../_lib/db/context";
 import {
-  createAdminEmailTemplateVersion,
-  listAdminEmailTemplateVersions,
-} from "../../../../../_lib/services/admin-email-templates";
+  createEmailTemplateVersion,
+  listEmailTemplateVersions,
+} from "../../../../../_lib/services/email-template-management";
 import type { ValidatedData } from "chanfana";
+import { requireSystemPermission } from "../../authorization";
 
 export const EmailTemplateVersionsList = openApiRoute(
   emailTemplateVersionsListRouteSchema,
   async (c: AdminContext, data) => {
-    await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-
-    return json(await listAdminEmailTemplateVersions(requestDb(c), data.params.key, data.query));
+    const { db } = await requireSystemPermission(c, "email-templates:read");
+    return json(await listEmailTemplateVersions(db, data.params.key, data.query));
   },
 );
 
@@ -26,10 +25,10 @@ async function handleVersionCreate(
   c: AdminContext,
   data: ValidatedData<typeof emailTemplateVersionCreateRouteSchema>,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const { db, staff } = await requireSystemPermission(c, "email-templates:write");
   const body = data.body;
 
-  const version = await createAdminEmailTemplateVersion(requestDb(c), admin, {
+  const version = await createEmailTemplateVersion(db, staff, {
     templateKey: data.params.key,
     content: body.content,
     subjectTemplate: body.subjectTemplate,
@@ -37,7 +36,7 @@ async function handleVersionCreate(
     messageType: body.messageType,
   });
 
-  return json(adminEmailTemplateVersionCreateResponseSchema.parse({ success: true, version }));
+  return json(emailTemplateVersionCreateResponseSchema.parse({ success: true, version }));
 }
 
 export const EmailTemplateVersionCreate = openApiRoute(emailTemplateVersionCreateRouteSchema, handleVersionCreate);

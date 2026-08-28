@@ -46,8 +46,13 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("publishes contracts for the previously raw admin mutations", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
-    expect(spec.paths["/api/v1/admin/email-templates/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/activate"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/email-templates"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/organizations/{id}/logo"].put).toBeDefined();
     expect(spec.paths["/api/v1/admin/organizations/{id}/logo"].delete).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}/anonymize"].post).toBeDefined();
@@ -66,14 +71,14 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("rejects invalid JSON bodies at the preview and version contract boundaries", async () => {
     await setupAdmin();
 
-    const preview = await callAdmin("/api/v1/admin/email-templates/preview", {
+    const preview = await callAdmin("/api/v1/system/email-templates/preview", {
       method: "POST",
       body: JSON.stringify({ content: "" }),
     });
     expect(preview.status).toBe(400);
     await expect(preview.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
 
-    const version = await callAdmin("/api/v1/admin/email-templates/example/versions", {
+    const version = await callAdmin("/api/v1/system/email-templates/example/versions", {
       method: "POST",
       body: JSON.stringify({ content: "" }),
     });

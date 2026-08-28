@@ -13,7 +13,7 @@ import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments } from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
-import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
@@ -181,7 +181,9 @@ async function markOutboxFailed(
   const attempts = row.attempts + 1;
   const nonRetryable =
     error instanceof AppError &&
-    (error.code === "CAPABILITY_RESOURCE_STALE" || error.code === "CAPABILITY_DESCRIPTOR_INVALID");
+    (error.code === "CAPABILITY_RESOURCE_STALE" ||
+      error.code === "CAPABILITY_DESCRIPTOR_INVALID" ||
+      error.code === "EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED");
   const status =
     error instanceof AppError && error.code === "CAPABILITY_RESOURCE_STALE"
       ? "cancelled"

@@ -93,6 +93,36 @@ describe("portal capability-derived navigation", () => {
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });
 
+  it("exposes email templates only to a global reader and preserves write capability separately", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email-templates:read", contextType: null, contextId: null }],
+    });
+    const writer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [
+        { permission: "email-templates:read", contextType: null, contextId: null },
+        { permission: "email-templates:write", contextType: null, contextId: null },
+      ],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "email-templates:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/email-templates",
+      section: "system",
+      label: "Email Templates",
+    });
+    expect(portalHasGlobalPermission(reader, "email-templates:write")).toBe(false);
+    expect(portalHasGlobalPermission(writer, "email-templates:write")).toBe(true);
+    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+  });
+
   it("shows member actions but no management entry to a member-only identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");

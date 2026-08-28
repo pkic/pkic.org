@@ -1,4 +1,4 @@
-import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { escapeMarkdownText } from "./markdown";
 
 const EMAIL_PLAIN_TEXT_KEY = "__pkicEmailPlainText";

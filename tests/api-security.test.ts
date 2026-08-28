@@ -55,6 +55,14 @@ function anonPost(url: string): Request {
   return new Request(url, { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
 }
 
+function anonPostBody(url: string, body: unknown): Request {
+  return new Request(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
+}
+
 /** Makes a GET request with a Bearer token. */
 function bearerGet(url: string, token: string): Request {
   return new Request(url, { headers: { authorization: `Bearer ${token}` } });
@@ -136,7 +144,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ["GET /api/v1/admin/stats", () => callApp(anonGet("https://app.test/api/v1/admin/stats"))],
     ["GET /api/v1/admin/donations", () => callApp(anonGet("https://app.test/api/v1/admin/donations"))],
     ["GET /api/v1/system/audit-log", () => callApp(anonGet("https://app.test/api/v1/system/audit-log"))],
-    ["GET /api/v1/admin/email-templates", () => callApp(anonGet("https://app.test/api/v1/admin/email-templates"))],
+    ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
     [
       "GET /api/v1/admin/events/:slug/registrations",
@@ -159,16 +167,22 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ["POST /api/v1/admin/events", () => callApp(anonPost("https://app.test/api/v1/admin/events"))],
     ["POST /api/v1/admin/donations/sync", () => callApp(anonPost("https://app.test/api/v1/admin/donations/sync"))],
     [
-      "POST /api/v1/admin/email-templates/preview",
-      () => callApp(anonPost("https://app.test/api/v1/admin/email-templates/preview")),
+      "POST /api/v1/system/email-templates/preview",
+      () => callApp(anonPostBody("https://app.test/api/v1/system/email-templates/preview", { content: "preview" })),
     ],
     [
-      "POST /api/v1/admin/email-templates/:key/activate",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/email-templates/${templateKey}/activate`)),
+      "POST /api/v1/system/email-templates/:key/activate",
+      () =>
+        callApp(anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/activate`, { version: 1 })),
     ],
     [
-      "POST /api/v1/admin/email-templates/:key/versions",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/email-templates/${templateKey}/versions`)),
+      "POST /api/v1/system/email-templates/:key/versions",
+      () =>
+        callApp(
+          anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/versions`, {
+            content: "version",
+          }),
+        ),
     ],
     ["GET /api/v1/admin/forms/:formKey", () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}`))],
     ["PATCH /api/v1/admin/forms/:formKey", () => callApp(anonPatch(`https://app.test/api/v1/admin/forms/${formKey}`))],

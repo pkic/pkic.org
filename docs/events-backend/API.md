@@ -3,6 +3,7 @@
 Base path: `/api/v1`
 
 ## Auth
+
 - `POST /admin/auth/request-link`
 - `POST /admin/auth/verify-link`
 
@@ -30,17 +31,26 @@ Base path: `/api/v1`
 - `POST /groups/:groupId/events/:eventId/invites/speakers/:inviteId/revoke`
 
 ## Proposal review
+
 - `GET /admin/proposals/:proposalId/reviews`
 - `POST /admin/proposals/:proposalId/reviews`
 - `PATCH /admin/proposals/:proposalId/reviews/:reviewId`
 - `POST /admin/proposals/:proposalId/finalize`
 
 ## Email templates
-- `GET /admin/email-templates`
-- `POST /admin/email-templates/:key/versions`
-- `POST /admin/email-templates/:key/activate`
+
+- `GET /system/email-templates`
+- `GET /system/email-templates/:key/versions`
+- `POST /system/email-templates/:key/versions`
+- `POST /system/email-templates/:key/activate`
+- `POST /system/email-templates/preview`
+- Reads require a user-backed staff session with `email-templates:read`.
+- Preview, version creation, and activation require `email-templates:write`.
+- The former `/admin/email-templates` API is removed; the portal is the only
+  management interface.
 
 ## Registrations and invites
+
 - `POST /events/:eventSlug/registrations`
 - `POST /events/:eventSlug/registrations/confirm-email`
 - `GET /events/:eventSlug/registrations/confirm-email?token=...`
@@ -55,6 +65,7 @@ Base path: `/api/v1`
 - Invite payloads use `firstName` and `lastName` (not `name`).
 
 ## Terms and proposals
+
 - `POST /events/:eventSlug/proposals`
 - `GET /events/:eventSlug/forms?purpose=event_registration|proposal_submission`
 - `GET /proposals/manage/:token`
@@ -64,15 +75,18 @@ Base path: `/api/v1`
 - `speakers[].role` supports `speaker`, `co_speaker`, `moderator`, `panelist` (plus proposer role in system internals).
 
 ## Referral and internal jobs
+
 - `GET /r/:code`
 - `POST /internal/email/retry`
 - `POST /internal/retention/run`
 
 ## Legacy removal
+
 - Legacy `/api/events/*` routes are removed.
 - Supported backend routes are exclusively under `/api/v1/*` and `/r/:code`.
 
 ## Bootstrap
+
 - Seed initial admin user with `pnpm run seed:admin:local` (or `pnpm run seed:admin:remote`).
 - Seed script upserts `admin@pkic.org` with global role `admin`.
 - Seed or update an event from YAML config (includes event metadata, terms, organizers, and forms/questions):
@@ -85,12 +99,14 @@ Base path: `/api/v1`
 - Per-day attendance is captured as first-class data (`registration_day_attendance`), not as ad-hoc custom question fields.
 
 ## Shared Validation
+
 - Shared request schemas live in focused `assets/shared/schemas/` domain modules for backend and frontend reuse.
 - Canonical attendee user field is `organizationName` (not `company`).
 - Name fields are split: `firstName`, `lastName` (and optional `preferred_name` in storage).
 - Event retention setting field is `userRetentionDays`.
 
 ## Link generation behavior
+
 - Invite, referral, confirmation, and manage links resolve through event frontend route metadata.
 - If route metadata is missing, backend falls back to defaults:
 - `/events/:slug/register/`

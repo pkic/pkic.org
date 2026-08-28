@@ -1,5 +1,5 @@
 import { sha256Hex } from "../../utils/crypto";
-import type { EmailMessageType } from "../../../../assets/shared/schemas/admin-email-templates";
+import type { EmailMessageType } from "../../../../assets/shared/schemas/email-templates";
 import type { CampaignAudienceFilter, CampaignRecipient } from "./types";
 
 export async function computeCampaignDigest(payload: {

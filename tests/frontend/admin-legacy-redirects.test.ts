@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
@@ -40,6 +41,11 @@ describe("legacy admin route redirects", () => {
     expect(legacyAdminRedirectTarget("/membership/settings?from=bookmark")).toBe(
       ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
     );
+  });
+
+  it("moves email templates to system management in the portal", () => {
+    expect(legacyAdminRedirectTarget("/email/templates")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/email/templates?from=bookmark")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
   });
 
   it("moves event invitation bookmarks to selected-group management", () => {

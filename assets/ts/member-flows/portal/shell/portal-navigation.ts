@@ -40,6 +40,12 @@ const SYSTEM_NAV_ITEMS = [
     permission: "organizations:content-review",
   },
   { path: "/system/audit-log", section: "system", label: "Audit Log", permission: "audit:read" },
+  {
+    path: "/system/email-templates",
+    section: "system",
+    label: "Email Templates",
+    permission: "email-templates:read",
+  },
 ] as const;
 
 const ACCOUNT_NAV_ITEM: PortalNavItem = { path: "/account", section: "account", label: "Account Settings" };

@@ -1,6 +1,89 @@
 import { marked } from "marked";
-import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { resolveEmailTemplateData } from "./plain-text";
+import {
+  assertEmailTemplateRenderLength,
+  EMAIL_TEMPLATE_RENDER_MAX_CHARS,
+  throwEmailTemplateRenderLimitExceeded,
+} from "./render-limit";
+
+export { EMAIL_TEMPLATE_RENDER_MAX_CHARS } from "./render-limit";
+
+export const EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS = 1_000;
+export const EMAIL_TEMPLATE_RENDER_MAX_WORK_CHARS = 8_000_000;
+export const EMAIL_SUBJECT_RENDER_MAX_CHARS = 8_192;
+const EMAIL_TEMPLATE_RENDER_MAX_DEPTH = 32;
+
+interface TemplateRenderBudget {
+  maxChars: number;
+  maxExpansions: number;
+  maxWorkChars: number;
+  expansions: number;
+  workChars: number;
+}
+
+function createTemplateRenderBudget(
+  maxChars = EMAIL_TEMPLATE_RENDER_MAX_CHARS,
+  maxExpansions = EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
+  maxWorkChars = EMAIL_TEMPLATE_RENDER_MAX_WORK_CHARS,
+): TemplateRenderBudget {
+  return { maxChars, maxExpansions, maxWorkChars, expansions: 0, workChars: 0 };
+}
+
+function throwTemplateRenderLimitExceeded(): never {
+  return throwEmailTemplateRenderLimitExceeded();
+}
+
+function assertTemplateRenderLength(length: number, budget: TemplateRenderBudget): void {
+  assertEmailTemplateRenderLength(length, budget.maxChars);
+}
+
+function assertTemplateRenderDepth(depth: number): void {
+  if (depth > EMAIL_TEMPLATE_RENDER_MAX_DEPTH) throwTemplateRenderLimitExceeded();
+}
+
+function consumeTemplateExpansions(budget: TemplateRenderBudget, count: number): void {
+  if (!Number.isSafeInteger(count) || count < 0 || budget.expansions + count > budget.maxExpansions) {
+    throwTemplateRenderLimitExceeded();
+  }
+  budget.expansions += count;
+}
+
+function consumeTemplateWork(budget: TemplateRenderBudget, characters: number): void {
+  if (!Number.isSafeInteger(characters) || characters < 0 || budget.workChars + characters > budget.maxWorkChars) {
+    throwTemplateRenderLimitExceeded();
+  }
+  budget.workChars += characters;
+}
+
+function replaceTemplateBounded(
+  input: string,
+  pattern: RegExp,
+  replacement: (match: RegExpExecArray) => string,
+  budget: TemplateRenderBudget,
+): string {
+  if (!pattern.global) throw new Error("Bounded template replacement requires a global expression");
+  pattern.lastIndex = 0;
+  const parts: string[] = [];
+  let outputLength = 0;
+  let inputOffset = 0;
+  let match: RegExpExecArray | null;
+
+  const append = (value: string): void => {
+    outputLength += value.length;
+    assertTemplateRenderLength(outputLength, budget);
+    parts.push(value);
+  };
+
+  while ((match = pattern.exec(input)) !== null) {
+    append(input.slice(inputOffset, match.index));
+    append(replacement(match));
+    inputOffset = match.index + match[0].length;
+    if (match[0].length === 0) pattern.lastIndex++;
+  }
+  append(input.slice(inputOffset));
+  return parts.join("");
+}
 
 // ─── Conditional template helpers ────────────────────────────────────────────
 
@@ -126,9 +209,21 @@ function findElseAtDepth0(content: string, openPrefix: string, closeTag: string)
  * blocks in `template` using a depth-counting scanner rather than regex.
  * This correctly handles arbitrary nesting without ambiguity.
  */
-function resolveAllConditionals(template: string, data: Record<string, unknown>): string {
+function resolveAllConditionals(
+  template: string,
+  data: Record<string, unknown>,
+  budget: TemplateRenderBudget,
+  depth: number,
+): string {
+  assertTemplateRenderDepth(depth);
+  consumeTemplateWork(budget, template.length);
   let result = "";
   let pos = 0;
+
+  const append = (value: string): void => {
+    assertTemplateRenderLength(result.length + value.length, budget);
+    result += value;
+  };
 
   while (pos < template.length) {
     const ifIdx = template.indexOf("{{#if ", pos);
@@ -136,7 +231,7 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
 
     // No more conditional tags — append remainder and stop.
     if (ifIdx === -1 && unlessIdx === -1) {
-      result += template.slice(pos);
+      append(template.slice(pos));
       break;
     }
 
@@ -146,13 +241,13 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
     const closeTag = isUnless ? "{{/unless}}" : "{{/if}}";
 
     // Append literal text before this tag.
-    result += template.slice(pos, tagIdx);
+    append(template.slice(pos, tagIdx));
 
     // Find the end of the opening tag.
     const condEnd = template.indexOf("}}", tagIdx + openPfx.length);
     if (condEnd === -1) {
       // Malformed — emit as-is and stop.
-      result += template.slice(tagIdx);
+      append(template.slice(tagIdx));
       break;
     }
 
@@ -163,7 +258,7 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
     const closeAt = findMatchingCloseTag(template, openTagEnd, openPfx, closeTag);
     if (closeAt === -1) {
       // Unmatched tag — emit the opening tag text and keep scanning.
-      result += template.slice(tagIdx, openTagEnd);
+      append(template.slice(tagIdx, openTagEnd));
       pos = openTagEnd;
       continue;
     }
@@ -178,7 +273,7 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
 
     // Evaluate and recursively process the chosen branch.
     const isTrue = isUnless ? !isTruthy(data[condition]) : evaluateIfCondition(condition, data);
-    result += resolveAllConditionals(isTrue ? ifContent : elseContent, data);
+    append(resolveAllConditionals(isTrue ? ifContent : elseContent, data, budget, depth + 1));
 
     pos = afterBlock;
   }
@@ -235,21 +330,29 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
  *
  *    Partials are resolved from data._partials (Record<string,string>). Each partial
  *    is compiled with the same data variables, but cannot itself include other partials
- *    (1-level deep only — prevents loops). Unknown partials render as empty string.
+ *    (1-level deep only). Unknown partials render as empty string.
  *    Load partials from DB via loadEmailPartials() and inject as data._partials.
  *
  * LIMITATIONS:
- * - No nested conditionals or loops
+ * - Nested conditionals are supported; nested loops are not
  * - No custom Handlebars helpers
- * - Comparison/logical operators work in uppercase only: {{#if EQ ...}} fails
- * - {{#for}} syntax is NOT supported; use {{#each}} or {{#each array as |item|}}
+ * - Comparison/logical operators are lowercase only: {{#if EQ ...}} fails
+ * - {{#for}} and {{#each array as |item|}} are NOT supported; use {{#each array}}
  * - Partials are 1-level deep only; nested {{> ...}} inside a partial are stripped
  *
  * WHY CUSTOM:
  * Cloudflare Workers blocks Handlebars.compile() because it uses eval/new Function().
  * This engine trades Handlebars' full feature set for CSP compliance.
  */
-export function compileSimpleTemplate(template: string, data: Record<string, unknown>): string {
+function compileSimpleTemplateWithBudget(
+  template: string,
+  data: Record<string, unknown>,
+  budget: TemplateRenderBudget,
+  depth: number,
+): string {
+  assertTemplateRenderDepth(depth);
+  assertTemplateRenderLength(template.length, budget);
+  consumeTemplateWork(budget, template.length);
   let result = template;
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -262,12 +365,19 @@ export function compileSimpleTemplate(template: string, data: Record<string, unk
     if (Object.keys(partials).length > 0) {
       const dataForPartial = { ...data };
       delete dataForPartial._partials;
-      result = result.replace(/\{\{>\s*(\w+)\s*\}\}/g, (_match, name: string) => {
-        const partialContent = partials[name];
-        if (partialContent === undefined) return "";
-        // Compile the partial — recursive call has no _partials, blocking further nesting.
-        return compileSimpleTemplate(partialContent, dataForPartial);
-      });
+      result = replaceTemplateBounded(
+        result,
+        /\{\{>\s*(\w+)\s*\}\}/g,
+        (match) => {
+          const name = match[1];
+          const partialContent = partials[name];
+          if (partialContent === undefined) return "";
+          consumeTemplateExpansions(budget, 1);
+          // Compile the partial — recursive call has no _partials, blocking further nesting.
+          return compileSimpleTemplateWithBudget(partialContent, dataForPartial, budget, depth + 1);
+        },
+        budget,
+      );
     }
   }
 
@@ -275,15 +385,20 @@ export function compileSimpleTemplate(template: string, data: Record<string, unk
   // 1. LOOPS: {{#each array}}...{{/each}}
   //    Processes nested conditionals inside loop content.
   // ────────────────────────────────────────────────────────────────────────────
-  result = result.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, arrayVar, content) => {
-    const array = data[arrayVar];
-    if (!Array.isArray(array)) {
-      return ""; // Not an array, skip loop
-    }
+  result = replaceTemplateBounded(
+    result,
+    /\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g,
+    (match) => {
+      const array = data[match[1]];
+      if (!Array.isArray(array)) {
+        return ""; // Not an array, skip loop
+      }
 
-    return array
-      .map((item, index) => {
-        let loopContent = content;
+      consumeTemplateExpansions(budget, array.length);
+      const expanded: string[] = [];
+      let expandedLength = 0;
+      for (const [index, item] of array.entries()) {
+        let loopContent = match[2];
 
         // Create a temporary data object with loop variables + item properties
         const loopData = { ...data };
@@ -299,12 +414,15 @@ export function compileSimpleTemplate(template: string, data: Record<string, unk
         }
 
         // Recursively process the loop content (handles nested conditionals)
-        loopContent = compileSimpleTemplate(loopContent, loopData);
-
-        return loopContent;
-      })
-      .join("");
-  });
+        loopContent = compileSimpleTemplateWithBudget(loopContent, loopData, budget, depth + 1);
+        expandedLength += loopContent.length;
+        assertTemplateRenderLength(expandedLength, budget);
+        expanded.push(loopContent);
+      }
+      return expanded.join("");
+    },
+    budget,
+  );
 
   // ────────────────────────────────────────────────────────────────────────────
   // 2–4. CONDITIONALS — depth-counting scanner (handles arbitrary nesting)
@@ -314,23 +432,33 @@ export function compileSimpleTemplate(template: string, data: Record<string, unk
   //   its own {{/if}} regardless of how deeply nested the blocks are.
   //   Supports all forms: {{#if var}}, {{#if eq}}, {{#if and/or}}, {{#unless}}.
   // ────────────────────────────────────────────────────────────────────────────
-  result = resolveAllConditionals(result, data);
+  result = resolveAllConditionals(result, data, budget, depth);
 
   // ────────────────────────────────────────────────────────────────────────────
   // 5. VARIABLE SUBSTITUTION: {{variable}}, {{this}}, {{@special}}
   // ────────────────────────────────────────────────────────────────────────────
-  result = result.replace(/\{\{([@\w.]+)\}\}/g, (match, key) => {
-    const value = data[key];
-    if (value === null || value === undefined) {
-      return match; // Leave unresolved placeholders as-is
-    }
-    return String(value);
-  });
+  result = replaceTemplateBounded(
+    result,
+    /\{\{([@\w.]+)\}\}/g,
+    (match) => {
+      const key = match[1];
+      const value = data[key];
+      if (value === null || value === undefined) {
+        return match[0]; // Leave unresolved placeholders as-is
+      }
+      return String(value);
+    },
+    budget,
+  );
 
   // Strip any unresolved {{> ...}} tags (unknown partials or partials-in-partials).
-  result = result.replace(/\{\{>\s*\w+\s*\}\}/g, "");
+  result = replaceTemplateBounded(result, /\{\{>\s*\w+\s*\}\}/g, () => "", budget);
 
   return result;
+}
+
+export function compileSimpleTemplate(template: string, data: Record<string, unknown>): string {
+  return compileSimpleTemplateWithBudget(template, data, createTemplateRenderBudget(), 0);
 }
 
 /**
@@ -351,15 +479,17 @@ function wrapHtml(
   layoutHtml: string,
   data: Record<string, unknown> = {},
   baseUrl = "https://pkic.org",
+  budget = createTemplateRenderBudget(),
 ): string {
   if (!layoutHtml) return bodyHtml;
 
-  const layout = compileSimpleTemplate(layoutHtml, { baseUrl, ...data });
+  const layout = compileSimpleTemplateWithBudget(layoutHtml, { baseUrl, ...data }, budget, 0);
 
   if (!layout.includes("{{{body_html}}}")) {
     throw new Error("Email layout template is missing the required {{{body_html}}} placeholder");
   }
 
+  assertTemplateRenderLength(layout.length - "{{{body_html}}}".length + bodyHtml.length, budget);
   return layout.replace("{{{body_html}}}", bodyHtml);
 }
 
@@ -395,13 +525,14 @@ export async function renderEmail(
   contentType: EmailContentType = "markdown",
   baseUrl = "https://pkic.org",
 ): Promise<{ html: string; text: string }> {
+  const budget = createTemplateRenderBudget();
   // Inject baseUrl into template data so {{baseUrl}} resolves in body + partials.
   const dataWithBase = resolveEmailTemplateData({ baseUrl, ...data }, contentType);
-  const rendered = compileSimpleTemplate(template, dataWithBase);
+  const rendered = compileSimpleTemplateWithBudget(template, dataWithBase, budget, 0);
 
   if (contentType === "html") {
     // Template is already HTML — wrap in layout but skip markdown processing.
-    const html = wrapHtml(rendered, layoutHtml, dataWithBase, baseUrl);
+    const html = wrapHtml(rendered, layoutHtml, dataWithBase, baseUrl, budget);
     const text = stripHtmlToText(rendered);
     return { html, text };
   }
@@ -409,7 +540,8 @@ export async function renderEmail(
   if (contentType === "text") {
     // Plain-text template — wrap a <pre>-based fallback, no markdown processor.
     const htmlBody = `<pre style="white-space:pre-wrap;font-family:inherit">${rendered.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`;
-    const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl);
+    assertTemplateRenderLength(htmlBody.length, budget);
+    const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
     return { html, text: stripHtmlToText(rendered) };
   }
 
@@ -418,7 +550,8 @@ export async function renderEmail(
     gfm: true,
     breaks: false,
   });
-  const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl);
+  assertTemplateRenderLength(htmlBody.length, budget);
+  const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
 
   const text = stripHtmlToText(htmlBody);
 
@@ -427,15 +560,20 @@ export async function renderEmail(
 
 export function renderSubject(template: string | null, fallback: string, data: Record<string, unknown>): string {
   const subjectData = resolveEmailTemplateData(data, "subject");
+  const budget = createTemplateRenderBudget(EMAIL_SUBJECT_RENDER_MAX_CHARS);
   const override = subjectData.__subjectOverride;
   if (typeof override === "string" && override.trim().length > 0) {
-    return override.replace(/[\r\n]+/g, " ").trim();
+    const renderedOverride = override.replace(/[\r\n]+/g, " ").trim();
+    assertTemplateRenderLength(renderedOverride.length, budget);
+    return renderedOverride;
   }
 
   if (!template) {
-    return fallback.replace(/[\r\n]+/g, " ").trim();
+    const renderedFallback = fallback.replace(/[\r\n]+/g, " ").trim();
+    assertTemplateRenderLength(renderedFallback.length, budget);
+    return renderedFallback;
   }
 
-  const rendered = compileSimpleTemplate(template, subjectData);
+  const rendered = compileSimpleTemplateWithBudget(template, subjectData, budget, 0);
   return rendered.replace(/[\r\n]+/g, " ").trim();
 }

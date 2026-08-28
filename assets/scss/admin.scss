@@ -10,8 +10,8 @@ $adm-green: #198754;
 $adm-danger: #dc3545;
 
 @import "admin-users";
-@import "admin-email-templates";
 @import "admin-donations";
+@import "email-template-editor";
 
 .adm-security-card {
   max-width: 720px;
@@ -436,12 +436,20 @@ $adm-danger: #dc3545;
     border-radius: 3px;
     overflow: hidden;
 
-    &::-webkit-progress-bar { background: #e9ecef; }
-    &::-webkit-progress-value { background: $adm-green; }
-    &::-moz-progress-bar { background: $adm-green; }
+    &::-webkit-progress-bar {
+      background: #e9ecef;
+    }
+    &::-webkit-progress-value {
+      background: $adm-green;
+    }
+    &::-moz-progress-bar {
+      background: $adm-green;
+    }
   }
 
-  .adm-email-batch-limit { width: 90px; }
+  .adm-email-batch-limit {
+    width: 90px;
+  }
 
   .bar-cnt {
     width: 30px;

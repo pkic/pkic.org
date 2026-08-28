@@ -5,6 +5,8 @@ import membershipApplications_Router from "./membership-applications/router";
 import { SystemMembershipCategoriesList, SystemMembershipCategoryUpdate } from "./membership-categories";
 import { SystemMembershipSettingsGet, SystemMembershipSettingsUpdate } from "./membership-settings";
 import { SystemAuditLogList } from "./audit-log";
+import { EmailTemplatesList } from "./email-templates";
+import emailTemplates_Router from "./email-templates/router";
 import {
   SystemOrganizationContentReviewApprove,
   SystemOrganizationContentReviewGet,
@@ -16,6 +18,8 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.get("/audit-log", SystemAuditLogList);
+openapi.get("/email-templates", EmailTemplatesList);
+openapi.route("/email-templates", emailTemplates_Router);
 openapi.get("/membership-categories", SystemMembershipCategoriesList);
 openapi.patch("/membership-categories/:categoryCode", SystemMembershipCategoryUpdate);
 openapi.get("/membership-settings", SystemMembershipSettingsGet);

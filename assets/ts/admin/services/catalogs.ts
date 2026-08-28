@@ -1,17 +1,10 @@
 import type { z } from "zod";
 import { rolesListResponseSchema, type Role } from "../../../shared/schemas/access-control";
-import {
-  adminEmailTemplatesListResponseSchema,
-  adminEmailTemplateVersionsListResponseSchema,
-  type AdminEmailTemplateSummary,
-  type AdminEmailTemplateVersion,
-} from "../../../shared/schemas/admin-email-templates";
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
 import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
 import type { ServerCatalog } from "../../shared/server-catalog";
-import { api } from "../api";
 
 /**
  * Runtime-validated metadata for one server-backed selector. Every catalogue
@@ -55,21 +48,6 @@ export function adminEventFormCatalog(
   };
 }
 
-export function adminEmailTemplateCatalog(
-  templateKeyPrefix?: string,
-): AdminCatalog<AdminEmailTemplateSummary, z.infer<typeof adminEmailTemplatesListResponseSchema>> {
-  return {
-    endpoint: "/api/v1/admin/email-templates",
-    responseSchema: adminEmailTemplatesListResponseSchema,
-    resolveItems: (response) => response.templates,
-    resolvePage: (response) => response.page,
-    itemKey: (item) => item.template_key,
-    itemLabel: (item) => item.template_key,
-    params: templateKeyPrefix ? { templateKeyPrefix } : undefined,
-    sort: "template_key",
-  };
-}
-
 export const adminEventCatalog: AdminCatalog<AdminEventSummary, z.infer<typeof adminEventsListResponseSchema>> = {
   endpoint: "/api/v1/admin/events",
   responseSchema: adminEventsListResponseSchema,
@@ -89,28 +67,3 @@ export const adminRoleCatalog: AdminCatalog<Role, z.infer<typeof rolesListRespon
   itemLabel: (item) => item.name,
   sort: "name",
 };
-
-async function loadTemplateVersionPage(
-  templateKey: string,
-  params: Record<string, string>,
-  signal?: AbortSignal,
-): Promise<AdminEmailTemplateVersion[]> {
-  const query = new URLSearchParams({ limit: "1", offset: "0", sort: "-version", ...params });
-  const raw = await api(
-    `/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions?${query.toString()}`,
-    adminEmailTemplateVersionsListResponseSchema,
-    { signal },
-  );
-  return raw.versions;
-}
-
-/** Loads only the active editor version, or the latest draft when no version is active. */
-export async function getAdminEmailTemplateEditorVersion(
-  templateKey: string,
-  signal?: AbortSignal,
-): Promise<AdminEmailTemplateVersion | null> {
-  const active = await loadTemplateVersionPage(templateKey, { status: "active" }, signal);
-  if (active[0]) return active[0];
-  const latest = await loadTemplateVersionPage(templateKey, {}, signal);
-  return latest[0] ?? null;
-}

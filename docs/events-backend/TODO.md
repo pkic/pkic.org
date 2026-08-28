@@ -34,9 +34,10 @@
 - [x] Enforce proposal session-type enum and required speaker biography rules.
 
 ## Stage 4: Email System
-- [x] R2 template version storage + D1 metadata.
+- [x] D1 template content, version metadata, and active-version enforcement.
 - [x] SendGrid outbox processing + retry endpoint.
-- [x] Add seed utility for default email templates (D1 metadata + private R2 content) to avoid missing-template runtime failures in local/provisioning workflows.
+- [x] Add a seed utility for default D1 email-template content and metadata to
+      avoid missing-template runtime failures in local/provisioning workflows.
 
 ## Stage 5: Referral + Waitlist
 - [x] Short code referral links and click tracking.

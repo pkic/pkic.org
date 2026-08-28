@@ -1117,7 +1117,26 @@ Status: In progress
       require a separate destructive-data design. A real Worker/D1 browser
       journey changes workflow settings and category metadata through the
       portal, persists both changes, and proves the legacy bookmark does not
-      call the removed admin endpoint. Other global management destinations
+      call the removed admin endpoint.
+      Email-template management is the fifth permission-derived System
+      destination. One neutral shared contract, D1-backed service, and portal
+      editor now own listing, server-side search/sort/pagination, version
+      history, preview, draft creation, and activation under
+      `/api/v1/system/email-templates`. Reads require the live global
+      `email-templates:read` permission; preview and mutations require
+      `email-templates:write`. Every mutation repeats the user-backed permission
+      and state predicates in the same D1 batch as the write and attributed
+      audit record. Conditional version creation and a partial unique index
+      prevent competing writers from creating the same version or leaving more
+      than one active version. Template resolution reads the current active D1
+      version instead of relying on process-local cache state, so activation is
+      immediately consistent across Worker isolates. The former admin API and
+      editor are removed rather than retained as a second consumer; the old
+      bookmark is only a portal redirect, while the still-temporary event-email
+      editor consumes the canonical System catalog. Mounted route, concurrency,
+      rollback, contract, permission, frontend, and real Worker/D1 browser
+      regressions provide the cutover evidence.
+      Other global management destinations
       remain, so this item is deliberately still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
@@ -1244,7 +1263,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes at the current architecture
-      checkpoint: 2,169 backend tests pass with one skipped, 277 frontend tests
+      checkpoint: 2,191 backend tests pass with one skipped, 281 frontend tests
       pass, and 80 tooling tests pass. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication, formatting,
       frontend/Hugo builds, max-lines, and filename gates also pass. An earlier
@@ -1252,9 +1271,13 @@ Status: In progress
       were separated into a focused file. The complete composite gate was then
       rerun successfully after the selected-group authorization, account
       cutover, centralized management destinations, group creation, category
-      rule regressions, and removal of the duplicate admin invitation surface
-      were added. The final architecture state must pass the same complete gate
-      again before handoff.
+      rule regressions, removal of the duplicate admin invitation surface, and
+      the canonical System email-template cutover were added. The email renderer
+      now applies shared output, expansion, cumulative-work, depth, and subject
+      budgets across body, partial, loop, layout, campaign-custom-text, preview,
+      and outbox paths. Focused regressions prove abusive expansion fails closed
+      before delivery and is terminal rather than retried. The final
+      architecture state must pass the same complete gate again before handoff.
 - [x] Run focused Playwright flows while iterating.
       Current evidence: the real Worker/D1 portal event journey and six
       selected-group persona journeys pass together in one isolated seven-test
@@ -1363,6 +1386,18 @@ The final PR description must include, at minimum:
   immediately;
 - verify `/api/v1/admin/membership-settings` returns 404 and the old admin
   bookmark redirects without making a legacy API request;
+- list and search email templates with `email-templates:read`, then confirm a
+  read-only staff user can inspect content and history but cannot preview,
+  create, save, or activate a version;
+- create a draft email-template version with `email-templates:write`, render its
+  HTML and text previews, activate it, reload the portal, and confirm the active
+  version is used immediately;
+- submit competing template-version creation and activation requests and
+  confirm one coherent version wins, only one version is active, and failed
+  writes leave neither partial state nor an audit record;
+- verify `/api/v1/admin/email-templates` and its nested paths return 404 and the
+  old `/admin/#/email/templates` bookmark redirects without making a legacy API
+  request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

@@ -5534,3 +5534,25 @@ VALUES (
 Actions you take in this representative capacity are attributed to {{organizationName}}. No acceptance is required. If this change is unexpected, please contact an authorized contact for the organization.',
   'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
 );
+
+-- Email rendering has one canonical active version per template. Normalize any
+-- branch-local duplicate active rows before enforcing the invariant; this is an
+-- in-place status correction and does not rebuild the table.
+WITH ranked_active_templates AS (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY template_key
+           ORDER BY version DESC, created_at DESC, id DESC
+         ) AS active_rank
+  FROM email_template_versions
+  WHERE status = 'active'
+)
+UPDATE email_template_versions
+SET status = 'archived'
+WHERE id IN (
+  SELECT id FROM ranked_active_templates WHERE active_rank > 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_template_versions_one_active
+  ON email_template_versions(template_key)
+  WHERE status = 'active';

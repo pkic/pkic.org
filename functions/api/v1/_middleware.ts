@@ -13,8 +13,12 @@ function isPublicCacheableGet(pathname: string): boolean {
  * All other routes signal sensitivity by calling markSensitive(context) at
  * the top of their handler so the middleware reads it from context.data.
  */
-function isAdminPath(pathname: string): boolean {
-  return pathname.startsWith("/api/v1/admin/") || pathname.startsWith("/api/v1/internal/");
+function isSensitiveArchitecturePath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/api/v1/admin/") ||
+    pathname.startsWith("/api/v1/internal/") ||
+    pathname.startsWith("/api/v1/system/")
+  );
 }
 
 function applyResponsePolicy(request: Request, response: Response, sensitive?: boolean): void {
@@ -22,7 +26,7 @@ function applyResponsePolicy(request: Request, response: Response, sensitive?: b
   const method = request.method.toUpperCase();
   const hasAuthHeader = Boolean(request.headers.get("authorization"));
   const hasAuthCookie = hasAuthenticatedSessionCookie(request);
-  const isSensitive = hasAuthHeader || hasAuthCookie || isAdminPath(pathname) || sensitive === true;
+  const isSensitive = hasAuthHeader || hasAuthCookie || isSensitiveArchitecturePath(pathname) || sensitive === true;
 
   if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);

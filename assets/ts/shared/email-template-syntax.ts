@@ -1,4 +1,10 @@
-import { esc } from "./ui";
+function esc(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 /** Escapes template source and marks only recognized Handlebars token spans. */
 export function highlightTemplateSyntax(source: string): string {

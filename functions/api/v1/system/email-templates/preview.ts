@@ -1,15 +1,15 @@
 import { json } from "../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailPartials, loadEmailRenderResources } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import {
-  adminEmailTemplatePreviewResponseSchema,
-  adminEmailTemplatePreviewRouteSchema,
-} from "../../../../../assets/shared/schemas/admin-email-templates";
-import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+  emailTemplatePreviewResponseSchema,
+  emailTemplatePreviewRouteSchema,
+} from "../../../../../assets/shared/schemas/email-templates";
+import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { ValidatedData } from "chanfana";
+import { requireSystemPermission } from "../authorization";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   return {
@@ -37,10 +37,9 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
 
 async function handlePreviewPost(
   c: AdminContext,
-  data: ValidatedData<typeof adminEmailTemplatePreviewRouteSchema>,
+  data: ValidatedData<typeof emailTemplatePreviewRouteSchema>,
 ): Promise<Response> {
-  const db = requestDb(c);
-  await requireAdminFromRequest(db, c.req.raw, c.env);
+  const { db } = await requireSystemPermission(c, "email-templates:write");
   const body = data.body;
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
@@ -59,7 +58,7 @@ async function handlePreviewPost(
   const rendered = await renderEmail(body.content, dataWithPartials, layoutHtml, body.contentType, appBaseUrl);
 
   return json(
-    adminEmailTemplatePreviewResponseSchema.parse({
+    emailTemplatePreviewResponseSchema.parse({
       success: true,
       subject,
       html: rendered.html,
@@ -69,4 +68,4 @@ async function handlePreviewPost(
   );
 }
 
-export const AdminEmailTemplatePreviewPost = openApiRoute(adminEmailTemplatePreviewRouteSchema, handlePreviewPost);
+export const EmailTemplatePreviewPost = openApiRoute(emailTemplatePreviewRouteSchema, handlePreviewPost);

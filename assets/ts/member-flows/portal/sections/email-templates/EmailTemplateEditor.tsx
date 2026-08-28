@@ -1,25 +1,27 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Tabs } from "../../components/Tabs";
-import { Badge } from "../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
-import { api, apiCommand } from "../api";
-import { toast } from "../ui";
-import { highlightTemplateSyntax } from "../email-template-syntax";
-import type { EmailTemplateVersion } from "../types";
+import { Tabs } from "../../../../components/Tabs";
+import { Badge } from "../../../../components/Badge";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { postJson } from "../../../../shared/api-client";
+import { toast } from "../../ui";
+import { highlightTemplateSyntax } from "../../../../shared/email-template-syntax";
+import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
 import {
   TEMPLATE_HELPERS,
   TEMPLATE_PARTIALS,
   PREVIEW_DEFAULTS,
   type TemplateHelperCategory,
-} from "../email-template-helpers";
+} from "../../../../shared/email-template-helpers";
 import {
-  adminEmailTemplateVersionsListResponseSchema,
-  adminEmailTemplateRenderedResponseSchema,
-  adminEmailTemplateVersionCreateResponseSchema,
+  emailTemplateVersionsListResponseSchema,
+  emailTemplatePreviewResponseSchema,
+  emailTemplateVersionCreateResponseSchema,
   type EmailContentType,
   type EmailMessageType,
-} from "../../../shared/schemas/admin-email-templates";
-import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../email-preview-tabs";
+} from "../../../../../shared/schemas/email-templates";
+import { successResponseSchema } from "../../../../../shared/schemas/api-common";
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
+import { EMAIL_TEMPLATES_API } from "../../../../shared/email-template-catalog";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
@@ -31,10 +33,12 @@ const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", 
 export function TemplateEditor({
   templateKey,
   initialVersion,
+  canWrite,
   onBack,
 }: {
   templateKey: string;
   initialVersion: EmailTemplateVersion | null;
+  canWrite: boolean;
   onBack: () => void;
 }) {
   const current = initialVersion;
@@ -126,6 +130,7 @@ export function TemplateEditor({
   }
 
   async function doPreview() {
+    if (!canWrite) return;
     if (!body.trim()) {
       toast("Body cannot be empty", "error");
       return;
@@ -147,16 +152,17 @@ export function TemplateEditor({
       const previewContent = isLayout
         ? "<h2>Layout preview</h2><p>This is how body content will appear inside the shared email shell.</p>"
         : body;
-      const result = await api("/api/v1/admin/email-templates/preview", adminEmailTemplateRenderedResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({
+      const result = await postJson(
+        `${EMAIL_TEMPLATES_API}/preview`,
+        {
           subjectTemplate: subject || undefined,
           content: previewContent,
           contentType: isLayout ? "html" : contentType,
           layoutHtml,
           data,
-        }),
-      });
+        },
+        emailTemplatePreviewResponseSchema,
+      );
       setPreviewSubject(result.subject);
       setPreviewHtml(result.html);
       setPreviewText(result.text);
@@ -170,6 +176,7 @@ export function TemplateEditor({
   }
 
   async function doSave() {
+    if (!canWrite) return;
     if (!body.trim()) {
       toast("Body cannot be empty", "error");
       return;
@@ -181,18 +188,15 @@ export function TemplateEditor({
     setSaving(true);
     try {
       const effectiveContentType = isLayout ? "html" : contentType;
-      const result = await api(
-        `/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`,
-        adminEmailTemplateVersionCreateResponseSchema,
+      const result = await postJson(
+        `${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`,
         {
-          method: "POST",
-          body: JSON.stringify({
-            content: body,
-            subjectTemplate: subject || undefined,
-            contentType: effectiveContentType,
-            messageType: isLayout ? undefined : messageType,
-          }),
+          content: body,
+          subjectTemplate: subject || undefined,
+          contentType: effectiveContentType,
+          messageType: isLayout ? undefined : messageType,
         },
+        emailTemplateVersionCreateResponseSchema,
       );
       toast(`Saved as draft v${result.version.version}`, "success");
       await historyRef.current?.reload();
@@ -204,11 +208,13 @@ export function TemplateEditor({
   }
 
   async function doActivate(version: number) {
+    if (!canWrite) return;
     try {
-      await apiCommand(`/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/activate`, {
-        method: "POST",
-        body: JSON.stringify({ version }),
-      });
+      await postJson(
+        `${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/activate`,
+        { version },
+        successResponseSchema,
+      );
       toast(`v${version} is now active`, "success");
       await historyRef.current?.reload();
     } catch (e) {
@@ -240,10 +246,14 @@ export function TemplateEditor({
               {!isLayout && (
                 <div class="row g-2 mb-2">
                   <div class="col-md-6">
-                    <label class="form-label small fw-semibold mb-1">Content type</label>
+                    <label class="form-label small fw-semibold mb-1" for="email-template-editor-content-type">
+                      Content type
+                    </label>
                     <select
+                      id="email-template-editor-content-type"
                       class="form-select form-select-sm"
                       value={contentType}
+                      disabled={!canWrite}
                       onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
                     >
                       <option value="markdown">Markdown</option>
@@ -252,10 +262,14 @@ export function TemplateEditor({
                     </select>
                   </div>
                   <div class="col-md-6">
-                    <label class="form-label small fw-semibold mb-1">Default message type</label>
+                    <label class="form-label small fw-semibold mb-1" for="email-template-editor-message-type">
+                      Default message type
+                    </label>
                     <select
+                      id="email-template-editor-message-type"
                       class="form-select form-select-sm"
                       value={messageType}
+                      disabled={!canWrite}
                       onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
                     >
                       <option value="transactional">Transactional</option>
@@ -267,7 +281,7 @@ export function TemplateEditor({
 
               {/* Subject with highlight backdrop */}
               <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1">
+                <label class="form-label small fw-semibold mb-1" for="email-template-editor-subject">
                   Subject template <span class="text-muted fw-normal">(supports conditions and variables)</span>
                 </label>
                 <div class="adm-template-overlay-wrap">
@@ -277,9 +291,11 @@ export function TemplateEditor({
                     class="adm-template-backdrop adm-template-backdrop-subject font-monospace"
                   ></pre>
                   <input
+                    id="email-template-editor-subject"
                     type="text"
                     class="form-control form-control-sm font-monospace adm-template-input-overlay"
                     value={subject}
+                    disabled={!canWrite}
                     placeholder="e.g. Your invitation to {{eventName}}"
                     onInput={(e) => {
                       setSubject((e.target as HTMLInputElement).value);
@@ -294,7 +310,7 @@ export function TemplateEditor({
 
               {/* Body with highlight backdrop */}
               <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1">
+                <label class="form-label small fw-semibold mb-1" for="email-template-editor-body">
                   Body{" "}
                   <span class="text-muted fw-normal">
                     (supports {"{{variables}}"}, {"{{#if}}...{{/if}}"}, {"{{#each}}...{{/each}}"})
@@ -307,10 +323,12 @@ export function TemplateEditor({
                     class="adm-template-backdrop adm-template-backdrop-body font-monospace"
                   ></pre>
                   <textarea
+                    id="email-template-editor-body"
                     ref={bodyTextareaRef}
                     class="form-control font-monospace adm-template-input-overlay adm-template-body-input"
                     rows={16}
                     defaultValue={body}
+                    readOnly={!canWrite}
                     onInput={(e) => {
                       setBody((e.target as HTMLTextAreaElement).value);
                       hasPreviewedRef.current = false;
@@ -325,11 +343,14 @@ export function TemplateEditor({
 
               {/* Partials */}
               <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1">Insert partial</label>
+                <label class="form-label small fw-semibold mb-1" for="email-template-partial">
+                  Insert partial
+                </label>
                 <div class="input-group input-group-sm">
                   <select
-                    id="partialSelect"
+                    id="email-template-partial"
                     class="form-select form-select-sm"
+                    disabled={!canWrite}
                     onChange={(e) => {
                       const sel = e.target as HTMLSelectElement;
                       if (!sel.value) return;
@@ -361,6 +382,7 @@ export function TemplateEditor({
                             key={item.label}
                             type="button"
                             class="btn btn-sm btn-outline-secondary"
+                            disabled={!canWrite}
                             onClick={() => insertSnippet(item.snippet, item.target)}
                           >
                             {item.label}
@@ -373,66 +395,86 @@ export function TemplateEditor({
               </div>
 
               {/* Preview data */}
-              <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1 d-flex justify-content-between align-items-center">
-                  Preview data (JSON)
-                  <button
-                    type="button"
-                    class="btn btn-link btn-sm p-0 text-muted"
-                    onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
+              {canWrite && (
+                <div class="mb-3">
+                  <label
+                    class="form-label small fw-semibold mb-1 d-flex justify-content-between align-items-center"
+                    for="email-template-preview-data"
                   >
-                    Reset to defaults
-                  </button>
-                </label>
-                <textarea
-                  class="form-control font-monospace adm-template-preview-data"
-                  rows={6}
-                  value={previewData}
-                  onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
-                />
-              </div>
+                    Preview data (JSON)
+                    <button
+                      type="button"
+                      class="btn btn-link btn-sm p-0 text-muted"
+                      onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
+                    >
+                      Reset to defaults
+                    </button>
+                  </label>
+                  <textarea
+                    id="email-template-preview-data"
+                    class="form-control font-monospace adm-template-preview-data"
+                    rows={6}
+                    value={previewData}
+                    disabled={!canWrite}
+                    onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
+                  />
+                </div>
+              )}
 
               <div class="d-flex gap-2 align-items-center flex-wrap">
-                <button class="btn btn-outline-primary" onClick={() => void doPreview()}>
-                  Render Preview
-                </button>
-                <button
-                  class="btn btn-success"
-                  onClick={() => void doSave()}
-                  disabled={saving || !hasPreviewedRef.current}
-                >
-                  {saving ? "Saving…" : "Save as Draft"}
-                </button>
-                <span class="text-muted small">
-                  Preview required before saving. Saving creates a new draft version — activate it below.
-                </span>
+                {canWrite ? (
+                  <>
+                    <button class="btn btn-outline-primary" onClick={() => void doPreview()}>
+                      Render Preview
+                    </button>
+                    <button
+                      class="btn btn-success"
+                      onClick={() => void doSave()}
+                      disabled={saving || !hasPreviewedRef.current}
+                    >
+                      {saving ? "Saving…" : "Save as Draft"}
+                    </button>
+                    <span class="text-muted small">
+                      Preview required before saving. Saving creates a new draft version — activate it below.
+                    </span>
+                  </>
+                ) : (
+                  <span class="text-muted small">Read-only access. Template changes require write permission.</span>
+                )}
               </div>
             </div>
 
             {/* Preview column */}
-            <div class="col-lg-5">
-              <div class="card border">
-                <div class="card-header bg-light small fw-semibold">Rendered Preview</div>
-                <div class="card-body">
-                  <div class="mb-2">
-                    <div class="small text-muted">Subject</div>
-                    <div class="fw-semibold">{previewSubject}</div>
+            {canWrite && (
+              <div class="col-lg-5">
+                <div class="card border">
+                  <div class="card-header bg-light small fw-semibold">Rendered Preview</div>
+                  <div class="card-body">
+                    <div class="mb-2">
+                      <div class="small text-muted">Subject</div>
+                      <div class="fw-semibold">{previewSubject}</div>
+                    </div>
+                    <Tabs
+                      items={EMAIL_PREVIEW_TABS}
+                      active={previewTab}
+                      onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
+                      className="mb-2"
+                    />
+                    {previewTab === "html" ? (
+                      <iframe
+                        ref={iframeRef}
+                        title="Rendered email HTML preview"
+                        sandbox=""
+                        class="adm-template-preview-frame"
+                      />
+                    ) : (
+                      <pre class="json-out adm-template-preview-text">{previewText}</pre>
+                    )}
+                    <div class="small text-muted mt-2">{previewStatus}</div>
                   </div>
-                  <Tabs
-                    items={EMAIL_PREVIEW_TABS}
-                    active={previewTab}
-                    onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
-                    className="mb-2"
-                  />
-                  {previewTab === "html" ? (
-                    <iframe ref={iframeRef} sandbox="" class="adm-template-preview-frame" />
-                  ) : (
-                    <pre class="json-out adm-template-preview-text">{previewText}</pre>
-                  )}
-                  <div class="small text-muted mt-2">{previewStatus}</div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -442,8 +484,8 @@ export function TemplateEditor({
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Version History</h6>
           <ApiDataTable
-            endpoint={`/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`}
-            responseSchema={adminEmailTemplateVersionsListResponseSchema}
+            endpoint={`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`}
+            responseSchema={emailTemplateVersionsListResponseSchema}
             resolve={(response) => response.versions}
             resolvePage={(response) => response.page}
             paginate
@@ -471,13 +513,13 @@ export function TemplateEditor({
                 header: "",
                 cell: (v) => (
                   <>
-                    {v.status !== "active" ? (
+                    {canWrite && v.status !== "active" ? (
                       <button class="btn btn-sm btn-outline-success me-1" onClick={() => void doActivate(v.version)}>
                         Activate
                       </button>
-                    ) : (
+                    ) : v.status === "active" ? (
                       <span class="badge text-bg-success me-1">In use</span>
-                    )}
+                    ) : null}
                     <button class="btn btn-sm btn-outline-secondary" onClick={() => loadVersion(v)}>
                       Load
                     </button>

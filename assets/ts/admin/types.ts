@@ -4,7 +4,7 @@ import type {
   SponsorshipCompany as CanonicalSponsorshipCompany,
   SponsorshipEvent as CanonicalSponsorshipEvent,
 } from "../../shared/schemas/admin-sponsorships";
-import type { AdminEmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/admin-email-templates";
+import type { EmailTemplateVersion as CanonicalEmailTemplateVersion } from "../../shared/schemas/email-templates";
 import type { LeadershipPosition as CanonicalLeadershipPosition } from "../../shared/schemas/leadership";
 import type {
   AdminUserListItem as CanonicalAdminUser,

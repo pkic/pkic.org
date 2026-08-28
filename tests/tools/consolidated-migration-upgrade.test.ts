@@ -75,6 +75,12 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     VALUES
       ('decision-1', 'proposal-1', 'admin-1', 'accepted', 'Accepted before upgrade', 1, 1, '2025-01-02');
 
+    INSERT INTO email_template_versions
+      (id, template_key, version, body, status, created_at)
+    VALUES
+      ('template-active-old', 'duplicate_active_upgrade', 1, 'Old active body', 'active', '2025-01-01'),
+      ('template-active-new', 'duplicate_active_upgrade', 2, 'New active body', 'active', '2025-01-02');
+
     INSERT INTO forms
       (id, key, scope_type, scope_ref, purpose, status, title, created_at, updated_at)
     VALUES
@@ -158,6 +164,27 @@ describe("consolidated pending migration upgrade", () => {
 
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      db
+        .prepare(
+          `SELECT version, status
+             FROM email_template_versions
+            WHERE template_key = 'duplicate_active_upgrade'
+            ORDER BY version`,
+        )
+        .all(),
+    ).toEqual([
+      { version: 1, status: "archived" },
+      { version: 2, status: "active" },
+    ]);
+    expect(() =>
+      db!.exec(
+        `INSERT INTO email_template_versions
+           (id, template_key, version, body, status, created_at)
+         VALUES
+           ('template-active-third', 'duplicate_active_upgrade', 3, 'Third active body', 'active', '2025-01-03')`,
+      ),
+    ).toThrow(/UNIQUE constraint failed/);
     expect(
       db
         .prepare(

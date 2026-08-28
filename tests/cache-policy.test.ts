@@ -32,7 +32,7 @@ describe("cache policy middleware", () => {
   it("adds no-store to authenticated and admin API endpoints", async () => {
     const adminResponse = await apiMiddlewareOnRequest(
       createMiddlewareContext(
-        new Request("https://app.test/api/v1/admin/email-templates", {
+        new Request("https://app.test/api/v1/system/email-templates", {
           headers: { authorization: "Bearer x" },
         }),
         new Response("{}", { status: 200 }),

@@ -5,6 +5,7 @@ import { OrganizationContentReviews } from "./OrganizationContentReviews";
 import { SystemAuditLog } from "./SystemAuditLog";
 import { MembershipApplications } from "./membership-applications";
 import { MembershipConfiguration } from "./MembershipConfiguration";
+import { EmailTemplates } from "./email-templates/EmailTemplates";
 
 export function SystemManagement({
   session,
@@ -55,6 +56,8 @@ export function SystemManagement({
         <OrganizationContentReviews />
       ) : selected.path === "/system/audit-log" ? (
         <SystemAuditLog />
+      ) : selected.path === "/system/email-templates" ? (
+        <EmailTemplates canWrite={portalHasGlobalPermission(session, "email-templates:write")} />
       ) : null}
     </div>
   );

@@ -14,7 +14,6 @@ import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
 import { AdminDueWorkList } from "./due-work";
-import { EmailTemplatesList } from "./email-templates";
 import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
 import { AdminStatsGet } from "./stats";
 import { UsersList } from "./users";
@@ -22,7 +21,6 @@ import access_grants_Router from "./access-grants/router";
 import auth_Router from "./auth/router";
 import donations_Router from "./donations/router";
 import email_Router from "./email/router";
-import email_templates_Router from "./email-templates/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
 import leadership_positions_Router from "./leadership-positions/router";
@@ -133,7 +131,6 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 
 app.use("*", useRequestScopedD1Session);
 
-openapi.get("/email-templates", EmailTemplatesList);
 openapi.get("/events", AdminEventsListGet);
 openapi.post("/events", AdminEventsCreatePost);
 openapi.get("/stats", AdminStatsGet);
@@ -143,7 +140,6 @@ openapi.route("/access-grants", access_grants_Router);
 openapi.route("/auth", auth_Router);
 openapi.route("/donations", donations_Router);
 openapi.route("/email", email_Router);
-openapi.route("/email-templates", email_templates_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
 openapi.route("/leadership-positions", leadership_positions_Router);

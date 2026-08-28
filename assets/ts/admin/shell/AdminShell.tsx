@@ -9,7 +9,6 @@ import { Donations } from "../sections/Donations";
 import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
-import { Templates } from "../sections/Templates";
 import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { Leadership } from "../sections/access-control/Leadership";
@@ -23,6 +22,7 @@ import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
+  ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
@@ -172,9 +172,10 @@ export function AdminShell() {
             <Route
               path="/email/templates"
               component={() => (
-                <SectionWrapper title="Email Templates">
-                  <Templates />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET}
+                  message="Email templates have moved to the portal."
+                />
               )}
             />
             <Route

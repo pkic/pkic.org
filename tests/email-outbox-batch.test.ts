@@ -11,11 +11,7 @@ import {
   processSelectedOutbox,
   resetFailedOutbox,
 } from "../functions/_lib/email/outbox";
-import {
-  createTemplateVersion,
-  activateTemplateVersion,
-  invalidateTemplateCache,
-} from "../functions/_lib/email/templates";
+import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { Env } from "../functions/_lib/types";
 
@@ -99,6 +95,41 @@ describe("email outbox batch processing", () => {
 
     const rows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox");
     expect(rows.every((r) => r.status === "sent")).toBe(true);
+  });
+
+  it("fails an unsafe template expansion terminally without calling SendGrid", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const unsafe = await createTemplateVersion(env.DB, {
+      templateKey: "attendee_invite",
+      content: `{{#each items}}${"x".repeat(2_001)}{{/each}}`,
+      createdByUserId: adminId,
+      subjectTemplate: "Bounded subject",
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "attendee_invite", version: unsafe.version });
+    const outboxId = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "unsafe-template@example.test",
+      messageType: "transactional",
+      data: { items: Array.from({ length: 1_000 }, () => null) },
+    });
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      await queryAll<{ attempts: number; status: string; last_error: string }>(
+        env.DB,
+        "SELECT attempts, status, last_error FROM email_outbox WHERE id = ?",
+        outboxId,
+      ),
+    ).toEqual([
+      {
+        attempts: 1,
+        status: "failed",
+        last_error: expect.stringContaining("EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED"),
+      },
+    ]);
   });
 
   it("ignores retired uploaded-ICS descriptors without reading R2", async () => {
@@ -408,7 +439,6 @@ describe("email outbox batch processing", () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
     await queueN(env.DB, eventId, 10);
-    invalidateTemplateCache();
     const budgeted = createD1QueryBudgetedDatabase(env.DB, 100);
 
     const result = await processPendingOutbox(budgeted.db, env, 10);

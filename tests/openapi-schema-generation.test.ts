@@ -34,6 +34,15 @@ describe("OpenAPI schema generation", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
     expect(spec.paths["/api/v1/admin/events"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/versions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/activate"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/email-templates"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
