@@ -93,7 +93,11 @@ export const formFieldInputSchema = z
     }
   });
 
-function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> }, context: z.RefinementCtx): void {
+/** Reused when a focused form context narrows the canonical creation shape. */
+export function addDuplicateFormFieldIssues(
+  value: { fields?: Array<{ key: string }> },
+  context: z.RefinementCtx,
+): void {
   addDuplicateStringIssues(value.fields ?? [], context, {
     value: (field) => field.key,
     path: (index) => ["fields", index, "key"],
@@ -101,22 +105,27 @@ function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> },
   });
 }
 
+/**
+ * Canonical editable form shape before the cross-field duplicate-key policy.
+ * Focused management contexts compose this object rather than copying its
+ * fields, then apply the same policy after narrowing `purpose`.
+ */
+export const formDefinitionCreateBaseSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9-]*$/),
+  purpose: formPurposeSchema,
+  title: z.string().trim().min(2).max(200),
+  description: z.string().trim().min(2).max(1000).optional(),
+  status: formStatusSchema.default("active"),
+  fields: z.array(formFieldInputSchema).max(50).default([]),
+});
+
 /** Canonical editable form definition; placement ownership is supplied by the route context. */
-export const formDefinitionCreateSchema = z
-  .object({
-    key: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .regex(/^[a-z][a-z0-9-]*$/),
-    purpose: formPurposeSchema,
-    title: z.string().trim().min(2).max(200),
-    description: z.string().trim().min(2).max(1000).optional(),
-    status: formStatusSchema.default("active"),
-    fields: z.array(formFieldInputSchema).max(50).default([]),
-  })
-  .superRefine(addDuplicateFormFieldIssues);
+export const formDefinitionCreateSchema = formDefinitionCreateBaseSchema.superRefine(addDuplicateFormFieldIssues);
 
 export const formDefinitionUpdateSchema = z
   .object({

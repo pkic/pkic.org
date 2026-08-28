@@ -12,6 +12,7 @@ import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserProfilePatch } from "../users";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import { toEventFormResolutionEvent } from "../forms";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 
@@ -26,6 +27,7 @@ interface UserRow {
 
 export interface RegistrationStatusEmailEvent {
   id: string;
+  source_mode?: "hugo" | "portal" | "integration" | null;
   slug: string;
   name: string;
   timezone: string;
@@ -44,7 +46,7 @@ interface RegistrationEmailOverrides {
 
 async function loadRegistrationEmailContext(
   db: DatabaseLike,
-  eventId: string,
+  event: RegistrationStatusEmailEvent,
   registrationId: string,
   overrides: RegistrationEmailOverrides = {},
 ): Promise<{
@@ -60,7 +62,7 @@ async function loadRegistrationEmailContext(
     (await first<RegistrationRecord>(
       db,
       `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ? AND event_id = ?`,
-      [registrationId, eventId],
+      [registrationId, event.id],
     ));
   if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   const storedUser = await first<UserRow>(
@@ -70,7 +72,7 @@ async function loadRegistrationEmailContext(
        FROM registrations r
        JOIN users u ON u.id = r.user_id
       WHERE r.id = ? AND r.event_id = ?`,
-    [registration.id, eventId],
+    [registration.id, event.id],
   );
   if (!storedUser) throw new AppError(404, "USER_NOT_FOUND", "Associated user record is missing");
   const patch = overrides.profilePatch;
@@ -85,7 +87,11 @@ async function loadRegistrationEmailContext(
   const [dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText] = await Promise.all([
     overrides.dayAttendance ?? getRegistrationDayAttendance(db, registration.id),
     overrides.dayWaitlist ?? listDayWaitlistForRegistration(db, registration.id),
-    getCustomAnswerRows(db, eventId, registration.custom_answers_json),
+    getCustomAnswerRows(
+      db,
+      toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
+      registration.custom_answers_json,
+    ),
     getAcceptedTermsTextForRegistration(db, registration.id),
   ]);
   return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };
@@ -110,7 +116,7 @@ export async function prepareRegistrationStatusEmail(
   params: RegistrationStatusEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; manageToken: string; manageUrl: string }> {
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageToken, manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
@@ -176,7 +182,7 @@ export async function prepareRegistrationConfirmedEmail(
   params: RegistrationConfirmedEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; manageUrl: string }> {
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
@@ -274,7 +280,7 @@ export async function prepareRegistrationConfirmationEmail(
   params: RegistrationConfirmationEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; confirmationUrl: string }> {
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const recipientEmail = params.recipientEmail ?? user.email;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
@@ -338,7 +344,7 @@ export async function prepareRegistrationEmailChangeNotice(
   db: DatabaseLike,
   params: RegistrationEmailChangeNoticeParams,
 ): Promise<{ outboxId: string; statement: StatementLike }> {
-  const { user } = await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+  const { user } = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const prepared = prepareQueueEmailStatement(db, {
     eventId: params.event.id,
     baseUrl: params.appBaseUrl,

@@ -1,7 +1,10 @@
 export {
   getActiveFormByPurpose,
   getActiveEventFormByPurpose,
+  getActivePortalEventFormByPurpose,
+  getActiveFormForEvent,
   getActiveFormForResolution,
+  toEventFormResolutionEvent,
   getGlobalFormByKey,
   getFormDefinitionByPlacement,
   getManagedFormWithFields,
@@ -12,6 +15,7 @@ export {
   type ManagedFormWithFields,
   type FormFieldDefinition,
   type EventFormResolution,
+  type EventFormResolutionEvent,
 } from "./read";
 export type { FormPurpose } from "../../../../assets/shared/schemas/forms";
 
@@ -40,6 +44,10 @@ export { listAdminForms, type AdminFormSummaryRow } from "./list";
 
 export { createManagedForm, prepareManagedForm, removeManagedForm, updateManagedForm } from "./management";
 export type { ManagedFormRemovalAction } from "./management";
+export {
+  prepareLegacyAdminFormPlacementTargetGuard,
+  requireLegacyAdminFormMutationBoundary,
+} from "./legacy-admin-boundary";
 
 export {
   createManagedFormPlacement,

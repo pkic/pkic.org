@@ -4,17 +4,16 @@ import { AppError } from "../errors";
 import { deriveEventAttendanceType } from "./event-days";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
-import { validateCustomAnswersForSubmission } from "./forms";
+import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "./forms";
 import type { InviteRecord } from "./invites";
 import { prepareRegistrationSubmission } from "./registration-submission";
 import type { VerifiedRegistrationIdentityContext } from "./registrations";
-import type { EventFormResolution } from "./forms";
+import type { EventFormResolutionEvent } from "./forms";
 
 export async function prepareValidatedAttendeeRegistration(
   db: DatabaseLike,
   input: AttendeeRegistrationFields,
   options: {
-    eventId: string;
     invite: InviteRecord | null;
     sourceType: string;
     sourceRef?: string | null;
@@ -27,21 +26,22 @@ export async function prepareValidatedAttendeeRegistration(
     referralCodeLength: number;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
     authorizationGuards?: readonly StatementLike[];
-    formResolution?: EventFormResolution;
+    /** Every registration flow supplies the loaded event so portal isolation cannot be skipped. */
+    event: Pick<EventFormResolutionEvent, "id"> & { source_mode: string | null | undefined };
   },
 ) {
+  const event = toEventFormResolutionEvent(options.event);
   const attendanceType = input.attendanceType ?? deriveEventAttendanceType(input.dayAttendance);
   if (!attendanceType) {
     throw new AppError(400, "ATTENDANCE_REQUIRED", "attendanceType or dayAttendance is required");
   }
 
-  const requiredTerms = await getRequiredTerms(db, options.eventId, "attendee");
+  const requiredTerms = await getRequiredTerms(db, event.id, "attendee");
   await validateRequiredConsents(requiredTerms, input.consents);
   const validatedForm = await validateCustomAnswersForSubmission(db, {
-    eventId: options.eventId,
     purpose: "event_registration",
+    event,
     customAnswers: input.customAnswers,
-    resolution: options.formResolution,
     context: { attendanceType, dayAttendance: input.dayAttendance },
   });
   const customAnswers = validatedForm.answers;
@@ -50,7 +50,7 @@ export async function prepareValidatedAttendeeRegistration(
     typeof input.customAnswers?.organization_name === "string" ? input.customAnswers.organization_name.trim() : "";
   const customJobTitle = typeof input.customAnswers?.job_title === "string" ? input.customAnswers.job_title.trim() : "";
   const prepared = await prepareRegistrationSubmission(db, {
-    eventId: options.eventId,
+    eventId: event.id,
     user: {
       email: input.email,
       firstName: input.firstName,
@@ -76,7 +76,7 @@ export async function prepareValidatedAttendeeRegistration(
     confirmationTtlHours: options.confirmationTtlHours,
     referralCodeLength: options.referralCodeLength,
     authorizationGuards: options.authorizationGuards,
-    termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, options.eventId, requiredTerms),
+    termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, event.id, requiredTerms),
     verifiedIdentity: options.verifiedIdentity,
   });
   return { prepared, requiredTerms };

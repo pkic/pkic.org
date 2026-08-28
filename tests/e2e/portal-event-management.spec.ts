@@ -79,7 +79,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const formCreated = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
-      response.url().endsWith("/registration-settings/form") &&
+      response.url().endsWith("/forms/event_registration") &&
       response.request().method() === "POST",
   );
   await formEditor.getByRole("button", { name: "Create form" }).click();
@@ -169,10 +169,6 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   expect(configuration.registrationSettings.status, JSON.stringify(configuration.registrationSettings.body)).toBe(200);
   expect(groupEventRegistrationSettingsResponseSchema.parse(configuration.registrationSettings.body)).toMatchObject({
     registrationPolicy: "optional",
-    form: {
-      placement: { contextType: "event", audience: "attendee", active: true },
-      form: { title: "Workshop registration questions" },
-    },
   });
 
   const publicShells = [

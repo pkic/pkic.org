@@ -197,9 +197,10 @@ export async function updateEventSettings(
   },
 ) {
   const event = await getEventBySlug(db, input.eventSlug);
-  const registrationMutation =
+  const eventFlowFormMutation =
     Object.prototype.hasOwnProperty.call(input.settings, "registrationMode") ||
-    Object.prototype.hasOwnProperty.call(input.settings, "registrationFormKey");
+    Object.prototype.hasOwnProperty.call(input.settings, "registrationFormKey") ||
+    Object.prototype.hasOwnProperty.call(input.settings, "proposalFormKey");
   try {
     await db.batch(
       buildEventSettingsMutationStatements(db, {
@@ -208,7 +209,7 @@ export async function updateEventSettings(
         settings: input.settings,
         appBaseUrl: input.appBaseUrl,
         allowedHeroImageHosts: input.allowedHeroImageHosts,
-        authorizationGuards: registrationMutation
+        authorizationGuards: eventFlowFormMutation
           ? [
               prepareAuthorizationGuard(db, {
                 sql: "SELECT 1 FROM events WHERE id = ? AND COALESCE(source_mode, '') <> 'portal'",
@@ -222,8 +223,8 @@ export async function updateEventSettings(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         403,
-        "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP",
-        "Registration policy and attendee forms for portal-owned events must be managed from the owning group.",
+        "PORTAL_EVENT_FORMS_OWNED_BY_GROUP",
+        "Registration policy and event-flow forms for portal-owned events must be managed from the owning group.",
       );
     }
     throw error;

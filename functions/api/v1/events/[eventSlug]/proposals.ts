@@ -2,7 +2,7 @@ import type { ValidatedData } from "chanfana";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { getEventBySlug, getRequiredTerms, recordHugoEventBasePath } from "../../../../_lib/services/events";
-import { validateCustomAnswersForSubmission } from "../../../../_lib/services/forms";
+import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "../../../../_lib/services/forms";
 import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/invites";
 import { validateRequiredConsents } from "../../../../_lib/services/consent";
@@ -41,7 +41,7 @@ async function handleProposalCreate(
   const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "speaker");
   await validateRequiredConsents(requiredTerms, body.consents);
   const validatedForm = await validateCustomAnswersForSubmission(c.env.DB, {
-    eventId: event.id,
+    event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
     purpose: "proposal_submission",
     customAnswers: body.proposal.details,
   });

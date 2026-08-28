@@ -72,7 +72,6 @@ async function createConfiguredEvent(page: Page, unique: string): Promise<{ id: 
     await api(page, `${base}/${event.id}/registration-settings`, "PUT", {
       expectedUpdatedAt: termsUpdatedAt,
       registrationPolicy: "public",
-      formId: null,
     }),
     200,
   );

@@ -7,7 +7,11 @@ import type {
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import type { DatabaseLike } from "../types";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
-import { prepareReplaceContextFormSubmission, validateCustomAnswersForSubmission } from "./forms";
+import {
+  prepareReplaceContextFormSubmission,
+  toEventFormResolutionEvent,
+  validateCustomAnswersForSubmission,
+} from "./forms";
 import { listProposalSpeakersWithStatus } from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord, updateProposalForVerifiedOwner } from "./proposals";
 import { getEventById, requireConfiguredSessionType } from "./events";
@@ -65,18 +69,16 @@ export async function saveProposalManageChanges(
   input: { token: string; signingSecret: string; body: ProposalManageInput },
 ): Promise<ProposalManageUpdateResponse> {
   const proposal = await getProposalByManageToken(db, input.token, input.signingSecret);
+  const event = await getEventById(db, proposal.event_id);
   const proposalType =
     input.body.proposalType === undefined
       ? undefined
-      : requireConfiguredSessionType(
-          (await getEventById(db, proposal.event_id)).settings_json,
-          input.body.proposalType,
-        );
+      : requireConfiguredSessionType(event.settings_json, input.body.proposalType);
   const validatedForm =
     input.body.details === undefined
       ? undefined
       : await validateCustomAnswersForSubmission(db, {
-          eventId: proposal.event_id,
+          event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
           purpose: "proposal_submission",
           customAnswers: input.body.details,
         });

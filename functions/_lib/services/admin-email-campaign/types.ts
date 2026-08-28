@@ -7,7 +7,10 @@ import type { ResolvedEmailTemplate } from "../../email/templates";
 
 export type AdminCampaignInput = z.infer<typeof adminEventCampaignPreviewSchema>;
 
-export type CampaignEvent = Pick<EventRecord, "id" | "slug" | "base_path" | "starts_at" | "settings_json">;
+export type CampaignEvent = Pick<
+  EventRecord,
+  "id" | "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode"
+>;
 
 export interface CampaignRecipient {
   registrationId?: string;

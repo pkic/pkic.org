@@ -3,14 +3,18 @@ import { getCsvExportLimits } from "../../../../../../_lib/config";
 import { csvResponse } from "../../../../../../_lib/csv";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
-import { getActiveFormByPurpose } from "../../../../../../_lib/services/forms";
+import { getActiveFormForEvent, toEventFormResolutionEvent } from "../../../../../../_lib/services/forms";
 import { buildAdminRegistrationCsvWithAudit } from "../../../../../../_lib/services/registrations/admin-export";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const event = await getEventBySlug(db, c.req.param("eventSlug"));
-  const registrationForm = await getActiveFormByPurpose(db, event.id, "event_registration");
+  const registrationForm = await getActiveFormForEvent(
+    db,
+    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
+    "event_registration",
+  );
   const result = await buildAdminRegistrationCsvWithAudit(
     db,
     event.id,

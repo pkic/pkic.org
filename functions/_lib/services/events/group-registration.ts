@@ -62,7 +62,6 @@ export async function submitGroupEventRegistration(
         prepareVerifiedRegistrationUserGuard(db, user),
         prepareGroupEventRegistrationGuard(db, { eventId: event.id, groupId, userId: user.id }),
       ],
-      formResolution: "event_placement",
     },
   );
 }

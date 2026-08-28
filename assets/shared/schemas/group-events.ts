@@ -10,7 +10,7 @@ import {
   eventProfileCatalogResponseSchema,
   eventSettingsSchema,
 } from "./event-management";
-import { eventFormsResponseSchema, formDefinitionCreateSchema, formPlacementSchema } from "./forms";
+import { eventFormsResponseSchema } from "./forms";
 import {
   eventDaysReplaceResponseSchema,
   eventDaysReplaceSchema,
@@ -104,7 +104,7 @@ export const groupEventProfilesRouteSchema = {
 export const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
 const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
 const groupEventInviteParamsSchema = groupEventParamsSchema.extend({ inviteId: databaseIdSchema });
-const eventConfigurationRevisionSchema = z.object({
+export const eventConfigurationRevisionSchema = z.object({
   expectedUpdatedAt: z.iso.datetime(),
 });
 
@@ -128,46 +128,15 @@ export const groupEventDaysReplaceResponseSchema = eventDaysReplaceResponseSchem
   eventUpdatedAt: z.iso.datetime(),
 });
 
-const groupEventRegistrationFormSchema = z.object({
-  placement: formPlacementSchema,
-  form: z.object({
-    id: databaseIdSchema,
-    key: z.string(),
-    title: z.string(),
-    description: z.string().nullable(),
-  }),
-});
-
 export const groupEventRegistrationSettingsResponseSchema = z.object({
   eventUpdatedAt: z.iso.datetime(),
   registrationPolicy: eventRegistrationPolicySchema,
-  form: groupEventRegistrationFormSchema.nullable(),
 });
 
 export const groupEventRegistrationSettingsUpdateSchema = z.object({
   expectedUpdatedAt: z.iso.datetime(),
   registrationPolicy: eventRegistrationPolicySchema,
-  /** Existing group-owned form definition to place, or null to remove it. */
-  formId: databaseIdSchema.nullable().optional(),
 });
-export const groupEventRegistrationFormCreateSchema = formDefinitionCreateSchema.safeExtend({
-  purpose: z.literal("event_registration"),
-});
-
-export const GROUP_EVENT_REGISTRATION_FORMS_SORT_COLUMNS = ["key", "title", "updated_at"] as const;
-export const groupEventRegistrationFormsQuerySchema = listQuerySchema(GROUP_EVENT_REGISTRATION_FORMS_SORT_COLUMNS);
-export type GroupEventRegistrationFormsQuery = z.infer<typeof groupEventRegistrationFormsQuerySchema>;
-export const groupEventRegistrationFormCatalogItemSchema = z.object({
-  id: databaseIdSchema,
-  key: z.string(),
-  title: z.string(),
-  description: z.string().nullable(),
-  updatedAt: z.string(),
-});
-export const groupEventRegistrationFormsResponseSchema = paginatedResponseSchema(
-  "forms",
-  groupEventRegistrationFormCatalogItemSchema,
-);
 
 /** A portal-managed event always has the selected group as its owner. */
 export const groupEventCreateSchema = eventCreateSchema
@@ -317,11 +286,11 @@ export const groupEventRegistrationSettingsGetRouteSchema = {
   tags: ["Groups"],
   summary: "Get registration settings for a managed group event",
   description:
-    "Returns the canonical registration policy and the exact active attendee form placement, without global fallback.",
+    "Returns the canonical registration policy. The attendee form placement is managed through the purpose-parameterized event-form routes.",
   request: { params: groupEventParamsSchema },
   responses: {
     "200": {
-      description: "Registration policy and optional exact attendee form placement.",
+      description: "The event registration policy and its current event revision.",
       content: { "application/json": { schema: groupEventRegistrationSettingsResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
@@ -334,8 +303,7 @@ export const groupEventRegistrationSettingsGetRouteSchema = {
 export const groupEventRegistrationSettingsPutRouteSchema = {
   tags: ["Groups"],
   summary: "Update registration settings for a managed group event",
-  description:
-    "Atomically updates the canonical registration policy and attaches or removes one exact attendee form placement.",
+  description: "Atomically updates the canonical registration policy for a managed group event.",
   request: {
     params: groupEventParamsSchema,
     body: {
@@ -350,51 +318,9 @@ export const groupEventRegistrationSettingsPutRouteSchema = {
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
     "403": jsonErrorResponse("Event management access is required."),
-    "404": jsonErrorResponse("The event or selected group form is not available."),
-    "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
-    "422": jsonErrorResponse("Registration requires at least one required attendee term."),
-  },
-};
-
-export const groupEventRegistrationFormCreateRouteSchema = {
-  tags: ["Groups"],
-  summary: "Create an attendee form for a managed group event",
-  description:
-    "Creates one group-owned reusable attendee form with its exact event placement in the same guarded D1 command.",
-  request: {
-    params: groupEventParamsSchema,
-    body: {
-      required: true,
-      content: { "application/json": { schema: groupEventRegistrationFormCreateSchema } },
-    },
-  },
-  responses: {
-    "201": {
-      description: "The attendee form and exact event placement were created.",
-      content: { "application/json": { schema: groupEventRegistrationSettingsResponseSchema } },
-    },
-    "401": jsonErrorResponse("An authenticated portal identity is required."),
-    "403": jsonErrorResponse("Event management access is required."),
     "404": jsonErrorResponse("The event is not available through this group."),
     "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
     "422": jsonErrorResponse("Registration requires at least one required attendee term."),
-  },
-};
-
-export const groupEventRegistrationFormsListRouteSchema = {
-  tags: ["Groups"],
-  summary: "List reusable attendee forms for a managed group event",
-  description:
-    "Lists distinct active group-owned event-registration definitions with server-side search and pagination.",
-  request: { params: groupEventParamsSchema, query: groupEventRegistrationFormsQuerySchema },
-  responses: {
-    "200": {
-      description: "A bounded page of reusable group-owned attendee forms.",
-      content: { "application/json": { schema: groupEventRegistrationFormsResponseSchema } },
-    },
-    "401": jsonErrorResponse("An authenticated portal identity is required."),
-    "403": jsonErrorResponse("Event management access is required."),
-    "404": jsonErrorResponse("The event is not available through this group."),
   },
 };
 

@@ -29,7 +29,7 @@ import {
   listGroupEvents,
 } from "../functions/_lib/services/events/group-read-model";
 import { submitGroupEventRegistration } from "../functions/_lib/services/events/group-registration";
-import { replaceEventTerms } from "../functions/_lib/services/events";
+import { getEventById, replaceEventTerms } from "../functions/_lib/services/events";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
 import {
@@ -1126,7 +1126,7 @@ describe("group event sharing", () => {
         ...payload,
       },
       {
-        eventId: fixture.eventId,
+        event: { id: fixture.eventId, source_mode: (await getEventById(env.DB, fixture.eventId)).source_mode },
         invite: null,
         sourceType: "direct",
         sourceRef: `group:${fixture.granteeId}`,
@@ -1166,7 +1166,7 @@ describe("group event sharing", () => {
     expect(disabled.status).toBe(403);
   });
 
-  it("uses only an exact event form placement for group registration", async () => {
+  it("never admits a global form placement for portal group registration", async () => {
     const fixture = await createFixture();
     await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
       granteeGroupId: fixture.granteeId,
@@ -1231,7 +1231,7 @@ describe("group event sharing", () => {
     });
     const withPlacement = await authenticatedRequest(fixture.memberToken, configPath);
     expect(withPlacement.status, await withPlacement.clone().text()).toBe(200);
-    expect(((await withPlacement.json()) as { form: unknown }).form).toMatchObject({ key: globalForm.key });
+    expect(((await withPlacement.json()) as { form: unknown }).form).toBeNull();
 
     const registered = await authenticatedRequest(
       fixture.memberToken,
@@ -1245,17 +1245,38 @@ describe("group event sharing", () => {
         }),
       },
     );
-    expect(registered.status, await registered.clone().text()).toBe(200);
+    expect(registered.status, await registered.clone().text()).toBe(400);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<{ count: number }>("count"),
+    ).toBe(0);
+
+    // The same route/service pair deliberately preserves Hugo compatibility:
+    // once this shared event is marked Hugo-authored, the legacy form
+    // definition is consistently displayed and accepted by submission.
+    await env.DB.prepare("UPDATE events SET source_mode = 'hugo' WHERE id = ?").bind(fixture.eventId).run();
+    const hugoConfig = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(hugoConfig.status, await hugoConfig.clone().text()).toBe(200);
+    expect(((await hugoConfig.json()) as { form: unknown }).form).toMatchObject({ key: globalForm.key });
+    const hugoRegistered = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          customAnswers: { global_only: "Hugo compatibility" },
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+    expect(hugoRegistered.status, await hugoRegistered.clone().text()).toBe(200);
     expect(
       await env.DB.prepare("SELECT form_placement_id FROM registrations WHERE event_id = ?")
         .bind(fixture.eventId)
         .first<{ form_placement_id: string }>("form_placement_id"),
     ).toBe(placement.id);
-
-    await env.DB.prepare("UPDATE form_placements SET active = 0 WHERE id = ?").bind(placement.id).run();
-    const deactivated = await authenticatedRequest(fixture.memberToken, configPath);
-    expect(deactivated.status, await deactivated.clone().text()).toBe(200);
-    expect(((await deactivated.json()) as { form: unknown }).form).toBeNull();
   });
 
   it("rejects registration when verified identity or attendee terms change before commit", async () => {
@@ -1277,7 +1298,7 @@ describe("group event sharing", () => {
       ]);
       if (!user) throw new Error("test user missing");
       return {
-        eventId: fixture.eventId,
+        event: { id: fixture.eventId, source_mode: (await getEventById(env.DB, fixture.eventId)).source_mode },
         invite: null,
         sourceType: "direct",
         sourceRef: `group:${fixture.granteeId}`,

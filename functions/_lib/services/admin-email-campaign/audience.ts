@@ -2,7 +2,7 @@ import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { buildSpeakerTemplateData, buildAttendeeCampaignRecipients } from "./template-data";
 import { projectAttendeeDayState } from "./attendance-projection";
-import { getActiveFormByPurpose } from "../forms";
+import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
 import type { DatabaseLike } from "../../types";
 import { proposalSpeakerEffectiveProfileExpression } from "../proposal-speakers";
 import type {
@@ -55,7 +55,11 @@ async function listAttendeeRecipients(
   filter: CampaignAudienceFilter,
   maxRecipients: number,
 ): Promise<CampaignRecipient[]> {
-  const form = await getActiveFormByPurpose(db, event.id, "event_registration");
+  const form = await getActiveFormForEvent(
+    db,
+    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
+    "event_registration",
+  );
   const attendeeStatus = filter.attendeeStatus ?? "registered";
   const dayWaitlistStatus = filter.dayWaitlistStatus ?? "all";
   const fetchLimit = maxRecipients + 1;
@@ -122,7 +126,11 @@ async function listSpeakerRecipients(
     throw new AppError(400, "CAMPAIGN_DAY_FILTER_UNSUPPORTED", "Day filter is only supported for attendee audience.");
   }
 
-  const form = await getActiveFormByPurpose(db, event.id, "proposal_submission");
+  const form = await getActiveFormForEvent(
+    db,
+    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
+    "proposal_submission",
+  );
   const speakerStatus = filter.speakerStatus ?? "confirmed";
   const rows = await all<SpeakerCampaignRow>(
     db,

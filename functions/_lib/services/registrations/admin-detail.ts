@@ -9,7 +9,8 @@ import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { getRegistrationDayAttendance, listConfiguredEventDaysWithCounts } from "../event-days";
-import { getActiveFormByPurpose } from "../forms";
+import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
+import { getEventById } from "../events";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
 
@@ -136,7 +137,12 @@ export async function getAdminRegistrationDetail(
     getRegistrationDayAttendance(db, registration.id),
     listDayWaitlistForRegistration(db, registration.id),
   ]);
-  const registrationForm = await getActiveFormByPurpose(db, eventId, "event_registration");
+  const event = await getEventById(db, eventId);
+  const registrationForm = await getActiveFormForEvent(
+    db,
+    toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
+    "event_registration",
+  );
 
   return eventRegistrationDetailResponseSchema.parse({
     registration: toAdminRegistrationDetail(registration),

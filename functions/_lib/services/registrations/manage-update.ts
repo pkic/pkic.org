@@ -2,7 +2,11 @@ import { registrationManageSchema } from "../../../../assets/shared/schemas/regi
 import type { DatabaseLike } from "../../types";
 import { deriveEventAttendanceType } from "../event-days";
 import { getEventById } from "../events";
-import { prepareReplaceContextFormSubmission, validateCustomAnswersForSubmission } from "../forms";
+import {
+  prepareReplaceContextFormSubmission,
+  toEventFormResolutionEvent,
+  validateCustomAnswersForSubmission,
+} from "../forms";
 import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
@@ -49,7 +53,7 @@ export async function updateManagedRegistration(
   const validatedForm =
     body.customAnswers !== undefined
       ? await validateCustomAnswersForSubmission(db, {
-          eventId: event.id,
+          event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
           purpose: "event_registration",
           customAnswers: body.customAnswers,
           context: { attendanceType, dayAttendance: body.dayAttendance },

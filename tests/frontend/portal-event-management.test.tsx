@@ -176,14 +176,17 @@ describe("portal event management", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ pathname: url.pathname, method, body });
-        if (url.pathname.endsWith("/registration-settings/forms")) {
-          return json({
-            forms: [],
-            page: { limit: 25, offset: 0, total: 0, count: 0, hasMore: false },
-          });
+        if (url.pathname.endsWith("/forms/event_registration")) {
+          return json({ eventUpdatedAt: revision, purpose: "event_registration", form: null });
+        }
+        if (url.pathname.endsWith("/forms/proposal_submission")) {
+          return json({ eventUpdatedAt: revision, purpose: "proposal_submission", form: null });
+        }
+        if (url.pathname.endsWith("/available")) {
+          return json({ forms: [], page: { limit: 25, offset: 0, total: 0, count: 0, hasMore: false } });
         }
         if (url.pathname.endsWith("/registration-settings")) {
-          return json({ eventUpdatedAt: revision, registrationPolicy: "no_registration", form: null });
+          return json({ eventUpdatedAt: revision, registrationPolicy: "no_registration" });
         }
         if (url.pathname.endsWith("/terms")) {
           if (method === "PUT") {
@@ -300,13 +303,7 @@ describe("portal event management", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ pathname: url.pathname, method, body });
-        if (url.pathname.endsWith("/registration-settings/forms")) {
-          return json({
-            forms: form ? [form.form] : [],
-            page: { limit: 25, offset: 0, total: form ? 1 : 0, count: form ? 1 : 0, hasMore: false },
-          });
-        }
-        if (url.pathname.endsWith("/registration-settings/form") && method === "POST") {
+        if (url.pathname.endsWith("/forms/event_registration") && method === "POST") {
           revision = "2026-08-01T00:00:02.000Z";
           form = {
             placement: {
@@ -329,14 +326,23 @@ describe("portal event management", () => {
               description: null,
             },
           };
-          return json({ eventUpdatedAt: revision, registrationPolicy: "optional", form });
+          return json({ eventUpdatedAt: revision, purpose: "event_registration", form });
+        }
+        if (url.pathname.endsWith("/forms/event_registration") && method === "GET") {
+          return json({ eventUpdatedAt: revision, purpose: "event_registration", form: form ?? null });
+        }
+        if (url.pathname.endsWith("/available")) {
+          return json({
+            forms: form ? [form.form] : [],
+            page: { limit: 25, offset: 0, total: form ? 1 : 0, count: form ? 1 : 0, hasMore: false },
+          });
         }
         if (url.pathname.endsWith("/registration-settings")) {
           if (method === "PUT") {
             revision = "2026-08-01T00:00:01.000Z";
-            return json({ eventUpdatedAt: revision, registrationPolicy: "optional", form: null });
+            return json({ eventUpdatedAt: revision, registrationPolicy: "optional" });
           }
-          return json({ eventUpdatedAt: revision, registrationPolicy: "no_registration", form: null });
+          return json({ eventUpdatedAt: revision, registrationPolicy: "no_registration" });
         }
         if (url.pathname.endsWith("/terms")) {
           return json({ eventUpdatedAt: revision, terms: { attendee: [], speaker: [], presentation: [] } });
@@ -366,7 +372,6 @@ describe("portal event management", () => {
       body: {
         expectedUpdatedAt: responseEvent.updatedAt,
         registrationPolicy: "optional",
-        formId: null,
       },
     });
 
@@ -390,15 +395,17 @@ describe("portal event management", () => {
     });
     await settle();
     expect(
-      requests.find(({ pathname, method }) => pathname.endsWith("/registration-settings/form") && method === "POST"),
+      requests.find(({ pathname, method }) => pathname.endsWith("/forms/event_registration") && method === "POST"),
       container.textContent ?? "",
     ).toMatchObject({
       body: {
-        key: "workshop-registration",
-        purpose: "event_registration",
-        title: "Workshop registration",
-        status: "active",
-        fields: [],
+        expectedUpdatedAt: "2026-08-01T00:00:01.000Z",
+        definition: {
+          key: "workshop-registration",
+          title: "Workshop registration",
+          status: "active",
+          fields: [],
+        },
       },
     });
     expect(container.textContent).toContain("Workshop registration");

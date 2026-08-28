@@ -516,7 +516,6 @@ async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string;
         body: JSON.stringify({
           expectedUpdatedAt: days.body.eventUpdatedAt,
           registrationPolicy: "public",
-          formId: null,
         }),
       });
       if (settings.status !== 200) {

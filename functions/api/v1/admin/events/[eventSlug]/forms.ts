@@ -43,7 +43,7 @@ export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (
 export const AdminEventFormsCreate = openApiRoute(adminEventFormCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
-  const registrationForm = data.body.purpose === "event_registration";
+  const eventFlowForm = data.body.purpose === "event_registration" || data.body.purpose === "proposal_submission";
   let form: Awaited<ReturnType<typeof createManagedForm>>;
   try {
     form = await createManagedForm(
@@ -51,7 +51,7 @@ export const AdminEventFormsCreate = openApiRoute(adminEventFormCreateRouteSchem
       admin.id,
       { type: "event", ref: event.id, eventSlug: event.slug },
       data.body,
-      registrationForm
+      eventFlowForm
         ? {
             authorizationGuards: [
               prepareAuthorizationGuard(requestDb(c), {
@@ -66,8 +66,8 @@ export const AdminEventFormsCreate = openApiRoute(adminEventFormCreateRouteSchem
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         403,
-        "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP",
-        "Attendee forms for portal-owned events must be created and managed from the owning group.",
+        "PORTAL_EVENT_FORMS_OWNED_BY_GROUP",
+        "Event-flow forms for portal-owned events must be created and managed from the owning group.",
       );
     }
     throw error;

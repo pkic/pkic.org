@@ -7,28 +7,25 @@ import type { DatabaseLike } from "../../types";
 import { countRegisteredByEventDay, listEventDays } from "../event-days";
 import { eventDayReadModels, requiredTermReadModel } from "../event-read-models";
 import { getRequiredTerms, resolveEventSessionTypes, type EventRecord } from "../events";
-import { getActiveFormForResolution, type EventFormResolution } from "../forms";
+import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
 
-export type EventRegistrationConfigurationResolution = EventFormResolution;
-
-type EventConfigurationEvent = Pick<EventRecord, "id" | "slug" | "name" | "settings_json">;
+type EventConfigurationEvent = Pick<EventRecord, "id" | "slug" | "name" | "settings_json" | "source_mode">;
 
 /**
  * Builds the single event-registration projection shared by public and group
- * routes. Public events retain linked/event/global fallback behavior; a
- * group-scoped registration deliberately resolves only an active exact event
- * placement so the selected group cannot inherit unrelated configuration.
+ * routes. Portal events resolve only their exact D1 placement while Hugo and
+ * integration events retain the explicit legacy fallback. Group routes use
+ * the same source-aware policy as submission routes.
  * Counts and filtering inputs are resolved by D1-backed services.
  */
 export async function getEventRegistrationConfiguration(
   db: DatabaseLike,
   event: EventConfigurationEvent,
   purpose: EventFormsPurpose,
-  resolution: EventRegistrationConfigurationResolution = "public_fallback",
 ): Promise<EventFormsResponse> {
   const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
   const [form, requiredTerms, eventDays] = await Promise.all([
-    getActiveFormForResolution(db, event.id, purpose, resolution),
+    getActiveFormForEvent(db, toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }), purpose),
     getRequiredTerms(db, event.id, audience),
     listEventDays(db, event.id),
   ]);

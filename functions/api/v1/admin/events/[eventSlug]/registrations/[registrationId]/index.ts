@@ -25,6 +25,7 @@ import {
 import {
   prepareReplaceContextFormSubmission,
   validateCustomAnswersForSubmission,
+  toEventFormResolutionEvent,
 } from "../../../../../../../_lib/services/forms";
 import { deriveEventAttendanceType } from "../../../../../../../_lib/services/event-days";
 import {
@@ -104,7 +105,7 @@ async function handleAdminRegistrationPatch(
   const validatedForm =
     body.customAnswers !== undefined
       ? await validateCustomAnswersForSubmission(requestDb(c), {
-          eventId: event.id,
+          event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
           purpose: "event_registration",
           customAnswers: body.customAnswers,
           context: {

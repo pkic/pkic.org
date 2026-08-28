@@ -1,8 +1,8 @@
 import { all } from "../db/queries";
 import { formatCustomAnswerValue, isCustomAnswerRecord, parseCustomAnswerRecord } from "./custom-answer-display";
-import { getActiveFormByPurpose } from "../services/forms";
+import { getActiveFormForEvent } from "../services/forms";
 import type { DatabaseLike } from "../types";
-import type { FormFieldDefinition } from "../services/forms/read";
+import type { EventFormResolutionEvent, FormFieldDefinition } from "../services/forms/read";
 
 export interface CustomAnswerRow {
   label: string;
@@ -91,11 +91,11 @@ export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, regi
  */
 export async function getCustomAnswerRows(
   db: DatabaseLike,
-  eventId: string,
+  event: EventFormResolutionEvent,
   customAnswersJson: string | null | undefined,
 ): Promise<CustomAnswerRow[]> {
   if (!customAnswersJson) return [];
-  const form = await getActiveFormByPurpose(db, eventId, "event_registration");
+  const form = await getActiveFormForEvent(db, event, "event_registration");
   if (!form) return [];
   const parsed = parseCustomAnswerRecord(customAnswersJson);
   if (!parsed) return [];
