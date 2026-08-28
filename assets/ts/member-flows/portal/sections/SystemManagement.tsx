@@ -8,6 +8,7 @@ import { MembershipConfiguration } from "./MembershipConfiguration";
 import { EmailTemplates } from "./email-templates/EmailTemplates";
 import { AccessControl } from "./access-control";
 import { Leadership } from "./leadership/Leadership";
+import { SystemAnalytics } from "./system-analytics/SystemAnalytics";
 
 export function SystemManagement({
   session,
@@ -46,7 +47,9 @@ export function SystemManagement({
           </Link>
         ))}
       </nav>
-      {selected.path === "/system/membership-applications" ? (
+      {selected.path === "/system/analytics" ? (
+        <SystemAnalytics initialTab={resourceId} />
+      ) : selected.path === "/system/membership-applications" ? (
         <MembershipApplications
           initialApplicationId={resourceId}
           canWrite={portalHasGlobalPermission(session, "membership:write")}

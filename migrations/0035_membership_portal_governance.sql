@@ -2601,6 +2601,7 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'users:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'users:anonymize', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'audit:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'analytics:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:grant', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:revoke', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'organizations:read', datetime('now')),

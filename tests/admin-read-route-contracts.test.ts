@@ -3,7 +3,8 @@ import { env } from "cloudflare:workers";
 import app, { openapi } from "../functions/router";
 import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { adminEventDetailResponseSchema } from "../assets/shared/schemas/admin-events";
-import { adminEventStatsResponseSchema, adminStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
+import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
+import { systemAnalyticsSummaryResponseSchema } from "../assets/shared/schemas/system-analytics";
 import { donationDetailResponseSchema } from "../assets/shared/schemas/admin-donations";
 import { emailTemplateExistsResponseSchema } from "../assets/shared/schemas/email-templates";
 import { adminUserDetailResponseSchema } from "../assets/shared/schemas/admin-users";
@@ -40,6 +41,7 @@ describe("admin read route OpenAPI contracts", () => {
     expect(paths["/api/v1/admin/donations/{id}"].get).toBeDefined();
     expect(paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
     expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
+    expect(paths["/api/v1/system/analytics/summary"].get).toBeDefined();
     expect(paths["/api/v1/admin/stats"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}"].get).toBeDefined();
     expect(paths["/api/v1/admin/events/{eventSlug}/stats"].get).toBeDefined();
@@ -80,9 +82,9 @@ describe("admin read route OpenAPI contracts", () => {
     expect(exists.status).toBe(200);
     expect(emailTemplateExistsResponseSchema.parse(await exists.json()).exists).toBe(false);
 
-    const stats = await call(token, "/api/v1/admin/stats");
+    const stats = await call(token, "/api/v1/system/analytics/summary");
     expect(stats.status).toBe(200);
-    adminStatsResponseSchema.parse(await stats.json());
+    systemAnalyticsSummaryResponseSchema.parse(await stats.json());
 
     const detail = await call(token, "/api/v1/admin/events/pqc-2026");
     expect(detail.status).toBe(200);

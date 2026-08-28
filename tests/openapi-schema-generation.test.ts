@@ -50,6 +50,9 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/leadership-positions/{id}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/system/leadership-positions/{id}"].delete).toBeDefined();
     expect(spec.paths["/api/v1/system/leadership-positions/users/{userId}/affiliations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/analytics/summary"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/analytics/registrations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/system/analytics/donations"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/access-grants"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/roles"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/roles/{id}/assignments"]).toBeUndefined();

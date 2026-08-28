@@ -51,11 +51,7 @@ import type {
   AdminVoteSummary as CanonicalAdminVoteSummary,
   VoteCandidateSummary as CanonicalVoteCandidateSummary,
 } from "../../shared/schemas/votes-admin";
-import type {
-  AdminEventStatsResponse as CanonicalEventStatsResponse,
-  AdminStatsResponse as CanonicalStatsResponse,
-  DonationPeriod as CanonicalDonationPeriod,
-} from "../../shared/schemas/admin-analytics";
+import type { AdminEventStatsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/admin-analytics";
 import type {
   AdminJobsRunResponse as CanonicalAdminJobsRunResponse,
   AdminReminderPreviewRow as CanonicalAdminReminderPreviewRow,
@@ -125,11 +121,6 @@ export type AdminUser = CanonicalAdminUser;
 // ── Email templates ───────────────────────────────────────────────────────────
 
 export type EmailTemplateVersion = CanonicalEmailTemplateVersion;
-
-// ── Reports / Stats ───────────────────────────────────────────────────────────
-
-export type DonationPeriod = CanonicalDonationPeriod;
-export type StatsResponse = CanonicalStatsResponse;
 
 // ── Event stats ───────────────────────────────────────────────────────────────
 

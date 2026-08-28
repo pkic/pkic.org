@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "users:write",
   "users:anonymize",
   "audit:read",
+  "analytics:read",
   "access:grant",
   "access:revoke",
   "organizations:read",

@@ -27,6 +27,12 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
 
 const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   {
+    path: "/system/analytics",
+    section: "system",
+    label: "Analytics",
+    permission: "analytics:read",
+  },
+  {
     path: "/system/membership-applications",
     section: "system",
     label: "Membership Applications",

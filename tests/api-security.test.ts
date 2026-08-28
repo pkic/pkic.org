@@ -141,7 +141,10 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   // Each entry: [description, thunk that invokes the real router with no auth]
   const cases: [string, () => Promise<Response>][] = [
     ["GET /api/v1/admin/users", () => callApp(anonGet("https://app.test/api/v1/admin/users"))],
-    ["GET /api/v1/admin/stats", () => callApp(anonGet("https://app.test/api/v1/admin/stats"))],
+    [
+      "GET /api/v1/system/analytics/summary",
+      () => callApp(anonGet("https://app.test/api/v1/system/analytics/summary")),
+    ],
     ["GET /api/v1/admin/donations", () => callApp(anonGet("https://app.test/api/v1/admin/donations"))],
     ["GET /api/v1/system/audit-log", () => callApp(anonGet("https://app.test/api/v1/system/audit-log"))],
     ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
@@ -570,10 +573,10 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects POST to GET-only /api/v1/admin/stats", async () => {
+  it("rejects POST to GET-only /api/v1/system/analytics/summary", async () => {
     const token = await createAdminSession(env.DB, adminId, "stats-method-enforcement-token");
     const response = await callApp(
-      new Request("https://app.test/api/v1/admin/stats", {
+      new Request("https://app.test/api/v1/system/analytics/summary", {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       }),

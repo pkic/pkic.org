@@ -75,14 +75,10 @@ export function PortalShell() {
           )}
           {portalHasSystemManagement(portalSession.value) && (
             <Route
-              path="/system/membership-applications/:resourceId"
-              component={({ params }: { params: { resourceId: string } }) => (
+              path="/system/:view/:resourceId"
+              component={({ params }: { params: { view: string; resourceId: string } }) => (
                 <SectionWrapper title="System">
-                  <SystemManagement
-                    session={portalSession.value}
-                    view="membership-applications"
-                    resourceId={params.resourceId}
-                  />
+                  <SystemManagement session={portalSession.value} view={params.view} resourceId={params.resourceId} />
                 </SectionWrapper>
               )}
             />

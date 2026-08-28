@@ -97,7 +97,6 @@ interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { path: "/", sec: "dashboard", label: "Dashboard", icon: "dashboard" },
   { path: "/events", sec: "events", label: "Events", icon: "events" },
   { path: "/forms", sec: "forms", label: "Forms", icon: "forms" },
   {
@@ -107,7 +106,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "email",
   },
   { path: "/duework", sec: "duework", label: "Due Work", icon: "duework" },
-  { path: "/stats", sec: "stats", label: "Stats", icon: "stats" },
   { path: "/donations", sec: "donations", label: "Donations", icon: "donations" },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
   {

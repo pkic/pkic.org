@@ -9,9 +9,12 @@ export const ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET = "/portal/#/sys
 export const ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET = "/portal/#/management";
 export const ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET = "/portal/#/system/email-templates";
 export const ADMIN_LEADERSHIP_REDIRECT_TARGET = "/portal/#/system/leadership";
+export const ADMIN_ANALYTICS_REDIRECT_TARGET = "/portal/#/system/analytics";
 
 export function legacyAdminRedirectTarget(path: string): string | null {
   const pathname = path.split("?", 1)[0];
+  if (pathname === "/" || pathname === "/dashboard") return ADMIN_ANALYTICS_REDIRECT_TARGET;
+  if (pathname === "/stats" || pathname.startsWith("/stats/")) return ADMIN_ANALYTICS_REDIRECT_TARGET;
   if (pathname === "/account") return ADMIN_ACCOUNT_REDIRECT_TARGET;
   if (pathname === "/access-control") return ADMIN_ACCESS_CONTROL_REDIRECT_TARGET;
   if (pathname === "/auditlog") return ADMIN_AUDIT_LOG_REDIRECT_TARGET;

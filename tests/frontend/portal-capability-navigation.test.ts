@@ -66,6 +66,25 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(contentReviewer, "/system/organization-content-reviews")).toBeNull();
   });
 
+  it("exposes System Analytics only to a global analytics reader", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "analytics:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toEqual([
+      { path: "/system/analytics", section: "system", label: "Analytics" },
+    ]);
+    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+    expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/management");
+  });
+
   it("exposes membership applications only to a global membership reader", () => {
     const reader = portalSessionFixture({
       admin: true,

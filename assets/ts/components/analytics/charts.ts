@@ -1,4 +1,4 @@
-import { esc } from "./ui";
+import { escapeHtml as esc } from "../../shared/ui";
 
 export function statusBars(byStatus: Record<string, number>, total: number): string {
   if (!total) return '<p class="text-muted fst-italic small">No data</p>';

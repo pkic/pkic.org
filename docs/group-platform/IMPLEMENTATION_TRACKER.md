@@ -1172,8 +1172,28 @@ Status: In progress
       permission, frontend, public-roster, and real Worker/D1 browser tests
       cover exact capability separation, route removal, public projection,
       redirect behavior, and absence of legacy API requests.
-      Other global management destinations
-      remain, so this item is deliberately still open.
+      The System Analytics portal is the eighth permission-derived System
+      destination. Three neutral, focused contracts and D1 services now serve
+      the overview,
+      registration, and donation projections under
+      `/api/v1/system/analytics`; each selected portal tab executes only its
+      bounded query batch instead of the former 13-query all-purpose request.
+      Live user-backed `analytics:read` authority is required and API-key
+      identities fail closed. Registration and donation time windows are
+      bound in SQL, high-frequency plans have explicit index assertions, and
+      the email screen reuses the canonical outbox summary instead of issuing
+      an unrelated statistics request. The duplicate Dashboard and Stats
+      consumers are removed from the admin shell, and their old bookmarks
+      redirect to `/portal/#/system/analytics`. Mounted contract, permission,
+      section-isolation, query-plan, frontend, escaping, and real Worker/D1
+      browser regressions cover the new path. This is not yet a fully canonical
+      or DRY cutover: the compatibility `/api/v1/admin/stats` contract, its
+      separate 13-query read model, and overlapping platform schema remain
+      mounted even though no production frontend calls them. Their removal is
+      an explicit remaining §10 legacy-API cleanup; do not describe this
+      destination as complete while that duplication exists.
+      Other global management destinations remain, so this item is deliberately
+      still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
       used by admin sign-in, MCP OAuth, membership due work, organization content
@@ -1244,7 +1264,11 @@ Status: In progress
       allowlisted sort-to-SQL mapping with qualified aliases; every supported
       sort is executed through the production page/count builders and asserts
       the event/status registration index without scanning the registration
-      table. The overall item remains open until the final critical-query
+      table. System Analytics asserts created-at index use for its bounded
+      registration, invitation, and donation time series and the event-first
+      registration index for the top-events projection; all-time aggregate
+      totals intentionally read their complete tables. The overall item remains
+      open until the final critical-query
       inventory is reconciled against current production builders.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
@@ -1298,8 +1322,8 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the canonical System
-      System Leadership cutover with 2,203 backend tests (one skipped), 287 frontend
+      Current evidence: the complete gate passes after the System Analytics
+      portal cutover with 2,207 backend tests (one skipped), 291 frontend
       tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1348,11 +1372,21 @@ Status: In progress
       the production-equivalent three-request email rate limit; each spec now
       uses its own explicitly seeded test identity without weakening the
       production control.
-- [x] Run the complete pnpm run test:e2e gate because navigation and portal
+      The affected System Analytics and membership-join browser journeys pass
+      together in a focused three-test run, including all three focused
+      analytics endpoints and the legacy bookmark redirect.
+- [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: all 43 real-browser tests pass in one uninterrupted
-      run against the freshly seeded local Worker, D1, R2, and intercepted
-      SendGrid environment.
+      Current evidence: the prior 43 real-browser tests passed in one
+      uninterrupted run against the freshly seeded local Worker, D1, R2, and
+      intercepted SendGrid environment. This round adds the System Analytics
+      journey, bringing the suite to 44 tests. Its full-run attempt passed the
+      first 19 tests before the local Wrangler proxy lost its connection after
+      five minutes; the remaining failures were connection refusals. The two
+      initially ambiguous membership-join locators were corrected and the
+      affected join plus analytics journeys pass 3/3 against a fresh server.
+      The current 44-test gate must still complete, potentially as documented
+      fresh-server batches, before final handoff.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Current evidence: the identity phase has real-browser desktop rendering,
@@ -1469,6 +1503,16 @@ The final PR description must include, at minimum:
 - verify `/api/v1/admin/leadership-positions` and its nested paths return 404,
   and the old `/admin/#/leadership` bookmark redirects without making a legacy
   API request;
+- inspect the System Analytics overview with an `analytics:read` staff user and
+  confirm an unrelated global permission, API key, and unauthenticated request
+  cannot read it;
+- open Overview, Registrations, and Donations independently, confirm each tab
+  calls only its matching `/api/v1/system/analytics` endpoint, and verify the
+  displayed totals, trends, top events, and donation periods against seeded D1
+  data;
+- verify `/admin/`, `/admin/#/dashboard`, and `/admin/#/stats` redirect to
+  `/portal/#/system/analytics` without a production frontend request to
+  `/api/v1/admin/stats`;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

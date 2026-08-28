@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ADMIN_ACCESS_CONTROL_REDIRECT_TARGET,
+  ADMIN_ANALYTICS_REDIRECT_TARGET,
   ADMIN_ACCOUNT_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
@@ -13,6 +14,13 @@ import {
 } from "../../assets/ts/admin/shell/legacy-redirects";
 
 describe("legacy admin route redirects", () => {
+  it("moves Dashboard and Stats bookmarks to focused System Analytics", () => {
+    expect(legacyAdminRedirectTarget("/")).toBe(ADMIN_ANALYTICS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/dashboard?from=bookmark")).toBe(ADMIN_ANALYTICS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/stats")).toBe(ADMIN_ANALYTICS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/stats/registrations?from=bookmark")).toBe(ADMIN_ANALYTICS_REDIRECT_TARGET);
+  });
+
   it("moves Access Control to the portal", () => {
     expect(legacyAdminRedirectTarget("/access-control")).toBe(ADMIN_ACCESS_CONTROL_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/access-control?from=bookmark")).toBe(ADMIN_ACCESS_CONTROL_REDIRECT_TARGET);

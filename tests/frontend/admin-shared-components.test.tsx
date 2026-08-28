@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { ActivityChartCard } from "../../assets/ts/admin/components/ActivityChartCard";
+import { ActivityChartCard } from "../../assets/ts/components/analytics/ActivityChartCard";
 import { AuditLogTable } from "../../assets/ts/admin/components/AuditLogTable";
 import { FilterSelect } from "../../assets/ts/admin/components/FilterSelect";
 import { StatusTabs } from "../../assets/ts/admin/components/StatusTabs";

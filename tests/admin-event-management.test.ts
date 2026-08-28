@@ -914,7 +914,7 @@ describe("admin event management endpoints", () => {
       ]),
     );
 
-    const platformStatsResponse = await callAdmin("/api/v1/admin/stats");
+    const platformStatsResponse = await callAdmin("/api/v1/system/analytics/summary");
     expect(platformStatsResponse.status).toBe(200);
     const platformStats = (await platformStatsResponse.json()) as {
       topEvents: Array<{ slug: string; confirmed: number; total: number }>;

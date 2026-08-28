@@ -4,7 +4,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { api } from "../../../api";
 import { adminEventStatsResponseSchema } from "../../../../../shared/schemas/admin-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
-import { svgStackedBarChart, isoDateRange } from "../../../charts";
+import { svgStackedBarChart, isoDateRange } from "../../../../components/analytics/charts";
 import type { EventStatsResponse } from "../../../types";
 import { useData } from "../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";

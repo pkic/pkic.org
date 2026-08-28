@@ -3,8 +3,6 @@ import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
-import { Dashboard } from "../sections/Dashboard";
-import { Stats } from "../sections/Stats";
 import { Donations } from "../sections/Donations";
 import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
@@ -19,6 +17,7 @@ import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDe
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
 import {
   ADMIN_ACCOUNT_REDIRECT_TARGET,
+  ADMIN_ANALYTICS_REDIRECT_TARGET,
   ADMIN_ACCESS_CONTROL_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
@@ -71,17 +70,19 @@ export function AdminShell() {
             <Route
               path="/"
               component={() => (
-                <SectionWrapper title="Dashboard">
-                  <Dashboard />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
             <Route
               path="/dashboard"
               component={() => (
-                <SectionWrapper title="Dashboard">
-                  <Dashboard />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
 
@@ -188,18 +189,20 @@ export function AdminShell() {
             />
             <Route
               path="/stats/:subTab"
-              component={({ params }: { params: { subTab: string } }) => (
-                <SectionWrapper title="Stats">
-                  <Stats subTab={params.subTab} />
-                </SectionWrapper>
+              component={() => (
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
             <Route
               path="/stats"
               component={() => (
-                <SectionWrapper title="Stats">
-                  <Stats />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_ANALYTICS_REDIRECT_TARGET}
+                  message="Analytics have moved to the portal."
+                />
               )}
             />
             <Route

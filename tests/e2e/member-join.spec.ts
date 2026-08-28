@@ -19,7 +19,7 @@ test("verifies an organization email before submitting the D1-backed membership 
   // a same-document hash navigation because the test is already on /join/.
   await page.reload();
 
-  await expect(page.getByRole("heading", { name: "Membership application" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Membership application", exact: true })).toBeVisible();
   await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
   await expect(page.getByLabel(/H6/)).toHaveCount(0);
   await page.getByLabel(/F —/).check();
@@ -57,7 +57,7 @@ test("keeps the individual path an explicit policy exception for an institutiona
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
   await page.goto(extractEmailUrl(verification, "#verify="));
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Membership application" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Membership application", exact: true })).toBeVisible();
   await expect(page.getByLabel(/H5 —/)).toBeVisible();
   await expect(page.getByLabel(/F —/)).toHaveCount(0);
   await expect(page.getByLabel("Organization name")).toBeHidden();

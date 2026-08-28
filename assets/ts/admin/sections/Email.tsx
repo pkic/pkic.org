@@ -8,7 +8,6 @@ import { api } from "../api";
 import { fmt, toast } from "../ui";
 import type { AdminEmailOutboxRow } from "../types";
 import { adminEmailOutboxResponseSchema } from "../../../shared/schemas/admin-email-outbox";
-import { adminStatsResponseSchema } from "../../../shared/schemas/admin-analytics";
 import { useServerCollection } from "../../hooks/useServerCollection";
 import { useOffsetPager } from "../../hooks/useOffsetPager";
 import { loadAdminCollection } from "../services/server-collection";
@@ -194,17 +193,12 @@ export function Email() {
     responseSchema: adminEmailOutboxResponseSchema,
     load: loadAdminCollection,
   });
-  const stats = useServerCollection({
-    endpoint: "/api/v1/admin/stats",
-    responseSchema: adminStatsResponseSchema,
-    load: loadAdminCollection,
-  });
   const outboxData = outbox.data;
-  const outboxStats = stats.data?.email.outboxByStatus ?? {};
-  const loading = outbox.loading || stats.loading;
-  const error = outbox.error ?? stats.error;
+  const outboxStats = outboxData?.summary.byStatus ?? {};
+  const loading = outbox.loading;
+  const error = outbox.error;
   const load = async () => {
-    await Promise.all([outbox.reload(), stats.reload()]);
+    await outbox.reload();
   };
 
   useEffect(() => {

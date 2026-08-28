@@ -460,24 +460,6 @@ describe("canonical offset pagination", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
         requests.push(url);
-        if (url.pathname === "/api/v1/admin/stats") {
-          return jsonResponse({
-            generatedAt: "2026-01-01T00:00:00Z",
-            registrations: { byStatus: {}, byAttendanceType: {}, total: 0, weekly: [], monthly: [] },
-            invites: { byStatus: {}, total: 0 },
-            email: { outboxByStatus: {}, totalQueued: 0, totalFailed: 0, totalBounced: 0 },
-            topEvents: [],
-            recentActivity: [],
-            donations: {
-              byStatus: {},
-              byCurrency: [],
-              totals: { gross_usd: 0, net_usd: 0 },
-              daily: [],
-              weekly: [],
-              monthly: [],
-            },
-          });
-        }
         if (url.pathname === "/api/v1/admin/email/outbox") {
           return jsonResponse({
             outbox: [
@@ -541,6 +523,7 @@ describe("canonical offset pagination", () => {
 
     const email = mount(<Email />);
     await settle();
+    expect(requests.some((url) => url.pathname === "/api/v1/admin/stats")).toBe(false);
     void act(() => nextButton(email).click());
     await settle();
     expect(

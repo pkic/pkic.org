@@ -15,11 +15,15 @@ import {
   SystemOrganizationContentReviewReject,
   SystemOrganizationContentReviewsList,
 } from "./organization-content-reviews";
+import { SystemAnalyticsSummaryGet, SystemDonationAnalyticsGet, SystemRegistrationAnalyticsGet } from "./analytics";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.get("/audit-log", SystemAuditLogList);
+openapi.get("/analytics/summary", SystemAnalyticsSummaryGet);
+openapi.get("/analytics/registrations", SystemRegistrationAnalyticsGet);
+openapi.get("/analytics/donations", SystemDonationAnalyticsGet);
 openapi.route("/access-control", accessControl_Router);
 openapi.get("/email-templates", EmailTemplatesList);
 openapi.route("/email-templates", emailTemplates_Router);
