@@ -6,6 +6,7 @@ import { UserGravatarPost } from "./gravatar";
 import { UserHeadshotDelete, UserHeadshotGet, UserHeadshotPut } from "./headshot";
 import { UserGet, UserPatch } from "./index";
 import emailsRouter from "./emails/router";
+import rolesRouter from "./roles-router";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -16,6 +17,7 @@ openapi.delete("/headshot", UserHeadshotDelete);
 openapi.post("/gravatar", UserGravatarPost);
 openapi.post("/anonymize", UserAnonymizePost);
 openapi.route("/emails", emailsRouter);
+openapi.route("/roles", rolesRouter);
 openapi.get("/", UserGet);
 openapi.patch("/", UserPatch);
 

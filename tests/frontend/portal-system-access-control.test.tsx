@@ -37,7 +37,7 @@ describe("portal system access control", () => {
           location.origin,
         );
         paths.push(url.pathname);
-        if (url.pathname === "/api/v1/system/access-control/grants") {
+        if (url.pathname === "/api/v1/permissions/grants") {
           return json({
             grants: [
               {
@@ -66,7 +66,7 @@ describe("portal system access control", () => {
 
     expect(container.textContent).not.toContain("Grant a permission");
     expect(container.textContent).toContain("Revoke");
-    expect(paths).toEqual(["/api/v1/system/access-control/grants"]);
+    expect(paths).toEqual(["/api/v1/permissions/grants"]);
     expect(paths.some((path) => path.startsWith("/api/v1/admin/"))).toBe(false);
   });
 
@@ -80,7 +80,7 @@ describe("portal system access control", () => {
           location.origin,
         );
         paths.push(url.pathname);
-        if (url.pathname === "/api/v1/system/access-control/roles") {
+        if (url.pathname === "/api/v1/roles") {
           return json({
             roles: [
               {
@@ -108,7 +108,7 @@ describe("portal system access control", () => {
     expect(container.textContent).not.toContain("Create a custom role");
     expect(container.textContent).not.toContain("Delete");
     expect(container.textContent).toContain("membership_processor");
-    expect(paths).toEqual(["/api/v1/system/access-control/roles"]);
+    expect(paths).toEqual(["/api/v1/roles"]);
   });
 
   it("hides role assignment controls without grant authority while retaining the staff tab shell", () => {

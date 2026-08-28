@@ -164,7 +164,7 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
   // access, rather than pretending the global admin is a staff persona.
   await jsonResponse(page.request, "DELETE", `/api/v1/members/capacities/${membershipId}`);
   for (const groupId of groupIds) {
-    await jsonResponse(page.request, "POST", `/api/v1/system/access-control/users/${userId}/roles`, {
+    await jsonResponse(page.request, "POST", `/api/v1/users/${userId}/roles`, {
       roleId: "role-group_lead",
       contextType: "group",
       contextId: groupId,

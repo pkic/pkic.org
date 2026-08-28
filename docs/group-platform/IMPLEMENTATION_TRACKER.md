@@ -1208,12 +1208,13 @@ Status: In progress
       editor consumes the canonical System catalog. Mounted route, concurrency,
       rollback, contract, permission, frontend, and real Worker/D1 browser
       regressions provide the cutover evidence.
-      Access Control is the sixth permission-derived System destination. The
-      roles, role assignments, and direct-grant screens and handlers moved
-      rather than being copied to `/api/v1/system/access-control`; the former
-      admin components, route mounts, and handlers are removed, and the old
-      bookmark is only a portal redirect. One neutral schema owns every list,
-      mutation, catalog, and pagination contract. Operators with either the
+      Access Control is the sixth permission-derived System destination. Its
+      screens now consume resource-domain APIs: `/api/v1/permissions/grants`,
+      `/api/v1/permissions/subjects`, `/api/v1/permissions/targets`,
+      `/api/v1/roles`, and `/api/v1/users/:userId/roles`. The generic
+      `/api/v1/system` router and access-control subtree are removed with no
+      compatibility alias. One neutral schema owns every list, mutation,
+      selector, and pagination contract. Operators with either the
       live global `access:grant` or `access:revoke` permission may inspect the
       destination, while create/assign and revoke/delete operations retain
       their exact permission boundaries and reject API-key identities. User,
@@ -1239,8 +1240,8 @@ Status: In progress
       permission may inspect the bounded, searchable, sortable, and paginated
       roster and affiliation catalogs. Create and update require `access:grant`,
       while delete requires `access:revoke`; API-key identities fail closed.
-      The editor reuses the bounded System Access Control user catalog rather
-      than introducing another user lookup. Mounted backend, OpenAPI,
+      The editor reuses the bounded `/api/v1/permissions/subjects` read model
+      rather than introducing another user lookup. Mounted backend, OpenAPI,
       permission, frontend, public-roster, and real Worker/D1 browser tests
       cover exact capability separation, route removal, public projection,
       redirect behavior, and absence of legacy API requests.

@@ -5,7 +5,7 @@ import { successResponseSchema } from "../../../../../shared/schemas/api-common"
 import { fmt, toast } from "../../ui";
 import { PERMISSIONS } from "../../../../../shared/schemas/permissions";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
-import { ContextPicker, type PickedContext } from "./ContextPicker";
+import { TargetPicker, type PickedTarget } from "./TargetPicker";
 import {
   accessGrantCreateResponseSchema,
   accessGrantsListResponseSchema,
@@ -16,14 +16,14 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
   const tableRef = useRef<ApiTableActions | null>(null);
   const [user, setUser] = useState<PickedUser | null>(null);
   const [permission, setPermission] = useState<string>(PERMISSIONS[0]);
-  const [context, setContext] = useState<PickedContext>({ contextType: null, contextId: null });
+  const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleRevoke(id: string) {
     if (!confirm("Revoke this permission grant?")) return;
     try {
-      await deleteJson(`/api/v1/system/access-control/grants/${id}`, successResponseSchema);
+      await deleteJson(`/api/v1/permissions/grants/${id}`, successResponseSchema);
       toast("Grant revoked", "success");
       await tableRef.current?.reload();
     } catch (error) {
@@ -37,26 +37,26 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
       toast("Pick a user first", "error");
       return;
     }
-    if (context.contextType && !context.contextId) {
+    if (target.targetType && !target.targetId) {
       toast("Pick a specific event/working group, or clear the context", "error");
       return;
     }
     setSubmitting(true);
     try {
       await postJson(
-        "/api/v1/system/access-control/grants",
+        "/api/v1/permissions/grants",
         {
           userId: user.id,
           permission,
-          contextType: context.contextType,
-          contextId: context.contextId,
+          contextType: target.targetType,
+          contextId: target.targetId,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         },
         accessGrantCreateResponseSchema,
       );
       toast("Permission granted", "success");
       setUser(null);
-      setContext({ contextType: null, contextId: null });
+      setTarget({ targetType: null, targetId: null });
       setExpiresAt("");
       await tableRef.current?.reload();
     } catch (error) {
@@ -76,7 +76,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
               <div class="col-md-4">
                 <label class="form-label small fw-semibold">User</label>
                 <UserPicker
-                  endpoint="/api/v1/system/access-control/users"
+                  endpoint="/api/v1/permissions/subjects"
                   value={user}
                   onChange={setUser}
                   disabled={submitting}
@@ -98,8 +98,8 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
                 </select>
               </div>
               <div class="col-md-3">
-                <label class="form-label small fw-semibold">Context</label>
-                <ContextPicker value={context} onChange={setContext} disabled={submitting} />
+                <label class="form-label small fw-semibold">Target</label>
+                <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
               </div>
               <div class="col-md-2">
                 <label class="form-label small fw-semibold">Expires (optional)</label>
@@ -122,7 +122,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
       )}
 
       <ApiDataTable
-        endpoint="/api/v1/system/access-control/grants"
+        endpoint="/api/v1/permissions/grants"
         responseSchema={accessGrantsListResponseSchema}
         resolve={(data) => data.grants}
         resolvePage={(data) => data.page}

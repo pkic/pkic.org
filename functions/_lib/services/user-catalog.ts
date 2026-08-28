@@ -48,7 +48,7 @@ export function serializeUserCatalogPage(query: UserCatalogListQuery, rows: User
   });
 }
 
-/** Data-minimized active-user catalog for global System administration. */
+/** Data-minimized active-user read model for permission-assignment selectors. */
 export async function listUserCatalog(db: DatabaseLike, query: UserCatalogListQuery) {
   const [pageResult, countResult] = await db.batch(buildOffsetPageStatements(db, buildUserCatalogPageQuery(query)));
   const { rows, total } = decodeOffsetPageResults<UserCatalogRow>(pageResult, countResult);

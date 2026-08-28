@@ -354,42 +354,58 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/proposals/:proposalId/speakers",
       () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
     ],
-    // ── system access control endpoints ─────────────────────
+    // ── permission, role, and user-role endpoints ───────────
     [
-      "GET /api/v1/system/access-control/grants",
-      () => callApp(anonGet("https://app.test/api/v1/system/access-control/grants")),
+      "GET /api/v1/permissions/grants",
+      () => callApp(anonGet("https://app.test/api/v1/permissions/grants")),
     ],
     [
-      "POST /api/v1/system/access-control/grants",
-      () => callApp(anonPost("https://app.test/api/v1/system/access-control/grants")),
+      "POST /api/v1/permissions/grants",
+      () => callApp(anonPost("https://app.test/api/v1/permissions/grants")),
     ],
     [
-      "DELETE /api/v1/system/access-control/grants/:id",
-      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/grants/${grantId}`)),
+      "DELETE /api/v1/permissions/grants/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/permissions/grants/${grantId}`)),
     ],
     [
-      "GET /api/v1/system/access-control/roles",
-      () => callApp(anonGet("https://app.test/api/v1/system/access-control/roles")),
+      "GET /api/v1/permissions/subjects",
+      () => callApp(anonGet("https://app.test/api/v1/permissions/subjects")),
     ],
     [
-      "POST /api/v1/system/access-control/roles",
-      () => callApp(anonPost("https://app.test/api/v1/system/access-control/roles")),
+      "GET /api/v1/permissions/targets",
+      () => callApp(anonGet("https://app.test/api/v1/permissions/targets?contextType=event")),
     ],
     [
-      "DELETE /api/v1/system/access-control/roles/:id",
-      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/roles/${roleId}`)),
+      "GET /api/v1/roles",
+      () => callApp(anonGet("https://app.test/api/v1/roles")),
     ],
     [
-      "GET /api/v1/system/access-control/users/:userId/roles",
-      () => callApp(anonGet(`https://app.test/api/v1/system/access-control/users/${userId}/roles`)),
+      "POST /api/v1/roles",
+      () => callApp(anonPost("https://app.test/api/v1/roles")),
     ],
     [
-      "POST /api/v1/system/access-control/users/:userId/roles",
-      () => callApp(anonPost(`https://app.test/api/v1/system/access-control/users/${userId}/roles`)),
+      "DELETE /api/v1/roles/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/roles/${roleId}`)),
     ],
     [
-      "DELETE /api/v1/system/access-control/users/:userId/roles/:userRoleId",
-      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/users/${userId}/roles/${userRoleId}`)),
+      "GET /api/v1/roles/:id/assignments",
+      () => callApp(anonGet(`https://app.test/api/v1/roles/${roleId}/assignments`)),
+    ],
+    [
+      "GET /api/v1/users/:userId/roles",
+      () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/roles`)),
+    ],
+    [
+      "POST /api/v1/users/:userId/roles",
+      () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/roles`)),
+    ],
+    [
+      "DELETE /api/v1/users/:userId/roles/:userRoleId",
+      () => callApp(anonDelete(`https://app.test/api/v1/users/${userId}/roles/${userRoleId}`)),
+    ],
+    [
+      "PATCH /api/v1/users/:userId/roles/:userRoleId",
+      () => callApp(anonPatch(`https://app.test/api/v1/users/${userId}/roles/${userRoleId}`)),
     ],
     // ── passkey endpoints ───────────────────────────────────
     // authenticate/begin and authenticate/complete are deliberately excluded

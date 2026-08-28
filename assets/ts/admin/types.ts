@@ -66,7 +66,7 @@ export type AccessGrant = CanonicalAccessGrant;
 
 export type UserRoleAssignment = CanonicalUserRoleAssignment;
 
-/** GET /api/v1/system/access-control/roles/:id/assignments — reverse lookup: who holds this role. */
+/** GET /api/v1/roles/:id/assignments — reverse lookup: who holds this role. */
 export type RoleAssignment = CanonicalRoleAssignment;
 
 export type ProposalSummary = CanonicalAdminEventProposalSummary;

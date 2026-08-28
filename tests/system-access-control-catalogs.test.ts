@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import { accessControlContextsListResponseSchema } from "../assets/shared/schemas/access-control";
+import { permissionTargetsListResponseSchema } from "../assets/shared/schemas/access-control";
 import { userCatalogListResponseSchema } from "../assets/shared/schemas/user-catalog";
 import { createGroup } from "../functions/_lib/services/groups";
 import type { AuthAdmin } from "../functions/_lib/types";
@@ -14,7 +14,7 @@ function call(token: string, path: string): Promise<Response> {
   return callApi(env, path, { headers: { authorization: `Bearer ${token}` } });
 }
 
-describe("System access-control catalogs", () => {
+describe("Permission subjects and targets", () => {
   let adminId: string;
   let adminToken: string;
 
@@ -39,7 +39,7 @@ describe("System access-control catalogs", () => {
       ).bind(inactiveId),
     ]);
 
-    const response = await call(adminToken, "/api/v1/system/access-control/users?q=ada.catalog&limit=1&sort=email");
+    const response = await call(adminToken, "/api/v1/permissions/subjects?q=ada.catalog&limit=1&sort=email");
     expect(response.status).toBe(200);
     const payload = userCatalogListResponseSchema.parse(await response.json());
     expect(payload.users).toEqual([
@@ -65,15 +65,15 @@ describe("System access-control catalogs", () => {
       "organization_name",
     ]);
 
-    expect((await call(adminToken, "/api/v1/system/access-control/users?limit=9&q=ada")).status).toBe(400);
-    expect((await call(adminToken, "/api/v1/system/access-control/users?sort=role&q=ada")).status).toBe(400);
+    expect((await call(adminToken, "/api/v1/permissions/subjects?limit=9&q=ada")).status).toBe(400);
+    expect((await call(adminToken, "/api/v1/permissions/subjects?sort=role&q=ada")).status).toBe(400);
     expect(
-      (await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/system/access-control/users?q=ada")).status,
+      (await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/permissions/subjects?q=ada")).status,
     ).toBe(403);
-    expect((await callApi(env, "/api/v1/system/access-control/users?q=ada")).status).toBe(401);
+    expect((await callApi(env, "/api/v1/permissions/subjects?q=ada")).status).toBe(401);
   });
 
-  it("permits a revoke-only user-backed operator to read every access-control catalog", async () => {
+  it("permits a revoke-only user-backed operator to read every permission and role read model", async () => {
     const operatorId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
@@ -88,15 +88,20 @@ describe("System access-control catalogs", () => {
     const token = await createAdminSession(env.DB, operatorId, `revoke-reader-${crypto.randomUUID()}`);
 
     for (const path of [
-      "/api/v1/system/access-control/grants",
-      "/api/v1/system/access-control/roles",
-      "/api/v1/system/access-control/roles/role-admin/assignments",
-      `/api/v1/system/access-control/users/${operatorId}/roles`,
-      "/api/v1/system/access-control/users?q=revoke-reader",
-      "/api/v1/system/access-control/contexts?contextType=event&q=PQC",
+      "/api/v1/permissions/grants",
+      "/api/v1/roles",
+      "/api/v1/roles/role-admin/assignments",
+      `/api/v1/users/${operatorId}/roles`,
+      "/api/v1/permissions/subjects?q=revoke-reader",
+      "/api/v1/permissions/targets?contextType=event&q=PQC",
     ]) {
       expect((await call(token, path)).status, path).toBe(200);
     }
+  });
+
+  it("does not retain the generic system route family", async () => {
+    expect((await call(adminToken, "/api/v1/system")).status).toBe(404);
+    expect((await call(adminToken, "/api/v1/system/access-control/grants")).status).toBe(404);
   });
 
   it("lists only requested durable context types with D1 search, ordering, and pagination", async () => {
@@ -113,10 +118,10 @@ describe("System access-control catalogs", () => {
     const organizationId = await insertOrganization(env.DB, "Context Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId);
 
-    const events = accessControlContextsListResponseSchema.parse(
-      await (await call(adminToken, "/api/v1/system/access-control/contexts?contextType=event&q=PQC&limit=1")).json(),
+    const events = permissionTargetsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/permissions/targets?contextType=event&q=PQC&limit=1")).json(),
     );
-    expect(events.contexts).toEqual([{ id: expect.any(String), type: "event", name: "PQC Conference 2026" }]);
+    expect(events.targets).toEqual([{ id: expect.any(String), type: "event", name: "PQC Conference 2026" }]);
     expect(events.page).toEqual({
       limit: 1,
       offset: 0,
@@ -124,22 +129,22 @@ describe("System access-control catalogs", () => {
       hasMore: false,
     });
 
-    const groups = accessControlContextsListResponseSchema.parse(
+    const groups = permissionTargetsListResponseSchema.parse(
       await (
-        await call(adminToken, "/api/v1/system/access-control/contexts?contextType=group&q=Catalog&sort=name")
+        await call(adminToken, "/api/v1/permissions/targets?contextType=group&q=Catalog&sort=name")
       ).json(),
     );
-    expect(groups.contexts).toEqual([{ id: group.id, type: "group", name: "Catalog Group" }]);
+    expect(groups.targets).toEqual([{ id: group.id, type: "group", name: "Catalog Group" }]);
 
-    const organizations = accessControlContextsListResponseSchema.parse(
+    const organizations = permissionTargetsListResponseSchema.parse(
       await (
         await call(
           adminToken,
-          "/api/v1/system/access-control/contexts?contextType=organization&q=Context%20Organization&limit=1",
+          "/api/v1/permissions/targets?contextType=organization&q=Context%20Organization&limit=1",
         )
       ).json(),
     );
-    expect(organizations.contexts).toEqual([{ id: memberId, type: "organization", name: "Context Organization" }]);
+    expect(organizations.targets).toEqual([{ id: memberId, type: "organization", name: "Context Organization" }]);
     expect(organizations.page).toEqual({
       limit: 1,
       offset: 0,
@@ -147,10 +152,10 @@ describe("System access-control catalogs", () => {
       hasMore: false,
     });
 
-    expect((await call(adminToken, "/api/v1/system/access-control/contexts?contextType=event&limit=51")).status).toBe(
+    expect((await call(adminToken, "/api/v1/permissions/targets?contextType=event&limit=51")).status).toBe(
       400,
     );
-    expect((await call(adminToken, "/api/v1/system/access-control/contexts?contextType=event&sort=id")).status).toBe(
+    expect((await call(adminToken, "/api/v1/permissions/targets?contextType=event&sort=id")).status).toBe(
       400,
     );
   });

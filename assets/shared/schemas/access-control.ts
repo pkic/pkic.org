@@ -83,9 +83,10 @@ export const accessGrantCreateResponseSchema = z.object({
 
 // Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Permissions"],
   summary: "Create a permission grant",
   description: "Grants a single permission to a user, optionally scoped and time-bounded.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     body: {
       content: { "application/json": { schema: accessGrantCreateSchema } },
@@ -119,8 +120,9 @@ export type AccessGrantsListQuery = z.infer<typeof accessGrantsListQuerySchema>;
 export const accessGrantsListResponseSchema = paginatedResponseSchema("grants", accessGrantResponseSchema);
 
 export const accessGrantsListRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Permissions"],
   summary: "List permission grants",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
   request: { query: accessGrantsListQuerySchema },
   responses: {
     "200": {
@@ -133,8 +135,9 @@ export const accessGrantsListRouteSchema = {
 };
 
 export const accessGrantRevokeRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Permissions"],
   summary: "Revoke a permission grant",
+  "x-pkic-auth": { required: true, scopes: ["access:revoke"] },
   request: { params: accessGrantIdParamsSchema },
   responses: {
     "200": { description: "Grant revoked." },
@@ -163,9 +166,10 @@ export const roleResponseEnvelopeSchema = z.object({
 });
 
 export const rolesCreateRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Roles"],
   summary: "Create a custom role",
-  description: "Custom roles bundle permissions that can be assigned via user_roles.",
+  description: "Custom roles bundle permissions that can be assigned to users.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     body: {
       content: { "application/json": { schema: roleCreateSchema } },
@@ -189,8 +193,9 @@ export type RolesListQuery = z.infer<typeof rolesListQuerySchema>;
 export const rolesListResponseSchema = paginatedResponseSchema("roles", roleResponseSchema);
 
 export const rolesListRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Roles"],
   summary: "List roles",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
   request: { query: rolesListQuerySchema },
   responses: {
     "200": {
@@ -201,8 +206,9 @@ export const rolesListRouteSchema = {
 };
 
 export const roleDeleteRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Roles"],
   summary: "Delete a custom role",
+  "x-pkic-auth": { required: true, scopes: ["access:revoke"] },
   request: { params: roleIdParamsSchema },
   responses: {
     "200": { description: "Role deleted." },
@@ -213,15 +219,15 @@ export const roleDeleteRouteSchema = {
   },
 };
 
-/** Context and lifecycle fields shared by every user-role assignment projection. */
-export const roleAssignmentContextSchema = z.object({
+/** Target and lifecycle fields shared by every user-role assignment projection. */
+export const roleAssignmentTargetSchema = z.object({
   contextType: authorizationContextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
 
-export const roleAssignmentSchema = roleAssignmentContextSchema.extend({
+export const roleAssignmentSchema = roleAssignmentTargetSchema.extend({
   userRoleId: databaseIdSchema,
   userId: databaseIdSchema,
   name: z.string(),
@@ -246,11 +252,11 @@ export type RoleAssignmentsListQuery = z.infer<typeof roleAssignmentsListQuerySc
 export const roleAssignmentsListResponseSchema = paginatedResponseSchema("assignments", roleAssignmentSchema);
 
 export const roleAssignmentsListRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Roles"],
   summary: "List every active holder of a role",
   description:
-    "Reverse lookup of user_roles by role — who currently holds this role, and in which context. Powers System " +
-    "management views that show a role's current holders without already knowing the user.",
+    "Reverse lookup of user roles by role — who currently holds this role and for which resource target.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
   request: {
     params: roleIdParamsSchema,
     query: roleAssignmentsListQuerySchema,
@@ -274,7 +280,7 @@ export const userRoleAssignSchema = z
   .superRefine(validateScopedContext);
 export type UserRoleAssignInput = z.infer<typeof userRoleAssignSchema>;
 
-export const userRoleResponseSchema = roleAssignmentContextSchema.extend({
+export const userRoleResponseSchema = roleAssignmentTargetSchema.extend({
   id: databaseIdSchema,
   userId: databaseIdSchema,
   roleId: roleIdSchema,
@@ -301,9 +307,10 @@ export type UserRolesListQuery = z.infer<typeof userRolesListQuerySchema>;
 export const userRolesListResponseSchema = paginatedResponseSchema("roles", userRoleResponseSchema);
 
 export const userRolesAssignRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Users"],
   summary: "Assign a role to a user",
-  description: "user_roles — a user may hold multiple roles simultaneously, optionally context-scoped.",
+  description: "A user may hold multiple roles simultaneously, optionally scoped to a resource target.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     params: userIdRolesParamsSchema,
     body: {
@@ -322,10 +329,11 @@ export const userRolesAssignRouteSchema = {
 };
 
 export const userRolesListRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Users"],
   summary: "List a user's non-revoked role assignments",
   description:
     "Includes expired assignments so administrators can inspect or extend completed terms; runtime authorization ignores them.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
   request: { params: userIdRolesParamsSchema, query: userRolesListQuerySchema },
   responses: {
     "200": {
@@ -336,8 +344,9 @@ export const userRolesListRouteSchema = {
 };
 
 export const userRoleRevokeRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Users"],
   summary: "Revoke a user's role assignment",
+  "x-pkic-auth": { required: true, scopes: ["access:revoke"] },
   request: { params: userRoleIdParamsSchema },
   responses: {
     "200": { description: "Role assignment revoked." },
@@ -353,11 +362,12 @@ export const userRoleUpdateExpirySchema = z.object({
 export type UserRoleUpdateExpiryInput = z.infer<typeof userRoleUpdateExpirySchema>;
 
 export const userRoleUpdateExpiryRouteSchema = {
-  tags: ["Access Control"],
+  tags: ["Users"],
   summary: "Change a role assignment's expiry date",
   description:
     "Updates user_roles.expires_at on an existing (non-revoked) assignment — e.g. a chair or vice-chair term " +
     "that had no expiry set, or one whose term end is being changed. Does not affect revoked_at.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     params: userRoleIdParamsSchema,
     body: {
@@ -376,11 +386,12 @@ export const userRoleUpdateExpiryRouteSchema = {
   },
 };
 
-/** Bounded, data-minimized user search for global access-control assignments. */
-export const accessControlUsersListRouteSchema = {
-  tags: ["Access Control"],
-  summary: "Search active users for a global access-control assignment",
-  description: "Returns only the identity fields needed by an access-control user selector.",
+/** Bounded, data-minimized active-user search for permission assignments. */
+export const permissionSubjectsListRouteSchema = {
+  tags: ["Permissions"],
+  summary: "Search active permission subjects",
+  description: "Returns only identity fields needed to select a user who can receive a permission or role assignment.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
   request: { query: userCatalogListQuerySchema },
   responses: {
     "200": {
@@ -392,35 +403,36 @@ export const accessControlUsersListRouteSchema = {
   },
 };
 
-export const accessControlContextsSortColumns = ["name"] as const;
-export const accessControlContextsListQuerySchema = listQuerySchema(accessControlContextsSortColumns, {
+export const PERMISSION_TARGETS_SORT_COLUMNS = ["name"] as const;
+export const permissionTargetsListQuerySchema = listQuerySchema(PERMISSION_TARGETS_SORT_COLUMNS, {
   limit: 25,
   maxLimit: 50,
 }).extend({
   contextType: authorizationContextTypeSchema,
   q: searchTermSchema,
 });
-export type AccessControlContextsListQuery = z.infer<typeof accessControlContextsListQuerySchema>;
+export type PermissionTargetsListQuery = z.infer<typeof permissionTargetsListQuerySchema>;
 
-export const accessControlContextSchema = z.object({
+export const permissionTargetSchema = z.object({
   id: databaseIdSchema,
   type: authorizationContextTypeSchema,
   name: z.string(),
 });
-export type AccessControlContext = z.infer<typeof accessControlContextSchema>;
-export const accessControlContextsListResponseSchema = paginatedResponseSchema("contexts", accessControlContextSchema);
+export type PermissionTarget = z.infer<typeof permissionTargetSchema>;
+export const permissionTargetsListResponseSchema = paginatedResponseSchema("targets", permissionTargetSchema);
 
-export const accessControlContextsListRouteSchema = {
-  tags: ["Access Control"],
-  summary: "Search assignable authorization contexts",
+export const permissionTargetsListRouteSchema = {
+  tags: ["Permissions"],
+  summary: "Search permission targets",
   description:
-    "Returns a bounded page of event, group, or organization-capacity contexts. Organization context identifiers are members.id values.",
-  request: { query: accessControlContextsListQuerySchema },
+    "Returns a bounded page of event, group, or organization-capacity targets. Organization target identifiers are members.id values.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
+  request: { query: permissionTargetsListQuerySchema },
   responses: {
     "200": {
-      description: "A bounded page of assignable contexts.",
+      description: "A bounded page of assignable resource targets.",
       content: {
-        "application/json": { schema: accessControlContextsListResponseSchema },
+        "application/json": { schema: permissionTargetsListResponseSchema },
       },
     },
   },

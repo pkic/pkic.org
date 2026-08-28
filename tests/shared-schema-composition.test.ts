@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  roleAssignmentContextSchema,
+  roleAssignmentTargetSchema,
   roleAssignmentSchema,
   userRoleResponseSchema,
 } from "../assets/shared/schemas/access-control";
@@ -131,8 +131,8 @@ describe("canonical shared schema composition", () => {
 
   it("uses one role-assignment context contract for holder and user projections", () => {
     for (const field of ["contextType", "contextId", "expiresAt", "createdAt"] as const) {
-      expect(roleAssignmentSchema.shape[field]).toBe(roleAssignmentContextSchema.shape[field]);
-      expect(userRoleResponseSchema.shape[field]).toBe(roleAssignmentContextSchema.shape[field]);
+      expect(roleAssignmentSchema.shape[field]).toBe(roleAssignmentTargetSchema.shape[field]);
+      expect(userRoleResponseSchema.shape[field]).toBe(roleAssignmentTargetSchema.shape[field]);
     }
 
     expect(

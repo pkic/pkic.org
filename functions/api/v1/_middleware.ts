@@ -24,9 +24,12 @@ function isSensitiveArchitecturePath(pathname: string): boolean {
     pathname.startsWith("/api/v1/membership/") ||
     pathname.startsWith("/api/v1/organizations/") ||
     pathname.startsWith("/api/v1/operations/") ||
+    pathname.startsWith("/api/v1/permissions/") ||
+    pathname === "/api/v1/roles" ||
+    pathname.startsWith("/api/v1/roles/") ||
+    /^\/api\/v1\/users\/[^/]+\/roles(?:\/|$)/.test(pathname) ||
     pathname === "/api/v1/leadership/positions" ||
-    pathname.startsWith("/api/v1/leadership/positions/") ||
-    pathname.startsWith("/api/v1/system/")
+    pathname.startsWith("/api/v1/leadership/positions/")
   );
 }
 

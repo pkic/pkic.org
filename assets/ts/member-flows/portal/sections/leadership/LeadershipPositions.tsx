@@ -17,7 +17,7 @@ import {
 } from "../../../../../shared/schemas/leadership";
 
 const API_BASE = "/api/v1/leadership/positions";
-const USER_CATALOG_ENDPOINT = "/api/v1/system/access-control/users";
+const USER_CATALOG_ENDPOINT = "/api/v1/permissions/subjects";
 
 /** ISO date -> "1 Jun 2022" for display (starts_at/ends_at are date-only, no time component). */
 function fmtDate(value: string | null): string {

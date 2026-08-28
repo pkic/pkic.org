@@ -2,16 +2,21 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
-const SYSTEM_ACCESS_API = "/api/v1/system/access-control";
+const PERMISSIONS_API = "/api/v1/permissions";
+const ROLES_API = "/api/v1/roles";
 const REMOVED_ADMIN_PREFIXES = ["/api/v1/admin/access-grants", "/api/v1/admin/roles", "/api/v1/admin/users"];
 
 test("permitted staff manage a custom role through the System portal", async ({ page }) => {
-  const systemRequests: string[] = [];
+  const permissionRequests: string[] = [];
+  const retiredSystemRequests: string[] = [];
   const removedAdminRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname === SYSTEM_ACCESS_API || pathname.startsWith(`${SYSTEM_ACCESS_API}/`)) {
-      systemRequests.push(`${request.method()} ${pathname}`);
+    if (pathname === PERMISSIONS_API || pathname.startsWith(`${PERMISSIONS_API}/`) || pathname === ROLES_API || pathname.startsWith(`${ROLES_API}/`)) {
+      permissionRequests.push(`${request.method()} ${pathname}`);
+    }
+    if (pathname === "/api/v1/system" || pathname.startsWith("/api/v1/system/")) {
+      retiredSystemRequests.push(`${request.method()} ${pathname}`);
     }
     if (REMOVED_ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
       removedAdminRequests.push(`${request.method()} ${pathname}`);
@@ -32,7 +37,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
 
   const createResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${SYSTEM_ACCESS_API}/roles` && response.request().method() === "POST",
+      new URL(response.url()).pathname === ROLES_API && response.request().method() === "POST",
   );
   await createCard.getByRole("button", { name: "Create role" }).click();
   expect((await createResponse).status()).toBe(201);
@@ -42,7 +47,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   page.once("dialog", (dialog) => void dialog.accept());
   const deleteResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname.startsWith(`${SYSTEM_ACCESS_API}/roles/`) &&
+      new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) &&
       response.request().method() === "DELETE",
   );
   await roleRow.getByRole("button", { name: "Delete" }).click();
@@ -53,8 +58,9 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control$/);
   await expect(page.getByRole("link", { name: "Access Control" })).toBeVisible();
 
-  expect(systemRequests).toEqual(
-    expect.arrayContaining([`GET ${SYSTEM_ACCESS_API}/grants`, `GET ${SYSTEM_ACCESS_API}/roles`]),
+  expect(permissionRequests).toEqual(
+    expect.arrayContaining([`GET ${PERMISSIONS_API}/grants`, `GET ${ROLES_API}`]),
   );
+  expect(retiredSystemRequests).toEqual([]);
   expect(removedAdminRequests).toEqual([]);
 });

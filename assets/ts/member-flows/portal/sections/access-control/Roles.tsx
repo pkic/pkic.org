@@ -33,7 +33,7 @@ export function Roles({ canGrant = true, canRevoke = true }: { canGrant?: boolea
     setSubmitting(true);
     try {
       await postJson(
-        "/api/v1/system/access-control/roles",
+        "/api/v1/roles",
         {
           name: name.trim(),
           description: description.trim() || undefined,
@@ -56,7 +56,7 @@ export function Roles({ canGrant = true, canRevoke = true }: { canGrant?: boolea
   async function handleDelete(role: Role) {
     if (!confirm(`Delete role "${role.name}"?`)) return;
     try {
-      await deleteJson(`/api/v1/system/access-control/roles/${role.id}`, successResponseSchema);
+      await deleteJson(`/api/v1/roles/${role.id}`, successResponseSchema);
       toast("Role deleted", "success");
       await tableRef.current?.reload();
     } catch (e) {
@@ -128,7 +128,7 @@ export function Roles({ canGrant = true, canRevoke = true }: { canGrant?: boolea
       )}
 
       <ApiDataTable
-        endpoint="/api/v1/system/access-control/roles"
+        endpoint="/api/v1/roles"
         responseSchema={rolesListResponseSchema}
         resolve={(data) => data.roles}
         resolvePage={(data) => data.page}
