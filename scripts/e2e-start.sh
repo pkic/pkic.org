@@ -38,6 +38,7 @@ printf 'y\n' | pnpm exec wrangler d1 migrations apply pkic-db-local --env local 
 node scripts/seed-initial-admin.mjs  --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --e2e-worker-pool
 node scripts/seed-event.mjs          --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --skip-email-templates
 node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --persist-to "$STATE_DIR"
+pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-donations.sql
 
 # ── 3. Start servers ────────────────────────────────────────────────────────
 node scripts/e2e-interceptor.mjs 0 "$INTERCEPT_URL_FILE" &

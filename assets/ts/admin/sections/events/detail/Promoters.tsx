@@ -15,7 +15,7 @@ import {
   eventPromotersListResponseSchema,
   type EventPromoter as PromoterEntry,
 } from "../../../../../shared/schemas/admin-event-promoters";
-import { promoterRankCardClass, promoterRankTier } from "../../../promoter-ranking";
+import { promoterRankCardClass, promoterRankTier } from "../../../../shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../../../hooks/useOffsetPager";
 
 function conversionColor(rate: number): string {

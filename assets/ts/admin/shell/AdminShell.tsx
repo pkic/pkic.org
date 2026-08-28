@@ -3,8 +3,6 @@ import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
-import { Donations } from "../sections/Donations";
-import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Users, UserDetailView } from "../sections/Users";
@@ -27,6 +25,8 @@ import {
   ADMIN_MEMBERSHIP_APPLICATIONS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
   ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET,
+  ADMIN_DONATIONS_REDIRECT_TARGET,
+  ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
@@ -208,25 +208,32 @@ export function AdminShell() {
             <Route
               path="/donations/detail/:id"
               component={({ params }: { params: { id: string } }) => (
-                <SectionWrapper title="Donation">
-                  <DonationDetailPage donationId={params.id} />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={`${ADMIN_DONATIONS_REDIRECT_TARGET}/detail/${encodeURIComponent(params.id)}`}
+                  message="Donation details have moved to the portal."
+                />
               )}
             />
             <Route
               path="/donations/:subTab"
               component={({ params }: { params: { subTab: string } }) => (
-                <SectionWrapper title="Donations">
-                  <Donations subTab={params.subTab} />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={
+                    params.subTab === "promoters"
+                      ? ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET
+                      : ADMIN_DONATIONS_REDIRECT_TARGET
+                  }
+                  message="Donations have moved to the portal."
+                />
               )}
             />
             <Route
               path="/donations"
               component={() => (
-                <SectionWrapper title="Donations">
-                  <Donations />
-                </SectionWrapper>
+                <PortalRedirect
+                  target={ADMIN_DONATIONS_REDIRECT_TARGET}
+                  message="Donations have moved to the portal."
+                />
               )}
             />
             <Route

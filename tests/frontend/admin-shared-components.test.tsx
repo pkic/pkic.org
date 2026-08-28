@@ -13,7 +13,7 @@ import { FormActions } from "../../assets/ts/admin/components/FormActions";
 import { RegistrationActionCard } from "../../assets/ts/admin/sections/events/detail/registration-detail/RegistrationActionCard";
 import { AdminSettingsEditor } from "../../assets/ts/admin/components/AdminSettingsEditor";
 import { Tabs } from "../../assets/ts/components/Tabs";
-import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/admin/promoter-ranking";
+import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
 
 const mounted: HTMLElement[] = [];

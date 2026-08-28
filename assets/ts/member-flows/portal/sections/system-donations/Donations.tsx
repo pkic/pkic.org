@@ -1,29 +1,29 @@
 import { useState, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
-import { Badge } from "../../components/Badge";
-import { Spinner } from "../../components/Spinner";
-import { ErrorAlert } from "../../components/ErrorAlert";
-import type { Column } from "../../components/Table";
-import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
-import { Tabs } from "../../components/Tabs";
-import { api } from "../api";
-import { fmt, toast } from "../ui";
-import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
-import { Pager } from "../../components/Pager";
+import { Badge } from "../../../../components/Badge";
+import { Spinner } from "../../../../components/Spinner";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import type { Column } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { Tabs } from "../../../../components/Tabs";
+import { getJson, postJson } from "../../../../shared/api-client";
+import { fmt, toast } from "../../ui";
+import { asyncPaymentWindow } from "../../../../../shared/constants/async-payment-window";
+import { Pager } from "../../../../components/Pager";
 import {
   donationPromotersListResponseSchema,
   donationSyncResponseSchema,
   donationsListResponseSchema,
-  type AdminDonationListSummary,
-  type AdminDonationPromoter as PromoterRow,
-} from "../../../shared/schemas/admin-donations";
-import { formatDonationAmount, type DonationRow } from "./donations/model";
-import { useServerCollection } from "../../hooks/useServerCollection";
-import { loadAdminCollection } from "../services/server-collection";
-import { promoterRankCardClass, promoterRankTier } from "../promoter-ranking";
-import { useOffsetPager } from "../../hooks/useOffsetPager";
+  type DonationManagementListSummary,
+  type DonationPromoter as PromoterRow,
+} from "../../../../../shared/schemas/donation-management";
+import { formatDonationAmount, type DonationRow } from "./model";
+import { useServerCollection, type CollectionLoader } from "../../../../hooks/useServerCollection";
+import { promoterRankCardClass, promoterRankTier } from "../../../../shared/donation/promoter-ranking";
+import { useOffsetPager } from "../../../../hooks/useOffsetPager";
 
 const FILTERS = ["", "pending", "awaiting_payment", "completed", "expired", "failed"] as const;
+const loadPortalCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
 function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
   const ownAmt = p.own_gross > 0 && p.own_currency ? formatDonationAmount(p.own_gross, p.own_currency) : null;
@@ -84,14 +84,14 @@ function PromotersTab() {
   const pager = useOffsetPager();
   const { offset, pageSize } = pager;
   const listing = useServerCollection({
-    endpoint: "/api/v1/admin/donations/promoters",
+    endpoint: "/api/v1/donations/promoters",
     params: {
       limit: String(pageSize),
       offset: String(offset),
       sort: "-impact",
     },
     responseSchema: donationPromotersListResponseSchema,
-    load: loadAdminCollection,
+    load: loadPortalCollection,
   });
   const promoters = listing.data?.promoters ?? [];
   const summary = listing.data?.summary ?? {
@@ -160,10 +160,29 @@ function PromotersTab() {
   );
 }
 
-export function Donations({ subTab }: { subTab?: string }) {
+export function Donations({
+  subTab,
+  canRead = true,
+  canSync = true,
+}: {
+  subTab?: string;
+  canRead?: boolean;
+  canSync?: boolean;
+}) {
+  if (!canRead) {
+    return (
+      <div class="alert alert-warning" role="alert">
+        Donation records require the <code>donations:read</code> permission.
+      </div>
+    );
+  }
+  return <DonationsView subTab={subTab} canSync={canSync} />;
+}
+
+function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean }) {
   const tab = subTab === "promoters" ? "promoters" : "list";
   const [statusFilter, setStatusFilter] = useState("");
-  const [summary, setSummary] = useState<AdminDonationListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
+  const [summary, setSummary] = useState<DonationManagementListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
   const [syncingAll, setSyncingAll] = useState(false);
   const [, navigate] = useHashLocation();
   const actionsRef = useRef<ApiTableActions | null>(null);
@@ -171,10 +190,11 @@ export function Donations({ subTab }: { subTab?: string }) {
   async function handleSync(pendingOnly: boolean) {
     setSyncingAll(true);
     try {
-      const res = await api("/api/v1/admin/donations/sync", donationSyncResponseSchema, {
-        method: "POST",
-        body: JSON.stringify(pendingOnly ? { pendingOnly: true } : {}),
-      });
+      const res = await postJson(
+        "/api/v1/donations/sync",
+        pendingOnly ? { pendingOnly: true } : {},
+        donationSyncResponseSchema,
+      );
       const parts = [
         res.completed ? `${res.completed} completed` : "",
         res.failed ? `${res.failed} failed` : "",
@@ -253,13 +273,13 @@ export function Donations({ subTab }: { subTab?: string }) {
           { key: "promoters", label: "Share Links" },
         ]}
         active={tab}
-        onChange={(k) => navigate(k === "list" ? "/donations" : "/donations/promoters")}
+        onChange={(k) => navigate(k === "list" ? "/system/donations" : "/system/donations/promoters")}
       />
 
       {tab === "list" && (
         <>
           <ApiDataTable
-            endpoint="/api/v1/admin/donations"
+            endpoint="/api/v1/donations"
             responseSchema={donationsListResponseSchema}
             resolve={(d) => d.donations}
             resolvePage={(d) => d.page}
@@ -290,7 +310,7 @@ export function Donations({ subTab }: { subTab?: string }) {
                     );
                   })}
                 </div>
-                {pending > 0 && (
+                {canSync && pending > 0 && (
                   <button
                     class="btn btn-sm btn-outline-success"
                     disabled={syncingAll}
@@ -299,13 +319,15 @@ export function Donations({ subTab }: { subTab?: string }) {
                     {syncingAll ? "Syncing…" : `↺ Sync pending (${pending})`}
                   </button>
                 )}
-                <button
-                  class="btn btn-sm btn-success"
-                  disabled={syncingAll || summary.syncable === 0}
-                  onClick={() => void handleSync(false)}
-                >
-                  {syncingAll ? "Syncing…" : `↺ Sync all (${summary.syncable})`}
-                </button>
+                {canSync && (
+                  <button
+                    class="btn btn-sm btn-success"
+                    disabled={syncingAll || summary.syncable === 0}
+                    onClick={() => void handleSync(false)}
+                  >
+                    {syncingAll ? "Syncing…" : `↺ Sync all (${summary.syncable})`}
+                  </button>
+                )}
                 {failed > 0 && (
                   <span class="badge text-bg-danger" title="Payment failed">
                     {failed} failed
@@ -317,7 +339,7 @@ export function Donations({ subTab }: { subTab?: string }) {
             empty="No donations found"
             className="align-middle"
             rowKey={(d) => d.id}
-            onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
+            onRowClick={(d) => navigate(`/system/donations/detail/${d.id}`)}
           />
         </>
       )}

@@ -1,5 +1,5 @@
-export type { AdminDonationSummary as DonationRow } from "../../../../shared/schemas/admin-donations";
-export type { DonationSyncResponse } from "../../../../shared/schemas/admin-donations";
+export type { DonationManagementSummary as DonationRow } from "../../../../../shared/schemas/donation-management";
+export type { DonationSyncResponse } from "../../../../../shared/schemas/donation-management";
 
 const ZERO_DECIMAL_CURRENCIES = new Set([
   "bif",

@@ -145,7 +145,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/system/analytics/summary",
       () => callApp(anonGet("https://app.test/api/v1/system/analytics/summary")),
     ],
-    ["GET /api/v1/admin/donations", () => callApp(anonGet("https://app.test/api/v1/admin/donations"))],
+    ["GET /api/v1/donations", () => callApp(anonGet("https://app.test/api/v1/donations"))],
     ["GET /api/v1/system/audit-log", () => callApp(anonGet("https://app.test/api/v1/system/audit-log"))],
     ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
     ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
@@ -168,7 +168,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ],
     // ── Additional admin endpoints ──────────────────────────────────────────
     ["POST /api/v1/admin/events", () => callApp(anonPost("https://app.test/api/v1/admin/events"))],
-    ["POST /api/v1/admin/donations/sync", () => callApp(anonPost("https://app.test/api/v1/admin/donations/sync"))],
+    ["POST /api/v1/donations/sync", () => callApp(anonPost("https://app.test/api/v1/donations/sync"))],
     [
       "POST /api/v1/system/email-templates/preview",
       () => callApp(anonPostBody("https://app.test/api/v1/system/email-templates/preview", { content: "preview" })),

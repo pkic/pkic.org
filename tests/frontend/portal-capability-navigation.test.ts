@@ -85,6 +85,38 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/management");
   });
 
+  it("exposes Donations to global readers, with sync authority adding controls", () => {
+    const reader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "donations:read", contextType: null, contextId: null }],
+    });
+    const synchronizer = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "donations:sync", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      admin: true,
+      adminRole: "user",
+      grants: [{ permission: "donations:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalSystemNavigationItems(reader)).toContainEqual({
+      path: "/system/donations",
+      section: "system",
+      label: "Donations",
+    });
+    expect(portalSystemNavigationItems(synchronizer)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/donations" }),
+    );
+    expect(portalHasGlobalPermission(reader, "donations:read")).toBe(true);
+    expect(portalHasGlobalPermission(synchronizer, "donations:read")).toBe(false);
+    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/system/donations" }),
+    );
+  });
+
   it("exposes membership applications only to a global membership reader", () => {
     const reader = portalSessionFixture({
       admin: true,

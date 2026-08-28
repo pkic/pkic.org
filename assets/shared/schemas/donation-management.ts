@@ -1,23 +1,21 @@
 import { z } from "zod";
-import { stripeCheckoutSessionIdSchema } from "./stripe";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { databaseIdSchema } from "./identifiers";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { stripeCheckoutSessionIdSchema } from "./stripe";
 
-/** Allowlisted sort columns for GET /api/v1/admin/donations — see functions/api/v1/admin/donations.ts. */
-export const ADMIN_DONATIONS_SORT_COLUMNS = ["name", "gross_amount", "status", "created_at"] as const;
+/** Allowlisted sort columns for the System donation-management list. */
+export const DONATION_MANAGEMENT_SORT_COLUMNS = ["name", "gross_amount", "status", "created_at"] as const;
 
 /**
- * Every value donations.status is ever set to — migration 0005 (pending/
- * completed), 0016/sync.ts/webhooks/stripe.ts (awaiting_payment, expired,
- * failed). No DB CHECK constraint backs this (see AGENTS.md — evolvable
- * product vocabulary belongs in a shared Zod module, not a table
- * constraint), so this is the single source of truth for the set.
+ * Every value donations.status is ever set to. This evolvable vocabulary is
+ * intentionally owned by the shared contract rather than a D1 CHECK
+ * constraint.
  */
 export const DONATION_STATUSES = ["pending", "awaiting_payment", "completed", "expired", "failed"] as const;
 export const donationStatusSchema = z.enum(DONATION_STATUSES);
 export type DonationStatus = z.infer<typeof donationStatusSchema>;
 
-export const adminDonationSummarySchema = z.object({
+export const donationManagementSummarySchema = z.object({
   id: z.string(),
   checkout_session_id: z.string(),
   payment_intent_id: z.string().nullable(),
@@ -36,23 +34,26 @@ export const adminDonationSummarySchema = z.object({
   created_at: z.string(),
   completed_at: z.string().nullable(),
 });
+export type DonationManagementSummary = z.infer<typeof donationManagementSummarySchema>;
 
-export const donationsListQuerySchema = listQuerySchema(ADMIN_DONATIONS_SORT_COLUMNS, { limit: 100 }).extend({
+export const donationsListQuerySchema = listQuerySchema(DONATION_MANAGEMENT_SORT_COLUMNS, { limit: 100 }).extend({
   status: donationStatusSchema.optional(),
 });
 export type DonationsListQuery = z.infer<typeof donationsListQuerySchema>;
 
-export const adminDonationListSummarySchema = z.object({
+export const donationManagementListSummarySchema = z.object({
   byStatus: z.partialRecord(donationStatusSchema, z.number().int().nonnegative()),
   backfillable: z.number().int().nonnegative(),
   syncable: z.number().int().nonnegative(),
 });
+export type DonationManagementListSummary = z.infer<typeof donationManagementListSummarySchema>;
 
-export const donationsListResponseSchema = paginatedResponseSchema("donations", adminDonationSummarySchema).extend({
-  summary: adminDonationListSummarySchema,
-});
+export const donationsListResponseSchema = paginatedResponseSchema("donations", donationManagementSummarySchema).extend(
+  {
+    summary: donationManagementListSummarySchema,
+  },
+);
 export type DonationsListResponse = z.infer<typeof donationsListResponseSchema>;
-export type AdminDonationListSummary = z.infer<typeof adminDonationListSummarySchema>;
 
 export const donationSyncResultSchema = z.object({
   sessionId: z.string(),
@@ -69,19 +70,24 @@ export const donationSyncResponseSchema = z.object({
   errors: z.number(),
   results: z.array(donationSyncResultSchema),
 });
-export const ADMIN_DONATION_SYNC_MAX_SESSIONS = 50;
+export type DonationSyncResponse = z.infer<typeof donationSyncResponseSchema>;
+
+/** Maximum Stripe sessions a staff reconciliation request may select. */
+export const DONATION_SYNC_MAX_SESSIONS = 50;
 
 /** Bounded reconciliation input; malformed bodies must never mean "sync all". */
 export const donationSyncRequestSchema = z
   .object({
-    sessionIds: z.array(stripeCheckoutSessionIdSchema).min(1).max(ADMIN_DONATION_SYNC_MAX_SESSIONS).optional(),
+    sessionIds: z.array(stripeCheckoutSessionIdSchema).min(1).max(DONATION_SYNC_MAX_SESSIONS).optional(),
     pendingOnly: z.boolean().optional(),
   })
   .strict();
+export type DonationSyncRequest = z.infer<typeof donationSyncRequestSchema>;
 
 export const donationSyncPostRouteSchema = {
   tags: ["Donations"],
-  summary: "Reconcile donations with Stripe (admin)",
+  "x-pkic-auth": { required: true, scopes: ["donations:sync"] },
+  summary: "Reconcile donations with Stripe",
   description:
     "Reconciles a bounded page of pending/incomplete donations, or an explicit bounded set of checkout sessions. " +
     "Filtering and limiting are applied in D1 before Stripe is contacted.",
@@ -94,18 +100,19 @@ export const donationSyncPostRouteSchema = {
       content: { "application/json": { schema: donationSyncResponseSchema } },
     },
     "400": { description: "Invalid or over-limit reconciliation request." },
+    "401": { description: "Authentication required." },
+    "403": { description: "A live user-backed donations:sync permission is required." },
+    "409": { description: "The operator's donations:sync permission changed during reconciliation." },
     "503": { description: "Stripe is not configured." },
   },
 };
-export type DonationSyncResponse = z.infer<typeof donationSyncResponseSchema>;
-export type DonationSyncRequest = z.infer<typeof donationSyncRequestSchema>;
-export type AdminDonationSummary = z.infer<typeof adminDonationSummarySchema>;
 
-export const donationDetailResponseSchema = z.object({ donation: adminDonationSummarySchema });
+export const donationDetailResponseSchema = z.object({ donation: donationManagementSummarySchema });
 
 export const donationDetailRouteSchema = {
   tags: ["Donations"],
-  summary: "Get donation details (admin)",
+  "x-pkic-auth": { required: true, scopes: ["donations:read"] },
+  summary: "Get donation details",
   request: { params: z.object({ id: databaseIdSchema }) },
   responses: {
     "200": {
@@ -113,14 +120,16 @@ export const donationDetailRouteSchema = {
       content: { "application/json": { schema: donationDetailResponseSchema } },
     },
     "400": { description: "Invalid donation identifier." },
-    "401": { description: "Admin authorization required." },
+    "401": { description: "Authentication required." },
+    "403": { description: "A live user-backed donations:read permission is required." },
     "404": { description: "Donation not found." },
   },
 };
 
 export const donationsListRouteSchema = {
   tags: ["Donations"],
-  summary: "List donations (admin)",
+  "x-pkic-auth": { required: true, scopes: ["donations:read"] },
+  summary: "List donations",
   description:
     "Paginated, optionally status-filtered list of donations. `summary` contains status and reconciliation counts " +
     "computed across every donation regardless of the current filter or page.",
@@ -128,24 +137,18 @@ export const donationsListRouteSchema = {
   responses: {
     "200": {
       description: "Donations list.",
-      content: {
-        "application/json": {
-          schema: donationsListResponseSchema,
-        },
-      },
+      content: { "application/json": { schema: donationsListResponseSchema } },
     },
+    "401": { description: "Authentication required." },
+    "403": { description: "A live user-backed donations:read permission is required." },
   },
 };
 
-// GET /api/v1/admin/donations/promoters (P6M-P2-12) — dataset is inherently
-// small (one row per manually-created marketing promo code), but still
-// composes the shared pagination contract for consistency with every other
-// list endpoint per AGENTS.md.
 export const DONATION_PROMOTER_SORT_COLUMNS = ["impact", "clicks", "donated", "createdAt"] as const;
 export const donationPromotersListQuerySchema = listQuerySchema(DONATION_PROMOTER_SORT_COLUMNS);
 export type DonationPromotersListQuery = z.infer<typeof donationPromotersListQuerySchema>;
 
-export const adminDonationPromoterSchema = z.object({
+export const donationPromoterSchema = z.object({
   code: z.string(),
   name: z.string().nullable(),
   checkout_session_id: z.string().nullable(),
@@ -160,9 +163,9 @@ export const adminDonationPromoterSchema = z.object({
   currency: z.string().nullable(),
   created_at: z.string(),
 });
-export type AdminDonationPromoter = z.infer<typeof adminDonationPromoterSchema>;
+export type DonationPromoter = z.infer<typeof donationPromoterSchema>;
 
-export const adminDonationPromoterSummarySchema = z.object({
+export const donationPromoterSummarySchema = z.object({
   promoterCount: z.number().int().nonnegative(),
   totalOwnGrossUsd: z.number(),
   totalAttributedGrossUsd: z.number(),
@@ -170,27 +173,25 @@ export const adminDonationPromoterSummarySchema = z.object({
   totalAttributedCompleted: z.number().int().nonnegative(),
 });
 
-export const donationPromotersListResponseSchema = paginatedResponseSchema(
-  "promoters",
-  adminDonationPromoterSchema,
-).extend({
-  summary: adminDonationPromoterSummarySchema,
+export const donationPromotersListResponseSchema = paginatedResponseSchema("promoters", donationPromoterSchema).extend({
+  summary: donationPromoterSummarySchema,
 });
 export type DonationPromotersListResponse = z.infer<typeof donationPromotersListResponseSchema>;
 
 export const donationPromotersListRouteSchema = {
   tags: ["Donations"],
-  summary: "List donation promoter share links (admin)",
+  "x-pkic-auth": { required: true, scopes: ["donations:read"] },
+  summary: "List donation promoter share links",
   description:
-    "Paginated list of every donation promoter share link ordered by click count, with attribution stats " +
-    "(donated, pending, failed) derived from donations.source.",
+    "Paginated list of donation promoter share links ordered by click count, with attribution statistics " +
+    "derived from donations.source.",
   request: { query: donationPromotersListQuerySchema },
   responses: {
     "200": {
       description: "Promoters list.",
-      content: {
-        "application/json": { schema: donationPromotersListResponseSchema },
-      },
+      content: { "application/json": { schema: donationPromotersListResponseSchema } },
     },
+    "401": { description: "Authentication required." },
+    "403": { description: "A live user-backed donations:read permission is required." },
   },
 };

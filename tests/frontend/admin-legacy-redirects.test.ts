@@ -3,6 +3,8 @@ import {
   ADMIN_ACCESS_CONTROL_REDIRECT_TARGET,
   ADMIN_ANALYTICS_REDIRECT_TARGET,
   ADMIN_ACCOUNT_REDIRECT_TARGET,
+  ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET,
+  ADMIN_DONATIONS_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
@@ -61,6 +63,15 @@ describe("legacy admin route redirects", () => {
   it("moves email templates to system management in the portal", () => {
     expect(legacyAdminRedirectTarget("/email/templates")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/email/templates?from=bookmark")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
+  });
+
+  it("moves donation bookmarks to system management in the portal", () => {
+    expect(legacyAdminRedirectTarget("/donations")).toBe(ADMIN_DONATIONS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/donations?from=bookmark")).toBe(ADMIN_DONATIONS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/donations/promoters")).toBe(ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/donations/detail/donation-1")).toBe(
+      `${ADMIN_DONATIONS_REDIRECT_TARGET}/detail/donation-1`,
+    );
   });
 
   it("moves global leadership management to the System portal", () => {

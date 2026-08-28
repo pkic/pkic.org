@@ -9,11 +9,11 @@ import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/ad
 import {
   donationPromotersListResponseSchema,
   donationsListResponseSchema,
-} from "../../assets/shared/schemas/admin-donations";
+} from "../../assets/shared/schemas/donation-management";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
 import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
 import { ApplicationDocumentsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDocumentsCard";
-import { Donations } from "../../assets/ts/admin/sections/Donations";
+import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { Email } from "../../assets/ts/admin/sections/Email";
 import { DueWorkTable } from "../../assets/ts/admin/sections/due-work/DueWorkTable";
 import { Promoters } from "../../assets/ts/admin/sections/events/detail/Promoters";
@@ -359,7 +359,7 @@ describe("canonical offset pagination", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
         requests.push(url);
-        if (url.pathname === "/api/v1/admin/donations/promoters") {
+        if (url.pathname === "/api/v1/donations/promoters") {
           return jsonResponse(
             donationPromotersListResponseSchema.parse({
               promoters: [
@@ -435,7 +435,7 @@ describe("canonical offset pagination", () => {
     await settle();
     void act(() => nextButton(donations).click());
     await settle();
-    expect(requests.at(-1)?.pathname).toBe("/api/v1/admin/donations/promoters");
+    expect(requests.at(-1)?.pathname).toBe("/api/v1/donations/promoters");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("50");
     void act(() => render(null, donations));
 

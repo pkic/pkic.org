@@ -1,16 +1,16 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import {
-  ADMIN_DONATIONS_SORT_COLUMNS,
-  type AdminDonationSummary,
+  DONATION_MANAGEMENT_SORT_COLUMNS,
+  type DonationManagementSummary,
   type DonationStatus,
   type DonationsListQuery,
   type DonationsListResponse,
-} from "../../../../assets/shared/schemas/admin-donations";
+} from "../../../../assets/shared/schemas/donation-management";
 import { resolveOrderBy } from "../../db/sort";
 import { batchRows, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import type { DatabaseLike } from "../../types";
-import { ADMIN_DONATION_SELECT_COLUMNS } from "./read";
+import { DONATION_MANAGEMENT_SELECT_COLUMNS } from "./read";
 
 interface StatusCountRow {
   status: DonationStatus;
@@ -33,10 +33,10 @@ export async function listDonations(db: DatabaseLike, params: DonationsListQuery
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(params.sort, ADMIN_DONATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
+  const orderBy = resolveOrderBy(params.sort, DONATION_MANAGEMENT_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
   const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
-    sql: `SELECT ${ADMIN_DONATION_SELECT_COLUMNS}
+    sql: `SELECT ${DONATION_MANAGEMENT_SELECT_COLUMNS}
             FROM donations
             ${where}`,
     bindings,
@@ -58,7 +58,7 @@ export async function listDonations(db: DatabaseLike, params: DonationsListQuery
     ),
   ]);
 
-  const { rows: donations, total } = decodeOffsetPageResults<AdminDonationSummary>(pageResult, countResult);
+  const { rows: donations, total } = decodeOffsetPageResults<DonationManagementSummary>(pageResult, countResult);
   const statusRows = batchRows<StatusCountRow>(summaryResult);
   const byStatus = Object.fromEntries(statusRows.map(({ status, count }) => [status, Number(count)]));
   const backfillable = statusRows.reduce((sum, row) => sum + Number(row.backfillable_count), 0);

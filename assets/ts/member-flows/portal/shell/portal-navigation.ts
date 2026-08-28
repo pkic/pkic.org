@@ -33,6 +33,12 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     permission: "analytics:read",
   },
   {
+    path: "/system/donations",
+    section: "system",
+    label: "Donations",
+    permission: "donations:read",
+  },
+  {
     path: "/system/membership-applications",
     section: "system",
     label: "Membership Applications",

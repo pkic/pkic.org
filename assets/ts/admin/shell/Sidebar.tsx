@@ -106,7 +106,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "email",
   },
   { path: "/duework", sec: "duework", label: "Due Work", icon: "duework" },
-  { path: "/donations", sec: "donations", label: "Donations", icon: "donations" },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
   {
     path: "/organizations",

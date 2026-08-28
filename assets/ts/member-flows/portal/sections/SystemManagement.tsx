@@ -9,6 +9,7 @@ import { EmailTemplates } from "./email-templates/EmailTemplates";
 import { AccessControl } from "./access-control";
 import { Leadership } from "./leadership/Leadership";
 import { SystemAnalytics } from "./system-analytics/SystemAnalytics";
+import { Donations } from "./system-donations/Donations";
 
 export function SystemManagement({
   session,
@@ -49,6 +50,12 @@ export function SystemManagement({
       </nav>
       {selected.path === "/system/analytics" ? (
         <SystemAnalytics initialTab={resourceId} />
+      ) : selected.path === "/system/donations" ? (
+        <Donations
+          subTab={resourceId}
+          canRead={portalHasGlobalPermission(session, "donations:read")}
+          canSync={portalHasGlobalPermission(session, "donations:sync")}
+        />
       ) : selected.path === "/system/membership-applications" ? (
         <MembershipApplications
           initialApplicationId={resourceId}

@@ -5,7 +5,7 @@ import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { adminEventDetailResponseSchema } from "../assets/shared/schemas/admin-events";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { systemAnalyticsSummaryResponseSchema } from "../assets/shared/schemas/system-analytics";
-import { donationDetailResponseSchema } from "../assets/shared/schemas/admin-donations";
+import { donationDetailResponseSchema } from "../assets/shared/schemas/donation-management";
 import { emailTemplateExistsResponseSchema } from "../assets/shared/schemas/email-templates";
 import { adminUserDetailResponseSchema } from "../assets/shared/schemas/admin-users";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
@@ -38,7 +38,8 @@ describe("admin read route OpenAPI contracts", () => {
 
   it("documents all converted admin reads", () => {
     const paths = decorateOpenApiSpec(openapi.schema).paths;
-    expect(paths["/api/v1/admin/donations/{id}"].get).toBeDefined();
+    expect(paths["/api/v1/donations/{id}"].get).toBeDefined();
+    expect(paths["/api/v1/admin/donations/{id}"]).toBeUndefined();
     expect(paths["/api/v1/system/email-templates/{key}/exists"].get).toBeDefined();
     expect(paths["/api/v1/admin/email-templates/{key}/exists"]).toBeUndefined();
     expect(paths["/api/v1/system/analytics/summary"].get).toBeDefined();
@@ -51,7 +52,7 @@ describe("admin read route OpenAPI contracts", () => {
   it("rejects malformed identifiers with the canonical error envelope", async () => {
     const { token } = await setupAdmin();
 
-    const donation = await call(token, "/api/v1/admin/donations/not-an-id");
+    const donation = await call(token, "/api/v1/donations/not-an-id");
     expect(donation.status).toBe(400);
     expect(apiErrorPayloadSchema.parse(await donation.json()).error.code).toBe("VALIDATION_ERROR");
 
@@ -74,7 +75,7 @@ describe("admin read route OpenAPI contracts", () => {
       .bind(donationId, `cs_contract_${crypto.randomUUID()}`)
       .run();
 
-    const donation = await call(token, `/api/v1/admin/donations/${donationId}`);
+    const donation = await call(token, `/api/v1/donations/${donationId}`);
     expect(donation.status).toBe(200);
     expect(donationDetailResponseSchema.parse(await donation.json()).donation.id).toBe(donationId);
 

@@ -15,7 +15,7 @@ import {
   sortColumnSchema,
   sortColumnSchemaWithDefault,
 } from "../assets/shared/schemas/pagination";
-import { donationsListQuerySchema } from "../assets/shared/schemas/admin-donations";
+import { donationsListQuerySchema } from "../assets/shared/schemas/donation-management";
 import { usersListQuerySchema } from "../assets/shared/schemas/admin-users";
 import { systemAuditLogListQuerySchema } from "../assets/shared/schemas/system-audit-log";
 import {

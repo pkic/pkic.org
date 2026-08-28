@@ -53,6 +53,22 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/analytics/summary"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/analytics/registrations"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/analytics/donations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/{id}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/promoters"].get).toBeDefined();
+    expect(spec.paths["/api/v1/donations/sync"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/donations"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/donations/{id}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/donations/promoters"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/donations/sync"]).toBeUndefined();
+    expect(spec.paths["/api/v1/donations"].get[AUTH_EXTENSION]).toMatchObject({
+      required: true,
+      scopes: ["donations:read"],
+    });
+    expect(spec.paths["/api/v1/donations/sync"].post[AUTH_EXTENSION]).toMatchObject({
+      required: true,
+      scopes: ["donations:sync"],
+    });
     expect(spec.paths["/api/v1/admin/access-grants"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/roles"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/roles/{id}/assignments"]).toBeUndefined();

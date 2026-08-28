@@ -1227,6 +1227,23 @@ Status: In progress
       mounted even though no production frontend calls them. Their removal is
       an explicit remaining §10 legacy-API cleanup; do not describe this
       destination as complete while that duplication exists.
+      Donation management now appears under the portal's System navigation,
+      but System is only the interface grouping: the canonical resource API is
+      `/api/v1/donations`, with collection, detail, promoter, and reconciliation
+      routes sharing one neutral contract and the existing donation services.
+      Reads require live user-backed `donations:read`; reconciliation requires
+      live user-backed `donations:sync`, rejects API-key identities, and
+      rechecks that permission before every D1 operation after Stripe I/O.
+      Reconciliation records an attributed audit summary and queues lifecycle
+      notifications through the durable outbox without sending during the
+      request. Search, status filtering, allowlisted sorting, counting, and
+      pagination remain in D1. The former admin donation UI, API handlers,
+      route mount, and admin-prefixed schema are removed rather than retained
+      as a second implementation; old bookmarks only redirect to the portal.
+      Mounted permission, revocation-race, contract, frontend, and focused real
+      Worker/D1 browser tests cover the canonical paths and prove no legacy
+      donation request is made. This closes the donation slice only; complete
+      removal of `/api/v1/admin` remains part of the open parent item.
       Due Work remains in the admin shell pending a deliberate System
       Operations permission and command design. Its current screen is now a
       bounded D1 preview rather than two competing mount-time projections:
@@ -1400,7 +1417,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the final security
-      remediation with 2,214 backend tests (one skipped), 297 frontend tests,
+      remediation and donation cutover with 2,217 backend tests (one skipped), 297 frontend tests,
       and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1453,6 +1470,10 @@ Status: In progress
       The affected System Analytics and membership-join browser journeys pass
       together in a focused three-test run, including all three focused
       analytics endpoints and the legacy bookmark redirect.
+      A focused real Worker/D1 donation journey signs in through the portal,
+      reads the canonical donation list, detail, and promoter views, follows a
+      legacy bookmark redirect, and asserts that no removed admin donation API
+      is requested. Stripe remains mocked and SendGrid remains intercepted.
 - [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
       Current evidence: all 44 previously existing browser tests passed in one
@@ -1533,7 +1554,7 @@ Status: In progress
       event, vote, and mailing-list paths, but legacy global/admin domain
       endpoints remain. The admin shell still exposes Events, Forms, Email, Due
       Work, Users, Organizations, and Sponsorships, and the admin router still
-      mounts those domains plus donations, votes, and the duplicate platform-
+      mounts those domains plus votes and the duplicate platform-
       statistics read model. Ownerless/global event actions, email delivery/
       outbox operations, user and organization management, sponsorship
       operations, and Due Work therefore still require deliberate System
@@ -1634,6 +1655,17 @@ The final PR description must include, at minimum:
 - verify `/admin/`, `/admin/#/dashboard`, and `/admin/#/stats` redirect to
   `/portal/#/system/analytics` without a production frontend request to
   `/api/v1/admin/stats`;
+- inspect Donations with a `donations:read` staff user and confirm an unrelated
+  permission, API key, and unauthenticated request cannot read the resource;
+- search, filter, sort, and paginate donations and promoters through
+  `/api/v1/donations`, open a donation detail, and reconcile a bounded set with
+  `donations:sync` while Stripe is mocked and delivery is intercepted;
+- revoke `donations:sync` after Stripe returns but before the next D1 operation
+  and confirm the reconciliation fails without persisting the raced update or
+  its audit result;
+- verify `/api/v1/admin/donations` and nested paths return 404 and the old
+  donation and promoter bookmarks redirect without making a legacy API
+  request;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
 - verify the retired admin event-invitation APIs return 404 and old attendee

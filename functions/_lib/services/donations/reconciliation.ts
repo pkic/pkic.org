@@ -1,4 +1,7 @@
-import type { DonationSyncRequest, DonationSyncResponse } from "../../../../assets/shared/schemas/admin-donations";
+import type { DonationSyncRequest, DonationSyncResponse } from "../../../../assets/shared/schemas/donation-management";
+import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { guardDatabaseBatches } from "../../db/guarded-database";
 import { all } from "../../db/queries";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import {
@@ -17,7 +20,9 @@ import {
   type DonationRecord,
 } from "./lifecycle";
 import { queueDonationNotification } from "./notifications";
-import type { DatabaseLike, Env } from "../../types";
+import { AppError, isAppError } from "../../errors";
+import { prepareAuditLog } from "../audit";
+import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../../types";
 
 interface ReconciliationRow extends DonationRecord {
   created_at: string;
@@ -26,6 +31,33 @@ interface ReconciliationRow extends DonationRecord {
 export interface DonationReconciliationResult {
   response: DonationSyncResponse;
   outboxIds: string[];
+}
+
+const DONATION_SYNC_AUTHORIZATION_CHANGED = "DONATION_SYNC_AUTHORIZATION_CHANGED";
+
+function authorizedReconciliationDb(db: DatabaseLike, actor: UserBackedAuthAdmin): DatabaseLike {
+  return guardDatabaseBatches(db, async (statements) => {
+    try {
+      const [, ...results] = await db.batch([
+        preparePermissionsAuthorizationGuard(db, actor, [{ permission: "donations:sync" }]),
+        ...statements,
+      ]);
+      return results;
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(
+          409,
+          DONATION_SYNC_AUTHORIZATION_CHANGED,
+          "Donation reconciliation permission changed while the update was being saved",
+        );
+      }
+      throw error;
+    }
+  });
+}
+
+function isAuthorizationChange(error: unknown): boolean {
+  return isAppError(error) && error.code === DONATION_SYNC_AUTHORIZATION_CHANGED;
 }
 
 function emptyDetails(paymentMethodType: string | null = null): StripePaymentDetails {
@@ -97,9 +129,10 @@ export async function reconcileDonations(
   db: DatabaseLike,
   env: Env,
   request: DonationSyncRequest,
-  options: { stripeKey: string; appBaseUrl: string; limit: number },
+  options: { stripeKey: string; appBaseUrl: string; limit: number; actor: UserBackedAuthAdmin },
 ): Promise<DonationReconciliationResult> {
-  const donations = await selectReconciliationRows(db, request, options.limit);
+  const authorizedDb = authorizedReconciliationDb(db, options.actor);
+  const donations = await selectReconciliationRows(authorizedDb, request, options.limit);
   const results: DonationSyncResponse["results"] = [];
   const outboxIds: string[] = [];
 
@@ -120,14 +153,14 @@ export async function reconcileDonations(
           results.push({ sessionId, outcome: "error", error: "Failed to fetch payment details from Stripe" });
           continue;
         }
-        await backfillCompletedDonation(db, session, details.value);
+        await backfillCompletedDonation(authorizedDb, session, details.value);
         results.push({ sessionId, outcome: "completed" });
         continue;
       }
 
       if (session.status === "expired") {
-        await markDonationExpired(db, sessionId);
-        await queueNotification(db, env, sessionId, "expired", options.appBaseUrl, outboxIds);
+        await markDonationExpired(authorizedDb, sessionId);
+        await queueNotification(authorizedDb, env, sessionId, "expired", options.appBaseUrl, outboxIds);
         results.push({ sessionId, outcome: "expired" });
         continue;
       }
@@ -141,8 +174,8 @@ export async function reconcileDonations(
         if (session.status === "complete" && session.payment_status === "paid") {
           // A directly fetched paid Checkout Session is authoritative. The
           // expanded payment-intent data is supplemental and backfillable.
-          await completeDonationFromStripe(db, session, emptyDetails());
-          await queueNotification(db, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
+          await completeDonationFromStripe(authorizedDb, session, emptyDetails());
+          await queueNotification(authorizedDb, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
           results.push({ sessionId, outcome: "completed" });
           continue;
         }
@@ -152,23 +185,29 @@ export async function reconcileDonations(
       const details = detailsResult.value;
 
       if (session.status === "complete" && session.payment_status === "paid") {
-        await completeDonationFromStripe(db, session, details);
-        await queueNotification(db, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
+        await completeDonationFromStripe(authorizedDb, session, details);
+        await queueNotification(authorizedDb, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
         results.push({ sessionId, outcome: "completed" });
       } else if (session.status === "complete" && details.paymentFailed) {
-        await markDonationFailed(db, sessionId, details.paymentMethodType);
-        await queueNotification(db, env, sessionId, "payment_failed", options.appBaseUrl, outboxIds);
+        await markDonationFailed(authorizedDb, sessionId, details.paymentMethodType);
+        await queueNotification(authorizedDb, env, sessionId, "payment_failed", options.appBaseUrl, outboxIds);
         results.push({ sessionId, outcome: "failed" });
       } else if (session.status === "complete") {
-        await markDonationAwaitingPayment(db, sessionId, details.paymentMethodType, session.expires_at ?? null);
+        await markDonationAwaitingPayment(
+          authorizedDb,
+          sessionId,
+          details.paymentMethodType,
+          session.expires_at ?? null,
+        );
         results.push({ sessionId, outcome: "awaiting_payment" });
       } else {
         if (details.paymentMethodType) {
-          await recordDonationPaymentMethod(db, sessionId, details.paymentMethodType);
+          await recordDonationPaymentMethod(authorizedDb, sessionId, details.paymentMethodType);
         }
         results.push({ sessionId, outcome: "still_pending" });
       }
-    } catch {
+    } catch (error) {
+      if (isAuthorizationChange(error)) throw error;
       results.push({
         sessionId,
         outcome: "error",
@@ -179,16 +218,24 @@ export async function reconcileDonations(
 
   const count = (outcome: DonationSyncResponse["results"][number]["outcome"]) =>
     results.filter((result) => result.outcome === outcome).length;
+  const response = {
+    synced: donations.length,
+    completed: count("completed"),
+    awaitingPayment: count("awaiting_payment"),
+    expired: count("expired"),
+    failed: count("failed"),
+    errors: count("error"),
+    results,
+  } satisfies DonationSyncResponse;
+  await authorizedDb.batch([
+    prepareAuditLog(authorizedDb, "admin", options.actor.id, "donations_reconciled", "donation_reconciliation", null, {
+      requestedSessionCount: request.sessionIds?.length ?? null,
+      pendingOnly: request.pendingOnly ?? false,
+      ...response,
+    }),
+  ]);
   return {
-    response: {
-      synced: donations.length,
-      completed: count("completed"),
-      awaitingPayment: count("awaiting_payment"),
-      expired: count("expired"),
-      failed: count("failed"),
-      errors: count("error"),
-      results,
-    },
+    response,
     outboxIds,
   };
 }

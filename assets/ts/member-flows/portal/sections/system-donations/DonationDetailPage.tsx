@@ -1,14 +1,17 @@
 import { useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
-import { Badge } from "../../components/Badge";
-import { Spinner } from "../../components/Spinner";
-import { ErrorAlert } from "../../components/ErrorAlert";
-import { api } from "../api";
-import { fmt, toast } from "../ui";
-import { useData } from "../../hooks/useData";
-import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
-import { formatDonationAmount } from "./donations/model";
-import { donationDetailResponseSchema, donationSyncResponseSchema } from "../../../shared/schemas/admin-donations";
+import { Badge } from "../../../../components/Badge";
+import { Spinner } from "../../../../components/Spinner";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { getJson, postJson } from "../../../../shared/api-client";
+import { fmt, toast } from "../../ui";
+import { useData } from "../../../../hooks/useData";
+import { asyncPaymentWindow } from "../../../../../shared/constants/async-payment-window";
+import { formatDonationAmount } from "./model";
+import {
+  donationDetailResponseSchema,
+  donationSyncResponseSchema,
+} from "../../../../../shared/schemas/donation-management";
 
 function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
   return (
@@ -19,22 +22,38 @@ function Field({ label, children }: { label: string; children: preact.ComponentC
   );
 }
 
-export function DonationDetailPage({ donationId }: { donationId: string }) {
+export function DonationDetailPage({
+  donationId,
+  canRead = true,
+  canSync = true,
+}: {
+  donationId: string;
+  canRead?: boolean;
+  canSync?: boolean;
+}) {
+  if (!canRead) {
+    return (
+      <div class="alert alert-warning" role="alert">
+        Donation records require the <code>donations:read</code> permission.
+      </div>
+    );
+  }
+  return <DonationDetailView donationId={donationId} canSync={canSync} />;
+}
+
+function DonationDetailView({ donationId, canSync }: { donationId: string; canSync: boolean }) {
   const [, navigate] = useHashLocation();
   const [syncing, setSyncing] = useState(false);
 
   const { data, loading, error, reload } = useData(
-    () => api(`/api/v1/admin/donations/${encodeURIComponent(donationId)}`, donationDetailResponseSchema),
+    () => getJson(`/api/v1/donations/${encodeURIComponent(donationId)}`, donationDetailResponseSchema),
     [donationId],
   );
 
   async function handleSync(sessionId: string) {
     setSyncing(true);
     try {
-      const res = await api("/api/v1/admin/donations/sync", donationSyncResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({ sessionIds: [sessionId] }),
-      });
+      const res = await postJson("/api/v1/donations/sync", { sessionIds: [sessionId] }, donationSyncResponseSchema);
       const result = res.results[0];
       if (result?.outcome === "completed") toast("Donation marked as completed.", "success");
       else if (result?.outcome === "awaiting_payment") toast("Payment initiated — awaiting bank settlement.", "info");
@@ -76,7 +95,7 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
 
   return (
     <div>
-      <button class="btn btn-sm btn-outline-secondary mb-3" onClick={() => navigate("/donations")}>
+      <button class="btn btn-sm btn-outline-secondary mb-3" onClick={() => navigate("/system/donations")}>
         ← Back to Donations
       </button>
 
@@ -117,7 +136,7 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
         </div>
 
         <div class="d-flex gap-2 mt-3">
-          {needsSync && (
+          {canSync && needsSync && (
             <button
               class="btn btn-sm btn-outline-primary"
               disabled={syncing}

@@ -10,6 +10,8 @@ export const ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET = "/portal/#/management";
 export const ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET = "/portal/#/system/email-templates";
 export const ADMIN_LEADERSHIP_REDIRECT_TARGET = "/portal/#/system/leadership";
 export const ADMIN_ANALYTICS_REDIRECT_TARGET = "/portal/#/system/analytics";
+export const ADMIN_DONATIONS_REDIRECT_TARGET = "/portal/#/system/donations";
+export const ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET = "/portal/#/system/donations/promoters";
 
 export function legacyAdminRedirectTarget(path: string): string | null {
   const pathname = path.split("?", 1)[0];
@@ -26,6 +28,11 @@ export function legacyAdminRedirectTarget(path: string): string | null {
   }
   if (pathname === "/membership/settings") return ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET;
   if (pathname === "/email/templates") return ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET;
+  if (pathname === "/donations") return ADMIN_DONATIONS_REDIRECT_TARGET;
+  if (pathname === "/donations/promoters") return ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET;
+  if (pathname.startsWith("/donations/detail/")) {
+    return `${ADMIN_DONATIONS_REDIRECT_TARGET}/detail/${encodeURIComponent(pathname.slice("/donations/detail/".length))}`;
+  }
   if (pathname === "/leadership") return ADMIN_LEADERSHIP_REDIRECT_TARGET;
   if (pathname === "/organizations/content-reviews") return ADMIN_ORGANIZATION_CONTENT_REVIEWS_REDIRECT_TARGET;
   if (/^\/events\/[^/]+\/(?:proposals|registrations)\/invites$/.test(pathname)) {
