@@ -1,6 +1,6 @@
 /**
- * GET   /api/v1/system/membership-applications/:id — application detail.
- * PATCH /api/v1/system/membership-applications/:id — correct applicant-submitted fields
+ * GET   /api/v1/members/applications/:id — application detail.
+ * PATCH /api/v1/members/applications/:id — correct applicant-submitted fields
  * (does not transition stage; see updateMembershipApplication).
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";

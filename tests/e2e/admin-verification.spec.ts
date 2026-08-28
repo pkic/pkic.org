@@ -164,7 +164,7 @@ async function provisionApprovedMember(
   for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
     const status = await page.evaluate(
       async ({ applicationId, toStage }) => {
-        const res = await fetch(`/api/v1/system/membership-applications/${applicationId}/stage`, {
+        const res = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
@@ -182,7 +182,7 @@ async function provisionApprovedMember(
   }
 
   const approved = await page.evaluate(async (applicationId) => {
-    const res = await fetch(`/api/v1/system/membership-applications/${applicationId}/approve`, {
+    const res = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
       method: "POST",
       credentials: "same-origin",
     });
@@ -530,7 +530,7 @@ test.describe("Admin browser-verification pass", () => {
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
-      if (pathname.startsWith("/api/v1/system/membership-applications")) {
+      if (pathname.startsWith("/api/v1/members/applications")) {
         canonicalRequests.push(`${request.method()} ${pathname}`);
       }
       if (pathname.startsWith("/api/v1/admin/applications")) {
@@ -589,7 +589,7 @@ test.describe("Admin browser-verification pass", () => {
     // API (not the same optimistic UI state the toast/badge above already
     // reflect) — durably approved with an event recording the transition.
     const refetched = await page.evaluate(async (id) => {
-      const res = await fetch(`/api/v1/system/membership-applications/${id}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/members/applications/${id}`, { credentials: "same-origin" });
       const body = await res.json();
       return { status: res.status, body };
     }, applicationId);
@@ -615,9 +615,9 @@ test.describe("Admin browser-verification pass", () => {
     expect(provisionedUser, JSON.stringify(usersLookup.body)).toBeTruthy();
     expect(provisionedUser?.membership?.organizationName).toBe(orgName);
 
-    expect(canonicalRequests).toContain(`GET /api/v1/system/membership-applications`);
-    expect(canonicalRequests).toContain(`GET /api/v1/system/membership-applications/${applicationId}`);
-    expect(canonicalRequests).toContain(`POST /api/v1/system/membership-applications/${applicationId}/approve`);
+    expect(canonicalRequests).toContain(`GET /api/v1/members/applications`);
+    expect(canonicalRequests).toContain(`GET /api/v1/members/applications/${applicationId}`);
+    expect(canonicalRequests).toContain(`POST /api/v1/members/applications/${applicationId}/approve`);
     expect(legacyRequests).toEqual([]);
 
     // Independent confirmation 3/3: the onboarding welcome email — one of

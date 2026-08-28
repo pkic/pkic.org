@@ -237,7 +237,7 @@ export async function getMembershipApplicationDetail(
 // Corrects applicant-submitted data (e.g. a mistyped email domain) without
 // moving the application through the stage machine — a distinct
 // operation from transitionApplicationStage. Route layer
-// (functions/api/v1/system/membership-applications/[id]/index.ts) writes the audit_log
+// (functions/api/v1/members/applications/[id]/index.ts) writes the audit_log
 // entry; this function only touches member_applications and records a
 // member_application_events row so the correction shows up in the
 // application's timeline. Per consolidated migration 0035's own note, member_application_events

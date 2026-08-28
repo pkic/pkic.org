@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/system/membership-applications/:id/approve. Runs the full onboarding
+ * POST /api/v1/members/applications/:id/approve. Runs the full onboarding
  * orchestration (membership/applications/approve.ts's approveApplication),
  * which commits membership provisioning, the application stage transition,
  * Google Groups enqueues, the three applicant-facing email-outbox inserts

@@ -2,7 +2,7 @@
  * application-stage-machine.test.ts
  *
  * application stage transitions, communications, and internal
- * notes via the canonical System endpoints (functions/api/v1/system/membership-applications/).
+ * notes via the canonical domain endpoints (functions/api/v1/members/applications/).
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -59,7 +59,7 @@ describe("Application stage machine, communications, notes", () => {
 
   it("transitions pending -> in_review and records a member_application_events row", async () => {
     const { id } = await createApplication();
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "in_review" }),
     });
@@ -78,14 +78,10 @@ describe("Application stage machine, communications, notes", () => {
 
   it("rejects API-key stage transitions without side effects", async () => {
     const { id } = await createApplication();
-    const response = await call(
-      env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/system/membership-applications/${id}/stage`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ toStage: "in_review" }),
-      },
-    );
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "in_review" }),
+    });
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
@@ -109,11 +105,11 @@ describe("Application stage machine, communications, notes", () => {
     const { id } = await createApplication();
 
     const [first, second] = await Promise.all([
-      call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+      call(adminToken, `/api/v1/members/applications/${id}/stage`, {
         method: "PATCH",
         body: JSON.stringify({ toStage: "in_review" }),
       }),
-      call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+      call(adminToken, `/api/v1/members/applications/${id}/stage`, {
         method: "PATCH",
         body: JSON.stringify({ toStage: "in_review" }),
       }),
@@ -131,7 +127,7 @@ describe("Application stage machine, communications, notes", () => {
 
   it("rejects an invalid transition (pending -> ec_review)", async () => {
     const { id } = await createApplication();
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "ec_review" }),
     });
@@ -141,13 +137,13 @@ describe("Application stage machine, communications, notes", () => {
   it("requires a valid on_hold subtype when moving to on_hold, and queues the matching email", async () => {
     const { id } = await createApplication({ stage: "in_review" });
 
-    const missingSubtype = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const missingSubtype = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "on_hold" }),
     });
     expect(missingSubtype.status).toBe(422);
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "on_hold", onHoldSubtype: "request_org_email" }),
     });
@@ -180,7 +176,7 @@ describe("Application stage machine, communications, notes", () => {
     ).run();
 
     try {
-      const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+      const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
         method: "PATCH",
         body: JSON.stringify({ toStage: "on_hold", onHoldSubtype: "request_org_email" }),
       });
@@ -213,7 +209,7 @@ describe("Application stage machine, communications, notes", () => {
       .bind(id)
       .run();
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "in_review" }),
     });
@@ -230,7 +226,7 @@ describe("Application stage machine, communications, notes", () => {
 
   it("a terminal stage (declined) has no further transitions", async () => {
     const { id } = await createApplication({ stage: "declined" });
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "in_review" }),
     });
@@ -239,7 +235,7 @@ describe("Application stage machine, communications, notes", () => {
 
   it("sends a communication, records it, and does not create a stage transition event", async () => {
     const { id } = await createApplication();
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/communications`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/communications`, {
       method: "POST",
       body: JSON.stringify({ subject: "Following up", body: "Please send more info." }),
     });
@@ -265,7 +261,7 @@ describe("Application stage machine, communications, notes", () => {
     const { id } = await createApplication();
     const response = await call(
       env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/system/membership-applications/${id}/communications`,
+      `/api/v1/members/applications/${id}/communications`,
       {
         method: "POST",
         body: JSON.stringify({ subject: "Must not send", body: "Synthetic actors cannot own this record." }),
@@ -285,7 +281,7 @@ describe("Application stage machine, communications, notes", () => {
 
   it("adds an internal note that never queues an email", async () => {
     const { id } = await createApplication();
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/notes`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/notes`, {
       method: "POST",
       body: JSON.stringify({ body: "Internal-only observation." }),
     });
@@ -305,14 +301,10 @@ describe("Application stage machine, communications, notes", () => {
 
   it("rejects API-key application notes without side effects", async () => {
     const { id } = await createApplication();
-    const response = await call(
-      env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/system/membership-applications/${id}/notes`,
-      {
-        method: "POST",
-        body: JSON.stringify({ body: "Synthetic actors cannot own this note." }),
-      },
-    );
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body: "Synthetic actors cannot own this note." }),
+    });
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
@@ -327,11 +319,11 @@ describe("Application stage machine, communications, notes", () => {
 
   it("keeps documents out of detail and lists them through the bounded staff subresource", async () => {
     const { id } = await createApplication();
-    await call(adminToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "in_review" }),
     });
-    await call(adminToken, `/api/v1/system/membership-applications/${id}/notes`, {
+    await call(adminToken, `/api/v1/members/applications/${id}/notes`, {
       method: "POST",
       body: JSON.stringify({ body: "note" }),
     });
@@ -354,7 +346,7 @@ describe("Application stage machine, communications, notes", () => {
       )
       .run();
 
-    const detailResponse = await call(adminToken, `/api/v1/system/membership-applications/${id}`);
+    const detailResponse = await call(adminToken, `/api/v1/members/applications/${id}`);
     expect(detailResponse.status).toBe(200);
     const rawDetail = await detailResponse.json();
     expect(rawDetail).not.toHaveProperty("documents");
@@ -365,7 +357,7 @@ describe("Application stage machine, communications, notes", () => {
 
     const documentsResponse = await call(
       adminToken,
-      `/api/v1/system/membership-applications/${id}/documents?limit=1&offset=0&sort=-uploadedAt&q=evidence`,
+      `/api/v1/members/applications/${id}/documents?limit=1&offset=0&sort=-uploadedAt&q=evidence`,
     );
     expect(documentsResponse.status).toBe(200);
     expect(staffApplicationDocumentsListResponseSchema.parse(await documentsResponse.json())).toEqual({
@@ -384,21 +376,22 @@ describe("Application stage machine, communications, notes", () => {
 
     const emailSearch = await call(
       adminToken,
-      `/api/v1/system/membership-applications/${id}/documents?q=applicant%40example.test&sort=filename`,
+      `/api/v1/members/applications/${id}/documents?q=applicant%40example.test&sort=filename`,
     );
     expect(emailSearch.status).toBe(200);
     expect(staffApplicationDocumentsListResponseSchema.parse(await emailSearch.json()).documents).toHaveLength(1);
 
-    const finalPage = await call(adminToken, `/api/v1/system/membership-applications/${id}/documents?limit=1&offset=1`);
+    const finalPage = await call(adminToken, `/api/v1/members/applications/${id}/documents?limit=1&offset=1`);
     expect(finalPage.status).toBe(200);
     expect(staffApplicationDocumentsListResponseSchema.parse(await finalPage.json())).toEqual({
       documents: [],
       page: { limit: 1, offset: 1, total: 1, hasMore: false },
     });
 
-    expect((await call(adminToken, `/api/v1/system/membership-applications/${id}/documents?sort=r2Key`)).status).toBe(
-      400,
-    );
+    expect((await call(adminToken, `/api/v1/members/applications/${id}/documents?sort=r2Key`)).status).toBe(400);
+    expect(
+      (await call(adminToken, `/api/v1/members/applications/${id}/documents?token=${"x".repeat(16)}`)).status,
+    ).toBe(401);
   });
 
   it("GET list filters by stage", async () => {
@@ -408,7 +401,7 @@ describe("Application stage machine, communications, notes", () => {
       applicant_email: "second@second.test",
     });
 
-    const response = await call(adminToken, "/api/v1/system/membership-applications?stage=in_review");
+    const response = await call(adminToken, "/api/v1/members/applications?stage=in_review");
     expect(response.status).toBe(200);
     const body = (await response.json()) as { applications: Array<{ id: string }> };
     expect(body.applications).toHaveLength(1);
@@ -426,7 +419,7 @@ describe("Application stage machine, communications, notes", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, userId, "plain-user-token");
 
-    const response = await call(staffToken, `/api/v1/system/membership-applications/${id}/stage`, {
+    const response = await call(staffToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "in_review" }),
     });

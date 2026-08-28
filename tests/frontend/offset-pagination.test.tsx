@@ -341,7 +341,7 @@ describe("canonical offset pagination", () => {
     await settle();
 
     expect(requests.at(-1)?.pathname).toBe(
-      "/api/v1/system/membership-applications/00000000-0000-4000-8000-000000000010/documents",
+      "/api/v1/members/applications/00000000-0000-4000-8000-000000000010/documents",
     );
     expect(requests.at(-1)?.searchParams.get("limit")).toBe("10");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");

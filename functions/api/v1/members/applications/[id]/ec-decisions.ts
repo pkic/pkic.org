@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/system/membership-applications/:id/ec-decisions — staff override fallback
+ * POST /api/v1/members/applications/:id/ec-decisions — staff override fallback
  * for recording an EC member's decision.
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";

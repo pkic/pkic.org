@@ -27,10 +27,7 @@ export function useApplicationDetail(applicationId: string) {
     setLoading(true);
     setError(null);
     try {
-      const data = await getJson(
-        `/api/v1/system/membership-applications/${applicationId}`,
-        membershipApplicationDetailSchema,
-      );
+      const data = await getJson(`/api/v1/members/applications/${applicationId}`, membershipApplicationDetailSchema);
       setDetail(data);
     } catch (e) {
       setError((e as Error).message);
@@ -46,7 +43,7 @@ export function useApplicationDetail(applicationId: string) {
   async function transition(params: { toStage: string; onHoldSubtype?: string; note?: string }) {
     try {
       await patchJson(
-        `/api/v1/system/membership-applications/${applicationId}/stage`,
+        `/api/v1/members/applications/${applicationId}/stage`,
         {
           toStage: params.toStage,
           onHoldSubtype: params.toStage === "on_hold" ? params.onHoldSubtype : undefined,
@@ -64,7 +61,7 @@ export function useApplicationDetail(applicationId: string) {
   async function sendCommunication(params: { subject: string; body: string }) {
     try {
       await postJson(
-        `/api/v1/system/membership-applications/${applicationId}/communications`,
+        `/api/v1/members/applications/${applicationId}/communications`,
         { subject: params.subject, body: params.body },
         applicationCommunicationCreateResponseSchema,
       );
@@ -78,7 +75,7 @@ export function useApplicationDetail(applicationId: string) {
   async function addNote(body: string) {
     try {
       await postJson(
-        `/api/v1/system/membership-applications/${applicationId}/notes`,
+        `/api/v1/members/applications/${applicationId}/notes`,
         { body },
         applicationNoteCreateResponseSchema,
       );
@@ -92,7 +89,7 @@ export function useApplicationDetail(applicationId: string) {
   async function recordEcDecision(params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) {
     try {
       await postJson(
-        `/api/v1/system/membership-applications/${applicationId}/ec-decisions`,
+        `/api/v1/members/applications/${applicationId}/ec-decisions`,
         {
           ecMemberUserId: params.ecMemberUserId,
           decision: params.decision,
@@ -110,11 +107,7 @@ export function useApplicationDetail(applicationId: string) {
   async function approve() {
     if (!confirm("Approve this application and run onboarding?")) return;
     try {
-      await postJson(
-        `/api/v1/system/membership-applications/${applicationId}/approve`,
-        {},
-        applicationApproveResponseSchema,
-      );
+      await postJson(`/api/v1/members/applications/${applicationId}/approve`, {}, applicationApproveResponseSchema);
       toast("Application approved", "success");
       await reload();
     } catch (e) {
@@ -136,7 +129,7 @@ export function useApplicationDetail(applicationId: string) {
     reason: string | null;
   }) {
     await patchJson(
-      `/api/v1/system/membership-applications/${applicationId}`,
+      `/api/v1/members/applications/${applicationId}`,
       {
         applicantName: edits.applicantName,
         applicantEmail: edits.applicantEmail,

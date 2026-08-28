@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/system/membership-applications/:id/communications.
+ * POST /api/v1/members/applications/:id/communications.
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";

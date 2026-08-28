@@ -91,7 +91,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   await jsonResponse(
     page.request,
     "PATCH",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/stage`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
     {
       toStage: "in_review",
     },
@@ -99,7 +99,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   await jsonResponse(
     page.request,
     "PATCH",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/stage`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
     {
       toStage: "in_consultation",
     },
@@ -107,7 +107,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   await jsonResponse(
     page.request,
     "PATCH",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/stage`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
     {
       toStage: "ec_review",
     },
@@ -115,7 +115,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   const approved = await jsonResponse(
     page.request,
     "POST",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/approve`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/approve`,
   );
   return {
     email,

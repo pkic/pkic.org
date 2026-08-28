@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/system/membership-applications/:id/notes. Never emailed;
+ * POST /api/v1/members/applications/:id/notes. Never emailed;
  * staff/processor-only.
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";

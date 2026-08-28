@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/system/membership-applications — list membership applications.
+ * GET /api/v1/members/applications — list membership applications.
  */
 import { json } from "../../../../_lib/http";
 import { listMembershipApplications } from "../../../../_lib/services/membership/applications/management";

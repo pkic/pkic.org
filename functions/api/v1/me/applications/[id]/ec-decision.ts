@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/me/applications/:id/ec-decision. The real EC
  * member portal voting path (as opposed to the staff-admin override at
- * POST /api/v1/system/membership-applications/:id/ec-decisions). Requires a member
+ * POST /api/v1/members/applications/:id/ec-decisions). Requires a member
  * session and `is_ec_member`.
  */
 import { json } from "../../../../../_lib/http";

@@ -27,6 +27,22 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/{userId}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/forms"]).toBeUndefined();
     expect(spec.paths["/api/v1/members/applications"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications"].get).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/form"].get).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/form/definition"].get).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/form/definition"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/documents"].get).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/documents"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/stage"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/communications"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/notes"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/ec-decisions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/approve"].post).toBeDefined();
+    expect(spec.paths["/api/v1/system/membership-applications"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/membership-applications/{id}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/system/membership-applications/{id}/documents"]).toBeUndefined();
     expect(spec.paths["/api/v1/sponsorship/inquiries"].post).toBeDefined();
   });
 

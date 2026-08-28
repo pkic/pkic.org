@@ -10,15 +10,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
 import { groupLabelSchema } from "./groups";
-import {
-  staffApplicationDocumentSchema,
-  staffApplicationDocumentsListResponseSchema,
-  applicationDocumentsListQuerySchema,
-} from "./application-documents";
-
-export { staffApplicationDocumentSchema, staffApplicationDocumentsListResponseSchema } from "./application-documents";
-
-/** Allowlisted sort columns for GET /api/v1/system/membership-applications — see listMembershipApplications. */
+/** Allowlisted sort columns for GET /api/v1/members/applications — see listMembershipApplications. */
 export const MEMBERSHIP_APPLICATIONS_SORT_COLUMNS = [
   "applicant_name",
   "organization_name",
@@ -117,7 +109,6 @@ export type MembershipApplicationEvent = z.infer<typeof membershipApplicationEve
 export type MembershipApplicationCommunication = z.infer<typeof membershipApplicationCommunicationSchema>;
 export type MembershipApplicationConcern = z.infer<typeof membershipApplicationConcernSchema>;
 export type MembershipApplicationEcDecision = z.infer<typeof membershipApplicationEcDecisionSchema>;
-export type StaffApplicationDocument = z.infer<typeof staffApplicationDocumentSchema>;
 
 export const membershipApplicationsListRouteSchema = {
   tags: ["Membership"],
@@ -306,21 +297,5 @@ export const applicationUpdateRouteSchema = {
     "404": { description: "Application not found." },
     "409": { description: "The application changed concurrently or the corrected organization domain is unavailable." },
     "422": { description: "Invalid field values." },
-  },
-};
-
-export const staffApplicationDocumentsListRouteSchema = {
-  tags: ["Membership"],
-  summary: "List all documents uploaded for an application (staff)",
-  request: {
-    params: z.object({ id: databaseIdSchema }),
-    query: applicationDocumentsListQuerySchema,
-  },
-  responses: {
-    "200": {
-      description: "Documents.",
-      content: { "application/json": { schema: staffApplicationDocumentsListResponseSchema } },
-    },
-    "404": { description: "Application not found." },
   },
 };

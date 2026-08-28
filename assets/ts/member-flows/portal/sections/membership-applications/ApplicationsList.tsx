@@ -19,7 +19,7 @@ function ConsultationQueueBanner() {
   useEffect(() => {
     let cancelled = false;
     void getJson(
-      "/api/v1/system/membership-applications?stage=in_consultation&limit=1&offset=0",
+      "/api/v1/members/applications?stage=in_consultation&limit=1&offset=0",
       membershipApplicationsListResponseSchema,
     )
       .then((data) => {
@@ -51,7 +51,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
     <div>
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable
-        endpoint="/api/v1/system/membership-applications"
+        endpoint="/api/v1/members/applications"
         responseSchema={membershipApplicationsListResponseSchema}
         resolve={(data) => data.applications}
         resolvePage={(data) => data.page}

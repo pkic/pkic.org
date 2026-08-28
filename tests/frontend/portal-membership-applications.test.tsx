@@ -98,7 +98,7 @@ describe("portal membership-application management", () => {
     expect(page.textContent).toContain("General Member");
     expect(page.textContent).toContain("(F)");
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.pathname).toBe("/api/v1/system/membership-applications");
+    expect(requests[0]?.pathname).toBe("/api/v1/members/applications");
     expect(requests[0]?.searchParams.get("limit")).toBe("50");
     expect(requests[0]?.searchParams.get("offset")).toBe("0");
     expect(requests[0]?.searchParams.get("sort")).toBe("-created_at");
@@ -143,7 +143,7 @@ describe("portal membership-application management", () => {
     expect(page.textContent).not.toContain("Add internal note");
     expect(page.textContent).not.toContain("staff override");
     expect([...page.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Edit")).toBe(false);
-    expect(requests.every((url) => url.pathname.startsWith("/api/v1/system/membership-applications"))).toBe(true);
+    expect(requests.every((url) => url.pathname.startsWith("/api/v1/members/applications"))).toBe(true);
   });
 
   it("renders write and approval controls only for their respective capabilities", async () => {

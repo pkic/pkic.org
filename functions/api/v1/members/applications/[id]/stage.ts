@@ -1,5 +1,5 @@
 /**
- * PATCH /api/v1/system/membership-applications/:id/stage — stage transition.
+ * PATCH /api/v1/members/applications/:id/stage — stage transition.
  *
  * The use case commits transition, history, audit, and outbox atomically;
  * this route only authorizes, supplies request/config data, and schedules

@@ -1126,11 +1126,11 @@ Status: In progress
       a review through the portal and verifies the old bookmark redirect.
       Membership-application review is the third permission-derived System
       destination. Neutral shared schemas and the canonical membership service
-      now drive `/api/v1/system/membership-applications`; the old admin route,
+      now drive `/api/v1/members/applications`; the former System API route and old admin route,
       component mount, transport names, and hardcoded category-id editor are
       removed. Read, mutation, and approval actions require their distinct live
       `membership:read`, `membership:write`, and `membership:approve`
-      permissions from a user-backed staff session. The joined D1 query owns
+      permissions from a live user-backed session. The joined D1 query owns
       category-label search, allowlisted sorting, counting, and pagination, and
       the portal editor consumes the D1-backed category catalog and labels.
       Notification links and old bookmarks lead to the portal. Mounted backend
