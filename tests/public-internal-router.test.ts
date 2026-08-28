@@ -22,9 +22,9 @@ describe("public and internal router smoke tests", () => {
     await resetDb();
   });
 
-  it("serves the public geo endpoint and rejects cross-origin requests", async () => {
+  it("serves the public geolocation country endpoint and rejects cross-origin requests", async () => {
     const sameOriginResponse = await callApp(
-      new Request("https://app.test/api/v1/geo", {
+      new Request("https://app.test/api/v1/geolocation/country", {
         headers: { "sec-fetch-site": "same-origin" },
       }),
     );
@@ -32,7 +32,7 @@ describe("public and internal router smoke tests", () => {
     expect(sameOriginResponse.status).toBe(200);
 
     const crossOriginResponse = await callApp(
-      new Request("https://app.test/api/v1/geo", {
+      new Request("https://app.test/api/v1/geolocation/country", {
         headers: {
           "sec-fetch-site": "cross-site",
           origin: "https://evil.example.com",
@@ -41,6 +41,25 @@ describe("public and internal router smoke tests", () => {
     );
 
     expect(crossOriginResponse.status).toBe(403);
+  });
+
+  it("serves HEAD for the public geolocation country endpoint without a body", async () => {
+    const response = await callApp(
+      new Request("https://app.test/api/v1/geolocation/country", {
+        method: "HEAD",
+        headers: { "sec-fetch-site": "same-origin" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+    expect(response.headers.get("cache-control")).toContain("private");
+  });
+
+  it("does not retain the superseded geo route", async () => {
+    const response = await callApp(new Request("https://app.test/api/v1/geo"));
+
+    expect(response.status).toBe(404);
   });
 
   it("serves event terms through the mounted router", async () => {

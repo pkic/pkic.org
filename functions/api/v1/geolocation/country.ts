@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/geo
+ * GET /api/v1/geolocation/country
  *
  * Returns the ISO 3166-1 alpha-2 country code as detected by Cloudflare from
  * the visitor's IP address. This uses the `cf.country` property that
@@ -8,7 +8,7 @@
  * information is stored or logged.
  *
  * The response is intentionally minimal so the frontend can offer a soft
- * "did you mean…?" pre-selection without forcing a choice. The field always
+ * "did you mean...?" pre-selection without forcing a choice. The field always
  * remains free-form so users can override it.
  *
  * Possible `country` values:
@@ -17,9 +17,12 @@
  *   - null when the code is unavailable (e.g. local / localhost / private IP).
  */
 
-import { dispatchRequestMethod, json } from "../../_lib/http";
-import { openApiRoute } from "../../_lib/openapi/route";
-import { geoResponseSchema, geoRouteSchema } from "../../../assets/shared/schemas/geolocation";
+import { dispatchRequestMethod, json } from "../../../_lib/http";
+import { openApiRoute } from "../../../_lib/openapi/route";
+import {
+  geolocationCountryResponseSchema,
+  geolocationCountryRouteSchema,
+} from "../../../../assets/shared/schemas/geolocation";
 
 /**
  * Allowed origins. Must exactly match the site origin (scheme + host + optional
@@ -43,18 +46,18 @@ function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.has(origin)) return true;
   try {
     const { hostname, protocol } = new URL(origin);
-    return protocol === "https:" && /^[a-z0-9-]+\.pkic\.pages\.dev$/.test(hostname);
+    return protocol === "https:" && /^[a-z0-9-]+\\.pkic\\.pages\\.dev$/.test(hostname);
   } catch {
     return false;
   }
 }
 
-function geoResponse(c: any): Response {
+function geolocationCountryResponse(c: any): Response {
   const request = c.req.raw as Request;
   const cf = (request as Request & { cf?: { country?: string } }).cf;
   const country: string | null = cf?.country ?? null;
 
-  return json(geoResponseSchema.parse({ country }), 200, {
+  return json(geolocationCountryResponseSchema.parse({ country }), 200, {
     "cache-control": "private, max-age=60, stale-while-revalidate=0",
   });
 }
@@ -74,7 +77,7 @@ export async function onRequest(c: any): Promise<Response> {
     return json({ error: "forbidden" }, 403);
   }
 
-  return dispatchRequestMethod(c, { GET: geoResponse, HEAD: geoResponse });
+  return dispatchRequestMethod(c, { GET: geolocationCountryResponse, HEAD: geolocationCountryResponse });
 }
 
-export const GeoGet = openApiRoute(geoRouteSchema, onRequest);
+export const GeolocationCountryGet = openApiRoute(geolocationCountryRouteSchema, onRequest);

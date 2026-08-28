@@ -29,6 +29,17 @@ describe("cache policy middleware", () => {
     expect(response.headers.get("cache-control")).toContain("public");
   });
 
+  it("preserves the private policy for the geolocation country endpoint", async () => {
+    const response = await apiMiddlewareOnRequest(
+      createMiddlewareContext(
+        new Request("https://app.test/api/v1/geolocation/country"),
+        new Response("{}", { status: 200, headers: { "cache-control": "private, max-age=60" } }),
+      ),
+    );
+
+    expect(response.headers.get("cache-control")).toBe("private, max-age=60");
+  });
+
   it("adds no-store to authenticated and admin API endpoints", async () => {
     const adminResponse = await apiMiddlewareOnRequest(
       createMiddlewareContext(

@@ -21,7 +21,7 @@ import {
   registrationSubmissionResponseSchema,
   type RegistrationSubmissionResponse,
 } from "../../shared/schemas/registration";
-import { geoResponseSchema } from "../../shared/schemas/geolocation";
+import { geolocationCountryResponseSchema } from "../../shared/schemas/geolocation";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
@@ -438,10 +438,10 @@ function installEmailReviewCard(form: HTMLFormElement): void {
   syncEmailReviewCard(form);
 }
 
-async function applyGeoHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
+async function applyGeolocationCountryHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
   try {
-    const geo = await getJson(`${apiBase}/geo`, geoResponseSchema);
-    if (geo.country) controller.setGeoHint(geo.country);
+    const geolocationCountry = await getJson(`${apiBase}/geolocation/country`, geolocationCountryResponseSchema);
+    if (geolocationCountry.country) controller.setGeoHint(geolocationCountry.country);
   } catch {
     // Geo lookup is best-effort — never block or break the form.
   }
@@ -498,7 +498,7 @@ async function main(): Promise<void> {
 
     // Apply Cloudflare geo hint to any country-select widgets.
     // Fire-and-forget: we don't block form load on this.
-    if (customFields) void applyGeoHint(customFields, apiBase);
+    if (customFields) void applyGeolocationCountryHint(customFields, apiBase);
   } catch {
     setStatus(statusEl, "Could not load registration form details.", true);
   }

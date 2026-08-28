@@ -209,16 +209,17 @@ describe("OpenAPI schema generation", () => {
     ).toBeDefined();
   });
 
-  it("documents the geo response through its shared response schema", () => {
+  it("documents the geolocation country response through its shared response schema", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
-    const geoGet = spec.paths["/api/v1/geo"].get;
+    const geolocationCountryGet = spec.paths["/api/v1/geolocation/country"].get;
 
-    expect(geoGet).toBeDefined();
-    expect(geoGet.responses["200"].content["application/json"].schema).toMatchObject({
+    expect(geolocationCountryGet).toBeDefined();
+    expect(geolocationCountryGet.responses["200"].content["application/json"].schema).toMatchObject({
       type: "object",
       required: ["country"],
       properties: { country: { type: ["string", "null"] } },
     });
+    expect(spec.paths["/api/v1/geo"]).toBeUndefined();
   });
 
   it("includes required scopes on decorated admin operations", () => {

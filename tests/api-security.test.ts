@@ -33,8 +33,8 @@ import {
   onRequestGet as eventFormsGet,
   onRequest as eventFormsRequest,
 } from "../functions/api/v1/events/[eventSlug]/forms";
-import { onRequest as geoRequest } from "../functions/api/v1/geo";
-import { geoResponseSchema } from "../assets/shared/schemas/geolocation";
+import { onRequest as geolocationCountryRequest } from "../functions/api/v1/geolocation/country";
+import { geolocationCountryResponseSchema } from "../assets/shared/schemas/geolocation";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -636,35 +636,35 @@ describe("public endpoints — accessible without credentials", () => {
     expect(Array.isArray(body.terms)).toBe(true);
   });
 
-  it("GET /api/v1/geo returns 200 for a same-origin request without Authorization header", async () => {
-    const response = await geoRequest(
+  it("GET /api/v1/geolocation/country returns 200 for a same-origin request without Authorization header", async () => {
+    const response = await geolocationCountryRequest(
       createContext(
         appEnv,
-        new Request("https://app.test/api/v1/geo", {
+        new Request("https://app.test/api/v1/geolocation/country", {
           headers: { "sec-fetch-site": "same-origin" },
         }),
         {},
       ),
     );
     expect(response.status).toBe(200);
-    const body = geoResponseSchema.parse(await response.json());
+    const body = geolocationCountryResponseSchema.parse(await response.json());
     expect(body.country).toBeNull();
   });
 
-  it("GET /api/v1/geo returns and validates Cloudflare's country hint", async () => {
-    const request = new Request("https://app.test/api/v1/geo", {
+  it("GET /api/v1/geolocation/country returns and validates Cloudflare's country hint", async () => {
+    const request = new Request("https://app.test/api/v1/geolocation/country", {
       headers: { "sec-fetch-site": "same-origin" },
     });
     Object.defineProperty(request, "cf", { value: { country: "NL" } });
 
-    const response = await geoRequest(createContext(appEnv, request, {}));
+    const response = await geolocationCountryRequest(createContext(appEnv, request, {}));
 
     expect(response.status).toBe(200);
-    expect(geoResponseSchema.parse(await response.json())).toEqual({ country: "NL" });
+    expect(geolocationCountryResponseSchema.parse(await response.json())).toEqual({ country: "NL" });
   });
 
-  it("GET /api/v1/geo rejects cross-origin requests (CSRF guard) without any credentials needed", async () => {
-    const response = await geoRequest(
+  it("GET /api/v1/geolocation/country rejects cross-origin requests (CSRF guard) without any credentials needed", async () => {
+    const response = await geolocationCountryRequest(
       createContext(
         appEnv,
         new Request("https://evil.example.com/steal", {
