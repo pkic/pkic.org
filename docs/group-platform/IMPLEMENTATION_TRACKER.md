@@ -562,12 +562,18 @@ Status: In progress
           evidence is rechecked inside each protected D1 mutation batch, so
           unrelated management authority cannot satisfy a stale or mismatched
           route preflight. Identifiable ballot page and count reads execute in
-          the same D1 batch as their live exact-context guard. Global
-          compatibility routes reuse the same domain
+          the same D1 batch as their live exact-context guard. Selected-group
+          preflight and every mutation/read guard now delegate to the generic
+          managed-resource evidence builder. Its optional `votes:manage` policy
+          is accepted only when the selected group still owns the vote; a
+          matching `manage` grant plus management authority remains mandatory
+          for a grantee group. Global compatibility routes retain their
+          intentionally broader no-group policy and reuse the same domain
           create/update/visibility/ballot schemas without duplicating their
           contracts. Mounted and direct-service tests cover path-owned creation,
-          wrong-context denial, explicit manage sharing, member denial, and
-          raw-ballot isolation.
+          wrong-context denial, explicit manage sharing, member denial,
+          owner-permission/grantee separation, permission-revocation rollback,
+          and raw-ballot isolation.
     - [x] Apply `manage` to canonical vote proposal routes.
           Evidence: the selected-group proposal collection, detail,
           endorsement, withdrawal, approval, and rejection routes derive their
@@ -1375,7 +1381,7 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the compatibility and
-      guarded shared-resource read cleanup with 2,210 backend tests (one
+      guarded shared-resource read and vote-evaluator cleanup with 2,211 backend tests (one
       skipped), 292 frontend tests, and 80 tooling tests. Type checks, ESLint,
       SQL projection,
       dependency architecture, API-contract, changed-scope duplication,

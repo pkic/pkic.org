@@ -12,7 +12,7 @@ import { activeGroupMembershipAuthorizationEvidence, hasActiveGroupMembership } 
 import {
   canManageAnyGroup,
   groupManagementAuthorizationEvidence,
-  prepareGroupManagementAuthorizationGuard,
+  groupPermissionAuthorizationEvidence,
 } from "../groups/governance";
 import type { LiveGroupResourceContextAccess } from "./access-query";
 import {
@@ -172,6 +172,66 @@ export function prepareGroupResourceContextAuthorizationGuard<K extends Resource
 }
 
 /**
+ * Live selected-group management evidence for an exact resource context.
+ * An optional domain permission applies only when the selected group owns the
+ * resource; it can never authorize management through a grantee group.
+ */
+export function managedGroupResourceAuthorizationEvidence<K extends ResourceGrantKind>(
+  actor: AuthAdmin,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+  options: { ownerPermission?: string } = {},
+): AuthorizationEvidence {
+  const definition = getResourceGrantDefinition(kind);
+  const resource = groupResourceContextAuthorizationEvidence(groupId, kind, resourceId, capability);
+  const management = groupManagementAuthorizationEvidence(actor, [groupId]);
+  const permission = options.ownerPermission
+    ? groupPermissionAuthorizationEvidence(actor, [groupId], options.ownerPermission)
+    : null;
+  return {
+    sql: `SELECT 1
+            WHERE EXISTS (${resource.sql})
+              AND (
+                EXISTS (${management.sql})
+                ${
+                  permission
+                    ? `OR (
+                         EXISTS (
+                           SELECT 1 FROM ${definition.resourceTable} owned_resource
+                            WHERE owned_resource.id = ?
+                              AND owned_resource.${definition.ownerGroupColumn} = ?
+                         )
+                         AND EXISTS (${permission.sql})
+                       )`
+                    : ""
+                }
+              )`,
+    bindings: [
+      ...resource.bindings,
+      ...management.bindings,
+      ...(permission ? [resourceId, groupId, ...permission.bindings] : []),
+    ],
+  };
+}
+
+export function prepareManagedGroupResourceAuthorizationGuard<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+  options: { ownerPermission?: string } = {},
+): StatementLike {
+  return prepareAuthorizationGuard(
+    db,
+    managedGroupResourceAuthorizationEvidence(actor, groupId, kind, resourceId, capability, options),
+  );
+}
+
+/**
  * Rechecks selected-group management and the exact resource relationship in
  * every protected read batch. This keeps delayed enrichment and aggregate
  * reads behind the same live manager-only capability as their preflight.
@@ -186,9 +246,8 @@ export function guardManagedGroupResourceDatabase<K extends ResourceGrantKind>(
 ): DatabaseLike {
   return guardDatabaseBatches(db, async (statements) => {
     try {
-      const [, , ...results] = await db.batch([
-        prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
-        prepareGroupResourceContextAuthorizationGuard(db, groupId, kind, resourceId, capability),
+      const [, ...results] = await db.batch([
+        prepareManagedGroupResourceAuthorizationGuard(db, actor, groupId, kind, resourceId, capability),
         ...statements,
       ]);
       return results;

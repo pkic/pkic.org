@@ -49,6 +49,7 @@ import {
   updateVoteVisibility,
   updateVoteSettings,
 } from "../functions/_lib/services/votes";
+import { hasVoteManagementAuthorization } from "../functions/_lib/services/votes/vote-access";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch, gateNextRun } from "./helpers/d1-batch-gate";
 import { queryAll } from "./helpers/context";
@@ -221,6 +222,47 @@ describe("canonical group voting", () => {
         })
       ).status,
     ).toBe(403);
+  });
+
+  it("keeps owner-scoped vote permission distinct from grantee-group management", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Owner permission boundary" });
+    const managerId = await insertUser(env.DB, "owner-vote-permission@example.test");
+    const actor = {
+      identityType: "user" as const,
+      id: managerId,
+      email: "owner-vote-permission@example.test",
+      role: "user",
+    };
+    const permissionId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants
+             (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+           VALUES (?, ?, 'votes:manage', 'group', ?, ?, datetime('now'))`,
+      ).bind(permissionId, managerId, TEST_GROUPS.pqc, admin.id),
+      env.DB.prepare(
+        `INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at)
+           VALUES (?, ?, 'manage', datetime('now'))`,
+      ).bind(vote.id, TEST_GROUPS.cm),
+    ]);
+
+    expect(await hasVoteManagementAuthorization(env.DB, actor, vote.id, TEST_GROUPS.pqc)).toBe(true);
+    expect(await hasVoteManagementAuthorization(env.DB, actor, vote.id, TEST_GROUPS.cm)).toBe(false);
+    expect(await hasVoteManagementAuthorization(env.DB, actor, vote.id)).toBe(true);
+
+    const gate = gateNextBatch(env.DB);
+    const pending = updateVoteSettings(gate.db, actor, vote.id, { title: "Must not commit" }, TEST_GROUPS.pqc);
+    await gate.reached;
+    await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(permissionId)
+      .run();
+    gate.release();
+    await expect(pending).rejects.toSatisfy(
+      (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
+    );
+    expect(await queryAll(env.DB, "SELECT title FROM votes WHERE id = ?", vote.id)).toEqual([
+      { title: "Owner permission boundary" },
+    ]);
   });
 
   it("keeps identifiable ballots behind exact selected-group management", async () => {
