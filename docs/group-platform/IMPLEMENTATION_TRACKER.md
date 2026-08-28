@@ -1246,8 +1246,19 @@ Status: In progress
 - [ ] Remove the admin shell and its separate navigation.
 - [ ] Remove duplicate admin and member session assumptions.
 - [ ] Remove legacy admin API routes after canonical consumers migrate.
-- [ ] Browser-test member, chair, inherited leader, local-only leader, staff,
+- [x] Browser-test member, chair, inherited leader, local-only leader, staff,
       guest, and unauthorized navigation.
+      Evidence: one real Worker/D1 journey provisions an approved member, a
+      parent and two child groups, direct and inherited leadership, a
+      local-only child with explicit local leadership, and a separate active
+      staff identity whose membership has ended. Real mailbox-capability
+      sessions prove direct and inherited management, local-only isolation,
+      local management by a non-member staff identity, and anonymous API and
+      portal denial. The external-guest journey separately proves that a
+      verified occurrence-scoped guest session can enter its meeting but
+      cannot authenticate to the portal. The six route-mocked persona tests
+      remain fast shell/navigation contracts and are not counted as backend
+      inheritance evidence.
 
 ## 11. Quality, security, and performance
 
@@ -1398,13 +1409,14 @@ Status: In progress
       before delivery and is terminal rather than retried. The final
       architecture state must pass the same complete gate again before handoff.
 - [x] Run focused Playwright flows while iterating.
-      Current evidence: the real Worker/D1 portal event journey and six
-      selected-group persona journeys pass together in one isolated seven-test
-      Playwright run. They cover actual email-capability sign-in, standalone
-      event create/edit persistence, member, direct chair, inherited manager,
-      local-only child participant, staff-only manager, and unauthorized
-      presentation contracts. The earlier guest meeting-entry browser journey
-      remains green as separate focused evidence. A separate real Worker/D1
+      Current evidence: the route-mocked six-persona suite remains a fast portal
+      shell contract. Backend governance is now covered separately by a passing
+      real Worker/D1 journey with actual email-capability sessions, disposable
+      group hierarchy and membership state, direct and inherited leadership,
+      local-only isolation, scoped non-member staff management, and anonymous
+      denial. The real guest meeting-entry journey also passes after asserting
+      that its verified occurrence session does not establish portal identity.
+      A separate real Worker/D1
       journey signs in as an event program manager, reads proposals through the
       selected-group API, edits an accepted abstract, previews and records a
       final decision, and reads the resulting audit history without an admin API
@@ -1436,24 +1448,26 @@ Status: In progress
       analytics endpoints and the legacy bookmark redirect.
 - [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: every one of the current 44 real-browser tests passes
-      against freshly seeded local Worker, D1, R2, and intercepted SendGrid
-      environments. Because Wrangler 4.123.0's local proxy terminated during
-      longer combined runs, the complete inventory was reconciled across
-      explicit fresh-server batches of 9, 12, 2, 4, 10, 6, and 1 unique tests.
-      The first rendering batch exposed three stale waits for the retired
-      `#admin-root`; one shared helper now verifies the canonical portal
-      analytics landing, and the rerun passes 9/9. Two larger-batch invitation
-      and checkout interruptions reproduced as `Network connection lost`, then
-      passed in focused fresh-server reruns. No product assertion remains
-      failing, and the batch inventory covers all 44 tests exactly once.
+      Current evidence: all 44 previously existing browser tests passed in one
+      uninterrupted 11.1-minute run against freshly seeded local Worker, D1,
+      R2, and intercepted SendGrid environments. The new forty-fifth real
+      persona test first exposed two invalid fixture assumptions: local-only
+      governance requires explicit local leadership, and the top-level
+      Management link remains visible when the actor manages another group.
+      The corrected fixture follows the real governance transition and asserts
+      selected-group navigation; its focused rerun passes. The guest test's new
+      portal-isolation assertion also passes in a focused rerun. The current
+      45-test inventory is therefore reconciled across the uninterrupted
+      44-test run and the two affected focused reruns; no product assertion
+      remains failing.
 - [ ] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Current evidence: the identity phase has real-browser desktop rendering,
       390x844 rendering, accessible drawer and keyboard behavior, error-free
       staff/member/dual-capacity login and logout, cross-identity rejection,
       and live-capacity-loss coverage. Empty, loading, pagination, and the
-      remaining role/persona matrix are still pending.
+      remaining rendering-state matrix are still pending; the role/persona
+      matrix is covered by the real Worker/D1 evidence above.
 - [ ] Run a final security diff review and resolve validated findings.
       Evidence so far: Codex Security scan
       `7f6a9db1-1349-49f6-8ac0-cd9437915ee8` reviewed the complete delegated

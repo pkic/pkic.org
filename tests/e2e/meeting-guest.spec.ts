@@ -123,6 +123,12 @@ test("invited external guest verifies the separate mailbox code before meeting e
     await guestPage.getByRole("button", { name: "Agree and join meeting" }).click();
     await expect(guestPage).toHaveURL(`https://meet.example.test/${unique}`);
     await expect(guestPage.getByRole("heading", { name: "Provider reached" })).toBeVisible();
+
+    // A verified occurrence-scoped guest capability is not a portal identity.
+    const portalSession = await guestPage.request.get("/api/v1/auth/portal/session");
+    expect(portalSession.status()).toBe(401);
+    await guestPage.goto(`/portal/#/groups/${GROUP_ID}/overview`);
+    await expect(guestPage.locator("#portal-inp-email")).toBeVisible();
   } finally {
     await guestContext.close();
   }
