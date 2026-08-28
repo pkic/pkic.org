@@ -1517,7 +1517,33 @@ Status: In progress
       positive owner/member/shared/manager access remains green, and an
       independent post-fix bypass review found no remaining path. The complete
       gate above passed on the fixed commit.
-- [ ] Audit every requirement in ARCHITECTURE.md against current evidence.
+- [x] Audit every requirement in ARCHITECTURE.md against current evidence.
+      Current evidence: the 2026-08-28 requirement-by-requirement audit confirms
+      that the installation/group boundary, configurable group types,
+      hierarchy and governance inheritance, explicit capacity-aware
+      participation, organization representation, conditional enrollment,
+      normalized resource ownership, capability implications, meeting and
+      attendance model, live-editable forms, Member/person voting, canonical
+      group route shapes, D1-side collections, atomic commands, durable outbox,
+      additive migration strategy, and no-production-data rule agree with the
+      accepted architecture and their focused evidence above. The final whole-
+      PR security scan and remediation close the only validated finding in the
+      committed range. The audit also confirms that implementation is not yet
+      complete. The shared resource evaluator covers the canonical group form,
+      event, vote, and mailing-list paths, but legacy global/admin domain
+      endpoints remain. The admin shell still exposes Events, Forms, Email, Due
+      Work, Users, Organizations, and Sponsorships, and the admin router still
+      mounts those domains plus donations, votes, and the duplicate platform-
+      statistics read model. Ownerless/global event actions, email delivery/
+      outbox operations, user and organization management, sponsorship
+      operations, and Due Work therefore still require deliberate System
+      cutovers or explicit retirement. Temporary redirects, separate admin/
+      member session assumptions, compatibility API removal, and final shell
+      removal remain the concrete differences from the accepted Portal and API
+      completion requirements. Migration 0035 remains consolidated and locally
+      verified, but its preview and production ledger state must be reverified
+      at handoff. The open §8 and §10 items above are the authoritative
+      remaining architecture work; completing this audit does not close them.
 
 ## 12. Pull-request handoff
 
