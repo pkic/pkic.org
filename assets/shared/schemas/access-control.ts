@@ -254,8 +254,7 @@ export const roleAssignmentsListResponseSchema = paginatedResponseSchema("assign
 export const roleAssignmentsListRouteSchema = {
   tags: ["Roles"],
   summary: "List every active holder of a role",
-  description:
-    "Reverse lookup of user roles by role — who currently holds this role and for which resource target.",
+  description: "Reverse lookup of user roles by role — who currently holds this role and for which resource target.",
   "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
   request: {
     params: roleIdParamsSchema,

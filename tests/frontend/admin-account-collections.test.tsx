@@ -141,9 +141,7 @@ describe("portal access-control collection pagination", () => {
       (container.querySelector(".adm-pager .pagination .page-item:last-child button") as HTMLButtonElement).click(),
     );
     await settle();
-    const roleRequests = requests.filter(
-      (url) => url.pathname === `/api/v1/users/${USER_ID}/roles`,
-    );
+    const roleRequests = requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`);
     expect(roleRequests.at(-1)?.searchParams.get("offset")).toBe("25");
 
     const search = container.querySelector('input[placeholder="Search role assignments…"]') as HTMLInputElement;
@@ -155,9 +153,7 @@ describe("portal access-control collection pagination", () => {
     expect(roleRequests.length).toBeLessThan(
       requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`).length,
     );
-    const searched = requests
-      .filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`)
-      .at(-1);
+    const searched = requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`).at(-1);
     expect(searched?.searchParams.get("q")).toBe("membership");
     expect(searched?.searchParams.get("offset")).toBe("0");
   });

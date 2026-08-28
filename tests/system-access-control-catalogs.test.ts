@@ -67,9 +67,7 @@ describe("Permission subjects and targets", () => {
 
     expect((await call(adminToken, "/api/v1/permissions/subjects?limit=9&q=ada")).status).toBe(400);
     expect((await call(adminToken, "/api/v1/permissions/subjects?sort=role&q=ada")).status).toBe(400);
-    expect(
-      (await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/permissions/subjects?q=ada")).status,
-    ).toBe(403);
+    expect((await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/permissions/subjects?q=ada")).status).toBe(403);
     expect((await callApi(env, "/api/v1/permissions/subjects?q=ada")).status).toBe(401);
   });
 
@@ -130,18 +128,13 @@ describe("Permission subjects and targets", () => {
     });
 
     const groups = permissionTargetsListResponseSchema.parse(
-      await (
-        await call(adminToken, "/api/v1/permissions/targets?contextType=group&q=Catalog&sort=name")
-      ).json(),
+      await (await call(adminToken, "/api/v1/permissions/targets?contextType=group&q=Catalog&sort=name")).json(),
     );
     expect(groups.targets).toEqual([{ id: group.id, type: "group", name: "Catalog Group" }]);
 
     const organizations = permissionTargetsListResponseSchema.parse(
       await (
-        await call(
-          adminToken,
-          "/api/v1/permissions/targets?contextType=organization&q=Context%20Organization&limit=1",
-        )
+        await call(adminToken, "/api/v1/permissions/targets?contextType=organization&q=Context%20Organization&limit=1")
       ).json(),
     );
     expect(organizations.targets).toEqual([{ id: memberId, type: "organization", name: "Context Organization" }]);
@@ -152,11 +145,7 @@ describe("Permission subjects and targets", () => {
       hasMore: false,
     });
 
-    expect((await call(adminToken, "/api/v1/permissions/targets?contextType=event&limit=51")).status).toBe(
-      400,
-    );
-    expect((await call(adminToken, "/api/v1/permissions/targets?contextType=event&sort=id")).status).toBe(
-      400,
-    );
+    expect((await call(adminToken, "/api/v1/permissions/targets?contextType=event&limit=51")).status).toBe(400);
+    expect((await call(adminToken, "/api/v1/permissions/targets?contextType=event&sort=id")).status).toBe(400);
   });
 });

@@ -12,7 +12,12 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   const removedAdminRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname === PERMISSIONS_API || pathname.startsWith(`${PERMISSIONS_API}/`) || pathname === ROLES_API || pathname.startsWith(`${ROLES_API}/`)) {
+    if (
+      pathname === PERMISSIONS_API ||
+      pathname.startsWith(`${PERMISSIONS_API}/`) ||
+      pathname === ROLES_API ||
+      pathname.startsWith(`${ROLES_API}/`)
+    ) {
       permissionRequests.push(`${request.method()} ${pathname}`);
     }
     if (pathname === "/api/v1/system" || pathname.startsWith("/api/v1/system/")) {
@@ -36,8 +41,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   await createCard.getByLabel("Description").fill("Temporary browser-test role");
 
   const createResponse = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === ROLES_API && response.request().method() === "POST",
+    (response) => new URL(response.url()).pathname === ROLES_API && response.request().method() === "POST",
   );
   await createCard.getByRole("button", { name: "Create role" }).click();
   expect((await createResponse).status()).toBe(201);
@@ -47,8 +51,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   page.once("dialog", (dialog) => void dialog.accept());
   const deleteResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) &&
-      response.request().method() === "DELETE",
+      new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) && response.request().method() === "DELETE",
   );
   await roleRow.getByRole("button", { name: "Delete" }).click();
   expect((await deleteResponse).status()).toBe(200);
@@ -58,9 +61,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control$/);
   await expect(page.getByRole("link", { name: "Access Control" })).toBeVisible();
 
-  expect(permissionRequests).toEqual(
-    expect.arrayContaining([`GET ${PERMISSIONS_API}/grants`, `GET ${ROLES_API}`]),
-  );
+  expect(permissionRequests).toEqual(expect.arrayContaining([`GET ${PERMISSIONS_API}/grants`, `GET ${ROLES_API}`]));
   expect(retiredSystemRequests).toEqual([]);
   expect(removedAdminRequests).toEqual([]);
 });

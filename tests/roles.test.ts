@@ -444,10 +444,7 @@ describe("roles (Built-in and custom roles)", () => {
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'event_volunteer'")
     )[0];
 
-    const emptyResponse = await call(
-      adminToken,
-      `/api/v1/roles/${assignmentRole.id}/assignments`,
-    );
+    const emptyResponse = await call(adminToken, `/api/v1/roles/${assignmentRole.id}/assignments`);
     expect(emptyResponse.status).toBe(200);
     expect(await emptyResponse.json()).toMatchObject({
       assignments: [],
@@ -563,18 +560,12 @@ describe("roles (Built-in and custom roles)", () => {
       page: { total: 1, hasMore: false },
     });
 
-    const firstPage = await call(
-      adminToken,
-      `/api/v1/users/${targetUserId}/roles?sort=role_name&limit=1&offset=0`,
-    );
+    const firstPage = await call(adminToken, `/api/v1/users/${targetUserId}/roles?sort=role_name&limit=1&offset=0`);
     expect(await firstPage.json()).toMatchObject({
       roles: [{ roleName: roles[0].name }],
       page: { limit: 1, offset: 0, total: 2, hasMore: true },
     });
-    const finalPage = await call(
-      adminToken,
-      `/api/v1/users/${targetUserId}/roles?sort=role_name&limit=1&offset=1`,
-    );
+    const finalPage = await call(adminToken, `/api/v1/users/${targetUserId}/roles?sort=role_name&limit=1&offset=1`);
     expect(await finalPage.json()).toMatchObject({
       roles: [{ roleName: roles[1].name }],
       page: { limit: 1, offset: 1, total: 2, hasMore: false },
@@ -843,11 +834,7 @@ describe("roles (Built-in and custom roles)", () => {
     ]);
     const targetToken = await createAdminSession(env.DB, staffUserId, `legacy-admin-${crypto.randomUUID()}`);
 
-    const response = await call(
-      adminToken,
-      `/api/v1/users/${staffUserId}/roles/${assignmentId}`,
-      { method: "DELETE" },
-    );
+    const response = await call(adminToken, `/api/v1/users/${staffUserId}/roles/${assignmentId}`, { method: "DELETE" });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true });
 
