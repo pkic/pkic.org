@@ -58,12 +58,13 @@ Status: In progress
       duplicate admin registration-detail schema module is removed. Internal
       command services now use the generalized audit-change guard classifier
       directly; its one-row compatibility alias, the redundant form-answer
-      schema name, and an unused admin vote-candidate alias are removed. A
-      current import audit still finds test-only proposal, proposal-schema,
-      registration-list, and registration-statistics adapters plus narrow
-      exports required by live admin consumers. Remove the test-only adapters
-      after migrating those tests, and remove each live compatibility export
-      with its consumer rather than creating a second contract.
+      schema name, and an unused admin vote-candidate alias are removed. Tests
+      now import the canonical proposal and registration read models directly;
+      their proposal service/schema, registration-list, and
+      registration-statistics compatibility modules are deleted. A current
+      import audit still finds narrow exports required by live admin consumers.
+      Remove each remaining compatibility export with its consumer rather than
+      creating a second contract.
 - [x] Prove empty-database migration application.
       Evidence: all 37 migrations, including 234 commands in 0035, applied to
       a fresh independent local D1 state under ScanDisk after the authenticated

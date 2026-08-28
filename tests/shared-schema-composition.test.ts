@@ -38,7 +38,7 @@ import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-
 import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
 import { adminMemberMutationResponseSchema } from "../assets/shared/schemas/admin-members";
 import { emailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/email-templates";
-import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
+import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
 import { eventInviteValiditySchema } from "../assets/shared/schemas/event-invite-validity";
@@ -65,14 +65,14 @@ describe("canonical shared schema composition", () => {
   });
 
   it("uses one event identity contract across event workflow responses", () => {
-    expect(adminEventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
+    expect(eventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(eventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(adminEventStatsResponseSchema.shape.event).toBe(eventSummarySchema);
 
     const valid = { id: ID, slug: "pqc-2026", name: "PQC Conference 2026" };
     expect(eventSummarySchema.parse(valid)).toEqual(valid);
     for (const schema of [
-      adminEventProposalsResponseSchema.shape.event,
+      eventProposalsResponseSchema.shape.event,
       eventRegistrationsListResponseSchema.shape.event,
       adminEventStatsResponseSchema.shape.event,
     ]) {

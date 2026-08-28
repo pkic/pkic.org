@@ -15,7 +15,7 @@ import {
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { adminEventCreateResponseSchema } from "../assets/shared/schemas/admin-events";
-import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
+import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
 import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/services/events/team";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -264,7 +264,7 @@ describe("admin event management endpoints", () => {
 
   it("keeps registration count predicates while excluding outbox and RSVP projections", async () => {
     const { baseEventId } = await setupAdmin();
-    const query = buildAdminEventRegistrationsPageQuery(baseEventId, {
+    const query = buildEventRegistrationsPageQuery(baseEventId, {
       limit: 10,
       offset: 0,
       status: "registered",
