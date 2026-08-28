@@ -25,7 +25,15 @@ function emptyCreateDraft(): CreateDraft {
   };
 }
 
-export function CreateSponsorshipForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+export function CreateSponsorshipForm({
+  onCreated,
+  onCancel,
+  showCancel = true,
+}: {
+  onCreated: () => void;
+  onCancel: () => void;
+  showCancel?: boolean;
+}) {
   const [draft, setDraft] = useState<CreateDraft>(emptyCreateDraft());
   const [saving, setSaving] = useState(false);
 
@@ -138,9 +146,11 @@ export function CreateSponsorshipForm({ onCreated, onCancel }: { onCreated: () =
           <button type="submit" class="btn btn-success btn-sm" disabled={saving}>
             Create
           </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" onClick={onCancel}>
-            Cancel
-          </button>
+          {showCancel && (
+            <button type="button" class="btn btn-outline-secondary btn-sm" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     </form>

@@ -45,8 +45,23 @@ export {
   mergeCompanySponsorshipsPage,
 } from "./companySponsorshipsPage";
 
-function SponsorshipDetailPage({ detailId, canWrite }: { detailId: string; canWrite: boolean }) {
+function SponsorshipDetailPage({
+  detailId,
+  canRead,
+  canWrite,
+}: {
+  detailId: string;
+  canRead: boolean;
+  canWrite: boolean;
+}) {
   const [, navigate] = useHashLocation();
+  if (!canRead) {
+    return (
+      <div class="alert alert-warning" role="alert">
+        Viewing sponsorship details requires the <code>sponsorships:read</code> permission.
+      </div>
+    );
+  }
   return (
     <div>
       <button type="button" class="btn btn-link btn-sm ps-0 mb-2" onClick={() => navigate("/system/sponsorships")}>
@@ -57,8 +72,60 @@ function SponsorshipDetailPage({ detailId, canWrite }: { detailId: string; canWr
   );
 }
 
-export function Sponsorships({ canWrite, detailId }: { canWrite: boolean; detailId?: string }) {
-  if (detailId) return <SponsorshipDetailPage detailId={detailId} canWrite={canWrite} />;
+function SponsorshipCreateOnly() {
+  const [created, setCreated] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+
+  if (created) {
+    return (
+      <section aria-labelledby="sponsorship-created-heading">
+        <h5 id="sponsorship-created-heading" class="mb-2">
+          Sponsorship created
+        </h5>
+        <p class="text-muted small">You do not have permission to view the sponsorship pipeline.</p>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          onClick={() => {
+            setCreated(false);
+            setFormKey((value) => value + 1);
+          }}
+        >
+          Create another sponsorship
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section aria-labelledby="sponsorship-create-heading">
+      <h5 id="sponsorship-create-heading" class="mb-2">
+        Create sponsorship
+      </h5>
+      <p class="text-muted small">You can create a sponsorship without access to the sponsorship pipeline.</p>
+      <CreateSponsorshipForm
+        key={formKey}
+        onCreated={() => setCreated(true)}
+        onCancel={() => undefined}
+        showCancel={false}
+      />
+    </section>
+  );
+}
+
+export function Sponsorships({
+  canRead = true,
+  canWrite,
+  detailId,
+}: {
+  canRead?: boolean;
+  canWrite: boolean;
+  detailId?: string;
+}) {
+  if (!canRead) {
+    return canWrite ? <SponsorshipCreateOnly /> : null;
+  }
+  if (detailId) return <SponsorshipDetailPage detailId={detailId} canRead={canRead} canWrite={canWrite} />;
 
   const [type, setType] = useState<"" | (typeof SPONSOR_TYPES)[number]>("");
   const [stage, setStage] = useState<"" | SponsorshipPipelineStage>("");

@@ -8,6 +8,7 @@ import {
   sponsorshipTierConfigResponseSchema,
 } from "../../assets/shared/schemas/sponsorship-management";
 import { SponsorshipTierConfig } from "../../assets/ts/member-flows/portal/sections/system-sponsorships/SponsorshipTierConfig";
+import { Sponsorships } from "../../assets/ts/member-flows/portal/sections/system-sponsorships";
 
 const mounted: HTMLElement[] = [];
 
@@ -45,6 +46,18 @@ afterEach(() => {
 });
 
 describe("portal system sponsorships", () => {
+  it("shows only creation controls to a writer without pipeline read access", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = mount(<Sponsorships canRead={false} canWrite />);
+    await settle();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Create sponsorship");
+    expect(container.textContent).not.toContain("Sponsorship tier pricing");
+  });
+
   it("loads tier pricing for readers and hides mutation controls without write permission", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(

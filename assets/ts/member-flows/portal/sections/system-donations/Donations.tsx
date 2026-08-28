@@ -160,6 +160,63 @@ function PromotersTab() {
   );
 }
 
+function DonationSyncActions({
+  pending,
+  syncable,
+  onSynced,
+}: {
+  pending?: number;
+  syncable?: number;
+  onSynced?: () => Promise<void>;
+}) {
+  const [syncing, setSyncing] = useState<"pending" | "all" | null>(null);
+
+  async function sync(kind: "pending" | "all"): Promise<void> {
+    setSyncing(kind);
+    try {
+      const result = await postJson(
+        "/api/v1/donations/sync",
+        kind === "pending" ? { pendingOnly: true } : {},
+        donationSyncResponseSchema,
+      );
+      const parts = [
+        result.completed ? `${result.completed} completed` : "",
+        result.failed ? `${result.failed} failed` : "",
+        result.expired ? `${result.expired} expired` : "",
+        result.errors ? `${result.errors} errors` : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      toast(
+        `Synced ${result.synced}${parts ? `: ${parts}` : "."}`,
+        result.errors > 0 || result.failed > 0 ? "error" : "success",
+      );
+      await onSynced?.();
+    } catch (error) {
+      toast((error as Error).message, "error");
+    } finally {
+      setSyncing(null);
+    }
+  }
+
+  return (
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {pending !== undefined && pending > 0 && (
+        <button class="btn btn-sm btn-outline-success" disabled={syncing !== null} onClick={() => void sync("pending")}>
+          {syncing === "pending" ? "Syncing…" : `↺ Sync pending (${pending})`}
+        </button>
+      )}
+      <button
+        class="btn btn-sm btn-success"
+        disabled={syncing !== null || (syncable !== undefined && syncable === 0)}
+        onClick={() => void sync("all")}
+      >
+        {syncing === "all" ? "Syncing…" : syncable === undefined ? "↺ Sync donations" : `↺ Sync all (${syncable})`}
+      </button>
+    </div>
+  );
+}
+
 export function Donations({
   subTab,
   canRead = true,
@@ -170,6 +227,17 @@ export function Donations({
   canSync?: boolean;
 }) {
   if (!canRead) {
+    if (canSync) {
+      return (
+        <section aria-labelledby="donation-sync-heading">
+          <h5 id="donation-sync-heading" class="mb-2">
+            Donation synchronization
+          </h5>
+          <p class="text-muted small">You can reconcile donations without access to donor records.</p>
+          <DonationSyncActions />
+        </section>
+      );
+    }
     return (
       <div class="alert alert-warning" role="alert">
         Donation records require the <code>donations:read</code> permission.
@@ -183,37 +251,8 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
   const tab = subTab === "promoters" ? "promoters" : "list";
   const [statusFilter, setStatusFilter] = useState("");
   const [summary, setSummary] = useState<DonationManagementListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
-  const [syncingAll, setSyncingAll] = useState(false);
   const [, navigate] = useHashLocation();
   const actionsRef = useRef<ApiTableActions | null>(null);
-
-  async function handleSync(pendingOnly: boolean) {
-    setSyncingAll(true);
-    try {
-      const res = await postJson(
-        "/api/v1/donations/sync",
-        pendingOnly ? { pendingOnly: true } : {},
-        donationSyncResponseSchema,
-      );
-      const parts = [
-        res.completed ? `${res.completed} completed` : "",
-        res.failed ? `${res.failed} failed` : "",
-        res.expired ? `${res.expired} expired` : "",
-        res.errors ? `${res.errors} errors` : "",
-      ]
-        .filter(Boolean)
-        .join(", ");
-      toast(
-        `Synced ${res.synced}${parts ? `: ${parts}` : "."}`,
-        res.errors > 0 || res.failed > 0 ? "error" : "success",
-      );
-      await actionsRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setSyncingAll(false);
-    }
-  }
 
   const total = Object.values(summary.byStatus).reduce((sum, value) => sum + value, 0);
   const pending = (summary.byStatus.pending ?? 0) + (summary.byStatus.awaiting_payment ?? 0);
@@ -310,23 +349,12 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
                     );
                   })}
                 </div>
-                {canSync && pending > 0 && (
-                  <button
-                    class="btn btn-sm btn-outline-success"
-                    disabled={syncingAll}
-                    onClick={() => void handleSync(true)}
-                  >
-                    {syncingAll ? "Syncing…" : `↺ Sync pending (${pending})`}
-                  </button>
-                )}
                 {canSync && (
-                  <button
-                    class="btn btn-sm btn-success"
-                    disabled={syncingAll || summary.syncable === 0}
-                    onClick={() => void handleSync(false)}
-                  >
-                    {syncingAll ? "Syncing…" : `↺ Sync all (${summary.syncable})`}
-                  </button>
+                  <DonationSyncActions
+                    pending={pending}
+                    syncable={summary.syncable}
+                    onSynced={() => actionsRef.current?.reload() ?? Promise.resolve()}
+                  />
                 )}
                 {failed > 0 && (
                   <span class="badge text-bg-danger" title="Payment failed">

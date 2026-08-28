@@ -77,11 +77,61 @@ describe("portal system donations", () => {
     const fetchMock = vi.fn(async () => response());
     vi.stubGlobal("fetch", fetchMock);
 
-    const container = mount(<Donations canRead={false} />);
+    const container = mount(<Donations canRead={false} canSync={false} />);
     await settle();
 
     expect(container.textContent).toContain("donations:read");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("lets a synchronizer reconcile donations without fetching donor records", async () => {
+    const requests: Array<{ url: URL; method: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push({
+          url,
+          method: init?.method ?? "GET",
+          body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        });
+        return new Response(
+          JSON.stringify({
+            synced: 0,
+            completed: 0,
+            awaitingPayment: 0,
+            expired: 0,
+            failed: 0,
+            errors: 0,
+            results: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    const container = mount(<Donations canRead={false} canSync />);
+    await settle();
+    expect(requests).toEqual([]);
+    expect(container.textContent).toContain("Sync donations");
+
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent?.includes("Sync donations"))!
+        .click();
+    });
+    await settle();
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        url: expect.objectContaining({ pathname: "/api/v1/donations/sync" }),
+        method: "POST",
+        body: {},
+      }),
+    ]);
   });
 
   it("uses only canonical system list requests and hides sync controls without donations:sync", async () => {

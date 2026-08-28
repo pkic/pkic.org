@@ -61,7 +61,11 @@ export function SystemManagement({
           canSync={portalHasGlobalPermission(session, "donations:sync")}
         />
       ) : selected.path === "/system/sponsorships" ? (
-        <Sponsorships detailId={resourceId} canWrite={portalHasGlobalPermission(session, "sponsorships:write")} />
+        <Sponsorships
+          detailId={resourceId}
+          canRead={portalHasGlobalPermission(session, "sponsorships:read")}
+          canWrite={portalHasGlobalPermission(session, "sponsorships:write")}
+        />
       ) : selected.path === "/system/membership-applications" ? (
         <MembershipApplications
           initialApplicationId={resourceId}
@@ -94,7 +98,10 @@ export function SystemManagement({
           <SystemAuditLog />
         </section>
       ) : selected.path === "/system/email-templates" ? (
-        <EmailTemplates canWrite={portalHasGlobalPermission(session, "email-templates:write")} />
+        <EmailTemplates
+          canRead={portalHasGlobalPermission(session, "email-templates:read")}
+          canWrite={portalHasGlobalPermission(session, "email-templates:write")}
+        />
       ) : selected.path === "/system/operations" ? (
         <Operations
           initialTab={resourceId}

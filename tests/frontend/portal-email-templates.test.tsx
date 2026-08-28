@@ -29,6 +29,70 @@ afterEach(() => {
 });
 
 describe("portal email templates", () => {
+  it("lets a writer create a template without loading catalog or version history", async () => {
+    const templateKey = "write_only_template";
+    const requests: Array<{ url: URL; method: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push({ url, method: init?.method ?? "GET" });
+        if (url.pathname === `/api/v1/system/email-templates/${templateKey}/versions`) {
+          return json({
+            success: true,
+            version: {
+              id: "version-write-only",
+              template_key: templateKey,
+              version: 1,
+              subject_template: null,
+              body: "Write-only template body",
+              content_type: "markdown",
+              r2_object_key: null,
+              checksum_sha256: "c".repeat(64),
+              status: "draft",
+              created_by_user_id: "user-1",
+              created_at: "2026-08-28T12:00:00.000Z",
+              message_type: "transactional",
+            },
+          });
+        }
+        throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<EmailTemplates canRead={false} canWrite />, container!));
+    await settle();
+    expect(requests).toEqual([]);
+
+    const keyInput = container.querySelector<HTMLInputElement>("#email-template-key")!;
+    const bodyInput = container.querySelector<HTMLTextAreaElement>("#email-template-body")!;
+    keyInput.value = templateKey;
+    bodyInput.value = "Write-only template body";
+    await act(() => {
+      keyInput.dispatchEvent(new Event("input", { bubbles: true }));
+      bodyInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      Array.from(container!.querySelectorAll("button"))
+        .find((button) => button.textContent === "Create Template")!
+        .click();
+    });
+    await settle();
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        url: expect.objectContaining({ pathname: `/api/v1/system/email-templates/${templateKey}/versions` }),
+        method: "POST",
+      }),
+    ]);
+    expect(container.textContent).toContain("Template created");
+  });
+
   it("opens the canonical editor after creating a template from the unmounted list", async () => {
     const templateKey = "new_system_template";
     const version = {

@@ -18,7 +18,17 @@ import { EMAIL_TEMPLATES_API, getEmailTemplateEditorVersion } from "../../../../
 // Create new template
 // ────────────────────────────────────────────────────────
 
-function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => void; onCancel: () => void }) {
+function CreateTemplate({
+  canRead,
+  onCreated,
+  onCancel,
+  showCancel = true,
+}: {
+  canRead: boolean;
+  onCreated: (key: string) => void;
+  onCancel: () => void;
+  showCancel?: boolean;
+}) {
   const [key, setKey] = useState("");
   const [subject, setSubject] = useState("");
   const [contentType, setContentType] = useState<EmailContentType>("markdown");
@@ -28,6 +38,10 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
   const [keyCheckStatus, setKeyCheckStatus] = useState<"idle" | "checking" | "exists" | "available">("idle");
 
   useEffect(() => {
+    if (!canRead) {
+      setKeyCheckStatus("idle");
+      return;
+    }
     if (!key || !/^[a-z][a-z0-9_]*$/.test(key)) {
       setKeyCheckStatus("idle");
       return;
@@ -86,9 +100,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white d-flex align-items-center justify-content-between">
         <span class="fw-semibold">Create New Template</span>
-        <button class="btn btn-sm btn-secondary" onClick={onCancel}>
-          ← Back to list
-        </button>
+        {showCancel && (
+          <button class="btn btn-sm btn-secondary" onClick={onCancel}>
+            ← Back to list
+          </button>
+        )}
       </div>
       <div class="card-body adm-template-create-form">
         <div class="mb-3">
@@ -180,13 +196,43 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
   );
 }
 
+function EmailTemplateCreateOnly() {
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+
+  if (createdKey) {
+    return (
+      <section aria-labelledby="email-template-created-heading">
+        <h5 id="email-template-created-heading" class="mb-2">
+          Template created
+        </h5>
+        <p class="text-muted small">
+          {createdKey} was created. You do not have permission to view template history or activate versions.
+        </p>
+        <button type="button" class="btn btn-sm btn-primary" onClick={() => setCreatedKey(null)}>
+          Create another template
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section aria-labelledby="email-template-create-heading">
+      <h5 id="email-template-create-heading" class="mb-2">
+        Create email template
+      </h5>
+      <p class="text-muted small">You can create a draft template without access to the template catalog.</p>
+      <CreateTemplate canRead={false} onCreated={setCreatedKey} onCancel={() => undefined} showCancel={false} />
+    </section>
+  );
+}
+
 // ────────────────────────────────────────────────────────
 // Main section
 // ────────────────────────────────────────────────────────
 
 type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
 
-export function EmailTemplates({ canWrite }: { canWrite: boolean }) {
+export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean; canWrite: boolean }) {
   const [view, setView] = useState<TemplatesView>("list");
 
   async function openEditor(key: string) {
@@ -195,6 +241,10 @@ export function EmailTemplates({ canWrite }: { canWrite: boolean }) {
     } catch (e) {
       toast((e as Error).message, "error");
     }
+  }
+
+  if (!canRead) {
+    return canWrite ? <EmailTemplateCreateOnly /> : null;
   }
 
   if (view !== "list" && view !== "create") {
@@ -211,6 +261,7 @@ export function EmailTemplates({ canWrite }: { canWrite: boolean }) {
   if (view === "create" && canWrite) {
     return (
       <CreateTemplate
+        canRead={canRead}
         onCreated={(key) => {
           void openEditor(key);
         }}
