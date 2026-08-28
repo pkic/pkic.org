@@ -413,7 +413,7 @@ export async function removeProposalSpeakerByProposer(
   });
 }
 
-export async function removeAdminProposalSpeaker(
+export async function removeProposalSpeakerByManager(
   db: DatabaseLike,
   input: {
     actor: AuthAdmin;
@@ -439,6 +439,3 @@ export async function removeAdminProposalSpeaker(
     authorization: input.authorization,
   });
 }
-
-/** Canonical group/event adapter; the legacy admin name remains above for compatibility. */
-export const removeProposalSpeakerByManager = removeAdminProposalSpeaker;

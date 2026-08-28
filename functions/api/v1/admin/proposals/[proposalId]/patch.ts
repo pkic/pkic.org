@@ -4,7 +4,7 @@ import { proposalPatchResponseSchema } from "../../../../../../assets/shared/sch
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
-import { editAdminProposal } from "../../../../../_lib/services/proposal-admin-edit";
+import { editProposal } from "../../../../../_lib/services/proposal-edit";
 
 export async function onRequestPatch(
   c: AdminContext,
@@ -12,6 +12,6 @@ export async function onRequestPatch(
 ): Promise<Response> {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const proposal = await editAdminProposal(db, admin, data.params.proposalId, data.body);
+  const proposal = await editProposal(db, admin, data.params.proposalId, data.body);
   return json(proposalPatchResponseSchema.parse({ proposal }));
 }

@@ -1,5 +1,6 @@
 import { AppError } from "../../errors";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
+import { guardDatabaseBatches } from "../../db/guarded-database";
 import type { AuthAdmin, D1StatementResult, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
@@ -121,44 +122,8 @@ export function guardEventResourceManagementDatabase(
   context: EventResourceManagementContext,
   capability: EventResourceManagementCapability,
 ): DatabaseLike {
-  const execute = (statements: StatementLike[]) =>
-    executeEventResourceManagementBatch(db, actor, context, capability, statements);
-  // `DatabaseLike` intentionally hides the D1 statement implementation. Keep
-  // the guarded facade for callers, but unwrap only facades created here when
-  // a multi-statement page is submitted to D1.
-  const guardedStatements = new WeakMap<StatementLike, StatementLike>();
-  return {
-    prepare(query: string): StatementLike {
-      let statement = db.prepare(query);
-      const guarded: StatementLike = {
-        bind(...values: unknown[]): StatementLike {
-          statement = statement.bind(...values);
-          guardedStatements.set(guarded, statement);
-          return guarded;
-        },
-        async run<T = Record<string, unknown>>(): Promise<D1StatementResult<T>> {
-          const [, result] = await execute([statement]);
-          return result as D1StatementResult<T>;
-        },
-        async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> {
-          const [, result] = await execute([statement]);
-          return { results: (result.results ?? []) as T[] };
-        },
-        async first<T = Record<string, unknown>>(columnName?: string): Promise<T | null> {
-          const { results } = await guarded.all<Record<string, unknown>>();
-          const row = results[0];
-          if (!row) return null;
-          return (columnName ? row[columnName] : row) as T;
-        },
-      };
-      guardedStatements.set(guarded, statement);
-      return guarded;
-    },
-    async batch(statements: StatementLike[]): Promise<D1StatementResult[]> {
-      const [, ...results] = await execute(
-        statements.map((statement) => guardedStatements.get(statement) ?? statement),
-      );
-      return results;
-    },
-  };
+  return guardDatabaseBatches(db, async (statements) => {
+    const [, ...results] = await executeEventResourceManagementBatch(db, actor, context, capability, statements);
+    return results;
+  });
 }

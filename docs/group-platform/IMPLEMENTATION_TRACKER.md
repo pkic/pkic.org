@@ -50,7 +50,7 @@ Status: In progress
       retain CHECKs only for structural booleans and identity invariants.
 - [x] Compose one canonical shared group entity, list query, page response,
       membership mutation, grant, and error contract.
-- [ ] Preserve temporary compatibility exports only while callers migrate.
+- [x] Preserve temporary compatibility exports only while callers migrate.
       Current evidence: the unreleased working-group collection contracts and
       routes have been removed. The obsolete admin event-management, form,
       invitation, proposal, speaker, and registration aliases have now been
@@ -61,10 +61,15 @@ Status: In progress
       schema name, and an unused admin vote-candidate alias are removed. Tests
       now import the canonical proposal and registration read models directly;
       their proposal service/schema, registration-list, and
-      registration-statistics compatibility modules are deleted. A current
-      import audit still finds narrow exports required by live admin consumers.
-      Remove each remaining compatibility export with its consumer rather than
-      creating a second contract.
+      registration-statistics compatibility modules are deleted. The remaining
+      admin proposal callers now import the canonical detail/edit services,
+      both admin and group speaker removal use one manager operation, and admin
+      vote routes consume the canonical mutation and raw-ballot contracts
+      directly. Event, series, and occurrence reads now call the generic live
+      resource-context evaluator without an event-named re-export. A current
+      import audit finds no remaining temporary contract or service export;
+      storage-level legacy columns and deployed-data readers remain explicit
+      compatibility policy rather than parallel application contracts.
 - [x] Prove empty-database migration application.
       Evidence: all 37 migrations, including 234 commands in 0035, applied to
       a fresh independent local D1 state under ScanDisk after the authenticated
@@ -443,6 +448,12 @@ Status: In progress
         preference mutation, and provider desired-state reconciliation.
   - [x] Apply form placement grants to canonical definition, submission, response,
         response-statistics, and management paths.
+        Evidence: response pages, delayed answer enrichment, aggregate
+        statistics, field catalogs, and every population lookup now execute
+        through one guarded D1 facade that rechecks selected-group leadership
+        and the exact `view_responses` grant before each protected batch.
+        Deterministic races prove that revoking either the grant or leadership
+        after preflight returns no response or aggregate data.
   - [x] Apply event grants beyond meeting entry.
     - [x] Apply `view` implications to canonical group-scoped event discovery
           and detail reads.
@@ -480,7 +491,12 @@ Status: In progress
           rollback when the grant, membership, ownership, identity, or terms
           change between preflight and commit, and mounted tests cover the
           configuration route's anonymous, inaccessible, view-only, available,
-          and lost-ownership states.
+          and lost-ownership states. The configuration projection now executes
+          every event, placement, term, day, and count read through the same
+          live membership/register/event-policy guard used by registration
+          submission. Grant and membership revocation after route preflight
+          return no configuration, while the public configuration path remains
+          unchanged.
     - [x] Apply `manage_attendance` to attendance discovery and verification
           mutations.
           Evidence: the canonical occurrence-attendance routes accept the
@@ -1359,8 +1375,9 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the compatibility and
-      group-form query-plan cleanup with 2,208 backend tests (one skipped), 292 frontend
-      tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
+      guarded shared-resource read cleanup with 2,210 backend tests (one
+      skipped), 292 frontend tests, and 80 tooling tests. Type checks, ESLint,
+      SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
       An earlier combined run exposed a nondeterministic Google Groups boundary

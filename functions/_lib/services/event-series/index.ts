@@ -7,6 +7,5 @@ export * from "./management";
 export * from "./occurrences";
 export * from "./provider-url";
 export * from "./providers";
-export * from "./read-access";
 export * from "./recurrence";
 export * from "./series";

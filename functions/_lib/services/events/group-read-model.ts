@@ -19,11 +19,11 @@ import {
   buildLiveAccessibleGroupResourceIdsCte,
   getResourceGrantDefinition,
   isResourceGrantCapability,
+  liveGroupResourceContextAccess,
   type GroupResourceContextAccess,
   type LiveGroupResourceContextAccess,
   type GroupResourceViewer,
 } from "../resource-grants";
-import { liveEventResourceContextAccess } from "../event-series/read-access";
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
 
 interface GroupEventRow {
@@ -182,13 +182,13 @@ export async function listGroupEvents(
 ): Promise<{ events: GroupEvent[]; total: number }> {
   const page = await queryPage<GroupEventRow>(
     db,
-    buildGroupEventsPageQuery(groupId, liveEventResourceContextAccess(viewer, groupId), query),
+    buildGroupEventsPageQuery(groupId, liveGroupResourceContextAccess(viewer, groupId), query),
   );
   return { events: page.rows.map((row) => mapGroupEvent(row, groupId)), total: page.total };
 }
 
 export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewer, groupId: string, eventId: string) {
-  const access = liveEventResourceContextAccess(viewer, groupId);
+  const access = liveGroupResourceContextAccess(viewer, groupId);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const row = await first<GroupEventRow>(
     db,

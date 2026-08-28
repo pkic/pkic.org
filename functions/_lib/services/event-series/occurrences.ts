@@ -21,13 +21,13 @@ import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import {
   buildLiveAccessibleGroupResourceIdsCte,
+  liveGroupResourceContextAccess,
   type GroupResourceViewer,
   type LiveGroupResourceContextAccess,
 } from "../resource-grants";
 import { commitEventResourceManagementBatch } from "./management";
 import { sealProviderJoinUrl } from "./provider-url";
 import { type EventOccurrenceRow, toEventOccurrence } from "./record";
-import { liveEventResourceContextAccess } from "./read-access";
 import { getGroupEventSeries, getManagedGroupEventSeries } from "./series";
 
 type OccurrenceCreateInput = z.infer<typeof eventOccurrenceCreateSchema>;
@@ -104,7 +104,7 @@ export async function listSeriesOccurrences(
   seriesId: string,
   query: OccurrenceListQuery,
 ) {
-  const access = liveEventResourceContextAccess(viewer, groupIdOrSlug);
+  const access = liveGroupResourceContextAccess(viewer, groupIdOrSlug);
   const pageQuery = buildSeriesOccurrencesPageQuery(groupIdOrSlug, access, seriesId, query);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupIdOrSlug, access, "view");
   const [pageResult, countResult, accessResult] = await db.batch([

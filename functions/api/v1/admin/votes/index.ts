@@ -11,10 +11,10 @@ import { requireEffectiveGroupPermission } from "../../../../_lib/services/group
 import { createVoteDirect, listVotesForAdmin } from "../../../../_lib/services/votes";
 import {
   adminVoteCreateRouteSchema,
-  adminVoteMutationResponseSchema,
   adminVotesListResponseSchema,
   adminVotesListRouteSchema,
 } from "../../../../../assets/shared/schemas/votes-admin";
+import { voteMutationResponseSchema } from "../../../../../assets/shared/schemas/vote-management";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
@@ -42,5 +42,5 @@ export const AdminVotesPost = openApiRoute(adminVoteCreateRouteSchema, async (c:
 
   const vote = await createVoteDirect(db, admin, body);
 
-  return json(adminVoteMutationResponseSchema.parse({ vote }));
+  return json(voteMutationResponseSchema.parse({ vote }));
 });

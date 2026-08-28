@@ -29,7 +29,7 @@ import {
   sendProposalSpeakerReminders,
 } from "../functions/_lib/services/proposal-reminders";
 import {
-  removeAdminProposalSpeaker,
+  removeProposalSpeakerByManager,
   removeProposalSpeakerByProposer,
 } from "../functions/_lib/services/proposal-speaker-removal";
 import {
@@ -828,7 +828,7 @@ describe("speaker self-management endpoints", () => {
     };
 
     await expect(
-      removeAdminProposalSpeaker(racingDb, {
+      removeProposalSpeakerByManager(racingDb, {
         actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
         proposalId,
         userId: before.proposer_user_id,

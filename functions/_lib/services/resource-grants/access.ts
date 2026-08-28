@@ -1,10 +1,19 @@
 import { hasPermission } from "../../auth/permissions";
-import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
+import { guardDatabaseBatches } from "../../db/guarded-database";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { activeGroupMembershipAuthorizationEvidence, hasActiveGroupMembership } from "../groups/access";
-import { canManageAnyGroup, groupManagementAuthorizationEvidence } from "../groups/governance";
+import {
+  canManageAnyGroup,
+  groupManagementAuthorizationEvidence,
+  prepareGroupManagementAuthorizationGuard,
+} from "../groups/governance";
 import type { LiveGroupResourceContextAccess } from "./access-query";
 import {
   getResourceGrantDefinition,
@@ -160,6 +169,36 @@ export function prepareGroupResourceContextAuthorizationGuard<K extends Resource
     db,
     groupResourceContextAuthorizationEvidence(groupId, kind, resourceId, capability),
   );
+}
+
+/**
+ * Rechecks selected-group management and the exact resource relationship in
+ * every protected read batch. This keeps delayed enrichment and aggregate
+ * reads behind the same live manager-only capability as their preflight.
+ */
+export function guardManagedGroupResourceDatabase<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): DatabaseLike {
+  return guardDatabaseBatches(db, async (statements) => {
+    try {
+      const [, , ...results] = await db.batch([
+        prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+        prepareGroupResourceContextAuthorizationGuard(db, groupId, kind, resourceId, capability),
+        ...statements,
+      ]);
+      return results;
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required");
+      }
+      throw error;
+    }
+  });
 }
 
 async function resourceOwnerGroupId<K extends ResourceGrantKind>(

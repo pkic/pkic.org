@@ -26,7 +26,7 @@ import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker
 import { buildEventProposalsPageQuery } from "../functions/_lib/services/event-proposals-list";
 import { buildProposalReviewsPageQuery } from "../functions/_lib/services/proposal-reviews/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
-import { editAdminProposal } from "../functions/_lib/services/proposal-admin-edit";
+import { editProposal } from "../functions/_lib/services/proposal-edit";
 import { cancelAcceptedProposal } from "../functions/_lib/services/proposal-cancellation";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { renderEmail } from "../functions/_lib/email/render";
@@ -1020,7 +1020,7 @@ describe("admin proposal endpoints", () => {
     );
 
     await expect(
-      editAdminProposal(racingDb, editor.actor, proposalId, { abstract: "This edit must roll back." }),
+      editProposal(racingDb, editor.actor, proposalId, { abstract: "This edit must roll back." }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_AUTHORIZATION_CHANGED" });
     const [proposal] = await queryAll<{ abstract: string }>(
       env.DB,
@@ -1045,7 +1045,7 @@ describe("admin proposal endpoints", () => {
     );
 
     await expect(
-      editAdminProposal(racingDb, editor.actor, proposalId, { abstract: "This stale edit must not win." }),
+      editProposal(racingDb, editor.actor, proposalId, { abstract: "This stale edit must not win." }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_EDIT_CONFLICT" });
     const [proposal] = await queryAll<{ status: string; abstract: string }>(
       env.DB,

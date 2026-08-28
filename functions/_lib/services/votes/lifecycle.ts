@@ -11,12 +11,11 @@ import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
 import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
+import { ADMIN_VOTES_SORT_COLUMNS, type AdminVotesListQuery } from "../../../../assets/shared/schemas/votes-admin";
 import {
-  ADMIN_VOTE_BALLOT_SORT_COLUMNS,
-  ADMIN_VOTES_SORT_COLUMNS,
-  type AdminVoteBallotsListQuery,
-  type AdminVotesListQuery,
-} from "../../../../assets/shared/schemas/votes-admin";
+  RAW_VOTE_BALLOT_SORT_COLUMNS,
+  type RawVoteBallotsListQuery,
+} from "../../../../assets/shared/schemas/vote-management";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
@@ -360,13 +359,13 @@ const ADMIN_BALLOT_SORT_COLUMNS = {
   choice: "b.choice",
   userId: "b.user_id",
   memberId: "b.member_id",
-} as const satisfies Record<(typeof ADMIN_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
+} as const satisfies Record<(typeof RAW_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
 
 export async function listBallotsForManager(
   db: DatabaseLike,
   actor: AuthAdmin,
   voteId: string,
-  query: AdminVoteBallotsListQuery,
+  query: RawVoteBallotsListQuery,
   throughGroupId?: string,
 ): Promise<{ ballots: AdminBallotRow[]; page: PageInfo }> {
   await getVoteRowOrThrow(db, voteId);

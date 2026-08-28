@@ -45,12 +45,6 @@ import type {
   AdminFormSummary as CanonicalAdminEventFormSummary,
 } from "../../shared/schemas/admin-forms";
 import type { AdminMemberSummary as CanonicalAdminMemberSummary } from "../../shared/schemas/admin-members";
-import type {
-  AdminVoteBallot as CanonicalAdminVoteBallot,
-  AdminVoteProposalSummary as CanonicalAdminVoteProposalSummary,
-  AdminVoteSummary as CanonicalAdminVoteSummary,
-  VoteCandidateSummary as CanonicalVoteCandidateSummary,
-} from "../../shared/schemas/votes-admin";
 import type { AdminEventStatsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/admin-analytics";
 import type {
   AdminJobsRunResponse as CanonicalAdminJobsRunResponse,
@@ -142,12 +136,3 @@ export type SponsorshipEvent = CanonicalSponsorshipEvent;
 
 // Interim Admin Tool — GET/POST /api/v1/admin/members
 export type AdminMemberSummary = CanonicalAdminMemberSummary;
-
-// Voting system
-export type VoteCandidateSummary = CanonicalVoteCandidateSummary;
-
-export type AdminVoteSummary = CanonicalAdminVoteSummary;
-
-export type AdminVoteBallot = CanonicalAdminVoteBallot;
-
-export type AdminVoteProposalSummary = CanonicalAdminVoteProposalSummary;
