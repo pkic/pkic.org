@@ -1,18 +1,10 @@
-import { Hono, type Context, type Next } from "hono";
+import { Hono, type Context } from "hono";
 import { fromHono } from "chanfana";
-import {
-  getCachedAdminAuthTransport,
-  getCachedAdminForRequest,
-  requireAdminFromRequest,
-  serializeAdminSessionCookie,
-  signAdminSessionToken,
-} from "../../../_lib/auth/admin";
-import { isUserBackedAuthAdmin } from "../../../_lib/auth/admin-identity";
+import { getCachedAdminForRequest } from "../../../_lib/auth/admin";
 import { enforceAdminRouteAuthorization } from "../../../_lib/auth/admin-route-policy";
 import { handleError } from "../../../_lib/http";
-import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
-import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
-import type { DatabaseSessionLike } from "../../../_lib/db/session";
+import type { RequestDbContext } from "../../../_lib/db/context";
+import { createRequestScopedD1SessionMiddleware } from "../../../_lib/db/request-session-middleware";
 import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
 import auth_Router from "./auth/router";
 import events_Router from "./events/router";
@@ -22,7 +14,6 @@ import proposals_Router from "./proposals/router";
 const app = new Hono<RequestDbContext>();
 app.onError((error, _c) => handleError(error));
 export const openapi = fromHono(app);
-const ADMIN_TOKEN_HEADER = "x-admin-token";
 
 function normalizedAdminPath(path: string): string {
   if (path.startsWith("/api/v1/admin/")) {
@@ -48,74 +39,13 @@ function enforceAdminAuthorization(c: Context<RequestDbContext>): void {
   enforceAdminRouteAuthorization(admin, normalizedAdminPath(c.req.path), c.req.method);
 }
 
-async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: DatabaseSessionLike): Promise<void> {
-  const state = sessionDb.getBookmark?.();
-  const admin = getCachedAdminForRequest(c.req.raw);
-  const transport = getCachedAdminAuthTransport(c.req.raw);
-  if (
-    !state ||
-    !admin ||
-    !isUserBackedAuthAdmin(admin) ||
-    !admin.sessionId ||
-    !admin.expiresAt ||
-    !c.env.INTERNAL_SIGNING_SECRET ||
-    transport === "api-key"
-  ) {
-    return;
-  }
-
-  const token = await signAdminSessionToken(c.env.INTERNAL_SIGNING_SECRET, {
-    admin,
-    sessionId: admin.sessionId,
-    expiresAt: admin.expiresAt,
-    state,
-  });
-
-  // Build a fresh mutable Headers object from the existing response so we can
-  // append without hitting the immutable-headers guard in the Workers runtime.
-  const headers = new Headers(c.res.headers);
-
-  if (transport === "cookie") {
-    headers.append("Set-Cookie", serializeAdminSessionCookie(token, c.req.raw));
-  } else {
-    headers.set(ADMIN_TOKEN_HEADER, token);
-  }
-
-  c.res = new Response(c.res.body, { status: c.res.status, headers });
-}
-
-async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Next): Promise<void> {
-  const method = c.req.method;
-  const primaryDb = c.env.DB;
-
-  if (method !== "GET" && method !== "HEAD") {
-    const sessionDb = primaryFirstDb(primaryDb);
-    c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
-    if (!isAdminAuthPath(c.req.path)) {
-      await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
-      enforceAdminAuthorization(c);
-    }
-    await next();
-    await rotateAdminToken(c, sessionDb).catch((err) => {
-      console.error("[rotateAdminToken] Failed to rotate token:", err);
-    });
-    return;
-  }
-
-  const admin = await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
-  if (!isAdminAuthPath(c.req.path)) {
-    enforceAdminAuthorization(c);
-  }
-  // Validate state bookmark: must be a reasonable string (null is ok for default session)
-  const state = isUserBackedAuthAdmin(admin) ? admin.state : null;
-  const bookmark = state ? (state.length > 0 && state.length < 1024 ? state : null) : null;
-  const sessionDb = readReplicaDb(primaryDb, bookmark);
-  c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
-  await next();
-  await rotateAdminToken(c, sessionDb);
-}
-
-app.use("*", useRequestScopedD1Session);
+app.use(
+  "*",
+  createRequestScopedD1SessionMiddleware({
+    skipAuthorization: (c) => isAdminAuthPath(c.req.path),
+    authorize: enforceAdminAuthorization,
+  }),
+);
 
 openapi.get("/events", AdminEventsListGet);
 openapi.post("/events", AdminEventsCreatePost);

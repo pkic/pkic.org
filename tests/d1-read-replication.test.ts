@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import adminRouter from "../functions/api/v1/admin/router";
+import usersRouter from "../functions/api/v1/users/router";
 import {
   cacheAdminForRequest,
   requireAdminFromRequest,
@@ -168,6 +169,27 @@ describe("D1 read replication", () => {
     const verified = await verifyAdminSessionToken(signingSecret, rotatedToken!);
     expect(verified.ok && verified.claims.state).toBe("next/bookmark");
     expect(response.headers.has("set-cookie")).toBe(false);
+  });
+
+  it("uses existing D1 bookmarks and rotates user-backed state for canonical Users reads", async () => {
+    const { primaryDb, primaryQueries, sessionQueries, withSessionCalls } = createDbWithSessionRecorder({
+      bookmark: "users/next-bookmark",
+    });
+    const adminToken = await createAdminToken("users/prior-bookmark");
+
+    const response = await usersRouter.fetch(
+      new Request("https://app.test/", { headers: { authorization: `Bearer ${adminToken}` } }),
+      { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(withSessionCalls).toEqual(["users/prior-bookmark"]);
+    expect(primaryQueries.some((query) => query.includes("FROM sessions"))).toBe(true);
+    expect(sessionQueries.some((query) => query.includes("FROM sessions"))).toBe(false);
+    const rotatedToken = response.headers.get("x-admin-token");
+    const verified = await verifyAdminSessionToken(signingSecret, rotatedToken!);
+    expect(verified.ok && verified.claims.state).toBe("users/next-bookmark");
   });
 
   it("serves cached admin identities for the same request without another DB lookup", async () => {

@@ -1370,6 +1370,16 @@ Status: In progress
 - [ ] Add temporary legacy redirects where needed.
 - [ ] Remove the admin shell and its separate navigation.
 - [ ] Remove duplicate admin and member session assumptions.
+      Progress: request-scoped D1 bookmark handling is no longer implemented
+      inside the legacy admin router. One neutral middleware now authenticates
+      staff against primary D1, applies a prior bookmark or
+      `first-unconstrained` session for reads, uses `first-primary` for writes,
+      and rotates user-backed cookie or bearer state without rotating API-key
+      identities. The legacy router and canonical Users domain both use this
+      boundary, with focused regressions proving primary authentication,
+      causal reads, token rotation, and an unmodified shared environment
+      binding. Separate admin/member session token assumptions and the legacy
+      admin authentication URLs remain, so the parent item stays open.
 - [ ] Remove legacy admin API routes after canonical consumers migrate.
 - [x] Browser-test member, chair, inherited leader, local-only leader, staff,
       guest, and unauthorized navigation.
