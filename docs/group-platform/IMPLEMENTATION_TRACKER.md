@@ -1243,7 +1243,7 @@ Status: In progress
       consecutive frontend/Hugo builds and a complete Vite/Cloudflare local
       startup pass without parsing or indexing metadata. No
       workstation path or cleanup script is committed.
-- [ ] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
+- [x] Run EXPLAIN QUERY PLAN assertions for all critical list and policy queries.
       Current evidence: the self-participation catalog asserts use of
       `idx_group_memberships_user_active` for page and count predicates; the
       event and recurring-series page/count assertions prove indexed owner and
@@ -1290,10 +1290,22 @@ Status: In progress
       both statements prove indexed owner, grantee-capability, and live member
       access through `idx_form_placements_owner_active`,
       `idx_form_placement_group_grants_group`, and
-      `idx_group_memberships_user_active` without scanning those tables. The
-      overall item remains open: the reconciled inventory still requires plan
-      coverage for the global form catalogue, proposal-review list, and full
-      merged form-submission page/count builders.
+      `idx_group_memberships_user_active` without scanning those tables.
+      Proposal-review search, sorting, and pagination now expose the exact
+      production page/count builder; both statements use
+      `idx_proposal_reviews_proposal_round` without scanning reviews or users,
+      while the bounded post-filter search and score sort may legitimately use
+      a temporary B-tree. The global form catalogue now counts fields and
+      submissions through indexed correlated projections instead of a
+      field-by-submission join, while its lean count statement omits every
+      page-only aggregate. The registration and proposal response populations
+      expose their complete merged page/count builder to plan assertions; both
+      use the form/context backfill index, native response-set index, and
+      event/form-placement source indexes without scanning the correlated
+      submission, answer, registration, or proposal aliases. The reconciled
+      critical-query inventory is complete; unindexed substring search and a
+      final bounded merge sort remain documented D1 limitations rather than
+      hidden client-side work.
 - [x] Run migration tests against production-shaped databases.
       Evidence: the realistic pre-0035 upgrade scenario passes integrity and
       foreign-key checks without rebuilding members or organizations and

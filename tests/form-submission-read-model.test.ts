@@ -8,6 +8,8 @@ import {
   resolveFormSubmissionPopulation,
   selectFromSubmissionPopulation,
 } from "../functions/_lib/services/form-submissions/population-query";
+import { buildFormSubmissionsPageQuery } from "../functions/_lib/services/form-submissions/submission-page";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -157,7 +159,11 @@ async function readPopulation(formKey: string, filters: Record<string, string>) 
   };
 }
 
-async function expectIndexedBackfillLookup(formKey: string, filters: Record<string, string>): Promise<void> {
+async function expectIndexedSubmissionPage(
+  formKey: string,
+  filters: Record<string, string>,
+  sourceIndex: RegExp,
+): Promise<void> {
   const population = await resolveFormSubmissionPopulation(env.DB, {
     formKey,
     status: filters.status ?? "",
@@ -165,13 +171,20 @@ async function expectIndexedBackfillLookup(formKey: string, filters: Record<stri
     eventSlug: filters.eventSlug ?? "",
     q: filters.q,
   });
-  const query = selectFromSubmissionPopulation(population, "SELECT id FROM merged LIMIT ?", [1]);
-  const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query.sql}`)
-    .bind(...query.bindings)
-    .all<{ detail: string }>();
-  const detail = plan.results.map((row) => row.detail).join("\n");
-  expect(detail).toContain("idx_form_submissions_form_context");
-  expect(detail).not.toMatch(/(?:^|\n)SCAN fs2(?:$|\s)/);
+  const query = buildFormSubmissionsPageQuery(population, { limit: 1, offset: 0, sort: "-submittedAt" });
+  const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+  const [pagePlan, countPlan] = await Promise.all([
+    queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [...bindings, 1, 0]),
+    queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${countSql}`, [...countBindings]),
+  ]);
+  for (const plan of [pagePlan, countPlan]) {
+    const detail = plan.map((row) => row.detail).join("\n");
+    expect(detail).toContain("idx_form_submissions_form_context");
+    expect(detail).toMatch(/idx_form_submissions_(?:placement_status|form)/);
+    expect(detail).toMatch(sourceIndex);
+    expect(detail).not.toMatch(/(?:^|\n)SCAN fs2(?:$|\s)/);
+    expect(detail).not.toMatch(/(?:^|\n)SCAN answer_search(?:$|\s)/);
+  }
 }
 
 describe("form-submission read-model population", () => {
@@ -269,12 +282,16 @@ describe("form-submission read-model population", () => {
         ],
       }),
     ]);
-    await expectIndexedBackfillLookup("registration-population", {
-      eventSlug: "pqc-2026",
-      status: "registered",
-      attendanceType: "virtual",
-      q: "needle",
-    });
+    await expectIndexedSubmissionPage(
+      "registration-population",
+      {
+        eventSlug: "pqc-2026",
+        status: "registered",
+        attendanceType: "virtual",
+        q: "needle",
+      },
+      /idx_registrations_(?:form_placement|event_status)/,
+    );
   });
 
   it("keeps proposal status and title search stable after answers are backfilled", async () => {
@@ -308,11 +325,15 @@ describe("form-submission read-model population", () => {
     expect(result.stats.total).toBe(2);
     expect(result.stats.stats[0]).toMatchObject({ fieldKey: "audience", totalAnswers: 2 });
     expect(result.stats.stats[0]?.entries.map((entry) => entry.label)).toEqual(["Backfilled", "Legacy"]);
-    await expectIndexedBackfillLookup("proposal-population", {
-      eventSlug: "pqc-2026",
-      status: "accepted",
-      q: "needle",
-    });
+    await expectIndexedSubmissionPage(
+      "proposal-population",
+      {
+        eventSlug: "pqc-2026",
+        status: "accepted",
+        q: "needle",
+      },
+      /idx_(?:session_proposals_form_placement|proposals_event_status|session_proposals_event_live_submitted)/,
+    );
   });
 
   it("preserves boolean labels and skips malformed legacy answer JSON", async () => {

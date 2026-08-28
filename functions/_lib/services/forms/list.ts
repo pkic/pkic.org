@@ -5,7 +5,7 @@
  * still composes a real `LIMIT`/`OFFSET` + `COUNT(*)` bound rather than
  * returning every row unbounded, matching every other admin list endpoint.
  */
-import { queryPage } from "../../db/pagination";
+import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
@@ -16,17 +16,15 @@ export type AdminFormSummaryRow = AdminFormSummary;
 const FORMS_LIST_FROM = `
   FROM forms f
   LEFT JOIN events e ON e.id = f.scope_ref AND f.scope_type = 'event'
-  LEFT JOIN form_fields ff ON ff.form_id = f.id
-  LEFT JOIN form_submissions fs ON fs.form_id = f.id
 `;
 
-export async function listAdminForms(
-  db: DatabaseLike,
+/** Build the bounded catalogue page/count pair without joining every field to every submission. */
+export function buildAdminFormsPageQuery(
   params: AdminFormsListQuery & {
     eventId?: string;
     includeGlobal?: boolean;
   },
-): Promise<{ forms: AdminFormSummaryRow[]; total: number }> {
+): OffsetPageQuery {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   if (params.eventId) {
@@ -83,15 +81,16 @@ export async function listAdminForms(
     "f.scope_type ASC, f.purpose ASC, f.updated_at DESC",
     "f.id ASC",
   );
-  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(db, {
-    sql: `SELECT
+  return {
+    source: {
+      selectSql: `SELECT
          f.id, f.key, f.scope_type, f.scope_ref, f.purpose, f.status,
          f.title, f.description, f.created_at, f.updated_at,
          e.slug AS event_slug,
          e.name AS event_name,
-         COUNT(DISTINCT ff.id) AS field_count,
+         (SELECT COUNT(*) FROM form_fields ff WHERE ff.form_id = f.id) AS field_count,
          (SELECT COUNT(*) FROM form_placements fp WHERE fp.form_id = f.id) AS placement_count,
-         COUNT(DISTINCT fs.id)
+         (SELECT COUNT(*) FROM form_submissions fs WHERE fs.form_id = f.id)
            + CASE WHEN f.scope_type = 'event' AND f.purpose = 'event_registration' THEN (
                SELECT COUNT(*) FROM registrations r
                WHERE r.event_id = f.scope_ref AND r.custom_answers_json IS NOT NULL
@@ -108,14 +107,24 @@ export async function listAdminForms(
                    WHERE fs2.form_id = f.id AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
                  )
              ) ELSE 0 END AS submission_count
-       ${FORMS_LIST_FROM}
-       ${where}
-       GROUP BY f.id`,
-    bindings,
+       `,
+      fromSql: `${FORMS_LIST_FROM} ${where}`,
+      bindings,
+    },
     orderBy,
     limit: params.limit,
     offset: params.offset,
-  });
+  };
+}
+
+export async function listAdminForms(
+  db: DatabaseLike,
+  params: AdminFormsListQuery & {
+    eventId?: string;
+    includeGlobal?: boolean;
+  },
+): Promise<{ forms: AdminFormSummaryRow[]; total: number }> {
+  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(db, buildAdminFormsPageQuery(params));
 
   return { forms, total };
 }

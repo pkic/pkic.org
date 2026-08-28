@@ -6,6 +6,8 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
+import { buildAdminFormsPageQuery } from "../functions/_lib/services/forms/list";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { adminFormCreateResponseSchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
 import { formDefinitionCreateSchema } from "../assets/shared/schemas/forms";
 import {
@@ -333,6 +335,29 @@ describe("admin forms endpoints", () => {
     );
     const inactive = (await inactiveResponse.json()) as { forms: Array<{ key: string; status: string }> };
     expect(inactive.forms).toEqual([expect.objectContaining({ key: "inactive-feedback-form", status: "inactive" })]);
+
+    const catalogueQuery = buildAdminFormsPageQuery({
+      eventId,
+      includeGlobal: true,
+      q: "form",
+      sort: "-submissionCount",
+      limit: 10,
+      offset: 0,
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(catalogueQuery);
+    const [pagePlan, countPlan] = await Promise.all([
+      queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [...bindings, 10, 0]),
+      queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${countSql}`, [...countBindings]),
+    ]);
+    const pageDetails = pagePlan.map((row) => row.detail).join("\n");
+    const countDetails = countPlan.map((row) => row.detail).join("\n");
+    expect(pageDetails).toContain("idx_form_fields_form");
+    expect(pageDetails).toContain("idx_form_submissions_form");
+    expect(pageDetails).toContain("idx_form_submissions_form_context");
+    expect(pageDetails).not.toMatch(/(?:^|\n)SCAN (?:ff|fs|fs2|r|sp)(?:$|\s)/);
+    expect(countDetails).not.toContain("idx_form_fields_form");
+    expect(countDetails).not.toContain("idx_form_submissions_form");
+    expect(countDetails).not.toMatch(/(?:^|\n)SCAN (?:ff|fs|fs2|r|sp)(?:$|\s)/);
   });
 
   it("lists and creates global forms through the admin forms root", async () => {

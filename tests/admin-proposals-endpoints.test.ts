@@ -24,6 +24,7 @@ import { proposalPatchResponseSchema } from "../assets/shared/schemas/proposal-m
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
 import { buildEventProposalsPageQuery } from "../functions/_lib/services/event-proposals-list";
+import { buildProposalReviewsPageQuery } from "../functions/_lib/services/proposal-reviews/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { editAdminProposal } from "../functions/_lib/services/proposal-admin-edit";
 import { cancelAcceptedProposal } from "../functions/_lib/services/proposal-cancellation";
@@ -823,6 +824,24 @@ describe("admin proposal endpoints", () => {
       minReviewsRequired: 2,
       quorumMet: true,
     });
+
+    const reviewQuery = buildProposalReviewsPageQuery(proposalId, 1, {
+      limit: 1,
+      offset: 1,
+      q: "deployment",
+      sort: "-score",
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(reviewQuery);
+    const [pagePlan, countPlan] = await Promise.all([
+      queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [...bindings, 1, 1]),
+      queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${countSql}`, [...countBindings]),
+    ]);
+    for (const plan of [pagePlan, countPlan]) {
+      const details = plan.map((row) => row.detail).join("\n");
+      expect(details).toContain("idx_proposal_reviews_proposal_round");
+      expect(details).not.toMatch(/SCAN (?:TABLE )?proposal_reviews\b/i);
+      expect(details).not.toMatch(/SCAN (?:TABLE )?users\b/i);
+    }
   });
 
   it("stores and returns internal proposal comments", async () => {
