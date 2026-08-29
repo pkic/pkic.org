@@ -2284,7 +2284,7 @@ END;
 
 -- Section: Fine-Grained Access Control
 --
--- Adds the roles/user_roles/permission_grants/refresh_tokens model from,
+-- Adds the roles/user_roles/permission_grants model from,
 -- seeds the built-in roles from, and executes the
 -- backfills (event_permissions → user_roles, users.role='admin' →
 -- user_roles), then drops event_permissions resolution.
@@ -2303,7 +2303,10 @@ END;
 -- the new model because authorization must not transfer if an address is
 -- later released and reused by another account.
 --
--- `permission_grants` and `refresh_tokens` are created exactly as specified.
+-- `permission_grants` is created exactly as specified. The draft
+-- `refresh_tokens` table is intentionally omitted: canonical user sessions
+-- and stateless capability links have their own revocation mechanisms, and no
+-- production flow issues or consumes refresh tokens.
 
 CREATE TABLE roles (
   id             TEXT    NOT NULL PRIMARY KEY,
@@ -2537,17 +2540,6 @@ WHEN EXISTS (SELECT 1 FROM user_roles WHERE context_type = 'organization' AND co
 BEGIN
   SELECT RAISE(ABORT, 'MEMBERSHIP_HAS_AUTHORIZATION_CONTEXT');
 END;
-
-CREATE TABLE refresh_tokens (
-  id           TEXT NOT NULL PRIMARY KEY,
-  user_id      TEXT NOT NULL,
-  token_hash   TEXT NOT NULL UNIQUE,
-  issued_at    TEXT NOT NULL,
-  expires_at   TEXT NOT NULL,
-  revoked_at   TEXT,
-  last_used_at TEXT,
-  FOREIGN KEY(user_id) REFERENCES users(id)
-);
 
 -- ── Built-in system roles ────────────────────────────────────────────
 --

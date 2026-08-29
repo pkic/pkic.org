@@ -165,6 +165,9 @@ describe("consolidated pending migration upgrade", () => {
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'refresh_tokens'").get(),
+    ).toBeUndefined();
+    expect(
       db
         .prepare(
           `SELECT version, status
