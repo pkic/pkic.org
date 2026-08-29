@@ -1,6 +1,6 @@
 /** Canonical contracts for every configured group type. */
 import { z } from "zod";
-import { booleanQueryFlagSchema, slugPattern, trimmedString } from "./api-common";
+import { booleanQueryFlagSchema, slugPattern, trimmedString, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { membershipCategorySchema } from "./membership-categories";
@@ -215,7 +215,7 @@ export type GroupLeadershipAssignment = z.infer<typeof groupLeadershipAssignment
 export const groupLeadershipAssignSchema = z.object({
   userId: databaseIdSchema,
   roleId: groupLeadershipRoleIdSchema,
-  expiresAt: z.iso.datetime().nullable().optional(),
+  expiresAt: utcInstantSchema.nullable().optional(),
 });
 export type GroupLeadershipAssignInput = z.infer<typeof groupLeadershipAssignSchema>;
 export const groupLeadershipListResponseSchema = z.object({

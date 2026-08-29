@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonErrorResponse } from "./api-common";
+import { jsonErrorResponse, utcInstantSchema } from "./api-common";
 import {
   addDuplicateFormFieldIssues,
   eventFormsPurposeSchema,
@@ -23,7 +23,7 @@ export const groupEventFormSchema = z.object({
 });
 
 export const groupEventFormResponseSchema = z.object({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
   purpose: eventFormsPurposeSchema,
   form: groupEventFormSchema.nullable(),
 });

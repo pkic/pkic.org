@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { successResponseSchema } from "./api-common";
+import { successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventInviteValiditySchema } from "./event-invite-validity";
 import { inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
@@ -47,7 +47,7 @@ const eventInviteSendBatchSchema = z.object({
 
 export const eventInvitePreviewResponseSchema = successResponseSchema.extend({
   ...eventInvitePreviewSchema.shape,
-  previewExpiresAt: z.iso.datetime(),
+  previewExpiresAt: utcInstantSchema,
   recipientCount: z.number().int().nonnegative(),
   sendBatches: z.array(eventInviteSendBatchSchema).min(1).max(100),
 });

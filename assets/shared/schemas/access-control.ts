@@ -3,7 +3,7 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
-import { trimmedString } from "./api-common";
+import { trimmedString, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, searchTermSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
@@ -40,7 +40,7 @@ export const userRoleIdParamsSchema = z.object({
 const scopedContextFields = {
   contextType: authorizationContextTypeSchema.nullable().optional(),
   contextId: trimmedString(1, 80).nullable().optional(),
-  expiresAt: z.iso.datetime().nullable().optional(),
+  expiresAt: utcInstantSchema.nullable().optional(),
 };
 
 function validateScopedContext(
@@ -356,7 +356,7 @@ export const userRoleRevokeRouteSchema = {
 export const userRoleUpdateExpirySchema = z.object({
   // Explicit null clears the expiry (no term end); omitting the field is
   // not allowed — PATCH always states the intended value.
-  expiresAt: z.iso.datetime().nullable(),
+  expiresAt: utcInstantSchema.nullable(),
 });
 export type UserRoleUpdateExpiryInput = z.infer<typeof userRoleUpdateExpirySchema>;
 

@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { eventIdSchema, frontendPathPattern, jsonErrorResponse, successResponseSchema } from "./api-common";
+import {
+  eventIdSchema,
+  frontendPathPattern,
+  jsonErrorResponse,
+  successResponseSchema,
+  utcInstantSchema,
+} from "./api-common";
 import {
   eventAttendanceRegistrationsListResponseSchema,
   eventAttendanceRegistrationsQuerySchema,
@@ -54,8 +60,8 @@ export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLU
   profileKey: eventProfileKeySchema.optional(),
   registrationPolicy: eventRegistrationPolicySchema.optional(),
   sourceMode: eventSourceModeSchema.optional(),
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
+  from: utcInstantSchema.optional(),
+  to: utcInstantSchema.optional(),
 });
 export type GroupEventsListQuery = z.infer<typeof groupEventsListQuerySchema>;
 
@@ -99,10 +105,10 @@ export const groupEventTermsReplaceSchema = eventConfigurationRevisionSchema.ext
   configuration: eventTermsReplaceSchema,
 });
 export const groupEventTermsResponseSchema = eventTermsResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
 });
 export const groupEventTermsReplaceResponseSchema = eventTermsReplaceResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
 });
 
 export const groupEventDaysReplaceSchema = eventDaysManagementReplaceSchema;
@@ -110,12 +116,12 @@ export const groupEventDaysResponseSchema = eventDaysManagementResponseSchema;
 export const groupEventDaysReplaceResponseSchema = eventDaysManagementReplaceResponseSchema;
 
 export const groupEventRegistrationSettingsResponseSchema = z.object({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
   registrationPolicy: eventRegistrationPolicySchema,
 });
 
 export const groupEventRegistrationSettingsUpdateSchema = z.object({
-  expectedUpdatedAt: z.iso.datetime(),
+  expectedUpdatedAt: utcInstantSchema,
   registrationPolicy: eventRegistrationPolicySchema,
 });
 
@@ -147,7 +153,7 @@ export const groupEventSettingsUpdateSchema = eventSettingsSchema
   })
   .extend({
     links: linksSchema.optional(),
-    expectedUpdatedAt: z.iso.datetime(),
+    expectedUpdatedAt: utcInstantSchema,
   });
 export type GroupEventSettingsUpdateInput = z.infer<typeof groupEventSettingsUpdateSchema>;
 

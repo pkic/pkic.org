@@ -312,7 +312,7 @@ export const meetingGuestInvitationBootstrapSchema = z.object({
 });
 export const meetingGuestInvitationBootstrapResponseSchema = z.object({
   challengeId: databaseIdSchema,
-  expiresAt: z.iso.datetime(),
+  expiresAt: utcInstantSchema,
 });
 export const meetingGuestInvitationVerifySchema = z.object({
   challengeId: databaseIdSchema,
@@ -323,14 +323,14 @@ export const meetingGuestInvitationVerifySchema = z.object({
 });
 export const meetingGuestInvitationVerifyResponseSchema = z.object({
   occurrenceId: databaseIdSchema,
-  expiresAt: z.iso.datetime(),
+  expiresAt: utcInstantSchema,
 });
 
 export const ATTENDANCE_VERIFICATION_SOURCES = ["microsoft_graph", "cloudflare_meet", "manual"] as const;
 export const attendanceVerificationSourceSchema = z.enum(ATTENDANCE_VERIFICATION_SOURCES);
 export const attendanceVerifySchema = z.object({
   source: attendanceVerificationSourceSchema,
-  verifiedAt: z.iso.datetime().optional(),
+  verifiedAt: utcInstantSchema.optional(),
   note: trimmedString(0, 500).optional(),
 });
 
