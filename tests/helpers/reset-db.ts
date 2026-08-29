@@ -43,8 +43,14 @@ interface TableNameRow {
 // migration-seeded reference/configuration rows. Public sponsor rendering and
 // self-service checkout must see the same canonical tier vocabulary in every
 // test unless a test explicitly updates it.
+// `scheduled_jobs` (consolidated migration 0035) is system reference data of
+// the same class: one row per recurring job, seeded once by the migration and
+// expected to exist by the dispatcher. Wiping it would leave every scheduled
+// pass with nothing to select, silently turning the scheduler into a no-op for
+// any test that runs after a reset.
 const EXCLUDED_TABLES = new Set([
   "d1_migrations",
+  "scheduled_jobs",
   "roles",
   "role_permissions",
   "membership_settings",

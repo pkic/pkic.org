@@ -97,6 +97,7 @@ export interface Env {
   SCHEDULED_STORAGE_DELETION_LIMIT?: string;
   SCHEDULED_WAITLIST_PROMOTION_LIMIT?: string;
   SCHEDULED_RSVP_ENFORCEMENT_LIMIT?: string;
+  SCHEDULED_JOBS_PER_PASS?: string;
   SCHEDULED_DUE_WORK_MAX_PASSES?: string;
   SCHEDULED_DUE_WORK_MAX_MS?: string;
   /** Maximum D1 statements issued by one scheduled Worker invocation. */
