@@ -4,7 +4,10 @@ import { MAX_PAGE_LIMIT } from "../assets/shared/schemas/pagination";
 import { buildOffsetPageSql, type OffsetPageQuery } from "../functions/_lib/db/pagination";
 import { buildOrganizationsPageQuery } from "../functions/_lib/services/organization-management/read-model";
 import { buildUsersPageQuery } from "../functions/_lib/services/user-management-list";
-import { buildAdminEventsPageQuery, buildAdminEventStatsQuery } from "../functions/_lib/services/events/admin-list";
+import {
+  buildEventRegistrationStatsQuery,
+  buildManagedEventsPageQuery,
+} from "../functions/_lib/services/events/catalog";
 import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
@@ -36,11 +39,14 @@ describe("admin list D1 query plans", () => {
   it("aggregates a maximum-size event page through one JSON binding", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const eventIds = [eventId, ...Array.from({ length: MAX_PAGE_LIMIT - 1 }, (_, index) => `event-${index}`)];
-    const pageQuery = buildAdminEventsPageQuery({ limit: MAX_PAGE_LIMIT, offset: 0 });
+    const pageQuery = buildManagedEventsPageQuery(
+      { userId: "admin-user", canReadAll: true },
+      { limit: MAX_PAGE_LIMIT, offset: 0 },
+    );
     expect(pageQuery.limit).toBe(200);
     await explainOffsetPage(pageQuery);
 
-    const statsQuery = buildAdminEventStatsQuery(eventIds);
+    const statsQuery = buildEventRegistrationStatsQuery(eventIds);
     expect(statsQuery.sql).toContain("e.id IN (SELECT value FROM json_each(?))");
     expect(occurrences(statsQuery.sql, /\?/g)).toBe(1);
     expect(statsQuery.bindings).toHaveLength(1);

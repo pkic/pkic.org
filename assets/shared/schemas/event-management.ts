@@ -152,14 +152,49 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
   });
 export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
 
+/**
+ * Event-management list projection for a caller holding live event read
+ * permission. It extends the same canonical core as every other event
+ * projection and adds ownership, source, and bounded registration aggregates
+ * instead of restating the event identity in a separate management contract.
+ */
+export const eventManagementSummarySchema = eventResourceCoreSchema.extend({
+  ownerGroupId: groupIdSchema.nullable(),
+  sourcePath: z.string().nullable(),
+  basePath: z.string().nullable(),
+  totalRegistrations: z.number().int().nonnegative(),
+  confirmedRegistrations: z.number().int().nonnegative(),
+  pendingInvites: z.number().int().nonnegative(),
+});
+export type EventManagementSummary = z.infer<typeof eventManagementSummarySchema>;
+
 export const EVENT_LIST_SORT_COLUMNS = ["name", "starts_at", "ends_at"] as const;
-export const eventsListQuerySchema = listQuerySchema(EVENT_LIST_SORT_COLUMNS).extend({
+/**
+ * Management callers may additionally sort by the registration aggregate.
+ * The query contract accepts the superset because the caller's scope is only
+ * known after authentication; the service rejects a management-only sort for
+ * an audience caller rather than silently ignoring it.
+ */
+export const EVENT_MANAGEMENT_LIST_SORT_COLUMNS = [
+  ...EVENT_LIST_SORT_COLUMNS,
+  "registration_mode",
+  "total_registrations",
+] as const;
+export const eventsListQuerySchema = listQuerySchema(EVENT_MANAGEMENT_LIST_SORT_COLUMNS).extend({
   visibility: eventVisibilitySchema.optional(),
   from: z.iso.datetime().optional(),
   to: z.iso.datetime().optional(),
 });
 export type EventsListQuery = z.infer<typeof eventsListQuerySchema>;
-export const eventsListResponseSchema = paginatedResponseSchema("events", eventAudienceDetailSchema);
+/**
+ * Scope-appropriate list payload. The management projection is attempted
+ * first; audience rows fall through to the reduced public/member projection.
+ * This mirrors `eventDetailResponseSchema`, so list and detail expose the same
+ * two scopes through one contract each.
+ */
+export const eventsManagementListResponseSchema = paginatedResponseSchema("events", eventManagementSummarySchema);
+export const eventsAudienceListResponseSchema = paginatedResponseSchema("events", eventAudienceDetailSchema);
+export const eventsListResponseSchema = z.union([eventsManagementListResponseSchema, eventsAudienceListResponseSchema]);
 
 export const eventManagementCapabilitySchema = z.enum(["read", "write", "manage"]);
 export type EventManagementCapability = z.infer<typeof eventManagementCapabilitySchema>;

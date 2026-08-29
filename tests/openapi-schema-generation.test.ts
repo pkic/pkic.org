@@ -52,7 +52,10 @@ describe("OpenAPI schema generation", () => {
   it("mounts admin mutation contracts through their owning routers", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
-    expect(spec.paths["/api/v1/admin/events"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/imports"].post).toBeDefined();
+    // The ownerless admin event collection and its Hugo sync route are retired.
+    expect(spec.paths["/api/v1/admin/events"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/sync-from-hugo"]).toBeUndefined();
     expect(spec.paths["/api/v1/email/templates"].get).toBeDefined();
     expect(spec.paths["/api/v1/email/templates/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/email/templates/{key}/versions"].get).toBeDefined();

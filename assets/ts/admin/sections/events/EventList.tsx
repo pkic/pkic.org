@@ -1,223 +1,26 @@
-import { useState, useRef } from "preact/hooks";
+import { useRef } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { EventScheduleFields } from "../../components/EventScheduleFields";
-import { api } from "../../api";
-import { adminEventCreateResponseSchema, adminEventsListResponseSchema } from "../../../../shared/schemas/admin-events";
+import { eventsManagementListResponseSchema } from "../../../../shared/schemas/event-management";
 import { useHashLocation } from "wouter/use-hash-location";
-import { performAdminAction } from "../../actions";
-import { FormActions } from "../../components/FormActions";
-import { eventCreateSchema } from "../../../../shared/schemas/event-management";
-import {
-  EVENT_VISIBILITIES,
-  EVENT_VISIBILITY_LABELS,
-  type EventVisibility,
-} from "../../../../shared/schemas/event-series";
-
-// ────────────────────────────────────────────────────────
-// New event form
-// ────────────────────────────────────────────────────────
-
-function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => void; onCancel: () => void }) {
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [timezone, setTimezone] = useState("UTC");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-  const [mode, setMode] = useState("invite_or_open");
-  const [visibility, setVisibility] = useState<EventVisibility>("invitation_only");
-  const [inviteLimit, setInviteLimit] = useState(5);
-  const [venue, setVenue] = useState("");
-  const [virtualUrl, setVirtualUrl] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState("");
-
-  // auto-slug from name
-  function handleNameChange(val: string) {
-    setName(val);
-    if (
-      !slug ||
-      slug ===
-        name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-    ) {
-      setSlug(
-        val
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, ""),
-      );
-    }
-  }
-
-  async function handleSubmit(e: Event) {
-    e.preventDefault();
-    if (!name.trim() || !slug.trim()) {
-      setStatus("Name and slug are required.");
-      return;
-    }
-    setStatus("Creating…");
-    const body = eventCreateSchema.parse({
-      name: name.trim(),
-      slug: slug.trim(),
-      timezone: timezone.trim() || "UTC",
-      registrationMode: mode,
-      visibility,
-      inviteLimitAttendee: inviteLimit,
-      startsAt: startsAt ? new Date(startsAt).toISOString() : null,
-      endsAt: endsAt ? new Date(endsAt).toISOString() : null,
-      venue: venue.trim() || null,
-      virtualUrl: virtualUrl.trim() || null,
-    });
-    await performAdminAction({
-      setBusy: setSaving,
-      request: () =>
-        api("/api/v1/admin/events", adminEventCreateResponseSchema, { method: "POST", body: JSON.stringify(body) }),
-      successMessage: "Event created",
-      afterSuccess: () => onCreated(slug.trim()),
-      onError: setStatus,
-    });
-  }
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <div class="row g-2 mb-2">
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Event Name *</label>
-          <input
-            class="form-control form-control-sm"
-            type="text"
-            value={name}
-            onInput={(e) => handleNameChange((e.target as HTMLInputElement).value)}
-            placeholder="PKI Maturity Model Summit 2026"
-            required
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Slug *</label>
-          <input
-            class="form-control form-control-sm mono"
-            type="text"
-            value={slug}
-            onInput={(e) => setSlug((e.target as HTMLInputElement).value)}
-            placeholder="pki-summit-2026"
-            pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
-            required
-          />
-        </div>
-      </div>
-      <div class="mb-2">
-        <label class="form-label small fw-semibold">Event visibility</label>
-        <select
-          class="form-select form-select-sm"
-          value={visibility}
-          onChange={(event) => setVisibility((event.target as HTMLSelectElement).value as EventVisibility)}
-        >
-          {EVENT_VISIBILITIES.map((value) => (
-            <option key={value} value={value}>
-              {EVENT_VISIBILITY_LABELS[value]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <EventScheduleFields
-        startsAt={startsAt}
-        endsAt={endsAt}
-        timezone={timezone}
-        onStartsAtChange={setStartsAt}
-        onEndsAtChange={setEndsAt}
-        onTimezoneChange={setTimezone}
-        timezonePlaceholder="UTC"
-      />
-      <div class="row g-2 mb-2">
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Registration Mode</label>
-          <select
-            class="form-select form-select-sm"
-            value={mode}
-            onChange={(e) => setMode((e.target as HTMLSelectElement).value)}
-          >
-            <option value="invite_or_open">Invite or Open</option>
-            <option value="invite_only">Invite Only</option>
-            <option value="open">Open</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Invite Limit</label>
-          <input
-            class="form-control form-control-sm"
-            type="number"
-            value={inviteLimit}
-            min={1}
-            max={50}
-            onInput={(e) => setInviteLimit(Number((e.target as HTMLInputElement).value))}
-          />
-        </div>
-      </div>
-      <div class="row g-2 mb-3">
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Venue</label>
-          <input
-            class="form-control form-control-sm"
-            type="text"
-            value={venue}
-            onInput={(e) => setVenue((e.target as HTMLInputElement).value)}
-            placeholder="Amsterdam, Netherlands"
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Virtual URL</label>
-          <input
-            class="form-control form-control-sm"
-            type="url"
-            value={virtualUrl}
-            onInput={(e) => setVirtualUrl((e.target as HTMLInputElement).value)}
-            placeholder="https://..."
-          />
-        </div>
-      </div>
-      <FormActions submitLabel="Create Event" busyLabel="Creating…" busy={saving} onCancel={onCancel} status={status} />
-    </form>
-  );
-}
 
 // ────────────────────────────────────────────────────────
 // Event list
+//
+// Events are created in the portal under their owning group. This screen
+// reads the canonical auth-aware event collection, which returns the
+// management projection to a caller holding live event read permission.
 // ────────────────────────────────────────────────────────
 
 export function EventList() {
-  const [showNewForm, setShowNewForm] = useState(false);
   const [, navigate] = useHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
 
-  function handleCreated(slug: string) {
-    setShowNewForm(false);
-    void tableRef.current?.reload();
-    navigate(`/events/${encodeURIComponent(slug)}`);
-  }
-
   return (
     <div>
-      <div class="mb-3">
-        <button class="btn btn-sm btn-success" onClick={() => setShowNewForm((v) => !v)}>
-          {showNewForm ? "Cancel" : "+ New Event"}
-        </button>
-      </div>
-
-      {showNewForm && (
-        <div class="card border-0 shadow-sm mb-3">
-          <div class="card-header bg-white fw-semibold">Create new event</div>
-          <div class="card-body">
-            <NewEventForm onCreated={handleCreated} onCancel={() => setShowNewForm(false)} />
-          </div>
-        </div>
-      )}
-
       <ApiDataTable
-        endpoint="/api/v1/admin/events"
-        responseSchema={adminEventsListResponseSchema}
+        endpoint="/api/v1/events"
+        responseSchema={eventsManagementListResponseSchema}
         resolve={(data) => data.events}
         resolvePage={(data) => data.page}
         paginate
@@ -237,29 +40,29 @@ export function EventList() {
           },
           {
             header: "Dates",
-            cell: (e) => (e.starts_at ? e.starts_at.substring(0, 10) : "—"),
+            cell: (e) => (e.startsAt ? e.startsAt.substring(0, 10) : "—"),
             className: "mono small text-nowrap",
             sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: "desc" },
           },
           {
             header: "Mode",
-            cell: (e) => <Badge status={e.registration_mode} />,
+            cell: (e) => <Badge status={e.registrationPolicy} />,
             sort: { asc: "registration_mode", desc: "-registration_mode" },
           },
           {
             header: { label: "Confirmed", className: "text-end" },
-            cell: (e) => e.confirmed_registrations ?? 0,
+            cell: (e) => e.confirmedRegistrations,
             className: "mono text-end",
           },
           {
             header: { label: "Total", className: "text-end" },
-            cell: (e) => e.total_registrations ?? 0,
+            cell: (e) => e.totalRegistrations,
             className: "mono text-end",
             sort: { asc: "total_registrations", desc: "-total_registrations" },
           },
           {
             header: { label: "Pending", className: "text-end" },
-            cell: (e) => e.pending_invites ?? 0,
+            cell: (e) => e.pendingInvites,
             className: "mono text-end",
           },
           {

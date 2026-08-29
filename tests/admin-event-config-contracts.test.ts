@@ -8,7 +8,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { apiErrorPayloadSchema, successResponseSchema } from "../assets/shared/schemas/api-common";
-import { adminEventSyncResponseSchema } from "../assets/shared/schemas/route-contracts-admin-events";
+import { eventImportResponseSchema } from "../assets/shared/schemas/event-imports";
 import { eventSponsorTiersResponseSchema } from "../assets/shared/schemas/sponsorship-management";
 import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import {
@@ -74,7 +74,8 @@ describe("admin event configuration OpenAPI boundaries", () => {
 
   it("documents every event configuration route through its mounted OpenAPI router", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
-    expect(spec.paths["/api/v1/admin/events/sync-from-hugo"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/imports"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/sync-from-hugo"]).toBeUndefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/settings"].patch).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/settings"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/terms"]).toBeUndefined();
@@ -96,7 +97,7 @@ describe("admin event configuration OpenAPI boundaries", () => {
   it("returns the canonical error envelope for malformed and invalid configuration payloads", async () => {
     const token = await setupAdmin();
 
-    const malformed = await call(token, "/api/v1/admin/events/sync-from-hugo", {
+    const malformed = await call(token, "/api/v1/events/imports", {
       method: "POST",
       body: "{not-json",
     });
@@ -116,17 +117,21 @@ describe("admin event configuration OpenAPI boundaries", () => {
     expect(apiErrorPayloadSchema.parse(await invalidTiers.json()).error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("parses successful response bodies for sync, sponsor tiers, and event-role revocation", async () => {
+  it("parses successful response bodies for imports, sponsor tiers, and event-role revocation", async () => {
     const token = await setupAdmin();
 
-    const sync = await call(token, "/api/v1/admin/events/sync-from-hugo", {
+    const imported = await call(token, "/api/v1/events/imports", {
       method: "POST",
       body: JSON.stringify({
+        source: "hugo",
         event: { slug: "contract-event", name: "Contract Event", timezone: "UTC" },
       }),
     });
-    expect(sync.status).toBe(200);
-    expect(adminEventSyncResponseSchema.parse(await sync.json()).event.slug).toBe("contract-event");
+    expect(imported.status).toBe(200);
+    const importedPayload = eventImportResponseSchema.parse(await imported.json());
+    expect(importedPayload.event.slug).toBe("contract-event");
+    expect(importedPayload.created).toBe(true);
+    expect(importedPayload.source).toBe("hugo");
 
     const tiersPut = await call(token, "/api/v1/events/pqc-2026/sponsors/tiers", {
       method: "PUT",

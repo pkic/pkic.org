@@ -18,6 +18,7 @@ import {
   eventTeamRoleCreateSchema,
   eventTeamRolesResponseSchema,
 } from "./event-team";
+import { eventImportResponseSchema, eventImportSchema } from "./event-imports";
 import { eventPromotersListQuerySchema, eventPromotersListResponseSchema } from "./event-promoters";
 import { eventPresentationArchiveQuerySchema } from "./event-presentations";
 import { eventAnalyticsResponseSchema } from "./event-analytics";
@@ -54,6 +55,26 @@ export const eventsListRouteSchema = {
     "401": jsonErrorResponse("The supplied user session is invalid."),
   },
   "x-pkic-auth": { required: false },
+};
+
+export const eventImportCreateRouteSchema = {
+  tags: ["Events"],
+  summary: "Import an event definition",
+  description:
+    "Creates or updates the event and its configured terms from an external generator. The generating system is named by the request body rather than the route. Requires a live user-backed event write permission, which is re-evaluated inside the same D1 batch as the writes.",
+  request: {
+    body: { content: { "application/json": { schema: eventImportSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Event imported.",
+      content: { "application/json": { schema: eventImportResponseSchema } },
+    },
+    "400": jsonErrorResponse("Invalid event import payload."),
+    "401": jsonErrorResponse("Authentication required."),
+    "403": jsonErrorResponse("Insufficient permission to import events."),
+    "409": jsonErrorResponse("The event changed concurrently, or it is not owned by this import source."),
+  },
 };
 
 export const eventSettingsPatchRouteSchema = {

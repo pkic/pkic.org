@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
 import { formsListResponseSchema, type FormSummary } from "../../../shared/schemas/form-management";
 import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
@@ -46,13 +45,3 @@ export function eventFormCatalog(
     sort: "title",
   };
 }
-
-export const adminEventCatalog: AdminCatalog<AdminEventSummary, z.infer<typeof adminEventsListResponseSchema>> = {
-  endpoint: "/api/v1/admin/events",
-  responseSchema: adminEventsListResponseSchema,
-  resolveItems: (response) => response.events,
-  resolvePage: (response) => response.page,
-  itemKey: (item) => item.id,
-  itemLabel: (item) => item.name,
-  sort: "name",
-};

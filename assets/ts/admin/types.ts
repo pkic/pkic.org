@@ -9,7 +9,6 @@ import type {
   RoleAssignment as CanonicalRoleAssignment,
   UserRoleAssignment as CanonicalUserRoleAssignment,
 } from "../../shared/schemas/access-control";
-import type { AdminEventSummary as CanonicalEventSummary } from "../../shared/schemas/admin-events";
 import type { EventDetail as CanonicalEventDetail } from "../../shared/schemas/event-management";
 import type {
   EventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
@@ -31,7 +30,6 @@ import type { EventAnalyticsResponse as CanonicalEventStatsResponse } from "../.
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
 import type { z } from "zod";
 
-export type EventSummary = CanonicalEventSummary;
 export type EventDetail = CanonicalEventDetail;
 
 export type AdminEventDay = z.infer<typeof eventDaysResponseSchema>["days"][number];

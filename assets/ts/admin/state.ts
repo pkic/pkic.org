@@ -5,7 +5,7 @@
  * re-render when that signal's value changes.
  */
 import { signal, computed } from "@preact/signals";
-import type { EventSummary, EventDetail } from "./types";
+import type { EventDetail } from "./types";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
@@ -13,7 +13,6 @@ export const authStatus = signal<AuthStatus>("loading");
 export const authEmail = signal<string | null>(null);
 export const isAuthed = computed(() => authStatus.value === "authenticated");
 
-export const eventList = signal<EventSummary[]>([]);
 export const currentEvent = signal<EventDetail | null>(null);
 
 export function setAuthChecking(): void {

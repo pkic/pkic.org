@@ -1,5 +1,6 @@
 import { AppError } from "../errors";
 import { all, first, run } from "../db/queries";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { nowIso } from "../utils/time";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import { uuid } from "../utils/ids";
@@ -7,6 +8,7 @@ import { prepareAuditLog } from "./audit";
 import type { DatabaseLike, StatementLike } from "../types";
 import { EVENT_COLUMNS, type EventRecord, type EventTermRecord } from "./event-types";
 import type { EventVisibility } from "../../../assets/shared/schemas/event-series";
+import type { EventImportSource } from "../../../assets/shared/schemas/event-imports";
 
 export { EVENT_COLUMNS } from "./event-types";
 export type { EventRecord, EventTermRecord } from "./event-types";
@@ -164,29 +166,6 @@ export async function upsertEventFromHugo(db: DatabaseLike, payload: EventUpsert
   return getEventBySlug(db, payload.slug);
 }
 
-export async function createAdminEvent(
-  db: DatabaseLike,
-  payload: EventUpsertPayload,
-  actorUserId: string,
-): Promise<EventRecord> {
-  const mutation = prepareEventCreateStatement(db, payload);
-  try {
-    await db.batch([
-      mutation.statement,
-      prepareAuditLog(db, "admin", actorUserId, "event_created", "event", mutation.eventId, {
-        slug: payload.slug,
-      }),
-    ]);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
-      throw new AppError(409, "SLUG_TAKEN", `The slug '${payload.slug}' is already in use`);
-    }
-    throw error;
-  }
-
-  return getEventBySlug(db, payload.slug);
-}
-
 /** Allowed characters in a base path: letters, digits, hyphens, underscores, dots, slashes. */
 const BASE_PATH_RE = /^\/[a-zA-Z0-9/_\-.]+\/$/;
 
@@ -261,14 +240,50 @@ export async function replaceEventTerms(
   await db.batch(buildReplaceEventTermsStatements(db, eventId, audienceType, terms));
 }
 
-export async function syncEventFromHugo(
+/**
+ * Import an event definition from an external generator.
+ *
+ * The INSERT-versus-UPDATE decision is made from a read taken before the
+ * batch, so the batch re-asserts that decision atomically:
+ *
+ * - an update binds the exact `updated_at` revision observed by that read, so
+ *   a concurrent write aborts the import instead of silently overwriting it;
+ * - an update also binds the import source, so an event owned by the portal or
+ *   another generator can never be retargeted by a slug collision;
+ * - a create relies on the unique slug index, and a lost race surfaces as a
+ *   conflict rather than an unhandled constraint error.
+ *
+ * `db` is expected to already carry the caller's live permission guard, so
+ * permission revocation between authorization and commit aborts the same batch.
+ */
+export async function importEvent(
   db: DatabaseLike,
+  source: EventImportSource,
   payload: EventUpsertPayload,
   terms: EventSyncTerms | undefined,
   actorUserId: string,
-): Promise<EventRecord> {
-  const mutation = await buildEventUpsertStatement(db, payload);
-  const statements: StatementLike[] = [mutation.statement];
+): Promise<{ event: EventRecord; created: boolean }> {
+  const existing = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`, [payload.slug]);
+  if (existing && existing.source_mode !== null && existing.source_mode !== source) {
+    throw new AppError(
+      409,
+      "EVENT_SOURCE_CONFLICT",
+      `Event '${payload.slug}' is owned by the '${existing.source_mode}' source and cannot be imported from '${source}'`,
+    );
+  }
+  const mutation = await buildEventUpsertStatement(db, { ...payload, sourceMode: source });
+  const statements: StatementLike[] = [];
+  if (existing) {
+    statements.push(
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 FROM events
+               WHERE id = ? AND updated_at = ?
+                 AND (source_mode IS NULL OR source_mode = ?)`,
+        bindings: [existing.id, existing.updated_at, source],
+      }),
+    );
+  }
+  statements.push(mutation.statement);
   if (terms) {
     statements.push(
       ...buildReplaceEventTermsStatements(db, mutation.eventId, "attendee", terms.attendee),
@@ -276,10 +291,21 @@ export async function syncEventFromHugo(
     );
   }
   statements.push(
-    prepareAuditLog(db, "admin", actorUserId, "event_synced_from_hugo", "event", mutation.eventId, {
+    prepareAuditLog(db, "admin", actorUserId, "event_imported", "event", mutation.eventId, {
       slug: payload.slug,
+      source,
     }),
   );
-  await db.batch(statements);
-  return getEventBySlug(db, payload.slug);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "EVENT_IMPORT_CONFLICT", "The event changed while this import was being prepared");
+    }
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
+      throw new AppError(409, "EVENT_IMPORT_CONFLICT", "The event changed while this import was being prepared");
+    }
+    throw error;
+  }
+  return { event: await getEventBySlug(db, payload.slug), created: !existing };
 }

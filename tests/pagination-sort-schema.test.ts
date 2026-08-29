@@ -23,7 +23,7 @@ import {
   emailTemplatesListQuerySchema,
   emailTemplatesSortValueSchema,
 } from "../assets/shared/schemas/email-templates";
-import { eventsListSortValueSchema } from "../assets/shared/schemas/admin-events";
+import { eventsListQuerySchema } from "../assets/shared/schemas/event-management";
 import { eventTeamSortValueSchema } from "../assets/shared/schemas/event-team";
 import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
 import {
@@ -199,9 +199,10 @@ describe("consolidated per-endpoint sort schemas still validate their own allowl
     expect(emailTemplatesSortValueSchema.safeParse("bogus").success).toBe(false);
   });
 
-  it("eventsListSortValueSchema", () => {
-    expect(eventsListSortValueSchema.safeParse("starts_at").success).toBe(true);
-    expect(eventsListSortValueSchema.safeParse("bogus").success).toBe(false);
+  it("eventsListQuerySchema sort", () => {
+    expect(eventsListQuerySchema.safeParse({ sort: "starts_at" }).success).toBe(true);
+    expect(eventsListQuerySchema.safeParse({ sort: "total_registrations" }).success).toBe(true);
+    expect(eventsListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
   it("eventTeamSortValueSchema", () => {

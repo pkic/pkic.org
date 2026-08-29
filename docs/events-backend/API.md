@@ -12,6 +12,7 @@ Base path: `/api/v1`
 ## Event resources
 
 - `GET /events`
+- `POST /events/imports`
 - `GET /events/:eventSlug`
 - `PATCH /events/:eventSlug/settings`
 - `GET /events/:eventSlug/days`
@@ -27,7 +28,19 @@ Base path: `/api/v1`
 - `POST /events/:eventSlug/email/campaigns`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
-  enables the management detail projection.
+  enables the management projection for both the list and the detail. `GET
+  /events` is the single event collection: visibility is filtered in D1 before
+  counting and pagination, and only the projection differs by scope.
+- `POST /events/imports` creates or updates an event and its terms from an
+  external generator. The generating system is named by the request body
+  (`source`), not the route. It requires an attributable user-backed
+  `events:write` permission — the shared API key is rejected — and that
+  permission, the target event revision, and the owning source are all
+  re-evaluated inside the same D1 batch as the event, terms, and audit writes.
+  An event owned by a different source cannot be retargeted by a slug
+  collision.
+- Events are created interactively only under an owning group, through
+  `POST /groups/:groupId/events`. There is no ownerless creation endpoint.
 - Event visibility is `invitation_only`, `group_members`, `all_members`, or
   `public`. It is separate from registration and meeting-entry policy.
 - Event team assignments are role resources, not generic permission records.
@@ -65,9 +78,8 @@ Base path: `/api/v1`
 
 ## Remaining legacy event integration
 
-- `POST /admin/events/sync-from-hugo`
 - `GET /admin/events/:eventSlug/registrations`
-- `POST /admin/events/sync-from-hugo` supports optional `event.frontend.routes`:
+- `POST /events/imports` supports optional `event.frontend.routes`:
 - `registration`, `registrationConfirm`, `proposal`, `registrationManage`, `proposalManage`
 - Route metadata is stored in `events.settings_json.frontend.routes`.
 
