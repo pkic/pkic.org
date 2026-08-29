@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { jsonErrorResponse, successResponseSchema } from "./api-common";
+import { successResponseSchema } from "./api-common";
+import { authErrors, ok, requiresPermissions } from "./route-contract";
 
 /**
  * Reminder cycles are an email-domain producer: every reminder they resolve is
@@ -61,7 +62,7 @@ export type EmailReminderRunResponse = z.infer<typeof emailReminderRunResponseSc
 
 export const emailReminderRunCreateRouteSchema = {
   tags: ["Email"],
-  "x-pkic-auth": { required: true, scopes: ["email:manage"] },
+  ...requiresPermissions("email:manage"),
   summary: "Create a reminder run",
   description:
     'Resolves due reminders and queues them into the durable outbox. `mode: "preview"` resolves and returns the same batch without queueing or recording delivery. The run reuses the scheduled D1 query budget, so a manual run cannot exceed the bounds the schedule respects.',
@@ -69,13 +70,11 @@ export const emailReminderRunCreateRouteSchema = {
     body: { required: true, content: { "application/json": { schema: emailReminderRunCreateSchema } } },
   },
   responses: {
-    "200": {
-      description: "Reminder run result.",
-      content: { "application/json": { schema: emailReminderRunResponseSchema } },
-    },
-    "400": jsonErrorResponse("Invalid reminder run request."),
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to run email work."),
-    "409": jsonErrorResponse("Email permission changed while the run was in progress."),
+    ...ok("Reminder run result.", emailReminderRunResponseSchema),
+    ...authErrors({
+      badRequest: "Invalid reminder run request.",
+      forbidden: "Requires email:manage.",
+      conflict: "Email permission changed while the run was in progress.",
+    }),
   },
 };

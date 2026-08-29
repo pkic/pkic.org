@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { jsonErrorResponse, successResponseSchema } from "./api-common";
+import { successResponseSchema } from "./api-common";
+import { authErrors, ok, requiresPermissions } from "./route-contract";
 
 /**
  * Membership workflow batches. The batch key is a path parameter validated
@@ -24,7 +25,7 @@ export type MembershipBatchRunResponse = z.infer<typeof membershipBatchRunRespon
 
 export const membershipBatchRunCreateRouteSchema = {
   tags: ["Membership"],
-  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
+  ...requiresPermissions("membership:write"),
   summary: "Create a membership batch run",
   description:
     "Runs one membership workflow batch. `consultation` additionally requires `membership:write` and `ec-review` requires `membership:approve`; the exact set is re-evaluated inside the same D1 batch as the batch's own writes, audit record, and queued notifications. The run reuses the scheduled D1 query budget.",
@@ -33,12 +34,10 @@ export const membershipBatchRunCreateRouteSchema = {
     body: { required: false, content: { "application/json": { schema: membershipBatchRunCreateSchema } } },
   },
   responses: {
-    "200": {
-      description: "Membership batch run result.",
-      content: { "application/json": { schema: membershipBatchRunResponseSchema } },
-    },
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to run this membership batch."),
-    "409": jsonErrorResponse("Membership permission changed while the run was in progress."),
+    ...ok("Membership batch run result.", membershipBatchRunResponseSchema),
+    ...authErrors({
+      forbidden: "Requires membership:write, plus membership:approve for the ec-review batch.",
+      conflict: "Membership permission changed while the run was in progress.",
+    }),
   },
 };

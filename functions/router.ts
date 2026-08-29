@@ -13,6 +13,7 @@ import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
+import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/document";
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
@@ -25,10 +26,9 @@ export const openapi = fromHono(app, {
   docs_url: null,
   redoc_url: null,
   schema: {
-    info: {
-      title: "PKI Consortium API",
-      version: "v1",
-    },
+    info: OPENAPI_INFO,
+    tags: [...OPENAPI_TAGS],
+    "x-tagGroups": OPENAPI_TAG_GROUPS.map((group) => ({ ...group, tags: [...group.tags] })),
   },
 });
 
