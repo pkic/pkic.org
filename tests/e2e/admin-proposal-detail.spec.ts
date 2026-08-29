@@ -537,7 +537,7 @@ test("offers event presentation archives only with proposal read access", async 
       ),
     });
   });
-  await page.route("**/api/v1/admin/events/pqc-2026/proposals**", async (route) => {
+  await page.route("**/api/v1/events/pqc-2026/proposals**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

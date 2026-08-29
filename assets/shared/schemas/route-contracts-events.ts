@@ -21,6 +21,7 @@ import {
 import { eventPromotersListQuerySchema, eventPromotersListResponseSchema } from "./event-promoters";
 import { eventPresentationArchiveQuerySchema } from "./event-presentations";
 import { eventAnalyticsResponseSchema } from "./event-analytics";
+import { eventProposalsListQuerySchema, eventProposalsResponseSchema } from "./event-proposals";
 
 export const eventDetailRouteSchema = {
   tags: ["Events"],
@@ -225,4 +226,23 @@ export const eventAnalyticsRouteSchema = {
     "404": jsonErrorResponse("Event not found."),
   },
   "x-pkic-auth": { required: true, scopes: ["events:read"] },
+};
+
+export const eventProposalsListRouteSchema = {
+  tags: ["Event proposals"],
+  summary: "List event proposals",
+  description:
+    "Searches, filters, sorts, counts, and paginates proposals in D1 for a caller with live proposal read permission for this event. Set archived=true to select archived records instead of active records.",
+  request: { params: eventSlugParamsSchema, query: eventProposalsListQuerySchema },
+  responses: {
+    "200": {
+      description: "Event proposals visible to the authenticated actor.",
+      content: { "application/json": { schema: eventProposalsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Proposal read permission is required for this event."),
+    "404": jsonErrorResponse("Event not found."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["proposals:read"] },
+  "x-pkic-mcp": { expose: true, readonly: true },
 };

@@ -39,7 +39,7 @@ import { proposalReviewsListQuerySchema } from "../assets/shared/schemas/proposa
 import { sponsorsListQuerySchema } from "../assets/shared/schemas/public-sponsors";
 import { sponsorPortalAttendeesListQuerySchema } from "../assets/shared/schemas/sponsor-portal";
 import { publicVotesListQuerySchema } from "../assets/shared/schemas/votes";
-import { adminEventProposalsQuerySchema } from "../assets/shared/schemas/admin-events";
+import { eventProposalsListQuerySchema } from "../assets/shared/schemas/event-proposals";
 import { emailOutboxQuerySchema as adminEmailOutboxQuerySchema } from "../assets/shared/schemas/email-outbox";
 import { eventPromotersListQuerySchema } from "../assets/shared/schemas/event-promoters";
 import { membersListQuerySchema } from "../assets/shared/schemas/members-directory";
@@ -115,7 +115,7 @@ describe("shared list/search contract", () => {
   });
 
   it("resolves domain filter and sort defaults in the same endpoint contracts", () => {
-    expect(adminEventProposalsQuerySchema.parse({})).toMatchObject({ sort: "-submittedAt", limit: 50, offset: 0 });
+    expect(eventProposalsListQuerySchema.parse({})).toMatchObject({ sort: "-submittedAt", limit: 50, offset: 0 });
     expect(adminEmailOutboxQuerySchema.parse({})).toMatchObject({ dueNow: false, limit: 50, offset: 0 });
     expect(eventPromotersListQuerySchema.parse({})).toMatchObject({ view: "promoters", limit: 50, offset: 0 });
     expect(membersListQuerySchema.parse({})).toMatchObject({ group: "all", limit: 50, offset: 0 });

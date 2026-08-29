@@ -263,8 +263,8 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/presentations/archive`)),
     ],
     [
-      "GET /api/v1/admin/events/:slug/proposals",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/proposals`)),
+      "GET /api/v1/events/:slug/proposals",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/proposals`)),
     ],
     [
       "POST /api/v1/admin/events/:slug/emails/campaign/preview",

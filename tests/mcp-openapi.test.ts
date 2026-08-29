@@ -19,9 +19,11 @@ describe("MCP OpenAPI filtering", () => {
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
       paths: {
-        "/api/v1/admin/events/{eventSlug}/proposals": {
+        "/api/v1/events/{eventSlug}/proposals": {
           get: {
             operationId: "listProposals",
+            [AUTH_EXTENSION]: { required: true, scopes: ["proposals:read"] },
+            [MCP_EXTENSION]: { expose: true, readonly: true },
           },
         },
         "/api/v1/admin/proposals/{proposalId}/finalize": {
@@ -42,14 +44,14 @@ describe("MCP OpenAPI filtering", () => {
     });
 
     expect(Object.keys(filtered.paths)).toEqual([
-      "/api/v1/admin/events/{eventSlug}/proposals",
+      "/api/v1/events/{eventSlug}/proposals",
       "/api/v1/admin/proposals/{proposalId}/reviews",
     ]);
     expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/finalize"]).toBeUndefined();
     expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post.security).toEqual([
       { McpSession: ["proposals:score"] },
     ]);
-    expect(filtered.paths["/api/v1/admin/events/{eventSlug}/proposals"].get.security).toEqual([
+    expect(filtered.paths["/api/v1/events/{eventSlug}/proposals"].get.security).toEqual([
       { McpSession: ["proposals:read"] },
     ]);
     expect(filtered.components.securitySchemes.McpSession.scheme).toBe("bearer");

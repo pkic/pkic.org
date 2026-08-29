@@ -5,7 +5,6 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
-import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { AdminEventRegistrationsGet } from "./registrations";
 import emails_Router from "./emails/router";
 import registrations_Router from "./registrations/router";
@@ -17,35 +16,18 @@ export const openapi = fromHono(app);
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-function isSelfGatedEventPath(path: string, eventSlug: string): boolean {
-  const marker = `/events/${eventSlug}/`;
-  const idx = path.indexOf(marker);
-  if (idx === -1) return false;
-  const rest = path.slice(idx + marker.length);
-  return rest.startsWith("proposals");
-}
-
 /**
  * Context-aware gate for the /admin/events/:eventSlug/**
- * management surface (registrations, waitlist, settings, emails,
- * days, forms, terms, stats) — requires events:read (GET) or
+ * compatibility surface (registrations, waitlist, and emails) — requires events:read (GET) or
  * events:write (writes), globally or scoped to this event. Global admins
  * pass unconditionally via requirePermission's role='admin' bypass, so
  * existing behavior under the single-tier admin model is unchanged; this
  * is what actually gives a event_organizer grant "full management
  * of a specific event" (P7) instead of just admin-only access.
  *
- * `/proposals` is excluded here because it self-gates with finer-grained
- * permissions (proposals:read/score/manage), since a program_committee grant authorizes
- * proposal/agenda access without granting general event management.
  */
 async function requireEventManagementAccess(c: Context<RequestDbContext>, next: Next): Promise<void> {
   const eventSlug = c.req.param("eventSlug") ?? "";
-  if (isSelfGatedEventPath(c.req.path, eventSlug)) {
-    await next();
-    return;
-  }
-
   const admin = getCachedAdminForRequest(c.req.raw);
   if (!admin) {
     throw new AppError(401, "AUTH_REQUIRED", "Missing authenticated admin");
@@ -60,7 +42,6 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 
 app.use("*", requireEventManagementAccess);
 
-openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 openapi.get("/registrations", AdminEventRegistrationsGet);
 openapi.route("/emails", emails_Router);
 openapi.route("/registrations", registrations_Router);

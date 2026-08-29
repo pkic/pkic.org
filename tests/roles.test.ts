@@ -246,8 +246,8 @@ describe("roles (Built-in and custom roles)", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-pc-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}/proposals`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}/proposals`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}/proposals`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventBSlug}/proposals`)).status).toBe(403);
 
     // A program_committee grant does not extend to general event management
     // (registrations) outside proposals/agenda — see P8's persona description.

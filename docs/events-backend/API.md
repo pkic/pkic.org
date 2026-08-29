@@ -22,6 +22,7 @@ Base path: `/api/v1`
 - `GET /events/:eventSlug/promoters`
 - `GET /events/:eventSlug/presentations/archive`
 - `GET /events/:eventSlug/analytics`
+- `GET /events/:eventSlug/proposals`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
   enables the management detail projection.
@@ -40,12 +41,15 @@ Base path: `/api/v1`
   `events:read` permission. Registration, attendance, waitlist, invitation,
   and RSVP metrics execute as one bounded D1 batch. Proposal totals are omitted
   unless the same user also has event-scoped `proposals:read`.
+- The event proposal catalogue requires exact live, user-backed event-scoped
+  `proposals:read`. Search, status and recommendation filters, allowlisted
+  sorting, counting, and pagination execute in D1. `?archived=true` selects
+  archived records instead of mixing them into the active catalogue.
 
 ## Remaining legacy event integration
 
 - `POST /admin/events/sync-from-hugo`
 - `GET /admin/events/:eventSlug/registrations`
-- `GET /admin/events/:eventSlug/proposals`
 - `POST /admin/events/sync-from-hugo` supports optional `event.frontend.routes`:
 - `registration`, `registrationConfirm`, `proposal`, `registrationManage`, `proposalManage`
 - Route metadata is stored in `events.settings_json.frontend.routes`.

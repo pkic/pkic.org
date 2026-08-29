@@ -11,16 +11,11 @@ import {
 import { z } from "zod";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { attendanceTypeSchema } from "./registration";
-import { EVENT_PROPOSALS_SORT_COLUMNS, eventProposalsListQuerySchema } from "./event-proposals";
+import { EVENT_PROPOSALS_SORT_COLUMNS } from "./event-proposals";
 import { attendeeInviteLimitSchema, eventManagementDetailResponseSchema } from "./event-management";
 import { eventVisibilitySchema } from "./event-series";
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
 
-/** Legacy admin-only extension for auditing soft-deleted proposal records. */
-export const adminEventProposalsQuerySchema = eventProposalsListQuerySchema.extend({
-  deleted: z.literal("1").optional(),
-});
-export type AdminEventProposalsQuery = z.infer<typeof adminEventProposalsQuerySchema>;
 export { EVENT_PROPOSALS_SORT_COLUMNS };
 
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;

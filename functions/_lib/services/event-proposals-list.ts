@@ -11,11 +11,8 @@ import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/propo
 
 type ProposalSort = EventProposalsListQuery["sort"];
 
-/** Transport-neutral query plus the legacy admin-only deleted-record selector. */
-export type EventProposalsServiceQuery = EventProposalsListQuery & {
-  eventId: string;
-  deleted?: "1";
-};
+/** Transport-neutral event proposal catalogue query. */
+export type EventProposalsServiceQuery = EventProposalsListQuery & { eventId: string };
 
 const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
   submittedAt: "sp.submitted_at",
@@ -58,7 +55,7 @@ function parseCountRecord(value: string): Record<string, number> {
 }
 
 export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery): OffsetPageQuery {
-  const conditions = ["sp.event_id = ?", query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
+  const conditions = ["sp.event_id = ?", query.archived ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
   const predicateBindings: unknown[] = [query.eventId];
 
   if (query.status === "active") {
@@ -108,8 +105,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
   }
 
   const where = conditions.join(" AND ");
-  const reviewDeletedScope =
-    query.deleted === "1" ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
+  const reviewDeletedScope = query.archived ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
   const baseFromSql = `FROM session_proposals sp
          JOIN users u ON u.id = sp.proposer_user_id
          WHERE ${where}`;
@@ -157,7 +153,7 @@ export async function listEventProposals(
 ): Promise<{ proposals: EventProposalSummary[]; stats: ProposalStats; page: ReturnType<typeof buildPageInfo> }> {
   const pageQuery = buildEventProposalsPageQuery(query);
   const [pageStatement, countStatement] = buildOffsetPageStatements(db, pageQuery);
-  const deletedScope = query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
+  const deletedScope = query.archived ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
   const [rowsResult, totalResult, statsResult] = await db.batch([
     pageStatement,
     countStatement,

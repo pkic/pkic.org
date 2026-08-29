@@ -9,8 +9,14 @@ import { validateRequiredConsents } from "../../../../_lib/services/consent";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
+import { eventProposalsListRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-events";
+import { eventProposalsResponseSchema } from "../../../../../assets/shared/schemas/event-proposals";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { submitProposal } from "../../../../_lib/services/proposal-submission";
+import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access";
+import { listEventProposals } from "../../../../_lib/services/event-proposals-list";
+import type { AdminContext } from "../../../../_lib/db/context";
+import { requireEventPermission } from "./authorization";
 
 async function handleProposalCreate(
   c: any,
@@ -82,3 +88,18 @@ async function handleProposalCreate(
 }
 
 export const EventsEventSlugProposalsPost = openApiRoute(eventProposalCreateRouteSchema, handleProposalCreate);
+
+export const EventProposalsListGet = openApiRoute(eventProposalsListRouteSchema, async (c: AdminContext, data) => {
+  const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "proposals:read");
+  const [access, result] = await Promise.all([
+    getProposalAccessForEvent(db, event.id, actor),
+    listEventProposals(db, { ...data.query, eventId: event.id }),
+  ]);
+  return json(
+    eventProposalsResponseSchema.parse({
+      event: { id: event.id, slug: event.slug, name: event.name },
+      access,
+      ...result,
+    }),
+  );
+});

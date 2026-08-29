@@ -250,8 +250,8 @@ describe("group event proposal routes", () => {
     const filtered = eventProposalsResponseSchema.parse(await filteredResponse.json());
     expect(filtered.proposals).toHaveLength(1);
     expect(filtered.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
-    const legacyDeletedSelector = eventProposalsResponseSchema.parse(await (await route(fixture, "?deleted=1")).json());
-    expect(legacyDeletedSelector.proposals.map((proposal) => proposal.id)).toEqual([fixture.proposalId]);
+    const archivedSelector = eventProposalsResponseSchema.parse(await (await route(fixture, "?archived=true")).json());
+    expect(archivedSelector.proposals).toEqual([]);
     expect((await route(fixture, "/" + fixture.proposalId)).status).toBe(200);
 
     const wrongGroupResponse = await app.fetch(

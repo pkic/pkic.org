@@ -9,7 +9,7 @@ function ProposalsList({ slug }: { slug: string }) {
 
   return (
     <EventProposalsTable
-      endpoint={`/api/v1/admin/events/${encodeURIComponent(slug)}/proposals`}
+      endpoint={`/api/v1/events/${encodeURIComponent(slug)}/proposals`}
       storageKey={`adm_proposal_filters_${slug}`}
       onSelect={(proposal) => navigate(`/events/${slug}/proposal/${proposal.id}`)}
       toolbarPrefix={(_, access) =>

@@ -324,7 +324,7 @@ describe("admin proposal endpoints", () => {
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list");
 
-    const response = await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals");
+    const response = await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals");
 
     expect(response.status).toBe(200);
     const raw = (await response.json()) as { proposals: Array<Record<string, unknown>> };
@@ -347,6 +347,29 @@ describe("admin proposal endpoints", () => {
     expect(payload.stats.reviewedCount).toBe(1);
     expect(payload.stats.unreviewedCount).toBe(0);
     expect(payload.stats.total).toBe(1);
+    expect((await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals")).status).toBe(404);
+  });
+
+  it("selects archived proposals explicitly without mixing them into the active catalogue", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-archived-proposal-list");
+
+    await env.DB.prepare("UPDATE session_proposals SET deleted_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const activeResponse = await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals");
+    const active = eventProposalsResponseSchema.parse(await activeResponse.json());
+    expect(active.proposals).toEqual([]);
+
+    const archivedResponse = await callAdminProposalsList(
+      adminToken,
+      "/api/v1/events/pqc-2026/proposals?archived=true",
+    );
+    expect(archivedResponse.status).toBe(200);
+    const archived = eventProposalsResponseSchema.parse(await archivedResponse.json());
+    expect(archived.proposals.map((proposal) => proposal.id)).toEqual([proposalId]);
   });
 
   it("keeps proposal count predicates while excluding page-only review projections", async () => {
@@ -423,10 +446,7 @@ describe("admin proposal endpoints", () => {
     ]);
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-sort");
-    const scoreResponse = await callAdminProposalsList(
-      adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?sort=score",
-    );
+    const scoreResponse = await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals?sort=score");
     const scorePayload = (await scoreResponse.json()) as { proposals: Array<{ title: string }> };
     expect(scorePayload.proposals.map((proposal) => proposal.title)).toEqual([
       "Lower Score Proposal",
@@ -435,7 +455,7 @@ describe("admin proposal endpoints", () => {
 
     const filterResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?recommendation=reject",
+      "/api/v1/events/pqc-2026/proposals?recommendation=reject",
     );
     const filterPayload = (await filterResponse.json()) as {
       proposals: Array<{ title: string; recommendation_reject_count: number }>;
@@ -473,7 +493,7 @@ describe("admin proposal endpoints", () => {
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-paged");
     const firstPageResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?status=submitted&limit=1&offset=0",
+      "/api/v1/events/pqc-2026/proposals?status=submitted&limit=1&offset=0",
     );
     expect(firstPageResponse.status).toBe(200);
     const firstPagePayload = (await firstPageResponse.json()) as {
@@ -485,7 +505,7 @@ describe("admin proposal endpoints", () => {
 
     const secondPageResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?status=submitted&limit=1&offset=1",
+      "/api/v1/events/pqc-2026/proposals?status=submitted&limit=1&offset=1",
     );
     const secondPagePayload = (await secondPageResponse.json()) as {
       proposals: Array<{ title: string }>;
@@ -727,7 +747,7 @@ describe("admin proposal endpoints", () => {
     const { adminId } = await seedProposalWithReviews(env.DB, eventId);
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-search");
 
-    const response = await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals?q=relevance");
+    const response = await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals?q=relevance");
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { proposals: Array<{ title: string }>; page: { total: number } };
@@ -1162,10 +1182,7 @@ describe("admin proposal endpoints", () => {
     expect(detail.proposal.decision_status).toBe("accepted");
     expect(detail.proposal.cancellation_comment).toContain("speaker is unavailable");
 
-    const listResponse = await callAdminProposalsList(
-      adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?status=canceled",
-    );
+    const listResponse = await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals?status=canceled");
     expect(listResponse.status).toBe(200);
     const list = eventProposalsResponseSchema.parse(await listResponse.json());
     expect(list.proposals).toHaveLength(1);

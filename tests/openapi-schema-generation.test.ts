@@ -13,6 +13,8 @@ describe("OpenAPI schema generation", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
     expect(spec.paths["/api/v1/events/{eventSlug}/proposals"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/proposals"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/proposals"]).toBeUndefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-email"].get).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-email"].post).toBeDefined();

@@ -1141,6 +1141,21 @@ Status: In progress
       frontend, route-retirement, and real-browser regressions cover the
       resource; the former `/api/v1/admin/events/:eventSlug/stats` handler is
       removed rather than retained as an alias.
+      The event proposal catalogue now shares the natural
+      `/api/v1/events/:eventSlug/proposals` resource with public proposal
+      creation: authenticated GET requires exact live, user-backed
+      event-scoped `proposals:read`, while POST retains its independent public
+      submission policy. One neutral list contract owns D1-side search, status
+      and recommendation filters, allowlisted sorting, counting, pagination,
+      and aggregate summaries for both event and selected-group consumers.
+      Archived proposals are an explicit `archived=true` selection and never
+      mix into the active catalogue. The response derives its action
+      capabilities from the same live event context. The canonical read
+      operation retains explicit MCP metadata, and the former
+      `/api/v1/admin/events/:eventSlug/proposals` handler is removed rather
+      than retained as an alias. Mounted permission, archive-isolation,
+      OpenAPI, MCP, pagination, frontend, route-retirement, and browser
+      regressions cover the cutover.
       Program-committee proposal management now uses the same selected-group
       event context. Neutral shared contracts and components serve the portal
       and the temporary admin adapter for detail, reviews, comments, accepted
@@ -1665,7 +1680,7 @@ Status: In progress
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the canonical event
       visibility, resource, team-role, promoter, presentation-archive, and
-      analytics cutovers with 2,286 backend tests (one skipped), 343 frontend tests, and
+      analytics and proposal-catalogue cutovers with 2,287 backend tests (one skipped), 343 frontend tests, and
       80 tooling tests. Type checks, ESLint,
       SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
