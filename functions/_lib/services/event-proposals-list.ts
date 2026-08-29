@@ -12,7 +12,11 @@ import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/propo
 type ProposalSort = EventProposalsListQuery["sort"];
 
 /** Transport-neutral event proposal catalogue query. */
-export type EventProposalsServiceQuery = EventProposalsListQuery & { eventId: string };
+export type EventProposalsServiceQuery = EventProposalsListQuery & {
+  eventId: string;
+  /** Allow search across private review and decision text for authorized scorers. */
+  searchPrivateFields?: boolean;
+};
 
 const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
   submittedAt: "sp.submitted_at",
@@ -81,27 +85,32 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
       "u.last_name",
       "u.first_name || ' ' || u.last_name",
     ]);
-    const review = buildD1TextSearchFilter(query.q, [
-      "pr_search.reviewer_comment",
-      "pr_search.applicant_note",
-      "pr_search.recommendation",
-      "ru.email",
-      "ru.first_name",
-      "ru.last_name",
-      "ru.first_name || ' ' || ru.last_name",
-    ]);
-    const decision = buildD1TextSearchFilter(query.q, ["pd_search.decision_note", "pd_search.final_status"]);
-    conditions.push(`(${proposal.sql}
-      OR EXISTS (
-        SELECT 1 FROM proposal_reviews pr_search
-        LEFT JOIN users ru ON ru.id = pr_search.reviewer_user_id
-        WHERE pr_search.proposal_id = sp.id AND pr_search.review_round = sp.review_round AND ${review.sql}
-      )
-      OR EXISTS (
-        SELECT 1 FROM proposal_decisions pd_search
-        WHERE pd_search.proposal_id = sp.id AND ${decision.sql}
-      ))`);
-    predicateBindings.push(...proposal.bindings, ...review.bindings, ...decision.bindings);
+    if (query.searchPrivateFields) {
+      const review = buildD1TextSearchFilter(query.q, [
+        "pr_search.reviewer_comment",
+        "pr_search.applicant_note",
+        "pr_search.recommendation",
+        "ru.email",
+        "ru.first_name",
+        "ru.last_name",
+        "ru.first_name || ' ' || ru.last_name",
+      ]);
+      const decision = buildD1TextSearchFilter(query.q, ["pd_search.decision_note", "pd_search.final_status"]);
+      conditions.push(`(${proposal.sql}
+        OR EXISTS (
+          SELECT 1 FROM proposal_reviews pr_search
+          LEFT JOIN users ru ON ru.id = pr_search.reviewer_user_id
+          WHERE pr_search.proposal_id = sp.id AND pr_search.review_round = sp.review_round AND ${review.sql}
+        )
+        OR EXISTS (
+          SELECT 1 FROM proposal_decisions pd_search
+          WHERE pd_search.proposal_id = sp.id AND ${decision.sql}
+        ))`);
+      predicateBindings.push(...proposal.bindings, ...review.bindings, ...decision.bindings);
+    } else {
+      conditions.push(proposal.sql);
+      predicateBindings.push(...proposal.bindings);
+    }
   }
 
   const where = conditions.join(" AND ");

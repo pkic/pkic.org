@@ -37,6 +37,7 @@ import {
   getPresentationProposalContext,
   uploadProposalPresentation,
 } from "../functions/_lib/services/presentation-upload";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 interface StoredObject {
   body: ReadableStream | null;
@@ -829,6 +830,42 @@ describe("presentation versioning", () => {
     expect(versions.map((version) => version.version_number)).toEqual([1, 2]);
     expect(versions.filter((version) => version.is_current === 1)).toHaveLength(1);
     expect(versions[1].is_current).toBe(1);
+  });
+
+  it("rejects a stale deletion after another deletion promotes that version", async () => {
+    const { proposalId, speakerUserId, adminUserId } = await seed();
+    const first = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-race-first.pdf",
+      fileName: "delete-race-first.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const second = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-race-second.pdf",
+      fileName: "delete-race-second.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const staleDelete = deletePresentationVersion(
+      mutateBeforeNextBatch(env.DB, () => deletePresentationVersion(env.DB, proposalId, second.id, adminUserId)),
+      proposalId,
+      first.id,
+      adminUserId,
+    );
+    await expect(staleDelete).rejects.toMatchObject({ status: 409, code: "PRESENTATION_VERSION_CONFLICT" });
+
+    const versions = await queryAll<{ id: string; is_current: number; deleted_at: string | null }>(
+      env.DB,
+      "SELECT id, is_current, deleted_at FROM presentation_versions WHERE proposal_id = ? ORDER BY version_number",
+      proposalId,
+    );
+    expect(versions).toEqual([
+      { id: first.id, is_current: 1, deleted_at: null },
+      { id: second.id, is_current: 0, deleted_at: expect.any(String) },
+    ]);
   });
 
   it("admin can list versions, download, and submit a review", async () => {

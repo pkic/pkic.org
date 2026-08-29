@@ -405,12 +405,24 @@ describe("admin proposal endpoints", () => {
       status: "active",
       recommendation: "accept",
       q: "needle",
+      searchPrivateFields: true,
     });
     const filteredSql = buildOffsetPageSql(filteredQuery);
     expect(filteredSql.countSql).toContain("sp.status NOT IN");
     expect(filteredSql.countSql).toContain("pr_filter.recommendation = ?");
     expect(filteredSql.countSql).toContain("pr_search.proposal_id = sp.id");
     expect(filteredSql.countBindings).toEqual(filteredSql.bindings.slice(1));
+
+    const readOnlySearch = buildOffsetPageSql(
+      buildEventProposalsPageQuery({
+        eventId,
+        limit: 10,
+        offset: 0,
+        sort: "-submittedAt",
+        q: "needle",
+      }),
+    );
+    expect(readOnlySearch.countSql).not.toMatch(/pr_search|pd_search|reviewer_comment|applicant_note|decision_note/);
   });
 
   it("filters proposal list by recommendation and sorts by average score", async () => {

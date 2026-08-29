@@ -280,6 +280,31 @@ describe("group event proposal routes", () => {
     expect(wrongEventResponse.status).toBe(404);
   });
 
+  it("does not expose private review text through read-only proposal search", async () => {
+    const fixture = await setupFixture();
+    const privateNeedle = "private-review-" + crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO proposal_reviews
+         (id, proposal_id, reviewer_user_id, review_round, recommendation, score,
+          reviewer_comment, applicant_note, created_at, updated_at)
+       VALUES (?, ?, ?, 1, 'accept', 8, ?, 'private applicant note', datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), fixture.proposalId, fixture.reviewerId, privateNeedle)
+      .run();
+
+    const readOnlyToken = await scopedToken(fixture, ["proposals:read"]);
+    const readOnlyResponse = await route(fixture, "?q=" + encodeURIComponent(privateNeedle), {}, readOnlyToken);
+    expect(readOnlyResponse.status).toBe(200);
+    expect(eventProposalsResponseSchema.parse(await readOnlyResponse.json()).proposals).toEqual([]);
+
+    const scorerToken = await scopedToken(fixture, ["proposals:read", "proposals:score"]);
+    const scorerResponse = await route(fixture, "?q=" + encodeURIComponent(privateNeedle), {}, scorerToken);
+    expect(scorerResponse.status).toBe(200);
+    expect(eventProposalsResponseSchema.parse(await scorerResponse.json()).proposals.map(({ id }) => id)).toEqual([
+      fixture.proposalId,
+    ]);
+  });
+
   it("mounts the group speaker roster behind the private proposal-score boundary and exact tuple", async () => {
     const fixture = await setupFixture();
     await addProposalSpeaker(fixture, "confirmed");

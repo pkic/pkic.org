@@ -407,13 +407,14 @@ export async function deletePresentationVersion(
           `UPDATE presentation_versions
            SET deleted_at = ?, is_current = 0
            WHERE id = ? AND proposal_id = ? AND deleted_at IS NULL
+             AND is_current = ?
              AND COALESCE((
                SELECT status FROM presentation_version_reviews
                WHERE version_id = presentation_versions.id
                ORDER BY reviewed_at DESC LIMIT 1
              ), '') <> 'approved'`,
         )
-        .bind(now, versionId, proposalId),
+        .bind(now, versionId, proposalId, version.isCurrent ? 1 : 0),
       prepareAuditLogAfterOneChange(
         db,
         "admin",
