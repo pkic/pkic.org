@@ -1411,7 +1411,7 @@ test.describe("browser workflows", () => {
 
     // Accept the proposal. The e2e server is configured with DEFAULT_MIN_PROPOSAL_REVIEWS=0.
     const finalizeResult = await page.evaluate(async (id) => {
-      const res = await fetch(`/api/v1/admin/proposals/${id}/finalize`, {
+      const res = await fetch(`/api/v1/proposals/${id}/decisions`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },

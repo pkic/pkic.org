@@ -33,7 +33,7 @@ function expectStatus(result: ApiResult, status: number): Record<string, unknown
   return result.body as Record<string, unknown>;
 }
 
-test("portal proposal detail uses canonical me/groups routes without admin fallback", async ({ page }) => {
+test("portal proposal detail uses canonical proposal resources without admin fallback", async ({ page }) => {
   await signInToPortal(page, e2eAdminEmail("portal-event-proposals"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const createdEvent = expectStatus(
@@ -84,14 +84,12 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
   expect(proposalId).toBeTruthy();
 
   const adminRequests: string[] = [];
-  const meRequests: string[] = [];
-  const groupRequests: string[] = [];
+  const proposalRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.startsWith("/api/v1/admin/")) adminRequests.push(`${request.method()} ${pathname}`);
-    if (pathname.startsWith("/api/v1/me/")) meRequests.push(`${request.method()} ${pathname}`);
-    if (pathname.startsWith(`/api/v1/groups/${GROUP_ID}/events/${event.id}/proposals`)) {
-      groupRequests.push(`${request.method()} ${pathname}`);
+    if (pathname.startsWith("/api/v1/proposals/") || pathname === `/api/v1/events/${event.slug}/proposals`) {
+      proposalRequests.push(`${request.method()} ${pathname}`);
     }
   });
 
@@ -115,8 +113,7 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
   const coSpeakerDeadline = "2027-09-10T15:30";
   const coSpeakerInviteResponse = page.waitForResponse(
     (response) =>
-      response.request().method() === "POST" &&
-      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/${event.id}/proposals/${proposalId}/speakers`),
+      response.request().method() === "POST" && response.url().includes(`/api/v1/proposals/${proposalId}/speakers`),
   );
   const speakerPanel = page.getByLabel("Proposal speakers");
   await speakerPanel.getByLabel("Email address").fill(coSpeakerEmail);
@@ -143,16 +140,16 @@ test("portal proposal detail uses canonical me/groups routes without admin fallb
   });
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
-  expect(meRequests).toEqual(expect.arrayContaining(["GET /api/v1/me/proposal-programs"]));
-  expect(groupRequests).toEqual(
+  expect(proposalRequests).toEqual(
     expect.arrayContaining([
-      expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals$/),
-      expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*$/),
-      expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/audit-log$/),
-      expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers$/),
-      expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers$/),
-      expect.stringMatching(/^PATCH \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers\/.*$/),
-      expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/proposals\/.*\/speakers\/.*\/remind$/),
+      "GET /api/v1/proposals/programs",
+      `GET /api/v1/events/${event.slug}/proposals`,
+      `GET /api/v1/proposals/${proposalId}`,
+      `GET /api/v1/proposals/${proposalId}/audit-log`,
+      `GET /api/v1/proposals/${proposalId}/speakers`,
+      `POST /api/v1/proposals/${proposalId}/speakers`,
+      expect.stringMatching(new RegExp(`^PATCH /api/v1/proposals/${proposalId}/speakers/`)),
+      expect.stringMatching(new RegExp(`^POST /api/v1/proposals/${proposalId}/speakers/.*/reminders$`)),
     ]),
   );
 });

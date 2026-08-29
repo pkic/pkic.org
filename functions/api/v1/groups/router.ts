@@ -52,43 +52,6 @@ import { GroupEventProfilesList } from "./[groupId]/events/profiles";
 import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
 import { GroupEventProposalsList } from "./[groupId]/events/[eventId]/proposals";
 import {
-  GroupEventProposalDetailGet,
-  GroupEventProposalPatch,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]";
-import {
-  GroupEventProposalReviewsList,
-  GroupEventProposalReviewUpsert,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]/reviews";
-import { GroupEventProposalReviewPatch } from "./[groupId]/events/[eventId]/proposals/[proposalId]/reviews/[reviewId]";
-import {
-  GroupEventProposalCommentsList,
-  GroupEventProposalCommentCreate,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]/comments";
-import { GroupEventProposalCancel } from "./[groupId]/events/[eventId]/proposals/[proposalId]/cancel";
-import { GroupEventProposalFinalizePreview } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize-preview";
-import { GroupEventProposalFinalize } from "./[groupId]/events/[eventId]/proposals/[proposalId]/finalize";
-import { GroupEventProposalAuditLogList } from "./[groupId]/events/[eventId]/proposals/[proposalId]/audit-log";
-import {
-  GroupEventProposalSpeakerInvitePost,
-  GroupEventProposalSpeakersGet,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers";
-import {
-  GroupEventProposalSpeakerDelete,
-  GroupEventProposalSpeakerPatch,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/[userId]";
-import {
-  GroupEventProposalRemindPresentationPost,
-  GroupEventProposalRemindSpeakersPost,
-  GroupEventProposalSpeakerRemindPost,
-  GroupEventProposalSpeakerRemindPresentationPost,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/reminders";
-import {
-  GroupEventProposalSpeakerHeadshotDelete,
-  GroupEventProposalSpeakerHeadshotGet,
-  GroupEventProposalSpeakerHeadshotPut,
-} from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/headshot";
-import { GroupEventProposalSpeakerGravatarPost } from "./[groupId]/events/[eventId]/proposals/[proposalId]/speakers/gravatar";
-import {
   GroupEventRegistrationAdmitPost,
   GroupEventRegistrationCreate,
   GroupEventRegistrationDayAttendancePatch,
@@ -179,50 +142,6 @@ openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
 registerGroupEventEmailCampaignRoutes(openapi);
 openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
-openapi.get("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalDetailGet);
-openapi.patch("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalPatch);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/cancel", GroupEventProposalCancel);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize-preview", GroupEventProposalFinalizePreview);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/finalize", GroupEventProposalFinalize);
-openapi.get("/:groupId/events/:eventId/proposals/:proposalId/audit-log", GroupEventProposalAuditLogList);
-openapi.get("/:groupId/events/:eventId/proposals/:proposalId/speakers", GroupEventProposalSpeakersGet);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/speakers", GroupEventProposalSpeakerInvitePost);
-openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId", GroupEventProposalSpeakerPatch);
-openapi.delete("/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId", GroupEventProposalSpeakerDelete);
-openapi.post(
-  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/remind",
-  GroupEventProposalSpeakerRemindPost,
-);
-openapi.post(
-  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/remind-presentation",
-  GroupEventProposalSpeakerRemindPresentationPost,
-);
-openapi.get(
-  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/headshot",
-  GroupEventProposalSpeakerHeadshotGet,
-);
-openapi.put(
-  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/headshot",
-  GroupEventProposalSpeakerHeadshotPut,
-);
-openapi.delete(
-  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/headshot",
-  GroupEventProposalSpeakerHeadshotDelete,
-);
-openapi.post(
-  "/:groupId/events/:eventId/proposals/:proposalId/speakers/:userId/gravatar",
-  GroupEventProposalSpeakerGravatarPost,
-);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/remind-speakers", GroupEventProposalRemindSpeakersPost);
-openapi.post(
-  "/:groupId/events/:eventId/proposals/:proposalId/remind-presentation",
-  GroupEventProposalRemindPresentationPost,
-);
-openapi.get("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewsList);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/reviews", GroupEventProposalReviewUpsert);
-openapi.patch("/:groupId/events/:eventId/proposals/:proposalId/reviews/:reviewId", GroupEventProposalReviewPatch);
-openapi.get("/:groupId/events/:eventId/proposals/:proposalId/comments", GroupEventProposalCommentsList);
-openapi.post("/:groupId/events/:eventId/proposals/:proposalId/comments", GroupEventProposalCommentCreate);
 openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
 openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);
 openapi.patch(

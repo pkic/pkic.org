@@ -25,7 +25,7 @@ describe("admin API client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const file = new File(["%PDF-1.7"], "slides.pdf", { type: "application/pdf" });
-    await api("/api/v1/admin/proposals/proposal-1/presentation/versions", successResponseSchema, {
+    await api("/api/v1/proposals/proposal-1/presentations", successResponseSchema, {
       method: "POST",
       ...presentationUploadRequest(file),
     });
@@ -43,7 +43,7 @@ describe("admin API client", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await api("/api/v1/admin/proposals/proposal-1/reviews", successResponseSchema, {
+    await api("/api/v1/proposals/proposal-1/reviews", successResponseSchema, {
       method: "POST",
       body: JSON.stringify({ recommendation: "accept" }),
     });
@@ -59,9 +59,9 @@ describe("admin API client", () => {
       ),
     );
 
-    await expect(
-      api("/api/v1/admin/proposals/proposal-1/presentation/versions/version-1", successResponseSchema),
-    ).rejects.toThrow(ADMIN_PERMISSION_DENIED_MESSAGE);
+    await expect(api("/api/v1/proposals/proposal-1/presentations/version-1", successResponseSchema)).rejects.toThrow(
+      ADMIN_PERMISSION_DENIED_MESSAGE,
+    );
   });
 
   it("uses the HTTP status fallback when an error response has no code", async () => {
@@ -71,7 +71,7 @@ describe("admin API client", () => {
     );
 
     await expect(
-      api("/api/v1/admin/proposals/proposal-1/presentation/versions/version-1", successResponseSchema),
+      api("/api/v1/proposals/proposal-1/presentations/version-1", successResponseSchema),
     ).rejects.toMatchObject({ code: "HTTP_ERROR", message: "HTTP 500" });
   });
 

@@ -24,8 +24,9 @@ export type ProposalProgram = z.infer<typeof proposalProgramSchema>;
 export const proposalProgramsListResponseSchema = paginatedResponseSchema("programs", proposalProgramSchema);
 
 export const proposalProgramsListRouteSchema = {
-  tags: ["Portal"],
-  summary: "List proposal programs available to me",
+  tags: ["Proposal programs"],
+  summary: "List proposal programs available to the current user",
+  "x-pkic-auth": { required: true },
   description:
     "Returns only group-owned event programs for which the caller has event-scoped proposals:read. Other proposal capabilities remain independent and do not grant read access. This does not grant generic group visibility or management.",
   request: { query: proposalProgramsListQuerySchema },

@@ -3,6 +3,7 @@ import { cancelAcceptedProposalResponseSchema } from "../../../../../../shared/s
 import { api } from "../../../../api";
 import { toast } from "../../../../ui";
 import type { ProposalDetailRecord } from "./model";
+import { proposalResourcePath } from "./proposal-api";
 
 export function ProposalCancellationPanel({
   proposalId,
@@ -20,10 +21,14 @@ export function ProposalCancellationPanel({
       proposal={proposal}
       canCancel={canCancel}
       onCancel={async (comment) => {
-        const result = await api(`/api/v1/admin/proposals/${proposalId}/cancel`, cancelAcceptedProposalResponseSchema, {
-          method: "POST",
-          body: JSON.stringify({ comment }),
-        });
+        const result = await api(
+          proposalResourcePath(proposalId, "cancellations"),
+          cancelAcceptedProposalResponseSchema,
+          {
+            method: "POST",
+            body: JSON.stringify({ comment }),
+          },
+        );
         return { notifiedSpeakerCount: result.notifiedSpeakerCount };
       }}
       onCanceled={(notifiedSpeakerCount) => {

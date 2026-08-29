@@ -91,10 +91,12 @@ export const EventsEventSlugProposalsPost = openApiRoute(eventProposalCreateRout
 
 export const EventProposalsListGet = openApiRoute(eventProposalsListRouteSchema, async (c: AdminContext, data) => {
   const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "proposals:read");
-  const [access, result] = await Promise.all([
-    getProposalAccessForEvent(db, event.id, actor),
-    listEventProposals(db, { ...data.query, eventId: event.id }),
-  ]);
+  const access = await getProposalAccessForEvent(db, event.id, actor);
+  const result = await listEventProposals(db, {
+    ...data.query,
+    eventId: event.id,
+    searchPrivateFields: access.canReview,
+  });
   return json(
     eventProposalsResponseSchema.parse({
       event: { id: event.id, slug: event.slug, name: event.name },

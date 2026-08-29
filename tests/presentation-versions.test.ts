@@ -22,7 +22,10 @@ import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "..
 import {
   createPresentationVersion,
   deletePresentationVersion,
+  getPresentationVersion,
+  listProposalPresentationVersions,
   presentationDownloadResponse,
+  reviewPresentationVersion,
 } from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
@@ -37,6 +40,7 @@ import {
   getPresentationProposalContext,
   uploadProposalPresentation,
 } from "../functions/_lib/services/presentation-upload";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 interface StoredObject {
   body: ReadableStream | null;
@@ -214,6 +218,38 @@ async function seed() {
     speakerUserId,
     adminUserId: adminRow.id,
     adminToken,
+  };
+}
+
+async function scopedPresentationActor(
+  eventId: string,
+  grantedByUserId: string,
+  permission: "proposals:read" | "proposals:manage" = "proposals:manage",
+) {
+  const userId = crypto.randomUUID();
+  const email = `presentation-manager-${userId}@example.test`;
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(userId, email, email)
+    .run();
+  const grantId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+  )
+    .bind(grantId, userId, permission, eventId, grantedByUserId)
+    .run();
+  return {
+    grantId,
+    actor: {
+      identityType: "user" as const,
+      id: userId,
+      email,
+      role: "user",
+      grants: [{ permission, contextType: "event", contextId: eventId }],
+    },
   };
 }
 
@@ -423,7 +459,7 @@ describe("presentation versioning", () => {
     const upload = presentationRequest("admin-upload.pdf");
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         method: "POST",
         ...upload,
         headers: { authorization: `Bearer ${adminToken}`, ...upload.headers },
@@ -460,7 +496,7 @@ describe("presentation versioning", () => {
     const upload = presentationRequest("api-key-upload.pdf");
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         method: "POST",
         ...upload,
         headers: {
@@ -505,7 +541,7 @@ describe("presentation versioning", () => {
     const upload = presentationRequest("orphan-safe.pdf");
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         method: "POST",
         ...upload,
         headers: { authorization: `Bearer ${adminToken}`, ...upload.headers },
@@ -772,7 +808,7 @@ describe("presentation versioning", () => {
     expect(archiveText).not.toContain("second-presentation-marker");
 
     const retiredRoute = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", {
+      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/content", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -831,6 +867,42 @@ describe("presentation versioning", () => {
     expect(versions[1].is_current).toBe(1);
   });
 
+  it("rejects a stale deletion after another deletion promotes that version", async () => {
+    const { proposalId, speakerUserId, adminUserId } = await seed();
+    const first = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-race-first.pdf",
+      fileName: "delete-race-first.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const second = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-race-second.pdf",
+      fileName: "delete-race-second.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const staleDelete = deletePresentationVersion(
+      mutateBeforeNextBatch(env.DB, () => deletePresentationVersion(env.DB, proposalId, second.id, adminUserId)),
+      proposalId,
+      first.id,
+      adminUserId,
+    );
+    await expect(staleDelete).rejects.toMatchObject({ status: 409, code: "PRESENTATION_VERSION_CONFLICT" });
+
+    const versions = await queryAll<{ id: string; is_current: number; deleted_at: string | null }>(
+      env.DB,
+      "SELECT id, is_current, deleted_at FROM presentation_versions WHERE proposal_id = ? ORDER BY version_number",
+      proposalId,
+    );
+    expect(versions).toEqual([
+      { id: first.id, is_current: 1, deleted_at: null },
+      { id: second.id, is_current: 0, deleted_at: expect.any(String) },
+    ]);
+  });
+
   it("admin can list versions, download, and submit a review", async () => {
     const { proposalId, speakerToken, adminToken } = await seed();
     const bucket = new FakePresentationBucket();
@@ -848,7 +920,7 @@ describe("presentation versioning", () => {
 
     // List versions
     const listRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -866,7 +938,7 @@ describe("presentation versioning", () => {
 
     // Download
     const dlRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/download`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/content`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -879,7 +951,7 @@ describe("presentation versioning", () => {
 
     // Submit a review
     const reviewRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/reviews`, {
         method: "POST",
         headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
         body: JSON.stringify({ status: "needs_revision", note: "Please add speaker notes." }),
@@ -893,6 +965,138 @@ describe("presentation versioning", () => {
     expect(reviewBody.version.latestReview.note).toBe("Please add speaker notes.");
   });
 
+  it("rechecks scoped presentation access while listing and loading a version", async () => {
+    const { eventId, proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/guarded-read.pdf",
+      fileName: "guarded-read.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId, "proposals:read");
+    const authorization = { actor, permission: "proposals:read" as const, eventId, proposalId };
+    const { proposal: otherProposal } = await createProposal(env.DB, {
+      eventId,
+      proposerUserId: speakerUserId,
+      proposalType: "talk",
+      title: "Other proposal",
+      abstract: "Cross-proposal guard test",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+
+    await expect(
+      getPresentationVersion(env.DB, version.id, {
+        actor,
+        permission: "proposals:read",
+        eventId,
+        proposalId: otherProposal.id,
+      }),
+    ).rejects.toMatchObject({ status: 404, code: "VERSION_NOT_FOUND" });
+
+    const listDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+    await expect(
+      listProposalPresentationVersions(listDb, proposalId, { limit: 25, offset: 0 }, authorization),
+    ).rejects.toMatchObject({ code: "PRESENTATION_AUTHORIZATION_CHANGED" });
+
+    const { actor: freshActor, grantId: freshGrantId } = await scopedPresentationActor(
+      eventId,
+      adminUserId,
+      "proposals:read",
+    );
+    const getDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(freshGrantId)
+        .run();
+    });
+    await expect(
+      getPresentationVersion(getDb, version.id, {
+        actor: freshActor,
+        permission: "proposals:read",
+        eventId,
+        proposalId,
+      }),
+    ).rejects.toMatchObject({ code: "PRESENTATION_AUTHORIZATION_CHANGED" });
+  });
+
+  it("rolls back a review when scoped presentation permission is revoked before commit", async () => {
+    const { eventId, proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/review-guard.pdf",
+      fileName: "review-guard.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId);
+    const db = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+
+    await expect(
+      reviewPresentationVersion(db, proposalId, version.id, actor, { status: "needs_revision", note: "No access" }),
+    ).rejects.toMatchObject({ code: "PRESENTATION_AUTHORIZATION_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_version_reviews WHERE version_id = ?", version.id),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("compensates an admin upload when scoped presentation permission is revoked before commit", async () => {
+    const { eventId, proposalId, adminUserId } = await seed();
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId);
+    const bucket = new FakePresentationBucket();
+    const context = await getPresentationProposalContext(env.DB, proposalId);
+    const db = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+
+    await expect(
+      uploadProposalPresentation(
+        db,
+        bucket as any,
+        new Request("https://app.test/upload", { method: "PUT", ...presentationRequest("upload-guard.pdf") }),
+        context,
+        { actor: { type: "admin", admin: actor }, enforceDeadline: false },
+      ),
+    ).rejects.toMatchObject({ code: "PRESENTATION_UPLOAD_CONFLICT" });
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back deletion when scoped presentation permission is revoked before commit", async () => {
+    const { eventId, proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-guard.pdf",
+      fileName: "delete-guard.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId);
+    const db = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+
+    await expect(deletePresentationVersion(db, proposalId, version.id, actor)).rejects.toMatchObject({
+      code: "PRESENTATION_AUTHORIZATION_CHANGED",
+    });
+    await expect(
+      queryAll(env.DB, "SELECT deleted_at FROM presentation_versions WHERE id = ?", version.id),
+    ).resolves.toEqual([{ deleted_at: null }]);
+  });
+
   it("rejects API-key presentation reviews before writing review or audit rows", async () => {
     const { proposalId, speakerUserId } = await seed();
     const version = await createPresentationVersion(env.DB, proposalId, {
@@ -904,7 +1108,7 @@ describe("presentation versioning", () => {
     });
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}/review`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${version.id}/reviews`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
@@ -944,10 +1148,9 @@ describe("presentation versioning", () => {
     });
 
     const response = await app.fetch(
-      new Request(
-        `https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions?q=second&sort=versionNumber&limit=1`,
-        { headers: { authorization: `Bearer ${adminToken}` } },
-      ),
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations?q=second&sort=versionNumber&limit=1`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
       env,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -980,7 +1183,7 @@ describe("presentation versioning", () => {
        END`,
     ).run();
     const reviewResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}/review`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${version.id}/reviews`, {
         method: "POST",
         headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
         body: JSON.stringify({ status: "needs_revision", note: "Must roll back" }),
@@ -1003,7 +1206,7 @@ describe("presentation versioning", () => {
        END`,
     ).run();
     const deleteResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${version.id}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${adminToken}` },
       }),
@@ -1078,7 +1281,7 @@ describe("presentation versioning", () => {
     );
 
     const listRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -1089,7 +1292,7 @@ describe("presentation versioning", () => {
 
     // Approve the version
     await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/reviews`, {
         method: "POST",
         headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
         body: JSON.stringify({ status: "approved" }),
@@ -1100,7 +1303,7 @@ describe("presentation versioning", () => {
 
     // Attempt to delete — must be blocked
     const deleteRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${adminToken}` },
       }),
@@ -1223,7 +1426,7 @@ describe("presentation versioning", () => {
     await expect(uploadResponse.json()).resolves.toEqual({ success: true });
 
     const listResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,

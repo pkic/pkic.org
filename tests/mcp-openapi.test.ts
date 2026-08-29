@@ -14,7 +14,7 @@ const mcpWriteMetadata = {
 };
 
 describe("MCP OpenAPI filtering", () => {
-  it("keeps authenticated read operations by default and adds bearer security", () => {
+  it("keeps explicitly exposed authenticated operations and adds bearer security", () => {
     const filtered = filterOpenApiSpecForMcp({
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
@@ -26,17 +26,18 @@ describe("MCP OpenAPI filtering", () => {
             [MCP_EXTENSION]: { expose: true, readonly: true },
           },
         },
-        "/api/v1/admin/proposals/{proposalId}/finalize": {
+        "/api/v1/proposals/{proposalId}/decisions": {
           post: {
             operationId: "finalizeProposal",
           },
         },
-        "/api/v1/admin/proposals/{proposalId}/reviews": {
+        "/api/v1/proposals/{proposalId}/reviews": {
           get: {
             operationId: "listReviews",
           },
           post: {
             operationId: "upsertReview",
+            [AUTH_EXTENSION]: { required: true, scopes: ["proposals:score"] },
             [MCP_EXTENSION]: mcpWriteMetadata,
           },
         },
@@ -45,10 +46,10 @@ describe("MCP OpenAPI filtering", () => {
 
     expect(Object.keys(filtered.paths)).toEqual([
       "/api/v1/events/{eventSlug}/proposals",
-      "/api/v1/admin/proposals/{proposalId}/reviews",
+      "/api/v1/proposals/{proposalId}/reviews",
     ]);
-    expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/finalize"]).toBeUndefined();
-    expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post.security).toEqual([
+    expect(filtered.paths["/api/v1/proposals/{proposalId}/decisions"]).toBeUndefined();
+    expect(filtered.paths["/api/v1/proposals/{proposalId}/reviews"].post.security).toEqual([
       { McpSession: ["proposals:score"] },
     ]);
     expect(filtered.paths["/api/v1/events/{eventSlug}/proposals"].get.security).toEqual([
@@ -59,14 +60,15 @@ describe("MCP OpenAPI filtering", () => {
 });
 
 describe("OpenAPI auth decoration", () => {
-  it("marks authenticated admin operations and records required scopes", () => {
+  it("marks explicitly authenticated resource operations and records required scopes", () => {
     const decorated = decorateOpenApiSpec({
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
       paths: {
-        "/api/v1/admin/proposals/{proposalId}/reviews": {
+        "/api/v1/proposals/{proposalId}/reviews": {
           post: {
             operationId: "upsertReview",
+            [AUTH_EXTENSION]: { required: true, scopes: ["proposals:score"] },
           },
         },
         "/api/v1/events/{eventSlug}/terms": {
@@ -77,7 +79,7 @@ describe("OpenAPI auth decoration", () => {
       },
     });
 
-    const operation = decorated.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post;
+    const operation = decorated.paths["/api/v1/proposals/{proposalId}/reviews"].post;
     expect(operation.security).toEqual([{ BearerAuth: ["proposals:score"] }]);
     expect(operation[AUTH_EXTENSION]).toEqual({
       required: true,
@@ -94,7 +96,7 @@ describe("OpenAPI auth decoration", () => {
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
       paths: {
-        "/api/v1/admin/proposals/{proposalId}/reviews": {
+        "/api/v1/proposals/{proposalId}/reviews": {
           post: {
             operationId: "upsertReview",
             description: "Existing operation summary.",
@@ -112,7 +114,7 @@ describe("OpenAPI auth decoration", () => {
       },
     });
 
-    expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post.description).toBe(
+    expect(filtered.paths["/api/v1/proposals/{proposalId}/reviews"].post.description).toBe(
       "Existing operation summary.\n\nRequired scopes: `proposals:score`.",
     );
   });
@@ -123,7 +125,7 @@ describe("OpenAPI auth decoration", () => {
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
       paths: {
-        "/api/v1/admin/proposals/{proposalId}": {
+        "/api/v1/proposals/{proposalId}": {
           patch: {
             operationId: "editProposal",
             [AUTH_EXTENSION]: { required: true, scopesAnyOf: alternatives },
@@ -132,7 +134,7 @@ describe("OpenAPI auth decoration", () => {
         },
       },
     });
-    const operation = filtered.paths["/api/v1/admin/proposals/{proposalId}"].patch;
+    const operation = filtered.paths["/api/v1/proposals/{proposalId}"].patch;
 
     expect(operation.security).toEqual(alternatives.map((scopes) => ({ McpSession: scopes })));
     expect(operation["x-pkic-required-scopes-any-of"]).toEqual(alternatives);

@@ -7,8 +7,8 @@ import {
   proposalSpeakersResponseSchema,
 } from "../assets/shared/schemas/proposal-speakers";
 import app from "../functions/router";
-import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
-import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
+import { onRequestGet as getProposalDetail } from "../functions/api/v1/proposals/[proposalId]";
+import { onRequestPost as openProposalManage } from "../functions/api/v1/proposals/[proposalId]/open-manage";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { addProposalSpeaker, createProposal, getProposalByManageToken } from "../functions/_lib/services/proposals";
@@ -20,14 +20,19 @@ import {
   proposalCommentCreateResponseSchema,
   proposalCommentsListResponseSchema,
 } from "../assets/shared/schemas/proposal-comments";
-import { proposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
+import {
+  coSpeakerInviteResponseSchema,
+  proposalPatchResponseSchema,
+} from "../assets/shared/schemas/proposal-management";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
-import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
+import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-management";
 import { buildEventProposalsPageQuery } from "../functions/_lib/services/event-proposals-list";
 import { buildProposalReviewsPageQuery } from "../functions/_lib/services/proposal-reviews/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { editProposal } from "../functions/_lib/services/proposal-edit";
 import { cancelAcceptedProposal } from "../functions/_lib/services/proposal-cancellation";
+import { createProposalAccessLink } from "../functions/_lib/services/proposal-access-links";
+import { getProposalDetailData } from "../functions/_lib/services/proposal-detail";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { renderEmail } from "../functions/_lib/email/render";
 
@@ -56,7 +61,7 @@ async function callAdminProposalComments(
   init?: RequestInit,
 ): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments${suffix}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/comments${suffix}`, {
       ...init,
       headers: { authorization: `Bearer ${token}`, ...init?.headers },
     }),
@@ -67,7 +72,7 @@ async function callAdminProposalComments(
 
 async function callAdminProposalPatch(token: string, proposalId: string, body: unknown): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}`, {
       method: "PATCH",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -79,7 +84,7 @@ async function callAdminProposalPatch(token: string, proposalId: string, body: u
 
 async function callAdminProposalDetail(token: string, proposalId: string): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}`, {
       headers: { authorization: `Bearer ${token}` },
     }),
     env as any,
@@ -89,7 +94,7 @@ async function callAdminProposalDetail(token: string, proposalId: string): Promi
 
 async function callAdminProposalCancel(token: string, proposalId: string, body: unknown): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/cancel`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/cancellations`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -101,7 +106,7 @@ async function callAdminProposalCancel(token: string, proposalId: string, body: 
 
 async function callAdminProposalReviews(token: string, proposalId: string, suffix = ""): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews${suffix}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/reviews${suffix}`, {
       headers: { authorization: `Bearer ${token}` },
     }),
     env as any,
@@ -116,7 +121,7 @@ async function callAdminProposalSpeakers(
   init?: RequestInit,
 ): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers${suffix}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers${suffix}`, {
       ...init,
       headers: { authorization: `Bearer ${token}`, ...init?.headers },
     }),
@@ -405,12 +410,24 @@ describe("admin proposal endpoints", () => {
       status: "active",
       recommendation: "accept",
       q: "needle",
+      searchPrivateFields: true,
     });
     const filteredSql = buildOffsetPageSql(filteredQuery);
     expect(filteredSql.countSql).toContain("sp.status NOT IN");
     expect(filteredSql.countSql).toContain("pr_filter.recommendation = ?");
     expect(filteredSql.countSql).toContain("pr_search.proposal_id = sp.id");
     expect(filteredSql.countBindings).toEqual(filteredSql.bindings.slice(1));
+
+    const readOnlySearch = buildOffsetPageSql(
+      buildEventProposalsPageQuery({
+        eventId,
+        limit: 10,
+        offset: 0,
+        sort: "-submittedAt",
+        q: "needle",
+      }),
+    );
+    expect(readOnlySearch.countSql).not.toMatch(/pr_search|pd_search|reviewer_comment|applicant_note|decision_note/);
   });
 
   it("filters proposal list by recommendation and sorts by average score", async () => {
@@ -620,6 +637,40 @@ describe("admin proposal endpoints", () => {
     expect(payload.speakers[0]).toMatchObject({ userId: speakerId, role: "speaker", links: [] });
   });
 
+  it("invites a proposal speaker through the canonical proposal resource", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const token = await createAdminSession(env.DB, adminId, "token-proposal-speaker-invite");
+    const response = await callAdminProposalSpeakers(token, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "invited-speaker@example.test",
+        firstName: "Invited",
+        lastName: "Speaker",
+        role: "speaker",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(coSpeakerInviteResponseSchema.parse(await response.json())).toMatchObject({
+      success: true,
+      email: "invited-speaker@example.test",
+      role: "speaker",
+      queued: true,
+    });
+    await expect(
+      queryAll<{ status: string; role: string }>(
+        env.DB,
+        `SELECT ps.status, ps.role
+           FROM proposal_speakers ps
+           JOIN users u ON u.id = ps.user_id
+          WHERE ps.proposal_id = ? AND u.normalized_email = ?`,
+        [proposalId, "invited-speaker@example.test"],
+      ),
+    ).resolves.toEqual([{ status: "invited", role: "speaker" }]);
+  });
+
   it("rejects an invalid proposal speaker role through the mounted shared schema", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
@@ -764,7 +815,7 @@ describe("admin proposal endpoints", () => {
     const response = await getProposalDetail(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
+        new Request(`https://app.test/api/v1/proposals/${proposalId}`, {
           headers: { authorization: `Bearer ${adminToken}` },
         }),
         { proposalId },
@@ -1317,10 +1368,15 @@ describe("admin proposal endpoints", () => {
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-manage");
 
+    const before = await queryAll<{ manage_link_secret: string }>(
+      env.DB,
+      "SELECT manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
     const response = await openProposalManage(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/open-manage`, {
+        new Request(`https://app.test/api/v1/proposals/${proposalId}/access-links`, {
           method: "POST",
           headers: { authorization: `Bearer ${adminToken}` },
         }),
@@ -1338,5 +1394,127 @@ describe("admin proposal endpoints", () => {
 
     const proposal = await getProposalByManageToken(env.DB, token!, "test-signing-secret");
     expect(proposal.id).toBe(proposalId);
+
+    const after = await queryAll<{ manage_link_secret: string }>(
+      env.DB,
+      "SELECT manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(after[0].manage_link_secret).not.toBe(before[0].manage_link_secret);
+
+    const secondResponse = await openProposalManage(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/${proposalId}/access-links`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${adminToken}` },
+        }),
+        { proposalId },
+      ),
+    );
+    expect(secondResponse.status).toBe(200);
+    await expect(getProposalByManageToken(env.DB, token!, "test-signing-secret")).rejects.toMatchObject({
+      status: 404,
+      code: "PROPOSAL_NOT_FOUND",
+    });
+  });
+
+  it("requires proposal management permission, not review permission, to issue a manage link", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const reviewer = await seedScopedProposalEditor(eventId, adminId, ["proposals:score"]);
+
+    await expect(
+      createProposalAccessLink(env.DB, {
+        actor: reviewer.actor,
+        proposalId,
+        signingSecret: "test-signing-secret",
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+  });
+
+  it("rolls back manage-link rotation and audit when live permission is revoked", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const manager = await seedScopedProposalEditor(eventId, adminId, ["proposals:manage"]);
+    const [before] = await queryAll<{ manage_link_secret: string }>(
+      env.DB,
+      "SELECT manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare(
+        "UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ? AND permission = 'proposals:manage'",
+      )
+        .bind(manager.userId)
+        .run();
+    });
+
+    await expect(
+      createProposalAccessLink(racingDb, {
+        actor: manager.actor,
+        proposalId,
+        signingSecret: "test-signing-secret",
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_AUTHORIZATION_CHANGED" });
+
+    await expect(
+      queryAll<{ manage_link_secret: string }>(
+        env.DB,
+        "SELECT manage_link_secret FROM session_proposals WHERE id = ?",
+        [proposalId],
+      ),
+    ).resolves.toEqual([before]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_access_link_issued' AND entity_id = ?", [
+        proposalId,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("does not overwrite a concurrently rotated proposal access secret", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const manager = await seedScopedProposalEditor(eventId, adminId, ["proposals:manage"]);
+    const concurrentSecret = "concurrent-proposal-access-secret";
+    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE session_proposals SET manage_link_secret = ? WHERE id = ?")
+        .bind(concurrentSecret, proposalId)
+        .run();
+    });
+
+    await expect(
+      createProposalAccessLink(racingDb, {
+        actor: manager.actor,
+        proposalId,
+        signingSecret: "test-signing-secret",
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_MANAGE_LINK_CONFLICT" });
+
+    await expect(
+      queryAll<{ manage_link_secret: string }>(
+        env.DB,
+        "SELECT manage_link_secret FROM session_proposals WHERE id = ?",
+        [proposalId],
+      ),
+    ).resolves.toEqual([{ manage_link_secret: concurrentSecret }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_access_link_issued' AND entity_id = ?", [
+        proposalId,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("does not return archived proposals from the neutral detail service", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithReviews(env.DB, eventId);
+    await env.DB.prepare("UPDATE session_proposals SET deleted_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    await expect(getProposalDetailData(env.DB, proposalId)).resolves.toBeNull();
   });
 });

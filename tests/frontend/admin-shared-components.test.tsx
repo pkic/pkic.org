@@ -267,7 +267,7 @@ describe("shared admin presentation components", () => {
     );
     const container = mount(
       <AuditLogTable
-        endpoint="/api/v1/admin/proposals/proposal-1/audit-log"
+        endpoint="/api/v1/proposals/proposal-1/audit-log"
         actionCell={(entry) => <strong>{entry.action}</strong>}
         detailsCell={() => <span>domain details</span>}
       />,

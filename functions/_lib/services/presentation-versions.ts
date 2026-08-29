@@ -3,6 +3,8 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import { requireAdminDatabaseUserId } from "../auth/admin-identity";
+import { requirePermission } from "../auth/permissions";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import type {
@@ -13,19 +15,23 @@ import type {
   PresentationVersionsListQuery,
 } from "../../../assets/shared/schemas/presentation-versions";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import { queryPage } from "../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults, queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
+import {
+  getPresentationProposalContext,
+  presentationAuthorizationChanged,
+  presentationAuthorizationGuards,
+  requirePresentationAuthorization,
+  type PresentationVersionAuthorization,
+} from "./presentation-version-authorization";
 
-export interface PresentationProposalContext {
-  id: string;
-  status: string;
-  updated_at: string;
-  title: string;
-  event_slug: string;
-  presentation_deadline: string | null;
-}
+export { getPresentationProposalContext } from "./presentation-version-authorization";
+export type {
+  PresentationProposalContext,
+  PresentationVersionAuthorization,
+} from "./presentation-version-authorization";
 
 export interface PresentationCommitAuthority {
   proposalStatus: string;
@@ -113,28 +119,13 @@ const VERSION_SELECT = `
     ORDER BY reviewed_at DESC LIMIT 1
   )`;
 
-export async function getPresentationProposalContext(
-  db: DatabaseLike,
-  proposalId: string,
-): Promise<PresentationProposalContext> {
-  const proposal = await first<PresentationProposalContext>(
-    db,
-    `SELECT sp.id, sp.status, sp.updated_at, sp.title, sp.presentation_deadline, e.slug AS event_slug
-     FROM session_proposals sp
-     JOIN events e ON e.id = sp.event_id
-     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
-    [proposalId],
-  );
-  if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  return proposal;
-}
-
 export async function listProposalPresentationVersions(
   db: DatabaseLike,
   proposalId: string,
   query: PresentationVersionsListQuery,
+  authorization?: PresentationVersionAuthorization,
 ) {
-  await getPresentationProposalContext(db, proposalId);
+  const proposal = await getPresentationProposalContext(db, proposalId);
   const search = query.q ? buildD1TextSearchFilter(query.q, ["pv.file_name", "pv.mime_type"]) : null;
   const filters = ["pv.proposal_id = ?", "pv.deleted_at IS NULL"];
   const bindings: unknown[] = [proposalId];
@@ -149,13 +140,31 @@ export async function listProposalPresentationVersions(
     "pv.version_number DESC",
     "pv.id ASC",
   );
-  const { rows, total } = await queryPage<PresentationVersionRow>(db, {
+  let rows: PresentationVersionRow[];
+  let total: number;
+  const pageQuery = {
     sql: `${VERSION_SELECT} ${where}`,
     bindings,
     orderBy,
     limit: query.limit,
     offset: query.offset,
-  });
+  } as const;
+  if (!authorization) {
+    ({ rows, total } = await queryPage<PresentationVersionRow>(db, pageQuery));
+  } else {
+    const eventId = authorization.eventId ?? proposal.event_id;
+    requirePresentationAuthorization(authorization, eventId);
+    try {
+      const [_, __, pageResult, countResult] = await db.batch([
+        ...presentationAuthorizationGuards(db, proposalId, eventId, authorization),
+        ...buildOffsetPageStatements(db, pageQuery),
+      ]);
+      ({ rows, total } = decodeOffsetPageResults<PresentationVersionRow>(pageResult, countResult));
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) throw presentationAuthorizationChanged();
+      throw error;
+    }
+  }
   const versions = rows.map(rowToVersion);
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }
@@ -168,24 +177,78 @@ export function publicPresentationVersion(version: PresentationVersionWithStorag
 export async function listPresentationVersions(
   db: DatabaseLike,
   proposalId: string,
+  authorization?: PresentationVersionAuthorization,
 ): Promise<PresentationVersionWithStorageKey[]> {
-  const rows = await all<PresentationVersionRow>(
-    db,
-    `${VERSION_SELECT}
-     WHERE pv.proposal_id = ? AND pv.deleted_at IS NULL
-     ORDER BY pv.version_number DESC`,
-    [proposalId],
-  );
+  const proposal = authorization ? await getPresentationProposalContext(db, proposalId) : null;
+  let rows: PresentationVersionRow[];
+  if (!authorization) {
+    rows = await all<PresentationVersionRow>(
+      db,
+      `${VERSION_SELECT}
+       WHERE pv.proposal_id = ? AND pv.deleted_at IS NULL
+       ORDER BY pv.version_number DESC`,
+      [proposalId],
+    );
+  } else {
+    const eventId = authorization.eventId ?? proposal!.event_id;
+    requirePresentationAuthorization(authorization, eventId);
+    try {
+      const [_, __, result] = await db.batch([
+        ...presentationAuthorizationGuards(db, proposalId, eventId, authorization),
+        db
+          .prepare(
+            `${VERSION_SELECT}
+             WHERE pv.proposal_id = ? AND pv.deleted_at IS NULL
+             ORDER BY pv.version_number DESC`,
+          )
+          .bind(proposalId),
+      ]);
+      rows = (result.results ?? []) as PresentationVersionRow[];
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) throw presentationAuthorizationChanged();
+      throw error;
+    }
+  }
   return rows.map(rowToVersion);
 }
 
 export async function getPresentationVersion(
   db: DatabaseLike,
   versionId: string,
+  authorization?: PresentationVersionAuthorization,
 ): Promise<PresentationVersionWithStorageKey> {
-  const row = await first<PresentationVersionRow>(db, `${VERSION_SELECT} WHERE pv.id = ? AND pv.deleted_at IS NULL`, [
-    versionId,
-  ]);
+  let row: PresentationVersionRow | null;
+  if (!authorization) {
+    row = await first<PresentationVersionRow>(db, `${VERSION_SELECT} WHERE pv.id = ? AND pv.deleted_at IS NULL`, [
+      versionId,
+    ]);
+  } else {
+    const proposalId = authorization.proposalId;
+    if (!proposalId) throw new AppError(500, "PRESENTATION_AUTHORIZATION_INVALID", "Proposal scope is required");
+    const existing = await first<PresentationVersionRow>(
+      db,
+      `${VERSION_SELECT} WHERE pv.id = ? AND pv.deleted_at IS NULL`,
+      [versionId],
+    );
+    if (!existing || existing.proposal_id !== proposalId) {
+      throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
+    }
+    const proposal = await getPresentationProposalContext(db, proposalId);
+    const eventId = authorization.eventId ?? proposal.event_id;
+    requirePresentationAuthorization(authorization, eventId);
+    try {
+      const [_, __, result] = await db.batch([
+        ...presentationAuthorizationGuards(db, proposalId, eventId, authorization, versionId),
+        db
+          .prepare(`${VERSION_SELECT} WHERE pv.id = ? AND pv.proposal_id = ? AND pv.deleted_at IS NULL`)
+          .bind(versionId, proposalId),
+      ]);
+      row = batchFirst<PresentationVersionRow>(result);
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) throw presentationAuthorizationChanged();
+      throw error;
+    }
+  }
   if (!row) throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
   return rowToVersion(row);
 }
@@ -240,6 +303,7 @@ export function preparePresentationVersionCreate(
   opts: PresentationVersionCreateInput,
   audit?: PresentationVersionAudit,
   authority?: PresentationCommitAuthority,
+  authorization?: PresentationVersionAuthorization,
 ): { id: string; statements: StatementLike[] } {
   const now = nowIso();
   // `updated_at` is the proposal CAS token for this upload. Two commits can
@@ -250,6 +314,9 @@ export function preparePresentationVersionCreate(
     ? new Date(Math.max(Date.parse(now), Date.parse(authority.proposalUpdatedAt) + 1)).toISOString()
     : now;
   const id = uuid();
+  if (authorization && !authorization.eventId) {
+    throw new AppError(500, "PRESENTATION_AUTHORIZATION_INVALID", "Event scope is required");
+  }
   const proposalUpdate = authority
     ? db
         .prepare(
@@ -281,7 +348,8 @@ export function preparePresentationVersionCreate(
           authority.speaker?.inviteGeneration ?? null,
         )
     : db.prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?").bind(now, proposalId);
-  const statements = [
+  const statements: StatementLike[] = [
+    ...(authorization ? presentationAuthorizationGuards(db, proposalId, authorization.eventId!, authorization) : []),
     proposalUpdate,
     ...(authority && audit
       ? [
@@ -360,23 +428,37 @@ export async function reviewPresentationVersion(
   review: PresentationVersionReviewRequest,
 ): Promise<PresentationVersionWithStorageKey> {
   const reviewerUserId = requireAdminDatabaseUserId(actor);
+  const proposal = await getPresentationProposalContext(db, proposalId);
+  requirePermission(actor, "proposals:manage", { type: "event", id: proposal.event_id });
   const version = await getPresentationVersion(db, versionId);
   if (version.proposalId !== proposalId) {
     throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
   }
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO presentation_version_reviews (id, version_id, reviewed_by_user_id, reviewed_at, status, note)
+  try {
+    await db.batch([
+      ...presentationAuthorizationGuards(
+        db,
+        proposalId,
+        proposal.event_id,
+        { actor, permission: "proposals:manage" },
+        versionId,
+      ),
+      db
+        .prepare(
+          `INSERT INTO presentation_version_reviews (id, version_id, reviewed_by_user_id, reviewed_at, status, note)
          VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(uuid(), versionId, reviewerUserId, now, review.status, review.note?.trim() || null),
-    prepareAuditLog(db, "admin", actor.id, "presentation_version_reviewed", "presentation_version", versionId, {
-      proposalId,
-      status: review.status,
-    }),
-  ]);
+        )
+        .bind(uuid(), versionId, reviewerUserId, now, review.status, review.note?.trim() || null),
+      prepareAuditLog(db, "admin", actor.id, "presentation_version_reviewed", "presentation_version", versionId, {
+        proposalId,
+        status: review.status,
+      }),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) throw presentationAuthorizationChanged();
+    throw error;
+  }
   return getPresentationVersion(db, versionId);
 }
 
@@ -384,8 +466,13 @@ export async function deletePresentationVersion(
   db: DatabaseLike,
   proposalId: string,
   versionId: string,
-  actorId: string,
+  actor: string | AuthAdmin,
 ): Promise<void> {
+  const actorId = typeof actor === "string" ? actor : actor.id;
+  const proposal = typeof actor === "string" ? null : await getPresentationProposalContext(db, proposalId);
+  if (typeof actor !== "string") {
+    requirePermission(actor, "proposals:manage", { type: "event", id: proposal!.event_id });
+  }
   const version = await getPresentationVersion(db, versionId);
   if (version.proposalId !== proposalId) {
     throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
@@ -402,18 +489,28 @@ export async function deletePresentationVersion(
   try {
     const storageDeletion = prepareStorageDeletion(db, version.r2Key, now, "speaker_uploads");
     await db.batch([
+      ...(typeof actor === "string"
+        ? []
+        : presentationAuthorizationGuards(
+            db,
+            proposalId,
+            proposal!.event_id,
+            { actor, permission: "proposals:manage" },
+            versionId,
+          )),
       db
         .prepare(
           `UPDATE presentation_versions
            SET deleted_at = ?, is_current = 0
            WHERE id = ? AND proposal_id = ? AND deleted_at IS NULL
+             AND is_current = ?
              AND COALESCE((
                SELECT status FROM presentation_version_reviews
                WHERE version_id = presentation_versions.id
                ORDER BY reviewed_at DESC LIMIT 1
              ), '') <> 'approved'`,
         )
-        .bind(now, versionId, proposalId),
+        .bind(now, versionId, proposalId, version.isCurrent ? 1 : 0),
       prepareAuditLogAfterOneChange(
         db,
         "admin",
@@ -437,6 +534,7 @@ export async function deletePresentationVersion(
         .bind(proposalId, version.isCurrent ? 1 : 0),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) throw presentationAuthorizationChanged();
     if (isAuditChangeGuardFailure(error)) {
       const current = await getPresentationVersion(db, versionId);
       if (current.latestReview?.status === "approved") {

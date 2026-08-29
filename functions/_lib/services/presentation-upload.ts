@@ -13,8 +13,11 @@ import {
   preparePresentationVersionCreate,
   type PresentationCommitAuthority,
   type PresentationProposalContext,
+  type PresentationVersionAuthorization,
 } from "./presentation-versions";
 import { isAuditChangeGuardFailure } from "./audit";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { requirePermission } from "../auth/permissions";
 import { withStorageUploadCompensation } from "./storage-deletion-outbox";
 
 const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
@@ -174,6 +177,13 @@ export async function uploadProposalPresentation(
     enforceDeadline: payload.enforceDeadline,
     speaker: payload.authority?.speaker,
   };
+  const authorization: PresentationVersionAuthorization | undefined =
+    payload.actor.type === "admin"
+      ? { actor: payload.actor.admin, permission: "proposals:manage", eventId: context.event_id }
+      : undefined;
+  if (authorization) {
+    requirePermission(authorization.actor, authorization.permission, { type: "event", id: context.event_id });
+  }
   try {
     await withStorageUploadCompensation({
       db,
@@ -235,9 +245,17 @@ export async function uploadProposalPresentation(
           },
           { actorType: payload.actor.type, actorId: auditActorId, action: "presentation_uploaded" },
           authority,
+          authorization,
         ).statements,
     });
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PRESENTATION_UPLOAD_CONFLICT",
+        "Presentation upload authority changed while the file was uploading.",
+      );
+    }
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,

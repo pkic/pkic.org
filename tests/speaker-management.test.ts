@@ -373,7 +373,7 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toEqual([{ scope_type: "proposal", scope_id: proposalId }]);
 
     const auditResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/audit-log`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/audit-log`, {
         headers: { authorization: `Bearer ${adminSessionToken}` },
       }),
       env,
@@ -402,7 +402,7 @@ describe("speaker self-management endpoints", () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
@@ -444,7 +444,7 @@ describe("speaker self-management endpoints", () => {
     await expect(proposerResponse.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });
 
     const adminResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
@@ -592,7 +592,7 @@ describe("speaker self-management endpoints", () => {
     );
 
     const ownerRoleResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ role: "speaker" }),
@@ -603,7 +603,7 @@ describe("speaker self-management endpoints", () => {
     expect(ownerRoleResponse.status).toBe(200);
 
     const nonOwnerResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ role: "proposer" }),
@@ -641,7 +641,7 @@ describe("speaker self-management endpoints", () => {
       .run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ role: "speaker" }),
@@ -683,7 +683,7 @@ describe("speaker self-management endpoints", () => {
     await expect(selfRemoval.json()).resolves.toMatchObject({ error: { code: "PROPOSER_REPLACEMENT_REQUIRED" } });
 
     const transfer = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${before.proposer_user_id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${before.proposer_user_id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ replacementProposerUserId: coSpeakerUserId }),
@@ -780,7 +780,7 @@ describe("speaker self-management endpoints", () => {
       .run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${before.proposer_user_id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${before.proposer_user_id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ replacementProposerUserId: coSpeakerUserId }),
@@ -871,7 +871,7 @@ describe("speaker self-management endpoints", () => {
     ).run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
@@ -2421,9 +2421,10 @@ describe("speaker self-management endpoints", () => {
     const remindResponse = await mountedSpeakerRoute(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}/remind`, {
+        new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}/reminders`, {
           method: "POST",
-          headers: { authorization: `Bearer ${adminSessionToken}` },
+          headers: { authorization: `Bearer ${adminSessionToken}`, "content-type": "application/json" },
+          body: JSON.stringify({ kind: "profile" }),
         }),
         { proposalId, userId: coSpeakerUserId },
       ),
@@ -2458,10 +2459,14 @@ describe("speaker self-management endpoints", () => {
       waitUntil: () => {},
     } as any;
     const adminHeaders = { authorization: `Bearer ${adminSessionToken}` };
-    const path = `/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`;
+    const path = `/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`;
 
     const profileResponse = await app.fetch(
-      new Request(`https://app.test${path}/remind`, { method: "POST", headers: adminHeaders }),
+      new Request(`https://app.test${path}/reminders`, {
+        method: "POST",
+        headers: { ...adminHeaders, "content-type": "application/json" },
+        body: JSON.stringify({ kind: "profile" }),
+      }),
       env,
       workerContext,
     );
@@ -2482,7 +2487,11 @@ describe("speaker self-management endpoints", () => {
       .run();
 
     const presentationResponse = await app.fetch(
-      new Request(`https://app.test${path}/remind-presentation`, { method: "POST", headers: adminHeaders }),
+      new Request(`https://app.test${path}/reminders`, {
+        method: "POST",
+        headers: { ...adminHeaders, "content-type": "application/json" },
+        body: JSON.stringify({ kind: "presentation" }),
+      }),
       env,
       workerContext,
     );
@@ -2498,9 +2507,10 @@ describe("speaker self-management endpoints", () => {
       waitUntil: () => {},
     } as any;
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/not-a-uuid/remind`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/not-a-uuid/reminders`, {
         method: "POST",
-        headers: { authorization: `Bearer ${adminSessionToken}` },
+        headers: { authorization: `Bearer ${adminSessionToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ kind: "profile" }),
       }),
       env,
       workerContext,

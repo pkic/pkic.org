@@ -51,7 +51,7 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
      JOIN users u ON u.id = sp.proposer_user_id
      JOIN events e ON e.id = sp.event_id
      LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-     WHERE sp.id = ?`,
+     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
     [proposalId],
   );
   if (!proposal) return null;

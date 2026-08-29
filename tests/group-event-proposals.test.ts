@@ -5,7 +5,7 @@ import { createProposal, getProposalById } from "../functions/_lib/services/prop
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventById } from "../functions/_lib/services/events";
 import { preparePermissionsAuthorizationGuard } from "../functions/_lib/auth/permissions";
-import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
+import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-management";
 import { removeProposalSpeakerByManager } from "../functions/_lib/services/proposal-speaker-removal";
 import { sendProposalSpeakerReminders } from "../functions/_lib/services/proposal-reminders";
 import { removeProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
@@ -143,7 +143,21 @@ function routeAt(
   init: RequestInit = {},
   token = fixture.reviewerToken,
 ): Promise<Response> {
-  const path = "/api/v1/groups/" + groupId + "/events/" + eventId + "/proposals" + suffix;
+  const groupCollectionPath = "/api/v1/groups/" + groupId + "/events/" + eventId + "/proposals";
+  let path = groupCollectionPath + suffix;
+  const proposalPrefix = "/" + fixture.proposalId;
+  if (groupId === fixture.ownerGroupId && eventId === fixture.eventId && suffix.startsWith(proposalPrefix)) {
+    const canonicalSuffix = suffix.slice(proposalPrefix.length);
+    const translatedSuffix =
+      canonicalSuffix === "/cancel"
+        ? "/cancellations"
+        : canonicalSuffix === "/finalize-preview"
+          ? "/decisions/previews"
+          : canonicalSuffix === "/finalize"
+            ? "/decisions"
+            : canonicalSuffix;
+    path = "/api/v1/proposals/" + fixture.proposalId + translatedSuffix;
+  }
   const headers = new Headers(init.headers);
   headers.set("authorization", "Bearer " + token);
   if (init.body) headers.set("content-type", "application/json");
@@ -235,7 +249,7 @@ function revokeProposalManagement(fixture: Fixture, actor: AuthAdmin): Promise<u
     .run();
 }
 
-describe("group event proposal routes", () => {
+describe("event proposal collection and canonical proposal resource routes", () => {
   beforeEach(resetDb);
 
   it("allows a program-only user to list/open its assigned program and rejects unrelated paths", async () => {
@@ -253,6 +267,21 @@ describe("group event proposal routes", () => {
     const archivedSelector = eventProposalsResponseSchema.parse(await (await route(fixture, "?archived=true")).json());
     expect(archivedSelector.proposals).toEqual([]);
     expect((await route(fixture, "/" + fixture.proposalId)).status).toBe(200);
+
+    const retiredNestedDetail = await app.fetch(
+      new Request(
+        "https://app.test/api/v1/groups/" +
+          fixture.ownerGroupId +
+          "/events/" +
+          fixture.eventId +
+          "/proposals/" +
+          fixture.proposalId,
+        { headers: { authorization: "Bearer " + fixture.reviewerToken } },
+      ),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(retiredNestedDetail.status).toBe(404);
 
     const wrongGroupResponse = await app.fetch(
       new Request(
@@ -280,6 +309,31 @@ describe("group event proposal routes", () => {
     expect(wrongEventResponse.status).toBe(404);
   });
 
+  it("does not expose private review text through read-only proposal search", async () => {
+    const fixture = await setupFixture();
+    const privateNeedle = "private-review-" + crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO proposal_reviews
+         (id, proposal_id, reviewer_user_id, review_round, recommendation, score,
+          reviewer_comment, applicant_note, created_at, updated_at)
+       VALUES (?, ?, ?, 1, 'accept', 8, ?, 'private applicant note', datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), fixture.proposalId, fixture.reviewerId, privateNeedle)
+      .run();
+
+    const readOnlyToken = await scopedToken(fixture, ["proposals:read"]);
+    const readOnlyResponse = await route(fixture, "?q=" + encodeURIComponent(privateNeedle), {}, readOnlyToken);
+    expect(readOnlyResponse.status).toBe(200);
+    expect(eventProposalsResponseSchema.parse(await readOnlyResponse.json()).proposals).toEqual([]);
+
+    const scorerToken = await scopedToken(fixture, ["proposals:read", "proposals:score"]);
+    const scorerResponse = await route(fixture, "?q=" + encodeURIComponent(privateNeedle), {}, scorerToken);
+    expect(scorerResponse.status).toBe(200);
+    expect(eventProposalsResponseSchema.parse(await scorerResponse.json()).proposals.map(({ id }) => id)).toEqual([
+      fixture.proposalId,
+    ]);
+  });
+
   it("mounts the group speaker roster behind the private proposal-score boundary and exact tuple", async () => {
     const fixture = await setupFixture();
     await addProposalSpeaker(fixture, "confirmed");
@@ -295,7 +349,7 @@ describe("group event proposal routes", () => {
     ).toBe(404);
   });
 
-  it("invites a co-speaker through the exact group proposal boundary with an event-bounded deadline", async () => {
+  it("invites a co-speaker through the canonical proposal boundary with an event-bounded deadline", async () => {
     const fixture = await setupFixture();
     const response = await route(fixture, "/" + fixture.proposalId + "/speakers", {
       method: "POST",

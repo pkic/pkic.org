@@ -18,9 +18,10 @@ import { proposalPatchResponseSchema } from "../../../../../shared/schemas/propo
 import { useProposalSubresources } from "./proposal-detail/useProposalSubresources";
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { eventProposalDetailResponseSchema } from "../../../../../shared/schemas/event-proposals";
-import { adminProposalOpenManageResponseSchema } from "../../../../../shared/schemas/route-contracts-admin-proposals";
+import { proposalAccessLinkResponseSchema } from "../../../../../shared/schemas/route-contracts-proposal-management";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
+import { proposalResourcePath } from "./proposal-detail/proposal-api";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -29,11 +30,11 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
-    async () => api(`/api/v1/admin/proposals/${proposalId}`, eventProposalDetailResponseSchema),
+    async () => api(proposalResourcePath(proposalId), eventProposalDetailResponseSchema),
     [proposalId],
   );
 
-  const subresources = useProposalSubresources(proposalId, reload);
+  const subresources = useProposalSubresources(proposalId, reload, data?.access);
   const {
     reviews,
     reviewPage,
@@ -128,7 +129,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
     if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/flag`, proposalFlagResponseSchema, {
+      await api(proposalResourcePath(proposalId, "moderations"), proposalFlagResponseSchema, {
         method: "POST",
         body: JSON.stringify({ action }),
       });
@@ -142,8 +143,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   async function handleOpenManage() {
     try {
       const { manageUrl } = await api(
-        `/api/v1/admin/proposals/${proposalId}/open-manage`,
-        adminProposalOpenManageResponseSchema,
+        proposalResourcePath(proposalId, "access-links"),
+        proposalAccessLinkResponseSchema,
         {
           method: "POST",
           body: "{}",
@@ -159,7 +160,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     e.preventDefault();
     setSavingAbstract(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}`, proposalPatchResponseSchema, {
+      await api(proposalResourcePath(proposalId), proposalPatchResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ abstract: abstractDraft }),
       });
@@ -381,7 +382,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 <h6 class="mb-0">Audit Log</h6>
               </div>
               <div class="card-body p-0">
-                <AuditLogSection proposalId={proposalId} />
+                <AuditLogSection proposalId={proposalId} enabled={access.canReview} />
               </div>
             </div>
           )}

@@ -7,6 +7,7 @@ import {
   proposalReviewWriteResponseSchema,
   type ProposalReviewSummary,
 } from "../../../../../../shared/schemas/proposal-reviews";
+import { proposalResourcePath } from "./proposal-api";
 
 interface ProposalReviewsTabProps {
   proposalId: string;
@@ -50,7 +51,7 @@ export function ProposalReviewsTab({
       loadingMore={loadingMore}
       onLoadMore={onLoadMore}
       onSave={async (draft) => {
-        const result = await api(`/api/v1/admin/proposals/${proposalId}/reviews`, proposalReviewWriteResponseSchema, {
+        const result = await api(proposalResourcePath(proposalId, "reviews"), proposalReviewWriteResponseSchema, {
           method: "POST",
           body: JSON.stringify(draft),
         });

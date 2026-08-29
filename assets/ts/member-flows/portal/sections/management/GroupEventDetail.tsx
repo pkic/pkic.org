@@ -106,7 +106,9 @@ export function GroupEventDetail({
         <GroupEventInvitations groupId={groupId} event={event} inviteType="speaker" />
       )}
 
-      {canReadProposalProgram(event) && <GroupEventProposals groupId={groupId} eventId={event.id} />}
+      {canReadProposalProgram(event) && (
+        <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
+      )}
 
       {event.capabilities.includes("manage_attendance") && (
         <div class="border-top pt-3">

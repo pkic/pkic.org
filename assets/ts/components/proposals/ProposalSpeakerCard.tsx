@@ -25,6 +25,9 @@ export function buildReplacementProposerOptions(speakers: ProposalSpeaker[], rem
 export interface ProposalSpeakerEndpointConfig {
   speakerPath: (proposalId: string, userId: string, suffix?: string) => string;
   assetPath: (proposalId: string, userId: string, asset: "headshot" | "gravatar") => string;
+  reminderPath?: (proposalId: string, userId: string, kind: "profile" | "presentation") => string;
+  reminderBody?: (kind: "profile" | "presentation") => unknown;
+  gravatarBody?: unknown;
 }
 
 export function ProposalSpeakerCard({
@@ -113,9 +116,16 @@ export function ProposalSpeakerCard({
 
   async function sendReminder(kind: "profile" | "presentation") {
     try {
-      await requestJson(speakerPath(kind === "profile" ? "remind" : "remind-presentation"), successResponseSchema, {
-        method: "POST",
-      });
+      const reminderBody = endpoints.reminderBody?.(kind);
+      await requestJson(
+        endpoints.reminderPath?.(proposalId, speaker.userId, kind) ??
+          speakerPath(kind === "profile" ? "remind" : "remind-presentation"),
+        successResponseSchema,
+        {
+          method: "POST",
+          ...(reminderBody === undefined ? {} : { body: JSON.stringify(reminderBody) }),
+        },
+      );
       notify?.(`${kind === "profile" ? "Profile" : "Presentation"} reminder sent`, "success");
     } catch (caught) {
       notify?.((caught as Error).message, "error");
@@ -156,6 +166,7 @@ export function ProposalSpeakerCard({
               name={name}
               canEdit={canEdit}
               assetPath={endpoints.assetPath}
+              gravatarBody={endpoints.gravatarBody}
               onSaved={onSaved}
               notify={notify}
             />
