@@ -23,6 +23,7 @@ import { resolve, relative, dirname } from "node:path";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -48,7 +49,7 @@ const config = {
     // Redirect React imports to Preact's compatibility layer so that
     // React-peer-dependent libraries (e.g. wouter) use Preact instead.
     alias: {
-      "react": "preact/compat",
+      react: "preact/compat",
       "react-dom/test-utils": "preact/test-utils",
       "react-dom": "preact/compat",
       "react/jsx-runtime": "preact/jsx-runtime",
@@ -89,11 +90,18 @@ function manifestPlugin({ entries, dataDir, root, isDev }) {
   return {
     name: "pkic-asset-manifest",
     writeBundle(_options, bundle) {
+      if (!isDev) {
+        const chunks = Object.entries(bundle).flatMap(([fileName, output]) =>
+          output.type === "chunk" ? [{ fileName, isEntry: output.isEntry, code: output.code }] : [],
+        );
+        const budget = assertFrontendBundleBudget(chunks);
+        const largest = budget.measurements[0];
+        console.log(
+          `[bundle-budget] ${budget.measurements.length} chunks pass; largest gzip chunk is ${largest.fileName} (${(largest.gzipBytes / 1024).toFixed(2)} KiB)`,
+        );
+      }
       const inputToKey = Object.fromEntries(
-        Object.entries(entries).map(([key, absPath]) => [
-          absPath.replace(/\\/g, "/"),
-          key,
-        ]),
+        Object.entries(entries).map(([key, absPath]) => [absPath.replace(/\\/g, "/"), key]),
       );
 
       const manifest = {};
