@@ -18,9 +18,7 @@
         },
       ],
       "triggers": {
-        "crons": [
-          "* * * * *",
-        ],
+        "crons": ["* * * * *"],
       },
       "routes": [
         {
@@ -34,9 +32,13 @@
         "not_found_handling": "404-page",
         "run_worker_first": [
           "/api/*",
+          "/admin",
+          "/admin/*",
           "/.well-known/oauth-*",
           "/og/*",
           "/r/*",
+          "/sponsor-portal",
+          "/sponsor-portal/*",
           "/donate/r/*",
           "/members/*",
           "/events/*/register*",
@@ -151,9 +153,13 @@
         "not_found_handling": "404-page",
         "run_worker_first": [
           "/api/*",
+          "/admin",
+          "/admin/*",
           "/.well-known/oauth-*",
           "/og/*",
           "/r/*",
+          "/sponsor-portal",
+          "/sponsor-portal/*",
           "/donate/r/*",
           "/members/*",
           "/events/*/register*",
@@ -267,9 +273,13 @@
         "not_found_handling": "404-page",
         "run_worker_first": [
           "/api/*",
+          "/admin",
+          "/admin/*",
           "/.well-known/oauth-*",
           "/og/*",
           "/r/*",
+          "/sponsor-portal",
+          "/sponsor-portal/*",
           "/donate/r/*",
           "/members/*",
           "/events/*/register*",

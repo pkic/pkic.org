@@ -173,7 +173,7 @@ async function provisionApprovedMember(
   return { applicationId, organizationId: approved.body.organizationId, userId: approved.body.userId };
 }
 
-test.describe("Admin browser-verification pass", () => {
+test.describe("Portal management browser-verification pass", () => {
   test.beforeAll(async ({ browser }) => {
     if (existsSync(ADMIN_AUTH_FILE)) return;
     // `browser.newContext()` inside a test file inherits this describe's
