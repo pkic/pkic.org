@@ -1156,6 +1156,20 @@ Status: In progress
       than retained as an alias. Mounted permission, archive-isolation,
       OpenAPI, MCP, pagination, frontend, route-retirement, and browser
       regressions cover the cutover.
+      Event communication now uses one neutral attendee/speaker campaign
+      service and one shared component. Direct event managers create previews
+      and campaigns through
+      `/api/v1/events/:eventSlug/email/campaigns[/previews]`; selected-group
+      managers use the same resource under
+      `/api/v1/groups/:groupId/events/:eventId/email/campaigns[/previews]`.
+      Preview capabilities are short-lived and actor-bound. Exact live
+      event-write or selected-group management authority is rechecked in every
+      D1 batch, including the atomic durable-outbox commit, and the portal only
+      renders controls from server-provided capabilities. The former action
+      routes under `/api/v1/admin/events/:eventSlug/emails/campaign/*` and their
+      duplicate admin-only service/schema names are removed. Mounted scoped
+      authorization, revocation-race, bounded-query, OpenAPI, frontend, legacy
+      404, and real Worker/D1 browser regressions cover the cutover.
       Program-committee proposal management now uses the same selected-group
       event context. Neutral shared contracts and components serve the portal
       and the temporary admin adapter for detail, reviews, comments, accepted

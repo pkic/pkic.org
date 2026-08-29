@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminEventCampaignPreviewSchema } from "../assets/shared/schemas/admin-events";
+import { eventEmailCampaignPreviewInputSchema } from "../assets/shared/schemas/event-email-campaigns";
 import {
   formFieldRulesSchema,
   formFieldOptionValues,
@@ -23,7 +23,7 @@ describe("canonical form-field rules", () => {
         true,
       );
       expect(
-        adminEventCampaignPreviewSchema.safeParse({
+        eventEmailCampaignPreviewInputSchema.safeParse({
           sendMode: "personal",
           filter: { audience: "attendees", attendanceType },
         }).success,

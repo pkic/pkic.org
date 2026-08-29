@@ -119,7 +119,7 @@ async function buildPreviewSubject(
   cache: Map<string, string | null>,
 ): Promise<string> {
   const directBody =
-    typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
+    typeof payload.__eventCampaignBodyContent === "string" && payload.__eventCampaignBodyContent.length > 0;
   const fallback = row.subject ?? "PKI Consortium Update";
   if (directBody) return renderSubject(row.subject, fallback, payload);
   return renderSubject(await resolveSubjectTemplate(db, row, cache), fallback, payload);
@@ -162,9 +162,9 @@ export async function buildEmailOutboxRows(db: DatabaseLike, rows: OutboxListRow
         hasCalendarInvite: Boolean(payload.__calendarInvite),
         hasBadgeAttachment: parseQueuedEmailAttachments(payload).length > 0,
         usesDirectBody:
-          typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0,
+          typeof payload.__eventCampaignBodyContent === "string" && payload.__eventCampaignBodyContent.length > 0,
         hasCustomText:
-          typeof payload.__adminCampaignCustomText === "string" && payload.__adminCampaignCustomText.trim().length > 0,
+          typeof payload.__eventCampaignCustomText === "string" && payload.__eventCampaignCustomText.trim().length > 0,
       };
     }),
   );

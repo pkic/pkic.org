@@ -108,8 +108,8 @@ export interface Env {
   SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
-  /** Maximum distinct recipients resolved for a synchronous admin campaign. */
-  ADMIN_CAMPAIGN_MAX_RECIPIENTS?: string;
+  /** Maximum distinct recipients resolved for a synchronous event campaign. */
+  EVENT_CAMPAIGN_MAX_RECIPIENTS?: string;
   CSV_EXPORT_MAX_ROWS?: string;
   CSV_EXPORT_MAX_BYTES?: string;
   APPLICATION_DOCUMENT_MAX_BYTES?: string;

@@ -1226,7 +1226,7 @@ $adm-danger: #dc3545;
     letter-spacing: 0.03em;
   }
 
-  // ── Email preview (shared by EventEmail, Invites, Templates) ────────────────
+  // ── Email preview (shared by campaigns, invitations, and templates) ────────
 
   .adm-email-preview-frame {
     width: 100%;
@@ -1241,7 +1241,7 @@ $adm-danger: #dc3545;
     overflow: auto;
   }
 
-  // ── Email compose editor overlay (EventEmail) ──────────────────────────────
+  // ── Email campaign compose editor overlay ──────────────────────────────────
 
   .adm-email-editor-wrap {
     position: relative;

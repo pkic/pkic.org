@@ -22,7 +22,7 @@ export async function buildEventInvitePreview(params: {
   event: EventRecord;
   appBaseUrl: string;
   signingSecret: string;
-  adminId: string;
+  actorId: string;
   inviteType: EventInviteType;
   invites: EventInvitePreviewInput[];
   expiresAt?: string;
@@ -62,7 +62,7 @@ export async function buildEventInvitePreview(params: {
   const preview = await signEventInvitePreviewToken({
     secret: params.signingSecret,
     eventId: params.event.id,
-    adminId: params.adminId,
+    actorId: params.actorId,
     inviteType: params.inviteType,
     inviteDigest: digest,
     ttlSeconds: PREVIEW_TTL_SECONDS,
@@ -78,7 +78,7 @@ export async function buildEventInvitePreview(params: {
           : await signEventInvitePreviewToken({
               secret: params.signingSecret,
               eventId: params.event.id,
-              adminId: params.adminId,
+              actorId: params.actorId,
               inviteType: params.inviteType,
               inviteDigest,
               ttlSeconds: PREVIEW_TTL_SECONDS,

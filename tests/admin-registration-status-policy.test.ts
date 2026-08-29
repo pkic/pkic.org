@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminEventCampaignPreviewSchema } from "../assets/shared/schemas/admin-events";
+import { eventEmailCampaignPreviewInputSchema } from "../assets/shared/schemas/event-email-campaigns";
 import {
   EVENT_REGISTRATION_STATUSES,
   eventRegistrationStatusSchema,
@@ -31,7 +31,7 @@ describe("admin registration status policy", () => {
       false,
     );
     expect(
-      adminEventCampaignPreviewSchema.safeParse({
+      eventEmailCampaignPreviewInputSchema.safeParse({
         subjectOverride: "Waitlist update",
         bodyContent: "Update",
         sendMode: "personal",

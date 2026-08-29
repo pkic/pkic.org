@@ -1,10 +1,15 @@
 import { resolveTemplate } from "../../email/templates";
 import type { DatabaseLike } from "../../types";
-import type { CampaignAudienceFilter, CampaignEvent, PreparedAdminCampaign, AdminCampaignInput } from "./types";
+import type {
+  CampaignAudienceFilter,
+  CampaignEvent,
+  EventEmailCampaignInput,
+  PreparedEventEmailCampaign,
+} from "./types";
 import { computeCampaignDigest } from "./digest";
 import { listCampaignRecipients } from "./audience";
 
-function campaignAudienceFilter(input: AdminCampaignInput): CampaignAudienceFilter {
+function campaignAudienceFilter(input: EventEmailCampaignInput): CampaignAudienceFilter {
   return {
     audience: input.filter.audience,
     attendeeStatus: input.filter.attendeeStatus,
@@ -15,13 +20,13 @@ function campaignAudienceFilter(input: AdminCampaignInput): CampaignAudienceFilt
   };
 }
 
-export async function prepareAdminCampaign(
+export async function prepareEventEmailCampaign(
   db: DatabaseLike,
   event: CampaignEvent,
   appBaseUrl: string,
-  input: AdminCampaignInput,
+  input: EventEmailCampaignInput,
   maxRecipients: number,
-): Promise<PreparedAdminCampaign> {
+): Promise<PreparedEventEmailCampaign> {
   const template = !input.bodyContent && input.templateKey ? await resolveTemplate(db, input.templateKey) : null;
   const messageType = input.messageType ?? template?.messageType ?? "promotional";
   const filter = campaignAudienceFilter(input);

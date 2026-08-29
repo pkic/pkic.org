@@ -50,6 +50,21 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   );
   await expect(page.getByRole("link", { name: "Open registration" })).toHaveCount(0);
 
+  const communications = detail.locator("details").filter({ has: page.getByText("Email campaigns", { exact: true }) });
+  await communications.getByText("Email campaigns", { exact: true }).click();
+  await communications.getByPlaceholder("Email subject").fill("Workshop planning update");
+  await communications.getByPlaceholder("Write your message here, or load a template above.").fill("Hello members");
+  const campaignPreview = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
+      response.url().endsWith("/email/campaigns/previews") &&
+      response.request().method() === "POST",
+  );
+  await communications.getByRole("button", { name: "Preview Email" }).click();
+  expect((await campaignPreview).status()).toBe(200);
+  await expect(communications.getByText("Email Preview", { exact: true })).toBeVisible();
+  await expect(communications.getByText("0 recipients", { exact: true })).toBeVisible();
+
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await registrationSetup.getByRole("button", { name: "Add attendee term" }).click();
   await registrationSetup.getByLabel("Key").fill("event-terms");

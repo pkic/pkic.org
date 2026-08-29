@@ -4,9 +4,9 @@ import {
   findBroadcastOnlyTemplateRefs,
   signCampaignPreviewToken,
   verifyCampaignPreviewToken,
-} from "../functions/_lib/services/admin-email-campaign";
+} from "../functions/_lib/services/event-email-campaign";
 
-describe("admin campaign preview token", () => {
+describe("event email campaign preview token", () => {
   it("accepts a valid token for identical payload", async () => {
     const digest = await computeCampaignDigest({
       templateKey: "attendee_invite",
@@ -21,7 +21,7 @@ describe("admin campaign preview token", () => {
     const signed = await signCampaignPreviewToken({
       secret: "test-secret",
       eventId: "evt-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       digest,
       ttlSeconds: 60,
     });
@@ -30,7 +30,7 @@ describe("admin campaign preview token", () => {
       secret: "test-secret",
       token: signed.token,
       eventId: "evt-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       digest,
     });
 
@@ -61,7 +61,7 @@ describe("admin campaign preview token", () => {
     const signed = await signCampaignPreviewToken({
       secret: "test-secret",
       eventId: "evt-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       digest: digestA,
       ttlSeconds: 60,
     });
@@ -70,7 +70,7 @@ describe("admin campaign preview token", () => {
       secret: "test-secret",
       token: signed.token,
       eventId: "evt-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       digest: digestB,
     });
 
@@ -78,7 +78,7 @@ describe("admin campaign preview token", () => {
   });
 });
 
-describe("admin campaign broadcast template safety", () => {
+describe("event email campaign broadcast template safety", () => {
   it("rejects recipient-specific manage links in broadcast content", () => {
     const refs = findBroadcastOnlyTemplateRefs(
       [{ email: "a@example.com", firstName: "A", lastName: "B", templateData: {} }],

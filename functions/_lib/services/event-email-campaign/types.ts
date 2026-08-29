@@ -1,12 +1,11 @@
-import type { z } from "zod";
 import type { EmailMessageType } from "../../../../assets/shared/schemas/email-templates";
-import { adminEventCampaignPreviewSchema } from "../../../../assets/shared/schemas/admin-events";
+import type { EventEmailCampaignPreviewInput } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import type { EventRecord } from "../events";
 import type { ResolvedEmailTemplate } from "../../email/templates";
 import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
 
-export type AdminCampaignInput = z.infer<typeof adminEventCampaignPreviewSchema>;
+export type EventEmailCampaignInput = EventEmailCampaignPreviewInput;
 
 export type CampaignEvent = Pick<
   EventRecord,
@@ -112,7 +111,7 @@ export type CampaignTemplate = Pick<
   "subjectTemplate" | "content" | "contentType" | "messageType"
 >;
 
-export interface PreparedAdminCampaign {
+export interface PreparedEventEmailCampaign {
   template: CampaignTemplate | null;
   messageType: EmailMessageType;
   filter: CampaignAudienceFilter;

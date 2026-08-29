@@ -1,15 +1,15 @@
 import { sha256Hex } from "../utils/crypto";
 import { AppError } from "../errors";
-import { signAdminPreviewToken, verifyAdminPreviewToken } from "../auth/admin-preview-token";
+import { signPreviewToken, verifyPreviewToken } from "../auth/preview-token";
 
 export type EventInviteType = "attendee" | "speaker";
 
 interface EventInvitePreviewClaims {
   v: 1;
-  type: "admin_invite_bulk";
+  type: "event_invite_batch_preview";
   inviteType: EventInviteType;
   eventId: string;
-  adminId: string;
+  actorId: string;
   inviteDigest: string;
   exp: number;
 }
@@ -38,14 +38,17 @@ export function computeEventInviteDigest(invites: EventInvitePreviewInput[], exp
 export async function signEventInvitePreviewToken(payload: {
   secret: string;
   eventId: string;
-  adminId: string;
+  actorId: string;
   inviteType: EventInviteType;
   inviteDigest: string;
   ttlSeconds: number;
 }): Promise<{ token: string; expiresAt: string }> {
-  return signAdminPreviewToken({
-    ...payload,
-    type: "admin_invite_bulk",
+  return signPreviewToken({
+    secret: payload.secret,
+    eventId: payload.eventId,
+    actorId: payload.actorId,
+    ttlSeconds: payload.ttlSeconds,
+    type: "event_invite_batch_preview",
     digest: payload.inviteDigest,
     extraClaims: { inviteType: payload.inviteType },
   });
@@ -58,13 +61,16 @@ export async function verifyEventInvitePreviewToken(payload: {
   secret: string;
   token: string;
   eventId: string;
-  adminId: string;
+  actorId: string;
   inviteType: EventInviteType;
   inviteDigest: string;
 }): Promise<EventInvitePreviewTokenValidation> {
-  const validation = await verifyAdminPreviewToken({
-    ...payload,
-    type: "admin_invite_bulk",
+  const validation = await verifyPreviewToken({
+    secret: payload.secret,
+    token: payload.token,
+    eventId: payload.eventId,
+    actorId: payload.actorId,
+    type: "event_invite_batch_preview",
     digest: payload.inviteDigest,
     extraClaimsMatch: (claims) => claims.inviteType === payload.inviteType,
   });
@@ -73,10 +79,10 @@ export async function verifyEventInvitePreviewToken(payload: {
     ok: true,
     claims: {
       v: 1,
-      type: "admin_invite_bulk",
+      type: "event_invite_batch_preview",
       inviteType: payload.inviteType,
       eventId: payload.eventId,
-      adminId: payload.adminId,
+      actorId: payload.actorId,
       inviteDigest: payload.inviteDigest,
       exp: validation.claims.exp,
     },
@@ -87,7 +93,7 @@ export async function requireValidEventInvitePreview(payload: {
   secret: string;
   token: string;
   eventId: string;
-  adminId: string;
+  actorId: string;
   inviteType: EventInviteType;
   inviteDigest: string;
 }): Promise<EventInvitePreviewClaims> {
@@ -111,7 +117,7 @@ export async function requireValidEventInviteRecipientBatch(payload: {
   secret: string;
   token: string;
   eventId: string;
-  adminId: string;
+  actorId: string;
   inviteType: EventInviteType;
   invites: EventInvitePreviewInput[];
   expiresAt: string;
@@ -129,7 +135,7 @@ export async function requireValidEventInviteRecipientBatch(payload: {
     secret: payload.secret,
     token: payload.token,
     eventId: payload.eventId,
-    adminId: payload.adminId,
+    actorId: payload.actorId,
     inviteType: payload.inviteType,
     inviteDigest: computedDigest,
   });

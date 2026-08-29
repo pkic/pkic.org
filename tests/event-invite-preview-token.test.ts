@@ -16,7 +16,7 @@ describe("event invite preview token", () => {
     const signed = await signEventInvitePreviewToken({
       secret,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: digest,
       ttlSeconds: 60,
@@ -26,7 +26,7 @@ describe("event invite preview token", () => {
       secret,
       token: signed.token,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: digest,
     });
@@ -42,7 +42,7 @@ describe("event invite preview token", () => {
     const signed = await signEventInvitePreviewToken({
       secret,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: digest,
       ttlSeconds: 60,
@@ -52,7 +52,7 @@ describe("event invite preview token", () => {
       secret,
       token: signed.token,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: changedDigest,
     });
@@ -67,7 +67,7 @@ describe("event invite preview token", () => {
     const signed = await signEventInvitePreviewToken({
       secret,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: digest,
       ttlSeconds: -1,
@@ -77,7 +77,7 @@ describe("event invite preview token", () => {
       secret,
       token: signed.token,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: digest,
     });
@@ -91,7 +91,7 @@ describe("event invite preview token", () => {
     const signed = await signEventInvitePreviewToken({
       secret,
       eventId: "event-1",
-      adminId: "admin-1",
+      actorId: "actor-1",
       inviteType: "attendee",
       inviteDigest: digest,
       ttlSeconds: 60,
@@ -102,7 +102,7 @@ describe("event invite preview token", () => {
         secret,
         token: signed.token,
         eventId: "event-1",
-        adminId: "admin-1",
+        actorId: "actor-1",
         inviteType: "speaker",
         inviteDigest: digest,
       }),

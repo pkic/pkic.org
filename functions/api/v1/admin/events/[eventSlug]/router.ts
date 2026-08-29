@@ -6,7 +6,6 @@ import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { AdminEventRegistrationsGet } from "./registrations";
-import emails_Router from "./emails/router";
 import registrations_Router from "./registrations/router";
 import waitlist_Router from "./waitlist/router";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
@@ -18,7 +17,7 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
  * Context-aware gate for the /admin/events/:eventSlug/**
- * compatibility surface (registrations, waitlist, and emails) — requires events:read (GET) or
+ * compatibility surface (registrations and waitlist) — requires events:read (GET) or
  * events:write (writes), globally or scoped to this event. Global admins
  * pass unconditionally via requirePermission's role='admin' bypass, so
  * existing behavior under the single-tier admin model is unchanged; this
@@ -43,7 +42,6 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 app.use("*", requireEventManagementAccess);
 
 openapi.get("/registrations", AdminEventRegistrationsGet);
-openapi.route("/emails", emails_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.route("/waitlist", waitlist_Router);
 

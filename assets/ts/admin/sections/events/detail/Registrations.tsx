@@ -9,7 +9,7 @@ import { api } from "../../../api";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { fmt, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../../../types";
-import { EventEmail } from "./EventEmail";
+import { EventEmailCampaign } from "../../../../components/events/EventEmailCampaign";
 import { EventFormResponses } from "./Forms";
 import {
   EVENT_REGISTRATION_STATUSES,
@@ -320,9 +320,9 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
 // ─── Registrations compositor ─────────────────────────────────────────────────
 
-export function Registrations({ slug, subTab }: { slug: string; subTab?: string }) {
+export function Registrations({ slug, subTab, canWrite }: { slug: string; subTab?: string; canWrite: boolean }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "email" || subTab === "responses" ? subTab : "overview";
+  const tab = subTab === "responses" || (canWrite && subTab === "email") ? subTab : "overview";
 
   return (
     <div>
@@ -330,7 +330,7 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
         items={[
           { key: "overview", label: "Overview" },
           { key: "responses", label: "Responses" },
-          { key: "email", label: "Email" },
+          ...(canWrite ? [{ key: "email", label: "Email" }] : []),
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/registrations/${key === "overview" ? "" : key}`)}
@@ -344,7 +344,14 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
         />
       )}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="event_registration" />}
-      {tab === "email" && <EventEmail slug={slug} audience="attendees" />}
+      {tab === "email" && (
+        <EventEmailCampaign
+          campaignsPath={`/api/v1/events/${encodeURIComponent(slug)}/email/campaigns`}
+          daysPath={`/api/v1/events/${encodeURIComponent(slug)}/days`}
+          audience="attendees"
+          notify={toast}
+        />
+      )}
     </div>
   );
 }

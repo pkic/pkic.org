@@ -3,28 +3,28 @@ import type { DatabaseLike } from "../types";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
-import { buildPersonalCampaignTemplateData } from "./admin-email-campaign/template-data";
+import { buildPersonalCampaignTemplateData } from "./event-email-campaign/template-data";
 import {
   chunkRecipients,
   findBroadcastOnlyTemplateRefs,
-  type AdminCampaignInput,
-  type PreparedAdminCampaign,
-} from "./admin-email-campaign";
+  type EventEmailCampaignInput,
+  type PreparedEventEmailCampaign,
+} from "./event-email-campaign";
 
 /** Builds and atomically queues every outbox row for a validated campaign. */
-export async function queueAdminCampaign(
+export async function queueEventEmailCampaign(
   db: DatabaseLike,
   event: EventRecord,
   appBaseUrl: string,
-  input: AdminCampaignInput,
-  campaign: PreparedAdminCampaign,
+  input: EventEmailCampaignInput,
+  campaign: PreparedEventEmailCampaign,
 ): Promise<{ queuedRecipients: number; queuedBatches: number }> {
   const { template, messageType, recipients } = campaign;
   const templateKey = input.bodyContent ? input.templateKey || "__direct__" : (input.templateKey as string);
   const routeVars =
     input.filter.audience === "attendees"
-      ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
-      : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
+      ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "event_email" }) }
+      : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "event_email" }) };
   const sharedEventVars = buildEventEmailVariables(event, appBaseUrl);
   const usesManageUrl =
     input.filter.audience === "attendees" &&
@@ -61,8 +61,8 @@ export async function queueAdminCampaign(
         data: {
           ...buildPersonalCampaignTemplateData(recipient, { ...sharedEventVars, ...routeVars }),
           ...(manageUrl ? { manageUrl } : {}),
-          __adminCampaignCustomText: input.customText ?? null,
-          __adminCampaignBodyContent: input.bodyContent ?? null,
+          __eventCampaignCustomText: input.customText ?? null,
+          __eventCampaignBodyContent: input.bodyContent ?? null,
           __campaignAudience: input.filter.audience,
         },
       });
@@ -84,8 +84,8 @@ export async function queueAdminCampaign(
           firstName: "Member",
           lastName: "",
           ...routeVars,
-          __adminCampaignCustomText: input.customText ?? null,
-          __adminCampaignBodyContent: input.bodyContent ?? null,
+          __eventCampaignCustomText: input.customText ?? null,
+          __eventCampaignBodyContent: input.bodyContent ?? null,
           __campaignAudience: input.filter.audience,
           __bccRecipients: chunk.slice(1).map((recipient) => recipient.email),
         },

@@ -1,8 +1,9 @@
 import { useHashLocation } from "wouter/use-hash-location";
 import { Tabs } from "../../../../components/Tabs";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
-import { EventEmail } from "./EventEmail";
+import { EventEmailCampaign } from "../../../../components/events/EventEmailCampaign";
 import { EventFormResponses } from "./Forms";
+import { toast } from "../../../ui";
 
 function ProposalsList({ slug }: { slug: string }) {
   const [, navigate] = useHashLocation();
@@ -37,9 +38,9 @@ function ProposalsList({ slug }: { slug: string }) {
 }
 
 /** Admin adapter for the shared event-proposal catalogue. */
-export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
+export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: string; canWrite: boolean }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "email" || subTab === "responses" ? subTab : "proposals";
+  const tab = subTab === "responses" || (canWrite && subTab === "email") ? subTab : "proposals";
 
   return (
     <div>
@@ -47,14 +48,21 @@ export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
         items={[
           { key: "proposals", label: "Overview" },
           { key: "responses", label: "Responses" },
-          { key: "email", label: "Email" },
+          ...(canWrite ? [{ key: "email", label: "Email" }] : []),
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/proposals/${key === "proposals" ? "" : key}`)}
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="proposal_submission" />}
-      {tab === "email" && <EventEmail slug={slug} audience="speakers" />}
+      {tab === "email" && (
+        <EventEmailCampaign
+          campaignsPath={`/api/v1/events/${encodeURIComponent(slug)}/email/campaigns`}
+          daysPath={`/api/v1/events/${encodeURIComponent(slug)}/days`}
+          audience="speakers"
+          notify={toast}
+        />
+      )}
     </div>
   );
 }

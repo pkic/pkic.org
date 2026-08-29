@@ -3,13 +3,14 @@ export { projectAttendeeDayState } from "./attendance-projection";
 export { assertCampaignBroadcastSafety, findBroadcastOnlyTemplateRefs } from "./broadcast-safety";
 export { chunkRecipients } from "./batching";
 export { computeCampaignDigest } from "./digest";
-export { prepareAdminCampaign } from "./preparation";
+export { prepareEventEmailCampaign } from "./preparation";
+export { createEventEmailCampaign, previewEventEmailCampaign } from "./operations";
 export { signCampaignPreviewToken, verifyCampaignPreviewToken } from "./preview-token";
 export type {
-  AdminCampaignInput,
+  EventEmailCampaignInput,
   CampaignAudienceFilter,
   CampaignEvent,
   CampaignRecipient,
   CampaignTemplate,
-  PreparedAdminCampaign,
+  PreparedEventEmailCampaign,
 } from "./types";

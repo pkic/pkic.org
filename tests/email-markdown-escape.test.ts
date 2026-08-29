@@ -8,7 +8,7 @@ import {
   buildAttendeeCampaignRecipients,
   buildPersonalCampaignTemplateData,
   buildSpeakerTemplateData,
-} from "../functions/_lib/services/admin-email-campaign/template-data";
+} from "../functions/_lib/services/event-email-campaign/template-data";
 
 const LAYOUT = "<!doctype html><html><body>{{{body_html}}}</body></html>";
 

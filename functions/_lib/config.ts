@@ -162,9 +162,9 @@ export function getConfig(env: Env, request?: Request) {
       500,
       Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100)),
     ),
-    adminCampaignMaxRecipients: Math.min(
+    eventCampaignMaxRecipients: Math.min(
       10_000,
-      Math.max(1, parseIntOrDefault(env.ADMIN_CAMPAIGN_MAX_RECIPIENTS, 2_000)),
+      Math.max(1, parseIntOrDefault(env.EVENT_CAMPAIGN_MAX_RECIPIENTS, 2_000)),
     ),
     sendgridApiBase: env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send",
   };

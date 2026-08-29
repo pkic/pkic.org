@@ -23,6 +23,8 @@ Base path: `/api/v1`
 - `GET /events/:eventSlug/presentations/archive`
 - `GET /events/:eventSlug/analytics`
 - `GET /events/:eventSlug/proposals`
+- `POST /events/:eventSlug/email/campaigns/previews`
+- `POST /events/:eventSlug/email/campaigns`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
   enables the management detail projection.
@@ -45,6 +47,21 @@ Base path: `/api/v1`
   `proposals:read`. Search, status and recommendation filters, allowlisted
   sorting, counting, and pagination execute in D1. `?archived=true` selects
   archived records instead of mixing them into the active catalogue.
+- Event email campaigns use one resource for attendee and speaker audiences.
+  Preview creation and campaign creation require exact live, user-backed
+  event-scoped `events:write`; the actor-bound preview expires after ten
+  minutes. Permission is rechecked in every D1 batch, including the batch that
+  atomically queues the durable outbox rows.
+
+## Selected-group event communication
+
+- `POST /groups/:groupId/events/:eventId/email/campaigns/previews`
+- `POST /groups/:groupId/events/:eventId/email/campaigns`
+- The selected-group adapter calls the same contracts and campaign services as
+  the direct event resource. It requires the exact group's live event `manage`
+  capability and rechecks group leadership and resource sharing in every D1
+  batch. The portal only renders the controls from the server-provided
+  management capability.
 
 ## Remaining legacy event integration
 

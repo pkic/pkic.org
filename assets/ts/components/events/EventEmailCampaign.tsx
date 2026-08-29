@@ -1,18 +1,13 @@
 import { useState, useEffect, useRef } from "preact/hooks";
-import { Tabs } from "../../../../components/Tabs";
-import { api } from "../../../api";
+import { Tabs } from "../Tabs";
 import {
-  adminEventEmailPreviewResponseSchema,
-  adminEventEmailSendResponseSchema,
-} from "../../../../../shared/schemas/admin-events";
-import {
-  TEMPLATE_HELPERS,
-  TEMPLATE_PARTIALS,
-  type TemplateHelperItem,
-} from "../../../../shared/email-template-helpers";
-import { toast } from "../../../ui";
-import type { EmailMessageType } from "../../../../../shared/schemas/email-templates";
-import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
+  eventEmailCampaignPreviewResponseSchema,
+  eventEmailCampaignResponseSchema,
+  type EventEmailCampaignPreviewResponse,
+} from "../../../shared/schemas/event-email-campaigns";
+import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../shared/email-template-helpers";
+import type { EmailMessageType } from "../../../shared/schemas/email-templates";
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import {
   HELPER_CATEGORIES,
   PERSONAL_ONLY_HELPERS,
@@ -22,26 +17,31 @@ import {
   highlightBody,
   type CampaignPayload,
   useDays,
-} from "./event-email-support";
+} from "./event-email-campaign-support";
 import {
   EVENT_REGISTRATION_STATUS_FILTERS,
   eventRegistrationStatusLabel,
   eventRegistrationStatusFilterSchema,
   type EventRegistrationStatusFilter,
-} from "../../../../../shared/schemas/event-registrations";
-import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
-import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../../../shared/email-template-catalog";
+} from "../../../shared/schemas/event-registrations";
+import { ServerSearchSelect } from "../ServerSearchSelect";
+import { requestJson } from "../../shared/api-client";
+import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../shared/email-template-catalog";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function EventEmail({
-  slug,
+export function EventEmailCampaign({
+  campaignsPath,
+  daysPath,
   audience: defaultAudience = "attendees",
+  notify = () => {},
 }: {
-  slug: string;
+  campaignsPath: string;
+  daysPath: string;
   audience?: "attendees" | "speakers";
+  notify?: (message: string, type: "success" | "error") => void;
 }) {
-  const days = useDays(slug);
+  const days = useDays(daysPath);
 
   const [templateKey, setTemplateKey] = useState("");
   const [mode, setMode] = useState<"personal" | "bcc_batch">("personal");
@@ -61,13 +61,7 @@ export function EventEmail({
   const [speakerStatus, setSpeakerStatus] = useState("confirmed");
 
   // preview state
-  const [preview, setPreview] = useState<{
-    subject: string;
-    html: string;
-    text: string;
-    recipientCount?: number;
-    previewToken?: string;
-  } | null>(null);
+  const [preview, setPreview] = useState<EventEmailCampaignPreviewResponse | null>(null);
   const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [status, setStatus] = useState("Preview required before sending.");
@@ -122,7 +116,7 @@ export function EventEmail({
       setBody(version.body ?? "");
       setMessageType(version.message_type ?? "promotional");
     } catch (e) {
-      toast((e as Error).message, "error");
+      notify((e as Error).message, "error");
     }
   }
 
@@ -152,47 +146,41 @@ export function EventEmail({
 
   async function handlePreview() {
     if (!subject.trim() || !body.trim()) {
-      toast("Subject and body are required.", "error");
+      notify("Subject and body are required.", "error");
       return;
     }
     setStatus("Generating preview…");
     setPreview(null);
     setPreviewConfirmed(false);
     try {
-      const res = await api(
-        `/api/v1/admin/events/${slug}/emails/campaign/preview`,
-        adminEventEmailPreviewResponseSchema,
-        {
-          method: "POST",
-          body: JSON.stringify(buildPayload()),
-        },
-      );
+      const res = await requestJson(`${campaignsPath}/previews`, eventEmailCampaignPreviewResponseSchema, {
+        method: "POST",
+        body: JSON.stringify(buildPayload()),
+      });
       setPreview(res);
-      setStatus(
-        `Preview ready — ${res.recipientCount != null ? `${res.recipientCount} recipients` : "confirm to send"}.`,
-      );
+      setStatus(`Preview ready — ${res.recipientCount} recipients.`);
     } catch (e) {
       const msg = (e as Error).message;
       setStatus(msg);
-      toast(msg, "error");
+      notify(msg, "error");
     }
   }
 
   async function handleSend() {
     if (!previewConfirmed) {
-      toast("Review the preview and tick the confirmation checkbox.", "error");
+      notify("Review the preview and tick the confirmation checkbox.", "error");
       return;
     }
     if (!preview) return;
     setSending(true);
     setStatus("Sending…");
     try {
-      const res = await api(`/api/v1/admin/events/${slug}/emails/campaign/send`, adminEventEmailSendResponseSchema, {
+      const res = await requestJson(campaignsPath, eventEmailCampaignResponseSchema, {
         method: "POST",
         body: JSON.stringify(buildPayload(preview.previewToken)),
       });
-      const count = res.queuedRecipients ?? 0;
-      toast(`Email queued for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
+      const count = res.queuedRecipients;
+      notify(`Email queued for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
       setStatus(`✓ Sent to ${count} recipients.`);
       setPreview(null);
       setPreviewConfirmed(false);
@@ -203,7 +191,7 @@ export function EventEmail({
     } catch (e) {
       const msg = (e as Error).message;
       setStatus(msg);
-      toast(msg, "error");
+      notify(msg, "error");
     } finally {
       setSending(false);
     }
@@ -451,9 +439,7 @@ export function EventEmail({
           <div class="card-body">
             <div class="small text-muted">Subject</div>
             <div class="fw-semibold mb-2">{preview.subject}</div>
-            {preview.recipientCount != null && (
-              <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>
-            )}
+            <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>
             <Tabs
               items={EMAIL_PREVIEW_TABS}
               active={previewTab}

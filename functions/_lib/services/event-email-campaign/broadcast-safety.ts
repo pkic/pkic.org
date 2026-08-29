@@ -1,5 +1,5 @@
 import { AppError } from "../../errors";
-import type { AdminCampaignInput, CampaignRecipient, CampaignTemplate } from "./types";
+import type { CampaignRecipient, CampaignTemplate, EventEmailCampaignInput } from "./types";
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -53,7 +53,7 @@ export function findBroadcastOnlyTemplateRefs(
 }
 
 export function assertCampaignBroadcastSafety(
-  input: Pick<AdminCampaignInput, "sendMode" | "subjectOverride" | "bodyContent" | "customText">,
+  input: Pick<EventEmailCampaignInput, "sendMode" | "subjectOverride" | "bodyContent" | "customText">,
   recipients: CampaignRecipient[],
   template: CampaignTemplate | null,
 ): void {

@@ -14,7 +14,7 @@ import {
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
-import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
+import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { createMemberSession } from "./helpers/auth";

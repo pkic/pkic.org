@@ -56,6 +56,10 @@ import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submis
 import { GroupEventsCreate, GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventProfilesList } from "./[groupId]/events/profiles";
 import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
+import {
+  GroupEventEmailCampaignCreate,
+  GroupEventEmailCampaignPreviewCreate,
+} from "./[groupId]/events/[eventId]/email-campaigns";
 import { GroupEventProposalsList } from "./[groupId]/events/[eventId]/proposals";
 import {
   GroupEventProposalDetailGet,
@@ -181,6 +185,8 @@ openapi.post("/:groupId/events", GroupEventsCreate);
 openapi.get("/:groupId/events/profiles", GroupEventProfilesList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
+openapi.post("/:groupId/events/:eventId/email/campaigns/previews", GroupEventEmailCampaignPreviewCreate);
+openapi.post("/:groupId/events/:eventId/email/campaigns", GroupEventEmailCampaignCreate);
 openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalDetailGet);
 openapi.patch("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalPatch);

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
+import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { resolveEventFormResponse } from "../functions/_lib/services/forms";
 import { getProposalDetailData } from "../functions/_lib/services/proposal-detail";

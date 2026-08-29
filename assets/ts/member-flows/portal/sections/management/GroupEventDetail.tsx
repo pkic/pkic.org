@@ -7,6 +7,7 @@ import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventInvitations } from "./GroupEventInvitations";
 import { GroupEventProposals } from "./GroupEventProposals";
+import { GroupEventCommunications } from "./GroupEventCommunications";
 
 function label(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -98,6 +99,8 @@ export function GroupEventDetail({
       )}
 
       {canManage && <GroupEventInvitations groupId={groupId} event={event} />}
+
+      {canManage && <GroupEventCommunications groupId={groupId} eventId={event.id} />}
 
       {event.proposalAccess?.canFinalize && (
         <GroupEventInvitations groupId={groupId} event={event} inviteType="speaker" />

@@ -79,8 +79,12 @@ describe("admin OpenAPI mutation boundaries", () => {
     expect(spec.paths["/api/v1/admin/vote-proposals/{id}/reject"]).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/preview"].post).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/speakers/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/preview"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/send"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/email/campaigns/previews"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/email/campaigns"].post).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/email/campaigns/previews"].post).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/email/campaigns"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/preview"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/send"]).toBeUndefined();
   });
 
   it("rejects invalid JSON bodies at the preview and version contract boundaries", async () => {
@@ -120,13 +124,13 @@ describe("admin OpenAPI mutation boundaries", () => {
   it("rejects malformed campaign mutation bodies at the mounted contracts", async () => {
     await setupAdmin();
 
-    const campaignPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
+    const campaignPreview = await callAdmin("/api/v1/events/pqc-2026/email/campaigns/previews", {
       method: "POST",
       body: JSON.stringify({ sendMode: "personal", batchSize: 50 }),
     });
     expect(campaignPreview.status).toBe(400);
 
-    const campaignSend = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/send", {
+    const campaignSend = await callAdmin("/api/v1/events/pqc-2026/email/campaigns", {
       method: "POST",
       body: JSON.stringify({
         sendMode: "personal",
@@ -152,7 +156,7 @@ describe("admin OpenAPI mutation boundaries", () => {
     });
     expect(retiredInvitePreview.status).toBe(404);
 
-    const campaignPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
+    const campaignPreview = await callAdmin("/api/v1/events/pqc-2026/email/campaigns/previews", {
       method: "POST",
       body: JSON.stringify({ sendMode: "personal", batchSize: 50, filter: { audience: "attendees" } }),
     });
@@ -163,6 +167,12 @@ describe("admin OpenAPI mutation boundaries", () => {
       batchCount: 0,
       sampleRecipients: [],
     });
+
+    const retiredPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
+      method: "POST",
+      body: JSON.stringify({ sendMode: "personal", batchSize: 50, filter: { audience: "attendees" } }),
+    });
+    expect(retiredPreview.status).toBe(404);
   });
 
   it("leaves the retired global vote-proposal adapter unmounted", async () => {

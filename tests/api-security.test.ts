@@ -267,12 +267,12 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/proposals`)),
     ],
     [
-      "POST /api/v1/admin/events/:slug/emails/campaign/preview",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/emails/campaign/preview`)),
+      "POST /api/v1/events/:slug/email/campaigns/previews",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/email/campaigns/previews`)),
     ],
     [
-      "POST /api/v1/admin/events/:slug/emails/campaign/send",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/emails/campaign/send`)),
+      "POST /api/v1/events/:slug/email/campaigns",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/email/campaigns`)),
     ],
     [
       "POST /api/v1/admin/events/:slug/registrations/:registrationId/admit",
