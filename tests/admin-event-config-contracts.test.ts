@@ -87,7 +87,10 @@ describe("admin event configuration OpenAPI boundaries", () => {
     expect(spec.paths["/api/v1/events/{eventSlug}/speakers/invitations"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/speaker-invites"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/sponsor-tiers"]).toBeUndefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions/{permId}"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/roles"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/roles"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/roles/{roleAssignmentId}"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"]).toBeUndefined();
   });
 
   it("returns the canonical error envelope for malformed and invalid configuration payloads", async () => {
@@ -113,7 +116,7 @@ describe("admin event configuration OpenAPI boundaries", () => {
     expect(apiErrorPayloadSchema.parse(await invalidTiers.json()).error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("parses successful response bodies for sync, sponsor tiers, and permission revocation", async () => {
+  it("parses successful response bodies for sync, sponsor tiers, and event-role revocation", async () => {
     const token = await setupAdmin();
 
     const sync = await call(token, "/api/v1/admin/events/sync-from-hugo", {
@@ -134,19 +137,21 @@ describe("admin event configuration OpenAPI boundaries", () => {
       { tierName: "Leader", hasAttendeeDataAccess: true },
     ]);
 
-    const permission = await call(token, "/api/v1/admin/events/pqc-2026/permissions", {
+    const role = await call(token, "/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userEmail: "contract-permission@example.test", permission: "organizer" }),
+      body: JSON.stringify({ userEmail: "contract-role@example.test", role: "organizer" }),
     });
-    expect(permission.status).toBe(201);
-    const permissionBody = (await permission.json()) as { permission: { id: string } };
-    const permissionId = permissionBody.permission.id;
+    expect(role.status).toBe(201);
+    const roleBody = (await role.json()) as { role: { id: string } };
 
-    const revoked = await call(token, `/api/v1/admin/events/pqc-2026/permissions/${permissionId}`, {
+    const revoked = await call(token, `/api/v1/events/pqc-2026/roles/${roleBody.role.id}`, {
       method: "DELETE",
     });
     expect(revoked.status).toBe(200);
     expect(successResponseSchema.parse(await revoked.json())).toEqual({ success: true });
+
+    const retired = await call(token, "/api/v1/admin/events/pqc-2026/permissions");
+    expect(retired.status).toBe(404);
   });
 
   it("uses exact event-scoped read/write permissions, rejects API keys, and leaves the legacy route unmounted", async () => {

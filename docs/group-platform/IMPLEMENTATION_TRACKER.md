@@ -52,10 +52,13 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [x] Preserve temporary compatibility exports only while callers migrate.
       Current evidence: the unreleased working-group collection contracts and
-      routes have been removed. The obsolete admin event-management, form,
-      invitation, proposal, speaker, and registration aliases have now been
-      replaced at every caller by their canonical domain contracts; the
-      duplicate admin registration-detail schema module is removed. Internal
+      routes have been removed. Temporary shared contract and service exports
+      for the completed form, invitation, speaker, registration, and event
+      configuration slices have been removed rather than retained as aliases;
+      the duplicate admin registration-detail schema module is also removed.
+      Remaining admin event and proposal HTTP consumers are tracked explicitly
+      under the open interface/API-retirement work and are not treated as
+      compatibility contracts. Internal
       command services now use the generalized audit-change guard classifier
       directly; its one-row compatibility alias, the redundant form-answer
       schema name, and an unused admin vote-candidate alias are removed. Tests
@@ -1089,6 +1092,19 @@ Status: In progress
       Focused tests cover the corresponding speaker lifecycle, large-list
       batching, preview-token substitution attacks, permission boundaries,
       accessible controls, and text-safe recipient rendering.
+      Event team assignments now use the canonical
+      `/api/v1/events/:eventSlug/roles` resource rather than the generic
+      `/api/v1/admin/events/:eventSlug/permissions` namespace. One neutral
+      role schema maps the organizer, program committee, moderator, and
+      volunteer vocabulary to the persisted RBAC catalogue. Search, sorting,
+      counting, and pagination run in D1; assignment and revocation repeat the
+      exact live user-backed `events:manage` authority and target state in one
+      guarded batch. API-key identities cannot mutate roles, the UI exposes
+      the Team tab only with the management capability, and event readers see
+      sponsor-tier data without receiving edit actions. Mounted, concurrency,
+      OpenAPI, frontend, and real-browser regressions cover canonical requests,
+      permission loss, target races, route removal, and absence of the legacy
+      admin permissions API.
       Program-committee proposal management now uses the same selected-group
       event context. Neutral shared contracts and components serve the portal
       and the temporary admin adapter for detail, reviews, comments, accepted
@@ -1612,8 +1628,9 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the canonical event
-      visibility and resource cutover with 2,280 backend tests (one skipped), 339
-      frontend tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
+      visibility, resource, and team-role cutovers with 2,281 backend tests (one
+      skipped), 342 frontend tests, and 80 tooling tests. Type checks, ESLint,
+      SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
       An earlier combined run exposed a nondeterministic Google Groups boundary

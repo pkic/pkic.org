@@ -3,12 +3,14 @@ import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataT
 import { api, apiCommand } from "../../../api";
 import { fmt } from "../../../ui";
 import {
-  adminEventTeamListResponseSchema,
-  adminEventTeamPermissionCreateResponseSchema,
-} from "../../../../../shared/schemas/admin-events";
+  EVENT_TEAM_ROLES,
+  eventTeamRoleCreateResponseSchema,
+  eventTeamRolesResponseSchema,
+  type EventTeamRole,
+} from "../../../../../shared/schemas/event-team";
 import { performAdminAction } from "../../../actions";
 
-const PERM_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<EventTeamRole, string> = {
   organizer: "Organizer",
   program_committee: "Program Committee",
   moderator: "Moderator",
@@ -18,16 +20,17 @@ const PERM_LABELS: Record<string, string> = {
 export function Team({ slug }: { slug: string }) {
   const tableRef = useRef<ApiTableActions | null>(null);
   const [newEmail, setNewEmail] = useState("");
-  const [newPerm, setNewPerm] = useState("organizer");
+  const [newRole, setNewRole] = useState<EventTeamRole>("organizer");
   const [newExpiresAt, setNewExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
   const [addStatus, setAddStatus] = useState("");
 
-  async function handleRevoke(permId: string) {
+  async function handleRevoke(roleAssignmentId: string) {
     if (!confirm("Remove this team member?")) return;
     await performAdminAction({
-      request: () => apiCommand(`/api/v1/admin/events/${slug}/permissions/${permId}`, { method: "DELETE" }),
-      successMessage: "Permission revoked",
+      request: () =>
+        apiCommand(`/api/v1/events/${encodeURIComponent(slug)}/roles/${roleAssignmentId}`, { method: "DELETE" }),
+      successMessage: "Role revoked",
       afterSuccess: () => tableRef.current?.reload(),
     });
   }
@@ -39,15 +42,15 @@ export function Team({ slug }: { slug: string }) {
     await performAdminAction({
       setBusy: setAdding,
       request: () =>
-        api(`/api/v1/admin/events/${slug}/permissions`, adminEventTeamPermissionCreateResponseSchema, {
+        api(`/api/v1/events/${encodeURIComponent(slug)}/roles`, eventTeamRoleCreateResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             userEmail: newEmail.trim(),
-            permission: newPerm,
+            role: newRole,
             expiresAt: newExpiresAt ? new Date(newExpiresAt).toISOString() : undefined,
           }),
         }),
-      successMessage: "Permission added",
+      successMessage: "Role assigned",
       afterSuccess: async () => {
         setNewEmail("");
         setNewExpiresAt("");
@@ -65,8 +68,11 @@ export function Team({ slug }: { slug: string }) {
         <div class="card-body">
           <form onSubmit={handleAdd} class="d-flex gap-2 align-items-end flex-wrap">
             <div>
-              <label class="form-label small fw-semibold">Email</label>
+              <label class="form-label small fw-semibold" for="event-team-email">
+                Email
+              </label>
               <input
+                id="event-team-email"
                 class="form-control form-control-sm"
                 type="email"
                 value={newEmail}
@@ -76,22 +82,28 @@ export function Team({ slug }: { slug: string }) {
               />
             </div>
             <div>
-              <label class="form-label small fw-semibold">Permission</label>
+              <label class="form-label small fw-semibold" for="event-team-role">
+                Role
+              </label>
               <select
+                id="event-team-role"
                 class="form-select form-select-sm"
-                value={newPerm}
-                onChange={(e) => setNewPerm((e.target as HTMLSelectElement).value)}
+                value={newRole}
+                onChange={(e) => setNewRole((e.target as HTMLSelectElement).value as EventTeamRole)}
               >
-                {Object.entries(PERM_LABELS).map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
+                {EVENT_TEAM_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label class="form-label small fw-semibold">Expires (optional)</label>
+              <label class="form-label small fw-semibold" for="event-team-expires-at">
+                Expires (optional)
+              </label>
               <input
+                id="event-team-expires-at"
                 class="form-control form-control-sm"
                 type="datetime-local"
                 value={newExpiresAt}
@@ -107,51 +119,51 @@ export function Team({ slug }: { slug: string }) {
       </div>
 
       <ApiDataTable
-        endpoint={`/api/v1/admin/events/${slug}/permissions`}
-        responseSchema={adminEventTeamListResponseSchema}
-        resolve={(data) => data.permissions}
+        endpoint={`/api/v1/events/${encodeURIComponent(slug)}/roles`}
+        responseSchema={eventTeamRolesResponseSchema}
+        resolve={(data) => data.roles}
         resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="Search email or role…"
         actionsRef={tableRef}
         columns={[
-          { header: "Email", cell: (p) => p.user_email, sort: { asc: "user_email", desc: "-user_email" } },
+          { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },
           {
-            header: "Permission",
-            cell: (p) => <span class="badge text-bg-secondary">{PERM_LABELS[p.permission] ?? p.permission}</span>,
-            sort: { asc: "role_id", desc: "-role_id" },
+            header: "Role",
+            cell: (assignment) => <span class="badge text-bg-secondary">{ROLE_LABELS[assignment.role]}</span>,
+            sort: { asc: "role", desc: "-role" },
           },
-          { header: "Added by", cell: (p) => p.granter_email ?? "—", className: "small text-muted" },
+          { header: "Added by", cell: (role) => role.granterEmail ?? "—", className: "small text-muted" },
           {
             header: "Added",
-            cell: (p) => (p.created_at ? p.created_at.substring(0, 10) : "—"),
+            cell: (role) => role.createdAt.substring(0, 10),
             className: "mono small",
-            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+            sort: { asc: "createdAt", desc: "-createdAt", defaultDirection: "desc" },
           },
           {
             header: "Expires",
-            cell: (p) =>
-              p.expires_at ? (
-                <span class={new Date(p.expires_at).getTime() < Date.now() ? "text-danger" : ""}>
-                  {fmt(p.expires_at)}
+            cell: (role) =>
+              role.expiresAt ? (
+                <span class={new Date(role.expiresAt).getTime() < Date.now() ? "text-danger" : ""}>
+                  {fmt(role.expiresAt)}
                 </span>
               ) : (
                 <span class="text-muted">Never</span>
               ),
             className: "small",
-            sort: { asc: "expires_at", desc: "-expires_at" },
+            sort: { asc: "expiresAt", desc: "-expiresAt" },
           },
           {
             header: "",
-            cell: (p) => (
-              <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(p.id)}>
+            cell: (role) => (
+              <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(role.id)}>
                 Revoke
               </button>
             ),
           },
         ]}
         empty="No team members"
-        rowKey={(p) => p.id}
+        rowKey={(role) => role.id}
       />
     </div>
   );

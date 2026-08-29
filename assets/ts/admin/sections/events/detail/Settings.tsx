@@ -6,10 +6,10 @@ import { SponsorTiersTab } from "./settings/SponsorTiersTab";
 
 type SettingsTab = "general" | "sponsor-tiers" | "team";
 
-const SETTINGS_TABS: Array<{ key: SettingsTab; label: string }> = [
+const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; capability?: "manage" }> = [
   { key: "general", label: "General" },
   { key: "sponsor-tiers", label: "Sponsor Tiers" },
-  { key: "team", label: "Team" },
+  { key: "team", label: "Team", capability: "manage" },
 ];
 
 export function Settings({
@@ -21,12 +21,13 @@ export function Settings({
   onUpdated: (event: EventDetail) => void;
   subTab?: string;
 }) {
-  const tab: SettingsTab = SETTINGS_TABS.find(({ key }) => key === subTab)?.key ?? "general";
+  const visibleTabs = SETTINGS_TABS.filter(({ capability }) => !capability || event.capabilities.includes(capability));
+  const tab: SettingsTab = visibleTabs.find(({ key }) => key === subTab)?.key ?? "general";
 
   return (
     <div>
       <Tabs
-        items={SETTINGS_TABS}
+        items={visibleTabs}
         active={tab}
         onChange={(key) => {
           location.hash = `/events/${event.slug}/settings/${key}`;
@@ -34,7 +35,7 @@ export function Settings({
       />
 
       {tab === "general" && <GeneralTab event={event} onUpdated={onUpdated} />}
-      {tab === "sponsor-tiers" && <SponsorTiersTab slug={event.slug} />}
+      {tab === "sponsor-tiers" && <SponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />}
       {tab === "team" && <Team slug={event.slug} />}
     </div>
   );

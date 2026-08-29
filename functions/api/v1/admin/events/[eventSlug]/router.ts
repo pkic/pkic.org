@@ -5,14 +5,12 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
-import { AdminEventTeamList, AdminEventTeamPermissionCreate } from "./permissions";
 import { AdminEventPromotersGet } from "./promoters";
 import { AdminEventPresentationsDownloadGet } from "./presentations/download";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { AdminEventRegistrationsGet } from "./registrations";
 import { AdminEventsEventSlugStatsGet } from "./stats";
 import emails_Router from "./emails/router";
-import permissions_Router from "./permissions/router";
 import registrations_Router from "./registrations/router";
 import waitlist_Router from "./waitlist/router";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
@@ -27,7 +25,7 @@ function isSelfGatedEventPath(path: string, eventSlug: string): boolean {
   const idx = path.indexOf(marker);
   if (idx === -1) return false;
   const rest = path.slice(idx + marker.length);
-  return rest.startsWith("proposals") || rest.startsWith("permissions");
+  return rest.startsWith("proposals");
 }
 
 /**
@@ -40,9 +38,8 @@ function isSelfGatedEventPath(path: string, eventSlug: string): boolean {
  * is what actually gives a event_organizer grant "full management
  * of a specific event" (P7) instead of just admin-only access.
  *
- * `/proposals` and `/permissions` are excluded here — they self-gate with
- * finer-grained permissions (proposals:read/score/manage, events:manage)
- * in their own handlers, since a program_committee grant authorizes
+ * `/proposals` is excluded here because it self-gates with finer-grained
+ * permissions (proposals:read/score/manage), since a program_committee grant authorizes
  * proposal/agenda access without granting general event management.
  */
 async function requireEventManagementAccess(c: Context<RequestDbContext>, next: Next): Promise<void> {
@@ -66,15 +63,12 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 
 app.use("*", requireEventManagementAccess);
 
-openapi.get("/permissions", AdminEventTeamList);
-openapi.post("/permissions", AdminEventTeamPermissionCreate);
 openapi.get("/promoters", AdminEventPromotersGet);
 openapi.get("/presentations/download", AdminEventPresentationsDownloadGet);
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 openapi.get("/registrations", AdminEventRegistrationsGet);
 openapi.get("/stats", AdminEventsEventSlugStatsGet);
 openapi.route("/emails", emails_Router);
-openapi.route("/permissions", permissions_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.route("/waitlist", waitlist_Router);
 

@@ -1,4 +1,5 @@
-import { eventSlugParamsSchema, jsonErrorResponse } from "./api-common";
+import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
 import {
   eventDaysManagementReplaceResponseSchema,
   eventDaysManagementReplaceSchema,
@@ -11,6 +12,12 @@ import {
   eventsListQuerySchema,
   eventsListResponseSchema,
 } from "./event-management";
+import {
+  eventTeamListQuerySchema,
+  eventTeamRoleCreateResponseSchema,
+  eventTeamRoleCreateSchema,
+  eventTeamRolesResponseSchema,
+} from "./event-team";
 
 export const eventDetailRouteSchema = {
   tags: ["Events"],
@@ -106,4 +113,61 @@ export const eventDaysPutRouteSchema = {
     "409": jsonErrorResponse("The event revision, ownership, series, or write permission changed."),
   },
   "x-pkic-auth": { required: true, scopes: ["events:write"] },
+};
+
+export const eventTeamRolesListRouteSchema = {
+  tags: ["Events"],
+  summary: "List event team roles",
+  description: "Searches, sorts, and paginates unrevoked role assignments for one event in D1.",
+  request: { params: eventSlugParamsSchema, query: eventTeamListQuerySchema },
+  responses: {
+    "200": {
+      description: "Event team role assignments.",
+      content: { "application/json": { schema: eventTeamRolesResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Event management permission is required."),
+    "404": jsonErrorResponse("Event not found."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:manage"] },
+};
+
+export const eventTeamRoleCreateRouteSchema = {
+  tags: ["Events"],
+  summary: "Assign an event team role",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventTeamRoleCreateSchema } } },
+  },
+  responses: {
+    "201": {
+      description: "Event team role assigned.",
+      content: { "application/json": { schema: eventTeamRoleCreateResponseSchema } },
+    },
+    "400": jsonErrorResponse("Invalid event team role payload."),
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Event management permission is required."),
+    "404": jsonErrorResponse("Event not found."),
+    "409": jsonErrorResponse("The identity, role assignment, or authorization changed."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:manage"] },
+};
+
+export const eventTeamRoleDeleteRouteSchema = {
+  tags: ["Events"],
+  summary: "Revoke an event team role",
+  request: {
+    params: eventSlugParamsSchema.extend({ roleAssignmentId: databaseIdSchema }),
+  },
+  responses: {
+    "200": {
+      description: "Event team role revoked.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Event management permission is required."),
+    "404": jsonErrorResponse("Event or role assignment not found."),
+    "409": jsonErrorResponse("The role assignment or authorization changed."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:manage"] },
 };

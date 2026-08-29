@@ -9,10 +9,7 @@ import type {
   RoleAssignment as CanonicalRoleAssignment,
   UserRoleAssignment as CanonicalUserRoleAssignment,
 } from "../../shared/schemas/access-control";
-import type {
-  AdminEventSummary as CanonicalEventSummary,
-  AdminEventTeamListItem as CanonicalEventPermission,
-} from "../../shared/schemas/admin-events";
+import type { AdminEventSummary as CanonicalEventSummary } from "../../shared/schemas/admin-events";
 import type { EventDetail as CanonicalEventDetail } from "../../shared/schemas/event-management";
 import type {
   EventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
@@ -55,8 +52,6 @@ export interface AdminRegistrationDay {
 export type BadgeRoleInfo = z.infer<typeof badgeRoleInfoSchema>;
 
 export type AdminFormSubmission = CanonicalFormSubmission;
-
-export type EventPermission = CanonicalEventPermission;
 
 // ── Access control ─────────────────────────────────────────────────
 

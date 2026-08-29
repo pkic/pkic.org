@@ -389,6 +389,48 @@ test.describe("Admin browser-verification pass", () => {
     await expect(savedRow.locator("input[type=checkbox]")).toBeChecked();
   });
 
+  test("event team: assign and revoke a role through the canonical event resource", async ({ page }) => {
+    const email = `e2e-event-team-${Date.now()}@example.test`;
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.includes(`/api/v1/admin/events/${EVENT_SLUG}/permissions`)) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
+
+    await page.goto(`/admin/#/events/${EVENT_SLUG}/settings/team`);
+    await expect(page.getByText("Add team member", { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Add", exact: true }) });
+    await form.getByLabel("Email").fill(email);
+    await form.getByLabel("Role").selectOption("program_committee");
+    const assigned = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/roles` &&
+        response.request().method() === "POST",
+    );
+    await form.getByRole("button", { name: "Add", exact: true }).click();
+    expect((await assigned).status()).toBe(201);
+
+    const row = page.getByRole("row").filter({ hasText: email });
+    await expect(row).toContainText("Program Committee");
+    await page.reload();
+    await expect(page.getByRole("row").filter({ hasText: email })).toContainText("Program Committee");
+
+    const reloadedRow = page.getByRole("row").filter({ hasText: email });
+    const revoked = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.startsWith(`/api/v1/events/${EVENT_SLUG}/roles/`) &&
+        response.request().method() === "DELETE",
+    );
+    page.once("dialog", (dialog) => dialog.accept());
+    await reloadedRow.getByRole("button", { name: "Revoke" }).click();
+    expect((await revoked).status()).toBe(200);
+    await expect(page.getByRole("row").filter({ hasText: email })).toHaveCount(0);
+    expect(legacyRequests).toEqual([]);
+  });
+
   test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];

@@ -71,6 +71,8 @@ async function createScopedEventManager(eventId: string) {
     .run();
 
   return {
+    email,
+    userId,
     actor: createUserBackedAuthAdmin({
       id: userId,
       email,
@@ -442,118 +444,153 @@ describe("admin event management endpoints", () => {
     expect(response.status).toBe(400);
   });
 
-  it("exposes permission grants after event-day editing moved to the group portal", async () => {
+  it("manages event team roles through the canonical event resource", async () => {
     await setupAdmin();
 
-    const permissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+    const roleResponse = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
       body: JSON.stringify({
         userEmail: "organizer@example.test",
-        permission: "organizer",
+        role: "organizer",
       }),
     });
 
-    expect(permissionResponse.status).toBe(201);
-    const permissionPayload = (await permissionResponse.json()) as {
-      permission: { id: string; user_email: string; permission: string };
+    expect(roleResponse.status).toBe(201);
+    const rolePayload = (await roleResponse.json()) as {
+      role: { id: string; userEmail: string; role: string };
     };
-    expect(permissionPayload.permission.user_email).toBe("organizer@example.test");
-    expect(permissionPayload.permission.permission).toBe("organizer");
+    expect(rolePayload.role.userEmail).toBe("organizer@example.test");
+    expect(rolePayload.role.role).toBe("organizer");
     expect(
       await queryAll<{ normalized_email: string }>(
         env.DB,
         `SELECT u.normalized_email
            FROM user_roles ur JOIN users u ON u.id = ur.user_id
           WHERE ur.id = ?`,
-        permissionPayload.permission.id,
+        rolePayload.role.id,
       ),
     ).toEqual([{ normalized_email: "organizer@example.test" }]);
 
-    const duplicatePermissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+    const duplicateRoleResponse = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
       body: JSON.stringify({
         userEmail: "organizer@example.test",
-        permission: "organizer",
+        role: "organizer",
       }),
     });
 
-    expect(duplicatePermissionResponse.status).toBe(409);
+    expect(duplicateRoleResponse.status).toBe(409);
 
-    const permissionListResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions");
-    expect(permissionListResponse.status).toBe(200);
-    const permissionListPayload = (await permissionListResponse.json()) as {
-      permissions: Array<{ user_email: string; permission: string }>;
+    const roleListResponse = await callAdmin("/api/v1/events/pqc-2026/roles");
+    expect(roleListResponse.status).toBe(200);
+    const roleListPayload = (await roleListResponse.json()) as {
+      roles: Array<{ userEmail: string; role: string }>;
     };
-    expect(permissionListPayload.permissions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ user_email: "organizer@example.test", permission: "organizer" }),
-      ]),
+    expect(roleListPayload.roles).toEqual(
+      expect.arrayContaining([expect.objectContaining({ userEmail: "organizer@example.test", role: "organizer" })]),
     );
   });
 
-  it("P6M-P2-06: searches, bounds, and sorts the event-team permissions list", async () => {
+  it("P6M-P2-06: searches, bounds, and sorts the event-team roles list", async () => {
     await setupAdmin();
 
-    for (const [email, permission] of [
+    for (const [email, role] of [
       ["p1@example.test", "organizer"],
       ["p2@example.test", "moderator"],
       ["p3@example.test", "volunteer"],
     ] as const) {
-      const res = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+      const res = await callAdmin("/api/v1/events/pqc-2026/roles", {
         method: "POST",
-        body: JSON.stringify({ userEmail: email, permission }),
+        body: JSON.stringify({ userEmail: email, role }),
       });
       expect(res.status).toBe(201);
     }
 
-    const firstPage = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=2&offset=0");
+    const firstPage = await callAdmin("/api/v1/events/pqc-2026/roles?limit=2&offset=0");
     expect(firstPage.status).toBe(200);
     const firstBody = (await firstPage.json()) as {
-      permissions: unknown[];
+      roles: unknown[];
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
-    expect(firstBody.permissions).toHaveLength(2);
+    expect(firstBody.roles).toHaveLength(2);
     expect(firstBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
 
-    const searched = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?q=p2%40example.test");
+    const searched = await callAdmin("/api/v1/events/pqc-2026/roles?q=p2%40example.test");
     const searchedBody = (await searched.json()) as {
-      permissions: Array<{ user_email: string }>;
+      roles: Array<{ userEmail: string }>;
       page: { total: number };
     };
-    expect(searchedBody.permissions.map(({ user_email }) => user_email)).toEqual(["p2@example.test"]);
+    expect(searchedBody.roles.map(({ userEmail }) => userEmail)).toEqual(["p2@example.test"]);
     expect(searchedBody.page.total).toBe(1);
 
-    const sorted = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?sort=created_at");
+    const sorted = await callAdmin("/api/v1/events/pqc-2026/roles?sort=createdAt");
     expect(sorted.status).toBe(200);
 
-    const invalidLimit = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=0");
+    const invalidLimit = await callAdmin("/api/v1/events/pqc-2026/roles?limit=0");
     expect(invalidLimit.status).toBe(400);
   });
 
-  it("keeps API-key audit identity separate from an event-team grantor user", async () => {
+  it("rejects API-key identities for event-team role writes", async () => {
     await setupAdmin();
     ADMIN_TOKEN = env.ADMIN_API_KEY ?? "test-admin-key";
 
-    const response = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+    const response = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", permission: "organizer" }),
+      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", role: "organizer" }),
     });
 
-    expect(response.status).toBe(201);
-    const payload = (await response.json()) as { permission: { id: string } };
+    expect(response.status).toBe(403);
     expect(
-      await queryAll<{ granted_by_user_id: string | null }>(
+      await queryAll<{ id: string }>(
         env.DB,
-        "SELECT granted_by_user_id FROM user_roles WHERE id = ?",
-        payload.permission.id,
+        `SELECT ur.id
+           FROM user_roles ur JOIN users u ON u.id = ur.user_id
+          WHERE u.normalized_email = 'api-key-organizer@example.test'`,
       ),
-    ).toEqual([{ granted_by_user_id: null }]);
+    ).toEqual([]);
+  });
+
+  it("enforces live event-scoped management permission on every role operation", async () => {
+    const { baseEventId } = await setupAdmin();
+    const readerId = await insertUser(env.DB, `event-team-reader-${crypto.randomUUID()}@example.test`);
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, baseEventId, readerId)
+      .run();
+    ADMIN_TOKEN = await createAdminSession(env.DB, readerId, `event-team-reader-${crypto.randomUUID()}`);
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(403);
+
+    const manager = await createScopedEventManager(baseEventId);
+    ADMIN_TOKEN = await createAdminSession(env.DB, manager.userId, `event-team-manager-${crypto.randomUUID()}`);
+
+    const assigned = await callAdmin("/api/v1/events/pqc-2026/roles", {
+      method: "POST",
+      body: JSON.stringify({ userEmail: "scoped-team-member@example.test", role: "moderator" }),
+    });
+    expect(assigned.status).toBe(201);
+    const assignment = (await assigned.json()) as { role: { id: string } };
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(200);
+
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(manager.roleAssignmentId)
+      .run();
+
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(401);
     expect(
-      await queryAll<{ actor_id: string | null }>(
-        env.DB,
-        "SELECT actor_id FROM audit_log WHERE action = 'event_permission_granted' AND entity_type = 'event'",
-      ),
-    ).toEqual([{ actor_id: "api-key" }]);
+      (
+        await callAdmin(`/api/v1/events/pqc-2026/roles/${assignment.role.id}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
+        assignment.role.id,
+      ]),
+    ).toEqual([{ revoked_at: null }]);
   });
 
   it("rolls back an event-team grant when the scoped manager loses authority before commit", async () => {
@@ -565,7 +602,7 @@ describe("admin event management endpoints", () => {
     );
 
     await expect(
-      grantEventTeamRole(racedDb, actor, "pqc-2026", { userEmail: targetEmail, permission: "organizer" }),
+      grantEventTeamRole(racedDb, actor, "pqc-2026", { userEmail: targetEmail, role: "organizer" }),
     ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [targetEmail])).toHaveLength(0);
     expect(
@@ -579,7 +616,7 @@ describe("admin event management endpoints", () => {
       ),
     ).toHaveLength(0);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_granted' AND entity_id = ?", [
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_assigned' AND entity_id = ?", [
         eventId,
       ]),
     ).toHaveLength(0);
@@ -591,7 +628,7 @@ describe("admin event management endpoints", () => {
     const targetEmail = `event-team-target-race-${crypto.randomUUID()}@example.test`;
     const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
       userEmail: targetEmail,
-      permission: "organizer",
+      role: "organizer",
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(created.id).run(),
@@ -607,7 +644,7 @@ describe("admin event management endpoints", () => {
       ]),
     ).toEqual([expect.objectContaining({ revoked_at: expect.any(String) })]);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_revoked' AND entity_id = ?", [
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_revoked' AND entity_id = ?", [
         eventId,
       ]),
     ).toHaveLength(0);
@@ -618,7 +655,7 @@ describe("admin event management endpoints", () => {
     const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
     const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
       userEmail: `event-team-revoke-race-${crypto.randomUUID()}@example.test`,
-      permission: "organizer",
+      role: "organizer",
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleAssignmentId).run(),
@@ -634,7 +671,7 @@ describe("admin event management endpoints", () => {
       ]),
     ).toEqual([{ revoked_at: null }]);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_revoked' AND entity_id = ?", [
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_revoked' AND entity_id = ?", [
         eventId,
       ]),
     ).toHaveLength(0);

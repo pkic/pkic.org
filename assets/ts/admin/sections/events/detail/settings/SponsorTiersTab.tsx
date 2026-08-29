@@ -5,7 +5,7 @@ import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource
 import { saveAdminEditor } from "../../../../actions";
 import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
 
-export function SponsorTiersTab({ slug }: { slug: string }) {
+export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: boolean }) {
   const tiersResource = useAdminEditorResource(
     async () => {
       const data = await api(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema);
@@ -38,9 +38,11 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
       error={error}
       description="Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no tiers having access."
       actions={
-        <button class="btn btn-sm btn-primary ms-auto" onClick={() => void handleSave()} disabled={saving}>
-          Save
-        </button>
+        canWrite ? (
+          <button class="btn btn-sm btn-primary ms-auto" onClick={() => void handleSave()} disabled={saving}>
+            Save
+          </button>
+        ) : undefined
       }
     >
       {saveStatus && (
@@ -52,6 +54,7 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
           <div class="col-sm-4">
             <input
               class="form-control form-control-sm"
+              disabled={!canWrite}
               placeholder="e.g. Leader"
               value={tier.tierName}
               onInput={(event) =>
@@ -68,6 +71,7 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
               <input
                 class="form-check-input"
                 type="checkbox"
+                disabled={!canWrite}
                 checked={tier.hasAttendeeDataAccess}
                 onChange={(event) =>
                   setTiers((current) =>
@@ -85,24 +89,28 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
               </label>
             </div>
           </div>
-          <div class="col-sm-2">
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-danger"
-              onClick={() => setTiers((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-            >
-              Remove
-            </button>
-          </div>
+          {canWrite && (
+            <div class="col-sm-2">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                onClick={() => setTiers((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+              >
+                Remove
+              </button>
+            </div>
+          )}
         </div>
       ))}
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-secondary"
-        onClick={() => setTiers((current) => [...current, { tierName: "", hasAttendeeDataAccess: false }])}
-      >
-        + Add tier
-      </button>
+      {canWrite && (
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          onClick={() => setTiers((current) => [...current, { tierName: "", hasAttendeeDataAccess: false }])}
+        >
+          + Add tier
+        </button>
+      )}
     </AdminSettingsEditor>
   );
 }

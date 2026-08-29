@@ -12,6 +12,8 @@ import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsors/tiers";
 import { EventDetailGet } from "./index";
 import { EventSettingsPatch } from "./settings";
 import { EventDaysGet, EventDaysPut } from "./days";
+import { EventTeamRoleCreate, EventTeamRolesList } from "./roles";
+import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
 import eventForms_Router from "./forms/[formKey]/router";
@@ -38,6 +40,8 @@ openapi.get("/forms/placements/:purpose", EventFormPlacementGet);
 
 app.use("/settings", requireEventManagementIdentity);
 app.use("/days", requireEventManagementIdentity);
+app.use("/roles", requireEventManagementIdentity);
+app.use("/roles/*", requireEventManagementIdentity);
 
 app.use("/forms", requireEventFormsIdentity);
 app.use("/forms/*", requireEventFormsIdentity);
@@ -52,6 +56,9 @@ openapi.post("/speakers/invitations", EventSpeakerInvitationsPost);
 openapi.get("/terms", TermsGet);
 openapi.get("/sponsors/tiers", EventSponsorTiersGet);
 openapi.put("/sponsors/tiers", EventSponsorTiersPut);
+openapi.get("/roles", EventTeamRolesList);
+openapi.post("/roles", EventTeamRoleCreate);
+openapi.delete("/roles/:roleAssignmentId", EventTeamRoleDelete);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);

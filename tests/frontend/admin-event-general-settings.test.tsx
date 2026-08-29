@@ -4,6 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventDetail } from "../../assets/ts/admin/types";
 import { GeneralTab } from "../../assets/ts/admin/sections/events/detail/settings/GeneralTab";
+import { Settings } from "../../assets/ts/admin/sections/events/detail/Settings";
+import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
 
 const mounted: HTMLElement[] = [];
 
@@ -77,5 +79,60 @@ describe("admin event general settings", () => {
     expect(container.textContent).not.toContain("Registration form");
     expect(container.textContent).not.toContain("Registration Mode");
     expect(container.textContent).toContain("Proposal form");
+  });
+
+  it("shows team management only with the exact event-management capability", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        if (url.pathname.endsWith("/roles")) {
+          return json(
+            eventTeamRolesResponseSchema.parse({
+              roles: [],
+              page: { limit: 100, offset: 0, total: 0, hasMore: false },
+            }),
+          );
+        }
+        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const reader = mount(<Settings event={portalEvent} onUpdated={vi.fn()} subTab="team" />);
+    await settle();
+    expect(reader.textContent).not.toContain("Add team member");
+    expect(requests.some(({ pathname }) => pathname.endsWith("/roles"))).toBe(false);
+
+    const manager = mount(
+      <Settings event={{ ...portalEvent, capabilities: ["read", "manage"] }} onUpdated={vi.fn()} subTab="team" />,
+    );
+    await settle();
+    await settle();
+    expect(manager.textContent).toContain("Add team member");
+    expect(requests.some(({ pathname }) => pathname === "/api/v1/events/portal-workshop/roles")).toBe(true);
+  });
+
+  it("keeps sponsor-tier actions hidden from an event reader", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] })),
+    );
+
+    const container = mount(<Settings event={portalEvent} onUpdated={vi.fn()} subTab="sponsor-tiers" />);
+    await settle();
+    await settle();
+
+    const tierName = [...container.querySelectorAll<HTMLInputElement>("input")].find(
+      (input) => input.value === "Community",
+    );
+    expect(tierName?.disabled).toBe(true);
+    expect(container.textContent).not.toContain("+ Add tier");
+    expect(container.textContent).not.toContain("Remove");
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Save")).toBe(false);
   });
 });

@@ -1,16 +1,11 @@
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import {
   adminEventCreateResponseSchema,
-  adminEventPermissionSchema,
-  adminEventTeamListQuerySchema,
-  adminEventTeamListResponseSchema,
-  adminEventTeamPermissionCreateResponseSchema,
   adminEventSyncSchema,
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
 import { eventCreateSchema } from "./event-management";
 import { adminEventStatsResponseSchema } from "./admin-analytics";
-import { databaseIdSchema } from "./identifiers";
 import { z } from "zod";
 
 const adminEventSyncEventSchema = z.object({
@@ -51,23 +46,6 @@ export const adminEventSyncRouteSchema = {
   },
 };
 
-export const adminEventTeamPermissionDeleteRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Revoke an event-team permission",
-  request: {
-    params: eventSlugParamsSchema.extend({ permId: databaseIdSchema }),
-  },
-  responses: {
-    "200": {
-      description: "Permission revoked.",
-      content: { "application/json": { schema: successResponseSchema } },
-    },
-    "401": { description: "Admin authorization required." },
-    "403": { description: "Insufficient permission to manage this event." },
-    "404": { description: "Event or permission grant not found." },
-  },
-};
-
 export const adminEventStatsRouteSchema = {
   tags: ["Admin events"],
   summary: "Get event statistics",
@@ -99,34 +77,6 @@ export const adminEventCreateRouteSchema = {
     "401": { description: "Admin authorization required." },
     "403": { description: "Insufficient permission to create events." },
     "409": { description: "An event with this slug already exists." },
-  },
-};
-
-export const adminEventTeamListRouteSchema = {
-  tags: ["Admin events"],
-  summary: "List event-level roles (admin)",
-  description: "Paginated, searchable, and sortable event-team role grants.",
-  request: { params: eventSlugParamsSchema, query: adminEventTeamListQuerySchema },
-  responses: {
-    "200": {
-      description: "Event-team permissions list.",
-      content: { "application/json": { schema: adminEventTeamListResponseSchema } },
-    },
-  },
-};
-
-export const adminEventTeamPermissionCreateRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Grant an event team permission",
-  request: {
-    params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: adminEventPermissionSchema } }, required: true },
-  },
-  responses: {
-    "201": {
-      description: "Permission granted.",
-      content: { "application/json": { schema: adminEventTeamPermissionCreateResponseSchema } },
-    },
   },
 };
 

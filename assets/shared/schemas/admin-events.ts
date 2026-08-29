@@ -46,48 +46,6 @@ export const adminEventCreateResponseSchema = eventManagementDetailResponseSchem
 export type AdminEventSummary = z.infer<typeof adminEventSummarySchema>;
 export const adminEventsListResponseSchema = paginatedResponseSchema("events", adminEventSummarySchema);
 
-export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
-export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
-export const adminEventTeamListQuerySchema = searchableListQuerySchema(eventTeamSortValueSchema, { limit: 100 });
-export type AdminEventTeamListQuery = z.infer<typeof adminEventTeamListQuerySchema>;
-/** Stable event-team permission vocabulary shared by API contracts and RBAC persistence. */
-export const EVENT_TEAM_PERMISSIONS = ["organizer", "program_committee", "moderator", "volunteer"] as const;
-export const eventTeamPermissionSchema = z.enum(EVENT_TEAM_PERMISSIONS);
-export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
-/**
- * The event-team grants are persisted as ordinary context-scoped `user_roles` rows.
- * Keep this as the single permission-to-role vocabulary so services cannot drift in
- * their forward mapping, reverse mapping, or SQL role allowlists.
- */
-export const EVENT_TEAM_PERMISSION_ROLE_IDS = {
-  organizer: "role-event_organizer",
-  program_committee: "role-program_committee",
-  moderator: "role-event_moderator",
-  volunteer: "role-event_volunteer",
-} as const satisfies Record<EventTeamPermission, string>;
-export type EventTeamRoleId = (typeof EVENT_TEAM_PERMISSION_ROLE_IDS)[EventTeamPermission];
-export const adminEventTeamListItemSchema = z.object({
-  id: z.string(),
-  user_email: z.string(),
-  user_id: z.string(),
-  permission: eventTeamPermissionSchema,
-  granted_by_id: z.string().nullable(),
-  expires_at: z.string().nullable(),
-  created_at: z.string(),
-  granter_email: z.string().nullable(),
-});
-export type AdminEventTeamListItem = z.infer<typeof adminEventTeamListItemSchema>;
-export const adminEventTeamListResponseSchema = paginatedResponseSchema("permissions", adminEventTeamListItemSchema);
-export const adminEventTeamPermissionCreateResponseSchema = z.object({
-  permission: adminEventTeamListItemSchema.pick({
-    id: true,
-    user_email: true,
-    permission: true,
-    expires_at: true,
-    created_at: true,
-  }),
-});
-
 export const eventPresentationArchiveQuerySchema = z.object({
   versions: z.literal("all").optional(),
 });
@@ -153,12 +111,6 @@ export const adminEventEmailSendResponseSchema = z.object({
   queuedBatches: z.number().optional(),
 });
 
-export const adminEventPermissionSchema = z.object({
-  userEmail: z.email().trim().toLowerCase(),
-  permission: eventTeamPermissionSchema,
-  expiresAt: z.iso.datetime().nullable().optional(),
-});
-export type AdminEventPermissionInput = z.infer<typeof adminEventPermissionSchema>;
 export const adminWaitlistPromotionResponseSchema = successResponseSchema.extend({
   dayRegistrationOffers: z.number().int().nonnegative(),
   affectedRegistrations: z.array(z.string()),

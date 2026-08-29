@@ -16,11 +16,17 @@ Base path: `/api/v1`
 - `PATCH /events/:eventSlug/settings`
 - `GET /events/:eventSlug/days`
 - `PUT /events/:eventSlug/days`
+- `GET /events/:eventSlug/roles`
+- `POST /events/:eventSlug/roles`
+- `DELETE /events/:eventSlug/roles/:roleAssignmentId`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
   enables the management detail projection.
 - Event visibility is `invitation_only`, `group_members`, `all_members`, or
   `public`. It is separate from registration and meeting-entry policy.
+- Event team assignments are role resources, not generic permission records.
+  Listing and mutations require the exact live, user-backed event-scoped
+  `events:manage` permission; writes recheck that authority in the D1 batch.
 
 ## Remaining legacy event integration
 

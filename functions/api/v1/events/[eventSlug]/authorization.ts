@@ -19,10 +19,11 @@ export async function requireEventPermission(c: AdminContext, eventSlug: string,
 export function eventManagementCapabilities(
   actor: Awaited<ReturnType<typeof requireUserBackedAdminFromRequest>>,
   context: { type: string; id: string },
-): Array<"read" | "write"> {
+): Array<"read" | "write" | "manage"> {
   return [
     ...(hasPermission(actor, "events:read", context) ? (["read"] as const) : []),
     ...(hasPermission(actor, "events:write", context) ? (["write"] as const) : []),
+    ...(hasPermission(actor, "events:manage", context) ? (["manage"] as const) : []),
   ];
 }
 

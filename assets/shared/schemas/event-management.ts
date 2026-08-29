@@ -161,7 +161,7 @@ export const eventsListQuerySchema = listQuerySchema(EVENT_LIST_SORT_COLUMNS).ex
 export type EventsListQuery = z.infer<typeof eventsListQuerySchema>;
 export const eventsListResponseSchema = paginatedResponseSchema("events", eventAudienceDetailSchema);
 
-export const eventManagementCapabilitySchema = z.enum(["read", "write"]);
+export const eventManagementCapabilitySchema = z.enum(["read", "write", "manage"]);
 export type EventManagementCapability = z.infer<typeof eventManagementCapabilitySchema>;
 
 /** Full event-management read model for an authenticated event-scoped actor. */
@@ -177,7 +177,7 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   sessionTypes: proposalSessionTypesSchema.nullable(),
   links: linksSchema,
   settings: z.record(z.string(), z.unknown()),
-  capabilities: z.array(eventManagementCapabilitySchema).max(2),
+  capabilities: z.array(eventManagementCapabilitySchema).max(3),
 });
 export type EventDetail = z.infer<typeof eventDetailSchema>;
 export const eventManagementDetailResponseSchema = z.object({ event: eventDetailSchema });

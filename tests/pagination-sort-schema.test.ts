@@ -23,7 +23,8 @@ import {
   emailTemplatesListQuerySchema,
   emailTemplatesSortValueSchema,
 } from "../assets/shared/schemas/email-templates";
-import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/shared/schemas/admin-events";
+import { eventsListSortValueSchema } from "../assets/shared/schemas/admin-events";
+import { eventTeamSortValueSchema } from "../assets/shared/schemas/event-team";
 import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
 import {
   formSubmissionsQuerySchema,
@@ -204,7 +205,8 @@ describe("consolidated per-endpoint sort schemas still validate their own allowl
   });
 
   it("eventTeamSortValueSchema", () => {
-    expect(eventTeamSortValueSchema.safeParse("role_id").success).toBe(true);
+    expect(eventTeamSortValueSchema.safeParse("role").success).toBe(true);
+    expect(eventTeamSortValueSchema.safeParse("-createdAt").success).toBe(true);
     expect(eventTeamSortValueSchema.safeParse("bogus").success).toBe(false);
   });
 

@@ -244,17 +244,11 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/events/:slug/terms",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/terms`)),
     ],
+    ["GET /api/v1/events/:slug/roles", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/roles`))],
+    ["POST /api/v1/events/:slug/roles", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/roles`))],
     [
-      "GET /api/v1/admin/events/:slug/permissions",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/permissions`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/permissions",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/permissions`)),
-    ],
-    [
-      "DELETE /api/v1/admin/events/:slug/permissions/:permId",
-      () => callApp(anonDelete(`https://app.test/api/v1/admin/events/${eventSlug}/permissions/${permId}`)),
+      "DELETE /api/v1/events/:slug/roles/:roleAssignmentId",
+      () => callApp(anonDelete(`https://app.test/api/v1/events/${eventSlug}/roles/${permId}`)),
     ],
     [
       "GET /api/v1/admin/events/:slug/promoters",
