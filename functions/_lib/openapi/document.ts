@@ -84,7 +84,6 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Sponsors", description: "Sponsors and sponsorship." },
   { name: "Sponsorship", description: "Sponsorship inquiry, tiers, and checkout." },
   { name: "Sponsorships", description: "The sponsorship pipeline." },
-  { name: "Sponsor Portal", description: "Sponsor-facing access to their events." },
   { name: "Donations", description: "Donations and payment handling." },
 
   { name: "Email", description: "The outbound email outbox and reminder runs." },
@@ -141,7 +140,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
   },
   {
     name: "Sponsorship and donations",
-    tags: ["Sponsors", "Sponsorship", "Sponsorships", "Sponsor Portal", "Donations"],
+    tags: ["Sponsors", "Sponsorship", "Sponsorships", "Donations"],
   },
   {
     name: "Platform operations",

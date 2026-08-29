@@ -10,6 +10,7 @@ import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { requiresSession } from "./route-contract";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: databaseIdSchema,
@@ -62,6 +63,7 @@ export const myProfileSchema = z.object({
 });
 
 export const myProfileGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Users"],
   summary: "Get the current user's member profile",
   responses: {
@@ -74,6 +76,7 @@ export const myActiveMembershipSwitchSchema = z.object({
 });
 
 export const myActiveMembershipSwitchRouteSchema = {
+  ...requiresSession(),
   tags: ["Users"],
   summary: "Replace the current user's active membership context",
   description:
@@ -99,6 +102,7 @@ export const myProfileUpdateSchema = z.object({
 });
 
 export const myProfileUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Users"],
   summary: "Update the current user's member profile",
   description: "organizationName is only honored for org-less categories (H5/H6/H7); ignored otherwise.",
@@ -123,6 +127,7 @@ export type MyApplicationsListQuery = z.infer<typeof myApplicationsListQuerySche
 export const myApplicationsListResponseSchema = paginatedResponseSchema("applications", myApplicationSummarySchema);
 
 export const myApplicationsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Users", "Membership"],
   summary: "List the current user's application history",
   request: { query: myApplicationsListQuerySchema },
@@ -165,6 +170,7 @@ export const myApplicationDetailSchema = z.object({
 });
 
 export const myApplicationDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Users", "Membership"],
   summary: "Get the current user's application detail, status history, and timeline",
   request: { params: z.object({ id: z.string() }) },
@@ -177,6 +183,7 @@ export const myApplicationDetailRouteSchema = {
 export const myHeadshotUploadResponseSchema = successResponseSchema;
 
 export const myHeadshotUploadRouteSchema = {
+  ...requiresSession(),
   tags: ["Users"],
   summary: "Replace the current user's headshot",
   description: "multipart/form-data with a single 'file' field. JPEG, PNG, or WebP, up to 5MB.",
@@ -205,6 +212,7 @@ export const myNotificationPreferencesSchema = z.object({
 });
 
 export const myNotificationPreferencesGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Users"],
   summary: "Get the current user's email notification preferences",
   responses: {
@@ -218,6 +226,7 @@ export const myNotificationPreferencesGetRouteSchema = {
 export const myNotificationPreferencesUpdateSchema = myNotificationPreferencesSchema.partial();
 
 export const myNotificationPreferencesUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Users"],
   summary: "Update the current user's email notification preferences",
   request: {

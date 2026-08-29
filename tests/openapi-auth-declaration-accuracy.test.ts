@@ -13,6 +13,13 @@ import { resetDb } from "./helpers/reset-db";
  * of them against the Worker: routes declared public must not answer 401
  * without credentials, and routes declared as needing a session must.
  */
+/**
+ * A well-formed identifier that matches no row. Request validation runs before
+ * the authorization guard, so a probe has to be structurally valid to reach the
+ * guard at all — an unparseable id answers 400 and proves nothing either way.
+ */
+const ABSENT_ID = "00000000000000000000000000000000";
+
 describe("OpenAPI authorization declarations match runtime behavior", () => {
   beforeEach(async () => {
     await resetDb();
@@ -32,6 +39,9 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/geolocation/country",
     "/api/v1/leadership/consortium-chairs",
     "/api/v1/invites/no-such-token/info",
+    "/api/v1/registrations/manage/no-such-token",
+    "/api/v1/proposals/manage/no-such-token",
+    "/api/v1/proposals/speaker/no-such-token",
   ];
 
   it.each(declaredPublic)("%s is reachable without credentials, as declared", async (path) => {
@@ -52,6 +62,10 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/groups/any-group/events",
     "/api/v1/groups/any-group/vote-proposals",
     "/api/v1/groups/any-group/mailing-lists",
+    "/api/v1/groups/any-group/meetings/series",
+    "/api/v1/users/current",
+    "/api/v1/users/current/applications",
+    `/api/v1/organizations/${ABSENT_ID}/representatives`,
   ];
 
   it.each(declaredSessionRequired)("%s rejects an anonymous caller, as declared", async (path) => {
@@ -61,8 +75,17 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     expect({ path, status: response.status }).toEqual({ path, status: 401 });
   });
 
-  it("audit log reads demand the declared permission, not merely a session", async () => {
-    const response = await callApi(env, "/api/v1/audit-log");
+  const declaredPermissionRequired = [
+    "/api/v1/audit-log",
+    "/api/v1/sponsors/companies",
+    "/api/v1/members/applications",
+    "/api/v1/leadership/positions?body=board",
+  ];
+
+  it.each(declaredPermissionRequired)("%s demands a permission, not merely a session", async (path) => {
+    const response = await callApi(env, path);
+    // Either is consistent with the declaration: the guard may reject the
+    // missing session before it reaches the permission check.
     expect([401, 403]).toContain(response.status);
   });
 });

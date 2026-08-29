@@ -15,6 +15,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpsCapabilityUrlSchema } from "./urls";
 import { eventGroupGrantSchemas } from "./resource-grants";
 import { eventInviteValiditySchema, eventInviteWindowSchema } from "./event-invite-validity";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
@@ -378,6 +379,7 @@ export const eventOccurrenceGuestResponseSchema = z.object({ guest: eventOccurre
 export const eventAttendanceResponseSchema = z.object({ confirmation: eventOccurrenceJoinConfirmationSchema });
 
 export const groupMeetingSeriesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List meeting series available through a group",
   description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -389,6 +391,7 @@ export const groupMeetingSeriesListRouteSchema = {
   },
 };
 export const groupMeetingSeriesCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Create a group-owned meeting series",
   request: {
@@ -398,6 +401,7 @@ export const groupMeetingSeriesCreateRouteSchema = {
   responses: { "201": { description: "Meeting series created." } },
 };
 export const eventSeriesUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Update a meeting series through a management group context",
   request: {
@@ -407,6 +411,7 @@ export const eventSeriesUpdateRouteSchema = {
   responses: { "200": { description: "Meeting series updated." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrencesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List occurrences in a meeting series",
   request: { params: eventSeriesParamsSchema, query: eventOccurrencesListQuerySchema },
@@ -417,6 +422,7 @@ export const eventOccurrencesListRouteSchema = {
   },
 };
 export const eventOccurrenceCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Create a meeting occurrence",
   request: {
@@ -426,6 +432,7 @@ export const eventOccurrenceCreateRouteSchema = {
   responses: { "201": { description: "Occurrence created." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Update a meeting occurrence",
   request: {
@@ -435,6 +442,7 @@ export const eventOccurrenceUpdateRouteSchema = {
   responses: { "200": { description: "Occurrence updated." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestInviteRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Invite a guest to one occurrence or explicitly to its series",
   request: {
@@ -444,6 +452,7 @@ export const eventOccurrenceGuestInviteRouteSchema = {
   responses: { "201": { description: "Guest invitation created." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List occurrence-specific and series-wide guests",
   description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
@@ -451,12 +460,14 @@ export const eventOccurrenceGuestsListRouteSchema = {
   responses: { "200": { description: "A bounded guest page." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestRevokeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Revoke a meeting guest and every active access capability",
   request: { params: eventGuestParamsSchema },
   responses: { "200": { description: "Guest access revoked." }, ...eventManagementErrorResponses },
 };
 export const eventSeriesCalendarRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Generate the current meeting-series calendar",
   request: { params: eventSeriesParamsSchema },
@@ -467,6 +478,7 @@ export const eventSeriesCalendarRouteSchema = {
   },
 };
 export const eventSeriesMaterializeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Idempotently materialize recurring meeting occurrences",
   description:
@@ -481,6 +493,7 @@ export const eventSeriesMaterializeRouteSchema = {
   },
 };
 export const eventOccurrenceAttendanceListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List occurrence join confirmations and verified attendance",
   description: "Search, verification filtering, sorting, counting, and pagination are executed in D1.",
@@ -495,6 +508,7 @@ export const eventOccurrenceAttendanceListRouteSchema = {
   },
 };
 export const eventOccurrenceAttendanceVerifyRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Verify attendance separately from join confirmation",
   request: {
@@ -512,6 +526,7 @@ export const eventOccurrenceAttendanceVerifyRouteSchema = {
   },
 };
 export const meetingJoinLandingRouteSchema = {
+  ...requiresSession(),
   tags: ["Meetings"],
   summary: "Inspect a meeting occurrence through the authenticated attendee identity",
   request: { params: meetingJoinOccurrenceParamsSchema },
@@ -525,6 +540,7 @@ export const meetingJoinLandingRouteSchema = {
   },
 };
 export const meetingJoinConfirmRouteSchema = {
+  ...requiresSession(),
   tags: ["Meetings"],
   summary: "Intentionally confirm meeting entry and obtain the provider redirect",
   request: {
@@ -543,6 +559,7 @@ export const meetingJoinConfirmRouteSchema = {
 };
 
 export const meetingInvitationVerificationCreateRouteSchema = {
+  ...publicOperation(),
   tags: ["Meetings"],
   summary: "Start browser-bound verification for an invited meeting guest",
   request: {
@@ -561,6 +578,7 @@ export const meetingInvitationVerificationCreateRouteSchema = {
 };
 
 export const meetingInvitationVerificationUpdateRouteSchema = {
+  ...publicOperation(),
   tags: ["Meetings"],
   summary: "Exchange a mailbox code and browser challenge for a guest session",
   request: {

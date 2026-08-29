@@ -10,6 +10,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
 import { groupLabelSchema } from "./groups";
+import { requiresPermissions } from "./route-contract";
 /** Allowlisted sort columns for GET /api/v1/members/applications — see listMembershipApplications. */
 export const MEMBERSHIP_APPLICATIONS_SORT_COLUMNS = [
   "applicant_name",
@@ -111,6 +112,7 @@ export type MembershipApplicationConcern = z.infer<typeof membershipApplicationC
 export type MembershipApplicationEcDecision = z.infer<typeof membershipApplicationEcDecisionSchema>;
 
 export const membershipApplicationsListRouteSchema = {
+  ...requiresPermissions("membership:read"),
   tags: ["Membership"],
   summary: "List membership applications (staff)",
   request: { query: membershipApplicationsListQuerySchema },
@@ -125,6 +127,7 @@ export const membershipApplicationsListRouteSchema = {
 };
 
 export const membershipApplicationDetailRouteSchema = {
+  ...requiresPermissions("membership:read"),
   tags: ["Membership"],
   summary: "Get a membership application's full detail (staff)",
   request: { params: z.object({ id: z.string() }) },
@@ -149,6 +152,7 @@ export const applicationStageTransitionSchema = z.object({
 });
 
 export const applicationStageTransitionRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Transition a membership application's stage",
   request: {
@@ -173,6 +177,7 @@ export const applicationCommunicationCreateSchema = z.object({
 });
 
 export const applicationCommunicationCreateRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Send a communication to an applicant",
   description: "Queues an email via the existing email_outbox and records it on the application's staff-only timeline.",
@@ -194,6 +199,7 @@ export const applicationNoteCreateSchema = z.object({
 });
 
 export const applicationNoteCreateRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Add an internal note to an application",
   description: "Never emailed; visible only to staff/processors.",
@@ -237,6 +243,7 @@ export const ecDecisionRecordRouteSchema = {
 };
 
 export const applicationApproveRouteSchema = {
+  ...requiresPermissions("membership:approve"),
   tags: ["Membership"],
   summary: "Approve an application and run post-approval onboarding",
   request: { params: z.object({ id: z.string() }) },
@@ -287,6 +294,7 @@ export const applicationUpdateSchema = z
   );
 
 export const applicationUpdateRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Correct an applicant's submitted fields (staff, does not transition stage)",
   description:
