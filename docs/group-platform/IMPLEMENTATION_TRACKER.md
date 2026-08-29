@@ -1507,6 +1507,16 @@ Status: In progress
       focused real Worker/D1 browser journey updates a user through the portal,
       verifies persistence and the legacy bookmark redirect, and observes no
       legacy Users or Members request.
+      The public current-headshot transport is also nested under its owning
+      user resource at `/api/v1/users/:userId/headshots/:file`. The former
+      standalone `/api/v1/headshots` router is removed without an alias, while
+      existing R2 object keys remain unchanged. The route serves only the
+      current D1-referenced object, preserves bounded image validation and
+      public cache policy, and therefore immediately revokes replaced or
+      removed pointers even when durable R2 cleanup is still pending. The
+      current-user read model and absolute URL generator reuse one canonical
+      path builder; mounted tests cover valid, malformed, oversized, replaced,
+      and retired-route behavior.
       Current-user and organization self-service transport now follows those
       same resource boundaries. `/api/v1/users/current` owns the signed-in
       user's profile, selected active membership, notification preferences,
@@ -1729,11 +1739,10 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the canonical event
-      visibility, resource, team-role, promoter, presentation-archive, and
-      analytics and proposal-catalogue cutovers with 2,287 backend tests (one skipped), 343 frontend tests, and
-      80 tooling tests. Type checks, ESLint,
-      SQL projection,
+      Current evidence: the complete gate passes after the current-user and
+      canonical public user-headshot resource cutovers with 2,314 backend tests
+      (one skipped), 348 frontend tests, and 84 tooling tests. Type checks,
+      ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
       An earlier combined run exposed a nondeterministic Google Groups boundary

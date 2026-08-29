@@ -1,15 +1,15 @@
 /**
- * Public headshot image endpoint.
+ * Public current-headshot image endpoint.
  *
- * GET /api/v1/headshots/:userId/:file
+ * GET /api/v1/users/:userId/headshots/:file
  *
- * Serves headshot images from the SPEAKER_UPLOADS_BUCKET R2 bucket.
- * No authentication required, but only the user's current D1-referenced key
+ * Serves headshot images from the SPEAKER_UPLOADS_BUCKET R2 bucket. No
+ * authentication is required, but only the user's current D1-referenced key
  * is served. Replaced and removed keys are revoked immediately even if their
  * asynchronous R2 cleanup needs a retry.
  */
-import { dispatchRequestMethod, json } from "../../../../_lib/http";
-import { currentUserHeadshotResponse } from "../../../../_lib/services/user-headshot";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { currentUserHeadshotResponse } from "../../../../../_lib/services/user-headshot";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const userId = c.req.param("userId");

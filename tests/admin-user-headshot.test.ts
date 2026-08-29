@@ -604,7 +604,7 @@ describe("admin user headshot upload", () => {
 
     expect(await bucket.get(oldKey)).not.toBeNull();
     const publicResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/headshots/${targetUserId}/${oldFile}`),
+      new Request(`https://app.test/api/v1/users/${targetUserId}/headshots/${oldFile}`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -637,18 +637,26 @@ describe("admin user headshot upload", () => {
     await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(validKey, targetUserId).run();
 
     const validResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/headshots/${targetUserId}/legacy.jpg`),
+      new Request(`https://app.test/api/v1/users/${targetUserId}/headshots/legacy.jpg`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
     );
     expect(validResponse.status).toBe(200);
     expect(validResponse.headers.get("content-type")).toBe("image/jpeg");
+    expect(validResponse.headers.get("cache-control")).toBe("public, max-age=300, s-maxage=300, must-revalidate");
+
+    const retiredRouteResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/headshots/${targetUserId}/legacy.jpg`),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(retiredRouteResponse.status).toBe(404);
 
     const malformedKey = `headshots/${targetUserId}/malformed.png`;
     await bucket.put(malformedKey, validPngBytes().slice(0, 24).buffer);
     await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(malformedKey, targetUserId).run();
     const malformedResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/headshots/${targetUserId}/malformed.png`),
+      new Request(`https://app.test/api/v1/users/${targetUserId}/headshots/malformed.png`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
     );
@@ -658,7 +666,7 @@ describe("admin user headshot upload", () => {
     await bucket.put(oversizedKey, new Uint8Array(5 * 1024 * 1024 + 1).buffer);
     await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oversizedKey, targetUserId).run();
     const oversizedResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/headshots/${targetUserId}/oversized.png`),
+      new Request(`https://app.test/api/v1/users/${targetUserId}/headshots/oversized.png`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
     );
