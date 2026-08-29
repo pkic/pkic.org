@@ -1,5 +1,4 @@
 import type { AuthScope } from "../auth/scopes";
-import { proposalPermissionForRequest } from "../auth/proposal-route-policy";
 
 export const AUTH_EXTENSION = "x-pkic-auth";
 export const MCP_EXTENSION = "x-pkic-mcp";
@@ -24,18 +23,6 @@ type JsonObject = Record<string, any>;
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options", "trace"]);
 const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
-
-function isAdminPath(path: string): boolean {
-  return path.startsWith("/api/v1/admin/");
-}
-
-function isMcpDefaultReadablePath(path: string): boolean {
-  return isAdminPath(path);
-}
-
-function isBearerAuthPath(path: string): boolean {
-  return isMcpDefaultReadablePath(path);
-}
 
 function inferredAuthSchemeForOperation(): AuthSecurityScheme {
   return "BearerAuth";
@@ -82,32 +69,14 @@ function withRequiredScopesDescription(
   };
 }
 
-export function inferredScopesForOperation(path: string, method: string): AuthScope[] {
-  if (!isBearerAuthPath(path)) {
-    return [];
-  }
-
-  if (path.includes("/proposal") || path.includes("/proposals")) {
-    return [proposalPermissionForRequest(path, method)];
-  }
-
-  if (path.includes("/events")) {
-    return [WRITE_METHODS.has(method) ? "events:write" : "events:read"];
-  }
-
-  const module = path.replace(/^\/api\/v1\/admin\//, "").split("/")[0] ?? "";
-  if (module === "audit-log") return ["audit:read"];
-  if (module === "donations") return [WRITE_METHODS.has(method) ? "donations:sync" : "donations:read"];
-  if (module === "email-templates") {
-    return [WRITE_METHODS.has(method) ? "email-templates:write" : "email-templates:read"];
-  }
-  if (module === "users") {
-    if (path.endsWith("/anonymize")) return ["users:anonymize"];
-    return [WRITE_METHODS.has(method) ? "users:write" : "users:read"];
-  }
-  return [WRITE_METHODS.has(method) ? "admin:write" : "admin:read"];
-}
-
+/**
+ * Authorization metadata comes from each route's own `x-pkic-auth`
+ * declaration. It used to be inferred from the `/api/v1/admin/` prefix, which
+ * meant "staff surface"; that prefix is retired, so every predicate built on
+ * it was permanently false and the inference silently stopped applying. Rather
+ * than guess from path shape, an operation now either declares its
+ * requirement or is reported by the contract test below as undeclared.
+ */
 function operationAuthMetadata(path: string, method: string, operation: JsonObject): AuthOperationMetadata | undefined {
   const explicit = operation[AUTH_EXTENSION] as AuthOperationMetadata | undefined;
   if (explicit?.required === true) {
@@ -115,20 +84,19 @@ function operationAuthMetadata(path: string, method: string, operation: JsonObje
     return {
       required: true,
       scheme: explicit.scheme ?? inferredAuthSchemeForOperation(),
-      scopes: uniqueScopes(explicit.scopes ?? (scopesAnyOf.length > 0 ? [] : inferredScopesForOperation(path, method))),
+      scopes: uniqueScopes(explicit.scopes ?? []),
       ...(scopesAnyOf.length > 0 ? { scopesAnyOf } : {}),
     };
   }
 
-  if (!isBearerAuthPath(path)) {
+  if (explicit?.required === false) {
     return undefined;
   }
 
-  return {
-    required: true,
-    scheme: inferredAuthSchemeForOperation(),
-    scopes: inferredScopesForOperation(path, method),
-  };
+  // Undeclared. Reported by the OpenAPI auth-declaration contract test so the
+  // backlog is visible and cannot grow, rather than being asserted here on a
+  // guess about what the route actually enforces.
+  return undefined;
 }
 
 function hasMcpMetadata(operation: unknown): operation is JsonObject & { [MCP_EXTENSION]: McpOperationMetadata } {
@@ -142,7 +110,9 @@ function shouldExposeToMcp(path: string, method: string, operation: JsonObject):
     return true;
   }
 
-  return isMcpDefaultReadablePath(path) && (method === "get" || method === "head");
+  // Exposure is opt-in. It was previously implicit for admin-prefix reads,
+  // which no longer exist.
+  return false;
 }
 
 export function decorateOpenApiSpec(spec: JsonObject): JsonObject {
@@ -215,9 +185,7 @@ export function filterOpenApiSpecForMcp(spec: JsonObject): JsonObject {
       const mcpMetadata = operation[MCP_EXTENSION] as McpOperationMetadata | undefined;
       const auth = operationAuthMetadata(path, key, operation);
       const scopesAnyOf = uniqueScopeAlternatives(mcpMetadata?.scopesAnyOf ?? auth?.scopesAnyOf ?? []);
-      const scopes = uniqueScopes(
-        mcpMetadata?.scopes ?? auth?.scopes ?? (scopesAnyOf.length > 0 ? [] : inferredScopesForOperation(path, key)),
-      );
+      const scopes = uniqueScopes(mcpMetadata?.scopes ?? auth?.scopes ?? []);
 
       filteredPathItem[key] = {
         ...withRequiredScopesDescription(operation, scopes, scopesAnyOf),
