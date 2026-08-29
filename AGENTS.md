@@ -27,6 +27,15 @@
 - Keep configurable product policy in shared domain modules or reference data. Do not scatter status, role, category, URL, email-template, or feature-policy literals through routes and components.
 - A state-changing use case owns one atomic D1 command boundary. External effects use the durable outbox and one explicit retry owner.
 
+## Time and time zones
+
+- The system operates in UTC. Persist, compute with, and transport every instant as ISO-8601 UTC with an explicit `Z` and millisecond precision.
+- Localize only at a presentation boundary. Backend services, shared contracts, stored values, and API payloads never carry a viewer's local time.
+- When a value's meaning is a local wall clock rather than an instant, store the IANA time zone identifier alongside the UTC instant. Recurrence expansion, event scheduling, and generated calendars resolve the wall clock through that identifier.
+- Never persist a fixed UTC offset or an abbreviation such as `CET` in place of an IANA identifier. Offsets do not survive daylight-saving transitions.
+- Use the shared codec in `assets/shared/timezone.ts` for every wall-clock conversion. Do not hand-roll offset arithmetic, and reject local times that do not exist in the configured zone.
+- Keep date-only values as `YYYY-MM-DD` calendar dates interpreted in the owning entity's zone. Do not widen them into instants.
+
 ## D1 migrations
 
 - Never edit a migration that has been applied to preview or production. Verify both migration ledgers before changing migration history.
