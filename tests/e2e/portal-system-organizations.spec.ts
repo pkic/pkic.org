@@ -55,7 +55,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
   await expect(page.getByText("Program Manager", { exact: true })).toBeVisible();
 
-  await page.goto("/admin/#/organizations");
+  await page.goto("/portal/#/system/organizations");
   await expect(page).toHaveURL(/\/portal\/#\/system\/organizations$/);
   await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();
 

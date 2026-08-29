@@ -775,15 +775,15 @@ If you have any issues uploading or need to request an extension, please [contac
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 8. Admin magic link
+  // 8. User magic link
   // Variables: email, magicLinkUrl, expiresInMinutes
   // ─────────────────────────────────────────────────────────────────────────
   {
-    key: "admin_magic_link",
-    subjectTemplate: "Your PKI Consortium admin sign-in link",
-    content: `A sign-in link was requested for the **PKI Consortium** administration panel.
+    key: "user_magic_link",
+    subjectTemplate: "Your PKI Consortium sign-in link",
+    content: `A sign-in link was requested for the **PKI Consortium portal**.
 
-<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to admin panel &rarr;</a></div>
+<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to the portal &rarr;</a></div>
 
 <div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>
 

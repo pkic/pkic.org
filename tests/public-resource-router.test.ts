@@ -126,21 +126,19 @@ describe("public and integration resource router smoke tests", () => {
       token_endpoint?: string;
       registration_endpoint?: string;
     };
-    expect(metadataPayload.authorization_endpoint).toBe("https://app.test/api/v1/oauth/authorize");
-    expect(metadataPayload.token_endpoint).toBe("https://app.test/api/v1/oauth/token");
-    expect(metadataPayload.registration_endpoint).toBe("https://app.test/api/v1/oauth/register");
+    expect(metadataPayload.authorization_endpoint).toBe("https://app.test/api/v1/auth/oauth/authorize");
+    expect(metadataPayload.token_endpoint).toBe("https://app.test/api/v1/auth/oauth/token");
+    expect(metadataPayload.registration_endpoint).toBe("https://app.test/api/v1/auth/oauth/register");
 
-    const verifyResponse = await callApp(
-      new Request("https://app.test/api/v1/oauth/verify-link", {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({}),
-      }),
-    );
-    expect(verifyResponse.status).toBe(400);
+    for (const retiredPath of [
+      "/api/v1/oauth/authorize",
+      "/api/v1/oauth/token",
+      "/api/v1/oauth/register",
+      "/api/v1/oauth/verify-link",
+      "/api/v1/auth/oauth/verify-link",
+    ]) {
+      expect((await callApp(new Request(`https://app.test${retiredPath}`))).status).toBe(404);
+    }
 
     const response = await callApp(
       new Request("https://app.test/api/v1/mcp", {

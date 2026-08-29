@@ -25,6 +25,7 @@ import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from
 import { SponsorAccess } from "./sections/sponsors/Access";
 import { portalDefaultPath } from "./shell/portal-navigation";
 import type { PortalSession } from "./types";
+import { McpAuthorization } from "./shell/McpAuthorization";
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
@@ -43,6 +44,7 @@ export function portalMagicLinkToken(hash: string): string | null {
 }
 
 export function App() {
+  const isMcpAuthorization = portalHashPath(window.location.hash) === "/auth/oauth";
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
@@ -67,6 +69,7 @@ export function App() {
     let cancelled = false;
 
     async function run(): Promise<void> {
+      if (isMcpAuthorization) return;
       setAuthChecking();
       const userToken = portalMagicLinkToken(window.location.hash);
       if (userToken) {
@@ -92,7 +95,11 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isMcpAuthorization]);
+
+  if (isMcpAuthorization) {
+    return <McpAuthorization />;
+  }
 
   if (verifying || authStatus.value === "loading") {
     return <VerifyingOverlay />;

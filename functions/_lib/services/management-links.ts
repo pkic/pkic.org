@@ -6,11 +6,9 @@
  * when its canonical management surface changes.
  */
 
-export const ADMIN_UI_PATH = "/admin/";
-export const MCP_OAUTH_UI_PATH = ADMIN_UI_PATH;
+export const PORTAL_UI_PATH = "/portal/";
 
 export type ManagementLink =
-  | { kind: "admin-sign-in"; token: string }
   | { kind: "mcp-oauth"; returnTo: string; token?: string; error?: string }
   | { kind: "organization-content-reviews" }
   | { kind: "membership-application"; id: string }
@@ -18,26 +16,25 @@ export type ManagementLink =
   | { kind: "sponsorship"; id: string };
 
 function portalHashUrl(appBaseUrl: string, path: string): URL {
-  const url = new URL("/portal/", appBaseUrl);
+  const url = new URL(PORTAL_UI_PATH, appBaseUrl);
   url.hash = `#${path.startsWith("/") ? path : `/${path}`}`;
+  return url;
+}
+
+function portalHashUrlWithQuery(appBaseUrl: string, path: string, query: URLSearchParams): URL {
+  const url = portalHashUrl(appBaseUrl, path);
+  url.hash = `${url.hash}?${query.toString()}`;
   return url;
 }
 
 /** Build a same-origin URL for a known management destination. */
 export function buildManagementLink(appBaseUrl: string, link: ManagementLink): string {
   switch (link.kind) {
-    case "admin-sign-in": {
-      const url = new URL(ADMIN_UI_PATH, appBaseUrl);
-      url.searchParams.set("token", link.token);
-      return url.toString();
-    }
     case "mcp-oauth": {
-      const url = new URL(MCP_OAUTH_UI_PATH, appBaseUrl);
-      url.searchParams.set("flow", "mcp-oauth");
-      url.searchParams.set("return_to", link.returnTo);
-      if (link.token) url.searchParams.set("token", link.token);
-      if (link.error) url.searchParams.set("error", link.error);
-      return url.toString();
+      const query = new URLSearchParams({ return_to: link.returnTo });
+      if (link.token) query.set("token", link.token);
+      if (link.error) query.set("error", link.error);
+      return portalHashUrlWithQuery(appBaseUrl, "/auth/oauth", query).toString();
     }
     case "organization-content-reviews":
       return portalHashUrl(appBaseUrl, "/system/organization-content-reviews").toString();

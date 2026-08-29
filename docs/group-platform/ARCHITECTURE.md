@@ -380,8 +380,8 @@ is an interface grouping, while the canonical domain API is
 filters, sorting, counting, and pagination in D1. Entity and actor filters are
 open strings rather than a duplicated frontend catalog, so adding a new audited
 resource or actor does not require a portal change. The former admin component,
-schema, service, and API route are removed; its hash URL is only a temporary
-bookmark redirect.
+schema, service, and API route are removed. Because this application is
+unreleased, the retired admin URL is not retained as a compatibility route.
 
 Membership workflow configuration remains at
 `/portal/#/system/membership-settings`, but its APIs are domain-based:
@@ -392,21 +392,20 @@ attributed audit. The D1-backed category catalog is the single mutable voting
 policy source; System is only the portal-navigation grouping and exposes no
 membership-settings or membership-categories API aliases.
 
-The separate admin application is retired incrementally:
+The portal is the sole human application. There is no admin or sponsor-specific
+HTML shell, navigation tree, human session, or authentication cookie. Staff,
+members, sponsor contacts, and dual-capacity users authenticate through
+`/api/v1/auth` into one `pkic_session`; live capacities determine the portal
+views and actions they may use. MCP OAuth approval also renders inside the
+portal and uses that same human session. Its resulting MCP access token is a
+machine transport, not another browser login.
 
-1. add portal routes and group-scoped REST endpoints backed by shared services;
-2. move existing management screens to the portal shell;
-3. redirect legacy admin URLs while bookmarks and emails migrate;
-4. remove the admin shell, route literals, duplicate session assumptions, and
-   compatibility endpoints before completion.
-
-Until each destination is migrated, notification and scheduled-work producers
-must use the semantic management-link adapter rather than concatenating admin
-paths. URLs already persisted in D1 (including review notification intents and
-queued email payloads) are not rewritten by changing a source migration; the
-eventual migration must either retain a compatible redirect or explicitly
-update those stored values. Changing migration seed text alone only affects a
-fresh database.
+Notification and scheduled-work producers use the typed management-link
+adapter and emit canonical portal URLs directly. The unreleased consolidated
+migration archives the obsolete admin sign-in template while preserving its
+historical version for exact-version outbox rendering. Retired `/admin/` and
+`/sponsor-portal/` page URLs return 404 instead of retaining duplicate shells or
+compatibility redirects.
 
 ## D1, security, and performance
 

@@ -30,9 +30,9 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
-    "admin_magic_link",
+    "user_magic_link",
     "Click [sign in]({{{magicLinkUrl}}}). Expires in {{expiresInMinutes}} minutes.",
-    "Admin sign-in link",
+    "User sign-in link",
   );
   await seedTemplate(
     db,

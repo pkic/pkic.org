@@ -189,6 +189,19 @@ describe("consolidated pending migration upgrade", () => {
       { version: 1, status: "archived" },
       { version: 2, status: "active" },
     ]);
+    expect(
+      db
+        .prepare(
+          `SELECT template_key, status
+             FROM email_template_versions
+            WHERE template_key IN ('admin_magic_link', 'user_magic_link')
+            ORDER BY template_key`,
+        )
+        .all(),
+    ).toEqual([
+      { template_key: "admin_magic_link", status: "archived" },
+      { template_key: "user_magic_link", status: "active" },
+    ]);
     expect(() =>
       db!.exec(
         `INSERT INTO email_template_versions

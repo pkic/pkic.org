@@ -121,10 +121,10 @@ Base path: `/api/v1`
 
 ## Proposal review
 
-- `GET /admin/proposals/:proposalId/reviews`
-- `POST /admin/proposals/:proposalId/reviews`
-- `PATCH /admin/proposals/:proposalId/reviews/:reviewId`
-- `POST /admin/proposals/:proposalId/finalize`
+- `GET /proposals/:proposalId/reviews`
+- `POST /proposals/:proposalId/reviews`
+- `PATCH /proposals/:proposalId/reviews/:reviewId`
+- `POST /proposals/:proposalId/finalize`
 
 ## Email templates
 

@@ -105,7 +105,7 @@ describe("webhook request body limits", () => {
     "rejects oversized MCP OAuth %s bodies before authorization processing",
     async (contentType) => {
       const response = await app.fetch(
-        new Request("https://pkic.org/api/v1/oauth/authorize", {
+        new Request("https://pkic.org/api/v1/auth/oauth/authorize", {
           method: "POST",
           headers: { "content-type": contentType },
           body: new Uint8Array(MCP_AUTHORIZE_MAX_BYTES + 1),

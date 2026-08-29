@@ -30,7 +30,7 @@ test("permitted staff manage donations through the neutral resource API", async 
   await expect(page).toHaveURL(/\/portal\/#\/system\/donations\/promoters$/);
   await expect(page.getByText("E2E Promoter", { exact: true })).toBeVisible();
 
-  await page.goto("/admin/#/donations");
+  await page.goto("/portal/#/system/donations");
   await expect(page).toHaveURL(/\/portal\/#\/system\/donations$/);
   await expect(page.getByRole("cell", { name: /E2E Donor — Example Organization/ })).toBeVisible();
 
