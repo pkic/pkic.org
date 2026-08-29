@@ -27,7 +27,7 @@ import type {
   FormSummary as CanonicalFormSummary,
 } from "../../shared/schemas/form-management";
 import type { MemberCapacitySummary as CanonicalMemberCapacitySummary } from "../../shared/schemas/membership-management";
-import type { AdminEventStatsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/admin-analytics";
+import type { EventAnalyticsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/event-analytics";
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
 import type { z } from "zod";
 

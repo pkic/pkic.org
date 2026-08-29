@@ -20,6 +20,7 @@ import {
 } from "./event-team";
 import { eventPromotersListQuerySchema, eventPromotersListResponseSchema } from "./event-promoters";
 import { eventPresentationArchiveQuerySchema } from "./event-presentations";
+import { eventAnalyticsResponseSchema } from "./event-analytics";
 
 export const eventDetailRouteSchema = {
   tags: ["Events"],
@@ -206,4 +207,22 @@ export const eventPresentationArchiveRouteSchema = {
     "503": jsonErrorResponse("Presentation storage is not configured."),
   },
   "x-pkic-auth": { required: true, scopes: ["proposals:read"] },
+};
+
+export const eventAnalyticsRouteSchema = {
+  tags: ["Events"],
+  summary: "Get event analytics",
+  description:
+    "Returns event-scoped operational analytics with live event read permission. Proposal totals are included only when the caller also has proposal read permission for this event.",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "Registration, attendance, waitlist, invitation, RSVP, and permitted proposal analytics.",
+      content: { "application/json": { schema: eventAnalyticsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Event read permission is required."),
+    "404": jsonErrorResponse("Event not found."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:read"] },
 };

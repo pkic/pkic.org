@@ -20,7 +20,7 @@ const TABS: Array<{ key: EventDetailTab; label: string; capability?: "read" }> =
   { key: "registrations", label: "Registrations" },
   { key: "proposals", label: "Proposals" },
   { key: "promoters", label: "Promoters", capability: "read" },
-  { key: "stats", label: "Stats" },
+  { key: "stats", label: "Analytics", capability: "read" },
   { key: "settings", label: "Settings" },
 ];
 

@@ -21,6 +21,7 @@ Base path: `/api/v1`
 - `DELETE /events/:eventSlug/roles/:roleAssignmentId`
 - `GET /events/:eventSlug/promoters`
 - `GET /events/:eventSlug/presentations/archive`
+- `GET /events/:eventSlug/analytics`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
   enables the management detail projection.
@@ -35,6 +36,10 @@ Base path: `/api/v1`
 - Presentation archives require the exact live, user-backed event-scoped
   `proposals:read` permission. The default archive contains the current file
   for each accepted proposal; `?versions=all` includes retained versions.
+- Event analytics require the exact live, user-backed event-scoped
+  `events:read` permission. Registration, attendance, waitlist, invitation,
+  and RSVP metrics execute as one bounded D1 batch. Proposal totals are omitted
+  unless the same user also has event-scoped `proposals:read`.
 
 ## Remaining legacy event integration
 

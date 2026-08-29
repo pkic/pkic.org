@@ -2,7 +2,7 @@ import { StatCard } from "../../../../components/StatCard";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { api } from "../../../api";
-import { adminEventStatsResponseSchema } from "../../../../../shared/schemas/admin-analytics";
+import { eventAnalyticsResponseSchema } from "../../../../../shared/schemas/event-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { svgStackedBarChart, isoDateRange } from "../../../../components/analytics/charts";
 import type { EventStatsResponse } from "../../../types";
@@ -31,7 +31,7 @@ export function EventStats({ slug }: { slug: string }) {
     error,
     reload,
   } = useData<EventStatsResponse>(
-    () => api(`/api/v1/admin/events/${slug}/stats`, adminEventStatsResponseSchema),
+    () => api(`/api/v1/events/${encodeURIComponent(slug)}/analytics`, eventAnalyticsResponseSchema),
     [slug],
   );
 

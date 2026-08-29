@@ -5,7 +5,6 @@ import {
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
 import { eventCreateSchema } from "./event-management";
-import { adminEventStatsResponseSchema } from "./admin-analytics";
 import { z } from "zod";
 
 const adminEventSyncEventSchema = z.object({
@@ -43,21 +42,6 @@ export const adminEventSyncRouteSchema = {
     "400": { description: "Invalid event synchronization payload." },
     "401": { description: "Admin authorization required." },
     "403": { description: "Insufficient permission to synchronize events." },
-  },
-};
-
-export const adminEventStatsRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Get event statistics",
-  request: { params: eventSlugParamsSchema },
-  responses: {
-    "200": {
-      description:
-        "Event registration, attendance, waitlist, invitation, and RSVP statistics. Proposal totals are included only when the caller also has proposals:read for this event.",
-      content: { "application/json": { schema: adminEventStatsResponseSchema } },
-    },
-    "401": { description: "Admin authorization required." },
-    "404": { description: "Event not found." },
   },
 };
 

@@ -33,7 +33,8 @@ const inviteStatsSchema = z.object({
   declineReasons: z.array(inviteDeclineReasonCountSchema),
 });
 
-export const adminEventStatsResponseSchema = z.object({
+/** Event-scoped operational analytics; proposal totals are capability-filtered. */
+export const eventAnalyticsResponseSchema = z.object({
   event: eventSummarySchema,
   registrations: z.object({
     byStatus: countMapSchema,
@@ -101,4 +102,4 @@ export const adminEventStatsResponseSchema = z.object({
   }),
 });
 
-export type AdminEventStatsResponse = z.infer<typeof adminEventStatsResponseSchema>;
+export type EventAnalyticsResponse = z.infer<typeof eventAnalyticsResponseSchema>;

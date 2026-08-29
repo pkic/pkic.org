@@ -932,7 +932,7 @@ describe("admin event management endpoints", () => {
       virtual: { accepted: 1, waitlisted: 0 },
     });
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       registrations: {
@@ -1008,7 +1008,7 @@ describe("admin event management endpoints", () => {
     );
     expect(history).toEqual([{ from_type: "in_person", to_type: "virtual", changed_by: "system" }]);
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       attendanceChanges: { changedAttendees: number; dayChanges: number };
@@ -1049,7 +1049,7 @@ describe("admin event management endpoints", () => {
       .bind(created.registration.id)
       .run();
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       attendanceChanges: {
@@ -1117,7 +1117,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const initialStatsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const initialStatsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(initialStatsResponse.status).toBe(200);
     const initialStats = (await initialStatsResponse.json()) as {
       attendanceChanges: { changedAttendees: number; dayChanges: number };
@@ -1137,7 +1137,7 @@ describe("admin event management endpoints", () => {
       "admin:test",
     );
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       attendanceChanges: {

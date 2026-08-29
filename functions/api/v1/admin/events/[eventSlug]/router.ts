@@ -7,7 +7,6 @@ import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { AdminEventRegistrationsGet } from "./registrations";
-import { AdminEventsEventSlugStatsGet } from "./stats";
 import emails_Router from "./emails/router";
 import registrations_Router from "./registrations/router";
 import waitlist_Router from "./waitlist/router";
@@ -63,7 +62,6 @@ app.use("*", requireEventManagementAccess);
 
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 openapi.get("/registrations", AdminEventRegistrationsGet);
-openapi.get("/stats", AdminEventsEventSlugStatsGet);
 openapi.route("/emails", emails_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.route("/waitlist", waitlist_Router);

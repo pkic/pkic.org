@@ -137,8 +137,13 @@ describe("admin event general settings", () => {
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Save")).toBe(false);
   });
 
-  it("does not expose promoter activity without event read capability", () => {
-    expect(eventDetailTabsForCapabilities([]).map(({ key }) => key)).not.toContain("promoters");
-    expect(eventDetailTabsForCapabilities(["read"]).map(({ key }) => key)).toContain("promoters");
+  it("does not expose event read projections without event read capability", () => {
+    const withoutRead = eventDetailTabsForCapabilities([]).map(({ key }) => key);
+    expect(withoutRead).not.toContain("promoters");
+    expect(withoutRead).not.toContain("stats");
+
+    const withRead = eventDetailTabsForCapabilities(["read"]).map(({ key }) => key);
+    expect(withRead).toContain("promoters");
+    expect(withRead).toContain("stats");
   });
 });
