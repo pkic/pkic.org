@@ -29,6 +29,8 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-identity-history",
   "portal-identity-logout",
   "portal-mobile-navigation",
+  "portal-dual-capacity",
+  "portal-dual-capacity-guard",
   "portal-system-audit-list",
   "portal-system-audit-states",
   "sponsor-workspace",

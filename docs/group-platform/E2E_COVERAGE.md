@@ -78,8 +78,8 @@ rendering and permission-derived-control dimension, not the rule itself.
   APIs exist and are tested, but nothing in `assets/ts` calls them — so this
   item cannot be performed in the portal at all, by a tester or a user. It
   needs a UI before it can be either manually tested or browser-covered.
-- Dual-capacity identity switching between staff and member contexts, and
-  losing one capacity while preserving the other.
+- Losing a capacity entirely (rather than switching away from it) while the
+  other is preserved. Switching is now covered; revocation is not.
 - Multi-organization participation: joining every eligible capacity, selecting
   a subset, adding a second, removing one, and leaving entirely.
 - Concurrent join/leave/configuration/leadership conflict handling in a
