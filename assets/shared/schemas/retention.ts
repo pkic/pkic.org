@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { jsonErrorResponse, successResponseSchema } from "./api-common";
+import { successResponseSchema } from "./api-common";
+import { authErrors, ok, requiresPermissions } from "./route-contract";
 import { pendingWorkListQuerySchema, pendingWorkListResponseSchema } from "./pending-work";
 
 /**
@@ -28,24 +29,20 @@ export const retentionDueListResponseSchema = pendingWorkListResponseSchema;
 
 export const retentionDueListRouteSchema = {
   tags: ["Retention"],
-  "x-pkic-auth": { required: true, scopes: ["retention:read"] },
+  ...requiresPermissions("retention:read"),
   summary: "List records due for retention redaction",
   description:
     "Returns the events whose configured retention window has elapsed and whose identifying registration data has not yet been redacted. Search, sorting, counting, and pagination run in D1.",
   request: { query: retentionDueListQuerySchema },
   responses: {
-    "200": {
-      description: "Due retention page.",
-      content: { "application/json": { schema: retentionDueListResponseSchema } },
-    },
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to read retention work."),
+    ...ok("Due retention page.", retentionDueListResponseSchema),
+    ...authErrors({ forbidden: "Requires retention:read." }),
   },
 };
 
 export const retentionRunCreateRouteSchema = {
   tags: ["Retention"],
-  "x-pkic-auth": { required: true, scopes: ["retention:run"] },
+  ...requiresPermissions("retention:run"),
   summary: "Create a retention run",
   description:
     "Applies the configured retention policies, redacting identifying registration and user data whose window has elapsed. Requires `users:anonymize` in addition to `retention:run`, and re-evaluates both inside the same D1 batch as the redaction and its audit record.",
@@ -53,12 +50,10 @@ export const retentionRunCreateRouteSchema = {
     body: { required: false, content: { "application/json": { schema: retentionRunCreateSchema } } },
   },
   responses: {
-    "200": {
-      description: "Retention run result.",
-      content: { "application/json": { schema: retentionRunResponseSchema } },
-    },
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to run retention."),
-    "409": jsonErrorResponse("Retention permission changed while the run was in progress."),
+    ...ok("Retention run result.", retentionRunResponseSchema),
+    ...authErrors({
+      forbidden: "Requires retention:run and users:anonymize.",
+      conflict: "Retention permission changed while the run was in progress.",
+    }),
   },
 };

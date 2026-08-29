@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { jsonErrorResponse, successResponseSchema, trimmedString, utcInstantSchema } from "./api-common";
+import { successResponseSchema, trimmedString, utcInstantSchema } from "./api-common";
+import { authErrors, ok, requiresPermissions } from "./route-contract";
 
 /**
  * The scheduler is the mechanism; a scheduled job is the resource it manages.
@@ -54,45 +55,39 @@ export const schedulerJobStateResponseSchema = successResponseSchema.extend({ jo
 
 export const schedulerJobsListRouteSchema = {
   tags: ["Scheduler"],
-  "x-pkic-auth": { required: true, scopes: ["scheduler:read"] },
+  ...requiresPermissions("scheduler:read"),
   summary: "List scheduled jobs",
   description:
     "Returns every recurring job with its cadence, next wake, and outcome history. `lastSuccessAt` is reported separately from `lastRunAt` so a job that runs often but last succeeded days ago is visible rather than hidden behind one timestamp.",
   responses: {
-    "200": {
-      description: "Scheduled job registry.",
-      content: { "application/json": { schema: schedulerJobsListResponseSchema } },
-    },
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to read the scheduler."),
+    ...ok("Scheduled job registry.", schedulerJobsListResponseSchema),
+    ...authErrors({ forbidden: "Requires scheduler:read." }),
   },
 };
 
 export const schedulerJobRunCreateRouteSchema = {
   tags: ["Scheduler"],
-  "x-pkic-auth": { required: true, scopes: ["scheduler:manage"] },
+  ...requiresPermissions("scheduler:read", "scheduler:manage"),
   summary: "Run a scheduled job now",
   description:
-    "Runs one job immediately, outside its interval. Requires `scheduler:manage` AND every grant the job's own domain requires, so triggering through the scheduler cannot do what the caller could not do directly. The run takes the same lease and D1 query budget as a scheduled pass.",
+    "Runs one job immediately, outside its interval. Requires every grant the job's own domain requires in addition to `scheduler:manage`, so triggering through the scheduler cannot do what the caller could not do directly. The run takes the same lease and D1 query budget as a scheduled pass.",
   request: {
     params: schedulerJobParamsSchema,
     body: { required: false, content: { "application/json": { schema: schedulerJobRunCreateSchema } } },
   },
   responses: {
-    "200": {
-      description: "Job run result.",
-      content: { "application/json": { schema: schedulerJobRunResponseSchema } },
-    },
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to run this job."),
-    "404": jsonErrorResponse("Unknown job."),
-    "409": jsonErrorResponse("The job is paused or already running."),
+    ...ok("Job run result.", schedulerJobRunResponseSchema),
+    ...authErrors({
+      forbidden: "Requires scheduler:manage and the job's own domain permissions.",
+      notFound: "Unknown job.",
+      conflict: "The job is paused or already running.",
+    }),
   },
 };
 
 export const schedulerJobPauseRouteSchema = {
   tags: ["Scheduler"],
-  "x-pkic-auth": { required: true, scopes: ["scheduler:manage"] },
+  ...requiresPermissions("scheduler:read", "scheduler:manage"),
   summary: "Pause a scheduled job",
   description:
     "Stops the dispatcher selecting this job until it is resumed. Because the dispatcher re-derives due work from domain state on every pass, a pause loses no work — the job simply finds it again on resume. A reason is required so a pause is attributable.",
@@ -101,20 +96,20 @@ export const schedulerJobPauseRouteSchema = {
     body: { required: true, content: { "application/json": { schema: schedulerJobPauseSchema } } },
   },
   responses: {
-    "200": {
-      description: "Job paused.",
-      content: { "application/json": { schema: schedulerJobStateResponseSchema } },
-    },
-    "401": jsonErrorResponse("Staff session required."),
-    "403": jsonErrorResponse("Insufficient permission to manage the scheduler."),
-    "404": jsonErrorResponse("Unknown job."),
+    ...ok("Job paused.", schedulerJobStateResponseSchema),
+    ...authErrors({ forbidden: "Requires scheduler:manage.", notFound: "Unknown job." }),
   },
 };
 
 export const schedulerJobResumeRouteSchema = {
-  ...schedulerJobPauseRouteSchema,
+  tags: ["Scheduler"],
+  ...requiresPermissions("scheduler:read", "scheduler:manage"),
   summary: "Resume a paused scheduled job",
   description:
     "Returns the job to the dispatcher. Any work that accumulated while it was paused is found by the next pass, because due work is derived from domain state rather than queued.",
   request: { params: schedulerJobParamsSchema },
+  responses: {
+    ...ok("Job resumed.", schedulerJobStateResponseSchema),
+    ...authErrors({ forbidden: "Requires scheduler:manage.", notFound: "Unknown job." }),
+  },
 };
