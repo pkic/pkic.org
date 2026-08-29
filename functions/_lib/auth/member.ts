@@ -1,8 +1,10 @@
 /** Live membership capacity resolved from the canonical user session. */
 import { AppError } from "../errors";
 import type { AuthMember, DatabaseLike, Env } from "../types";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { guardDatabaseBatches } from "../db/guarded-database";
 import { getUserSessionToken, resolveUserSessionFromRequest } from "./user-session";
-import { resolveEligibleMembershipRows, toAuthMember } from "./identity-capacities";
+import { memberSessionAuthorizationEvidence, resolveEligibleMembershipRows, toAuthMember } from "./identity-capacities";
 export {
   findEligibleMemberById,
   memberSignInAuthorizationEvidence,
@@ -10,6 +12,24 @@ export {
   toAuthMember,
 } from "./identity-capacities";
 export type { MemberEligibleUserRow } from "./identity-capacities";
+
+/** Apply the exact current user session and selected membership as a same-batch mutation guard. */
+export function guardMemberSessionMutationDatabase(db: DatabaseLike, member: AuthMember): DatabaseLike {
+  return guardDatabaseBatches(db, async (statements) => {
+    try {
+      const [, ...results] = await db.batch([
+        prepareAuthorizationGuard(db, memberSessionAuthorizationEvidence(member)),
+        ...statements,
+      ]);
+      return results;
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session or membership changed");
+      }
+      throw error;
+    }
+  });
+}
 
 const memberByRequest = new WeakMap<Request, AuthMember>();
 

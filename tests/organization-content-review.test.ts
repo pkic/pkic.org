@@ -24,7 +24,7 @@ import {
   organizationContentReviewDecisionResponseSchema,
   organizationContentReviewsListResponseSchema,
 } from "../assets/shared/schemas/organization-content-reviews";
-import { myOrganizationReviewsListResponseSchema } from "../assets/shared/schemas/me";
+import { organizationContentReviewsListResponseSchema as organizationSelfServiceReviewsListResponseSchema } from "../assets/shared/schemas/organization-self-service";
 import {
   drainOrganizationContentReviewNotificationIntents,
   listPendingOrganizationContentReviewNotificationIntents,
@@ -78,10 +78,22 @@ class FakeAssetsBucket {
 
 const JPEG_BYTES = validJpegBytes();
 
-function logoUploadRequest(token: string): Request {
+function organizationPath(organizationId: string): string {
+  return `/api/v1/organizations/${organizationId}`;
+}
+
+function organizationContentReviewsPath(organizationId: string): string {
+  return `${organizationPath(organizationId)}/content/reviews`;
+}
+
+function secondaryContactNominationPath(organizationId: string): string {
+  return `${organizationPath(organizationId)}/contacts/secondary/nomination`;
+}
+
+function logoUploadRequest(token: string, organizationId: string): Request {
   const formData = new FormData();
   formData.append("file", new File([JPEG_BYTES], "organization-logo.jpg", { type: "image/jpeg" }));
-  return request(token, "/api/v1/me/organization/logo", { method: "POST", body: formData });
+  return request(token, `${organizationPath(organizationId)}/logo`, { method: "POST", body: formData });
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
@@ -135,8 +147,8 @@ describe("Organization content moderation", () => {
     const { organizationId, userId } = await seedOrgWithContact("primary@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "content-submit-token");
 
-    const response = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const response = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "New description", slogan: "New slogan" }),
     });
     expect(response.status).toBe(200);
@@ -179,21 +191,49 @@ describe("Organization content moderation", () => {
     ]);
   });
 
-  it("GET /api/v1/me/organization/reviews applies the shared list query to D1", async () => {
-    const { userId } = await seedOrgWithContact("review-list@example.test", "F");
+  it("GET organization content reviews applies the shared list query to D1", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("review-list@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "review-list-token");
-    const submitResponse = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Review-list change" }),
     });
     expect(submitResponse.status).toBe(200);
 
-    const response = await call(token, "/api/v1/me/organization/reviews?status=pending&limit=1&sort=status");
+    const response = await call(
+      token,
+      organizationContentReviewsPath(organizationId) + "?status=pending&limit=1&sort=status",
+    );
     expect(response.status).toBe(200);
-    const body = myOrganizationReviewsListResponseSchema.parse(await response.json());
+    const body = organizationSelfServiceReviewsListResponseSchema.parse(await response.json());
     expect(body.reviews).toHaveLength(1);
     expect(body.reviews[0].status).toBe("pending");
     expect(body.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("binds organization self-service reads and writes to the active membership", async () => {
+    const own = await seedOrgWithContact("bound-contact@example.test", "F");
+    const other = await seedOrgWithContact("other-contact@example.test", "F");
+    const token = await createMemberSession(env.DB, own.userId, "organization-binding-token");
+
+    const ownProfile = await call(token, `${organizationPath(own.organizationId)}/profile`);
+    expect(ownProfile.status).toBe(200);
+    expect((await ownProfile.json()) as { organization: { id: string } }).toMatchObject({
+      organization: { id: own.organizationId },
+    });
+
+    expect((await call(token, `${organizationPath(other.organizationId)}/profile`)).status).toBe(404);
+    expect((await call(token, organizationContentReviewsPath(other.organizationId))).status).toBe(404);
+    const crossOrganizationWrite = await call(token, organizationContentReviewsPath(other.organizationId), {
+      method: "POST",
+      body: JSON.stringify({ slogan: "Must not cross organizations" }),
+    });
+    expect(crossOrganizationWrite.status).toBe(404);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", [
+        other.organizationId,
+      ]),
+    ).toHaveLength(0);
   });
 
   it("rejects a non-contact representative's submission with 403", async () => {
@@ -201,8 +241,8 @@ describe("Organization content moderation", () => {
     const nonContactUserId = await addRepresentative(organizationId, "non-contact@example.test");
     const token = await createMemberSession(env.DB, nonContactUserId, "non-contact-content-token");
 
-    const response = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const response = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Should fail" }),
     });
     expect(response.status).toBe(403);
@@ -215,10 +255,14 @@ describe("Organization content moderation", () => {
     const token = await createMemberSession(env.DB, userId, "logo-only-token");
     const bucket = new FakeAssetsBucket();
 
-    const response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
-      passThroughOnException: () => {},
-      waitUntil: () => {},
-    } as any);
+    const response = await app.fetch(
+      logoUploadRequest(token, organizationId),
+      { ...(env as any), ASSETS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
     expect(response.status).toBe(200);
 
     expect(
@@ -263,8 +307,8 @@ describe("Organization content moderation", () => {
       env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactiveUserId),
     ]);
     const token = await createMemberSession(env.DB, userId, "snapshot-submit-token");
-    const response = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const response = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ slogan: "Snapshot this" }),
     });
     expect(response.status).toBe(200);
@@ -314,17 +358,21 @@ describe("Organization content moderation", () => {
     const token = await createMemberSession(env.DB, userId, "content-then-logo-token");
     expect(
       (
-        await call(token, "/api/v1/me/organization", {
-          method: "PATCH",
+        await call(token, organizationContentReviewsPath(organizationId), {
+          method: "POST",
           body: JSON.stringify({ slogan: "Content first" }),
         })
       ).status,
     ).toBe(200);
     const bucket = new FakeAssetsBucket();
-    const logoResponse = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
-      passThroughOnException: () => {},
-      waitUntil: () => {},
-    } as any);
+    const logoResponse = await app.fetch(
+      logoUploadRequest(token, organizationId),
+      { ...(env as any), ASSETS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
     expect(logoResponse.status).toBe(200);
     expect(
       await queryAll<{ count: number }>(
@@ -352,7 +400,7 @@ describe("Organization content moderation", () => {
 
     let response: Response;
     try {
-      response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+      response = await app.fetch(logoUploadRequest(token, organizationId), { ...(env as any), ASSETS_BUCKET: bucket }, {
         passThroughOnException: () => {},
         waitUntil: () => {},
       } as any);
@@ -393,7 +441,7 @@ describe("Organization content moderation", () => {
 
     let response: Response;
     try {
-      response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+      response = await app.fetch(logoUploadRequest(token, organizationId), { ...(env as any), ASSETS_BUCKET: bucket }, {
         passThroughOnException: () => {},
         waitUntil: () => {},
       } as any);
@@ -448,8 +496,8 @@ describe("Organization content moderation", () => {
     ).run();
 
     try {
-      const response = await call(token, "/api/v1/me/organization", {
-        method: "PATCH",
+      const response = await call(token, organizationContentReviewsPath(organizationId), {
+        method: "POST",
         body: JSON.stringify({ description: "Must roll back" }),
       });
       expect(response.status).toBe(500);
@@ -468,12 +516,15 @@ describe("Organization content moderation", () => {
   });
 
   it("rejects a second submission while one is already pending with 409", async () => {
-    const { userId } = await seedOrgWithContact("primary3@example.test", "F");
+    const { organizationId, userId } = await seedOrgWithContact("primary3@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "double-submit-token");
 
-    await call(token, "/api/v1/me/organization", { method: "PATCH", body: JSON.stringify({ slogan: "First" }) });
-    const second = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
+      body: JSON.stringify({ slogan: "First" }),
+    });
+    const second = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ slogan: "Second" }),
     });
 
@@ -487,12 +538,12 @@ describe("Organization content moderation", () => {
     const token = await createMemberSession(env.DB, userId, "concurrent-content-submit-token");
 
     const responses = await Promise.all([
-      call(token, "/api/v1/me/organization", {
-        method: "PATCH",
+      call(token, organizationContentReviewsPath(organizationId), {
+        method: "POST",
         body: JSON.stringify({ slogan: "First concurrent version" }),
       }),
-      call(token, "/api/v1/me/organization", {
-        method: "PATCH",
+      call(token, organizationContentReviewsPath(organizationId), {
+        method: "POST",
         body: JSON.stringify({ slogan: "Second concurrent version" }),
       }),
     ]);
@@ -698,16 +749,18 @@ describe("Organization content moderation", () => {
   });
 
   it("lets the submitter withdraw a pending review, freeing them to resubmit", async () => {
-    const { userId } = await seedOrgWithContact("primary4@example.test", "F");
+    const { organizationId, userId } = await seedOrgWithContact("primary4@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "withdraw-token");
 
-    const submitResponse = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ slogan: "First" }),
     });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
 
-    const withdrawResponse = await call(token, `/api/v1/me/organization/reviews/${review.id}`, { method: "DELETE" });
+    const withdrawResponse = await call(token, `${organizationContentReviewsPath(organizationId)}/${review.id}`, {
+      method: "DELETE",
+    });
     expect(withdrawResponse.status).toBe(200);
 
     const rows = await queryAll<{ status: string }>(
@@ -717,8 +770,8 @@ describe("Organization content moderation", () => {
     );
     expect(rows[0].status).toBe("withdrawn");
 
-    const resubmit = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const resubmit = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ slogan: "Second" }),
     });
     expect(resubmit.status).toBe(200);
@@ -727,8 +780,8 @@ describe("Organization content moderation", () => {
   it("staff admin reaches the static content-review collection before dynamic organization IDs, then approves a review", async () => {
     const { organizationId, userId } = await seedOrgWithContact("primary5@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "approve-flow-token");
-    const submitResponse = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Approved description", website: "https://example.test" }),
     });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
@@ -780,8 +833,8 @@ describe("Organization content moderation", () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
     const organization = await seedOrgWithContact("api-key-review@example.test", "F");
     const memberToken = await createMemberSession(env.DB, organization.userId, "api-key-review-token");
-    const submission = await call(memberToken, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submission = await call(memberToken, organizationContentReviewsPath(organization.organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Must require an attributable reviewer" }),
     });
     const submitted = (await submission.json()) as { review: { id: string } };
@@ -814,8 +867,8 @@ describe("Organization content moderation", () => {
   it("staff admin can reject a pending review with a reason, leaving the live org row untouched", async () => {
     const { organizationId, userId } = await seedOrgWithContact("primary6@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "reject-flow-token");
-    const submitResponse = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Rejected description" }),
     });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
@@ -848,8 +901,8 @@ describe("Organization content moderation", () => {
   it("rolls back approval state, live content, and email when audit fails", async () => {
     const { organizationId, userId } = await seedOrgWithContact("approve-rollback@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "approve-rollback-token");
-    const submitResponse = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Must roll back" }),
     });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
@@ -891,10 +944,10 @@ describe("Organization content moderation", () => {
   });
 
   it("allows exactly one concurrent approval or rejection with matching fallout", async () => {
-    const { userId } = await seedOrgWithContact("decision-race@example.test", "F");
+    const { organizationId, userId } = await seedOrgWithContact("decision-race@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "decision-race-token");
-    const submitResponse = await call(token, "/api/v1/me/organization", {
-      method: "PATCH",
+    const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
       body: JSON.stringify({ description: "Race decision" }),
     });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
@@ -1005,8 +1058,8 @@ describe("Secondary contact nomination & confirmation", () => {
     const nomineeUserId = await addRepresentative(organizationId, "nominee@example.test");
     const token = await createMemberSession(env.DB, primaryUserId, "nominate-token");
 
-    const nominateResponse = await call(token, "/api/v1/me/organization/secondary-contact", {
-      method: "PATCH",
+    const nominateResponse = await call(token, secondaryContactNominationPath(organizationId), {
+      method: "PUT",
       body: JSON.stringify({ userId: nomineeUserId }),
     });
     expect(nominateResponse.status).toBe(200);
@@ -1027,7 +1080,9 @@ describe("Secondary contact nomination & confirmation", () => {
 
     const dispatched: Promise<unknown>[] = [];
     const confirmResponse = await app.fetch(
-      request(adminToken, `/api/v1/organizations/${organizationId}/confirm-secondary-contact`, { method: "POST" }),
+      request(adminToken, `/api/v1/organizations/${organizationId}/contacts/secondary/confirmation`, {
+        method: "POST",
+      }),
       env as any,
       {
         passThroughOnException: () => {},
@@ -1068,15 +1123,15 @@ describe("Secondary contact nomination & confirmation", () => {
     } = await seedOrgWithContact("api-key-contact-primary@example.test", "F");
     const nomineeUserId = await addRepresentative(organizationId, "api-key-contact-nominee@example.test");
     const token = await createMemberSession(env.DB, primaryUserId, "api-key-contact-nominate-token");
-    const nominateResponse = await call(token, "/api/v1/me/organization/secondary-contact", {
-      method: "PATCH",
+    const nominateResponse = await call(token, secondaryContactNominationPath(organizationId), {
+      method: "PUT",
       body: JSON.stringify({ userId: nomineeUserId }),
     });
     expect(nominateResponse.status).toBe(200);
 
     const confirmResponse = await call(
       env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/organizations/${organizationId}/confirm-secondary-contact`,
+      `/api/v1/organizations/${organizationId}/contacts/secondary/confirmation`,
       { method: "POST" },
     );
     expect(confirmResponse.status).toBe(403);
@@ -1099,7 +1154,7 @@ describe("Secondary contact nomination & confirmation", () => {
 
   it("rejects confirmation with 409 when there is no pending nomination", async () => {
     const { organizationId } = await seedOrgWithContact("primary8@example.test", "F");
-    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/confirm-secondary-contact`, {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/contacts/secondary/confirmation`, {
       method: "POST",
     });
     expect(response.status).toBe(409);
@@ -1111,15 +1166,15 @@ describe("Secondary contact nomination & confirmation", () => {
     const nomineeUserId = await addRepresentative(organizationId, "nominee2@example.test");
     const token = await createMemberSession(env.DB, nonContactUserId, "non-primary-nominate-token");
 
-    const response = await call(token, "/api/v1/me/organization/secondary-contact", {
-      method: "PATCH",
+    const response = await call(token, secondaryContactNominationPath(organizationId), {
+      method: "PUT",
       body: JSON.stringify({ userId: nomineeUserId }),
     });
     expect(response.status).toBe(403);
   });
 
   it("rejects nominating someone who isn't an active representative of the same org with 422", async () => {
-    const { userId: primaryUserId } = await seedOrgWithContact("primary10@example.test", "F");
+    const { organizationId, userId: primaryUserId } = await seedOrgWithContact("primary10@example.test", "F");
     const outsiderUserId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
@@ -1129,8 +1184,8 @@ describe("Secondary contact nomination & confirmation", () => {
       .run();
     const token = await createMemberSession(env.DB, primaryUserId, "outsider-nominate-token");
 
-    const response = await call(token, "/api/v1/me/organization/secondary-contact", {
-      method: "PATCH",
+    const response = await call(token, secondaryContactNominationPath(organizationId), {
+      method: "PUT",
       body: JSON.stringify({ userId: outsiderUserId }),
     });
     expect(response.status).toBe(422);
@@ -1141,8 +1196,8 @@ describe("Secondary contact nomination & confirmation", () => {
     const nomineeUserId = await addRepresentative(organizationId, "lapsing-nominee@example.test");
     const token = await createMemberSession(env.DB, primaryUserId, "lapse-token");
 
-    await call(token, "/api/v1/me/organization/secondary-contact", {
-      method: "PATCH",
+    await call(token, secondaryContactNominationPath(organizationId), {
+      method: "PUT",
       body: JSON.stringify({ userId: nomineeUserId }),
     });
 

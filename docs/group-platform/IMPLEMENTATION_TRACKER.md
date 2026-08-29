@@ -806,7 +806,7 @@ Status: In progress
       mailbox verification is a nested invitation-verification resource rather
       than an actor- or UI-scoped endpoint.
 - [x] Keep routes thin and SQL-free.
-- [x] Add one generic `/api/v1/me/groups` self-participation read model.
+- [x] Add one generic `/api/v1/users/current/groups` self-participation read model.
       Evidence: the shared contract composes the canonical group list filters,
       sorting, and offset page schema; the service evaluates visibility,
       catalog/joined state, category capacity, and structural-parent eligibility
@@ -832,7 +832,7 @@ Status: In progress
 - [x] Remove temporary working-group endpoint compatibility before completion.
       Evidence: the unreleased /api/v1/working-groups and
       /api/v1/me/working-groups routes, services, contracts, and route-specific
-      tests are removed. Generic /api/v1/groups, /api/v1/me/groups, and the
+      tests are removed. Generic /api/v1/groups, /api/v1/users/current/groups, and the
       privacy-bounded public group directory are the only group collection and
       self-service resources.
       The portal retains only its hash-route redirect for existing bookmarks;
@@ -850,8 +850,8 @@ Status: In progress
 - [x] Gate member actions separately from staff management permissions.
       Portal session status exposes live capacities, the shell derives its
       navigation from them, and staff-only identities never probe or receive
-      access to `/api/v1/me/*`. Those endpoints continue to require a live
-      member session; loss of membership removes only that capacity rather
+      access to member-capacity resources under `/api/v1/users/current/*`.
+      Those endpoints continue to require a live member session; loss of membership removes only that capacity rather
       than locking an otherwise eligible staff identity out.
       Evidence: the expanded mounted authentication matrix covers neutral
       portal magic links, passkeys, purpose isolation, live staff/member
@@ -889,7 +889,7 @@ Status: In progress
       or navigation branch selects behavior from a group type key.
 - [x] Move self-service participation onto the generic group and
       group-membership contracts without a working-group-only UI context.
-      Evidence: the portal consumes `/api/v1/me/groups` without a type filter
+      Evidence: the portal consumes `/api/v1/users/current/groups` without a type filter
       and uses the canonical join/leave commands. One Groups view and focused
       card support every configured group type, display type and structural
       parent context, select all eligible affiliations by default, accept an
@@ -1468,9 +1468,10 @@ Status: In progress
       directory read. One neutral schema and service boundary own the D1-side
       search, allowlisted sorting, counting, pagination, revision
       compare-and-swap, organization aggregate, flexible links, contacts,
-      logo, and representative transitions. Direct-email provisioning is
-      user-backed staff-only, does not verify the mailbox or enqueue mail, and
-      preserves the representative's optional job title and profile links.
+      logo, and representative transitions. Primary and secondary contacts can
+      add coworkers with the minimum identity fields needed for representation;
+      user-backed staff with `membership:write` may additionally provision
+      profile metadata. Neither path verifies the mailbox or enqueues mail.
       Every mutation repeats its live permission and exact state predicates in
       the same D1 batch as the write and attributed audit record. The former
       admin Organization components, API handlers, route mount, and
@@ -1506,6 +1507,23 @@ Status: In progress
       focused real Worker/D1 browser journey updates a user through the portal,
       verifies persistence and the legacy bookmark redirect, and observes no
       legacy Users or Members request.
+      Current-user and organization self-service transport now follows those
+      same resource boundaries. `/api/v1/users/current` owns the signed-in
+      user's profile, selected active membership, notification preferences,
+      headshot, group participation, and membership applications. Explicit
+      `/api/v1/organizations/:organizationId` subresources own organization
+      profile visibility, content reviews, logo staging, active sponsorship,
+      representatives, and secondary-contact nomination. The former
+      `/api/v1/me` router and its EC-decision action endpoint are removed;
+      self EC decisions use the same membership-application decision resource
+      as staff overrides. Every self-service mutation repeats the exact live
+      session, selected membership, organization capacity, contact role, and
+      mutable-state predicates in the same D1 batch as its write and audit.
+      Cross-organization requests fail closed, contact-added coworkers cannot
+      smuggle staff-only profile fields, and user-facing timestamps remain UTC
+      in storage and are localized only at the presentation boundary. Mounted
+      Worker/D1, OpenAPI, frontend, and negative legacy-route tests cover the
+      cutover without retaining a compatibility alias.
       Reusable form-definition management now uses the canonical Forms
       resource instead of an interface namespace. Global definitions are
       listed, created, edited, archived, placed, and analyzed under

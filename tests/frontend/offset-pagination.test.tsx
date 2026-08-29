@@ -169,7 +169,7 @@ describe("canonical offset pagination", () => {
 
     function Harness() {
       const listing = useApiPage(
-        "/api/v1/me/groups",
+        "/api/v1/users/current/groups",
         { view: "joined", q: "alpha" },
         responseSchema,
         (data) => data.groups,

@@ -515,20 +515,24 @@ test.describe("Admin browser-verification pass", () => {
     const stamp = Date.now();
     const email = `e2e-content-review-${stamp}@e2e-content-review-${stamp}.test`;
     const orgName = `E2E Content Review Org ${stamp}`;
-    await provisionApprovedMember(page, { email, name: "Content Reviewer E2E", orgName });
+    const provisioned = await provisionApprovedMember(page, { email, name: "Content Reviewer E2E", orgName });
+    expect(provisioned.organizationId).not.toBeNull();
     await page.context().clearCookies();
     await signInToPortal(page, email);
 
     const newSlogan = `E2E updated slogan ${stamp}`;
-    const editStatus = await page.evaluate(async (slogan) => {
-      const res = await fetch("/api/v1/me/organization", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ slogan }),
-      });
-      return res.status;
-    }, newSlogan);
+    const editStatus = await page.evaluate(
+      async ({ slogan, organizationId }) => {
+        const res = await fetch(`/api/v1/organizations/${organizationId}/content/reviews`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ slogan }),
+        });
+        return res.status;
+      },
+      { slogan: newSlogan, organizationId: provisioned.organizationId! },
+    );
     expect(editStatus).toBe(200);
 
     await page.context().clearCookies();

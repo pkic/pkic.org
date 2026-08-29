@@ -96,7 +96,7 @@ export const applicationStageTransitionResponseSchema = z.object({
 });
 export const applicationCommunicationCreateResponseSchema = z.object({ id: databaseIdSchema, createdAt: z.string() });
 export const applicationNoteCreateResponseSchema = applicationCommunicationCreateResponseSchema;
-export const staffEcDecisionCreateResponseSchema = membershipApplicationEcDecisionSchema;
+export const ecDecisionRecordResponseSchema = membershipApplicationEcDecisionSchema;
 export const applicationApproveResponseSchema = z.object({
   applicationId: databaseIdSchema,
   memberId: databaseIdSchema,
@@ -210,23 +210,26 @@ export const applicationNoteCreateRouteSchema = {
   },
 };
 
-export const staffEcDecisionCreateSchema = ecDecisionCreateSchema.safeExtend({
-  ecMemberUserId: databaseIdSchema,
+export const ecDecisionRecordSchema = ecDecisionCreateSchema.safeExtend({
+  ecMemberUserId: databaseIdSchema.optional(),
 });
 
-export const staffEcDecisionCreateRouteSchema = {
+export const ecDecisionRecordRouteSchema = {
   tags: ["Membership"],
-  summary: "Record an EC decision on behalf of an EC member (staff override)",
-  description: "Fallback for exceptional access cases; written to audit_log with actor and reason.",
+  "x-pkic-auth": { required: true },
+  summary: "Record an Executive Council decision",
+  description:
+    "An Executive Council member records their own decision by omitting ecMemberUserId. Staff with membership:approve may name an EC member only as an exceptional override. Both paths use the same application decision resource and audit trail.",
   request: {
     params: z.object({ id: z.string() }),
-    body: { content: { "application/json": { schema: staffEcDecisionCreateSchema } }, required: true },
+    body: { content: { "application/json": { schema: ecDecisionRecordSchema } }, required: true },
   },
   responses: {
     "201": {
       description: "Decision recorded.",
-      content: { "application/json": { schema: staffEcDecisionCreateResponseSchema } },
+      content: { "application/json": { schema: ecDecisionRecordResponseSchema } },
     },
+    "403": { description: "EC membership or membership:approve permission required." },
     "404": { description: "Application not found." },
     "409": { description: "Application is not currently in EC review." },
     "400": { description: "Missing required reason for a decline." },

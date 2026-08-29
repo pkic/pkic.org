@@ -31,6 +31,8 @@ function isSensitiveArchitecturePath(pathname: string): boolean {
     pathname.startsWith("/api/v1/scheduler/") ||
     pathname.startsWith("/api/v1/permissions/") ||
     /^\/api\/v1\/proposals\/[^/]+(?:\/|$)/.test(pathname) ||
+    pathname === "/api/v1/users/current" ||
+    pathname.startsWith("/api/v1/users/current/") ||
     pathname === "/api/v1/roles" ||
     pathname.startsWith("/api/v1/roles/") ||
     /^\/api\/v1\/users\/[^/]+\/roles(?:\/|$)/.test(pathname) ||

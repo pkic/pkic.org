@@ -27,7 +27,10 @@ import {
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { prepareOrganizationContentReviewNotificationIntents } from "./notifications";
-import type { MyOrganizationReviewsListQuery } from "../../../../assets/shared/schemas/me";
+import type { OrganizationContentReviewsListQuery } from "../../../../assets/shared/schemas/organization-self-service";
+import { prepareOrganizationRepresentativeManagementGuard } from "../organization-representations/authorization";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { prepareAuditLogAfterOneChange } from "../audit";
 
 export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMember) {
   if (!member.organizationId) {
@@ -94,6 +97,11 @@ export async function submitOrgContentChange(
   const proposedChangesJson = JSON.stringify(changedFields);
   try {
     await db.batch([
+      prepareOrganizationRepresentativeManagementGuard(db, {
+        memberId: member.memberId,
+        actorUserId: member.userId,
+        staffAuthorized: false,
+      }),
       db
         .prepare(
           `INSERT INTO organization_content_reviews
@@ -101,9 +109,26 @@ export async function submitOrgContentChange(
            VALUES (?, ?, ?, ?, NULL, 'pending', ?, ?)`,
         )
         .bind(id, org.id, member.userId, proposedChangesJson, now, now),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "organization_content_review_submitted",
+        "organization_content_review",
+        id,
+        { organizationId: org.id, changedFields: Object.keys(changedFields) },
+        now,
+      ),
       prepareOrganizationContentReviewNotificationIntents(db, id, org.id, member.email, reviewUrl, now),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_CONTACT_CHANGED",
+        "Organization-contact access changed while the review was being submitted",
+      );
+    }
     if (!isPendingReviewUniqueConflict(error)) throw error;
     throw new AppError(
       409,
@@ -132,7 +157,7 @@ export async function submitOrgContentChange(
 export async function listMyOrganizationReviews(
   db: DatabaseLike,
   member: AuthMember,
-  params: MyOrganizationReviewsListQuery,
+  params: OrganizationContentReviewsListQuery,
 ) {
   if (!member.organizationId) {
     throw new AppError(403, "NO_ORGANIZATION", "Your membership is not tied to an organization");
@@ -179,10 +204,24 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
 
   try {
     const statements = [
+      prepareOrganizationRepresentativeManagementGuard(db, {
+        memberId: member.memberId,
+        actorUserId: member.userId,
+        staffAuthorized: false,
+      }),
       prepareReviewTransitionGuard(db, review),
       db
         .prepare("UPDATE organization_content_reviews SET status = 'withdrawn' WHERE id = ? AND status = 'pending'")
         .bind(reviewId),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "organization_content_review_withdrawn",
+        "organization_content_review",
+        reviewId,
+        { organizationId: org.id },
+      ),
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = NULL WHERE id = ? AND logo_staging_r2_key = ?")
         .bind(org.id, review.logo_staging_r2_key),
@@ -191,6 +230,13 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
     if (deletion) statements.push(deletion);
     await db.batch(statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_CONTACT_CHANGED",
+        "Organization-contact access changed while the review was being withdrawn",
+      );
+    }
     if (!isStaleContentReviewTransition(error)) throw error;
     throw new AppError(409, "NOT_PENDING", "This review changed before it could be withdrawn");
   }
@@ -218,10 +264,25 @@ export async function prepareAuthorizedOrganizationLogoStage(
 
   if (existingPending) {
     const statements = [
+      prepareOrganizationRepresentativeManagementGuard(db, {
+        memberId: member.memberId,
+        actorUserId: member.userId,
+        staffAuthorized: false,
+      }),
       prepareReviewTransitionGuard(db, existingPending),
       db
         .prepare("UPDATE organization_content_reviews SET logo_staging_r2_key = ? WHERE id = ? AND status = 'pending'")
         .bind(r2Key, existingPending.id),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "organization_logo_review_staged",
+        "organization_content_review",
+        existingPending.id,
+        { organizationId },
+        now,
+      ),
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
         .bind(r2Key, now, organizationId),
@@ -232,6 +293,13 @@ export async function prepareAuthorizedOrganizationLogoStage(
       previousStagingKey,
       statements,
       mapCommitError(error) {
+        if (isAuthorizationGuardFailure(error)) {
+          return new AppError(
+            409,
+            "ORGANIZATION_CONTACT_CHANGED",
+            "Organization-contact access changed while the logo was being staged",
+          );
+        }
         return isStaleContentReviewTransition(error)
           ? new AppError(409, "REVIEW_CHANGED", "The pending review changed; please retry the logo upload")
           : error;
@@ -243,6 +311,11 @@ export async function prepareAuthorizedOrganizationLogoStage(
   return {
     previousStagingKey,
     statements: [
+      prepareOrganizationRepresentativeManagementGuard(db, {
+        memberId: member.memberId,
+        actorUserId: member.userId,
+        staffAuthorized: false,
+      }),
       db
         .prepare(
           `INSERT INTO organization_content_reviews
@@ -250,12 +323,29 @@ export async function prepareAuthorizedOrganizationLogoStage(
            VALUES (?, ?, ?, '{}', ?, 'pending', ?, ?)`,
         )
         .bind(reviewId, organizationId, member.userId, r2Key, now, now),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "organization_logo_review_staged",
+        "organization_content_review",
+        reviewId,
+        { organizationId },
+        now,
+      ),
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
         .bind(r2Key, now, organizationId),
       prepareOrganizationContentReviewNotificationIntents(db, reviewId, organizationId, member.email, reviewUrl, now),
     ],
     mapCommitError(error) {
+      if (isAuthorizationGuardFailure(error)) {
+        return new AppError(
+          409,
+          "ORGANIZATION_CONTACT_CHANGED",
+          "Organization-contact access changed while the logo was being staged",
+        );
+      }
       return isPendingReviewUniqueConflict(error)
         ? new AppError(409, "REVIEW_CHANGED", "A pending review was created; please retry the logo upload")
         : error;

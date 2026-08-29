@@ -15,6 +15,8 @@ import {
 } from "../../../../../assets/shared/schemas/route-contracts-organization-representations";
 import { organizationRepresentativesListResponseSchema } from "../../../../../assets/shared/schemas/organization-representation";
 import { requireOrganizationStaffPermission } from "../authorization";
+import { requireOrganizationMemberMutation } from "../authorization";
+import { addCoworker } from "../../../../_lib/services/member-organization";
 
 export const OrganizationRepresentativesList = openApiRoute(
   organizationRepresentativesListRouteSchema,
@@ -42,20 +44,33 @@ export const OrganizationRepresentativeAssociate = openApiRoute(
     const db = requestDb(c);
     let representativeId: string;
     if (data.body.kind === "email") {
-      const { staff } = await requireOrganizationStaffPermission(c, "membership:write");
-      const memberId = await resolveOrganizationMemberId(db, data.params.organizationId);
-      representativeId = await associateOrganizationRepresentativeByEmail(db, staff, {
-        memberId,
-        email: data.body.email,
-        name: data.body.name,
-        jobTitle: data.body.jobTitle,
-        links: data.body.links,
-        showOnOrganizationProfile: data.body.showOnOrganizationProfile,
-      });
+      const actor = await requireRepresentativeManagerActor(db, c.req.raw, c.env);
+      if (actor.staffAuthorized) {
+        const { staff } = await requireOrganizationStaffPermission(c, "membership:write");
+        const memberId = await resolveOrganizationMemberId(db, data.params.organizationId);
+        representativeId = await associateOrganizationRepresentativeByEmail(db, staff, {
+          memberId,
+          email: data.body.email,
+          name: data.body.name,
+          jobTitle: data.body.jobTitle,
+          links: data.body.links,
+          showOnOrganizationProfile: data.body.showOnOrganizationProfile,
+        });
+      } else {
+        const { db: guardedDb, member } = await requireOrganizationMemberMutation(c, data.params.organizationId);
+        const result = await addCoworker(guardedDb, member, {
+          email: data.body.email,
+          name: data.body.name,
+        });
+        representativeId = result.representativeId;
+      }
     } else {
       const memberId = await resolveOrganizationMemberId(db, data.params.organizationId);
       const actor = await requireRepresentativeManagerActor(db, c.req.raw, c.env);
-      representativeId = await associateOrganizationRepresentative(db, actor, {
+      const mutationDb = actor.staffAuthorized
+        ? db
+        : (await requireOrganizationMemberMutation(c, data.params.organizationId)).db;
+      representativeId = await associateOrganizationRepresentative(mutationDb, actor, {
         memberId,
         userId: data.body.userId,
         showOnOrganizationProfile: data.body.showOnOrganizationProfile,

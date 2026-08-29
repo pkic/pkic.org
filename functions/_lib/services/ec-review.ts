@@ -13,6 +13,7 @@ import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import type { DatabaseLike } from "../types";
 import type { EcDecisionValue } from "../../../assets/shared/schemas/ec-review";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 
 export type { EcDecisionValue };
@@ -42,6 +43,14 @@ export async function recordEcDecision(
     audit?: { actorType: "admin" | "member"; actorId: string; action: string };
   },
 ): Promise<EcDecisionRow> {
+  const ecMember = await first<{ id: string }>(
+    db,
+    "SELECT id FROM users WHERE id = ? AND active = 1 AND is_ec_member = 1",
+    [params.ecMemberUserId],
+  );
+  if (!ecMember) {
+    throw new AppError(422, "EC_MEMBER_REQUIRED", "The decision must be attributed to an active EC member");
+  }
   const application = await getMemberApplicationById(db, params.applicationId);
   if (!application) {
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
@@ -78,6 +87,10 @@ export async function recordEcDecision(
   };
   try {
     await db.batch([
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 FROM users WHERE id = ? AND active = 1 AND is_ec_member = 1",
+        bindings: [params.ecMemberUserId],
+      }),
       // Serialize decisions with every stage-changing command through the
       // application row. A concurrent approval changes stage/revision; a
       // decision changes revision, invalidating any approval snapshot that
@@ -108,6 +121,9 @@ export async function recordEcDecision(
       decisionStatement,
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(409, "EC_AUTHORIZATION_CHANGED", "EC decision authorization changed before commit");
+    }
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,

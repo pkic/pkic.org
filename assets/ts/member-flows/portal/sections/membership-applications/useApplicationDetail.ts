@@ -5,7 +5,7 @@ import type { MembershipApplicationDetail } from "../../../../../shared/schemas/
 import type { EcDecisionValue } from "../../../../../shared/schemas/ec-review";
 import {
   membershipApplicationDetailSchema,
-  staffEcDecisionCreateResponseSchema,
+  ecDecisionRecordResponseSchema,
   applicationApproveResponseSchema,
   applicationCommunicationCreateResponseSchema,
   applicationNoteCreateResponseSchema,
@@ -95,7 +95,7 @@ export function useApplicationDetail(applicationId: string) {
           decision: params.decision,
           reason: params.reason || undefined,
         },
-        staffEcDecisionCreateResponseSchema,
+        ecDecisionRecordResponseSchema,
       );
       toast("EC decision recorded", "success");
       await reload();
