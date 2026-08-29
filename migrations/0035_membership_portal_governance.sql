@@ -2611,6 +2611,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'analytics:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'retention:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'retention:run', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'scheduler:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'scheduler:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:grant', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'access:revoke', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'organizations:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
