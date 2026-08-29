@@ -24,7 +24,7 @@ test("a permitted staff identity uses the system audit log only through the port
   expect(retiredSystemRequests).toEqual([]);
   expect(legacyAuditRequests).toEqual([]);
 
-  await page.goto("/admin/#/auditlog");
+  await page.goto("/portal/#/system/audit-log");
   await expect(page).toHaveURL(/\/portal\/#\/system\/audit-log$/);
   await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
   expect(legacyAuditRequests).toEqual([]);

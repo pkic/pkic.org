@@ -9,7 +9,7 @@ import { issueDatabaseCapability } from "../functions/_lib/services/capability-l
 import app from "../functions/router";
 import { createGroup } from "../functions/_lib/services/groups";
 
-interface VerifyAdminPayload {
+interface VerifyUserPayload {
   token: string;
 }
 
@@ -46,9 +46,9 @@ async function seedRequiredEmailTemplates(adminId: string): Promise<void> {
   await seedTemplate(adminId, "partial_donation_request", "Donation request", "Partial: donation request");
   await seedTemplate(
     adminId,
-    "admin_magic_link",
+    "user_magic_link",
     "Click [sign in]({{magicLinkUrl}}). Expires in {{expiresInMinutes}} minutes.",
-    "Admin sign-in link",
+    "User sign-in link",
   );
   await seedTemplate(adminId, "speaker_invite", "Submit your talk: {{proposalUrl}}", "Speaker invitation");
   await seedTemplate(
@@ -151,13 +151,13 @@ describe("full workflow", () => {
         new Request("https://app.test/api/v1/auth/verify-link", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: magicToken } as VerifyAdminPayload),
+          body: JSON.stringify({ token: magicToken } as VerifyUserPayload),
         }),
       );
       expect(verifyResponse.status).toBe(200);
       await verifyResponse.json();
-      const adminSessionCookie = verifyResponse.headers.get("set-cookie") ?? "";
-      const adminSessionToken = decodeURIComponent(adminSessionCookie.match(/^pkic_session=([^;]+)/)?.[1] ?? "");
+      const staffSessionCookie = verifyResponse.headers.get("set-cookie") ?? "";
+      const staffSessionToken = decodeURIComponent(staffSessionCookie.match(/^pkic_session=([^;]+)/)?.[1] ?? "");
 
       const reviewerUserId = crypto.randomUUID();
       await env.DB.prepare(
@@ -175,7 +175,7 @@ describe("full workflow", () => {
       const speakerPreviewResponse = await app.fetch(
         new Request(`https://app.test${speakerInvitationBase}/preview`, {
           method: "POST",
-          headers: { "content-type": "application/json", cookie: adminSessionCookie },
+          headers: { "content-type": "application/json", cookie: staffSessionCookie },
           body: JSON.stringify({ invites: speakerInvites }),
         }),
         env as any,
@@ -191,7 +191,7 @@ describe("full workflow", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            cookie: adminSessionCookie,
+            cookie: staffSessionCookie,
           },
           body: JSON.stringify({
             invites: speakerInvites,
@@ -251,7 +251,7 @@ describe("full workflow", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            cookie: adminSessionCookie,
+            cookie: staffSessionCookie,
           },
           body: JSON.stringify({
             recommendation: "accept",
@@ -283,7 +283,7 @@ describe("full workflow", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            cookie: adminSessionCookie,
+            cookie: staffSessionCookie,
           },
           body: JSON.stringify({
             finalStatus: "accepted",
@@ -425,7 +425,7 @@ describe("full workflow", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: `Bearer ${adminSessionToken}`,
+            authorization: `Bearer ${staffSessionToken}`,
           },
           body: JSON.stringify({ limit: 50 }),
         }),

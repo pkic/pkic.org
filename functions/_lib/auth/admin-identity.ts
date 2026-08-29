@@ -1,5 +1,5 @@
 import { AppError } from "../errors";
-import { publicAuthAdminSchema, type PublicAuthAdmin } from "../../../assets/shared/schemas/admin-auth";
+import { publicStaffCapacitySchema, type PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { AuthAdmin, ServiceAuthAdmin, UserBackedAuthAdmin } from "../types";
 
 type UserBackedAuthAdminInput = Omit<UserBackedAuthAdmin, "identityType">;
@@ -23,8 +23,8 @@ export function adminDatabaseUserId(actor: AuthAdmin): string | null {
 }
 
 /** Explicitly maps the only admin fields that may cross a public transport boundary. */
-export function publicAuthAdmin(actor: AuthAdmin): PublicAuthAdmin {
-  return publicAuthAdminSchema.parse({
+export function publicStaffCapacity(actor: AuthAdmin): PublicStaffCapacity {
+  return publicStaffCapacitySchema.parse({
     id: actor.id,
     email: actor.email,
     role: actor.role,

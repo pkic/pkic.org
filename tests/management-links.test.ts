@@ -4,15 +4,6 @@ import { buildManagementLink } from "../functions/_lib/services/management-links
 describe("semantic management links", () => {
   const appBaseUrl = "https://app.test";
 
-  it("builds the current admin sign-in URL without duplicating query handling", () => {
-    expect(
-      buildManagementLink(appBaseUrl, {
-        kind: "admin-sign-in",
-        token: "capability-token",
-      }),
-    ).toBe("https://app.test/admin/?token=capability-token");
-  });
-
   it("builds current hash destinations for global management queues", () => {
     expect(buildManagementLink(appBaseUrl, { kind: "organization-content-reviews" })).toBe(
       "https://app.test/portal/#/system/organization-content-reviews",
@@ -30,12 +21,12 @@ describe("semantic management links", () => {
     expect(
       buildManagementLink(appBaseUrl, {
         kind: "mcp-oauth",
-        returnTo: "/api/v1/oauth/authorize?client_id=client-1",
+        returnTo: "/api/v1/auth/oauth/authorize?client_id=client-1",
         token: "oauth-token",
         error: "denied",
       }),
     ).toBe(
-      "https://app.test/admin/?flow=mcp-oauth&return_to=%2Fapi%2Fv1%2Foauth%2Fauthorize%3Fclient_id%3Dclient-1&token=oauth-token&error=denied",
+      "https://app.test/portal/#/auth/oauth?return_to=%2Fapi%2Fv1%2Fauth%2Foauth%2Fauthorize%3Fclient_id%3Dclient-1&token=oauth-token&error=denied",
     );
   });
 });

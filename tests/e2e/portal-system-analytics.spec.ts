@@ -27,7 +27,7 @@ test("permitted staff use focused platform analytics through the System portal",
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics\/donations$/);
   await expect(page.getByText("Total Gross (USD)", { exact: true })).toBeVisible();
 
-  await page.goto("/admin/#/stats/registrations");
+  await page.goto("/portal/#/system/analytics");
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics$/);
   await expect(page.getByRole("heading", { name: "System Analytics" })).toBeVisible();
 

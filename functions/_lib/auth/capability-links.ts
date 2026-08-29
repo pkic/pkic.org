@@ -206,7 +206,6 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
     case "member_join_apply":
     case "user_sign_in":
     case "sponsor_sign_in":
-    case "mcp_oauth_sign_in":
       throw new Error("Stateless capabilities do not have a database secret query");
   }
 }

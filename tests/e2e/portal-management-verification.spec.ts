@@ -1,16 +1,16 @@
 /**
  * E2E coverage for: a real-browser verification pass on
- * "built but never browser-verified" admin screens — these all shipped with
+ * permission-scoped management screens that previously lacked complete
  * API/test-level verification only (per their own phase status notes), and
  * this phase's job is only to confirm they actually work end-to-end in a
  * real browser, not to build anything new.
  *
- * Screens covered include the remaining sponsorship/event/user admin views,
+ * Screens covered include sponsorship, event, and user management views,
  * portal System content review, and canonical group Votes/Proposals management
  * (2026-07-27 follow-up).
  *
  * Fixture data (an approved org member, an approved individual member) goes
- * through the real public/admin application APIs exactly like
+ * through the real public and permission-scoped application APIs exactly like
  * votes-and-sponsor.spec.ts and sponsor-workspace.spec.ts already do for their
  * own fixtures — an application is created via the public endpoint, walked
  * through its real stage transitions by the signed-in admin, and approved,
@@ -18,7 +18,7 @@
  * real via the portal's magic-link flow to produce the content-review and
  * vote-proposal submissions that the canonical portal workflows moderate.
  *
- * Admin auth happens exactly once for the whole file (`beforeAll`, saved as
+ * Staff authentication happens exactly once for the whole file (`beforeAll`, saved as
  * `storageState` and reused by every test) rather than per-test: the local
  * env's EMAIL_RATE_LIMITER allows only 3 magic-link requests per 60s per
  * address (wrangler.jsonc), and 8 independent sign-ins for the same
@@ -37,8 +37,8 @@ import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-aut
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
-const ADMIN_AUTH_FILE = path.join("test-results", "admin-verification-auth.json");
-const ADMIN_EMAIL = e2eAdminEmail("admin-verification");
+const ADMIN_AUTH_FILE = path.join("test-results", "portal-management-verification-auth.json");
+const ADMIN_EMAIL = e2eAdminEmail("portal-management-verification");
 
 function sendgridServer(): string {
   return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
@@ -190,6 +190,11 @@ test.describe("Admin browser-verification pass", () => {
 
   test.use({ storageState: ADMIN_AUTH_FILE });
 
+  test("does not retain duplicate admin or sponsor portal shells", async ({ request }) => {
+    expect((await request.get("/admin/")).status()).toBe(404);
+    expect((await request.get("/sponsor-portal/")).status()).toBe(404);
+  });
+
   test("votes: create a vote via the group portal and manage its visibility/ballots", async ({ page }) => {
     const groupId = "20000000-0000-4000-8000-000000000001";
     const title = `E2E Admin-created Vote ${Date.now()}`;
@@ -222,10 +227,10 @@ test.describe("Admin browser-verification pass", () => {
   test("vote proposals: a real member submission is moderated (reject guard + approve bypass)", async ({ page }) => {
     const groupId = "20000000-0000-4000-8000-000000000001";
     // page.evaluate needs a real document loaded first — storageState
-    // restores the admin session cookie, but a brand-new page starts on
+    // restores the staff session cookie, but a brand-new page starts on
     // about:blank, where relative-URL fetches have nothing to resolve
     // against.
-    await page.goto("/admin/");
+    await page.goto("/portal/");
     await expectStaffSessionLanding(page);
 
     // Member proposal submission requires the owning group's canonical
@@ -359,7 +364,7 @@ test.describe("Admin browser-verification pass", () => {
   test("sponsor tiers: add a tier on the real seeded event and confirm it persists", async ({ page }) => {
     const tierName = `E2E Verify Tier ${Date.now()}`;
 
-    await page.goto(`/admin/#/events/${EVENT_SLUG}/settings/sponsor-tiers`);
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/sponsor-tiers`);
     await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "+ Add tier" }).click();
@@ -399,7 +404,7 @@ test.describe("Admin browser-verification pass", () => {
       }
     });
 
-    await page.goto(`/admin/#/events/${EVENT_SLUG}/settings/team`);
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);
     await expect(page.getByText("Add team member", { exact: true })).toBeVisible({ timeout: 15_000 });
 
     const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Add", exact: true }) });
@@ -445,7 +450,7 @@ test.describe("Admin browser-verification pass", () => {
         new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/promoters` &&
         response.request().method() === "GET",
     );
-    await page.goto(`/admin/#/events/${EVENT_SLUG}/promoters`);
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/promoters`);
     expect((await loaded).status()).toBe(200);
     await expect(page.getByText(/Active Promoters|No promoter activity yet/).first()).toBeVisible({ timeout: 15_000 });
     expect(legacyRequests).toEqual([]);
@@ -465,7 +470,7 @@ test.describe("Admin browser-verification pass", () => {
         new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/analytics` &&
         response.request().method() === "GET",
     );
-    await page.goto(`/admin/#/events/${EVENT_SLUG}/stats`);
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/stats`);
     expect((await loaded).status()).toBe(200);
     await expect(page.getByRole("heading", { name: "Event dashboard" })).toBeVisible({ timeout: 15_000 });
     expect(legacyRequests).toEqual([]);
@@ -488,7 +493,7 @@ test.describe("Admin browser-verification pass", () => {
         new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/registrations` &&
         response.request().method() === "GET",
     );
-    await page.goto(`/admin/#/events/${EVENT_SLUG}/registrations`);
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations`);
     expect((await loaded).status()).toBe(200);
     await expect(page.getByRole("button", { name: "Run waitlist promotions" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: "Download CSV" })).toBeVisible();
@@ -508,7 +513,7 @@ test.describe("Admin browser-verification pass", () => {
       }
     });
 
-    await page.goto("/admin/");
+    await page.goto("/portal/");
     await expectStaffSessionLanding(page);
     const staffCookies = await page.context().cookies();
 
@@ -566,7 +571,7 @@ test.describe("Admin browser-verification pass", () => {
     ).toBe(true);
     expect(legacyRequests).toEqual([]);
 
-    await page.goto("/admin/#/organizations/content-reviews");
+    await page.goto("/portal/#/system/organization-content-reviews");
     await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
     await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
     expect(legacyRequests).toEqual([]);
@@ -578,7 +583,7 @@ test.describe("Admin browser-verification pass", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
-    await page.goto("/admin/");
+    await page.goto("/portal/");
     await expectStaffSessionLanding(page);
 
     const stamp = Date.now();
@@ -591,7 +596,7 @@ test.describe("Admin browser-verification pass", () => {
       orgName: `E2E Users Org ${stamp}`,
     });
 
-    await page.goto("/admin/#/users");
+    await page.goto("/portal/#/system/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
     await page.getByPlaceholder("email or name").press("Enter");
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
@@ -629,7 +634,7 @@ test.describe("Admin browser-verification pass", () => {
       }
     });
     page.on("dialog", (d) => d.accept());
-    await page.goto("/admin/");
+    await page.goto("/portal/");
     await expectStaffSessionLanding(page);
     const staffCookies = await page.context().cookies();
 

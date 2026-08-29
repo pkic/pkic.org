@@ -3322,6 +3322,14 @@ As part of our transition to the new PKI Consortium member portal, an account ha
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
+-- Human authentication now uses one portal session and one user sign-in
+-- template. Preserve the legacy version for historical outbox rendering, but
+-- prevent it from appearing as an active alternative authentication flow.
+UPDATE email_template_versions
+SET status = 'archived'
+WHERE template_key = 'admin_magic_link'
+  AND status = 'active';
+
 -- Section: Secondary email addresses
 --
 -- Follow-up to a real, visible problem from the YAML->D1 migration:

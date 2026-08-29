@@ -1,6 +1,6 @@
 export const E2E_ADMIN_SCOPES: readonly [
   "default",
-  "admin-verification",
+  "portal-management-verification",
   "browser-auth",
   "browser-presentation",
   "browser-waitlist",

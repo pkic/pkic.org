@@ -59,7 +59,7 @@ test("permitted staff manage the public leadership roster through the System por
   expect((await deleteResponse).status()).toBe(200);
   await expect(position).toHaveCount(0);
 
-  await page.goto("/admin/#/leadership");
+  await page.goto("/portal/#/system/leadership");
   await expect(page).toHaveURL(/\/portal\/#\/system\/leadership$/);
   await expect(page.getByRole("link", { name: "Leadership" })).toBeVisible();
 

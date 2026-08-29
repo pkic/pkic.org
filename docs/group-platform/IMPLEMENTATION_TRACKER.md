@@ -789,9 +789,9 @@ Status: In progress
       group manager creating, editing, and archiving a list. It asserts
       POST/PATCH/DELETE and management-list GET requests stay under
       `/api/v1/groups/:groupId/mailing-lists` and never call `/api/v1/admin/*`.
-      Old bookmarks retain a single redirect to the selected-group portal;
+      Retired admin bookmarks return 404 rather than retaining a second shell;
       provider synchronization remains owned by the scheduled service rather
-      than an orphaned UI endpoint. A focused frontend test covers that redirect.
+      than an orphaned UI endpoint.
       The focused Playwright run passes against the real local Worker, migrated
       D1 state, and intercepted sign-in email.
 - [x] Add /api/v1/groups/:groupId/meetings/series routes.
@@ -938,7 +938,7 @@ Status: In progress
       and managers can use the same group-scoped proposal list with only the
       actions advertised by the backend. The duplicate admin Votes navigation,
       components, and `/api/v1/admin/votes/**` compatibility API are removed,
-      while the old browser URL redirects to the portal. Vote creation,
+      while the retired admin browser URL returns 404. Vote creation,
       settings, visibility, and identifiable-ballot audit now use only the
       selected-group contracts; the unused global vote inventory contract and
       read model are deleted. The unused global
@@ -1002,9 +1002,9 @@ Status: In progress
       its persisted owner, source mode, registration policy, invite limit, link,
       and location.
       Mailing-list management has equivalent browser coverage for staff-only
-      group create/edit/archive, exact group-scoped API paths, no admin API
-      fallback. A focused frontend test covers the legacy admin bookmark
-      redirect. The old global mailing-list CRUD surface is intentionally
+      group create/edit/archive, exact group-scoped API paths, and no admin API
+      fallback. The retired admin bookmark returns 404. The old global
+      mailing-list CRUD surface is intentionally
       removed; scheduled Google Groups synchronization remains a backend-owned
       job. The focused Playwright run passes against the real local Worker,
       migrated D1 state, and intercepted sign-in email.
@@ -1043,7 +1043,7 @@ Status: In progress
       Account Settings is now a capacity-aware portal destination for staff,
       members, and dual-capacity users; staff-only users do not call member
       notification APIs. The duplicate admin view and navigation item are gone,
-      and the former admin hash route redirects to the portal.
+      and the former admin hash route returns 404.
       Event registration setup now also belongs to the selected-group portal.
       A group manager can keep registration disabled, enable registration with
       no custom questions, select an existing group-owned attendee form through
@@ -1106,8 +1106,8 @@ Status: In progress
       The unreleased consolidated migration includes the query-plan-verified
       event/type/created index. The obsolete admin-only bulk form, invitation
       list, resend/revoke handlers, route contracts, and event-detail tabs are
-      removed. Old attendee and speaker invitation bookmarks redirect to the
-      selected-group portal instead of retaining a second consumer. Real
+      removed. Old attendee and speaker invitation bookmarks return 404;
+      canonical management links target the selected-group portal directly. Real
       Worker/D1 browser journeys create, preview, send, search, resend, and
       revoke attendee and speaker invitations without an admin API request.
       Focused tests cover the corresponding speaker lifecycle, large-list
@@ -1219,13 +1219,13 @@ Status: In progress
       portal destination. Its schema, service, and API moved rather than being
       copied to a System API namespace: the canonical domain endpoint is
       `/api/v1/audit-log`; the old admin handler and component are removed,
-      while the old hash URL is only a bookmark redirect. The
+      while the old hash URL returns 404. The
       canonical endpoint recomputes live user-backed staff permissions and
       requires a global `audit:read` grant. The shared collection controller
       keeps search, open-ended exact actor/entity/action filters, allowlisted
       sorting, counting, and pagination in D1. Mounted tests cover global and
       contextual permission separation plus removal of the old API, and a real
-      Worker/D1 browser journey proves the portal path and redirect make no
+      Worker/D1 browser journey proves the portal path makes no
       legacy audit request, including no `/api/v1/system/audit-log` request.
       Organization-content moderation is the second
       permission-derived System destination. One neutral shared schema now owns
@@ -1237,12 +1237,12 @@ Status: In progress
       Search, status, sorting, counting, and pagination remain in D1, and the
       existing atomic moderation service records an attributable user-backed
       reviewer. The old admin component, API handlers, route mounts, service
-      adapter, and transport aliases are removed. Notification links and old
-      bookmarks lead to the portal rather than retaining a second consumer.
+      adapter, and transport aliases are removed. Notification links target the
+      portal directly; retired admin bookmarks return 404.
       Mounted backend and frontend tests prove permission boundaries, decision
       behavior, schema validation, D1 filtering, error and empty rendering, and
       absence of admin API requests. A real Worker/D1 browser journey completes
-      a review through the portal and verifies the old bookmark redirect.
+      a review through the portal and verifies the retired admin URL returns 404.
       Membership-application review is the third permission-derived System
       destination. Neutral shared schemas and the canonical membership service
       now drive `/api/v1/members/applications`; the former System API route and old admin route,
@@ -1252,7 +1252,8 @@ Status: In progress
       permissions from a live user-backed session. The joined D1 query owns
       category-label search, allowlisted sorting, counting, and pagination, and
       the portal editor consumes the D1-backed category catalog and labels.
-      Notification links and old bookmarks lead to the portal. Mounted backend
+      Notification links target the portal directly; retired admin bookmarks
+      return 404. Mounted backend
       and frontend tests cover permission separation, API-key rejection,
       category labels, D1 filtering, route removal, capability-derived controls,
       and absence of legacy requests. A real Worker/D1 browser journey verifies
@@ -1263,8 +1264,8 @@ Status: In progress
       domain APIs are `/api/v1/membership/settings` and the
       `/api/v1/membership/categories` collection and
       `/:categoryCode` mutation contracts; the old
-      admin component and API are removed, and the old bookmark only redirects
-      to `/portal/#/system/membership-settings`. Reads and writes recheck live
+      admin component and API are removed, and the old bookmark returns 404.
+      Reads and writes recheck live
       `membership:read` and `membership:write` authority, mutations record the
       user-backed actor, and revision compare-and-swap guards prevent stale
       overwrites. `membership_categories.is_voting` is the single mutable D1
@@ -1276,8 +1277,7 @@ Status: In progress
       deletion, and merging are deliberately deferred because those operations
       require a separate destructive-data design. A real Worker/D1 browser
       journey changes workflow settings and category metadata through the
-      portal, persists both changes, and proves the legacy bookmark does not
-      call the removed admin endpoint.
+      portal, persists both changes, and observes no removed admin request.
       The singleton membership-application form is managed in that portal
       destination but remains a domain API, not a System API:
       `/api/v1/members/applications/form/definition` is the sole staff
@@ -1321,7 +1321,7 @@ Status: In progress
       version instead of relying on process-local cache state, so activation is
       immediately consistent across Worker isolates. The former admin API and
       editor are removed rather than retained as a second consumer; the old
-      bookmark is only a portal redirect, while the still-temporary event-email
+      bookmark returns 404, while the still-temporary event-email
       editor consumes the canonical System catalog. Mounted route, concurrency,
       rollback, contract, permission, frontend, and real Worker/D1 browser
       regressions provide the cutover evidence.
@@ -1345,12 +1345,12 @@ Status: In progress
       now use the same live authorization and exact-target guards. Mounted
       backend, migration, concurrency, permission, frontend, and browser tests
       cover the canonical routes, revoke-only inspection, role management,
-      route removal, redirect, and absence of legacy API requests.
+      route removal, and absence of legacy API requests.
       Global Board and Executive Council leadership is the seventh
       permission-derived System destination. The dated roster editor and route
       handlers moved rather than being copied to
       `/api/v1/leadership/positions`; the former System route mount and handler
-      sources are removed, and the old bookmark is only a portal redirect. One
+      sources are removed, and the old bookmark returns 404. One
       neutral schema and service remain the source of truth for
       the System editor and public leadership projection. User-backed staff
       holding either the live global `access:grant` or `access:revoke`
@@ -1361,7 +1361,7 @@ Status: In progress
       rather than introducing another user lookup. Mounted backend, OpenAPI,
       permission, frontend, public-roster, and real Worker/D1 browser tests
       cover exact capability separation, route removal, public projection,
-      redirect behavior, and absence of legacy API requests.
+      and absence of legacy API requests.
       Analytics appears in the portal's System interface grouping, but System
       is not an API namespace: three neutral, focused contracts and D1
       services serve the overview, registration, and donation projections
@@ -1373,7 +1373,7 @@ Status: In progress
       the email screen reuses the canonical outbox summary instead of issuing
       an unrelated statistics request. The duplicate Dashboard and Stats
       consumers are removed from the admin shell, and their old bookmarks
-      redirect to `/portal/#/system/analytics`. Mounted contract, permission,
+      return 404. Mounted contract, permission,
       section-isolation, query-plan, frontend, escaping, and real Worker/D1
       browser regressions cover the domain path and the retired
       `/api/v1/system/analytics` namespace. The compatibility
@@ -1393,7 +1393,7 @@ Status: In progress
       request. Search, status filtering, allowlisted sorting, counting, and
       pagination remain in D1. The former admin donation UI, API handlers,
       route mount, and admin-prefixed schema are removed rather than retained
-      as a second implementation; old bookmarks only redirect to the portal.
+      as a second implementation; old bookmarks return 404.
       Mounted permission, revocation-race, contract, frontend, and focused real
       Worker/D1 browser tests cover the canonical paths and prove no legacy
       donation request is made. This closes the donation slice only; complete
@@ -1415,7 +1415,7 @@ Status: In progress
       now manageable without a migration. The former admin sponsorship UI,
       API mount and handlers, and admin-prefixed schema/read-model names are
       removed rather than retained as a second implementation; semantic
-      notification links and old bookmarks lead to `/portal/#/sponsors`.
+      notification links lead to `/portal/#/sponsors`; old bookmarks return 404.
       Sponsor access capabilities redeem through `/api/v1/auth/verify-link`
       into the same `pkic_session` used by every portal identity. Live sponsor
       capacities are included by `/api/v1/auth/session` and re-derived from
@@ -1424,7 +1424,7 @@ Status: In progress
       Focused mounted
       backend and frontend tests cover permission separation, API-key denial,
       revocation-before-commit rollback, neutral contracts, tier management,
-      redirects, and absence of legacy sponsorship requests. The independent
+      retired-route behavior, and absence of legacy sponsorship requests. The independent
       real Worker/D1 browser journey creates and advances a sponsorship through
       the portal and observes canonical API traffic without a legacy request.
       Event-specific sponsor attendee-data entitlements use the canonical
@@ -1462,12 +1462,12 @@ Status: In progress
       canonical `/api/v1/calendar/rsvp` resource and the generic
       `/api/v1/internal` router is removed. Existing calendar UIDs and signed
       RSVP email addresses remain unchanged, so replies from already-issued
-      calendar files continue through the same ingestion service. Old
-      bookmarks redirect to the portal. Mounted
+      calendar files continue through the same ingestion service. Old admin
+      bookmarks return 404. Mounted
       permission, revocation, audit, reset-isolation, concurrency, schema,
       frontend, cache-policy, and route-removal regressions cover the cutover;
       the focused real Worker/D1 browser journey also verifies canonical
-      traffic and the legacy bookmark redirect.
+      traffic and retired-route behavior.
       Organization directory and profile management now also appears under
       the portal's System navigation while retaining the canonical domain API
       `/api/v1/organizations`. System is an interface grouping, not an
@@ -1488,12 +1488,12 @@ Status: In progress
       Every mutation repeats its live permission and exact state predicates in
       the same D1 batch as the write and attributed audit record. The former
       admin Organization components, API handlers, route mount, and
-      admin-prefixed schema/service aliases are removed; old bookmarks only
-      redirect to the portal. Mounted permission, API-key denial,
+      admin-prefixed schema/service aliases are removed; old bookmarks return
+      404. Mounted permission, API-key denial,
       revocation-race, revision-race, contract, query-plan, profile-contact,
       and frontend tests cover the cutover. A focused real Worker/D1 browser
       journey creates an organization, adds a representative, verifies the
-      legacy bookmark redirect, and observes no legacy organization request.
+      retired admin URL returns 404, and observes no legacy organization request.
       User and membership-capacity management now also appears under the
       portal's System navigation while retaining domain APIs:
       `/api/v1/users` owns account records, email aliases, headshots, access
@@ -1514,12 +1514,12 @@ Status: In progress
       state in the same D1 batch as the write and audit record. Canonical user
       responses do not expose R2 storage keys. The former admin Users and
       Members components, API handlers, route mounts, and admin-prefixed schema
-      and service names are removed; old bookmarks only redirect to the portal.
+      and service names are removed; old bookmarks return 404.
       Mounted authorization, API-key denial, lifecycle-race, query-plan,
       storage-compensation, contract, and frontend tests cover the cutover. A
       focused real Worker/D1 browser journey updates a user through the portal,
-      verifies persistence and the legacy bookmark redirect, and observes no
-      legacy Users or Members request.
+      verifies persistence, confirms the retired admin URL returns 404, and
+      observes no legacy Users or Members request.
       The public current-headshot transport is also nested under its owning
       user resource at `/api/v1/users/:userId/headshots/:file`. The former
       standalone `/api/v1/headshots` router is removed without an alias, while
@@ -1564,7 +1564,7 @@ Status: In progress
       `forms:write` or contextual `events:write` authorization in the same D1
       batch as the write and audit record. The former admin Forms components,
       handlers, route mounts, and admin-prefixed contracts are removed; the
-      old bookmark redirects to the portal without retaining an API alias.
+      old bookmark returns 404 without retaining an API alias.
       Mounted ownership, permission, revocation-race, placement, submission,
       statistics, public-contract, OpenAPI, frontend, and route-removal tests
       cover the cutover. A real Worker/D1 browser journey creates and updates a
@@ -1574,14 +1574,19 @@ Status: In progress
       still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
-      used by admin sign-in, MCP OAuth, membership due work, organization content
-      review, sponsorship inquiries, checkout processing, and renewal due work.
-      Destinations that still require the admin application remain explicit in
-      that adapter and can move to portal routes without changing email or job
-      business logic. Persisted URLs in already-applied D1 templates are called
-      out separately in ARCHITECTURE.md.
-- [ ] Add temporary legacy redirects where needed.
-- [ ] Remove the admin shell and its separate navigation.
+      used by MCP OAuth, membership due work, organization content review,
+      sponsorship inquiries, checkout processing, and renewal due work. Every
+      destination now resolves directly to the portal; the adapter contains no
+      admin sign-in or admin-shell path. The consolidated migration is
+      unapplied and archives the obsolete admin magic-link template.
+- [x] Remove temporary legacy redirects rather than retaining them.
+      Evidence: the application is unreleased and is its only API/UI consumer,
+      so `/admin/` and `/sponsor-portal/` return 404. Canonical notification,
+      scheduled-work, sponsor, and OAuth links target `/portal/` directly.
+- [x] Remove the admin shell and its separate navigation.
+      Evidence: the admin Hugo content, layout, loader entry, redirect bundle,
+      navigation, and frontend tests are deleted. One portal application renders
+      staff, member, sponsor, and MCP authorization views from live capacities.
 - [x] Remove duplicate admin and member session assumptions.
       Evidence: `/api/v1/auth/request-link`, `/verify-link`, `/session`, and
       `/logout` are the only human authentication routes. Magic links and
@@ -1590,16 +1595,21 @@ Status: In progress
       request, so loss of one capacity does not invent or preserve a separate
       identity session. The former `/api/v1/admin/auth/*`,
       `/api/v1/auth/member/*`, and `/api/v1/auth/portal/*` handlers, schemas,
-      cookies, JWT types, and services are removed. A dedicated signed MCP
-      session and the explicit service API key remain machine transports, not
-      alternate human sessions. One neutral request-scoped D1 middleware
+      cookies, JWT types, and services are removed. MCP OAuth approval now uses
+      the same portal session and canonical magic-link verification endpoint;
+      the resulting scoped MCP access token and explicit service API key remain
+      machine transports, not alternate human sessions. One neutral request-scoped D1 middleware
       authenticates staff on primary D1, applies causal read bookmarks, uses
       `first-primary` for writes, and rotates the already verified user or MCP
       token without a redundant replica session lookup. Focused tests cover
       staff-only, member-only, and combined capacities, retired routes,
       rejection of a validly signed legacy human JWT, live revocation and
       expiry, D1 bookmark rotation, passkeys, and email-change invalidation.
-- [ ] Remove legacy admin API routes after canonical consumers migrate.
+- [x] Remove legacy admin API routes after canonical consumers migrate.
+      Evidence: no tracked `/api/v1/admin` handler or router remains, the root
+      router has no admin mount, and the generated OpenAPI document contains no
+      admin-prefixed operation. Domain and group APIs are the only mounted
+      implementations; retired paths are covered as 404s rather than aliases.
 - [x] Browser-test member, chair, inherited leader, local-only leader, staff,
       guest, and unauthorized navigation.
       Evidence: one real Worker/D1 journey provisions an approved member, a
@@ -1784,8 +1794,8 @@ Status: In progress
       final decision, and reads the resulting audit history without an admin API
       fallback. The global audit-log journey signs in through the neutral
       portal flow, renders D1 audit data through the canonical audit-log API, and
-      proves both direct portal navigation and the old admin bookmark redirect
-      make no request to the removed admin audit endpoint.
+      proves direct portal navigation makes no request to the removed admin
+      audit endpoint; retired admin pages now return 404.
       The current seven-test browser checkpoint also covers membership-setting
       and category updates, canonical group vote creation, member proposal
       submission and moderation, waitlist transitions, and both portal and
@@ -1796,8 +1806,8 @@ Status: In progress
       and self-management URLs. The System Leadership round also
       signs in with real user-backed authority, creates and removes a Board
       position through the canonical portal API, verifies the public roster,
-      follows the legacy bookmark redirect, and proves that no removed admin
-      endpoint is requested. The proposal-moderation browser journey now uses
+      verifies the retired admin URL returns 404, and proves that no removed
+      admin endpoint is requested. The proposal-moderation browser journey now uses
       an exact action-bearing row locator so the expanded detail row cannot be
       mistaken for its parent proposal row. In the current browser checkpoint,
       51 of 52 tests passed in one freshly seeded Worker/D1 run; the remaining
@@ -1810,11 +1820,11 @@ Status: In progress
       production control.
       The affected System Analytics and membership-join browser journeys pass
       together in a focused three-test run, including all three focused
-      analytics endpoints and the legacy bookmark redirect.
+      analytics endpoints.
       A focused real Worker/D1 donation journey signs in through the portal,
-      reads the canonical donation list, detail, and promoter views, follows a
-      legacy bookmark redirect, and asserts that no removed admin donation API
-      is requested. Stripe remains mocked and SendGrid remains intercepted.
+      reads the canonical donation list, detail, and promoter views, confirms
+      the retired admin URL returns 404, and asserts that no removed admin
+      donation API is requested. Stripe remains mocked and SendGrid remains intercepted.
 - [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
       Current evidence: all 52 browser tests pass in one uninterrupted
@@ -1893,20 +1903,16 @@ Status: In progress
       additive migration strategy, and no-production-data rule agree with the
       accepted architecture and their focused evidence above. The final whole-
       PR security scan and remediation close the only validated finding in the
-      committed range. The audit also confirms that implementation is not yet
-      complete. The shared resource evaluator covers the canonical group form,
-      event, vote, and mailing-list paths, but legacy global/admin domain
-      endpoints remain. The admin shell still exposes Events, and the admin
-      router still mounts the event and proposal compatibility routes.
-      Ownerless/global event actions and the
-      remaining proposal adapter therefore still require deliberate
-      portal/domain cutovers or explicit retirement.
-      Temporary redirects, compatibility API removal, and final shell removal
-      remain the concrete differences from the accepted Portal and API completion
-      requirements. Migration 0035 remains consolidated and locally
+      committed range. The shared resource evaluator covers the canonical group
+      form, event, vote, and mailing-list paths. Subsequent vertical slices
+      removed the remaining admin event, proposal, and global APIs, and the
+      single-portal authentication slice removed the last admin and sponsor
+      HTML shells without compatibility redirects. Ownerless/global event
+      actions remain deliberately excluded in favor of group-owned creation.
+      Migration 0035 remains consolidated and locally
       verified, but its preview and production ledger state must be reverified
-      at handoff. The open §8 and §10 items above are the authoritative
-      remaining architecture work; completing this audit does not close them.
+      at handoff. The remaining unchecked tracker items are the authoritative
+      completion scope; this historical audit is not current completion proof.
 
 ## 12. Pull-request handoff
 
@@ -1952,8 +1958,8 @@ The final PR description must include, at minimum:
   proposal, notification, concern, and statistics eligibility changes
   immediately;
 - verify the retired `/api/v1/admin/membership-settings` and
-  `/api/v1/system/membership-settings` routes return 404, while the old admin
-  bookmark redirects without making a legacy API request;
+  `/api/v1/system/membership-settings` routes and the old admin bookmark return
+  404;
 - inspect the complete membership-application definition with
   `membership:read`, edit its title and dynamic questions with
   `membership:write`, and confirm the public join form reflects the change
@@ -1977,8 +1983,7 @@ The final PR description must include, at minimum:
   confirm one coherent version wins, only one version is active, and failed
   writes leave neither partial state nor an audit record;
 - verify `/api/v1/admin/email-templates` and its nested paths return 404 and the
-  old `/admin/#/email/templates` bookmark redirects without making a legacy API
-  request;
+  old `/admin/#/email/templates` bookmark also returns 404;
 - inspect Access Control with separate `access:grant`-only and
   `access:revoke`-only staff identities, confirming each mutation control is
   shown only for its exact permission;
@@ -1990,8 +1995,7 @@ The final PR description must include, at minimum:
   leaves the target's authority and session unchanged;
 - verify `/api/v1/admin/access-grants`, `/api/v1/admin/roles`, and nested admin
   user-role paths return 404 for an authenticated operator, and the old
-  `/admin/#/access-control` bookmark redirects without making a legacy API
-  request;
+  `/admin/#/access-control` bookmark also returns 404;
 - inspect the global leadership roster with separate `access:grant`-only and
   `access:revoke`-only staff identities, confirming add/edit and remove controls
   appear only for their exact permission;
@@ -1999,9 +2003,8 @@ The final PR description must include, at minimum:
   positions, with and without an organization affiliation, and confirm the
   public roster displays the same current and historical state;
 - verify `/api/v1/system/leadership-positions`, `/api/v1/admin/leadership-positions`,
-  and their nested paths return 404,
-  and the old `/admin/#/leadership` bookmark redirects without making a legacy
-  API request;
+  and their nested paths return 404, and the old `/admin/#/leadership`
+  bookmark also returns 404;
 - inspect the System Analytics overview with an `analytics:read` staff user and
   confirm an unrelated global permission, API key, and unauthenticated request
   cannot read it;
@@ -2009,8 +2012,8 @@ The final PR description must include, at minimum:
   calls only its matching `/api/v1/analytics` endpoint, and verify the
   displayed totals, trends, top events, and donation periods against seeded D1
   data;
-- verify `/admin/`, `/admin/#/dashboard`, and `/admin/#/stats` redirect to
-  `/portal/#/system/analytics` without a production frontend request to
+- verify `/admin/`, `/admin/#/dashboard`, and `/admin/#/stats` return 404 and
+  direct `/portal/#/system/analytics` navigation makes no request to
   `/api/v1/admin/stats`;
 - inspect Donations with a `donations:read` staff user and confirm an unrelated
   permission, API key, and unauthenticated request cannot read the resource;
@@ -2021,8 +2024,7 @@ The final PR description must include, at minimum:
   and confirm the reconciliation fails without persisting the raced update or
   its audit result;
 - verify `/api/v1/admin/donations` and nested paths return 404 and the old
-  donation and promoter bookmarks redirect without making a legacy API
-  request;
+  donation and promoter bookmarks also return 404;
 - inspect Sponsorships with a `sponsorships:read` staff user and confirm an
   unrelated permission, API key, and unauthenticated request cannot read the
   pipeline or tier-pricing catalog;
@@ -2037,7 +2039,7 @@ The final PR description must include, at minimum:
   object are not retained;
 - verify `/api/v1/sponsorship`, `/api/v1/sponsorships`,
   `/api/v1/sponsor-portal`, and `/api/v1/auth/sponsor-portal` return 404; old
-  list and detail bookmarks redirect to `/portal/#/sponsors`; and inquiry,
+  list and detail bookmarks also return 404; and inquiry,
   checkout, renewal, and activation emails contain portal management links;
 - redeem a sponsor access link through `/api/v1/auth/verify-link`, confirm only
   `pkic_session` is set, verify `/api/v1/auth/session` lists every active
@@ -2055,7 +2057,7 @@ The final PR description must include, at minimum:
   batch and confirm the command, its audit row, and queued work roll back;
 - verify `/api/v1/admin/email/outbox`, `/api/v1/admin/due-work`, and the retired
   internal email/job/reminder/retention routes return 404, while the old Email
-  and Due Work bookmarks redirect without a legacy API request;
+  and Due Work bookmarks also return 404;
 - inspect Organizations with separate `organizations:read`,
   `organizations:write`, and `membership:write` staff identities, confirming
   list/detail, profile/logo/contact, and create/representative actions appear
@@ -2068,7 +2070,7 @@ The final PR description must include, at minimum:
   representative visibility/removal from My Profile without gaining the
   global organization directory or staff-only direct-email provisioning;
 - verify `/api/v1/admin/organizations` and nested paths return 404 and the old
-  Organizations bookmark redirects without making a legacy API request;
+  Organizations bookmark also returns 404;
 - inspect Users with separate `users:read`, `users:write`, `access:grant`,
   `users:anonymize`, and `membership:write` staff identities, confirming the
   directory and every profile, email, role, anonymization, and membership
@@ -2085,9 +2087,10 @@ The final PR description must include, at minimum:
   anonymization, or permission revocation and confirm no partial capacity or
   audit state is retained;
 - verify `/api/v1/admin/users`, `/api/v1/admin/members`, and nested paths return
-  404 and the old Users bookmark redirects without making a legacy API request;
+  404 and the old Users bookmark also returns 404;
 - create, preview, send, search, resend, and revoke attendee and speaker
   invitations from the selected-group event view;
-- verify the retired admin event-invitation APIs return 404 and old attendee
-  and speaker invitation bookmarks redirect without making a legacy request;
-- verify legacy admin redirects and absence of duplicate admin workflows.
+- verify the retired admin event-invitation APIs and old attendee and speaker
+  invitation bookmarks return 404;
+- verify the admin and sponsor-specific HTML shells are absent and no duplicate
+  authentication or management workflow remains.
