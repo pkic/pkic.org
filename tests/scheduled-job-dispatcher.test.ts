@@ -191,3 +191,31 @@ describe("scheduled job dispatcher", () => {
     expect(dueWork.next_run_at).toBe("2999-06-01T00:00:00.000Z");
   });
 });
+
+describe("computed next wake", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it("sleeps until the next real deadline instead of polling, but never past the reconciliation floor", async () => {
+    const { boundedNextRunAt } = await import("../functions/_lib/services/scheduled-jobs/next-due");
+    const floorSeconds = 86_400;
+
+    // A deadline sooner than the floor wins: the job wakes when work is due.
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    expect(boundedNextRunAt(soon, floorSeconds)).toBe(soon);
+
+    // A deadline beyond the floor does not extend the sleep — the periodic
+    // pass remains the safety net if a deadline was never recorded.
+    const distant = new Date(Date.now() + 400 * 86_400_000).toISOString();
+    const capped = boundedNextRunAt(distant, floorSeconds);
+    expect(capped! < distant).toBe(true);
+
+    // No known deadline still schedules the reconciliation pass.
+    expect(boundedNextRunAt(null, floorSeconds)).toBeTruthy();
+
+    // An overdue deadline must not schedule a wake in the past.
+    const overdue = "2000-01-01T00:00:00.000Z";
+    expect(boundedNextRunAt(overdue, floorSeconds)! >= new Date(Date.now() - 5_000).toISOString()).toBe(true);
+  });
+});

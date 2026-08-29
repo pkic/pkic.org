@@ -5652,7 +5652,7 @@ INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
   ('on_hold_due_work',          900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('ec_auto_approve',           900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('google_groups_sync',        900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('sponsorship_due_work',      900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('sponsorship_due_work',    86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('votes_due_work',            900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('retention',               86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('consultation_batch',      86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
