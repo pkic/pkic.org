@@ -14,10 +14,12 @@ import type {
   myApplicationTimelineEntrySchema,
   myApplicationCommunicationEntrySchema,
   myApplicationDetailSchema,
-  myOrganizationReviewSchema,
-  myOrganizationProfileSchema,
-  myOrganizationSponsorshipSchema,
 } from "../../../shared/schemas/me";
+import {
+  organizationActiveSponsorshipSchema,
+  organizationMemberProfileSchema,
+} from "../../../shared/schemas/organization-self-service";
+import { organizationContentReviewSchema } from "../../../shared/schemas/organization-profile";
 import type {
   voteTypeSchema,
   candidateSummarySchema,
@@ -39,9 +41,9 @@ export type MyApplicationSummary = z.infer<typeof myApplicationSummarySchema>;
 export type MyApplicationTimelineEntry = z.infer<typeof myApplicationTimelineEntrySchema>;
 export type MyApplicationCommunicationEntry = z.infer<typeof myApplicationCommunicationEntrySchema>;
 export type MyApplicationDetail = z.infer<typeof myApplicationDetailSchema>;
-export type MyOrganizationReview = z.infer<typeof myOrganizationReviewSchema>;
-export type MyOrganizationProfile = z.infer<typeof myOrganizationProfileSchema>;
-export type MyOrganizationSponsorship = z.infer<typeof myOrganizationSponsorshipSchema>;
+export type MyOrganizationReview = z.infer<typeof organizationContentReviewSchema>;
+export type MyOrganizationProfile = z.infer<typeof organizationMemberProfileSchema>;
+export type MyOrganizationSponsorship = z.infer<typeof organizationActiveSponsorshipSchema>;
 
 export type VoteType = z.infer<typeof voteTypeSchema>;
 export type VoteCandidate = z.infer<typeof candidateSummarySchema>;

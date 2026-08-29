@@ -226,7 +226,7 @@ unless noted:
 2. **`members.member_since`** (now consolidated in migration `0035`) — the YAML
    `memberSince` key (org-tied) and each individual's own `memberSince` now
    land in D1 and are read back by the public directory (`GET /api/v1/members[/:id]`),
-   the member self-service profile (`GET /api/v1/me`), and the admin
+   the member self-service profile (`GET /api/v1/users/current`), and the staff
    Organizations detail view, instead of those endpoints silently
    substituting the row's D1 `created_at` (a migration-run timestamp, not a
    real join date). The Interim Admin Tool's "Add organization" form was

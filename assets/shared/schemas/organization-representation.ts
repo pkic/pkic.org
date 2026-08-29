@@ -69,12 +69,7 @@ export const organizationRepresentativeSchema = z.object({
 });
 export type OrganizationRepresentative = z.infer<typeof organizationRepresentativeSchema>;
 
-/**
- * Associate an existing user, or let an attributable membership manager
- * provision a representative by email. The email variant is deliberately
- * staff-only at the route boundary; organization contacts retain only the
- * existing-user association path.
- */
+/** Associate an existing user or provision an attributable representative by email. */
 export const representativeAssociateSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("existing_user"),

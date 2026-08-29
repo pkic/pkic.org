@@ -217,7 +217,7 @@ export interface PermissionGrant {
 }
 
 /**
- * Resolved member capacity on the shared human session. Self-service `/api/v1/me/*`
+ * Resolved member capacity on the shared human session. Current-user resource
  * endpoints are identity-gated (a valid session backed by an active
  * `members` row), not `resource:action` permission-gated — the `member`/
  * `interested_parties` roles carry no `role_permissions` rows (see

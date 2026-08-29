@@ -1,6 +1,5 @@
 /**
- * Member self-service sponsorship status (
- * "GET /api/v1/me/organization/sponsorship") and sponsor-portal attendee
+ * Organization-member sponsorship status and sponsor-portal attendee
  * data. Split out of sponsorship.ts.
  */
 import { first, all } from "../../db/queries";

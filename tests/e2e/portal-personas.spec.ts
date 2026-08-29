@@ -160,7 +160,7 @@ async function installPersona(page: Page, persona: Persona): Promise<void> {
       await json(route, sessionFor(persona));
       return;
     }
-    if (url.pathname === "/api/v1/me") {
+    if (url.pathname === "/api/v1/users/current") {
       await json(route, profileFor(persona));
       return;
     }

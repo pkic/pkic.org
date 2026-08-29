@@ -1,8 +1,8 @@
 /**
  * Sponsor portal session persistence.
  *
- * Unlike the member/admin portals, there's no `GET /api/v1/me`-equivalent
- * "who am I" endpoint here (see _lib/auth/sponsor-portal.ts's header
+ * Unlike the user portal, sponsorship access does not expose a current-user
+ * resource (see _lib/auth/sponsor-portal.ts's header
  * comment: the identity is a bare `sponsorships.id`, and the session
  * cookie is HttpOnly + scoped to `/api/v1/sponsor-portal`, so JS can never
  * read it back). The only way to know *which event* to query on a repeat

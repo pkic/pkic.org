@@ -8,24 +8,21 @@
 import { useState } from "preact/hooks";
 import { deleteJson, getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
-import { uploadFile } from "../../../shared/file-upload";
+import { replaceFile } from "../../../shared/file-upload";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
-import {
-  myProfileSchema,
-  addedCoworkerSchema,
-  myHeadshotUploadResponseSchema,
-  myOrganizationVisibilityUpdateResponseSchema,
-} from "../../../../shared/schemas/me";
+import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { representativeMutationResponseSchema } from "../../../../shared/schemas/organization-representation";
 
+const CURRENT_USER_API = "/api/v1/users/current";
+
 async function refreshProfile(): Promise<void> {
-  const refreshed = await getJson("/api/v1/me", myProfileSchema);
+  const refreshed = await getJson(CURRENT_USER_API, myProfileSchema);
   saveProfile(refreshed);
 }
 
@@ -62,7 +59,7 @@ export function MyProfile() {
       if (current!.canEditOrganizationName) {
         input.organizationName = form.organizationName.trim();
       }
-      const updated = await patchJson("/api/v1/me", input, myProfileSchema);
+      const updated = await patchJson(CURRENT_USER_API, input, myProfileSchema);
       saveProfile(updated);
       toast("Profile updated", "success");
     } catch (err) {
@@ -75,12 +72,7 @@ export function MyProfile() {
   async function handleVisibilityToggle(next: boolean): Promise<void> {
     setVisibilitySaving(true);
     try {
-      await patchJson(
-        "/api/v1/me/organization-visibility",
-        { showOnOrgProfile: next },
-        myOrganizationVisibilityUpdateResponseSchema,
-      );
-      await refreshProfile();
+      saveProfile(await patchJson(CURRENT_USER_API, { showOnOrgProfile: next }, myProfileSchema));
       toast(
         next
           ? "You'll now appear on your organization's public page"
@@ -106,7 +98,7 @@ export function MyProfile() {
               uploadLabel="📷 Upload headshot"
               helpText="JPEG, PNG, or WebP, up to 5MB."
               uploadHeadshot={async (file) => {
-                await uploadFile("/api/v1/me/headshot", file, myHeadshotUploadResponseSchema);
+                await replaceFile(`${CURRENT_USER_API}/headshot`, file, myHeadshotUploadResponseSchema);
                 await refreshProfile();
                 return { headshotUrl: profileSignal.value?.headshotUrl };
               }}
@@ -342,7 +334,7 @@ function OrganizationRepresentativesCard({ current }: { current: MyProfileType }
             );
           })}
         </ul>
-        {current.isOrgContact && <AddCoworkerForm />}
+        {current.isOrgContact && <AddCoworkerForm organizationId={current.organizationId} />}
       </div>
     </div>
   );
@@ -353,7 +345,7 @@ function OrganizationRepresentativesCard({ current }: { current: MyProfileType }
  * an organization plus their own individual membership) concurrently —
  * lets them pick which membership context the rest of the portal (working
  * groups, votes, applications, etc.) acts as. Switching reissues the
- * session cookie server-side (PUT /api/v1/me/active-membership) and then
+ * session cookie server-side (PUT /api/v1/users/current/memberships/active) and then
  * does a full navigation rather than a signal update, so every other
  * org-scoped screen re-fetches under the new context instead of holding
  * stale state from the previous one.
@@ -373,7 +365,7 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
     setError(null);
     setSwitching(memberId);
     try {
-      await putJson("/api/v1/me/active-membership", { memberId }, myProfileSchema);
+      await putJson(`${CURRENT_USER_API}/memberships/active`, { memberId }, myProfileSchema);
       // A full reload, not window.location.assign to this same route — the
       // caller is already on #/profile, so assigning that same URL is a
       // no-op and would leave every other org-scoped screen (working
@@ -424,7 +416,7 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
   );
 }
 
-function AddCoworkerForm() {
+function AddCoworkerForm({ organizationId }: { organizationId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -439,8 +431,12 @@ function AddCoworkerForm() {
     setSuccess(null);
     setSubmitting(true);
     try {
-      const created = await postJson("/api/v1/me/organization/members", { name, email }, addedCoworkerSchema);
-      setSuccess(`${created.name} (${created.email}) was added to your organization.`);
+      await postJson(
+        `/api/v1/organizations/${encodeURIComponent(organizationId)}/representatives`,
+        { kind: "email", name, email, showOnOrganizationProfile: true },
+        representativeMutationResponseSchema,
+      );
+      setSuccess(`${name} (${email}) was added to your organization.`);
       form.reset();
       await refreshProfile();
     } catch (err) {

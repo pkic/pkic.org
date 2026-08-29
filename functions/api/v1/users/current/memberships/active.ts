@@ -1,24 +1,19 @@
-/**
- * PUT /api/v1/me/active-membership — switch which membership context
- * (own individual membership vs. one of possibly several represented
- * organizations) the current session acts as.
- */
-import { json } from "../../../_lib/http";
-import { requireMemberFromRequest, switchActiveMembership } from "../../../_lib/auth/member";
+import { json } from "../../../../../_lib/http";
+import { requireMemberFromRequest, switchActiveMembership } from "../../../../../_lib/auth/member";
 import {
   getUserSessionToken,
   signUserSessionToken,
   serializeUserSessionCookie,
   verifyUserSessionToken,
-} from "../../../_lib/auth/user-session";
-import { sessionExpiresAtToExp } from "../../../_lib/auth/session-engine";
-import { getMyProfile } from "../../../_lib/services/member-self-service";
-import { requireInternalSecret } from "../../../_lib/request";
-import { myActiveMembershipSwitchRouteSchema } from "../../../../assets/shared/schemas/me";
-import { requestDb, type AdminContext } from "../../../_lib/db/context";
-import { openApiRoute } from "../../../_lib/openapi/route";
+} from "../../../../../_lib/auth/user-session";
+import { sessionExpiresAtToExp } from "../../../../../_lib/auth/session-engine";
+import { getMyProfile } from "../../../../../_lib/services/member-self-service";
+import { requireInternalSecret } from "../../../../../_lib/request";
+import { myActiveMembershipSwitchRouteSchema } from "../../../../../../assets/shared/schemas/me";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export const MeActiveMembershipSwitch = openApiRoute(
+export const CurrentUserActiveMembershipPut = openApiRoute(
   myActiveMembershipSwitchRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);

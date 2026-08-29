@@ -91,6 +91,39 @@ export function prepareOrganizationRepresentativeManagementGuard(
   return prepareAuthorizationGuard(db, organizationRepresentativeManagementEvidence(input));
 }
 
+export function organizationPrimaryContactEvidence(memberId: string, actorUserId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+            FROM members member
+            JOIN users actor ON actor.id = ? AND actor.active = 1
+            JOIN organization_representatives representative
+              ON representative.member_id = member.id
+             AND representative.user_id = actor.id
+             AND representative.left_at IS NULL
+             AND representative.blocked_at IS NULL
+            JOIN user_roles role
+              ON role.user_id = actor.id
+             AND role.context_type = 'organization'
+             AND role.context_id = member.id
+             AND role.role_id = ?
+             AND role.revoked_at IS NULL
+             AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+           WHERE member.id = ?
+             AND member.organization_id IS NOT NULL
+             AND member.status = 'active'
+           LIMIT 1`,
+    bindings: [actorUserId, REPRESENTATIVE_ROLE_IDS.primaryContact, memberId],
+  };
+}
+
+export function prepareOrganizationPrimaryContactGuard(
+  db: DatabaseLike,
+  memberId: string,
+  actorUserId: string,
+): StatementLike {
+  return prepareAuthorizationGuard(db, organizationPrimaryContactEvidence(memberId, actorUserId));
+}
+
 export async function requireOrganizationRepresentativeManagement(
   db: DatabaseLike,
   input: RepresentativeManagementInput,

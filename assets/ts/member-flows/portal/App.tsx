@@ -39,7 +39,7 @@ export function App() {
       const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
       savePortalSession(session);
       if (session.member) {
-        saveProfile(await getJson("/api/v1/me", myProfileSchema));
+        saveProfile(await getJson("/api/v1/users/current", myProfileSchema));
       } else {
         clearMemberProfile();
       }

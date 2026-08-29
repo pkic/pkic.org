@@ -105,6 +105,25 @@ export function memberSignInAuthorizationEvidence(userId: string, normalizedEmai
   };
 }
 
+/** Rechecks the exact live session and selected member capacity used by a current-user mutation. */
+export function memberSessionAuthorizationEvidence(member: AuthMember): AuthorizationEvidence {
+  if (!member.sessionId) return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  return {
+    sql: `SELECT 1
+            FROM sessions session
+            JOIN (${MEMBER_ELIGIBLE_USER_SELECT}) eligible
+              ON eligible.id = session.user_id
+             AND eligible.member_id = ?
+             AND eligible.active = 1
+           WHERE session.id = ?
+             AND session.user_id = ?
+             AND session.revoked_at IS NULL
+             AND session.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           LIMIT 1`,
+    bindings: [member.memberId, member.sessionId, member.userId],
+  };
+}
+
 function toEligibleMembership(row: MemberEligibleUserRow): EligibleMembership {
   return {
     memberId: row.member_id,

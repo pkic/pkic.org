@@ -1,9 +1,8 @@
 /**
  * ec-review.test.ts
  *
- * Executive Council review — the real member-session EC decision
- * path (POST /api/v1/me/applications/:id/ec-decision) and the staff-admin
- * override fallback (POST /api/v1/members/applications/:id/ec-decisions).
+ * Executive Council review through one canonical application decision
+ * resource for both self-service and staff override.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -64,7 +63,7 @@ describe("Executive Council review", () => {
     const ecUserId = await insertActiveMember("ec-member@example.test", true);
     const token = await createMemberSession(env.DB, ecUserId, "ec-member-token");
 
-    const response = await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    const response = await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "approve" }),
     });
@@ -84,7 +83,7 @@ describe("Executive Council review", () => {
     const userId = await insertActiveMember("plain-member@example.test", false);
     const token = await createMemberSession(env.DB, userId, "plain-member-token");
 
-    const response = await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    const response = await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "approve" }),
     });
@@ -96,7 +95,7 @@ describe("Executive Council review", () => {
     const ecUserId = await insertActiveMember("ec-decliner@example.test", true);
     const token = await createMemberSession(env.DB, ecUserId, "ec-decliner-token");
 
-    const response = await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    const response = await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "decline" }),
     });
@@ -108,7 +107,7 @@ describe("Executive Council review", () => {
     const ecUserId = await insertActiveMember("ec-decliner2@example.test", true);
     const token = await createMemberSession(env.DB, ecUserId, "ec-decliner2-token");
 
-    const response = await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    const response = await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "decline", reason: "Concerns about org legitimacy" }),
     });
@@ -128,11 +127,11 @@ describe("Executive Council review", () => {
     const ecUserId = await insertActiveMember("ec-reviser@example.test", true);
     const token = await createMemberSession(env.DB, ecUserId, "ec-reviser-token");
 
-    await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "approve" }),
     });
-    await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "decline", reason: "Changed my mind" }),
     });
@@ -175,7 +174,7 @@ describe("Executive Council review", () => {
     const ecUserId = await insertActiveMember("ec-wrong-stage@example.test", true);
     const token = await createMemberSession(env.DB, ecUserId, "ec-wrong-stage-token");
 
-    const response = await call(token, `/api/v1/me/applications/${id}/ec-decision`, {
+    const response = await call(token, `/api/v1/members/applications/${id}/ec-decisions`, {
       method: "POST",
       body: JSON.stringify({ decision: "approve" }),
     });

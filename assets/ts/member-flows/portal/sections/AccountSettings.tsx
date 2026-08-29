@@ -22,7 +22,7 @@ function NotificationPreferencesCard() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson("/api/v1/me/notification-preferences", myNotificationPreferencesSchema)
+    getJson("/api/v1/users/current/notifications/preferences", myNotificationPreferencesSchema)
       .then(setPreferences)
       .catch((reason: unknown) =>
         setError(reason instanceof ApiClientError ? reason.message : "Could not load preferences."),
@@ -33,7 +33,7 @@ function NotificationPreferencesCard() {
     setSavingKey(key);
     try {
       const updated = await patchJson(
-        "/api/v1/me/notification-preferences",
+        "/api/v1/users/current/notifications/preferences",
         { [key]: next },
         myNotificationPreferencesSchema,
       );

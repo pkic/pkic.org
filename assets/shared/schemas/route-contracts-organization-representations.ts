@@ -38,7 +38,7 @@ export const organizationRepresentativeAssociateRouteSchema = {
   tags: ["Organizations"],
   summary: "Associate an organization representative",
   description:
-    "Association is immediate and does not require recipient acceptance. The direct-email variant requires an attributable membership:write staff session; organization contacts may only associate an existing user.",
+    "Association is immediate and does not require recipient acceptance. Organization contacts may add a coworker by email; staff with membership:write may also provide profile metadata.",
   request: {
     params: organizationRepresentativeCollectionParamsSchema,
     body: { required: true, content: { "application/json": { schema: representativeAssociateSchema } } },

@@ -7,18 +7,29 @@
  * secondary contact may enroll a coworker or manage contact
  * designations, never an arbitrary representative.
  */
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
-import type { AddedCoworker } from "../../../assets/shared/schemas/me";
+import { prepareAuditLogAfterOneChange } from "./audit";
 import { buildFindOrCreateUserStatement } from "./users";
 import { isActiveRepresentative, buildAddRepresentativeStatement } from "./membership/representatives";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
-import { prepareOrganizationRepresentativeManagementGuard } from "./organization-representations/authorization";
+import {
+  prepareOrganizationPrimaryContactGuard,
+  prepareOrganizationRepresentativeManagementGuard,
+} from "./organization-representations/authorization";
 import type { AuthMember, DatabaseLike } from "../types";
+
+export interface AddedCoworker {
+  representativeId: string;
+  membershipId: string;
+  userId: string;
+  name: string;
+  email: string;
+}
 
 async function requireOrgContact(db: DatabaseLike, member: AuthMember): Promise<void> {
   if (!member.organizationId) {
@@ -114,7 +125,7 @@ export async function addCoworker(
  * Primary contact nominates (or withdraws a nomination for) a secondary
  * contact. Held in `organization_secondary_contact_nominations` (one
  * pending row per organization) until a staff admin confirms it via
- * `POST /api/v1/organizations/:organizationId/confirm-secondary-contact` — the
+ * `POST /api/v1/organizations/:organizationId/contacts/secondary/confirmation` — the
  * primary contact cannot promote someone directly.
  */
 export async function nominateSecondaryContact(
@@ -135,7 +146,41 @@ export async function nominateSecondaryContact(
   }
 
   if (nomineeUserId === null) {
-    await run(db, "DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?", [member.memberId]);
+    const existing = await first<{ id: string; nominated_user_id: string }>(
+      db,
+      "SELECT id, nominated_user_id FROM organization_secondary_contact_nominations WHERE member_id = ?",
+      [member.memberId],
+    );
+    if (!existing) return { pendingSecondaryContactUserId: null };
+    try {
+      await db.batch([
+        prepareOrganizationPrimaryContactGuard(db, member.memberId, member.userId),
+        db
+          .prepare(
+            "DELETE FROM organization_secondary_contact_nominations WHERE id = ? AND member_id = ? AND nominated_user_id = ?",
+          )
+          .bind(existing.id, member.memberId, existing.nominated_user_id),
+        prepareAuditLogAfterOneChange(
+          db,
+          "member",
+          member.userId,
+          "organization_secondary_contact_nomination_withdrawn",
+          "member",
+          member.memberId,
+          { nominatedUserId: existing.nominated_user_id },
+          nowIso(),
+        ),
+      ]);
+    } catch (error) {
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(
+          409,
+          "ORGANIZATION_PRIMARY_CONTACT_CHANGED",
+          "Primary-contact access changed while the nomination was being withdrawn",
+        );
+      }
+      throw error;
+    }
     return { pendingSecondaryContactUserId: null };
   }
 
@@ -153,13 +198,38 @@ export async function nominateSecondaryContact(
   }
 
   const now = nowIso();
-  await run(db, "DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?", [member.memberId]);
-  await run(
-    db,
-    `INSERT INTO organization_secondary_contact_nominations
-       (id, member_id, nominated_user_id, nominated_by_user_id, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [uuid(), member.memberId, nomineeUserId, member.userId, now],
-  );
+  const nominationId = uuid();
+  try {
+    await db.batch([
+      prepareOrganizationPrimaryContactGuard(db, member.memberId, member.userId),
+      db.prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?").bind(member.memberId),
+      db
+        .prepare(
+          `INSERT INTO organization_secondary_contact_nominations
+             (id, member_id, nominated_user_id, nominated_by_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(nominationId, member.memberId, nomineeUserId, member.userId, now),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "organization_secondary_contact_nominated",
+        "member",
+        member.memberId,
+        { nominatedUserId: nomineeUserId },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "ORGANIZATION_PRIMARY_CONTACT_CHANGED",
+        "Primary-contact access changed while the nomination was being saved",
+      );
+    }
+    throw error;
+  }
   return { pendingSecondaryContactUserId: nomineeUserId };
 }

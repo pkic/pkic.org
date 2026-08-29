@@ -75,7 +75,7 @@ describe("portal account settings capacity cutover", () => {
           location.origin,
         );
         requests.push(url.pathname);
-        if (url.pathname === "/api/v1/me/notification-preferences") {
+        if (url.pathname === "/api/v1/users/current/notifications/preferences") {
           return jsonResponse({
             workingGroupUpdates: true,
             voteReminders: true,
@@ -94,6 +94,6 @@ describe("portal account settings capacity cutover", () => {
     });
 
     expect(container.textContent).toContain("Notification preferences");
-    expect(requests).toEqual(["/api/v1/me/notification-preferences"]);
+    expect(requests).toEqual(["/api/v1/users/current/notifications/preferences"]);
   });
 });

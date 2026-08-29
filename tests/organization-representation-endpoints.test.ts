@@ -95,7 +95,7 @@ describe("organization representation API", () => {
     expect(response.status).toBe(403);
   });
 
-  it("reserves direct-email provisioning for a live, user-backed membership writer", async () => {
+  it("lets organization contacts add coworkers while reserving profile metadata for staff", async () => {
     const organizationId = await insertOrganization(env.DB, "Direct Email Representation Org");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     const contactUserId = await insertUser(env.DB, "contact@direct-email.example");
@@ -110,10 +110,19 @@ describe("organization representation API", () => {
       jobTitle: "Security Engineer",
       links: ["https://example.test/profile"],
     };
+    const contactCreated = await jsonRequest(
+      `/api/v1/organizations/${organizationId}/representatives`,
+      contactToken,
+      "POST",
+      directEmail,
+    );
+    expect(contactCreated.status).toBe(201);
+    expect(await contactCreated.json()).toMatchObject({ success: true, representativeId: expect.any(String) });
     expect(
-      (await jsonRequest(`/api/v1/organizations/${organizationId}/representatives`, contactToken, "POST", directEmail))
-        .status,
-    ).toBe(403);
+      await env.DB.prepare(
+        "SELECT job_title, links_json FROM users WHERE normalized_email = 'new@direct-email.example'",
+      ).all(),
+    ).toMatchObject({ results: [{ job_title: null, links_json: null }] });
     expect(
       (
         await jsonRequest(
@@ -134,23 +143,29 @@ describe("organization representation API", () => {
       .bind(crypto.randomUUID(), staffUserId, staffUserId)
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "direct-email-staff-token");
+    const staffEmail = {
+      ...directEmail,
+      email: "staff-added@direct-email.example",
+    };
     const created = await jsonRequest(
       `/api/v1/organizations/${organizationId}/representatives`,
       staffToken,
       "POST",
-      directEmail,
+      staffEmail,
     );
     expect(created.status).toBe(201);
     expect(await created.json()).toMatchObject({ success: true, representativeId: expect.any(String) });
     expect(
       await env.DB.prepare(
-        "SELECT job_title, links_json FROM users WHERE normalized_email = 'new@direct-email.example'",
+        "SELECT job_title, links_json FROM users WHERE normalized_email = 'staff-added@direct-email.example'",
       ).all(),
     ).toMatchObject({
       results: [{ job_title: "Security Engineer", links_json: '["https://example.test/profile"]' }],
     });
     expect(
-      await env.DB.prepare("SELECT id FROM email_outbox WHERE recipient_email = 'new@direct-email.example'").all(),
+      await env.DB.prepare(
+        "SELECT id FROM email_outbox WHERE recipient_email IN ('new@direct-email.example', 'staff-added@direct-email.example')",
+      ).all(),
     ).toMatchObject({ results: [] });
   });
 });

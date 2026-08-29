@@ -4,7 +4,7 @@
  * Staff sales pipeline: CRUD, stage transitions (and their "on active"/"on
  * lapsed" side effects on organizations.sponsor_tier/sponsor_start_date),
  * the audit trail, per-event sponsor-tier attendee-access config, and the
- * member-facing GET /api/v1/me/organization/sponsorship view.
+ * organization-member active sponsorship view.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -766,13 +766,14 @@ describe("Sponsorship sales pipeline", () => {
     }
   });
 
-  it("lets an org-tied member view their organization's active sponsorship tier via GET /api/v1/me/organization/sponsorship", async () => {
+  it("lets an org-tied member view its active sponsorship through the organization resource", async () => {
     const { organizationId, userId } = await seedOrganization("Delta Co");
     const memberToken = await createMemberSession(env.DB, userId, "delta-member-token");
 
-    const beforeResponse = await call(memberToken, "/api/v1/me/organization/sponsorship");
-    const before = (await beforeResponse.json()) as { tier: string | null };
-    expect(before.tier).toBeNull();
+    const sponsorshipPath = `/api/v1/organizations/${organizationId}/sponsorships/current`;
+    const beforeResponse = await call(memberToken, sponsorshipPath);
+    const before = (await beforeResponse.json()) as { sponsorship: { tier: string | null } };
+    expect(before.sponsorship.tier).toBeNull();
 
     const createResponse = await call(adminToken, "/api/v1/sponsorships", {
       method: "POST",
@@ -789,10 +790,12 @@ describe("Sponsorship sales pipeline", () => {
       body: JSON.stringify({ toStage: "active" }),
     });
 
-    const afterResponse = await call(memberToken, "/api/v1/me/organization/sponsorship");
-    const after = (await afterResponse.json()) as { tier: string | null; startDate: string | null };
-    expect(after.tier).toBe("Titanium");
-    expect(after.startDate).not.toBeNull();
+    const afterResponse = await call(memberToken, sponsorshipPath);
+    const after = (await afterResponse.json()) as {
+      sponsorship: { tier: string | null; startDate: string | null };
+    };
+    expect(after.sponsorship.tier).toBe("Titanium");
+    expect(after.sponsorship.startDate).not.toBeNull();
   });
 
   it("rejects an unknown pipeline stage with 400", async () => {

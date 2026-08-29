@@ -60,7 +60,7 @@ describe("generic self-service group catalog", () => {
 
     const firstResponse = await getAs(
       token,
-      "/api/v1/me/groups?view=catalog&typeKey=working_group&q=Portal&sort=name&limit=1&offset=0",
+      "/api/v1/users/current/groups?view=catalog&typeKey=working_group&q=Portal&sort=name&limit=1&offset=0",
     );
     expect(firstResponse.status, await firstResponse.clone().text()).toBe(200);
     const firstPage = selfGroupsListResponseSchema.parse(await firstResponse.json());
@@ -80,7 +80,7 @@ describe("generic self-service group catalog", () => {
 
     const secondResponse = await getAs(
       token,
-      "/api/v1/me/groups?view=catalog&typeKey=working_group&q=Portal&sort=name&limit=1&offset=1",
+      "/api/v1/users/current/groups?view=catalog&typeKey=working_group&q=Portal&sort=name&limit=1&offset=1",
     );
     const secondPage = selfGroupsListResponseSchema.parse(await secondResponse.json());
     expect(secondPage.groups.map((group) => group.name)).toEqual(["Portal Parent"]);
@@ -94,7 +94,7 @@ describe("generic self-service group catalog", () => {
       allowManaged: false,
     });
     await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(alpha.id).run();
-    const joinedResponse = await getAs(token, "/api/v1/me/groups?view=joined&typeKey=working_group");
+    const joinedResponse = await getAs(token, "/api/v1/users/current/groups?view=joined&typeKey=working_group");
     const joinedPage = selfGroupsListResponseSchema.parse(await joinedResponse.json());
     expect(joinedPage.groups).toHaveLength(1);
     expect(joinedPage.groups[0]).toMatchObject({ id: alpha.id, active: false });
@@ -102,9 +102,9 @@ describe("generic self-service group catalog", () => {
       new Set([memberAId, memberBId]),
     );
 
-    const invalidSort = await getAs(token, "/api/v1/me/groups?sort=email");
+    const invalidSort = await getAs(token, "/api/v1/users/current/groups?sort=email");
     expect(invalidSort.status).toBe(400);
-    expect((await callApi(env, "/api/v1/me/groups")).status).toBe(401);
+    expect((await callApi(env, "/api/v1/users/current/groups")).status).toBe(401);
   });
 
   it("requires person-level parent participation before discovering a child", async () => {

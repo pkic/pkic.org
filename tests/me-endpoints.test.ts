@@ -13,10 +13,10 @@ import { queryAll } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { seedMemberApplication } from "./helpers/member-applications";
-import {
-  myApplicationsListResponseSchema,
-  myOrganizationVisibilityUpdateResponseSchema,
-} from "../assets/shared/schemas/me";
+import { myApplicationsListResponseSchema, myProfileSchema } from "../assets/shared/schemas/me";
+import { guardMemberSessionMutationDatabase, requireMemberFromRequest } from "../functions/_lib/auth/member";
+import { updateMyProfile } from "../functions/_lib/services/member-self-service";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -61,16 +61,16 @@ async function insertActiveMember(email: string, category: string): Promise<stri
   return userId;
 }
 
-describe("Member self-service /api/v1/me/*", () => {
+describe("Current-user and application self-service", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
-  it("GET /api/v1/me returns my profile", async () => {
+  it("GET /api/v1/users/current returns my profile", async () => {
     const userId = await insertActiveMember("me@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "me-profile-token");
 
-    const response = await call(token, "/api/v1/me");
+    const response = await call(token, "/api/v1/users/current");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       email: string;
@@ -82,11 +82,11 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(body.canEditOrganizationName).toBe(false);
   });
 
-  it("PATCH /api/v1/me updates editable fields", async () => {
+  it("PATCH /api/v1/users/current updates editable fields", async () => {
     const userId = await insertActiveMember("update-me@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "me-update-token");
 
-    const response = await call(token, "/api/v1/me", {
+    const response = await call(token, "/api/v1/users/current", {
       method: "PATCH",
       body: JSON.stringify({ jobTitle: "CTO", biography: "New bio" }),
     });
@@ -99,7 +99,7 @@ describe("Member self-service /api/v1/me/*", () => {
   it("only org-less (H5/H6/H7) members may set organizationName", async () => {
     const orgTiedUserId = await insertActiveMember("org-tied@example.test", "F");
     const orgTiedToken = await createMemberSession(env.DB, orgTiedUserId, "org-tied-token");
-    const orgTiedResponse = await call(orgTiedToken, "/api/v1/me", {
+    const orgTiedResponse = await call(orgTiedToken, "/api/v1/users/current", {
       method: "PATCH",
       body: JSON.stringify({ organizationName: "Should Not Apply" }),
     });
@@ -108,7 +108,7 @@ describe("Member self-service /api/v1/me/*", () => {
 
     const individualUserId = await insertActiveMember("individual@example.test", "H6");
     const individualToken = await createMemberSession(env.DB, individualUserId, "individual-token");
-    const individualResponse = await call(individualToken, "/api/v1/me", {
+    const individualResponse = await call(individualToken, "/api/v1/users/current", {
       method: "PATCH",
       body: JSON.stringify({ organizationName: "My Consultancy" }),
     });
@@ -120,19 +120,16 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(individualBody.organizationName).toBe("My Consultancy");
   });
 
-  it("PATCH /api/v1/me/organization-visibility toggles organization_representatives.show_on_org_profile", async () => {
+  it("PATCH /api/v1/users/current updates organization representative visibility with the profile", async () => {
     const userId = await insertActiveMember("visibility@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "visibility-token");
 
-    const response = await call(token, "/api/v1/me/organization-visibility", {
+    const response = await call(token, "/api/v1/users/current", {
       method: "PATCH",
       body: JSON.stringify({ showOnOrgProfile: false }),
     });
     expect(response.status).toBe(200);
-    expect(myOrganizationVisibilityUpdateResponseSchema.parse(await response.json())).toEqual({
-      success: true,
-      showOnOrgProfile: false,
-    });
+    expect(myProfileSchema.parse(await response.json()).showOnOrgProfile).toBe(false);
 
     const rows = await queryAll<{ show_on_org_profile: number }>(
       env.DB,
@@ -142,7 +139,36 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(rows[0].show_on_org_profile).toBe(0);
   });
 
-  it("GET /api/v1/me/applications lists applications matching my email", async () => {
+  it("rolls back profile changes when the exact user session is revoked before the D1 batch", async () => {
+    const userId = await insertActiveMember("profile-race@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "profile-race-token");
+    const request = requestWithAuth(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ jobTitle: "Must not persist" }),
+    });
+    const member = await requireMemberFromRequest(env.DB, request, env);
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE sessions SET revoked_at = datetime('now') WHERE user_id = ?").bind(userId).run(),
+    );
+
+    await expect(
+      updateMyProfile(guardMemberSessionMutationDatabase(racingDb, member), member, {
+        jobTitle: "Must not persist",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "AUTHORIZATION_CONTEXT_CHANGED" });
+
+    const [user] = await queryAll<{ job_title: string | null }>(
+      env.DB,
+      "SELECT job_title FROM users WHERE id = ?",
+      userId,
+    );
+    expect(user.job_title).toBeNull();
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_profile_updated'", userId),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("GET /api/v1/users/current/applications lists applications matching my email", async () => {
     const userId = await insertActiveMember("applicant-history@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "applicant-history-token");
     await seedMemberApplication({
@@ -162,7 +188,7 @@ describe("Member self-service /api/v1/me/*", () => {
       stage: "in_review",
     });
 
-    const response = await call(token, "/api/v1/me/applications");
+    const response = await call(token, "/api/v1/users/current/applications");
     expect(response.status).toBe(200);
     const body = myApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications).toHaveLength(2);
@@ -171,17 +197,17 @@ describe("Member self-service /api/v1/me/*", () => {
     );
     expect(body.page).toEqual({ limit: 25, offset: 0, total: 2, hasMore: false });
 
-    const filtered = await call(token, "/api/v1/me/applications?q=approved&limit=1&sort=stage");
+    const filtered = await call(token, "/api/v1/users/current/applications?q=approved&limit=1&sort=stage");
     expect(filtered.status).toBe(200);
     const filteredBody = myApplicationsListResponseSchema.parse(await filtered.json());
     expect(filteredBody.applications.map((application) => application.stage)).toEqual(["approved"]);
     expect(filteredBody.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
 
-    const invalid = await call(token, "/api/v1/me/applications?sort=email");
+    const invalid = await call(token, "/api/v1/users/current/applications?sort=email");
     expect(invalid.status).toBe(400);
   });
 
-  it("GET /api/v1/me/applications/:id returns the applicant-facing detail (timeline + communications), scoped to my own email", async () => {
+  it("GET /api/v1/users/current/applications/:id returns applicant-facing detail scoped to my own email", async () => {
     const userId = await insertActiveMember("applicant-detail@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "applicant-detail-token");
     const staffUserId = crypto.randomUUID();
@@ -218,7 +244,7 @@ describe("Member self-service /api/v1/me/*", () => {
       ).bind(crypto.randomUUID(), applicationId, staffUserId),
     ]);
 
-    const response = await call(token, `/api/v1/me/applications/${applicationId}`);
+    const response = await call(token, `/api/v1/users/current/applications/${applicationId}`);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       stage: string;
@@ -235,15 +261,15 @@ describe("Member self-service /api/v1/me/*", () => {
 
     const otherUserId = await insertActiveMember("not-the-applicant@example.test", "F");
     const otherToken = await createMemberSession(env.DB, otherUserId, "not-the-applicant-token");
-    const deniedResponse = await call(otherToken, `/api/v1/me/applications/${applicationId}`);
+    const deniedResponse = await call(otherToken, `/api/v1/users/current/applications/${applicationId}`);
     expect(deniedResponse.status).toBe(404);
   });
 
-  it("GET/PATCH /api/v1/me/notification-preferences defaults to all-true and persists partial updates", async () => {
+  it("GET/PATCH /api/v1/users/current/notifications/preferences defaults to all-true and persists partial updates", async () => {
     const userId = await insertActiveMember("notif-prefs@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "notif-prefs-token");
 
-    const getResponse = await call(token, "/api/v1/me/notification-preferences");
+    const getResponse = await call(token, "/api/v1/users/current/notifications/preferences");
     expect(getResponse.status).toBe(200);
     const defaults = await getResponse.json();
     expect(defaults).toEqual({
@@ -253,7 +279,7 @@ describe("Member self-service /api/v1/me/*", () => {
       wgChairMembershipDigest: true,
     });
 
-    const patchResponse = await call(token, "/api/v1/me/notification-preferences", {
+    const patchResponse = await call(token, "/api/v1/users/current/notifications/preferences", {
       method: "PATCH",
       body: JSON.stringify({ voteReminders: false }),
     });
@@ -267,32 +293,37 @@ describe("Member self-service /api/v1/me/*", () => {
     });
 
     // Persisted, not just returned — a second GET reflects the same state.
-    const getAfterResponse = await call(token, "/api/v1/me/notification-preferences");
+    const getAfterResponse = await call(token, "/api/v1/users/current/notifications/preferences");
     expect(await getAfterResponse.json()).toEqual(patched);
   });
 
-  it("GET /api/v1/me returns headshotUrl derived from headshot_r2_key", async () => {
+  it("GET /api/v1/users/current returns headshotUrl derived from headshot_r2_key", async () => {
     const userId = await insertActiveMember("headshot-profile@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "headshot-profile-token");
 
-    const beforeResponse = await call(token, "/api/v1/me");
+    const beforeResponse = await call(token, "/api/v1/users/current");
     expect(((await beforeResponse.json()) as { headshotUrl: string | null }).headshotUrl).toBeNull();
 
     await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?")
       .bind(`headshots/${userId}/123.jpg`, userId)
       .run();
 
-    const afterResponse = await call(token, "/api/v1/me");
+    const afterResponse = await call(token, "/api/v1/users/current");
     const afterBody = (await afterResponse.json()) as { headshotUrl: string | null };
     expect(afterBody.headshotUrl).toBe(`/api/v1/headshots/${userId}/123.jpg`);
   });
 
-  it("rejects unauthenticated access to every /me endpoint", async () => {
+  it("rejects unauthenticated current-user access and does not retain moved /me paths", async () => {
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/me/groups"),
+      new Request("https://app.test/api/v1/users/current/groups"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow, noarchive");
+    expect((await call("invalid", "/api/v1/me/groups")).status).toBe(404);
+    expect((await call("invalid", "/api/v1/me/notification-preferences")).status).toBe(404);
+    expect((await call("invalid", "/api/v1/me/applications")).status).toBe(404);
   });
 });

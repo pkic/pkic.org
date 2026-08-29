@@ -1,9 +1,9 @@
 /**
  * Member profile, applications, and notification self-service. All
- * functions here operate on the caller's own AuthMember identity —
- * `/api/v1/me/*` never accepts a target user/member id, by design.
+ * functions here operate on the caller's own AuthMember identity — current-user
+ * resource routes never accept a target user/member id, by design.
  */
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
@@ -16,6 +16,7 @@ import { getMemberApplicationById } from "./membership/applications/queries";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
 import type { MyApplicationsListQuery } from "../../../assets/shared/schemas/me";
+import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 
 export interface MyOrganizationRepresentative {
   userId: string;
@@ -50,7 +51,7 @@ export interface MyProfile {
    * Every membership context this member is currently eligible to act
    * through (see AuthMember.activeMemberships) — lets a person who
    * represents more than one organization see, and switch, which one is
-   * currently active via PUT /api/v1/me/active-membership.
+   * currently active via PUT /api/v1/users/current/memberships/active.
    */
   activeMemberships: EligibleMembership[];
 }
@@ -179,6 +180,7 @@ export interface MyProfileUpdateInput {
   links?: string[];
   /** Only honored for org-less categories (H5/H6/H7). */
   organizationName?: string;
+  showOnOrgProfile?: boolean;
 }
 
 export async function updateMyProfile(
@@ -187,57 +189,56 @@ export async function updateMyProfile(
   input: MyProfileUpdateInput,
 ): Promise<MyProfile> {
   const now = nowIso();
-
-  await run(
-    db,
-    `UPDATE users
-     SET first_name = COALESCE(?, first_name),
-         last_name = COALESCE(?, last_name),
-         preferred_name = COALESCE(?, preferred_name),
-         job_title = COALESCE(?, job_title),
-         biography = COALESCE(?, biography),
-         links_json = COALESCE(?, links_json),
-         updated_at = ?
-     WHERE id = ?`,
-    [
-      input.firstName ?? null,
-      input.lastName ?? null,
-      input.preferredName ?? null,
-      input.jobTitle ?? null,
-      input.biography ?? null,
-      input.links ? serializeLinks(input.links) : null,
-      now,
-      member.userId,
-    ],
-  );
-
-  // organization is locked to membership for org-tied categories —
-  // only H5/H6/H7 (member.organizationId === null) may set a free-text name.
-  if (member.organizationId === null && input.organizationName !== undefined) {
-    await run(db, `UPDATE users SET organization_name = ?, updated_at = ? WHERE id = ?`, [
-      input.organizationName,
-      now,
-      member.userId,
-    ]);
-  }
-
-  return getMyProfile(db, member);
-}
-
-export async function updateOrganizationVisibility(
-  db: DatabaseLike,
-  member: AuthMember,
-  showOnOrgProfile: boolean,
-): Promise<void> {
-  if (!member.organizationId) {
+  if (input.showOnOrgProfile !== undefined && !member.organizationId) {
     throw new AppError(422, "NO_ORGANIZATION", "This preference only applies to organization representatives");
   }
-  await run(
-    db,
-    `UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ?
-     WHERE member_id = ? AND user_id = ? AND left_at IS NULL`,
-    [showOnOrgProfile ? 1 : 0, nowIso(), member.memberId, member.userId],
+
+  const statements = [
+    db
+      .prepare(
+        `UPDATE users
+         SET first_name = COALESCE(?, first_name),
+             last_name = COALESCE(?, last_name),
+             preferred_name = COALESCE(?, preferred_name),
+             job_title = COALESCE(?, job_title),
+             biography = COALESCE(?, biography),
+             links_json = COALESCE(?, links_json),
+             organization_name = COALESCE(?, organization_name),
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        input.firstName ?? null,
+        input.lastName ?? null,
+        input.preferredName ?? null,
+        input.jobTitle ?? null,
+        input.biography ?? null,
+        input.links !== undefined ? serializeLinks(input.links) : null,
+        member.organizationId === null ? (input.organizationName ?? null) : null,
+        now,
+        member.userId,
+      ),
+  ];
+  if (input.showOnOrgProfile !== undefined) {
+    statements.push(
+      db
+        .prepare(
+          `UPDATE organization_representatives
+              SET show_on_org_profile = ?, updated_at = ?
+            WHERE member_id = ? AND user_id = ? AND left_at IS NULL`,
+        )
+        .bind(input.showOnOrgProfile ? 1 : 0, now, member.memberId, member.userId),
+    );
+  }
+  statements.push(
+    prepareAuditLog(db, "member", member.userId, "user_profile_updated", "user", member.userId, {
+      fields: Object.keys(input).sort(),
+      memberId: member.memberId,
+    }),
   );
+  await db.batch(statements);
+
+  return getMyProfile(db, member);
 }
 
 export interface MyApplicationSummary {
@@ -317,7 +318,7 @@ export interface MyApplicationDetail {
 /**
  * "My Application" tab: original application, status history, and
  * timeline. Scoped to the caller's own application(s) by matching
- * `applicant_email` against the member session's email — `/api/v1/me/*`
+ * `applicant_email` against the member session's email — current-user routes
  * never accepts a target id that isn't independently ownership-checked
  * (see this file's header comment).
  */
@@ -416,12 +417,42 @@ export async function updateMyNotificationPreferences(
   member: AuthMember,
   input: Partial<MyNotificationPreferences>,
 ): Promise<MyNotificationPreferences> {
-  const current = await getMyNotificationPreferences(db, member);
+  const row = await first<{ notification_preferences_json: string | null }>(
+    db,
+    "SELECT notification_preferences_json FROM users WHERE id = ?",
+    [member.userId],
+  );
+  const current = {
+    ...DEFAULT_NOTIFICATION_PREFERENCES,
+    ...parseJsonSafe<Partial<MyNotificationPreferences>>(row?.notification_preferences_json ?? null, {}),
+  };
   const next = { ...current, ...input };
-  await run(db, "UPDATE users SET notification_preferences_json = ?, updated_at = ? WHERE id = ?", [
-    stringifyJson(next),
-    nowIso(),
-    member.userId,
-  ]);
+  const at = nowIso();
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE users
+              SET notification_preferences_json = ?, updated_at = ?
+            WHERE id = ? AND notification_preferences_json IS ?`,
+        )
+        .bind(stringifyJson(next), at, member.userId, row?.notification_preferences_json ?? null),
+      prepareAuditLogAfterOneChange(
+        db,
+        "member",
+        member.userId,
+        "notification_preferences_updated",
+        "user",
+        member.userId,
+        { fields: Object.keys(input).sort(), memberId: member.memberId },
+        at,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "NOTIFICATION_PREFERENCES_CHANGED", "Notification preferences changed concurrently");
+    }
+    throw error;
+  }
   return next;
 }

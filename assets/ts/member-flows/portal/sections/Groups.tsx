@@ -12,7 +12,7 @@ type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
 
 export function Groups() {
   const catalog = useApiPage<SelfGroupsPage>(
-    "/api/v1/me/groups",
+    "/api/v1/users/current/groups",
     { view: "catalog" },
     selfGroupsListResponseSchema,
     (data) => data.groups,

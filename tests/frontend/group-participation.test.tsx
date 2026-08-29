@@ -126,7 +126,7 @@ describe("generic group participation card", () => {
     const container = mountGroups();
     await settle();
 
-    expect(request?.pathname).toBe("/api/v1/me/groups");
+    expect(request?.pathname).toBe("/api/v1/users/current/groups");
     expect(request?.searchParams.get("view")).toBe("catalog");
     expect(request?.searchParams.has("typeKey")).toBe(false);
     expect(container.textContent).toContain("Committee");
