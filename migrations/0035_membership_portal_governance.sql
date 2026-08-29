@@ -289,6 +289,26 @@ WHERE EXISTS (
     )
 );
 
+-- Invitation recipients are case-insensitive application identities. Repair
+-- legacy whitespace/casing before duplicate detection so the uniqueness
+-- invariant cannot preserve parallel capabilities for the same mailbox.
+UPDATE invites
+SET invitee_email = lower(trim(invitee_email))
+WHERE invitee_email <> lower(trim(invitee_email));
+
+-- A blank recipient or a deadline that has already elapsed cannot represent
+-- an active invitation. Retire it before duplicate resolution so only a
+-- currently usable capability can occupy the active uniqueness slot.
+UPDATE invites
+SET status = 'expired'
+WHERE status = 'sent'
+  AND (
+    invitee_email = ''
+    OR expires_at IS NULL
+    OR expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', expires_at)
+    OR expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  );
+
 CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
   WHERE role <> 'proposer' AND status IN ('invited', 'confirmed');
@@ -5242,7 +5262,10 @@ INSERT INTO sponsorship_tier_config (id, sponsor_type, tier, currency, amount_ce
 -- sponsorships table, not added here.
 
 -- A sent invite is a single active capability per event, address, and purpose.
--- Resolve any legacy duplicates deterministically before enforcing the invariant.
+-- Resolve any legacy duplicates deterministically before enforcing the
+-- invariant. Retain the newest still-valid capability because it is the one
+-- most recently delivered; created_at ties use the greatest id as a stable
+-- tiebreaker.
 UPDATE invites
 SET status = 'revoked'
 WHERE status = 'sent'
@@ -5253,7 +5276,7 @@ WHERE status = 'sent'
       AND keeper.invitee_email = invites.invitee_email
       AND keeper.invite_type = invites.invite_type
       AND keeper.status = 'sent'
-      AND (keeper.created_at < invites.created_at OR (keeper.created_at = invites.created_at AND keeper.id < invites.id))
+      AND (keeper.created_at > invites.created_at OR (keeper.created_at = invites.created_at AND keeper.id > invites.id))
   );
 
 CREATE UNIQUE INDEX uq_invites_active_recipient
