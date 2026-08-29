@@ -7,7 +7,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
-import { VoteDetails } from "../Votes/VoteCard";
+import { VoteDetails } from "../Votes/VoteDetails";
 import { GroupVoteCreateForm } from "./GroupVoteCreateForm";
 import { GroupVoteManagementControls } from "./GroupVoteManagementControls";
 import { GroupVoteProposals } from "./GroupVoteProposals";
@@ -18,13 +18,15 @@ export function GroupVotes({
   groupId,
   canManage,
   canParticipate,
+  initialVoteId,
 }: {
   groupId: string;
   canManage: boolean;
   canParticipate: boolean;
+  initialVoteId?: string;
 }) {
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
-  const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
+  const [selectedVoteId, setSelectedVoteId] = useState<string | null>(initialVoteId ?? null);
   const [showCreate, setShowCreate] = useState(false);
   const tableActions = useRef<ApiTableActions | null>(null);
   const detail = useData(

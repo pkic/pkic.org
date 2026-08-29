@@ -21,7 +21,7 @@ import type {
 import type {
   voteTypeSchema,
   candidateSummarySchema,
-  portalVoteSchema,
+  memberVoteSchema,
   proposalSummarySchema,
   motionVoteResultSchema,
   electionRoundTallySchema,
@@ -50,6 +50,6 @@ export type MotionVoteResult = z.infer<typeof motionVoteResultSchema>;
 export type ElectionRoundTally = z.infer<typeof electionRoundTallySchema>;
 export type ElectionVoteResult = z.infer<typeof electionVoteResultSchema>;
 
-export type PortalVote = z.infer<typeof portalVoteSchema>;
+export type MemberVote = z.infer<typeof memberVoteSchema>;
 
 export type VoteProposal = z.infer<typeof proposalSummarySchema>;

@@ -26,7 +26,6 @@ const MyOrganization = lazy(() =>
   import("../sections/MyOrganization").then((module) => ({ default: module.MyOrganization })),
 );
 const Groups = lazy(() => import("../sections/Groups").then((module) => ({ default: module.Groups })));
-const Votes = lazy(() => import("../sections/Votes").then((module) => ({ default: module.Votes })));
 const MyApplications = lazy(() =>
   import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
 );
@@ -164,6 +163,16 @@ export function PortalShell() {
                 )}
               />
             )}
+            {(hasAdminCapacity || hasMemberCapacity) && (
+              <Route
+                path="/groups/:groupId/votes/:voteId"
+                component={({ params }: { params: { groupId: string; voteId: string } }) => (
+                  <SectionWrapper title="Group">
+                    <Management groupId={params.groupId} view="votes" resourceId={params.voteId} />
+                  </SectionWrapper>
+                )}
+              />
+            )}
             {portalHasSystemManagement(portalSession.value) && (
               <Route
                 path="/system/donations/detail/:donationId"
@@ -262,16 +271,6 @@ export function PortalShell() {
               Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
                 <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
               ))}
-            {hasMemberCapacity && (
-              <Route
-                path="/votes"
-                component={() => (
-                  <SectionWrapper title="Votes">
-                    <Votes />
-                  </SectionWrapper>
-                )}
-              />
-            )}
             {hasMemberCapacity && (
               <Route
                 path="/application"

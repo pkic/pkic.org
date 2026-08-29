@@ -11,6 +11,7 @@ import { voteParticipationGroupPredicate } from "./vote-access";
  */
 export interface PendingVoteRepresentativeNotificationIntent {
   voteId: string;
+  ownerGroupId: string;
   voteTitle: string;
   round: number;
   closesAt: string;
@@ -101,6 +102,7 @@ export async function listPendingVoteRepresentativeNotificationIntents(
 ): Promise<PendingVoteRepresentativeNotificationIntent[]> {
   const rows = await all<{
     vote_id: string;
+    owner_group_id: string;
     vote_title: string;
     round: number;
     closes_at: string;
@@ -111,16 +113,19 @@ export async function listPendingVoteRepresentativeNotificationIntents(
     representative_name: string;
   }>(
     db,
-    `SELECT vote_id, vote_title, round, closes_at, member_id,
-            organization_name, representative_user_id, recipient_email, representative_name
-     FROM vote_representative_notification_intents
-     WHERE queued_outbox_id IS NULL
-     ORDER BY created_at ASC, vote_id ASC, round ASC, member_id ASC, representative_user_id ASC
+    `SELECT intent.vote_id, vote.owner_group_id, intent.vote_title, intent.round, intent.closes_at, intent.member_id,
+            intent.organization_name, intent.representative_user_id, intent.recipient_email, intent.representative_name
+     FROM vote_representative_notification_intents intent
+     JOIN votes vote ON vote.id = intent.vote_id
+     WHERE intent.queued_outbox_id IS NULL
+     ORDER BY intent.created_at ASC, intent.vote_id ASC, intent.round ASC,
+              intent.member_id ASC, intent.representative_user_id ASC
      LIMIT ?`,
     [limit],
   );
   return rows.map((row) => ({
     voteId: row.vote_id,
+    ownerGroupId: row.owner_group_id,
     voteTitle: row.vote_title,
     round: row.round,
     closesAt: row.closes_at,

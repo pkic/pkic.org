@@ -15,7 +15,6 @@ const MEMBER_NAV_ITEMS: PortalNavItem[] = [
   { path: "/profile", section: "profile", label: "My Profile" },
   { path: "/organization", section: "organization", label: "My Organization" },
   { path: "/groups", section: "groups", label: "Groups" },
-  { path: "/votes", section: "votes", label: "Votes" },
   { path: "/application", section: "application", label: "My Application" },
 ];
 

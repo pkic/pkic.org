@@ -432,6 +432,7 @@ describe("portal capability-derived navigation", () => {
     expect(labels).toContain("My Profile");
     expect(labels).toContain("Account Settings");
     expect(labels).toContain("Groups");
+    expect(labels).not.toContain("Votes");
     expect(labels).not.toContain("Working Groups");
     expect(labels).not.toContain("Management");
   });

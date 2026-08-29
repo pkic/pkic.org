@@ -256,7 +256,7 @@ test.describe("Admin browser-verification pass", () => {
     const title = `E2E Member Vote Proposal ${stamp}`;
     const submitted = await page.evaluate(
       async ({ title, groupId }) => {
-        const res = await fetch("/api/v1/portal/vote-proposals", {
+        const res = await fetch(`/api/v1/groups/${encodeURIComponent(groupId)}/vote-proposals`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",

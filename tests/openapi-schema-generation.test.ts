@@ -157,6 +157,14 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/votes/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}/visibility"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}/ballots"]).toBeUndefined();
+    expect(spec.paths["/api/v1/portal/votes"]).toBeUndefined();
+    expect(spec.paths["/api/v1/portal/vote-proposals"]).toBeUndefined();
+    expect(spec.paths["/api/v1/me/votes"]).toBeUndefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/votes"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/votes/{voteId}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/votes/{voteId}/ballots"].post).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/vote-proposals"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/vote-proposals"].post).toBeDefined();
     expect(spec.paths["/api/v1/donations"].get[AUTH_EXTENSION]).toMatchObject({
       required: true,
       scopes: ["donations:read"],
