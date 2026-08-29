@@ -43,7 +43,8 @@ export function prepareVoteRepresentativeNotificationIntents(
          FROM votes
          WHERE id = ?
            AND electorate_mode = 'per_member'
-           AND status = 'open'
+           AND closed_at IS NULL
+           AND cancelled_at IS NULL
            AND current_round = ?
        )
        INSERT INTO vote_representative_notification_intents (

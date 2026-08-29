@@ -3,15 +3,16 @@ import { VOTE_CANDIDATE_COLUMNS, VOTE_ROW_COLUMNS } from "./shared";
 /** Indexed, deterministic projections used by scheduled vote due-work. */
 export const VOTE_OPEN_DUE_QUERY = `
   SELECT ${VOTE_ROW_COLUMNS}
-  FROM votes INDEXED BY idx_votes_status_opens_at
-  WHERE status = 'scheduled' AND opens_at <= ?
+  FROM votes INDEXED BY idx_votes_pending_open
+  WHERE opened_at IS NULL AND cancelled_at IS NULL AND opens_at <= ?
   ORDER BY opens_at ASC, id ASC
   LIMIT ?`;
 
 export const VOTE_CLOSE_DUE_QUERY = `
   SELECT ${VOTE_ROW_COLUMNS}
-  FROM votes INDEXED BY idx_votes_status_closes_at
-  WHERE status = 'open'
+  FROM votes INDEXED BY idx_votes_pending_close
+  WHERE closed_at IS NULL
+    AND cancelled_at IS NULL
     AND closes_at <= ?
     AND (transition_processing_token IS NULL OR transition_lease_expires_at <= ?)
   ORDER BY closes_at ASC, id ASC

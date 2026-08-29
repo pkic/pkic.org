@@ -89,7 +89,8 @@ export function activeGroupVoterAuthorizationEvidence(userId: string, groupId: s
  */
 export const VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY = `
   WITH target_vote AS (
-    SELECT id, vote_type, electorate_mode, status, current_round, eligible_categories, owner_group_id
+    SELECT id, vote_type, electorate_mode, opens_at, closes_at, opened_at, closed_at, cancelled_at,
+           current_round, eligible_categories, owner_group_id
       FROM votes
      WHERE id = ?
   ),
@@ -149,7 +150,11 @@ export const VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY = `
   SELECT target_vote.id AS vote_id,
          target_vote.vote_type,
          target_vote.electorate_mode,
-         target_vote.status,
+         target_vote.opens_at,
+         target_vote.closes_at,
+         target_vote.opened_at,
+         target_vote.closed_at,
+         target_vote.cancelled_at,
          target_vote.current_round,
          COUNT(eligible_units.unit_id) AS current_eligible,
          COUNT(CASE WHEN eligible_ballot.id IS NOT NULL THEN 1 END) AS current_eligible_cast,

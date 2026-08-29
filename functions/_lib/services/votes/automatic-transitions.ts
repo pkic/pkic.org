@@ -48,15 +48,16 @@ export async function openDueVote(db: DatabaseLike, vote: VoteRow, now: string):
       db
         .prepare(
           `UPDATE votes
-           SET status = 'open', transition_revision = transition_revision + 1, updated_at = ?
+           SET opened_at = ?, transition_revision = transition_revision + 1, updated_at = ?
            WHERE id = ?
-             AND status = 'scheduled'
+             AND opened_at IS NULL
+             AND cancelled_at IS NULL
              AND transition_revision = ?
              AND transition_processing_token IS NULL
              AND opens_at = ?
              AND opens_at <= ?`,
         )
-        .bind(now, vote.id, vote.transition_revision, vote.opens_at, now),
+        .bind(now, now, vote.id, vote.transition_revision, vote.opens_at, now),
       prepareAuditLogAfterOneChange(
         db,
         "system",
@@ -84,7 +85,8 @@ export async function claimDueVote(db: DatabaseLike, vote: VoteRow, now: string)
        SET transition_processing_token = ?, transition_lease_expires_at = ?,
            transition_revision = transition_revision + 1, updated_at = ?
        WHERE id = ?
-         AND status = 'open'
+         AND closed_at IS NULL
+         AND cancelled_at IS NULL
          AND current_round = ?
          AND transition_revision = ?
          AND closes_at = ?
@@ -121,7 +123,8 @@ export async function releaseClaimedVote(db: DatabaseLike, vote: ClaimedVote, no
        SET transition_processing_token = NULL, transition_lease_expires_at = NULL,
            transition_revision = transition_revision + 1, updated_at = ?
        WHERE id = ?
-         AND status = 'open'
+         AND closed_at IS NULL
+         AND cancelled_at IS NULL
          AND current_round = ?
          AND transition_revision = ?
          AND transition_processing_token = ?`,
@@ -140,18 +143,20 @@ function prepareFinalizeVoteStatement(
   return db
     .prepare(
       `UPDATE votes
-       SET status = 'closed', result_json = ?, closes_at = ?,
+       SET closed_at = ?, result_json = ?, closes_at = ?,
            transition_revision = transition_revision + 1,
            transition_processing_token = NULL, transition_lease_expires_at = NULL,
            updated_at = ?
        WHERE id = ?
-         AND status = 'open'
+         AND closed_at IS NULL
+         AND cancelled_at IS NULL
          AND current_round = ?
          AND transition_revision = ?
          AND transition_processing_token = ?
          AND closes_at = ?`,
     )
     .bind(
+      now,
       resultJson,
       finalClosesAt,
       now,
@@ -269,7 +274,8 @@ async function advanceOrFinalizeElection(
              transition_processing_token = NULL, transition_lease_expires_at = NULL,
              updated_at = ?
          WHERE id = ?
-           AND status = 'open'
+           AND closed_at IS NULL
+           AND cancelled_at IS NULL
            AND current_round = ?
            AND transition_revision = ?
            AND transition_processing_token = ?

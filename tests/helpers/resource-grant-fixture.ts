@@ -95,10 +95,10 @@ export async function createResourceGrantFixture(): Promise<ResourceGrantFixture
   await env.DB.prepare(
     `INSERT INTO votes
        (id, slug, title, vote_type, owner_group_id, electorate_mode, created_by_user_id,
-        threshold_type, opens_at, closes_at, status, created_at, updated_at)
+        threshold_type, opens_at, closes_at, created_at, updated_at)
      VALUES (?, ?, 'Shared vote', 'motion', ?, 'per_member', ?, 'simple_majority',
-             '2026-01-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z', 'scheduled',
-             datetime('now'), datetime('now'))`,
+             '2026-01-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z',
+             strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   )
     .bind(voteId, `shared-vote-${crypto.randomUUID()}`, owner.id, admin.id)
     .run();

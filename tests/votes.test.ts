@@ -1053,7 +1053,9 @@ describe("canonical group voting", () => {
       totalBallots: 1,
       outcome: "passed" as const,
     };
-    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+    await env.DB.prepare(
+      "UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), result_json = ? WHERE id = ?",
+    )
       .bind(JSON.stringify(result), vote.id)
       .run();
     await env.DB.prepare(
@@ -1081,7 +1083,7 @@ describe("canonical group voting", () => {
     const vote = await createCanonicalVote(env.DB, admin, { title: "Public result" });
     await env.DB.prepare(
       `UPDATE votes
-       SET status = 'closed', visibility = 'public', public_detail_level = 'outcome_only',
+       SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), visibility = 'public', public_detail_level = 'outcome_only',
            result_json = '{"thresholdType":"simple_majority","counts":{"in_favor":2,"opposed":0,"abstain":0},"totalBallots":2,"outcome":"passed"}'
        WHERE id = ?`,
     )
@@ -1345,8 +1347,8 @@ describe("canonical group voting", () => {
       transitionManagedVote(env.DB, admin, vote.id, { transition: "close" }, TEST_GROUPS.pqc),
     ).rejects.toThrow("manual close audit rejected by test");
     expect(
-      await queryAll(env.DB, "SELECT status, transition_processing_token FROM votes WHERE id = ?", vote.id),
-    ).toEqual([{ status: "open", transition_processing_token: null }]);
+      await queryAll(env.DB, "SELECT closed_at, transition_processing_token FROM votes WHERE id = ?", vote.id),
+    ).toEqual([{ closed_at: null, transition_processing_token: null }]);
     await env.DB.prepare("DROP TRIGGER test_reject_manual_vote_close_audit").run();
   });
 
@@ -1371,7 +1373,7 @@ describe("canonical group voting", () => {
     await expect(pending).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
     );
-    expect(await queryAll(env.DB, "SELECT status FROM votes WHERE id = ?", vote.id)).toEqual([{ status: "scheduled" }]);
+    expect(await queryAll(env.DB, "SELECT opened_at FROM votes WHERE id = ?", vote.id)).toEqual([{ opened_at: null }]);
   });
 
   it("binds vote detail, ballots, and results to the selected group", async () => {
@@ -1420,7 +1422,9 @@ describe("canonical group voting", () => {
       totalBallots: 1,
       outcome: "passed",
     };
-    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+    await env.DB.prepare(
+      "UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), result_json = ? WHERE id = ?",
+    )
       .bind(JSON.stringify(result), vote.id)
       .run();
     expect((await call(token, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/results`)).status).toBe(404);
@@ -1442,7 +1446,9 @@ describe("canonical group voting", () => {
       totalBallots: 0,
       outcome: "failed",
     };
-    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+    await env.DB.prepare(
+      "UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), result_json = ? WHERE id = ?",
+    )
       .bind(JSON.stringify(result), vote.id)
       .run();
     await env.DB.prepare(
@@ -1492,12 +1498,14 @@ describe("canonical group voting", () => {
       .bind(new Date(Date.now() - 100).toISOString(), vote.id)
       .run();
     expect((await closeDueVotes(env.DB, 10)).closed).toContain(vote.id);
-    const [closed] = await queryAll<{ status: string; result_json: string }>(
+    const [closed] = await queryAll<{ closed_at: string | null; result_json: string }>(
       env.DB,
-      "SELECT status, result_json FROM votes WHERE id = ?",
+      "SELECT closed_at, result_json FROM votes WHERE id = ?",
       vote.id,
     );
-    expect(closed.status).toBe("closed");
+    // The close side effects ran, which is the fact worth asserting; whether
+    // the vote reads as closed follows from the schedule either way.
+    expect(closed.closed_at).not.toBeNull();
     expect(JSON.parse(closed.result_json)).toMatchObject({ outcome: "passed", totalBallots: 1 });
   });
 
@@ -1531,7 +1539,7 @@ describe("canonical group voting", () => {
       20,
       0,
     ]);
-    expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_status/);
+    expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_schedule/);
     expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_group_grants_group/);
     const groupProposals = buildOffsetPageSql(
       buildGroupVoteProposalsPageQuery({ userId: admin.id, admin }, TEST_GROUPS.pqc, {

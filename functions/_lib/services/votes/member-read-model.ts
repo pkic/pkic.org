@@ -1,4 +1,6 @@
 /** Member-scoped vote discovery, detail, and results for group resource adapters. */
+import { nowIso } from "../../utils/time";
+import { deriveVoteStatus, isVoteAcceptingBallots } from "./status";
 import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
@@ -199,8 +201,9 @@ export async function hydrateVotesForUser(
     loadAccessibleVoteIds(db, voteIds, userId, throughGroupId),
   ]);
 
+  const now = nowIso();
   return rows.map((row) => {
-    const open = row.status === "open";
+    const open = isVoteAcceptingBallots(row, now);
     const memberBallots = row.electorate_mode === "per_member" ? (memberBallotsByVoteId.get(row.id) ?? []) : null;
     const personStatus = personStatuses.get(row.id) ?? { eligible: false, hasCastBallot: false };
     const canCastBallot = open && (memberBallots ? memberBallots.length > 0 : personStatus.eligible);
@@ -208,7 +211,7 @@ export async function hydrateVotesForUser(
       ? memberBallots.some((ballot) => ballot.hasCastBallot)
       : personStatus.hasCastBallot;
     const result =
-      row.status !== "closed"
+      deriveVoteStatus(row, now) !== "closed"
         ? null
         : accessibleVoteIds.has(row.id)
           ? closedVoteResult(row)

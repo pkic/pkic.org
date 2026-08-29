@@ -5,6 +5,8 @@
  * 1400+ line votes.ts (PR #1 review) — see votes/index.ts for the barrel
  * that re-exports everything under the original module surface.
  */
+import { nowIso } from "../../utils/time";
+import { deriveVoteStatus } from "./status";
 import type { z } from "zod";
 import { all, first } from "../../db/queries";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
@@ -60,7 +62,9 @@ export interface VoteRow {
   transition_revision: number;
   transition_processing_token: string | null;
   transition_lease_expires_at: string | null;
-  status: VoteStatus;
+  opened_at: string | null;
+  closed_at: string | null;
+  cancelled_at: string | null;
   cancellation_reason: string | null;
   result_json: string | null;
   visibility: VoteVisibility;
@@ -77,7 +81,8 @@ export function voteRowProjection(alias: "votes" | "vote"): string {
     ${alias}.electorate_mode, ${alias}.created_by_user_id, ${alias}.proposed_by_user_id,
     ${alias}.eligible_categories, ${alias}.threshold_type, ${alias}.opens_at, ${alias}.closes_at,
     ${alias}.current_round, ${alias}.transition_revision, ${alias}.transition_processing_token,
-    ${alias}.transition_lease_expires_at, ${alias}.status, ${alias}.cancellation_reason,
+    ${alias}.transition_lease_expires_at, ${alias}.opened_at, ${alias}.closed_at,
+    ${alias}.cancelled_at, ${alias}.cancellation_reason,
     ${alias}.result_json, ${alias}.visibility,
     ${alias}.public_detail_level, ${alias}.created_at, ${alias}.updated_at`;
 }
@@ -166,7 +171,7 @@ export interface VoteSummary {
   updatedAt: string;
 }
 
-export function toVoteSummary(row: VoteRow): VoteSummary {
+export function toVoteSummary(row: VoteRow, now: string = nowIso()): VoteSummary {
   return {
     id: row.id,
     slug: row.slug,
@@ -181,7 +186,7 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
     opensAt: row.opens_at,
     closesAt: row.closes_at,
     currentRound: row.current_round,
-    status: row.status,
+    status: deriveVoteStatus(row, now),
     cancellationReason: row.cancellation_reason,
     visibility: row.visibility,
     publicDetailLevel: row.public_detail_level,
@@ -190,8 +195,8 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
   };
 }
 
-export function closedVoteResult(row: VoteRow): VoteFullResult {
-  if (row.status !== "closed") {
+export function closedVoteResult(row: VoteRow, now: string = nowIso()): VoteFullResult {
+  if (deriveVoteStatus(row, now) !== "closed") {
     throw new AppError(409, "VOTE_NOT_CLOSED", "Results are hidden until the vote closes");
   }
   return parseJsonSafe<Record<string, unknown>>(row.result_json, {}) as unknown as VoteFullResult;

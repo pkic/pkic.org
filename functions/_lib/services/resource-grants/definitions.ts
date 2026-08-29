@@ -78,7 +78,7 @@ const DEFINITIONS: { [K in ResourceGrantKind]: ResourceGrantDefinition<K> } = {
     kind: "vote",
     resourceTable: "votes",
     ownerGroupColumn: "owner_group_id",
-    ownerGroupIndex: "idx_votes_group_status",
+    ownerGroupIndex: "idx_votes_group_schedule",
     grantTable: "vote_group_grants",
     grantResourceColumn: "vote_id",
     grantGroupIndex: "idx_vote_group_grants_group",

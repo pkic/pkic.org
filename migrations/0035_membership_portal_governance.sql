@@ -4814,8 +4814,13 @@ CREATE TABLE votes (
   transition_revision   INTEGER NOT NULL DEFAULT 0,
   transition_processing_token TEXT,
   transition_lease_expires_at TEXT,
-  status                TEXT NOT NULL,
-  -- allowed: scheduled | open | closed | cancelled
+  -- Lifecycle facts: WHICH side effects have already run. Whether the ballot
+  -- box is open is NOT stored — it is derived from opens_at/closes_at, so it
+  -- cannot drift from the schedule while a transition job is late. Conflating
+  -- the two previously let a vote read as open past its own deadline.
+  opened_at             TEXT,
+  closed_at             TEXT,
+  cancelled_at          TEXT,
   cancellation_reason   TEXT,
   result_json           TEXT,
   visibility             TEXT NOT NULL DEFAULT 'private',
@@ -4826,10 +4831,17 @@ CREATE TABLE votes (
   updated_at            TEXT NOT NULL
 );
 
-CREATE INDEX idx_votes_group_status
-  ON votes(owner_group_id, status, opens_at, id);
-CREATE INDEX idx_votes_status_opens_at ON votes(status, opens_at, id);
-CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at, id);
+CREATE INDEX idx_votes_group_schedule
+  ON votes(owner_group_id, opens_at, id);
+-- The dispatcher's two selection paths. Partial on the lifecycle fact rather
+-- than a status string, so each index covers exactly the rows still needing
+-- that side effect.
+CREATE INDEX idx_votes_pending_open
+  ON votes(opens_at, id)
+  WHERE opened_at IS NULL AND cancelled_at IS NULL;
+CREATE INDEX idx_votes_pending_close
+  ON votes(closes_at, id)
+  WHERE closed_at IS NULL AND cancelled_at IS NULL;
 CREATE INDEX idx_votes_visibility ON votes(visibility, closes_at);
 
 CREATE TABLE vote_group_grants (

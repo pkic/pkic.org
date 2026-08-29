@@ -3,6 +3,7 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
+import { deriveVoteStatus } from "./status";
 import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
@@ -28,7 +29,6 @@ import {
   type VoteType,
   type VoteElectorateMode,
   type ThresholdType,
-  type VoteStatus,
   type VoteVisibility,
   type PublicDetailLevel,
   type VoteSummary,
@@ -69,7 +69,6 @@ export async function createVoteDirect(
 
   const id = uuid();
   const slug = await uniqueSlug(db, input.title);
-  const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
   const databaseUserId = adminDatabaseUserId(admin);
 
   // Build every statement first, execute once via db.batch() — the vote row
@@ -84,9 +83,9 @@ export async function createVoteDirect(
         `INSERT INTO votes
            (id, slug, title, description, vote_type, owner_group_id, electorate_mode,
             created_by_user_id, proposed_by_user_id,
-            eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json,
+            eligible_categories, threshold_type, opens_at, closes_at, current_round, result_json,
             visibility, public_detail_level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1, NULL, 'private', 'aggregate', ?, ?)`,
       )
       .bind(
         id,
@@ -101,7 +100,6 @@ export async function createVoteDirect(
         input.thresholdType,
         opensAt,
         input.closesAt,
-        status,
         now,
         now,
       ),
@@ -157,7 +155,7 @@ export async function updateVoteSettings(
   throughGroupId?: string,
 ): Promise<VoteSummary> {
   const existing = await getVoteRowOrThrow(db, voteId);
-  if (existing.status === "closed") {
+  if (deriveVoteStatus(existing, nowIso()) === "closed") {
     throw new AppError(409, "VOTE_CLOSED", "Cannot update a closed vote");
   }
   const opensAt = input.opensAt ?? existing.opens_at;

@@ -26,6 +26,8 @@ export const publicDetailLevelSchema = z.enum(PUBLIC_DETAIL_LEVELS);
 
 export const VOTE_STATUSES = ["scheduled", "open", "closed", "cancelled"] as const;
 export const voteStatusSchema = z.enum(VOTE_STATUSES);
+/** Derived from the vote schedule and lifecycle facts; never stored. */
+export type VoteStatus = z.infer<typeof voteStatusSchema>;
 
 export const VOTE_PROPOSAL_STATUSES = [
   "open_for_endorsement",
