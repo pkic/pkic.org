@@ -170,7 +170,7 @@ describe("portal capability-derived navigation", () => {
     );
   });
 
-  it("exposes Sponsorships to global readers or writers", () => {
+  it("exposes Sponsors as a resource workspace to global readers or writers", () => {
     const reader = portalSessionFixture({
       staff: true,
       staffRole: "user",
@@ -195,21 +195,19 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "sponsorships:read", contextType: "group", contextId: "group-1" }],
     });
 
-    expect(portalSystemNavigationItems(reader)).toContainEqual({
-      path: "/system/sponsorships",
-      section: "system",
-      label: "Sponsorships",
+    expect(portalNavigationItems(reader)).toContainEqual({
+      path: "/sponsors",
+      section: "sponsors",
+      label: "Sponsors",
     });
     expect(portalHasGlobalPermission(reader, "sponsorships:write")).toBe(false);
     expect(portalHasGlobalPermission(writer, "sponsorships:write")).toBe(true);
-    expect(portalSystemNavigationItems(writeOnly)).toContainEqual({
-      path: "/system/sponsorships",
-      section: "system",
-      label: "Sponsorships",
+    expect(portalNavigationItems(writeOnly)).toContainEqual({
+      path: "/sponsors",
+      section: "sponsors",
+      label: "Sponsors",
     });
-    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/sponsorships" }),
-    );
+    expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/sponsors" }));
   });
 
   it("exposes Organizations to global readers or membership writers", () => {

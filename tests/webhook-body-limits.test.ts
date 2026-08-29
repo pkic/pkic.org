@@ -92,7 +92,7 @@ describe("webhook request body limits", () => {
   });
 
   it("rejects oversized sponsorship Stripe webhook bodies before HMAC work", async () => {
-    expect(await call("/api/v1/sponsorship/checkout/webhook", STRIPE_WEBHOOK_MAX_BYTES + 1)).toMatchObject({
+    expect(await call("/api/v1/sponsors/checkouts/stripe/events", STRIPE_WEBHOOK_MAX_BYTES + 1)).toMatchObject({
       status: 413,
     });
   });

@@ -1,5 +1,10 @@
 import { prepareMagicLinkVerificationHttp, createSessionEstablishedResponse } from "../../../_lib/auth/http-flow";
-import { redeemUserSignInCapability, serializeUserSessionCookie } from "../../../_lib/auth/user-session";
+import {
+  redeemSponsorSignInCapability,
+  redeemUserSignInCapability,
+  serializeUserSessionCookie,
+} from "../../../_lib/auth/user-session";
+import { parseCapabilityToken } from "../../../_lib/auth/capability-token";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";
 import {
@@ -12,7 +17,10 @@ const USER_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE = "user-auth-verify-link:ip";
 
 export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async (c: AdminContext, data) => {
   const http = await prepareMagicLinkVerificationHttp(c, USER_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
-  const result = await redeemUserSignInCapability(http.db, {
+  const redeem = parseCapabilityToken(data.body.token, "sponsor_sign_in")
+    ? redeemSponsorSignInCapability
+    : redeemUserSignInCapability;
+  const result = await redeem(http.db, {
     token: data.body.token,
     signingSecret: http.secret,
     sessionTtlHours: resolveMemberSessionTtlHours(c.env.MEMBER_SESSION_TTL_HOURS),
@@ -26,6 +34,7 @@ export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async 
       identity: result.session.identity,
       ...(result.session.staff ? { staff: result.session.staff } : {}),
       ...(result.session.member ? { member: result.session.member } : {}),
+      sponsors: result.session.sponsors,
     }),
     serializeUserSessionCookie(result.token, c.req.raw),
   );

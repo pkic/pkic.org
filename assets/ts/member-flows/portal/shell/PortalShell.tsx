@@ -4,7 +4,7 @@ import { lazy, Suspense } from "preact/compat";
 import { useEffect } from "preact/hooks";
 import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
-import { portalSession, profile } from "../state";
+import { clearAuth, portalSession, profile } from "../state";
 import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
 import { Spinner } from "../../../components/Spinner";
 import type { PortalSession } from "../types";
@@ -15,6 +15,7 @@ import {
   portalDefaultPath,
   portalHasGlobalPermission,
   portalHasPermissionAtAnyScope,
+  portalHasSponsorWorkspace,
   portalHasSystemManagement,
 } from "./portal-navigation";
 
@@ -44,6 +45,9 @@ const GroupEventProposals = lazy(() =>
 );
 const DonationDetailPage = lazy(() =>
   import("../sections/system-donations/DonationDetailPage").then((module) => ({ default: module.DonationDetailPage })),
+);
+const SponsorWorkspace = lazy(() =>
+  import("../sections/sponsors").then((module) => ({ default: module.SponsorWorkspace })),
 );
 
 function LazyEventWorkspace(props: EventWorkspaceProps) {
@@ -130,6 +134,40 @@ export function PortalShell() {
               />
             )}
             {hasEventWorkspace && <Route path="/events" component={() => <LazyEventWorkspace view="list" />} />}
+            {portalHasSponsorWorkspace(portalSession.value) && (
+              <Route path="/sponsors/access" component={() => <PortalRouteRedirect to="/sponsors" />} />
+            )}
+            {portalHasSponsorWorkspace(portalSession.value) && (
+              <Route
+                path="/sponsors/:sponsorId"
+                component={({ params }: { params: { sponsorId: string } }) => (
+                  <SectionWrapper title="Sponsors">
+                    <SponsorWorkspace
+                      sponsors={portalSession.value?.sponsors ?? []}
+                      canRead={portalHasGlobalPermission(portalSession.value, "sponsorships:read")}
+                      canWrite={portalHasGlobalPermission(portalSession.value, "sponsorships:write")}
+                      detailId={params.sponsorId}
+                      onSessionExpired={clearAuth}
+                    />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {portalHasSponsorWorkspace(portalSession.value) && (
+              <Route
+                path="/sponsors"
+                component={() => (
+                  <SectionWrapper title="Sponsors">
+                    <SponsorWorkspace
+                      sponsors={portalSession.value?.sponsors ?? []}
+                      canRead={portalHasGlobalPermission(portalSession.value, "sponsorships:read")}
+                      canWrite={portalHasGlobalPermission(portalSession.value, "sponsorships:write")}
+                      onSessionExpired={clearAuth}
+                    />
+                  </SectionWrapper>
+                )}
+              />
+            )}
             {portalHasGlobalPermission(portalSession.value, "forms:read") && (
               <Route
                 path="/forms/:formKey"

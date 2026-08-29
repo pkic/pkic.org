@@ -9,11 +9,8 @@
  * fully modeled field-by-field.
  */
 import { z } from "zod";
-import { userIdentitySchema } from "./user-auth";
+import { userAuthEstablishedResponseSchema } from "./user-auth";
 import { databaseIdSchema } from "./identifiers";
-import { successResponseSchema } from "./api-common";
-import { publicAuthAdminSchema } from "./admin-auth";
-import { authMemberSchema } from "./member-auth";
 import { publicOperation, requiresSession } from "./route-contract";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
@@ -75,16 +72,7 @@ export const passkeySummarySchema = z.object({
 export type PasskeySummary = z.infer<typeof passkeySummarySchema>;
 export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySummarySchema) });
 
-export const passkeyAuthenticateCompleteBaseResponseSchema = successResponseSchema.extend({ expiresAt: z.string() });
-export const passkeyAuthenticateCompleteResponseSchema = passkeyAuthenticateCompleteBaseResponseSchema
-  .extend({
-    identity: userIdentitySchema,
-    staff: publicAuthAdminSchema.optional(),
-    member: authMemberSchema.optional(),
-  })
-  .refine((value) => value.staff !== undefined || value.member !== undefined, {
-    message: "At least one authenticated capacity is required",
-  });
+export const passkeyAuthenticateCompleteResponseSchema = userAuthEstablishedResponseSchema;
 
 export const passkeyRegisterBeginRouteSchema = {
   ...requiresSession(),

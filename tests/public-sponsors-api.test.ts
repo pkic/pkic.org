@@ -103,7 +103,7 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
     };
     expect(body.sponsors).toHaveLength(1);
     expect(body.sponsors[0]).toMatchObject({ name: "Sponsoring Org", tier: "Diamond" });
-    expect(body.page).toEqual({ limit: 200, offset: 0, total: 1, hasMore: false });
+    expect(body.page).toEqual({ limit: 50, offset: 0, total: 1, hasMore: false });
   });
 
   it("bounds the result set with ?limit=/?offset= instead of returning everything unbounded", async () => {

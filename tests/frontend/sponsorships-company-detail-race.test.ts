@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
-import { useCompanySponsorships } from "../../assets/ts/member-flows/portal/sections/system-sponsorships/useCompanySponsorships";
+import { useCompanySponsorships } from "../../assets/ts/member-flows/portal/sections/sponsors/management/useCompanySponsorships";
 import type { Sponsorship, SponsorshipCompany } from "../../assets/shared/schemas/sponsorship-management";
 
 /**

@@ -20,11 +20,9 @@ describe("semantic management links", () => {
     expect(buildManagementLink(appBaseUrl, { kind: "membership-application", id: "application-1" })).toBe(
       "https://app.test/portal/#/system/membership-applications/application-1",
     );
-    expect(buildManagementLink(appBaseUrl, { kind: "sponsorship-list" })).toBe(
-      "https://app.test/portal/#/system/sponsorships",
-    );
+    expect(buildManagementLink(appBaseUrl, { kind: "sponsorship-list" })).toBe("https://app.test/portal/#/sponsors");
     expect(buildManagementLink(appBaseUrl, { kind: "sponsorship", id: "sponsor/1" })).toBe(
-      "https://app.test/portal/#/system/sponsorships/sponsor%2F1",
+      "https://app.test/portal/#/sponsors/sponsor%2F1",
     );
   });
 

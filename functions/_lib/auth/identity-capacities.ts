@@ -2,6 +2,8 @@ import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
 import { all, first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
+import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
+import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
 
 export const STAFF_ACCESS_CONDITION = `(
   u.role = 'admin'
@@ -190,16 +192,18 @@ export interface IdentityCapacityResolution {
   identity: IdentityCapacity;
   staff: EligibleStaffUser | null;
   member: AuthMember | null;
+  sponsors: SponsorCapacity[];
 }
 
 export async function resolveIdentityCapacities(
   db: DatabaseLike,
   userId: string,
 ): Promise<IdentityCapacityResolution | null> {
-  const [staff, member] = await Promise.all([
+  const [identity, staff, member, sponsors] = await Promise.all([
+    first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
     findEligibleStaffUserById(db, userId),
     findEligibleMemberById(db, userId),
+    findActiveSponsorCapacitiesByUserId(db, userId),
   ]);
-  const email = staff?.email ?? member?.email;
-  return email ? { identity: { id: userId, email }, staff, member } : null;
+  return identity && (staff || member || sponsors.length > 0) ? { identity, staff, member, sponsors } : null;
 }

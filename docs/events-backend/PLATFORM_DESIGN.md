@@ -22,10 +22,10 @@
 - Signed, short-lived email capabilities: no issued login credential is stored; current identity, email, eligibility, and request context are rechecked at redemption.
 - `authorization_guards`: re-evaluate the canonical live email and eligibility query inside the same D1 transaction as redemption, preventing stale reads from issuing a session.
 - `audit_log.idempotency_key`: durable one-time redemption guard and security audit in that transaction.
-- `sessions`: shared revocable human sessions referenced by signed JWT cookies.
-  `sponsor_portal_sessions` remains a separate capability identity for sponsor
-  contacts and is revoked automatically when the authenticated contact mailbox
-  changes.
+- `sessions`: the sole revocable human-session table referenced by the signed
+  `pkic_session` cookie. Staff, member, and sponsor capacities are derived from
+  live D1 state on every request; a sponsor access link proves control of the
+  current contact mailbox and then establishes this same portal identity.
 
 2. Community
 

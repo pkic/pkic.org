@@ -36,7 +36,7 @@ export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: bo
     <SettingsEditor
       loading={loading}
       error={error}
-      description="Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no tiers having access."
+      description="Which sponsor tiers at this event get attendee-data access in the portal. Defaults to no tiers having access."
       actions={
         canWrite ? (
           <button class="btn btn-sm btn-primary ms-auto" onClick={() => void handleSave()} disabled={saving}>

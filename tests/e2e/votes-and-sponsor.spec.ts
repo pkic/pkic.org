@@ -216,7 +216,7 @@ test.describe("event sponsor self-service checkout (Path B)", () => {
   test("submits the Sponsor Now form and follows the returned Stripe checkout redirect", async ({ page }) => {
     let capturedBody: Record<string, unknown> | null = null;
 
-    await page.route("**/api/v1/sponsorship/checkout", async (route) => {
+    await page.route("**/api/v1/sponsors/checkouts", async (route) => {
       capturedBody = route.request().postDataJSON() as Record<string, unknown>;
       const checkoutUrl = new URL(
         "/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/?session_id=cs_test_mocked",

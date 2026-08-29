@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { handleError } from "../functions/_lib/http";
-import { onRequestPost } from "../functions/api/v1/sponsorship/checkout/webhook";
+import { onRequestPost } from "../functions/api/v1/sponsors/checkouts/stripe";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { renderEmail } from "../functions/_lib/email/render";
@@ -25,7 +25,7 @@ async function stripeSignature(body: string): Promise<string> {
 
 async function callWebhook(event: unknown): Promise<Response> {
   const body = JSON.stringify(event);
-  const request = new Request("https://pkic.org/api/v1/sponsorship/checkout/webhook", {
+  const request = new Request("https://pkic.org/api/v1/sponsors/checkouts/stripe/events", {
     method: "POST",
     headers: { "stripe-signature": await stripeSignature(body) },
     body,
@@ -74,7 +74,7 @@ function paidEvent(eventId: string, sessionId: string, eventDatabaseId: string, 
   };
 }
 
-describe("POST /api/v1/sponsorship/checkout/webhook", () => {
+describe("POST /api/v1/sponsors/checkouts/stripe/events", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -144,7 +144,7 @@ describe("POST /api/v1/sponsorship/checkout/webhook", () => {
     );
 
     expect(JSON.parse(outbox!.payload_json)).toMatchObject({
-      managementUrl: "https://app.test/portal/#/system/sponsorships",
+      managementUrl: "https://app.test/portal/#/sponsors",
     });
 
     expect(rendered.text).toContain("attacker.invalid");

@@ -55,6 +55,13 @@ function emptyStatement(query: string, queries: string[], options: StatementOpti
           active: 1,
         } as T;
       }
+      if (query.includes("SELECT id, email, normalized_email FROM users WHERE id")) {
+        return {
+          id: "admin-user",
+          email: "admin@example.test",
+          normalized_email: "admin@example.test",
+        } as T;
+      }
       options.onQuery?.();
       await options.waitForQuery?.();
       return null;

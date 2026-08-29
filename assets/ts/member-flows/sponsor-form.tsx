@@ -101,7 +101,7 @@ async function main(): Promise<void> {
 
   try {
     const { tiers } = await getJson(
-      `${API_BASE}/sponsorship/tiers?sponsorType=consortium`,
+      `${API_BASE}/sponsors/tiers?sponsorType=consortium`,
       sponsorshipTiersResponseSchema,
     );
     populateTierOptions(
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
         const payload = sponsorshipInquirySchema.parse(buildSponsorshipPayload(form));
-        await postJson(`${API_BASE}/sponsorship/inquiries`, payload, sponsorshipInquiryResponseSchema);
+        await postJson(`${API_BASE}/sponsors/inquiries`, payload, sponsorshipInquiryResponseSchema);
         showSuccessPanel(root, form);
       } catch (error) {
         handleSubmitError(error, form, statusEl);

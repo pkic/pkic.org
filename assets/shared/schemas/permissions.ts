@@ -43,7 +43,6 @@ export const PERMISSIONS = [
   "proposals:cancel_accepted",
   "agenda:read",
   "agenda:write",
-  "sponsor-portal:attendee-data",
   "admin:read",
   "admin:write",
 ] as const;

@@ -83,7 +83,7 @@ describe("cache policy middleware", () => {
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
   });
 
-  it.each(["pkic_session", "pkic_sponsor_portal_session"])(
+  it.each(["pkic_session", "pkic_meeting_guest_session"])(
     "overrides cacheable responses when the %s cookie is present",
     async (cookieName) => {
       const response = await apiMiddlewareOnRequest(

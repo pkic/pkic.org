@@ -486,7 +486,7 @@ describe("consolidated pending migration upgrade", () => {
     ).toEqual([]);
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sponsor_portal_sessions'").get(),
-    ).toEqual({ name: "sponsor_portal_sessions" });
+    ).toBeUndefined();
     expect(
       db
         .prepare("PRAGMA table_info(application_documents)")

@@ -1,6 +1,6 @@
 /**
  * Shared revocable-session mechanism used by admin.ts, member.ts, and
- * sponsor-portal.ts. Persona-specific eligibility and authorization remain
+ * user-session.ts. Capacity-specific eligibility and authorization remain
  * separate; cookie transport, JWT claim shape, and session-row lifecycle are
  * centralized here.
  */
@@ -102,14 +102,14 @@ export function hasBaseSessionTokenClaims(claims: object, expectedTyp: string): 
   );
 }
 
-// ── Session rows (`sessions` for admin/member, `sponsor_portal_sessions`) ──
+// ── Session rows ──
 
 export interface SessionTableConfig {
   table: string;
   subjectColumn: string;
 }
 
-/** Generic session-row INSERT — same shape across admin/member/sponsor-portal, differing only by table + subject column. */
+/** Generic session-row INSERT — table and subject column are explicit. */
 export async function prepareSessionRow(
   db: DatabaseLike,
   config: SessionTableConfig,
@@ -153,7 +153,7 @@ export interface PlainSessionRow {
   revokedAt: string | null;
 }
 
-/** Plain session-row SELECT (no eligibility join) — used by member/sponsor-portal, which re-check eligibility separately after this. */
+/** Plain session-row SELECT (no eligibility join); callers re-check live eligibility separately. */
 export async function fetchSessionRow(
   db: DatabaseLike,
   config: SessionTableConfig,

@@ -12,6 +12,7 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
   return {
     success: true,
     identity,
+    sponsors: [],
     ...(capacities.staff
       ? {
           staff: {

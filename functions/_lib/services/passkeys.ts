@@ -32,6 +32,7 @@ import { AUTH_SCOPES } from "../auth/scopes";
 import { createUserBackedAuthAdmin } from "../auth/admin-identity";
 import { computeGrantsForUser } from "../auth/permissions";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
+import { sponsorUserSignInAuthorizationEvidence } from "../auth/sponsor-capacity";
 import { sessionExpiresAtToExp } from "../auth/session-engine";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
@@ -387,9 +388,10 @@ export async function completePasskeyAuthentication(
     resolved.identity.id,
     resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
   );
-  const capacities: Array<"admin" | "member"> = [
+  const capacities: Array<"admin" | "member" | "sponsor"> = [
     ...(resolved.staff ? ["admin" as const] : []),
     ...(resolved.member ? ["member" as const] : []),
+    ...(resolved.sponsors.length > 0 ? ["sponsor" as const] : []),
   ];
 
   const lastUsedAt = nowIso();
@@ -399,7 +401,7 @@ export async function completePasskeyAuthentication(
     actorId: string;
     auditSessionId: string;
     expiresAt: string;
-    capacities: Array<"admin" | "member">;
+    capacities: Array<"admin" | "member" | "sponsor">;
   }) => {
     try {
       await db.batch([
@@ -434,6 +436,14 @@ export async function completePasskeyAuthentication(
               prepareAuthorizationGuard(
                 db,
                 memberSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
+              ),
+            ]
+          : []),
+        ...(resolved.sponsors.length > 0
+          ? [
+              prepareAuthorizationGuard(
+                db,
+                sponsorUserSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
               ),
             ]
           : []),
@@ -482,6 +492,7 @@ export async function completePasskeyAuthentication(
     ...(resolved.member
       ? { member: { ...resolved.member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } }
       : {}),
+    sponsors: resolved.sponsors,
   };
   const token = await signUserSessionToken(signingSecret, {
     sub: resolved.identity.id,

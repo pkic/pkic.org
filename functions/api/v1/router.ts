@@ -27,9 +27,6 @@ import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
 import roles_Router from "./roles/router";
 import sponsors_Router from "./sponsors/router";
-import sponsorship_Router from "./sponsorship/router";
-import sponsorships_Router from "./sponsorships/router";
-import sponsorPortal_Router from "./sponsor-portal/router";
 import users_Router from "./users/router";
 import votes_Router from "./votes/router";
 
@@ -70,9 +67,6 @@ openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.route("/roles", roles_Router);
 openapi.route("/sponsors", sponsors_Router);
-openapi.route("/sponsorship", sponsorship_Router);
-openapi.route("/sponsorships", sponsorships_Router);
-openapi.route("/sponsor-portal", sponsorPortal_Router);
 openapi.route("/users", users_Router);
 openapi.route("/votes", votes_Router);
 

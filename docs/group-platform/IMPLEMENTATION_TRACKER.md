@@ -1392,13 +1392,14 @@ Status: In progress
       Worker/D1 browser tests cover the canonical paths and prove no legacy
       donation request is made. This closes the donation slice only; complete
       removal of `/api/v1/admin` remains part of the open parent item.
-      Sponsorship pipeline management now also appears under the portal's
-      System navigation while retaining a domain API: the canonical staff
-      surface is `/api/v1/sponsorships`, distinct from the public singular
-      `/api/v1/sponsorship` inquiry/checkout API and sponsorship-scoped
-      `/api/v1/sponsor-portal` self-service API. One neutral management schema
-      and service boundary own the company drill-down, pipeline records,
-      history, stage transitions, non-member logos, and D1-backed tier pricing.
+      Sponsor management and sponsor-contact access now share the portal's
+      top-level Sponsors workspace and the sole `/api/v1/sponsors` resource
+      family. The same family owns public display, inquiries, checkout, tiers,
+      company drill-down, pipeline records, history, stage transitions,
+      non-member logos, access-link requests, and consenting attendee data;
+      the singular, plural, and sponsor-portal API families are removed rather
+      than retained as aliases. One neutral management schema and service
+      boundary owns the staff operations and D1-backed tier pricing.
       Reads require a live user-backed `sponsorships:read` permission; every
       mutation requires `sponsorships:write` and repeats that authorization in
       the same D1 batch as state, history, audit, projection, capability, and
@@ -1408,7 +1409,13 @@ Status: In progress
       now manageable without a migration. The former admin sponsorship UI,
       API mount and handlers, and admin-prefixed schema/read-model names are
       removed rather than retained as a second implementation; semantic
-      notification links and old bookmarks lead to the portal. Focused mounted
+      notification links and old bookmarks lead to `/portal/#/sponsors`.
+      Sponsor access capabilities redeem through `/api/v1/auth/verify-link`
+      into the same `pkic_session` used by every portal identity. Live sponsor
+      capacities are included by `/api/v1/auth/session` and re-derived from
+      the current verified user email, active sponsorship, event, and tier;
+      there is no sponsor cookie, sponsor JWT type, or sponsor-session table.
+      Focused mounted
       backend and frontend tests cover permission separation, API-key denial,
       revocation-before-commit rollback, neutral contracts, tier management,
       redirects, and absence of legacy sponsorship requests. The independent
@@ -1739,9 +1746,10 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the current-user and
-      canonical public user-headshot resource cutovers with 2,314 backend tests
-      (one skipped), 348 frontend tests, and 84 tooling tests. Type checks,
+      Current evidence: the complete gate passes after the canonical sponsor
+      resource and unified portal-authentication cutover with 2,311 passing
+      backend tests (one additional skipped), 348 frontend tests, and 84
+      tooling tests. Type checks,
       ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -2013,7 +2021,7 @@ The final PR description must include, at minimum:
   unrelated permission, API key, and unauthenticated request cannot read the
   pipeline or tier-pricing catalog;
 - search, filter, sort, and paginate sponsor companies and sponsorships through
-  `/api/v1/sponsorships`, create and edit a record, advance its stage, inspect
+  `/api/v1/sponsors`, create and edit a record, advance its stage, inspect
   its event history, and upload and remove a non-member logo with
   `sponsorships:write`;
 - edit sponsorship tier amount, currency, and active state in the portal,
@@ -2021,9 +2029,14 @@ The final PR description must include, at minimum:
 - revoke `sponsorships:write` after route authentication but before the D1
   mutation and confirm state, history, audit, outbox, and any newly uploaded R2
   object are not retained;
-- verify `/api/v1/admin/sponsorships` and nested paths return 404, old list and
-  detail bookmarks redirect to `/portal/#/system/sponsorships`, and inquiry,
+- verify `/api/v1/sponsorship`, `/api/v1/sponsorships`,
+  `/api/v1/sponsor-portal`, and `/api/v1/auth/sponsor-portal` return 404; old
+  list and detail bookmarks redirect to `/portal/#/sponsors`; and inquiry,
   checkout, renewal, and activation emails contain portal management links;
+- redeem a sponsor access link through `/api/v1/auth/verify-link`, confirm only
+  `pkic_session` is set, verify `/api/v1/auth/session` lists every active
+  sponsor capacity for that identity, and confirm changing the contact email,
+  tier entitlement, or sponsorship stage removes access immediately;
 - inspect Operations with separate `email:read` and `operations:read` staff
   users, confirming each sees only its readable tab and no command controls;
 - add `email:manage` and confirm the outbox exposes only bounded processing and

@@ -11,7 +11,7 @@
  *
  * Fixture data (an approved org member, an approved individual member) goes
  * through the real public/admin application APIs exactly like
- * votes-and-sponsor.spec.ts and sponsor-portal.spec.ts already do for their
+ * votes-and-sponsor.spec.ts and sponsor-workspace.spec.ts already do for their
  * own fixtures — an application is created via the public endpoint, walked
  * through its real stage transitions by the signed-in admin, and approved,
  * which provisions a real organization + user. The member then signs in for
@@ -306,13 +306,13 @@ test.describe("Admin browser-verification pass", () => {
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
-      if (pathname.startsWith("/api/v1/sponsorships")) canonicalRequests.push(`${request.method()} ${pathname}`);
+      if (pathname.startsWith("/api/v1/sponsors")) canonicalRequests.push(`${request.method()} ${pathname}`);
       if (pathname.startsWith("/api/v1/admin/sponsorships")) legacyRequests.push(`${request.method()} ${pathname}`);
     });
 
     await page.context().clearCookies();
     await signInToPortal(page, ADMIN_EMAIL);
-    await page.goto("/portal/#/system/sponsorships");
+    await page.goto("/portal/#/sponsors");
     await page.getByRole("button", { name: "Create sponsorship" }).click();
 
     // Labels aren't `<label for>`-linked to their inputs here either —
@@ -350,9 +350,9 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
     await expect(detail.locator("span.badge", { hasText: "contacted" })).toBeVisible();
     await expect(detail.getByText(/new inquiry\s*→\s*contacted/)).toBeVisible();
-    expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsorships/companies"]));
-    expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsorships"))).toBe(true);
-    expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsorships/"))).toBe(true);
+    expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsors/companies"]));
+    expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsors"))).toBe(true);
+    expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsors/"))).toBe(true);
     expect(legacyRequests).toEqual([]);
   });
 
@@ -360,7 +360,7 @@ test.describe("Admin browser-verification pass", () => {
     const tierName = `E2E Verify Tier ${Date.now()}`;
 
     await page.goto(`/admin/#/events/${EVENT_SLUG}/settings/sponsor-tiers`);
-    await expect(page.getByText(/attendee-data access via the sponsor portal/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "+ Add tier" }).click();
     const newRow = page.locator("div.row.g-2.align-items-center.mb-2").last();
@@ -371,7 +371,7 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.getByText("✓ Saved")).toBeVisible();
 
     await page.reload();
-    await expect(page.getByText(/attendee-data access via the sponsor portal/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
     // `hasText`/getByText can't see an <input>'s value (it isn't a text
     // node), and Playwright has no getByDisplayValue — find the matching
     // tier-name input by its live .value via evaluateAll, then walk up to

@@ -7,7 +7,10 @@ import { useEffect, useState } from "preact/hooks";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
 import {
   authStatus,
+  clearUserSession,
+  finishAuthCheck,
   isAuthed,
+  portalSession,
   setAuthChecking,
   savePortalSession,
   saveProfile,
@@ -19,13 +22,22 @@ import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
+import { SponsorAccess } from "./sections/sponsors/Access";
+import { portalDefaultPath } from "./shell/portal-navigation";
+import type { PortalSession } from "./types";
 
-async function verifyMagicLink(token: string): Promise<void> {
+async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
   savePortalSession(session);
+  return session;
+}
+
+function portalHashPath(hash: string): string {
+  return (hash.replace(/^#/, "").split("?", 1)[0] || "/").replace(/\/$/, "") || "/";
 }
 
 export function portalMagicLinkToken(hash: string): string | null {
+  if (portalHashPath(hash) !== "/verify") return null;
   const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
   return new URLSearchParams(query).get("token");
 }
@@ -43,11 +55,12 @@ export function App() {
       } else {
         clearMemberProfile();
       }
-      return true;
     } catch {
-      clearAuth();
-      return false;
+      clearUserSession();
     }
+
+    finishAuthCheck();
+    return portalSession.value !== null;
   }
 
   useEffect(() => {
@@ -55,11 +68,11 @@ export function App() {
 
     async function run(): Promise<void> {
       setAuthChecking();
-      const token = portalMagicLinkToken(window.location.hash);
-      if (token) {
-        history.replaceState({}, "", "/portal/");
+      const userToken = portalMagicLinkToken(window.location.hash);
+      if (userToken) {
         try {
-          await verifyMagicLink(token);
+          const session = await verifyMagicLink(userToken);
+          history.replaceState({}, "", `/portal/#${portalDefaultPath(session)}`);
         } catch (err) {
           if (!cancelled) {
             setVerifyError(
@@ -87,6 +100,19 @@ export function App() {
 
   if (isAuthed.value) {
     return <PortalShell />;
+  }
+
+  if (portalHashPath(window.location.hash).startsWith("/sponsors")) {
+    return (
+      <>
+        {verifyError && (
+          <div class="container content-width-sm">
+            <div class="alert alert-danger mt-4">✕ Sponsor access failed: {verifyError}</div>
+          </div>
+        )}
+        <SponsorAccess />
+      </>
+    );
   }
 
   return (

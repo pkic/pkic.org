@@ -22,7 +22,7 @@ export { PERMISSIONS, isPermission, type Permission };
 
 /**
  * Every permission string in the system (table, plus the
- * `organizations`/`sponsorships`/`sponsor-portal` additions pulled forward
+ * `organizations`/`sponsorships` additions pulled forward
  *, plus the `admin:read`/`admin:write` fallback pair for
  * admin routes not yet mapped to a named module — see consolidated migration 0035's
  * header comment).

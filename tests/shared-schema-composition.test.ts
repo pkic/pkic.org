@@ -28,14 +28,14 @@ import {
 } from "../assets/shared/schemas/event-series";
 import {
   authenticationResponseSchema,
-  passkeyAuthenticateCompleteBaseResponseSchema,
+  passkeyAuthenticateCompleteResponseSchema,
   publicKeyCredentialEnvelopeSchema,
   registrationResponseSchema,
 } from "../assets/shared/schemas/passkeys";
 import { successResponseSchema } from "../assets/shared/schemas/api-common";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
-import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
+import { userAuthEstablishedResponseSchema } from "../assets/shared/schemas/user-auth";
 import { memberCapacityMutationResponseSchema } from "../assets/shared/schemas/membership-management";
 import { emailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/email-templates";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
@@ -84,13 +84,14 @@ describe("canonical shared schema composition", () => {
     for (const schema of [
       headshotUploadResponseSchema,
       memberAuthVerifyResponseSchema,
-      sponsorPortalAuthVerifyResponseSchema,
-      passkeyAuthenticateCompleteBaseResponseSchema,
+      userAuthEstablishedResponseSchema,
+      passkeyAuthenticateCompleteResponseSchema,
     ]) {
       expect(schema.shape.success).toBe(successResponseSchema.shape.success);
       expect(schema.safeParse({ success: false }).success).toBe(false);
     }
     expect(successResponseSchema.parse({ success: true })).toEqual({ success: true });
+    expect(passkeyAuthenticateCompleteResponseSchema).toBe(userAuthEstablishedResponseSchema);
   });
 
   it("keeps admin mutation payloads explicit instead of treating them as success-only commands", () => {

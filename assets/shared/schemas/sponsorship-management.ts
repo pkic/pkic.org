@@ -1,6 +1,6 @@
 /**
  * Staff sponsorship sales pipeline. Backs
- * `GET/POST /api/v1/sponsorships`, `GET/PATCH .../:id`,
+ * `GET/POST /api/v1/sponsors`, `GET/PATCH .../:id`,
  * `PATCH .../:id/stage`, `GET .../:id/events`, and
  * `GET/PUT /api/v1/events/:eventSlug/sponsors/tiers`.
  */

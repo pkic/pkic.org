@@ -21,7 +21,7 @@ async function callEndpoint(request: Request, runtimeEnv: typeof env): Promise<R
   return app.fetch(request, runtimeEnv as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
-describe("POST /api/v1/sponsorship/inquiries", () => {
+describe("POST /api/v1/sponsors/inquiries", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -29,7 +29,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
   it("creates a sponsorships record at pipeline_stage=new_inquiry", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -62,7 +62,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     const { eventId } = await seedEventAndAdmin(testEnv.DB);
 
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -85,7 +85,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
   it("defaults to sponsor_type=consortium when no event context is provided", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -106,7 +106,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
   it("queues the sponsorship-new-inquiry staff notification email", async () => {
     const testEnv = makeEnv({ SPONSORSHIP_NOTIFICATION_EMAIL: "sponsorships-team@pkic.org" });
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -128,7 +128,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
       "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsorship-new-inquiry' ORDER BY created_at DESC LIMIT 1",
     );
     expect(JSON.parse(staffPayload!.payload_json)).toMatchObject({
-      managementUrl: "https://app.test/portal/#/system/sponsorships",
+      managementUrl: "https://app.test/portal/#/sponsors",
     });
 
     const brochureOutbox = await queryAll<{ recipient_email: string }>(
@@ -150,7 +150,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
       "# Urgent",
     ].join("\n\n");
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana [Sponsor](https://attacker.invalid/name)",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor <img src=https://attacker.invalid/org.gif>",
@@ -189,18 +189,18 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
 
   it("returns 400 for missing required fields", async () => {
     const testEnv = makeEnv();
-    const response = await callEndpoint(postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {}), testEnv);
+    const response = await callEndpoint(postRequest("https://pkic.org/api/v1/sponsors/inquiries", {}), testEnv);
     expect(response.status).toBe(400);
   });
 
   it("rate limits invalid requests before body validation", async () => {
     const testEnv = makeEnv({ IP_RATE_LIMITER: createTestRateLimiter(1) });
 
-    const invalid = await callEndpoint(postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {}), testEnv);
+    const invalid = await callEndpoint(postRequest("https://pkic.org/api/v1/sponsors/inquiries", {}), testEnv);
     expect(invalid.status).toBe(400);
 
     const limited = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -216,7 +216,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
   it("rejects a tier outside the active shared catalog", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -242,7 +242,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
 
     try {
       const response = await callEndpoint(
-        postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+        postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
           contactName: "Dana Sponsor",
           contactEmail: "dana@sponsor-corp.test",
           organizationName: "Sponsor Corp",
@@ -271,7 +271,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
   it("accepts an inquiry with no selected tier without inventing a catalog tier", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -296,7 +296,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
   it("rejects an unknown event before it can create an unlinked event sponsorship", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
-      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+      postRequest("https://pkic.org/api/v1/sponsors/inquiries", {
         contactName: "Dana Sponsor",
         contactEmail: "dana@sponsor-corp.test",
         organizationName: "Sponsor Corp",
@@ -319,7 +319,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
 
     try {
       const response = await callEndpoint(
-        new Request("https://pkic.org/api/v1/sponsorship/tiers?sponsorType=consortium"),
+        new Request("https://pkic.org/api/v1/sponsors/tiers?sponsorType=consortium"),
         testEnv,
       );
 
@@ -327,6 +327,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
       expect(response.headers.get("cache-control")).toContain("s-maxage=900");
       await expect(response.json()).resolves.toEqual({
         sponsorType: "consortium",
+        visibility: "public",
         tiers: [{ tier: "Silver" }, { tier: "Gold" }, { tier: "Platinum" }, { tier: "Titanium" }, { tier: "Diamond" }],
       });
     } finally {
@@ -338,7 +339,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
 
   it("validates the public catalog sponsorship type through the shared query contract", async () => {
     const response = await callEndpoint(
-      new Request("https://pkic.org/api/v1/sponsorship/tiers?sponsorType=unsupported"),
+      new Request("https://pkic.org/api/v1/sponsors/tiers?sponsorType=unsupported"),
       makeEnv(),
     );
 

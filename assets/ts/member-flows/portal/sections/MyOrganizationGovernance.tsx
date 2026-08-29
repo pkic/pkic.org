@@ -129,7 +129,7 @@ export function OrganizationSponsorshipCard({ organizationId }: { organizationId
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson(`${organizationPath(organizationId)}/sponsorships/current`, organizationActiveSponsorshipResponseSchema)
+    getJson(`${organizationPath(organizationId)}/sponsors/current`, organizationActiveSponsorshipResponseSchema)
       .then((response) => setSponsorship(response.sponsorship))
       .catch((cause: unknown) =>
         setError(cause instanceof ApiClientError ? cause.message : "Could not load sponsorship."),

@@ -6,7 +6,7 @@
 
   Parameters:
     slug — the event's public slug (required; resolved server-side to the
-           internal events.id by POST /api/v1/sponsorship/checkout)
+           internal events.id by POST /api/v1/sponsors/checkouts)
 */}}
 {{- $slug := .Get "slug" -}}
 <div data-event-sponsor-checkout data-module="member-flows/event-sponsor-page" data-api-base="/api/v1" data-event-slug="{{ $slug }}">

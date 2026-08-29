@@ -10,7 +10,7 @@ import { getSponsorship, type SponsorshipReadModelRow } from "./read-model";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { escapeMarkdownText } from "../../email/markdown";
-import { queueSponsorPortalSignInCapability } from "../../auth/sponsor-portal";
+import { queueSponsorSignInCapability } from "../../auth/sponsor-capacity";
 import { prepareRefreshOrganizationSponsorshipProjection, prepareSponsorshipStageTransition } from "./stage-transition";
 import { hasFutureRenewalDate, initialRenewalActionDueAt, utcDate } from "./renewal-policy";
 import {
@@ -197,10 +197,10 @@ export interface AdvanceSponsorshipStageResult {
  *  - consortium: writes/clears organizations.sponsor_tier + sponsor_start_date
  *  - event: no D1 side effect beyond the stage itself — attendee-data
  *    eligibility (event_sponsor_attendee_tiers) is checked live on every
- *    sponsor-portal request (see _lib/auth/sponsor-portal.ts), not cached
+ *    sponsor access request, not cached
  *    as a grant row, because sponsor contacts have no `users` row for a
  *    permission_grants row to attach to. `qualifiesForAttendeeDataAccess`
- *    tells the caller (route) whether to send the sponsor-portal-access
+ *    tells the caller (route) whether to send the sponsor access
  *    email on this transition.
  */
 export async function advanceSponsorshipStage(
@@ -283,18 +283,18 @@ export async function advanceSponsorshipStage(
   }
 
   if (becameActive && qualifiesForAttendeeDataAccess && existing.contact_email) {
-    const magicLink = await queueSponsorPortalSignInCapability(params.id, existing.contact_email, {
+    const magicLink = await queueSponsorSignInCapability(params.id, existing.contact_email, {
       ttlMinutes: params.notifications.magicLinkTtlMinutes,
       signingSecret: params.notifications.signingSecret,
     });
-    const portalUrl = `${params.notifications.appBaseUrl}/sponsor-portal/?token=${encodeURIComponent(magicLink.queuedToken)}`;
+    const portalUrl = `${params.notifications.appBaseUrl}/portal/#/verify?token=${encodeURIComponent(magicLink.queuedToken)}`;
     const queued = prepareQueueEmailStatement(
       db,
       {
         templateKey: "sponsor-portal-access",
         recipientEmail: existing.contact_email,
         messageType: "transactional",
-        subject: "Access your sponsor portal",
+        subject: "Access your sponsor workspace",
         data: {
           contactNameText: escapeMarkdownText(existing.contact_name ?? "there"),
           tierText: escapeMarkdownText(existing.tier ?? ""),

@@ -22,7 +22,7 @@ openapi.get("/profile", OrganizationMemberProfileGet);
 openapi.get("/content/reviews", OrganizationContentReviewsGet);
 openapi.post("/content/reviews", OrganizationContentReviewPost);
 openapi.delete("/content/reviews/:reviewId", OrganizationContentReviewDelete);
-openapi.get("/sponsorships/current", OrganizationActiveSponsorshipGet);
+openapi.get("/sponsors/current", OrganizationActiveSponsorshipGet);
 openapi.put("/contacts/secondary/nomination", OrganizationSecondaryContactNominationPut);
 openapi.delete("/contacts/secondary/nomination", OrganizationSecondaryContactNominationDelete);
 openapi.post("/logo", OrganizationLogoReviewPost);

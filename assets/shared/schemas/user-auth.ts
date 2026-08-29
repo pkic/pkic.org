@@ -5,6 +5,7 @@ import { authMemberSchema } from "./member-auth";
 import { emailRecoveryRequestSchema, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { publicOperation, requiresSession } from "./route-contract";
+import { sponsorCapacitySchema } from "./sponsor-access";
 
 export const userAuthRequestSchema = emailRecoveryRequestSchema;
 export const userAuthVerifySchema = magicLinkVerifySchema;
@@ -18,13 +19,16 @@ const userCapacityFields = {
   identity: userIdentitySchema,
   staff: publicAuthAdminSchema.optional(),
   member: authMemberSchema.optional(),
+  sponsors: z.array(sponsorCapacitySchema).default([]),
 };
 
 function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
   return schema.refine(
     (value) => {
-      const capacities = value as { staff?: unknown; member?: unknown };
-      return capacities.staff !== undefined || capacities.member !== undefined;
+      const capacities = value as { staff?: unknown; member?: unknown; sponsors?: unknown[] };
+      return (
+        capacities.staff !== undefined || capacities.member !== undefined || (capacities.sponsors?.length ?? 0) > 0
+      );
     },
     { message: "At least one user capacity is required" },
   );

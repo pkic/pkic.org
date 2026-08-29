@@ -104,11 +104,11 @@ describe("Sponsorship sales pipeline", () => {
     ]);
     const staffToken = await createAdminSession(env.DB, staffId, "sponsorship-reader-token");
 
-    const listResponse = await call(staffToken, "/api/v1/sponsorships");
+    const listResponse = await call(staffToken, "/api/v1/sponsors");
     expect(listResponse.status).toBe(200);
     expect(
       (
-        await call(staffToken, "/api/v1/sponsorships", {
+        await call(staffToken, "/api/v1/sponsors", {
           method: "POST",
           body: JSON.stringify({ sponsorType: "event", nonMemberName: "Unauthorized", eventId }),
         })
@@ -119,7 +119,7 @@ describe("Sponsorship sales pipeline", () => {
   it("creates, lists, and updates a consortium sponsorship", async () => {
     const { organizationId } = await seedOrganization("Acme Corp");
 
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -132,11 +132,11 @@ describe("Sponsorship sales pipeline", () => {
     const created = (await createResponse.json()) as { sponsorship: { id: string; pipelineStage: string } };
     expect(created.sponsorship.pipelineStage).toBe("new_inquiry");
 
-    const listResponse = await call(adminToken, "/api/v1/sponsorships?type=consortium");
+    const listResponse = await call(adminToken, "/api/v1/sponsors?visibility=all&type=consortium");
     const list = (await listResponse.json()) as { sponsorships: unknown[] };
     expect(list.sponsorships).toHaveLength(1);
 
-    const updateResponse = await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}`, {
+    const updateResponse = await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}`, {
       method: "PATCH",
       body: JSON.stringify({ assignedToUserId: adminId, renewalDate: "2027-01-01", notes: "Updated notes" }),
     });
@@ -147,7 +147,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("rejects service API keys because sponsorship mutations require a user-backed staff identity", async () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
-    const createResponse = await call(apiKey, "/api/v1/sponsorships", {
+    const createResponse = await call(apiKey, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({ sponsorType: "event", nonMemberName: "API Key Sponsor", eventId }),
     });
@@ -157,9 +157,9 @@ describe("Sponsorship sales pipeline", () => {
 
   it("documents the canonical staff routes and leaves the legacy admin prefix unmounted", async () => {
     const paths = decorateOpenApiSpec(openapi.schema).paths;
-    expect(paths["/api/v1/sponsorships"].get).toBeDefined();
-    expect(paths["/api/v1/sponsorships"].post).toBeDefined();
-    expect(paths["/api/v1/sponsorships/{id}"].patch).toBeDefined();
+    expect(paths["/api/v1/sponsors"].get).toBeDefined();
+    expect(paths["/api/v1/sponsors"].post).toBeDefined();
+    expect(paths["/api/v1/sponsors/{id}"].patch).toBeDefined();
     expect(paths["/api/v1/admin/sponsorships"]).toBeUndefined();
     expect((await call(adminToken, "/api/v1/admin/sponsorships")).status).toBe(404);
   });
@@ -210,7 +210,7 @@ describe("Sponsorship sales pipeline", () => {
     const second = await seedOrganization("Drilldown Second");
 
     for (const organizationId of [first.organizationId, second.organizationId]) {
-      const response = await call(adminToken, "/api/v1/sponsorships", {
+      const response = await call(adminToken, "/api/v1/sponsors", {
         method: "POST",
         body: JSON.stringify({ sponsorType: "consortium", organizationId, tier: "Gold" }),
       });
@@ -219,7 +219,7 @@ describe("Sponsorship sales pipeline", () => {
 
     const response = await call(
       adminToken,
-      `/api/v1/sponsorships?organizationId=${encodeURIComponent(first.organizationId)}&limit=200&offset=0`,
+      `/api/v1/sponsors?visibility=all&organizationId=${encodeURIComponent(first.organizationId)}&limit=200&offset=0`,
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -233,7 +233,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("advancing a consortium sponsorship to active writes organizations.sponsor_tier/sponsor_start_date, and lapsing clears them", async () => {
     const { organizationId } = await seedOrganization("Beta Inc");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -245,7 +245,7 @@ describe("Sponsorship sales pipeline", () => {
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
     const id = created.sponsorship.id;
 
-    const activateResponse = await call(adminToken, `/api/v1/sponsorships/${id}/stage`, {
+    const activateResponse = await call(adminToken, `/api/v1/sponsors/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active", note: "Payment cleared" }),
     });
@@ -259,7 +259,7 @@ describe("Sponsorship sales pipeline", () => {
     expect(orgRows[0].sponsor_tier).toBe("Platinum");
     expect(orgRows[0].sponsor_start_date).not.toBeNull();
 
-    const eventsResponse = await call(adminToken, `/api/v1/sponsorships/${id}/events?limit=1&offset=0`);
+    const eventsResponse = await call(adminToken, `/api/v1/sponsors/${id}/events?limit=1&offset=0`);
     const eventsBody = (await eventsResponse.json()) as {
       events: { toStage: string }[];
       page: { limit: number; offset: number; total: number; hasMore: boolean };
@@ -275,7 +275,7 @@ describe("Sponsorship sales pipeline", () => {
       ),
     ).toEqual([{ actor_user_id: adminId }, { actor_user_id: adminId }]);
 
-    const secondEventsResponse = await call(adminToken, `/api/v1/sponsorships/${id}/events?limit=1&offset=1`);
+    const secondEventsResponse = await call(adminToken, `/api/v1/sponsors/${id}/events?limit=1&offset=1`);
     const secondEventsBody = (await secondEventsResponse.json()) as {
       events: { toStage: string }[];
       page: { limit: number; offset: number; total: number; hasMore: boolean };
@@ -283,7 +283,7 @@ describe("Sponsorship sales pipeline", () => {
     expect(secondEventsBody.events.map((e) => e.toStage)).toEqual(["new_inquiry"]);
     expect(secondEventsBody.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
 
-    const lapseResponse = await call(adminToken, `/api/v1/sponsorships/${id}/stage`, {
+    const lapseResponse = await call(adminToken, `/api/v1/sponsors/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "lapsed" }),
     });
@@ -298,7 +298,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("refreshes the organization projection for every exit from active", async () => {
     const { organizationId } = await seedOrganization("Projection Exit");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -308,12 +308,12 @@ describe("Sponsorship sales pipeline", () => {
       }),
     });
     const { sponsorship } = (await createResponse.json()) as { sponsorship: { id: string } };
-    await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
 
-    const response = await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    const response = await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "negotiating" }),
     });
@@ -328,13 +328,13 @@ describe("Sponsorship sales pipeline", () => {
     const { organizationId } = await seedOrganization("Projection Set");
     const ids: string[] = [];
     for (const tier of ["Gold", "Platinum"]) {
-      const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+      const createResponse = await call(adminToken, "/api/v1/sponsors", {
         method: "POST",
         body: JSON.stringify({ sponsorType: "consortium", organizationId, tier, renewalDate: futureRenewalDate() }),
       });
       const { sponsorship } = (await createResponse.json()) as { sponsorship: { id: string } };
       ids.push(sponsorship.id);
-      await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+      await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
         method: "PATCH",
         body: JSON.stringify({ toStage: "active" }),
       });
@@ -347,7 +347,7 @@ describe("Sponsorship sales pipeline", () => {
       .bind(ids[0], ids[0], ids[1])
       .run();
 
-    await call(adminToken, `/api/v1/sponsorships/${ids[1]}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${ids[1]}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "lapsed" }),
     });
@@ -359,7 +359,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("does not create history or audit rows for a same-stage request", async () => {
     const { organizationId } = await seedOrganization("Same Stage");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -369,13 +369,13 @@ describe("Sponsorship sales pipeline", () => {
       }),
     });
     const { sponsorship } = (await createResponse.json()) as { sponsorship: { id: string } };
-    await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
     const before = await queryAll(env.DB, "SELECT id FROM sponsorship_events WHERE sponsorship_id = ?", sponsorship.id);
 
-    const response = await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    const response = await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -395,7 +395,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("allows only one concurrent transition from the same sponsorship revision", async () => {
     const { organizationId } = await seedOrganization("Concurrent Stage");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -440,7 +440,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("requires a future renewal date before reactivating a lapsed sponsorship", async () => {
     const { organizationId } = await seedOrganization("Expired Renewal");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -450,20 +450,20 @@ describe("Sponsorship sales pipeline", () => {
       }),
     });
     const { sponsorship } = (await createResponse.json()) as { sponsorship: { id: string } };
-    await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
-    await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "lapsed" }),
     });
-    await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}`, {
+    await call(adminToken, `/api/v1/sponsors/${sponsorship.id}`, {
       method: "PATCH",
       body: JSON.stringify({ renewalDate: "2026-01-01" }),
     });
 
-    const response = await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+    const response = await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -476,7 +476,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("does not let an active sponsorship become invisible to renewal due-work", async () => {
     const { organizationId } = await seedOrganization("Active Renewal Invariant");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -488,14 +488,14 @@ describe("Sponsorship sales pipeline", () => {
     const { sponsorship } = (await createResponse.json()) as { sponsorship: { id: string } };
     expect(
       (
-        await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}/stage`, {
+        await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
           method: "PATCH",
           body: JSON.stringify({ toStage: "active" }),
         })
       ).status,
     ).toBe(200);
 
-    const clearResponse = await call(adminToken, `/api/v1/sponsorships/${sponsorship.id}`, {
+    const clearResponse = await call(adminToken, `/api/v1/sponsors/${sponsorship.id}`, {
       method: "PATCH",
       body: JSON.stringify({ renewalDate: null }),
     });
@@ -513,7 +513,7 @@ describe("Sponsorship sales pipeline", () => {
 
   it("searches both event rows and the count, validates list parameters, and requires authorization", async () => {
     const { organizationId, userId } = await seedOrganization("History Search");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -524,12 +524,12 @@ describe("Sponsorship sales pipeline", () => {
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
     const id = created.sponsorship.id;
-    await call(adminToken, `/api/v1/sponsorships/${id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active", note: "Payment cleared" }),
     });
 
-    const searchResponse = await call(adminToken, `/api/v1/sponsorships/${id}/events?q=payment`);
+    const searchResponse = await call(adminToken, `/api/v1/sponsors/${id}/events?q=payment`);
     const searchBody = (await searchResponse.json()) as {
       events: { toStage: string; note: string | null }[];
       page: { total: number };
@@ -538,17 +538,17 @@ describe("Sponsorship sales pipeline", () => {
     expect(searchBody.events).toEqual([expect.objectContaining({ toStage: "active", note: "Payment cleared" })]);
     expect(searchBody.page.total).toBe(1);
 
-    expect((await call(adminToken, `/api/v1/sponsorships/${id}/events?limit=0`)).status).toBe(400);
-    expect((await call(adminToken, `/api/v1/sponsorships/${id}/events?sort=note`)).status).toBe(400);
-    expect((await call(adminToken, `/api/v1/sponsorships/${crypto.randomUUID()}/events`)).status).toBe(404);
+    expect((await call(adminToken, `/api/v1/sponsors/${id}/events?limit=0`)).status).toBe(400);
+    expect((await call(adminToken, `/api/v1/sponsors/${id}/events?sort=note`)).status).toBe(400);
+    expect((await call(adminToken, `/api/v1/sponsors/${crypto.randomUUID()}/events`)).status).toBe(404);
 
     const memberToken = await createMemberSession(env.DB, userId, "sponsorship-history-member-token");
-    expect((await call(memberToken, `/api/v1/sponsorships/${id}/events`)).status).toBe(403);
+    expect((await call(memberToken, `/api/v1/sponsors/${id}/events`)).status).toBe(403);
   });
 
   it("paginates equal-timestamp history deterministically in either schema-allowed order", async () => {
     const { organizationId } = await seedOrganization("Stable History");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -559,7 +559,7 @@ describe("Sponsorship sales pipeline", () => {
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
     const id = created.sponsorship.id;
-    await call(adminToken, `/api/v1/sponsorships/${id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -576,8 +576,8 @@ describe("Sponsorship sales pipeline", () => {
       .run();
 
     const newestFirst = await Promise.all([
-      call(adminToken, `/api/v1/sponsorships/${id}/events?limit=1&offset=0`),
-      call(adminToken, `/api/v1/sponsorships/${id}/events?limit=1&offset=1`),
+      call(adminToken, `/api/v1/sponsors/${id}/events?limit=1&offset=0`),
+      call(adminToken, `/api/v1/sponsors/${id}/events?limit=1&offset=1`),
     ]);
     const newestStages = await Promise.all(
       newestFirst.map(
@@ -587,8 +587,8 @@ describe("Sponsorship sales pipeline", () => {
     expect(newestStages).toEqual(["active", "new_inquiry"]);
 
     const oldestFirst = await Promise.all([
-      call(adminToken, `/api/v1/sponsorships/${id}/events?sort=createdAt&limit=1&offset=0`),
-      call(adminToken, `/api/v1/sponsorships/${id}/events?sort=createdAt&limit=1&offset=1`),
+      call(adminToken, `/api/v1/sponsors/${id}/events?sort=createdAt&limit=1&offset=0`),
+      call(adminToken, `/api/v1/sponsors/${id}/events?sort=createdAt&limit=1&offset=1`),
     ]);
     const oldestStages = await Promise.all(
       oldestFirst.map(
@@ -605,7 +605,7 @@ describe("Sponsorship sales pipeline", () => {
     )
       .bind(userId)
       .run();
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -618,7 +618,7 @@ describe("Sponsorship sales pipeline", () => {
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
 
-    await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -637,13 +637,13 @@ describe("Sponsorship sales pipeline", () => {
     });
   });
 
-  it("advancing an event sponsorship to active at a qualifying tier queues sponsor-portal access", async () => {
+  it("advancing an event sponsorship to active at a qualifying tier queues sponsor workspace access", async () => {
     await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`, {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
     });
 
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "event",
@@ -656,7 +656,7 @@ describe("Sponsorship sales pipeline", () => {
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
 
-    const activateResponse = await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
+    const activateResponse = await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -675,7 +675,7 @@ describe("Sponsorship sales pipeline", () => {
       contactNameText: "Leader Contact",
       tierText: "Leader",
       eventNameText: "PQC Conference 2026",
-      portalUrl: expect.stringContaining("/sponsor-portal/?token="),
+      portalUrl: expect.stringContaining("/portal/#/verify?token="),
     });
     expect(queuedPayload.portalUrl).toContain("pkcq1_");
     expect(queuedPayload.portalUrl).not.toContain("pkc1_");
@@ -685,11 +685,12 @@ describe("Sponsorship sales pipeline", () => {
       env,
       outboxRows[0].payload_json,
     );
-    expect(new URL(deliveredPayload.portalUrl).searchParams.get("token")).toMatch(/^pkc1_/);
+    const deliveredQuery = new URL(deliveredPayload.portalUrl).hash.split("?", 2)[1] ?? "";
+    expect(new URLSearchParams(deliveredQuery).get("token")).toMatch(/^pkc1_/);
   });
 
-  it("does not send sponsor-portal-access when the sponsorship's tier is not configured for attendee data access", async () => {
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+  it("does not send sponsor workspace access when the sponsorship's tier is not configured for attendee data access", async () => {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "event",
@@ -702,7 +703,7 @@ describe("Sponsorship sales pipeline", () => {
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
 
-    await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -719,7 +720,7 @@ describe("Sponsorship sales pipeline", () => {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Rollback", hasAttendeeDataAccess: true }] }),
     });
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "event",
@@ -741,7 +742,7 @@ describe("Sponsorship sales pipeline", () => {
     ).run();
 
     try {
-      const response = await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
+      const response = await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}/stage`, {
         method: "PATCH",
         body: JSON.stringify({ toStage: "active" }),
       });
@@ -770,12 +771,12 @@ describe("Sponsorship sales pipeline", () => {
     const { organizationId, userId } = await seedOrganization("Delta Co");
     const memberToken = await createMemberSession(env.DB, userId, "delta-member-token");
 
-    const sponsorshipPath = `/api/v1/organizations/${organizationId}/sponsorships/current`;
+    const sponsorshipPath = `/api/v1/organizations/${organizationId}/sponsors/current`;
     const beforeResponse = await call(memberToken, sponsorshipPath);
     const before = (await beforeResponse.json()) as { sponsorship: { tier: string | null } };
     expect(before.sponsorship.tier).toBeNull();
 
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
@@ -785,7 +786,7 @@ describe("Sponsorship sales pipeline", () => {
       }),
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
-    await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
+    await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "active" }),
     });
@@ -800,13 +801,13 @@ describe("Sponsorship sales pipeline", () => {
 
   it("rejects an unknown pipeline stage with 400", async () => {
     const { organizationId } = await seedOrganization("Epsilon");
-    const createResponse = await call(adminToken, "/api/v1/sponsorships", {
+    const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
       body: JSON.stringify({ sponsorType: "consortium", organizationId, tier: "Gold" }),
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
 
-    const response = await call(adminToken, `/api/v1/sponsorships/${created.sponsorship.id}/stage`, {
+    const response = await call(adminToken, `/api/v1/sponsors/${created.sponsorship.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "not_a_real_stage" }),
     });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { sponsorshipCheckoutResponseSchema, type SponsorshipCheckoutInput } from "../assets/shared/schemas/sponsorship";
 import { handleError } from "../functions/_lib/http";
-import { handleSponsorshipCheckout } from "../functions/api/v1/sponsorship/checkout";
+import { handleSponsorshipCheckout } from "../functions/api/v1/sponsors/checkouts";
 import { createContext, createTestRateLimiter, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 
@@ -19,7 +19,7 @@ const validBody: SponsorshipCheckoutInput = {
 };
 
 function request(headers: HeadersInit = {}): Request {
-  return new Request("https://app.test/api/v1/sponsorship/checkout", {
+  return new Request("https://app.test/api/v1/sponsors/checkouts", {
     method: "POST",
     headers: { "content-type": "application/json", origin: "https://app.test", ...headers },
     body: JSON.stringify(validBody),
@@ -39,7 +39,7 @@ async function call(body = validBody, rawRequest = request(), limiter = createTe
   }
 }
 
-describe("POST /api/v1/sponsorship/checkout", () => {
+describe("POST /api/v1/sponsors/checkouts", () => {
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);

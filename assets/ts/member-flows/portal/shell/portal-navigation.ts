@@ -36,6 +36,12 @@ const EVENTS_NAV_ITEM: PortalNavItem = {
   label: "Events",
 };
 
+const SPONSORS_NAV_ITEM: PortalNavItem = {
+  path: "/sponsors",
+  section: "sponsors",
+  label: "Sponsors",
+};
+
 const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   {
     path: "/system/analytics",
@@ -48,12 +54,6 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     section: "system",
     label: "Donations",
     permissions: ["donations:read", "donations:sync"],
-  },
-  {
-    path: "/system/sponsorships",
-    section: "system",
-    label: "Sponsorships",
-    permissions: ["sponsorships:read", "sponsorships:write"],
   },
   {
     path: "/system/membership-applications",
@@ -123,6 +123,7 @@ const CAPACITY_ROUTE_PATHS = new Set([
   ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
   MANAGEMENT_NAV_ITEM.path,
   FORMS_NAV_ITEM.path,
+  SPONSORS_NAV_ITEM.path,
   ...SYSTEM_NAV_ITEMS.map((item) => item.path),
   ACCOUNT_NAV_ITEM.path,
 ]);
@@ -166,12 +167,21 @@ export function portalHasSystemManagement(session: PortalSession | null): boolea
   return portalSystemNavigationItems(session).length > 0;
 }
 
+export function portalHasSponsorWorkspace(session: PortalSession | null): boolean {
+  return Boolean(
+    session?.sponsors.length ||
+    portalHasGlobalPermission(session, "sponsorships:read") ||
+    portalHasGlobalPermission(session, "sponsorships:write"),
+  );
+}
+
 export function portalNavigationItems(session: PortalSession | null): PortalNavItem[] {
   const systemHome = portalSystemNavigationItems(session)[0];
   return [
     ...(session?.member ? MEMBER_NAV_ITEMS : []),
     ...(session?.staff ? [MANAGEMENT_NAV_ITEM] : []),
     ...(portalHasPermissionAtAnyScope(session, "events:read") ? [EVENTS_NAV_ITEM] : []),
+    ...(portalHasSponsorWorkspace(session) ? [SPONSORS_NAV_ITEM] : []),
     ...(portalHasGlobalPermission(session, "forms:read") ? [FORMS_NAV_ITEM] : []),
     ...(systemHome ? [{ ...systemHome, label: "System" }] : []),
     ...(session?.member || session?.staff ? [ACCOUNT_NAV_ITEM] : []),
@@ -179,7 +189,10 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
 }
 
 export function portalDefaultPath(session: PortalSession | null): string {
-  return session?.member ? "/profile" : "/management";
+  if (session?.member) return "/profile";
+  if (session?.staff) return "/management";
+  if (session?.sponsors.length) return "/sponsors";
+  return "/";
 }
 
 /**
@@ -194,13 +207,15 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
   const isSelectedGroupRoute = location.startsWith("/groups/");
   const isEventsRoute = location === "/events" || location.startsWith("/events/");
   const isFormsRoute = location === "/forms" || location.startsWith("/forms/");
+  const isSponsorsRoute = location === "/sponsors" || location.startsWith("/sponsors/");
   if (
     !CAPACITY_ROUTE_PATHS.has(location) &&
     !isManagementRoute &&
     !isSystemRoute &&
     !isSelectedGroupRoute &&
     !isEventsRoute &&
-    !isFormsRoute
+    !isFormsRoute &&
+    !isSponsorsRoute
   ) {
     return null;
   }
@@ -210,6 +225,7 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
   if (isSelectedGroupRoute && (session?.member || session?.staff)) return null;
   if (isEventsRoute && portalHasPermissionAtAnyScope(session, "events:read")) return null;
   if (isFormsRoute && portalHasGlobalPermission(session, "forms:read")) return null;
+  if (isSponsorsRoute && portalHasSponsorWorkspace(session)) return null;
   return portalDefaultPath(session);
 }
 

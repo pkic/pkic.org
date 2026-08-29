@@ -108,7 +108,7 @@ describe("portal organization self-service", () => {
       expect.arrayContaining([
         `/api/v1/organizations/${organizationId}/profile`,
         `/api/v1/organizations/${organizationId}/content/reviews`,
-        `/api/v1/organizations/${organizationId}/sponsorships/current`,
+        `/api/v1/organizations/${organizationId}/sponsors/current`,
       ]),
     );
     expect(requests.some((path) => path.startsWith("/api/v1/me"))).toBe(false);

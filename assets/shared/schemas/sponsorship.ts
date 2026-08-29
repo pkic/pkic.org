@@ -4,7 +4,7 @@ import { databaseIdSchema } from "./identifiers";
 import { stripeCurrencySchema, stripeEventEnvelopeSchema, stripeIdentifierSchema } from "./stripe";
 import { httpUrlSchema, relativeRedirectPathSchema } from "./urls";
 
-/** Schemas for /api/v1/sponsorship/*. */
+/** Shared public sponsor inquiry and checkout schemas. */
 
 export const sponsorshipTypeSchema = z.enum(["consortium", "event"]);
 export type SponsorshipType = z.infer<typeof sponsorshipTypeSchema>;

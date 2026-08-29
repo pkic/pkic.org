@@ -23,7 +23,6 @@ const SystemAnalytics = lazy(() =>
   import("./system-analytics/SystemAnalytics").then((module) => ({ default: module.SystemAnalytics })),
 );
 const Donations = lazy(() => import("./system-donations/Donations").then((module) => ({ default: module.Donations })));
-const Sponsorships = lazy(() => import("./system-sponsorships").then((module) => ({ default: module.Sponsorships })));
 const Operations = lazy(() => import("./system-operations").then((module) => ({ default: module.Operations })));
 const Organizations = lazy(() =>
   import("./system-organizations/Organizations").then((module) => ({ default: module.Organizations })),
@@ -78,12 +77,6 @@ export function SystemManagement({
             subTab={resourceId}
             canRead={portalHasGlobalPermission(session, "donations:read")}
             canSync={portalHasGlobalPermission(session, "donations:sync")}
-          />
-        ) : selected.path === "/system/sponsorships" ? (
-          <Sponsorships
-            detailId={resourceId}
-            canRead={portalHasGlobalPermission(session, "sponsorships:read")}
-            canWrite={portalHasGlobalPermission(session, "sponsorships:write")}
           />
         ) : selected.path === "/system/membership-applications" ? (
           <MembershipApplications

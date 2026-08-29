@@ -51,7 +51,7 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/system/membership-applications"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/membership-applications/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/membership-applications/{id}/documents"]).toBeUndefined();
-    expect(spec.paths["/api/v1/sponsorship/inquiries"].post).toBeDefined();
+    expect(spec.paths["/api/v1/sponsors/inquiries"].post).toBeDefined();
   });
 
   it("mounts management contracts through their owning resource routers", () => {
@@ -256,7 +256,7 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/organizations/{organizationId}/logo"].post).toBeDefined();
     expect(spec.paths["/api/v1/organizations/{organizationId}/contacts/secondary/nomination"].put).toBeDefined();
     expect(spec.paths["/api/v1/organizations/{organizationId}/contacts/secondary/nomination"].delete).toBeDefined();
-    expect(spec.paths["/api/v1/organizations/{organizationId}/sponsorships/current"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/sponsors/current"].get).toBeDefined();
     expect(spec.paths["/api/v1/me"]).toBeUndefined();
     expect(spec.paths["/api/v1/me/groups"]).toBeUndefined();
     expect(spec.paths["/api/v1/me/notification-preferences"]).toBeUndefined();

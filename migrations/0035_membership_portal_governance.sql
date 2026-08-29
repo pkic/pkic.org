@@ -943,7 +943,7 @@ CREATE INDEX idx_referral_conversions_code_created
 --    — required immediately by POST /api/v1/members/applications.
 --
 -- 2. sponsorships / sponsorship_events —
---    required immediately by POST /api/v1/sponsorship/inquiries and
+--    required immediately by POST /api/v1/sponsors/inquiries and
 --    /checkout. Only the columns needed to record an inquiry/checkout are
 --    exercised in the beginning; the full sales-pipeline admin UI is later.
 --    Two columns beyond the schema are added here because of initial changes
@@ -1156,6 +1156,9 @@ CREATE TABLE sponsorships (
 CREATE INDEX idx_sponsorships_stage ON sponsorships(pipeline_stage);
 CREATE INDEX idx_sponsorships_event ON sponsorships(event_id);
 CREATE INDEX idx_sponsorships_org ON sponsorships(organization_id);
+CREATE INDEX idx_sponsorships_active_event_contact
+  ON sponsorships(lower(trim(contact_email)), event_id, id)
+  WHERE sponsor_type = 'event' AND pipeline_stage = 'active' AND contact_email IS NOT NULL;
 CREATE INDEX idx_sponsorships_active_consortium_org_projection
   ON sponsorships(organization_id, start_date DESC, id)
   WHERE sponsor_type = 'consortium' AND pipeline_stage = 'active';
@@ -2629,7 +2632,6 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'proposals:cancel_accepted', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'agenda:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'agenda:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'sponsor-portal:attendee-data', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'admin:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'admin:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
@@ -3757,23 +3759,19 @@ You may revise and resubmit at any time.',
 -- `sponsorships`/`sponsorship_events` are created earlier in this migration
 -- forward for inquiry/checkout endpoints) with every column
 -- schema calls for. What's still missing for the full sales-pipeline/
--- sponsor-portal feature:
+-- sponsor management and attendee-access feature:
 --
 -- 1. `organizations.sponsor_tier`/`sponsor_start_date` — written when a
 --    consortium sponsorship goes active, cleared when it lapses.
 -- 2. `event_sponsor_attendee_tiers` — per-event config of which sponsor
 --    tiers get attendee-data access.
--- 3. `sponsor_portal_sessions` — a sponsor contact has no `users` row ("no
---    separate account required"), so the existing `sessions` table (with
---    `user_id NOT NULL`) cannot be reused. Sessions are scoped to
---    `sponsorship_id` instead.
--- 4. Migrate the live `sponsors`/`sponsor_events` rows into
+-- 3. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
 --    against anything already there). Keep the legacy source tables as a
 --    rollback/reconciliation source until the backfill has been verified in
 --    preview and production. A later, explicitly approved migration may drop
 --    them after that verification; application code must not write to them.
--- 5. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
+-- 4. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
 --    `sponsorship-lapsed-staff`, `sponsorship-active-confirmation`,
 --    `sponsor-portal-access`) — `sponsorship-brochure`/`sponsorship-new-inquiry`
 --    are seeded earlier in this migration.
@@ -3799,32 +3797,6 @@ CREATE TABLE event_sponsor_attendee_tiers (
   updated_at               TEXT NOT NULL,
   UNIQUE(event_id, tier_name)
 );
-
--- ── Sponsor portal sessions (no `users` row — see header) ──────────────────
-
-CREATE TABLE sponsor_portal_sessions (
-  id             TEXT NOT NULL PRIMARY KEY,
-  sponsorship_id TEXT NOT NULL REFERENCES sponsorships(id),
-  token_hash     TEXT NOT NULL UNIQUE,
-  expires_at     TEXT NOT NULL,
-  revoked_at     TEXT,
-  created_at     TEXT NOT NULL
-);
-
-CREATE INDEX idx_sponsor_portal_sessions_sponsorship ON sponsor_portal_sessions(sponsorship_id);
-
--- The authenticated sponsor identity is the current contact mailbox. Any
--- change to that mailbox revokes existing bearer sessions immediately, no
--- matter which present or future management path performs the update.
-CREATE TRIGGER revoke_sponsor_portal_sessions_on_contact_email_change
-AFTER UPDATE OF contact_email ON sponsorships
-WHEN lower(trim(COALESCE(OLD.contact_email, ''))) <> lower(trim(COALESCE(NEW.contact_email, '')))
-BEGIN
-  UPDATE sponsor_portal_sessions
-     SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-   WHERE sponsorship_id = NEW.id
-     AND revoked_at IS NULL;
-END;
 
 -- ── Migrate live `sponsors`/`sponsor_events` rows first ───────
 -- (must run before any future YAML-scan pass — see scripts/migrate-sponsors-yaml-to-d1.mjs
@@ -3953,14 +3925,14 @@ Your {{tierText}} sponsorship for {{organizationNameText}} is now active{{#start
   ),
   (
     lower(hex(randomblob(16))), 'sponsor-portal-access', 1,
-    'Access your sponsor portal',
+    'Access your sponsor workspace',
     'Hi {{contactNameText}},
 
 As a {{tierText}} sponsor of {{eventNameText}}, you can view and export basic attendee information for attendees who agreed to share their details with sponsors.
 
-[Access your sponsor portal]({{portalUrl}})
+[Access your sponsor workspace]({{portalUrl}})
 
-This link expires in {{expiresInMinutes}} minutes; you can request a new one at any time from the sponsor portal sign-in page.',
+This link expires in {{expiresInMinutes}} minutes; you can request a new one at any time from the sponsor workspace sign-in page.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 

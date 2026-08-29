@@ -1,6 +1,6 @@
 ---
-title: Sponsor Portal
-type: sponsor-portal
+title: Sponsor Access
+redirect: /portal/#/sponsors/access
 robots: noindex
 sitemap:
   disable: true
