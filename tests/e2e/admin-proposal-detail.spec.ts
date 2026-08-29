@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
-import { adminEventDetailResponseSchema } from "../../assets/shared/schemas/admin-events";
+import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 
@@ -500,29 +500,37 @@ test("offers an event-level presentation ZIP from the proposals overview", async
       body: JSON.stringify(adminSessionResponse),
     });
   });
-  await page.route("**/api/v1/admin/events/pqc-2026", async (route) => {
+  await page.route("**/api/v1/events/pqc-2026", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        adminEventDetailResponseSchema.parse({
+        eventManagementDetailResponseSchema.parse({
           event: {
             id: "event-1",
             slug: "pqc-2026",
             name: "PQC Conference 2026",
             timezone: "Europe/Amsterdam",
-            starts_at: "2026-11-01T09:00:00.000Z",
-            ends_at: null,
-            registration_mode: "open",
-            invite_limit_attendee: 50,
-            base_path: null,
-            user_retention_days: null,
+            startsAt: "2026-11-01T09:00:00.000Z",
+            endsAt: null,
+            profileKey: "conference",
+            sourceMode: "hugo",
+            registrationPolicy: "public",
+            visibility: "public",
+            inviteLimitAttendee: 50,
+            updatedAt: "2026-08-29T00:00:00.000Z",
+            ownerGroupId: null,
+            seriesId: null,
+            basePath: null,
+            userRetentionDays: null,
             venue: "Amsterdam",
-            virtual_url: null,
-            hero_image_url: null,
+            virtualUrl: null,
+            heroImageUrl: null,
             location: "Amsterdam",
-            session_types: [],
+            sessionTypes: [],
+            links: [],
             settings: {},
+            capabilities: ["read", "write"],
           },
         }),
       ),

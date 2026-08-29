@@ -1,13 +1,28 @@
-import { isEventCustomSettingKey, type EventSettingsInput } from "../../../../assets/shared/schemas/event-management";
-import type { DatabaseLike, StatementLike } from "../../types";
+import {
+  isEventCustomSettingKey,
+  type EventManagementCapability,
+  type EventSettingsInput,
+  type EventSettingsUpdateInput,
+} from "../../../../assets/shared/schemas/event-management";
+import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { AppError } from "../../errors";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { resolveHeroImageSource } from "../../utils/hero-image-url";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLog, prepareScopedAuditLogAfterOneChange, type AuditScope } from "../audit";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import {
+  isAuditChangeGuardFailure,
+  prepareAuditLog,
+  prepareScopedAuditLogAfterOneChange,
+  type AuditScope,
+} from "../audit";
+import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { getEventBySlug, type EventRecord } from "../events";
-import { getAdminEventDetail } from "./admin-detail";
+import { getEventDetail } from "./detail";
+import {
+  prepareDirectEventConfigurationGuard,
+  requireDirectEventConfiguration,
+  throwEventConfigurationConflict,
+} from "./direct-configuration";
 
 function setFormLink(
   settings: Record<string, unknown>,
@@ -33,7 +48,7 @@ export function initialEventSettings(
 
 function mergeEventSettings(
   existingJson: string,
-  input: Omit<EventSettingsInput, "registrationMode"> & { registrationMode?: string },
+  input: Omit<EventSettingsInput, "registrationPolicy"> & { registrationPolicy?: string },
   appBaseUrl: string,
   allowedHeroImageHosts?: string,
 ): Record<string, unknown> {
@@ -79,7 +94,7 @@ function mergeEventSettings(
 export interface EventSettingsMutationInput {
   event: EventRecord;
   actorId: string;
-  settings: Omit<EventSettingsInput, "registrationMode"> & { registrationMode?: string };
+  settings: Omit<EventSettingsInput, "registrationPolicy"> & { registrationPolicy?: string };
   appBaseUrl: string;
   allowedHeroImageHosts?: string;
   expectedUpdatedAt?: string;
@@ -116,6 +131,7 @@ export function buildEventSettingsMutationStatements(
                 starts_at = IIF(? = 1, starts_at, ?),
                 ends_at = IIF(? = 1, ends_at, ?),
                 registration_mode = COALESCE(?, registration_mode),
+                visibility = COALESCE(?, visibility),
                 links_json = IIF(? = 1, ?, links_json),
                 invite_limit_attendee = COALESCE(?, invite_limit_attendee),
                 settings_json = ?, updated_at = ?
@@ -128,7 +144,8 @@ export function buildEventSettingsMutationStatements(
         input.settings.startsAt ?? null,
         input.settings.endsAt === undefined ? 1 : 0,
         input.settings.endsAt ?? null,
-        input.settings.registrationMode ?? null,
+        input.settings.registrationPolicy ?? null,
+        input.settings.visibility ?? null,
         input.links === undefined ? 0 : 1,
         input.links === undefined ? null : stringifyJson(input.links),
         input.settings.inviteLimitAttendee ?? null,
@@ -186,52 +203,42 @@ export function buildEventSettingsMutationStatements(
   return statements;
 }
 
-export async function updateEventSettings(
+export async function updateDirectEventSettings(
   db: DatabaseLike,
   input: {
     eventSlug: string;
-    actorId: string;
-    settings: EventSettingsInput;
+    actor: UserBackedAuthAdmin;
+    settings: EventSettingsUpdateInput;
     appBaseUrl: string;
     allowedHeroImageHosts?: string;
+    capabilities: readonly EventManagementCapability[];
   },
 ) {
   const event = await getEventBySlug(db, input.eventSlug);
-  const eventFlowFormMutation =
-    Object.prototype.hasOwnProperty.call(input.settings, "registrationMode") ||
-    Object.prototype.hasOwnProperty.call(input.settings, "registrationFormKey") ||
-    Object.prototype.hasOwnProperty.call(input.settings, "proposalFormKey");
+  await requireDirectEventConfiguration(db, event);
+  const { expectedUpdatedAt, ...settings } = input.settings;
+  const context = { type: "event", id: event.id };
   try {
     await db.batch(
       buildEventSettingsMutationStatements(db, {
         event,
-        actorId: input.actorId,
-        settings: input.settings,
+        actorId: input.actor.id,
+        settings,
         appBaseUrl: input.appBaseUrl,
         allowedHeroImageHosts: input.allowedHeroImageHosts,
-        authorizationGuards: eventFlowFormMutation
-          ? [
-              prepareAuthorizationGuard(db, {
-                sql: "SELECT 1 FROM events WHERE id = ? AND COALESCE(source_mode, '') <> 'portal'",
-                bindings: [event.id],
-              }),
-            ]
-          : undefined,
+        expectedUpdatedAt,
+        auditScope: context,
+        authorizationGuards: [
+          preparePermissionsAuthorizationGuard(db, input.actor, [{ permission: "events:write", context }]),
+          prepareDirectEventConfigurationGuard(db, event.id),
+        ],
       }),
     );
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(
-        403,
-        "PORTAL_EVENT_FORMS_OWNED_BY_GROUP",
-        "Registration policy and event-flow forms for portal-owned events must be managed from the owning group.",
-      );
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "EVENT_CHANGED", "The event changed; reload before saving");
     }
-    throw error;
+    throwEventConfigurationConflict(error);
   }
-
-  // Return the same normalized projection as the admin detail GET route. This
-  // keeps PATCH consumers on one response contract instead of exposing the
-  // raw database event row.
-  return getAdminEventDetail(db, input.eventSlug);
+  return getEventDetail(db, input.eventSlug, input.capabilities);
 }

@@ -183,11 +183,12 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/forms/{formKey}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/forms"].post).toBeDefined();
-    expect(spec.paths["/api/v1/events/{eventSlug}/form-configurations/{purpose}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/forms/placements/{purpose}"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/forms"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"]).toBeUndefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeUndefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/days"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/days"].put).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"]).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].get).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].put).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/terms"].get).toBeDefined();

@@ -340,7 +340,7 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
       return;
     }
     void getJson(
-      `/api/v1/events/${encodeURIComponent(eventSlug)}/form-configurations/${encodeURIComponent(purpose)}`,
+      `/api/v1/events/${encodeURIComponent(eventSlug)}/forms/placements/${encodeURIComponent(purpose)}`,
       eventFormsResponseSchema,
     )
       .then((response) => setAttendanceOptions(collectAttendanceOptions(response.eventDays)))

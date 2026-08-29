@@ -6,7 +6,8 @@ import {
   formDefinitionCreateBaseSchema,
   formPlacementSchema,
 } from "./forms";
-import { groupEventParamsSchema, eventConfigurationRevisionSchema } from "./group-events";
+import { eventConfigurationRevisionSchema } from "./event-configuration";
+import { groupEventParamsSchema } from "./group-events";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 

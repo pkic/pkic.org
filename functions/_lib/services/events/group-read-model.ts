@@ -25,6 +25,7 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
+import { buildEventAudiencePredicate } from "./visibility";
 
 interface GroupEventRow {
   event_id: string;
@@ -39,6 +40,7 @@ interface GroupEventRow {
   profile_key: GroupEvent["profileKey"];
   source_mode: GroupEvent["sourceMode"];
   registration_policy: GroupEvent["registrationPolicy"];
+  visibility: GroupEvent["visibility"];
   invite_limit_attendee: number;
   location: string | null;
   links_json: string | null;
@@ -62,7 +64,7 @@ const EVENT_LOCATION = `COALESCE(series.location,
 const EVENT_SELECT = `SELECT event.id AS event_id, event.owner_group_id, series.id AS series_id,
   event.slug AS event_slug, event.base_path AS event_base_path, event.name AS event_name, event.timezone AS event_timezone,
   event.starts_at AS event_starts_at, event.ends_at AS event_ends_at,
-  event.profile_key, event.source_mode, event.registration_mode AS registration_policy,
+  event.profile_key, event.source_mode, event.registration_mode AS registration_policy, event.visibility,
   event.invite_limit_attendee,
   ${EVENT_LOCATION} AS location, event.links_json, next_occurrence.next_occurrence_at,
   event.created_at AS event_created_at, event.updated_at AS event_updated_at,
@@ -94,6 +96,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
     profileKey: row.profile_key,
     sourceMode: row.source_mode,
     registrationPolicy: row.registration_policy,
+    visibility: row.visibility,
     inviteLimitAttendee: row.invite_limit_attendee,
     location: row.location,
     links: parseLinksJson(row.links_json),
@@ -111,13 +114,19 @@ export function buildGroupEventsPageQuery(
   groupId: string,
   access: GroupResourceContextAccess | LiveGroupResourceContextAccess,
   query: GroupEventsListQuery,
+  viewer: GroupResourceViewer,
 ) {
   const live = "memberEvidence" in access;
   const accessibleEvents = live
     ? buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view")
     : buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
-  const conditions = ["event.owner_group_id IS NOT NULL"];
-  const bindings: unknown[] = [...accessibleEvents.bindings, groupId];
+  const audience = buildEventAudiencePredicate("event", {
+    userId: viewer.userId,
+    canReadAll: viewer.admin?.role === "admin",
+  });
+  const managerAccess = live ? "group_access.manager_access" : access.manager ? "1" : "0";
+  const conditions = ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR ${audience.sql})`];
+  const bindings: unknown[] = [...accessibleEvents.bindings, groupId, ...audience.bindings];
   if (query.profileKey) {
     conditions.push("event.profile_key = ?");
     bindings.push(query.profileKey);
@@ -182,7 +191,7 @@ export async function listGroupEvents(
 ): Promise<{ events: GroupEvent[]; total: number }> {
   const page = await queryPage<GroupEventRow>(
     db,
-    buildGroupEventsPageQuery(groupId, liveGroupResourceContextAccess(viewer, groupId), query),
+    buildGroupEventsPageQuery(groupId, liveGroupResourceContextAccess(viewer, groupId), query, viewer),
   );
   return { events: page.rows.map((row) => mapGroupEvent(row, groupId)), total: page.total };
 }
@@ -190,6 +199,10 @@ export async function listGroupEvents(
 export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewer, groupId: string, eventId: string) {
   const access = liveGroupResourceContextAccess(viewer, groupId);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view");
+  const audience = buildEventAudiencePredicate("event", {
+    userId: viewer.userId,
+    canReadAll: viewer.admin?.role === "admin",
+  });
   const row = await first<GroupEventRow>(
     db,
     `WITH ${NEXT_OCCURRENCE_CTE},
@@ -202,8 +215,9 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
        CROSS JOIN group_access
        LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
       WHERE event.id = ? AND event.owner_group_id IS NOT NULL
+        AND (group_access.manager_access = 1 OR ${audience.sql})
      GROUP BY event.id`,
-    [...accessibleEvents.bindings, groupId, eventId],
+    [...accessibleEvents.bindings, groupId, eventId, ...audience.bindings],
   );
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
   const event = mapGroupEvent(row, groupId);

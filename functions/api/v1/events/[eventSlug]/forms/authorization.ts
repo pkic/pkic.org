@@ -1,23 +1,13 @@
-import type { Permission } from "../../../../../../assets/shared/schemas/permissions";
-import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { guardPermissionMutationDatabase, requirePermission } from "../../../../../_lib/auth/permissions";
-import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { guardPermissionMutationDatabase } from "../../../../../_lib/auth/permissions";
+import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { requireManagedEventForm } from "../../../../../_lib/services/forms";
-import { getEventBySlug } from "../../../../../_lib/services/events";
-
-export async function requireEventFormsPermission(c: AdminContext, eventSlug: string, permission: Permission) {
-  const db = requestDb(c);
-  const actor = await requireUserBackedAdminFromRequest(db, c.req.raw, c.env);
-  const event = await getEventBySlug(db, eventSlug);
-  const context = { type: "event", id: event.id };
-  requirePermission(actor, permission, context);
-  return { actor, context, db, event };
-}
+import type { UserBackedAuthAdmin } from "../../../../../_lib/types";
+export { requireEventPermission as requireEventFormsPermission } from "../authorization";
 
 export function guardedEventFormsDatabase(
   db: ReturnType<typeof requestDb>,
-  actor: Awaited<ReturnType<typeof requireUserBackedAdminFromRequest>>,
+  actor: UserBackedAuthAdmin,
   context: { type: string; id: string },
 ) {
   return guardPermissionMutationDatabase(

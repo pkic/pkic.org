@@ -2,7 +2,7 @@
  * Staff sponsorship sales pipeline. Backs
  * `GET/POST /api/v1/sponsorships`, `GET/PATCH .../:id`,
  * `PATCH .../:id/stage`, `GET .../:id/events`, and
- * `GET/PUT /api/v1/events/:eventSlug/sponsor-tiers`.
+ * `GET/PUT /api/v1/events/:eventSlug/sponsors/tiers`.
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";

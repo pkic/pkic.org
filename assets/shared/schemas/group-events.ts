@@ -5,16 +5,17 @@ import {
   eventAttendanceRegistrationsQuerySchema,
 } from "./event-registrations";
 import {
-  attendeeInviteLimitSchema,
   eventCreateSchema,
   eventProfileCatalogResponseSchema,
+  eventResourceCoreSchema,
   eventSettingsSchema,
 } from "./event-management";
 import { eventFormsResponseSchema } from "./forms";
 import {
-  eventDaysReplaceResponseSchema,
-  eventDaysReplaceSchema,
-  eventDaysResponseSchema,
+  eventConfigurationRevisionSchema,
+  eventDaysManagementReplaceResponseSchema,
+  eventDaysManagementReplaceSchema,
+  eventDaysManagementResponseSchema,
   eventTermsReplaceSchema,
   eventTermsReplaceResponseSchema,
   eventTermsResponseSchema,
@@ -23,6 +24,7 @@ import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
   eventSourceModeSchema,
+  eventVisibilitySchema,
   standaloneEventProfileKeySchema,
 } from "./event-series";
 import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
@@ -57,24 +59,13 @@ export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLU
 });
 export type GroupEventsListQuery = z.infer<typeof groupEventsListQuerySchema>;
 
-export const groupEventSchema = z.object({
-  id: eventIdSchema,
+export const groupEventSchema = eventResourceCoreSchema.extend({
   ownerGroupId: groupIdSchema,
   seriesId: databaseIdSchema.nullable(),
-  slug: z.string(),
   basePath: z.string().trim().regex(frontendPathPattern).max(300).nullable(),
-  name: z.string(),
-  timezone: z.string(),
-  startsAt: z.string().nullable(),
-  endsAt: z.string().nullable(),
-  profileKey: eventProfileKeySchema.nullable(),
-  sourceMode: eventSourceModeSchema.nullable(),
-  registrationPolicy: eventRegistrationPolicySchema,
-  inviteLimitAttendee: attendeeInviteLimitSchema,
   location: z.string().nullable(),
   links: linksSchema,
   nextOccurrenceAt: z.string().nullable(),
-  updatedAt: z.string(),
   capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
   /** Event-scoped proposal authority; never implies a generic event or group grant. */
   proposalAccess: proposalAccessSchema.nullable().default(null),
@@ -104,10 +95,6 @@ export const groupEventProfilesRouteSchema = {
 export const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
 const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
 const groupEventInviteParamsSchema = groupEventParamsSchema.extend({ inviteId: databaseIdSchema });
-export const eventConfigurationRevisionSchema = z.object({
-  expectedUpdatedAt: z.iso.datetime(),
-});
-
 export const groupEventTermsReplaceSchema = eventConfigurationRevisionSchema.extend({
   configuration: eventTermsReplaceSchema,
 });
@@ -118,15 +105,9 @@ export const groupEventTermsReplaceResponseSchema = eventTermsReplaceResponseSch
   eventUpdatedAt: z.iso.datetime(),
 });
 
-export const groupEventDaysReplaceSchema = eventConfigurationRevisionSchema.extend({
-  configuration: eventDaysReplaceSchema,
-});
-export const groupEventDaysResponseSchema = eventDaysResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
-});
-export const groupEventDaysReplaceResponseSchema = eventDaysReplaceResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
-});
+export const groupEventDaysReplaceSchema = eventDaysManagementReplaceSchema;
+export const groupEventDaysResponseSchema = eventDaysManagementResponseSchema;
+export const groupEventDaysReplaceResponseSchema = eventDaysManagementReplaceResponseSchema;
 
 export const groupEventRegistrationSettingsResponseSchema = z.object({
   eventUpdatedAt: z.iso.datetime(),
@@ -148,15 +129,19 @@ export const groupEventCreateSchema = eventCreateSchema
   .extend({
     profileKey: standaloneEventProfileKeySchema,
     registrationPolicy: z.literal("no_registration").default("no_registration"),
+    visibility: eventVisibilitySchema.default("group_members"),
     location: eventSettingsSchema.shape.location,
     links: linksSchema.optional(),
   });
-export type GroupEventCreateInput = z.infer<typeof groupEventCreateSchema>;
+type ParsedGroupEventCreateInput = z.infer<typeof groupEventCreateSchema>;
+export type GroupEventCreateInput = Omit<ParsedGroupEventCreateInput, "visibility"> & {
+  visibility?: ParsedGroupEventCreateInput["visibility"];
+};
 
 /** Optimistic concurrency keeps two group managers from silently overwriting each other. */
 export const groupEventSettingsUpdateSchema = eventSettingsSchema
   .omit({
-    registrationMode: true,
+    registrationPolicy: true,
     venue: true,
     virtualUrl: true,
   })

@@ -37,6 +37,16 @@ export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
 export type EventSourceMode = z.infer<typeof eventSourceModeSchema>;
 
+export const EVENT_VISIBILITIES = ["invitation_only", "group_members", "all_members", "public"] as const;
+export const eventVisibilitySchema = z.enum(EVENT_VISIBILITIES);
+export type EventVisibility = z.infer<typeof eventVisibilitySchema>;
+export const EVENT_VISIBILITY_LABELS = {
+  invitation_only: "Invited participants only",
+  group_members: "Owning and shared group members",
+  all_members: "All members",
+  public: "Public",
+} as const satisfies Record<EventVisibility, string>;
+
 export const EVENT_REGISTRATION_POLICIES = [
   "no_registration",
   "optional",
@@ -63,6 +73,7 @@ export type EventMemberEligibility = z.infer<typeof eventMemberEligibilitySchema
 
 export const eventProfilePolicySchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
+  visibility: eventVisibilitySchema.default("group_members"),
   memberEligibility: eventMemberEligibilitySchema,
   guestPolicy: eventGuestPolicySchema,
 });
@@ -96,6 +107,7 @@ export const eventSeriesSchema = z.object({
   eventSlug: z.string(),
   profileKey: eventProfileKeySchema,
   registrationPolicy: eventRegistrationPolicySchema,
+  visibility: eventVisibilitySchema,
   memberEligibility: eventProfilePolicySchema.shape.memberEligibility.optional(),
   guestPolicy: eventGuestPolicySchema.optional(),
   startsAt: z.iso.datetime(),

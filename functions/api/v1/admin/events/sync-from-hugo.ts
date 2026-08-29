@@ -19,7 +19,12 @@ export const AdminEventsSyncFromHugoPost = openApiRoute(adminEventSyncRouteSchem
     ...(body.event.frontend ? { frontend: body.event.frontend } : {}),
   };
 
-  const event = await syncEventFromHugo(requestDb(c), { ...body.event, settings }, body.terms, admin.id);
+  const event = await syncEventFromHugo(
+    requestDb(c),
+    { ...body.event, visibility: body.event.visibility ?? "public", settings },
+    body.terms,
+    admin.id,
+  );
 
   return json(adminEventSyncResponseSchema.parse({ success: true, event }));
 });

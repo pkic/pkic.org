@@ -236,6 +236,7 @@ describe("group event sharing", () => {
       fixture.granteeId,
       { member: true, manager: false },
       groupEventsListQuerySchema.parse({ q: "architecture", limit: 20 }),
+      { userId: fixture.leader.id },
     );
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
     const [pagePlan, countPlan] = await Promise.all([
@@ -969,9 +970,9 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
-    expect(
-      (await callApi(env, `/api/v1/events/${fixture.eventSlug}/form-configurations/event_registration`)).status,
-    ).toBe(200);
+    expect((await callApi(env, `/api/v1/events/${fixture.eventSlug}/forms/placements/event_registration`)).status).toBe(
+      200,
+    );
 
     const revokedGrantDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(

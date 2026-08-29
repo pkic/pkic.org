@@ -5,10 +5,13 @@ import {
   EVENT_PROFILE_KEYS,
   EVENT_REGISTRATION_POLICY_LABELS,
   EVENT_REGISTRATION_POLICIES,
+  EVENT_VISIBILITIES,
+  EVENT_VISIBILITY_LABELS,
   type EventGuestPolicy,
   type EventMemberEligibility,
   type EventProfileKey,
   type EventRegistrationPolicy,
+  type EventVisibility,
 } from "../../../../../shared/schemas/event-series";
 
 export interface MeetingSeriesDraft {
@@ -20,6 +23,7 @@ export interface MeetingSeriesDraft {
   durationMinutes: number;
   location: string;
   registrationPolicy: EventRegistrationPolicy;
+  visibility: EventVisibility;
   memberEligibility: EventMemberEligibility;
   guestPolicy: EventGuestPolicy;
 }
@@ -173,6 +177,24 @@ export function MeetingSeriesFields({
           {EVENT_REGISTRATION_POLICIES.map((policy) => (
             <option key={policy} value={policy}>
               {EVENT_REGISTRATION_POLICY_LABELS[policy]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold" for={`${idPrefix}-visibility`}>
+          Visibility
+        </label>
+        <select
+          id={`${idPrefix}-visibility`}
+          class="form-select"
+          value={draft.visibility}
+          disabled={disabled}
+          onChange={(event) => updateDraft(draft, onChange, "visibility", event.currentTarget.value as EventVisibility)}
+        >
+          {EVENT_VISIBILITIES.map((visibility) => (
+            <option key={visibility} value={visibility}>
+              {EVENT_VISIBILITY_LABELS[visibility]}
             </option>
           ))}
         </select>

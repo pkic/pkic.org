@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app, { openapi } from "../functions/router";
 import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
-import { adminEventDetailResponseSchema } from "../assets/shared/schemas/admin-events";
+import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
 import { analyticsSummaryResponseSchema } from "../assets/shared/schemas/analytics";
 import { donationDetailResponseSchema } from "../assets/shared/schemas/donation-management";
@@ -51,7 +51,8 @@ describe("admin read route OpenAPI contracts", () => {
     expect(paths["/api/v1/admin/votes/{id}"]).toBeUndefined();
     expect(paths["/api/v1/admin/votes/{id}/visibility"]).toBeUndefined();
     expect(paths["/api/v1/admin/votes/{id}/ballots"]).toBeUndefined();
-    expect(paths["/api/v1/admin/events/{eventSlug}"].get).toBeDefined();
+    expect(paths["/api/v1/events/{eventSlug}"].get).toBeDefined();
+    expect(paths["/api/v1/admin/events/{eventSlug}"]).toBeUndefined();
     expect(paths["/api/v1/admin/events/{eventSlug}/stats"].get).toBeDefined();
     expect(paths["/api/v1/users"].get).toBeDefined();
     expect(paths["/api/v1/users/{userId}"].get).toBeDefined();
@@ -132,9 +133,9 @@ describe("admin read route OpenAPI contracts", () => {
     expect(stats.status).toBe(200);
     analyticsSummaryResponseSchema.parse(await stats.json());
 
-    const detail = await call(token, "/api/v1/admin/events/pqc-2026");
+    const detail = await call(token, "/api/v1/events/pqc-2026");
     expect(detail.status).toBe(200);
-    expect(adminEventDetailResponseSchema.parse(await detail.json()).event.slug).toBe("pqc-2026");
+    expect(eventManagementDetailResponseSchema.parse(await detail.json()).event.slug).toBe("pqc-2026");
 
     const eventStats = await call(token, "/api/v1/admin/events/pqc-2026/stats");
     expect(eventStats.status).toBe(200);

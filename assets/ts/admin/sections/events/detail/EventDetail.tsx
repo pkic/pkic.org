@@ -4,7 +4,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
-import { adminEventDetailResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { eventManagementDetailResponseSchema } from "../../../../../shared/schemas/event-management";
 import { toast } from "../../../ui";
 import type { EventDetail } from "../../../types";
 import { Settings } from "./Settings";
@@ -35,7 +35,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
     setLoading(true);
     setError(null);
     try {
-      const data = await api(`/api/v1/admin/events/${slug}`, adminEventDetailResponseSchema);
+      const data = await api(`/api/v1/events/${encodeURIComponent(slug)}`, eventManagementDetailResponseSchema);
       setEvent(data.event);
       currentEvent.value = data.event;
     } catch (e) {
@@ -67,7 +67,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
           <h5 class="mb-1">{event.name}</h5>
           <div class="text-muted small">
             <span class="mono">{event.slug}</span>
-            {event.starts_at && <> · {event.starts_at.substring(0, 10)}</>}
+            {event.startsAt && <> · {event.startsAt.substring(0, 10)}</>}
             {event.venue && <> · {event.venue}</>}
           </div>
         </div>

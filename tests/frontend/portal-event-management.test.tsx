@@ -40,6 +40,7 @@ const responseEvent: GroupEvent = {
   profileKey: "workshop",
   sourceMode: "portal",
   registrationPolicy: "no_registration",
+  visibility: "group_members",
   inviteLimitAttendee: 5,
   location: "Online",
   links: ["https://example.test/architecture-workshop"],

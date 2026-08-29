@@ -41,6 +41,7 @@ const event: GroupEvent = {
   profileKey: "workshop",
   sourceMode: "portal",
   registrationPolicy: "required",
+  visibility: "group_members",
   inviteLimitAttendee: 5,
   location: "Online",
   links: [],

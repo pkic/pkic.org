@@ -27,6 +27,13 @@ describe("cache policy middleware", () => {
     );
 
     expect(response.headers.get("cache-control")).toContain("public");
+
+    for (const path of ["/api/v1/events", "/api/v1/events/public-workshop"]) {
+      const eventResponse = await apiMiddlewareOnRequest(
+        createMiddlewareContext(new Request(`https://app.test${path}`), new Response("{}", { status: 200 })),
+      );
+      expect(eventResponse.headers.get("cache-control")).toContain("public");
+    }
   });
 
   it("preserves the private policy for the geolocation country endpoint", async () => {

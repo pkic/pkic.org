@@ -1,7 +1,17 @@
 import { z } from "zod";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { proposalSessionTypesSchema } from "./proposal-management";
-import { slugPattern, trimmedString } from "./api-common";
+import { eventIdSchema, slugPattern, trimmedString } from "./api-common";
+import {
+  eventProfileKeySchema,
+  eventRegistrationPolicySchema,
+  eventSourceModeSchema,
+  eventVisibilitySchema,
+} from "./event-series";
+import { groupIdSchema } from "./groups";
+import { databaseIdSchema } from "./identifiers";
+import { linksSchema } from "./links";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -86,7 +96,8 @@ export const eventSettingsSchema = z.object({
     .regex(/^[a-z][a-z0-9-]*$/)
     .nullable()
     .optional(),
-  registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
+  registrationPolicy: eventRegistrationPolicySchema.optional(),
+  visibility: eventVisibilitySchema.optional(),
   inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
   settings: eventCustomSettingsSchema.optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
@@ -101,8 +112,79 @@ export const eventCreateSchema = z.object({
   startsAt: z.iso.datetime().nullable().optional(),
   endsAt: z.iso.datetime().nullable().optional(),
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).default("invite_or_open"),
+  visibility: eventVisibilitySchema.default("invitation_only"),
   inviteLimitAttendee: attendeeInviteLimitSchema.default(5),
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
 });
 export type EventCreateInput = z.infer<typeof eventCreateSchema>;
+
+/**
+ * Canonical event fields shared by global management and group-context
+ * projections. Context-specific contracts extend this base with ownership,
+ * capabilities, and other view-specific data instead of copying the event
+ * identity and scheduling shape.
+ */
+export const eventResourceCoreSchema = z.object({
+  id: eventIdSchema,
+  slug: z.string(),
+  name: z.string(),
+  timezone: z.string(),
+  startsAt: z.string().nullable(),
+  endsAt: z.string().nullable(),
+  profileKey: eventProfileKeySchema.nullable(),
+  sourceMode: eventSourceModeSchema.nullable(),
+  registrationPolicy: eventRegistrationPolicySchema,
+  visibility: eventVisibilitySchema,
+  inviteLimitAttendee: attendeeInviteLimitSchema,
+  /** Exact persisted D1 revision; clients must return it unchanged for compare-and-set writes. */
+  updatedAt: z.string().min(1).max(40),
+});
+export type EventResourceCore = z.infer<typeof eventResourceCoreSchema>;
+
+/** Public/member-safe event representation; management configuration is deliberately absent. */
+export const eventAudienceDetailSchema = eventResourceCoreSchema
+  .omit({ sourceMode: true, inviteLimitAttendee: true, updatedAt: true })
+  .extend({
+    accessLevel: z.enum(["public", "participant"]),
+    location: z.string().nullable(),
+    links: linksSchema,
+  });
+export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
+
+export const EVENT_LIST_SORT_COLUMNS = ["name", "starts_at", "ends_at"] as const;
+export const eventsListQuerySchema = listQuerySchema(EVENT_LIST_SORT_COLUMNS).extend({
+  visibility: eventVisibilitySchema.optional(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+});
+export type EventsListQuery = z.infer<typeof eventsListQuerySchema>;
+export const eventsListResponseSchema = paginatedResponseSchema("events", eventAudienceDetailSchema);
+
+export const eventManagementCapabilitySchema = z.enum(["read", "write"]);
+export type EventManagementCapability = z.infer<typeof eventManagementCapabilitySchema>;
+
+/** Full event-management read model for an authenticated event-scoped actor. */
+export const eventDetailSchema = eventResourceCoreSchema.extend({
+  ownerGroupId: groupIdSchema.nullable(),
+  seriesId: databaseIdSchema.nullable(),
+  basePath: z.string().nullable(),
+  userRetentionDays: z.number().int().positive().nullable(),
+  venue: z.string().nullable(),
+  virtualUrl: httpUrlSchema.nullable(),
+  heroImageUrl: httpOrSameOriginUrlSchema.nullable(),
+  location: z.string().nullable(),
+  sessionTypes: proposalSessionTypesSchema.nullable(),
+  links: linksSchema,
+  settings: z.record(z.string(), z.unknown()),
+  capabilities: z.array(eventManagementCapabilitySchema).max(2),
+});
+export type EventDetail = z.infer<typeof eventDetailSchema>;
+export const eventManagementDetailResponseSchema = z.object({ event: eventDetailSchema });
+export const eventDetailResponseSchema = z.object({ event: z.union([eventDetailSchema, eventAudienceDetailSchema]) });
+
+/** Direct event updates always use optimistic concurrency. */
+export const eventSettingsUpdateSchema = eventSettingsSchema.extend({
+  expectedUpdatedAt: z.string().min(1).max(40),
+});
+export type EventSettingsUpdateInput = z.infer<typeof eventSettingsUpdateSchema>;

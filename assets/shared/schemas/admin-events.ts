@@ -12,10 +12,9 @@ import {
 import { z } from "zod";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { attendanceTypeSchema } from "./registration";
-import { eventSourceModeSchema } from "./event-series";
-import { groupIdSchema } from "./groups";
 import { EVENT_PROPOSALS_SORT_COLUMNS, eventProposalsListQuerySchema } from "./event-proposals";
-import { attendeeInviteLimitSchema } from "./event-management";
+import { attendeeInviteLimitSchema, eventManagementDetailResponseSchema } from "./event-management";
+import { eventVisibilitySchema } from "./event-series";
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
 
 /** Legacy admin-only extension for auditing soft-deleted proposal records. */
@@ -43,36 +42,7 @@ export const adminEventSummarySchema = z.object({
   total_registrations: z.number(),
   pending_invites: z.number(),
 });
-export const adminEventDetailSchema = z.object({
-  id: eventIdSchema,
-  slug: z.string(),
-  name: z.string(),
-  timezone: z.string(),
-  starts_at: z.string().nullable(),
-  ends_at: z.string().nullable(),
-  registration_mode: z.string(),
-  invite_limit_attendee: z.number(),
-  base_path: z.string().nullable(),
-  user_retention_days: z.number().nullable(),
-  venue: z.string().nullable(),
-  virtual_url: z.string().nullable(),
-  hero_image_url: z.string().nullable(),
-  location: z.string().nullable(),
-  session_types: z.array(z.object({ label: z.string(), requiresPresentation: z.boolean() })).nullable(),
-  /** Source and ownership determine which portal or admin surface owns authoring. */
-  ownerGroupId: groupIdSchema.nullable().default(null),
-  sourceMode: eventSourceModeSchema.nullable().default(null),
-  settings: z.record(z.string(), z.unknown()),
-});
-export type AdminEventDetail = z.infer<typeof adminEventDetailSchema>;
-export const adminEventDetailResponseSchema = z.object({ event: adminEventDetailSchema });
-export const adminEventCreateResponseSchema = adminEventDetailResponseSchema;
-export const adminEventUpdateResponseSchema = successResponseSchema.extend({ event: adminEventDetailSchema });
-export const adminEventEmailSupportDaysResponseSchema = z.object({
-  days: z.array(
-    z.object({ day_date: z.string().optional(), date: z.string().optional(), label: z.string().nullable().optional() }),
-  ),
-});
+export const adminEventCreateResponseSchema = eventManagementDetailResponseSchema;
 export type AdminEventSummary = z.infer<typeof adminEventSummarySchema>;
 export const adminEventsListResponseSchema = paginatedResponseSchema("events", adminEventSummarySchema);
 
@@ -157,6 +127,7 @@ export const adminEventSyncSchema = z.object({
     startsAt: z.iso.datetime().optional(),
     endsAt: z.iso.datetime().optional(),
     registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
+    visibility: eventVisibilitySchema.optional(),
     inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
     frontend: z.object({ routes: frontendRoutesSchema }).optional(),
     settings: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),

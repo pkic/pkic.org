@@ -1191,7 +1191,7 @@ test.describe("browser workflows", () => {
 
     // Nominate speakers via the API (no browser page exists for this endpoint)
     const speakerInviteStatus = await page.evaluate(async (token) => {
-      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/speaker-invites", {
+      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/speakers/invitations", {
         method: "POST",
         headers: {
           "content-type": "application/json",

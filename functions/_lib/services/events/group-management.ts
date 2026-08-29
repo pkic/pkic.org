@@ -43,6 +43,7 @@ export async function createGroupManagedEvent(
     startsAt: input.startsAt,
     endsAt: input.endsAt,
     registrationMode: input.registrationPolicy,
+    visibility: input.visibility ?? "group_members",
     inviteLimitAttendee: input.inviteLimitAttendee,
     settings: initialEventSettings(input),
     ownerGroupId: group.id,

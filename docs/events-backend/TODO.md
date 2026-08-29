@@ -1,6 +1,7 @@
 # Events Backend TODO
 
 ## Stage 0: Planning Artifacts
+
 - [x] Create and maintain TODO tracking.
 - [x] Create decisions log.
 - [x] Create API contract draft.
@@ -9,6 +10,7 @@
 - [x] Add combined community+events architecture overview (`PLATFORM_DESIGN.md`).
 
 ## Stage 1: Foundation
+
 - [x] Add TypeScript backend tooling.
 - [x] Add Wrangler config for D1/R2 bindings.
 - [x] Add shared validation/error modules.
@@ -16,6 +18,7 @@
 - [x] Centralize reusable Zod API schemas in focused `assets/shared/schemas/` domain modules.
 
 ## Stage 2: Data Model + Migrations
+
 - [x] Add v2 D1 migration set.
 - [x] Remove legacy registrations data and remove legacy API routes.
 - [x] Generalize unsubscribe model (`unsubscribes`) for future channels.
@@ -26,6 +29,7 @@
 - [x] Add event-level role table (`event_participants`) for attendee/speaker/moderator/panelist modeling.
 
 ## Stage 3: Core Workflows
+
 - [x] Registration + double opt-in.
 - [x] Invite accept/decline/reminder-ready data model.
 - [x] Proposal submit/edit/withdraw.
@@ -34,34 +38,40 @@
 - [x] Enforce proposal session-type enum and required speaker biography rules.
 
 ## Stage 4: Email System
+
 - [x] D1 template content, version metadata, and active-version enforcement.
 - [x] SendGrid outbox processing + retry endpoint.
 - [x] Add a seed utility for default D1 email-template content and metadata to
       avoid missing-template runtime failures in local/provisioning workflows.
 
 ## Stage 5: Referral + Waitlist
+
 - [x] Short code referral links and click tracking.
 - [x] Waitlist promotion workflow.
 
 ## Stage 6: Calendar Phase 1
+
 - [x] ICS generation in transactional emails.
 - [x] Calendar delivery tracked via `email_outbox` provider status (no dedicated calendar-invite table).
 
 ## Stage 7: Hardening + Tests
+
 - [x] Add end-to-end workflow integration test (`tests/full-workflow.test.ts`).
 - [x] CI workflow for backend checks.
 - [x] Add bootstrap seed script for initial admin user (`scripts/seed-initial-admin.mjs`).
 
 ## Stage 8: Deferred Design Readiness
+
 - [x] Schema hooks for public hashed-email proposal feedback.
 - [x] Schema hooks for RSVP/reconfirmation tracking.
 - [x] Add gamification subject ledger table (`engagement_events`) for points/badges/leaderboards.
 
 ## Stage 9: Hugo Frontend Integration (TypeScript-only)
+
 - [x] Add TypeScript frontend structure (`assets/ts/event-flows`, `assets/ts/shared`) and strict frontend tsconfig.
 - [x] Add frontend test/typecheck scripts and include them in `pnpm run check`.
 - [x] Add event route metadata support in sync schema (`event.frontend.routes`) and backend route resolver.
-- [x] Add forms hydration endpoint (`GET /events/:eventSlug/form-configurations/:purpose`) with required terms in response.
+- [x] Add forms hydration endpoint (`GET /events/:eventSlug/forms/placements/:purpose`) with required terms in response.
 - [x] Add manage token read endpoints (`GET /registrations/manage/:token`, `GET /proposals/manage/:token`).
 - [x] Refactor backend-generated event links (invites, referral redirects, manage URLs) to route resolver.
 - [x] Add Hugo shortcodes and event-specific pages for registration/proposal/confirm/manage flows.

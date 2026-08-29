@@ -473,7 +473,7 @@ async function main(): Promise<void> {
 
   try {
     const forms = await getJson(
-      `${apiBase}/events/${eventSlug}/form-configurations/event_registration`,
+      `${apiBase}/events/${eventSlug}/forms/placements/event_registration`,
       eventFormsResponseSchema,
     );
     eventName = forms.event.name;

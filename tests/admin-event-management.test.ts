@@ -15,6 +15,7 @@ import {
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { adminEventCreateResponseSchema } from "../assets/shared/schemas/admin-events";
+import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
 import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/services/events/team";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
@@ -51,6 +52,11 @@ async function setupAdmin(): Promise<{ baseEventId: string }> {
   )[0];
   ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { baseEventId: eventId };
+}
+
+async function eventUpdatedAt(slug = "pqc-2026"): Promise<string> {
+  const [row] = await queryAll<{ updated_at: string }>(env.DB, "SELECT updated_at FROM events WHERE slug = ?", [slug]);
+  return row.updated_at;
 }
 
 async function createScopedEventManager(eventId: string) {
@@ -334,16 +340,15 @@ describe("admin event management endpoints", () => {
   it("returns details and persists settings updates", async () => {
     await setupAdmin();
 
-    const detailResponse = await callAdmin("/api/v1/admin/events/pqc-2026");
+    const detailResponse = await callAdmin("/api/v1/events/pqc-2026");
     expect(detailResponse.status).toBe(200);
-    const detailPayload = (await detailResponse.json()) as {
-      event: { slug: string; settings: Record<string, unknown> };
-    };
+    const detailPayload = eventManagementDetailResponseSchema.parse(await detailResponse.json());
     expect(detailPayload.event.slug).toBe("pqc-2026");
 
-    const patchResponse = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+    const patchResponse = await callAdmin("/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
       body: JSON.stringify({
+        expectedUpdatedAt: detailPayload.event.updatedAt,
         name: "PQC Conference 2026 - Updated",
         venue: "The Hague Conference Center",
         virtualUrl: "https://pkic.org/live/pqc-2026/",
@@ -358,20 +363,11 @@ describe("admin event management endpoints", () => {
     });
 
     expect(patchResponse.status).toBe(200);
-    const patchPayload = (await patchResponse.json()) as {
-      success: boolean;
-      event: {
-        name: string;
-        venue: string | null;
-        user_retention_days: number | null;
-        settings: Record<string, unknown>;
-      };
-    };
-    expect(patchPayload.success).toBe(true);
+    const patchPayload = eventManagementDetailResponseSchema.parse(await patchResponse.json());
     expect(patchPayload.event.name).toBe("PQC Conference 2026 - Updated");
     expect(patchPayload.event.settings.venue).toBe("The Hague Conference Center");
     expect(patchPayload.event.settings.virtualUrl).toBe("https://pkic.org/live/pqc-2026/");
-    expect(patchPayload.event.user_retention_days).toBe(180);
+    expect(patchPayload.event.userRetentionDays).toBe(180);
     expect(
       (
         patchPayload.event.settings.proposal as
@@ -396,21 +392,21 @@ describe("admin event management endpoints", () => {
       .bind("20000000-0000-4000-8000-000000000001")
       .run();
 
-    const detailResponse = await callAdmin("/api/v1/admin/events/pqc-2026");
+    const detailResponse = await callAdmin("/api/v1/events/pqc-2026");
     expect(detailResponse.status).toBe(200);
-    const detail = (await detailResponse.json()) as { event: Record<string, unknown> };
+    const detail = eventManagementDetailResponseSchema.parse(await detailResponse.json());
     expect(detail.event).toMatchObject({
       ownerGroupId: "20000000-0000-4000-8000-000000000001",
       sourceMode: "portal",
     });
 
-    const settingsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+    const settingsResponse = await callAdmin("/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
-      body: JSON.stringify({ registrationMode: "open" }),
+      body: JSON.stringify({ expectedUpdatedAt: detail.event.updatedAt, registrationPolicy: "public" }),
     });
-    expect(settingsResponse.status).toBe(403);
+    expect(settingsResponse.status).toBe(409);
     await expect(settingsResponse.json()).resolves.toMatchObject({
-      error: { code: "PORTAL_EVENT_FORMS_OWNED_BY_GROUP" },
+      error: { code: "EVENT_MANAGED_BY_GROUP" },
     });
 
     const formResponse = await callAdmin("/api/v1/events/pqc-2026/forms", {
@@ -432,9 +428,10 @@ describe("admin event management endpoints", () => {
   it("rejects duplicate configurable session types case-insensitively", async () => {
     await setupAdmin();
 
-    const response = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+    const response = await callAdmin("/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
       body: JSON.stringify({
+        expectedUpdatedAt: await eventUpdatedAt(),
         sessionTypes: [
           { label: "Ask Me Anything", requiresPresentation: false },
           { label: "ask me anything", requiresPresentation: true },

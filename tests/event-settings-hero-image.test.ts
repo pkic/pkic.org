@@ -6,8 +6,20 @@ import app from "../functions/router";
 import { normalizeHttpOrSameOriginUrl } from "../assets/shared/schemas/urls";
 import type { Env } from "../functions/_lib/types";
 import { eventSettingsSchema } from "../assets/shared/schemas/event-management";
-import { adminEventUpdateResponseSchema } from "../assets/shared/schemas/admin-events";
+import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
+import { createAdminSession } from "./helpers/auth";
+
+async function eventAdminAuth() {
+  const [admin] = await queryAll<{ id: string }>(workerEnv.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+  const [event] = await queryAll<{ updated_at: string }>(workerEnv.DB, "SELECT updated_at FROM events WHERE slug = ?", [
+    "pqc-2026",
+  ]);
+  return {
+    token: await createAdminSession(workerEnv.DB, admin.id, `hero-image-${crypto.randomUUID()}`),
+    updatedAt: event.updated_at,
+  };
+}
 
 describe("event hero image URL handling", () => {
   beforeEach(async () => {
@@ -36,20 +48,21 @@ describe("event hero image URL handling", () => {
 
   it("stores normalized hero image paths via the admin settings endpoint", async () => {
     await seedEventAndAdmin(workerEnv.DB);
+    const auth = await eventAdminAuth();
 
     const env = {
       ...workerEnv,
-      ADMIN_API_KEY: "test-admin-key",
       APP_BASE_URL: "https://preview.pkic.org",
     } as Env;
 
-    const request = new Request("https://preview.pkic.org/api/v1/admin/events/pqc-2026/settings", {
+    const request = new Request("https://preview.pkic.org/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
       headers: {
-        authorization: "Bearer test-admin-key",
+        authorization: `Bearer ${auth.token}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
+        expectedUpdatedAt: auth.updatedAt,
         heroImageUrl: "http://localhost:8788/events/2026/pqc-conference-amsterdam-nl/hero.png?version=1",
       }),
     });
@@ -60,7 +73,7 @@ describe("event hero image URL handling", () => {
     } as unknown as ExecutionContext);
 
     expect(response.status).toBe(200);
-    const payload = adminEventUpdateResponseSchema.parse(await response.json());
+    const payload = eventManagementDetailResponseSchema.parse(await response.json());
     expect(payload.event.settings.heroImageUrl).toBe("/events/2026/pqc-conference-amsterdam-nl/hero.png?version=1");
 
     const rows = await queryAll<{ settings_json: string }>(env.DB, "SELECT settings_json FROM events WHERE slug = ?", [
@@ -85,15 +98,19 @@ describe("event hero image URL handling", () => {
 
   it("rejects a reserved-key override at the mounted request boundary without mutating D1", async () => {
     await seedEventAndAdmin(workerEnv.DB);
+    const auth = await eventAdminAuth();
     const env = {
       ...workerEnv,
-      ADMIN_API_KEY: "test-admin-key",
       APP_BASE_URL: "https://preview.pkic.org",
     } as Env;
-    const request = new Request("https://preview.pkic.org/api/v1/admin/events/pqc-2026/settings", {
+    const request = new Request("https://preview.pkic.org/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
-      headers: { authorization: "Bearer test-admin-key", "content-type": "application/json" },
-      body: JSON.stringify({ venue: "Expected venue", settings: { venue: "Injected venue" } }),
+      headers: { authorization: `Bearer ${auth.token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        expectedUpdatedAt: auth.updatedAt,
+        venue: "Expected venue",
+        settings: { venue: "Injected venue" },
+      }),
     });
 
     const response = await app.fetch(request, env, {

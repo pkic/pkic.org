@@ -163,7 +163,7 @@ async function main(): Promise<void> {
   try {
     [manageData, formsData] = await Promise.all([
       getJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, registrationManageReadResponseSchema),
-      getJson(`${apiBase}/events/${eventSlug}/form-configurations/event_registration`, eventFormsResponseSchema).catch(
+      getJson(`${apiBase}/events/${eventSlug}/forms/placements/event_registration`, eventFormsResponseSchema).catch(
         () => null,
       ),
     ]);

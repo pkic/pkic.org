@@ -104,7 +104,7 @@ describe("Sponsor portal", () => {
     )[0];
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-sponsor-portal-token");
 
-    await callAdmin(adminToken, "/api/v1/events/pqc-2026/sponsor-tiers", {
+    await callAdmin(adminToken, "/api/v1/events/pqc-2026/sponsors/tiers", {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
     });

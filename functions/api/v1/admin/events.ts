@@ -3,7 +3,7 @@ import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requirePermission } from "../../../_lib/auth/permissions";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { createAdminEvent } from "../../../_lib/services/events";
-import { getAdminEventDetail } from "../../../_lib/services/events/admin-detail";
+import { getEventDetail } from "../../../_lib/services/events/detail";
 import { initialEventSettings } from "../../../_lib/services/events/settings";
 import { listAdminEvents } from "../../../_lib/services/events/admin-list";
 import {
@@ -60,11 +60,17 @@ export const AdminEventsCreatePost = openApiRoute(adminEventCreateRouteSchema, a
       startsAt: body.startsAt ?? undefined,
       endsAt: body.endsAt ?? undefined,
       registrationMode: body.registrationMode,
+      visibility: body.visibility,
       inviteLimitAttendee: body.inviteLimitAttendee,
       settings: initialEventSettings(body),
     },
     admin.id,
   );
 
-  return json(adminEventCreateResponseSchema.parse({ event: await getAdminEventDetail(requestDb(c), body.slug) }), 201);
+  return json(
+    adminEventCreateResponseSchema.parse({
+      event: await getEventDetail(requestDb(c), body.slug, ["read", "write"]),
+    }),
+    201,
+  );
 });

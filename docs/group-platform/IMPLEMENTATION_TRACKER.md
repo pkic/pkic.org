@@ -224,6 +224,22 @@ Status: In progress
       in the same guarded D1 batch. The group-portal route and shared UI are
       tracked as part of the portal-management cutover below.
 - [x] Add one owning group to portal-managed events.
+- [x] Add a multi-level event audience policy and authorization-derived event
+      projections.
+      Evidence: `events.visibility` is a dedicated indexed D1 column with the
+      shared `invitation_only`, `group_members`, `all_members`, and `public`
+      vocabulary. It is deliberately independent from registration and
+      meeting-entry eligibility. The canonical event list applies one live D1
+      predicate before counting and pagination, including active membership,
+      owner/shared-group membership, registrations, event participation,
+      unexpired invitations, and exact event-read grants. Detail responses use
+      the same predicate and omit management settings, retention, invite
+      limits, revisions, and virtual URLs unless the caller has exact
+      `events:read`; invalid credentials never downgrade to anonymous access.
+      Group-context event reads compose the same audience predicate with
+      manager authority. Focused backend tests cover every audience level,
+      list totals, field projection, immediate policy changes, invalid-token
+      handling, and explicit group sharing.
 - [x] Replace unreleased meeting_series with shared event_series.
 - [x] Add authoritative recurring schedule and event occurrences.
 - [x] Generate ICS from series and occurrence state.
@@ -1303,7 +1319,7 @@ Status: In progress
       real Worker/D1 browser journey creates and advances a sponsorship through
       the portal and observes canonical API traffic without a legacy request.
       Event-specific sponsor attendee-data entitlements use the canonical
-      `/api/v1/events/:eventSlug/sponsor-tiers` resource path with exact
+      `/api/v1/events/:eventSlug/sponsors/tiers` resource path with exact
       event-scoped `events:read` and `events:write` permissions, API-key
       denial, and a same-batch revocation guard. Its current editor remains in
       the still-unmigrated event screen pending that broader UI cutover; it is
@@ -1396,7 +1412,7 @@ Status: In progress
       `/api/v1/forms`; event-owned definitions and response sets use
       `/api/v1/events/:eventSlug/forms`; group-owned definitions remain under
       their owning group routes. Anonymous event flows use the distinct
-      `/api/v1/events/:eventSlug/form-configurations/:purpose` projection, so
+      `/api/v1/events/:eventSlug/forms/placements/:purpose` projection, so
       public form hydration cannot be confused with a staff catalogue. One
       neutral schema and service family owns definition, placement,
       submission, statistics, search, allowlisted sorting, counting, and
@@ -1595,8 +1611,8 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the canonical Forms
-      cutover with 2,275 backend tests (one skipped), 339
+      Current evidence: the complete gate passes after the canonical event
+      visibility and resource cutover with 2,280 backend tests (one skipped), 339
       frontend tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1640,9 +1656,12 @@ Status: In progress
       follows the legacy bookmark redirect, and proves that no removed admin
       endpoint is requested. The proposal-moderation browser journey now uses
       an exact action-bearing row locator so the expanded detail row cannot be
-      mistaken for its parent proposal row. The complete 52-test Playwright
-      gate now passes against one freshly seeded Worker/D1 environment. That
-      run also exposed four event-management specs sharing one mailbox against
+      mistaken for its parent proposal row. In the current browser checkpoint,
+      51 of 52 tests passed in one freshly seeded Worker/D1 run; the remaining
+      sponsor-portal test exposed one stale test-only request to the removed
+      admin event-detail URL and passes after using the canonical event resource.
+      A later uninterrupted full gate remains required before final handoff.
+      This browser work also exposed four event-management specs sharing one mailbox against
       the production-equivalent three-request email rate limit; each spec now
       uses its own explicitly seeded test identity without weakening the
       production control.

@@ -79,13 +79,13 @@ test.describe("sponsor portal", () => {
 
     // ── Resolve the seeded event's internal id + configure Leader tier ────
     const event = await page.evaluate(async (slug) => {
-      const res = await fetch(`/api/v1/admin/events/${slug}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/events/${slug}`, { credentials: "same-origin" });
       const body = (await res.json()) as { event: { id: string } };
       return body.event;
     }, EVENT_SLUG);
 
     const tierStatus = await page.evaluate(async (slug) => {
-      const res = await fetch(`/api/v1/events/${slug}/sponsor-tiers`, {
+      const res = await fetch(`/api/v1/events/${slug}/sponsors/tiers`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",

@@ -6,6 +6,7 @@ import { uuid } from "../utils/ids";
 import { prepareAuditLog } from "./audit";
 import type { DatabaseLike, StatementLike } from "../types";
 import { EVENT_COLUMNS, type EventRecord, type EventTermRecord } from "./event-types";
+import type { EventVisibility } from "../../../assets/shared/schemas/event-series";
 
 export { EVENT_COLUMNS } from "./event-types";
 export type { EventRecord, EventTermRecord } from "./event-types";
@@ -52,6 +53,7 @@ export interface EventUpsertPayload {
   startsAt?: string | null;
   endsAt?: string | null;
   registrationMode?: string;
+  visibility?: EventVisibility;
   inviteLimitAttendee?: number;
   inviteLimitSpeakerNomination?: number;
   settings?: Record<string, unknown>;
@@ -89,9 +91,9 @@ export function prepareEventCreateStatement(
       .prepare(
         `INSERT INTO events (
           id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
-          registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at,
+          registration_mode, visibility, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at,
           owner_group_id, profile_key, source_mode, links_json
-        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         eventId,
@@ -102,6 +104,7 @@ export function prepareEventCreateStatement(
         payload.endsAt ?? null,
         payload.basePath ?? null,
         payload.registrationMode ?? "invite_or_open",
+        payload.visibility ?? "invitation_only",
         payload.inviteLimitAttendee ?? 50,
         payload.inviteLimitSpeakerNomination ?? 10,
         stringifyJson(payload.settings ?? {}),
@@ -130,7 +133,7 @@ async function buildEventUpsertStatement(
       .prepare(
         `UPDATE events
          SET name = ?, timezone = ?, starts_at = ?, ends_at = ?,
-             capacity_in_person = ?, registration_mode = ?, invite_limit_attendee = ?,
+             capacity_in_person = ?, registration_mode = ?, visibility = ?, invite_limit_attendee = ?,
              invite_limit_speaker_nomination = ?, settings_json = ?, updated_at = ?
          WHERE id = ?`,
       )
@@ -141,6 +144,7 @@ async function buildEventUpsertStatement(
         payload.endsAt ?? existing.ends_at,
         null,
         payload.registrationMode ?? existing.registration_mode,
+        payload.visibility ?? (existing.visibility as EventVisibility),
         payload.inviteLimitAttendee ?? existing.invite_limit_attendee,
         payload.inviteLimitSpeakerNomination ?? existing.invite_limit_speaker_nomination,
         stringifyJson({

@@ -5,7 +5,7 @@
  *  - GET  /api/v1/proposals/speaker/:token       (speaker self-view)
  *  - POST /api/v1/proposals/speaker/:token       (confirm / decline)
  *  - PATCH /api/v1/proposals/speaker/:token       (update profile)
- *  - POST /api/v1/events/:slug/speaker-invites   (attendee nominates speakers)
+ *  - POST /api/v1/events/:slug/speakers/invitations   (attendee nominates speakers)
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
@@ -2743,7 +2743,7 @@ describe("speaker nomination by attendees", () => {
     return mountedSpeakerRoute(
       createContext(
         env,
-        new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {
+        new Request("https://app.test/api/v1/events/pqc-2026/speakers/invitations", {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -2832,7 +2832,7 @@ describe("speaker nomination by attendees", () => {
     await expect(
       createPeerInvitations(
         racingEnv,
-        new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {
+        new Request("https://app.test/api/v1/events/pqc-2026/speakers/invitations", {
           headers: { authorization: `Bearer ${manageToken}` },
         }),
         "pqc-2026",
@@ -2854,7 +2854,7 @@ describe("speaker nomination by attendees", () => {
     const response = await mountedSpeakerRoute(
       createContext(
         env,
-        new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {
+        new Request("https://app.test/api/v1/events/pqc-2026/speakers/invitations", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({

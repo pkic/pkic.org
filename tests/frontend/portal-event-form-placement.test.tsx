@@ -321,6 +321,7 @@ describe("portal event form placement management", () => {
       profileKey: "workshop",
       sourceMode: "portal",
       registrationPolicy: "no_registration",
+      visibility: "group_members",
       inviteLimitAttendee: 5,
       location: null,
       links: [],

@@ -9,10 +9,22 @@ Base path: `/api/v1`
 - `GET /auth/session`
 - `POST /auth/logout`
 
-## Admin event management
+## Event resources
+
+- `GET /events`
+- `GET /events/:eventSlug`
+- `PATCH /events/:eventSlug/settings`
+- `GET /events/:eventSlug/days`
+- `PUT /events/:eventSlug/days`
+- Lists and details apply the live event audience in D1. Anonymous and member
+  responses contain only audience-safe fields; exact `events:read` permission
+  enables the management detail projection.
+- Event visibility is `invitation_only`, `group_members`, `all_members`, or
+  `public`. It is separate from registration and meeting-entry policy.
+
+## Remaining legacy event integration
 
 - `POST /admin/events/sync-from-hugo`
-- `PATCH /admin/events/:eventSlug/settings`
 - `GET /admin/events/:eventSlug/registrations`
 - `GET /admin/events/:eventSlug/proposals`
 - `POST /admin/events/sync-from-hugo` supports optional `event.frontend.routes`:
@@ -56,7 +68,7 @@ Base path: `/api/v1`
 - `POST /events/:eventSlug/registrations`
 - `POST /events/:eventSlug/registrations/confirm-email`
 - `GET /events/:eventSlug/registrations/confirm-email?token=...`
-- `GET /events/:eventSlug/form-configurations/:purpose`
+- `GET /events/:eventSlug/forms/placements/:purpose`
 - `GET /registrations/manage/:token`
 - `PATCH /registrations/manage/:token`
 - `POST /events/:eventSlug/invites`
@@ -69,7 +81,7 @@ Base path: `/api/v1`
 ## Terms and proposals
 
 - `POST /events/:eventSlug/proposals`
-- `GET /events/:eventSlug/form-configurations/:purpose`
+- `GET /events/:eventSlug/forms/placements/:purpose`
 - `GET /proposals/manage/:token`
 - `PATCH /proposals/manage/:token`
 - Proposal participants:

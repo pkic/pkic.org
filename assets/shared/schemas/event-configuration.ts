@@ -104,6 +104,17 @@ export const eventDaysReplaceSchema = z
   });
 export type EventDaysReplaceInput = z.infer<typeof eventDaysReplaceSchema>;
 
+/** Shared optimistic-revision envelope for mutable event configuration. */
+export const eventConfigurationRevisionSchema = z.object({
+  /** Exact persisted D1 revision; accepted as stored so legacy SQLite timestamps remain CAS-safe. */
+  expectedUpdatedAt: z.string().min(1).max(40),
+});
+
+export const eventDaysManagementReplaceSchema = eventConfigurationRevisionSchema.extend({
+  configuration: eventDaysReplaceSchema,
+});
+export type EventDaysManagementReplaceInput = z.infer<typeof eventDaysManagementReplaceSchema>;
+
 /** Canonical configured event-day projection shared by management and attendance views. */
 export const eventDayResponseSchema = z.object({
   id: z.string(),
@@ -122,3 +133,10 @@ export const eventDaysResponseSchema = z.object({
 });
 export type EventDay = EventDayResponse;
 export const eventDaysReplaceResponseSchema = successResponseSchema.extend({ skipped: z.array(z.string()) });
+export const eventDaysManagementResponseSchema = eventDaysResponseSchema.extend({
+  eventUpdatedAt: z.string().min(1).max(40),
+});
+export type EventDaysManagementResponse = z.infer<typeof eventDaysManagementResponseSchema>;
+export const eventDaysManagementReplaceResponseSchema = eventDaysReplaceResponseSchema.extend({
+  eventUpdatedAt: z.string().min(1).max(40),
+});

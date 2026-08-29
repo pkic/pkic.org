@@ -3986,12 +3986,20 @@ ALTER TABLE events ADD COLUMN owner_group_id TEXT REFERENCES groups(id);
 ALTER TABLE events ADD COLUMN profile_key TEXT REFERENCES event_profiles(key);
 ALTER TABLE events ADD COLUMN source_mode TEXT;
 ALTER TABLE events ADD COLUMN links_json TEXT;
+-- Audience policy is deliberately separate from registration and meeting-entry
+-- policy. Keep validation in shared application schemas so extending the
+-- catalog never requires rebuilding the D1 events table.
+ALTER TABLE events ADD COLUMN visibility TEXT NOT NULL DEFAULT 'invitation_only';
 -- allowed source_mode: hugo | portal | integration
 
 CREATE INDEX idx_events_owner_profile
   ON events(owner_group_id, profile_key, starts_at, id);
 CREATE INDEX idx_events_source_mode
   ON events(source_mode, updated_at, id);
+CREATE INDEX idx_events_visibility_schedule
+  ON events(visibility, starts_at, ends_at, id);
+CREATE INDEX idx_events_owner_visibility_schedule
+  ON events(owner_group_id, visibility, starts_at, id);
 
 CREATE TRIGGER trg_portal_events_require_owner_insert
 BEFORE INSERT ON events

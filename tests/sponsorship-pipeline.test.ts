@@ -638,7 +638,7 @@ describe("Sponsorship sales pipeline", () => {
   });
 
   it("advancing an event sponsorship to active at a qualifying tier queues sponsor-portal access", async () => {
-    await call(adminToken, `/api/v1/events/pqc-2026/sponsor-tiers`, {
+    await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`, {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
     });
@@ -715,7 +715,7 @@ describe("Sponsorship sales pipeline", () => {
   });
 
   it("rolls back a stage transition, portal token, and notification when its audit insert fails", async () => {
-    await call(adminToken, `/api/v1/events/pqc-2026/sponsor-tiers`, {
+    await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`, {
       method: "PUT",
       body: JSON.stringify({ tiers: [{ tierName: "Rollback", hasAttendeeDataAccess: true }] }),
     });
@@ -811,7 +811,7 @@ describe("Sponsorship sales pipeline", () => {
   });
 
   it("round-trips per-event sponsor attendee-data-access tier config", async () => {
-    const putResponse = await call(adminToken, `/api/v1/events/pqc-2026/sponsor-tiers`, {
+    const putResponse = await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`, {
       method: "PUT",
       body: JSON.stringify({
         tiers: [
@@ -822,7 +822,7 @@ describe("Sponsorship sales pipeline", () => {
     });
     expect(putResponse.status).toBe(200);
 
-    const getResponse = await call(adminToken, `/api/v1/events/pqc-2026/sponsor-tiers`);
+    const getResponse = await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`);
     const body = (await getResponse.json()) as { tiers: { tierName: string; hasAttendeeDataAccess: boolean }[] };
     expect(body.tiers).toHaveLength(2);
     expect(body.tiers.find((t) => t.tierName === "Leader")?.hasAttendeeDataAccess).toBe(true);

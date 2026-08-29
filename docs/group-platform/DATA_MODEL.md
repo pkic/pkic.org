@@ -298,6 +298,7 @@ ownership and profile fields:
     profile_key
     source_mode
     links_json
+    visibility (invitation_only, group_members, all_members, or public)
 
 Controlled profiles include meeting, conference, workshop, tutorial, and
 board_meeting. Existing Hugo-backed conferences remain source_mode hugo.
@@ -305,6 +306,15 @@ Portal-managed meetings use source_mode portal.
 
 Existing registration_mode and settings are interpreted through the shared
 event-profile policy rather than route-local literals.
+
+Event visibility is an independent audience policy. It controls discovery and
+the safe detail projection, while registration_mode controls whether and how a
+visible person registers and memberEligibility controls meeting entry. Exact
+event permissions and explicit group resource grants may expand access without
+rewriting the stored policy. Event list filtering, counting, searching,
+sorting, and pagination apply the live audience predicate in D1; public/member
+responses never contain management settings, retention, invite limits, or
+virtual join URLs.
 
 ### registrations addition
 

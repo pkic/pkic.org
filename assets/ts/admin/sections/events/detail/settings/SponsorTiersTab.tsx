@@ -8,7 +8,7 @@ import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor"
 export function SponsorTiersTab({ slug }: { slug: string }) {
   const tiersResource = useAdminEditorResource(
     async () => {
-      const data = await api(`/api/v1/events/${slug}/sponsor-tiers`, eventSponsorTiersResponseSchema);
+      const data = await api(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema);
       return data.tiers ?? [];
     },
     [slug],
@@ -23,7 +23,7 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
       setSaving,
       setStatus: setSaveStatus,
       request: () =>
-        api(`/api/v1/events/${slug}/sponsor-tiers`, eventSponsorTiersResponseSchema, {
+        api(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema, {
           method: "PUT",
           body: JSON.stringify({ tiers: tiers.filter((tier) => tier.tierName.trim()) }),
         }),

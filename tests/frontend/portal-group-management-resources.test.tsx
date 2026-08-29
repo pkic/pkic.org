@@ -101,6 +101,7 @@ describe("portal group management resources", () => {
           eventSlug: "architecture-call",
           profileKey: "meeting",
           registrationPolicy: "no_registration",
+          visibility: "group_members",
           memberEligibility: "owner_group",
           guestPolicy: "occurrence_invitation",
           startsAt: "2026-09-01T15:00:00.000Z",

@@ -5,14 +5,11 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
-import { AdminEventDaysGet } from "./days";
-import { AdminEventsEventSlugGet } from "./index";
 import { AdminEventTeamList, AdminEventTeamPermissionCreate } from "./permissions";
 import { AdminEventPromotersGet } from "./promoters";
 import { AdminEventPresentationsDownloadGet } from "./presentations/download";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { AdminEventRegistrationsGet } from "./registrations";
-import { AdminEventsEventSlugSettingsPatch } from "./settings";
 import { AdminEventsEventSlugStatsGet } from "./stats";
 import emails_Router from "./emails/router";
 import permissions_Router from "./permissions/router";
@@ -69,15 +66,12 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 
 app.use("*", requireEventManagementAccess);
 
-openapi.get("/days", AdminEventDaysGet);
-openapi.get("/", AdminEventsEventSlugGet);
 openapi.get("/permissions", AdminEventTeamList);
 openapi.post("/permissions", AdminEventTeamPermissionCreate);
 openapi.get("/promoters", AdminEventPromotersGet);
 openapi.get("/presentations/download", AdminEventPresentationsDownloadGet);
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 openapi.get("/registrations", AdminEventRegistrationsGet);
-openapi.patch("/settings", AdminEventsEventSlugSettingsPatch);
 openapi.get("/stats", AdminEventsEventSlugStatsGet);
 openapi.route("/emails", emails_Router);
 openapi.route("/permissions", permissions_Router);

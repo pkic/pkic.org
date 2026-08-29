@@ -234,18 +234,11 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "POST /api/v1/admin/events/sync-from-hugo",
       () => callApp(anonPost("https://app.test/api/v1/admin/events/sync-from-hugo")),
     ],
-    [
-      "GET /api/v1/admin/events/:slug (detail)",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/days",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/days`)),
-    ],
+    ["GET /api/v1/events/:slug/days", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/days`))],
     ["POST /api/v1/events/:slug/forms", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/forms`))],
     [
-      "PATCH /api/v1/admin/events/:slug/settings",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/events/${eventSlug}/settings`)),
+      "PATCH /api/v1/events/:slug/settings",
+      () => callApp(anonPatch(`https://app.test/api/v1/events/${eventSlug}/settings`)),
     ],
     [
       "GET /api/v1/admin/events/:slug/terms",
@@ -675,9 +668,9 @@ describe("public endpoints — accessible without credentials", () => {
     expect(response.status).toBe(403);
   });
 
-  it("GET /api/v1/events/:slug/form-configurations/:purpose returns 200 without Authorization header", async () => {
+  it("GET /api/v1/events/:slug/forms/placements/:purpose returns 200 without Authorization header", async () => {
     const response = await callApp(
-      new Request("https://app.test/api/v1/events/pqc-2026/form-configurations/event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
     );
     expect(response.status).toBe(200);
   });

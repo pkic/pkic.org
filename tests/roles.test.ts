@@ -154,8 +154,8 @@ describe("roles (Built-in and custom roles)", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-context-role-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventBSlug}`)).status).toBe(404);
   });
 
   it("keeps authorization with the same user when an email changes and does not transfer it on address reuse", async () => {
@@ -176,8 +176,8 @@ describe("roles (Built-in and custom roles)", () => {
     const replacementUserId = await insertUser("staff-roles@example.test");
     const replacementToken = await createAdminSession(env.DB, replacementUserId, "replacement-address-token");
 
-    expect((await call(originalToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(replacementToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(401);
+    expect((await call(originalToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(replacementToken, `/api/v1/events/${eventASlug}`)).status).toBe(401);
   });
 
   it("expired user_roles records are not honored", async () => {
@@ -200,7 +200,7 @@ describe("roles (Built-in and custom roles)", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-expired-role-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
   });
 
   it("revoked user_roles records are not honored", async () => {
@@ -214,15 +214,15 @@ describe("roles (Built-in and custom roles)", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-revoked-role-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
   });
 
   it("admin role user can access all endpoints; membership_processor role user cannot access event management endpoints", async () => {
     await assignRole(staffUserId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-processor-token");
 
-    expect((await call(adminToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(403);
+    expect((await call(adminToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
   });
 
   it("event_organizer scoped to event A cannot access event B management endpoints", async () => {
@@ -233,8 +233,8 @@ describe("roles (Built-in and custom roles)", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-organizer-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventBSlug}`)).status).toBe(404);
     void eventBId;
   });
 

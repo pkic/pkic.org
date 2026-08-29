@@ -3,7 +3,7 @@ import type { EmailMessageType } from "../../../../../shared/schemas/email-templ
 import type { EventRegistrationStatusFilter } from "../../../../../shared/schemas/event-registrations";
 import type { AttendanceType } from "../../../../../shared/schemas/registration";
 import { api } from "../../../api";
-import { adminEventEmailSupportDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { eventDaysManagementResponseSchema } from "../../../../../shared/schemas/event-configuration";
 import type { TemplateHelperCategory } from "../../../../shared/email-template-helpers";
 
 export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
@@ -91,7 +91,7 @@ export interface CampaignPayload {
 export function useDays(slug: string) {
   const [days, setDays] = useState<Array<{ day_date?: string; date?: string; label?: string | null }>>([]);
   useEffect(() => {
-    api(`/api/v1/admin/events/${slug}/days`, adminEventEmailSupportDaysResponseSchema)
+    api(`/api/v1/events/${encodeURIComponent(slug)}/days`, eventDaysManagementResponseSchema)
       .then((data) => setDays(data.days ?? []))
       .catch(() => {});
   }, [slug]);

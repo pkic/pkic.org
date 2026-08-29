@@ -7,6 +7,12 @@ import { adminEventCreateResponseSchema, adminEventsListResponseSchema } from ".
 import { useHashLocation } from "wouter/use-hash-location";
 import { performAdminAction } from "../../actions";
 import { FormActions } from "../../components/FormActions";
+import { eventCreateSchema } from "../../../../shared/schemas/event-management";
+import {
+  EVENT_VISIBILITIES,
+  EVENT_VISIBILITY_LABELS,
+  type EventVisibility,
+} from "../../../../shared/schemas/event-series";
 
 // ────────────────────────────────────────────────────────
 // New event form
@@ -19,6 +25,7 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [mode, setMode] = useState("invite_or_open");
+  const [visibility, setVisibility] = useState<EventVisibility>("invitation_only");
   const [inviteLimit, setInviteLimit] = useState(5);
   const [venue, setVenue] = useState("");
   const [virtualUrl, setVirtualUrl] = useState("");
@@ -52,17 +59,18 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
       return;
     }
     setStatus("Creating…");
-    const body: Record<string, unknown> = {
+    const body = eventCreateSchema.parse({
       name: name.trim(),
       slug: slug.trim(),
       timezone: timezone.trim() || "UTC",
-      registration_mode: mode,
-      invite_limit_attendee: inviteLimit,
-    };
-    if (startsAt) body.starts_at = new Date(startsAt).toISOString();
-    if (endsAt) body.ends_at = new Date(endsAt).toISOString();
-    if (venue.trim()) body.venue = venue.trim();
-    if (virtualUrl.trim()) body.virtual_url = virtualUrl.trim();
+      registrationMode: mode,
+      visibility,
+      inviteLimitAttendee: inviteLimit,
+      startsAt: startsAt ? new Date(startsAt).toISOString() : null,
+      endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+      venue: venue.trim() || null,
+      virtualUrl: virtualUrl.trim() || null,
+    });
     await performAdminAction({
       setBusy: setSaving,
       request: () =>
@@ -99,6 +107,20 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
             required
           />
         </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small fw-semibold">Event visibility</label>
+        <select
+          class="form-select form-select-sm"
+          value={visibility}
+          onChange={(event) => setVisibility((event.target as HTMLSelectElement).value as EventVisibility)}
+        >
+          {EVENT_VISIBILITIES.map((value) => (
+            <option key={value} value={value}>
+              {EVENT_VISIBILITY_LABELS[value]}
+            </option>
+          ))}
+        </select>
       </div>
       <EventScheduleFields
         startsAt={startsAt}

@@ -4,7 +4,11 @@ const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-rev
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 
 function isPublicCacheableGet(pathname: string): boolean {
-  return /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname);
+  return (
+    pathname === "/api/v1/events" ||
+    /^\/api\/v1\/events\/[^/]+$/.test(pathname) ||
+    /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname)
+  );
 }
 
 /**

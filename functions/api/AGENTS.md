@@ -4,6 +4,7 @@
 - Validate once, then consume typed `data.params`, `data.query`, and `data.body`. Do not reparse the request into a second shape.
 - Resolve authentication and authorization context once through middleware or a shared guard.
 - Name top-level API route families after actual business or resource domains, never the UI surface or caller role. Do not introduce generic `admin`, `portal`, `system`, `me`, or `operations` namespaces without explicit user approval that the term is itself the domain.
+- Express relationships through natural nested resource collections. Do not concatenate a parent domain and child resource into compound segments such as `/form-placements`, `/speaker-invites`, or `/sponsor-tiers`; use `/forms/placements`, `/speakers/invitations`, and `/sponsors/tiers`. A bare collection path represents the collection, while an identifier or named child collection selects a resource below it.
 - Treat authorization as orthogonal to routing: use exact permission guards on the canonical domain endpoint and mirror those permissions when rendering UI actions. Use `/api/v1/auth` for the shared human authentication lifecycle and place current-user resources under their actual resource domain.
 - Delete the superseded route implementation and its callers when moving an unreleased endpoint. Do not leave aliases or duplicate handlers unless an external compatibility requirement has been explicitly approved.
 - Route handlers own HTTP concerns only. Call one focused use case; do not embed SQL, business transitions, or external-delivery policy.

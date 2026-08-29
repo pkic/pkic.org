@@ -6,12 +6,9 @@ import {
   adminEventTeamListResponseSchema,
   adminEventTeamPermissionCreateResponseSchema,
   adminEventSyncSchema,
-  adminEventDetailResponseSchema,
-  adminEventUpdateResponseSchema,
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
-import { eventCreateSchema, eventSettingsSchema } from "./event-management";
-import { eventDaysResponseSchema } from "./event-configuration";
+import { eventCreateSchema } from "./event-management";
 import { adminEventStatsResponseSchema } from "./admin-analytics";
 import { databaseIdSchema } from "./identifiers";
 import { z } from "zod";
@@ -54,26 +51,6 @@ export const adminEventSyncRouteSchema = {
   },
 };
 
-export const adminEventSettingsPatchRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Update event settings",
-  description: "Updates the event's dedicated settings and its extensible custom settings.",
-  request: {
-    params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: eventSettingsSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Event settings updated.",
-      content: { "application/json": { schema: adminEventUpdateResponseSchema } },
-    },
-    "400": { description: "Invalid event settings payload." },
-    "401": { description: "Admin authorization required." },
-    "403": { description: "Portal-owned registration settings must be managed from the owning group." },
-    "404": { description: "Event not found." },
-  },
-};
-
 export const adminEventTeamPermissionDeleteRouteSchema = {
   tags: ["Admin events"],
   summary: "Revoke an event-team permission",
@@ -88,20 +65,6 @@ export const adminEventTeamPermissionDeleteRouteSchema = {
     "401": { description: "Admin authorization required." },
     "403": { description: "Insufficient permission to manage this event." },
     "404": { description: "Event or permission grant not found." },
-  },
-};
-
-export const adminEventDetailRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Get event details",
-  request: { params: eventSlugParamsSchema },
-  responses: {
-    "200": {
-      description: "Event details and settings.",
-      content: { "application/json": { schema: adminEventDetailResponseSchema } },
-    },
-    "401": { description: "Admin authorization required." },
-    "404": { description: "Event not found." },
   },
 };
 
@@ -136,22 +99,6 @@ export const adminEventCreateRouteSchema = {
     "401": { description: "Admin authorization required." },
     "403": { description: "Insufficient permission to create events." },
     "409": { description: "An event with this slug already exists." },
-  },
-};
-
-export const adminEventDaysGetRouteSchema = {
-  tags: ["Admin events"],
-  summary: "List configured event days",
-  description: "Returns configured event days, attendance options, and server-computed attendance counts.",
-  request: { params: eventSlugParamsSchema },
-  responses: {
-    "200": {
-      description: "Configured event days.",
-      content: { "application/json": { schema: eventDaysResponseSchema } },
-    },
-    "401": { description: "Admin authorization required." },
-    "403": { description: "Insufficient permission to read this event." },
-    "404": { description: "Event not found." },
   },
 };
 

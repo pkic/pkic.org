@@ -276,8 +276,8 @@ describe("permission_grants (Permission grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, eventAId, adminId, new Date(Date.now() - 60_000).toISOString())
       .run();
 
-    const response = await call(staffToken, `/api/v1/admin/events/${eventASlug}`);
-    expect(response.status).toBe(403);
+    const response = await call(staffToken, `/api/v1/events/${eventASlug}`);
+    expect(response.status).toBe(404);
   });
 
   it("revoked grants are not honored", async () => {
@@ -299,8 +299,8 @@ describe("permission_grants (Permission grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, eventAId, adminId)
       .run();
 
-    const response = await call(staffToken, `/api/v1/admin/events/${eventASlug}`);
-    expect(response.status).toBe(403);
+    const response = await call(staffToken, `/api/v1/events/${eventASlug}`);
+    expect(response.status).toBe(404);
   });
 
   it("a context-scoped grant does not authorize access to a different event", async () => {
@@ -318,11 +318,11 @@ describe("permission_grants (Permission grants)", () => {
     });
     expect(grantResponse.status).toBe(201);
 
-    const okResponse = await call(staffToken, `/api/v1/admin/events/${eventASlug}`);
+    const okResponse = await call(staffToken, `/api/v1/events/${eventASlug}`);
     expect(okResponse.status).toBe(200);
 
-    const deniedResponse = await call(staffToken, `/api/v1/admin/events/cbom-2027`);
-    expect(deniedResponse.status).toBe(403);
+    const deniedResponse = await call(staffToken, `/api/v1/events/cbom-2027`);
+    expect(deniedResponse.status).toBe(404);
     void eventBId;
   });
 

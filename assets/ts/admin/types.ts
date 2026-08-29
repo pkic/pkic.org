@@ -12,8 +12,8 @@ import type {
 import type {
   AdminEventSummary as CanonicalEventSummary,
   AdminEventTeamListItem as CanonicalEventPermission,
-  AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import type { EventDetail as CanonicalEventDetail } from "../../shared/schemas/event-management";
 import type {
   EventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   EventRegistrationSummary as CanonicalRegistration,
@@ -35,7 +35,7 @@ import type { ProposalReview as CanonicalProposalReview } from "../../shared/sch
 import type { z } from "zod";
 
 export type EventSummary = CanonicalEventSummary;
-export type EventDetail = CanonicalAdminEventDetail;
+export type EventDetail = CanonicalEventDetail;
 
 export type AdminEventDay = z.infer<typeof eventDaysResponseSchema>["days"][number];
 export type AdminAttendanceOption = AdminEventDay["attendanceOptions"][number];
