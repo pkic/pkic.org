@@ -4,11 +4,16 @@ import {
   successResponseSchema,
   termKeyPattern,
   trimmedString,
+  utcInstantSchema,
   versionPattern,
 } from "./api-common";
 import { z } from "zod";
-import { attendeeInviteLimitSchema, eventManagementDetailResponseSchema } from "./event-management";
-import { eventVisibilitySchema } from "./event-series";
+import {
+  attendeeInviteLimitSchema,
+  eventCustomSettingsSchema,
+  eventManagementDetailResponseSchema,
+} from "./event-management";
+import { eventVisibilitySchema, timeZoneSchema } from "./event-series";
 
 /**
  * Systems allowed to import an event definition. The source is part of the
@@ -37,20 +42,29 @@ const importedFrontendRoutesSchema = z.object({
   speakerManage: z.string().trim().regex(frontendPathPattern).max(300).optional(),
 });
 
-export const eventImportSchema = z.object({
-  source: eventImportSourceSchema,
-  event: z.object({
+const importedEventSchema = z
+  .object({
     slug: z.string().trim().regex(slugPattern),
     name: trimmedString(3, 180),
-    timezone: trimmedString(2, 64),
-    startsAt: z.iso.datetime().optional(),
-    endsAt: z.iso.datetime().optional(),
+    timezone: timeZoneSchema,
+    startsAt: utcInstantSchema.optional(),
+    endsAt: utcInstantSchema.optional(),
     registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
-    visibility: eventVisibilitySchema.optional(),
+    // Importers must make publication an explicit decision. An omitted field
+    // must never turn a newly imported event into a public resource.
+    visibility: eventVisibilitySchema,
     inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
     frontend: z.object({ routes: importedFrontendRoutesSchema }).optional(),
-    settings: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
-  }),
+    settings: eventCustomSettingsSchema.optional(),
+  })
+  .refine((event) => !event.startsAt || !event.endsAt || event.endsAt > event.startsAt, {
+    path: ["endsAt"],
+    message: "Event end must be after its start",
+  });
+
+export const eventImportSchema = z.object({
+  source: eventImportSourceSchema,
+  event: importedEventSchema,
   terms: z
     .object({
       attendee: z.array(importedTermSchema).max(40).default([]),

@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { proposalSessionTypesSchema } from "./proposal-management";
-import { eventIdSchema, slugPattern, trimmedString } from "./api-common";
+import { eventIdSchema, slugPattern, trimmedString, utcInstantSchema } from "./api-common";
 import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
   eventSourceModeSchema,
   eventVisibilitySchema,
+  timeZoneSchema,
 } from "./event-series";
 import { groupIdSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
@@ -72,9 +73,9 @@ export const attendeeInviteLimitSchema = z.number().int().min(0).max(50);
  */
 export const eventSettingsSchema = z.object({
   name: trimmedString(3, 180).optional(),
-  timezone: trimmedString(2, 64).optional(),
-  startsAt: z.iso.datetime().nullable().optional(),
-  endsAt: z.iso.datetime().nullable().optional(),
+  timezone: timeZoneSchema.optional(),
+  startsAt: utcInstantSchema.nullable().optional(),
+  endsAt: utcInstantSchema.nullable().optional(),
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
   heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
@@ -108,9 +109,9 @@ export type EventSettingsInput = z.infer<typeof eventSettingsSchema>;
 export const eventCreateSchema = z.object({
   slug: z.string().trim().regex(slugPattern),
   name: trimmedString(3, 180),
-  timezone: trimmedString(2, 64).default("UTC"),
-  startsAt: z.iso.datetime().nullable().optional(),
-  endsAt: z.iso.datetime().nullable().optional(),
+  timezone: timeZoneSchema.default("UTC"),
+  startsAt: utcInstantSchema.nullable().optional(),
+  endsAt: utcInstantSchema.nullable().optional(),
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).default("invite_or_open"),
   visibility: eventVisibilitySchema.default("invitation_only"),
   inviteLimitAttendee: attendeeInviteLimitSchema.default(5),
@@ -182,8 +183,8 @@ export const EVENT_MANAGEMENT_LIST_SORT_COLUMNS = [
 ] as const;
 export const eventsListQuerySchema = listQuerySchema(EVENT_MANAGEMENT_LIST_SORT_COLUMNS).extend({
   visibility: eventVisibilitySchema.optional(),
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
+  from: utcInstantSchema.optional(),
+  to: utcInstantSchema.optional(),
 });
 export type EventsListQuery = z.infer<typeof eventsListQuerySchema>;
 /**

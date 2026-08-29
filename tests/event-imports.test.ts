@@ -9,6 +9,7 @@ import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity
 import { guardPermissionDatabase } from "../functions/_lib/auth/permissions";
 import { AppError } from "../functions/_lib/errors";
 import { importEvent } from "../functions/_lib/services/events";
+import { eventImportSchema } from "../assets/shared/schemas/event-imports";
 
 const importPayload = {
   source: "hugo",
@@ -16,6 +17,7 @@ const importPayload = {
     slug: "synced-event",
     name: "Synced Event",
     timezone: "Europe/Amsterdam",
+    visibility: "public",
     registrationMode: "open",
     frontend: { routes: { registration: "/events/synced-event/register/" } },
   },
@@ -43,9 +45,19 @@ async function createAdminToken(): Promise<string> {
   return createAdminSession(env.DB, admin.id, "event-import-admin-token");
 }
 
+async function expectResponseStatus(response: Response, status: number): Promise<void> {
+  const body = await response.clone().text();
+  expect(response.status, body).toBe(status);
+}
+
 describe("event imports", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("accepts the canonical importer payload", () => {
+    const parsed = eventImportSchema.safeParse(importPayload);
+    expect(parsed.success, parsed.success ? undefined : JSON.stringify(parsed.error.issues)).toBe(true);
   });
 
   it("requires events:write for an authenticated staff user", async () => {
@@ -70,12 +82,87 @@ describe("event imports", () => {
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_imported'")).toHaveLength(0);
   });
 
+  it("requires an explicit visibility and canonical UTC instants", async () => {
+    const token = await createAdminToken();
+    const importRequest = (event: Record<string, unknown>) =>
+      app.fetch(
+        new Request("https://app.test/api/v1/events/imports", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ source: "hugo", event }),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+    const base = {
+      slug: "strict-import",
+      name: "Strict import",
+      timezone: "Europe/Amsterdam",
+      visibility: "invitation_only",
+    };
+    expect((await importRequest({ ...base, visibility: undefined })).status).toBe(400);
+    expect((await importRequest({ ...base, timezone: "CET" })).status).toBe(400);
+    expect((await importRequest({ ...base, startsAt: "2027-04-12T08:00:00Z" })).status).toBe(400);
+    expect((await importRequest({ ...base, startsAt: "2027-04-12T10:00:00.000+02:00" })).status).toBe(400);
+    expect(
+      (
+        await importRequest({
+          ...base,
+          startsAt: "2027-04-12T08:00:00.000Z",
+          endsAt: "2027-04-12T07:59:59.000Z",
+        })
+      ).status,
+    ).toBe(400);
+
+    const valid = await importRequest({
+      ...base,
+      startsAt: "2027-04-12T08:00:00.000Z",
+      endsAt: "2027-04-12T09:00:00.000Z",
+    });
+    expect(valid.status).toBe(200);
+    const [stored] = await queryAll<{ starts_at: string; ends_at: string; visibility: string }>(
+      env.DB,
+      "SELECT starts_at, ends_at, visibility FROM events WHERE slug = 'strict-import'",
+    );
+    expect(stored).toEqual({
+      starts_at: "2027-04-12T08:00:00.000Z",
+      ends_at: "2027-04-12T09:00:00.000Z",
+      visibility: "invitation_only",
+    });
+  });
+
+  it("rejects custom settings that shadow dedicated event fields", async () => {
+    const token = await createAdminToken();
+    const response = await app.fetch(
+      new Request("https://app.test/api/v1/events/imports", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          source: "hugo",
+          event: {
+            slug: "shadowed-import",
+            name: "Shadowed import",
+            timezone: "UTC",
+            visibility: "invitation_only",
+            settings: { frontend: { routes: { registration: "/wrong/" } } },
+          },
+        }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await queryAll(env.DB, "SELECT id FROM events WHERE slug = 'shadowed-import'")).toHaveLength(0);
+  });
+
   it("atomically persists the event, both term audiences, and audit record", async () => {
     const token = await createAdminToken();
 
     const response = await callImport(token);
 
-    expect(response.status).toBe(200);
+    await expectResponseStatus(response, 200);
     const [event] = await queryAll<{ id: string }>(
       env.DB,
       "SELECT id FROM events WHERE slug = ?",
@@ -178,7 +265,7 @@ describe("event imports", () => {
       importEvent(
         guardedDb,
         "hugo",
-        { slug: "raced-import", name: "Raced Import", timezone: "UTC" },
+        { slug: "raced-import", name: "Raced Import", timezone: "UTC", visibility: "invitation_only" },
         undefined,
         staffId,
       ),

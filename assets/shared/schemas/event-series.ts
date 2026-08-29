@@ -7,6 +7,7 @@ import {
   normalizedEmailSchema,
   tokenSchema,
   trimmedString,
+  utcInstantSchema,
 } from "./api-common";
 import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
@@ -87,7 +88,16 @@ function isValidTimeZone(value: string): boolean {
   }
 }
 
-export const timeZoneSchema = z.string().trim().min(1).max(100).refine(isValidTimeZone, "Unknown IANA time zone");
+export const timeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine(isValidTimeZone, "Unknown IANA time zone")
+  .refine(
+    (value) => value === "UTC" || value.includes("/"),
+    "Use an IANA time zone identifier such as Europe/Amsterdam, not an abbreviation",
+  );
 export const recurrenceRuleSchema = z
   .string()
   .trim()
@@ -110,7 +120,7 @@ export const eventSeriesSchema = z.object({
   visibility: eventVisibilitySchema,
   memberEligibility: eventProfilePolicySchema.shape.memberEligibility.optional(),
   guestPolicy: eventGuestPolicySchema.optional(),
-  startsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -141,7 +151,7 @@ export const eventSeriesCreateSchema = z.object({
   eventSlug: z.string().trim().min(1).max(200),
   profileKey: eventProfileKeySchema.default("meeting"),
   policy: eventProfilePolicySchema,
-  startsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -157,17 +167,17 @@ export const eventSeriesUpdateSchema = eventSeriesCreateSchema.omit({ eventSlug:
   // must not silently reset a board meeting or workshop to `meeting`.
   profileKey: eventProfileKeySchema.optional(),
   active: z.boolean().optional(),
-  expectedUpdatedAt: z.iso.datetime(),
+  expectedUpdatedAt: utcInstantSchema,
 });
 
 export const eventSeriesMaterializeSchema = z.object({
-  through: z.iso.datetime(),
+  through: utcInstantSchema,
   maxOccurrences: z.number().int().min(1).max(500).default(200),
 });
 export const eventSeriesMaterializeResponseSchema = z.object({
   created: z.number().int().min(0),
   existing: z.number().int().min(0),
-  through: z.iso.datetime(),
+  through: utcInstantSchema,
 });
 
 export const EVENT_SERIES_SORT_COLUMNS = ["event_name", "next_occurrence_at", "created_at"] as const;
@@ -183,8 +193,8 @@ export type EventOccurrenceStatus = z.infer<typeof eventOccurrenceStatusSchema>;
 export const eventOccurrenceSchema = z.object({
   id: databaseIdSchema,
   seriesId: databaseIdSchema,
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
+  endsAt: utcInstantSchema,
   status: eventOccurrenceStatusSchema,
   locationOverride: z.string().nullable(),
   location: z.string().nullable(),
@@ -198,8 +208,8 @@ export const eventOccurrenceSchema = z.object({
 export type EventOccurrence = z.infer<typeof eventOccurrenceSchema>;
 
 const eventOccurrenceInputSchema = z.object({
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
+  endsAt: utcInstantSchema,
   locationOverride: trimmedString(0, 500).nullable().optional(),
   providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
@@ -211,7 +221,7 @@ export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
   .partial()
   .extend({
     status: eventOccurrenceStatusSchema.optional(),
-    expectedUpdatedAt: z.iso.datetime(),
+    expectedUpdatedAt: utcInstantSchema,
   })
   .refine((value) => !value.startsAt || !value.endsAt || value.endsAt > value.startsAt, {
     message: "Occurrence must end after it starts",
@@ -221,8 +231,8 @@ export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
 export const EVENT_OCCURRENCE_SORT_COLUMNS = ["starts_at", "ends_at", "status"] as const;
 export const eventOccurrencesListQuerySchema = listQuerySchema(EVENT_OCCURRENCE_SORT_COLUMNS).extend({
   status: eventOccurrenceStatusSchema.optional(),
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
+  from: utcInstantSchema.optional(),
+  to: utcInstantSchema.optional(),
 });
 export const eventOccurrencesListResponseSchema = paginatedResponseSchema("occurrences", eventOccurrenceSchema);
 
@@ -270,8 +280,8 @@ export const meetingJoinOccurrenceSchema = z.object({
   id: databaseIdSchema,
   seriesId: databaseIdSchema,
   eventName: z.string(),
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
+  endsAt: utcInstantSchema,
   location: z.string().nullable(),
 });
 export const meetingJoinTermSchema = z.object({

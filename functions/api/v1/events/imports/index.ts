@@ -38,20 +38,14 @@ export const EventImportsCreate = openApiRoute(eventImportCreateRouteSchema, asy
     [{ permission: "events:write" }],
     () => new AppError(409, "EVENT_IMPORT_AUTHORIZATION_CHANGED", "Event write permission changed during this import"),
   );
-  const result = await importEvent(
-    guardedDb,
-    source,
-    { ...event, visibility: event.visibility ?? "public", settings },
-    terms,
-    actor.id,
-  );
+  const result = await importEvent(guardedDb, source, { ...event, settings }, terms, actor.id);
 
   return json(
     eventImportResponseSchema.parse({
       success: true,
       source,
       created: result.created,
-      ...(await getEventDetail(db, result.event.slug, ["read", "write"])),
+      event: await getEventDetail(db, result.event.slug, ["read", "write"]),
     }),
   );
 });

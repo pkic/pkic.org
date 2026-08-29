@@ -124,7 +124,12 @@ describe("admin event configuration OpenAPI boundaries", () => {
       method: "POST",
       body: JSON.stringify({
         source: "hugo",
-        event: { slug: "contract-event", name: "Contract Event", timezone: "UTC" },
+        event: {
+          slug: "contract-event",
+          name: "Contract Event",
+          timezone: "UTC",
+          visibility: "invitation_only",
+        },
       }),
     });
     expect(imported.status).toBe(200);

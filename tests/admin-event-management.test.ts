@@ -62,7 +62,10 @@ async function setupAdmin(): Promise<{ baseEventId: string }> {
 async function importEvent(slug: string, name: string, event: Record<string, unknown> = {}): Promise<Response> {
   return callAdmin("/api/v1/events/imports", {
     method: "POST",
-    body: JSON.stringify({ source: "hugo", event: { slug, name, timezone: "UTC", ...event } }),
+    body: JSON.stringify({
+      source: "hugo",
+      event: { slug, name, timezone: "UTC", visibility: "invitation_only", ...event },
+    }),
   });
 }
 
@@ -143,7 +146,7 @@ describe("admin event management endpoints", () => {
 
   it("rejects an import that would retarget an event owned by another source", async () => {
     await setupAdmin();
-    await env.DB.prepare("UPDATE events SET source_mode = 'portal' WHERE slug = 'pqc-2026'").run();
+    await env.DB.prepare("UPDATE events SET source_mode = 'integration' WHERE slug = 'pqc-2026'").run();
 
     const response = await importEvent("pqc-2026", "Hijacked", {});
     expect(response.status).toBe(409);
@@ -1407,7 +1410,10 @@ describe("admin event management endpoints", () => {
       (
         await asStaff("/api/v1/events/imports", {
           method: "POST",
-          body: JSON.stringify({ source: "hugo", event: { slug: "nope", name: "Nope", timezone: "UTC" } }),
+          body: JSON.stringify({
+            source: "hugo",
+            event: { slug: "nope", name: "Nope", timezone: "UTC", visibility: "invitation_only" },
+          }),
         })
       ).status,
     ).toBe(403);

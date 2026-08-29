@@ -40,7 +40,12 @@ describe("atomic service audit boundaries", () => {
       method: "POST",
       body: JSON.stringify({
         source: "hugo",
-        event: { slug: "audited-event", name: "Audited event", timezone: "UTC" },
+        event: {
+          slug: "audited-event",
+          name: "Audited event",
+          timezone: "UTC",
+          visibility: "invitation_only",
+        },
       }),
     });
     expect(success.status).toBe(200);
@@ -56,7 +61,12 @@ describe("atomic service audit boundaries", () => {
       method: "POST",
       body: JSON.stringify({
         source: "hugo",
-        event: { slug: "rolled-back-event", name: "Rolled back event", timezone: "UTC" },
+        event: {
+          slug: "rolled-back-event",
+          name: "Rolled back event",
+          timezone: "UTC",
+          visibility: "invitation_only",
+        },
       }),
     });
     expect(failed.status).toBe(500);
