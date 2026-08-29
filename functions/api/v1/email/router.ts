@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { EmailTemplatesList } from "./templates";
 import emailTemplates_Router from "./templates/router";
+import { EmailReminderRunCreate } from "./reminders/runs/index";
 import { EmailOutboxGet } from "./outbox";
 import { EmailOutboxProcessPost } from "./outbox/process";
 import { EmailOutboxResetFailedPost } from "./outbox/reset-failed";
@@ -17,5 +18,6 @@ openapi.post("/sendgrid/webhook", EmailSendgridWebhookPost);
 openapi.get("/outbox", EmailOutboxGet);
 openapi.post("/outbox/process", EmailOutboxProcessPost);
 openapi.post("/outbox/reset-failed", EmailOutboxResetFailedPost);
+openapi.post("/reminders/runs", EmailReminderRunCreate);
 
 export default openapi;

@@ -174,12 +174,12 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ["GET /api/v1/users/:id", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}`))],
     ["POST /api/v1/email/outbox/process", () => callApp(anonPost("https://app.test/api/v1/email/outbox/process"))],
     [
-      "POST /api/v1/operations/reminders/run",
-      () => callApp(anonPost("https://app.test/api/v1/operations/reminders/run")),
+      "POST /api/v1/email/reminders/runs",
+      () => callApp(anonPostBody("https://app.test/api/v1/email/reminders/runs", { mode: "execute", limit: 10 })),
     ],
     [
-      "POST /api/v1/operations/retention/run",
-      () => callApp(anonPost("https://app.test/api/v1/operations/retention/run")),
+      "POST /api/v1/retention/runs",
+      () => callApp(anonPostBody("https://app.test/api/v1/retention/runs", { mode: "execute" })),
     ],
     [
       "POST /api/v1/email/outbox/reset-failed",
@@ -620,8 +620,8 @@ describe("HTTP method enforcement", () => {
   it.each([
     "/api/v1/email/outbox/process",
     "/api/v1/email/outbox/reset-failed",
-    "/api/v1/operations/reminders/run",
-    "/api/v1/operations/retention/run",
+    "/api/v1/email/reminders/runs",
+    "/api/v1/retention/runs",
   ])("does not accept GET on POST-only %s", async (path) => {
     const token = await createAdminSession(env.DB, adminId, `method-${path}`);
     const response = await callApp(

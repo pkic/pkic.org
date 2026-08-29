@@ -119,8 +119,8 @@ export function SystemManagement({
           initialTab={resourceId}
           canReadEmail={portalHasGlobalPermission(session, "email:read")}
           canManageEmail={portalHasGlobalPermission(session, "email:manage")}
-          canReadOperations={portalHasGlobalPermission(session, "operations:read")}
-          canRunOperations={portalHasGlobalPermission(session, "operations:run")}
+          canReadRetention={portalHasGlobalPermission(session, "retention:read")}
+          canRunRetention={portalHasGlobalPermission(session, "retention:run")}
           canAnonymizeUsers={portalHasGlobalPermission(session, "users:anonymize")}
           canWriteMembership={portalHasGlobalPermission(session, "membership:write")}
           canApproveMembership={portalHasGlobalPermission(session, "membership:approve")}

@@ -15,7 +15,7 @@ import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
 import { ApplicationDocumentsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDocumentsCard";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
-import { DueWorkTable } from "../../assets/ts/member-flows/portal/sections/system-operations/DueWorkTable";
+import { RetentionDueTable } from "../../assets/ts/member-flows/portal/sections/system-operations/RetentionDueTable";
 import { Promoters } from "../../assets/ts/admin/sections/events/detail/Promoters";
 import { Pager } from "../../assets/ts/components/Pager";
 import { useApiPage } from "../../assets/ts/hooks/useApiPage";
@@ -457,7 +457,7 @@ describe("canonical offset pagination", () => {
     expect(codeViewRequests.map((url) => url.searchParams.get("offset"))).toEqual(["0"]);
   });
 
-  it("uses the shared pager for email outbox and due-work filters", async () => {
+  it("uses the shared pager for email outbox and retention filters", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -548,31 +548,24 @@ describe("canonical offset pagination", () => {
     expect(filteredEmailRequest.searchParams.get("offset")).toBe("0");
     void act(() => render(null, email));
 
-    const dueWork = mount(<DueWorkTable reminderLimit={50} outboxLimit={50} includeRetention={false} />);
+    const retention = mount(<RetentionDueTable />);
     await settle();
-    const initialDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(initialDueWorkRequest.searchParams.get("sort")).toBe("dueAt");
-    expect(initialDueWorkRequest.searchParams.get("bucket")).toBe("all");
-    void act(() => nextButton(dueWork).click());
+    const initialRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(initialRetentionRequest.searchParams.get("sort")).toBe("dueAt");
+    void act(() => nextButton(retention).click());
     await settle();
-    expect(latestRequest(requests, "/api/v1/operations/due-work").searchParams.get("offset")).toBe("25");
-    const pageSize = dueWork.querySelector(".adm-pager-size") as HTMLSelectElement;
+    expect(latestRequest(requests, "/api/v1/retention/due").searchParams.get("offset")).toBe("25");
+    const pageSize = retention.querySelector(".adm-pager-size") as HTMLSelectElement;
     pageSize.value = "50";
     void act(() => {
       pageSize.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
-    const resizedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(resizedDueWorkRequest.searchParams.get("limit")).toBe("50");
-    expect(resizedDueWorkRequest.searchParams.get("offset")).toBe("0");
-    const outboxTab = [...dueWork.querySelectorAll("button")].find((button) => button.textContent?.includes("Outbox"))!;
-    void act(() => outboxTab.click());
-    await settle();
-    const filteredDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(filteredDueWorkRequest.searchParams.get("bucket")).toBe("outbox");
-    expect(filteredDueWorkRequest.searchParams.get("offset")).toBe("0");
+    const resizedRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(resizedRetentionRequest.searchParams.get("limit")).toBe("50");
+    expect(resizedRetentionRequest.searchParams.get("offset")).toBe("0");
 
-    const search = dueWork.querySelector<HTMLInputElement>('input[placeholder="Search this preview batch…"]')!;
+    const search = retention.querySelector<HTMLInputElement>('input[placeholder="Search event name or slug…"]')!;
     search.value = "ada";
     void act(() => {
       search.dispatchEvent(new Event("input", { bubbles: true }));
@@ -581,17 +574,17 @@ describe("canonical offset pagination", () => {
       search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     await settle();
-    const searchedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(searchedDueWorkRequest.searchParams.get("q")).toBe("ada");
-    expect(searchedDueWorkRequest.searchParams.get("offset")).toBe("0");
+    const searchedRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(searchedRetentionRequest.searchParams.get("q")).toBe("ada");
+    expect(searchedRetentionRequest.searchParams.get("offset")).toBe("0");
 
-    const titleSort = [...dueWork.querySelectorAll<HTMLButtonElement>(".tbl-sort-btn")].find((button) =>
-      button.textContent?.includes("Target"),
+    const titleSort = [...retention.querySelectorAll<HTMLButtonElement>(".tbl-sort-btn")].find((button) =>
+      button.textContent?.includes("Event"),
     )!;
     void act(() => titleSort.click());
     await settle();
-    const sortedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(sortedDueWorkRequest.searchParams.get("sort")).toBe("-title");
-    expect(sortedDueWorkRequest.searchParams.get("q")).toBe("ada");
+    const sortedRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(sortedRetentionRequest.searchParams.get("sort")).toBe("-title");
+    expect(sortedRetentionRequest.searchParams.get("q")).toBe("ada");
   });
 });

@@ -18,7 +18,7 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
     if (LEGACY_OPERATIONS_APIS.some((prefix) => pathname.startsWith(prefix))) {
       requests.push(`${request.method()} ${pathname}`);
     }
-    if (pathname === "/api/v1/email/outbox" || pathname === "/api/v1/operations/due-work") {
+    if (pathname === "/api/v1/email/outbox" || pathname === "/api/v1/retention/due") {
       canonicalRequests.push(`${request.method()} ${pathname}`);
     }
   });
@@ -32,7 +32,7 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
   await expect(page.getByRole("tab", { name: "Due Work" })).toBeVisible();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/email/outbox")).toBe(true);
   await page.getByRole("tab", { name: "Due Work" }).click();
-  await expect.poll(() => canonicalRequests.includes("GET /api/v1/operations/due-work")).toBe(true);
+  await expect.poll(() => canonicalRequests.includes("GET /api/v1/retention/due")).toBe(true);
 
   await page.goto("/admin/#/email/outbox");
   await expect(page).toHaveURL(/\/portal\/#\/system\/operations$/);

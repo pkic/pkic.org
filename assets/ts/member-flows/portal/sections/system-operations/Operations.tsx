@@ -1,15 +1,15 @@
 import { useState } from "preact/hooks";
 import { EmailOutbox } from "./EmailOutbox";
-import { DueWork } from "./DueWork";
+import { ScheduledWork } from "./ScheduledWork";
 
-type OperationsTab = "outbox" | "due-work";
+type OperationsTab = "outbox" | "scheduled-work";
 
 export function Operations({
   initialTab,
   canReadEmail,
   canManageEmail,
-  canReadOperations,
-  canRunOperations,
+  canReadRetention,
+  canRunRetention,
   canAnonymizeUsers,
   canWriteMembership,
   canApproveMembership,
@@ -17,15 +17,15 @@ export function Operations({
   initialTab?: string;
   canReadEmail: boolean;
   canManageEmail: boolean;
-  canReadOperations: boolean;
-  canRunOperations: boolean;
+  canReadRetention: boolean;
+  canRunRetention: boolean;
   canAnonymizeUsers: boolean;
   canWriteMembership: boolean;
   canApproveMembership: boolean;
 }) {
   const readableTabs: OperationsTab[] = [
     ...(canReadEmail ? ["outbox" as const] : []),
-    ...(canReadOperations ? ["due-work" as const] : []),
+    ...(canReadRetention ? ["scheduled-work" as const] : []),
   ];
   const [tab, setTab] = useState<OperationsTab>(() =>
     readableTabs.includes(initialTab as OperationsTab) ? (initialTab as OperationsTab) : (readableTabs[0] ?? "outbox"),
@@ -55,15 +55,16 @@ export function Operations({
             role="tab"
             onClick={() => setTab(key)}
           >
-            {key === "outbox" ? "Email Outbox" : "Due Work"}
+            {key === "outbox" ? "Email Outbox" : "Scheduled Work"}
           </button>
         ))}
       </nav>
       {selectedTab === "outbox" && canReadEmail ? (
         <EmailOutbox canManage={canManageEmail} />
-      ) : selectedTab === "due-work" && canReadOperations ? (
-        <DueWork
-          canRun={canRunOperations}
+      ) : selectedTab === "scheduled-work" && canReadRetention ? (
+        <ScheduledWork
+          canManageEmail={canManageEmail}
+          canRunRetention={canRunRetention}
           canAnonymizeUsers={canAnonymizeUsers}
           canWriteMembership={canWriteMembership}
           canApproveMembership={canApproveMembership}

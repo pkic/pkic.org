@@ -1,24 +1,32 @@
 import { useState } from "preact/hooks";
 import { postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
+import { emailReminderRunResponseSchema } from "../../../../../shared/schemas/email-reminders";
 import {
-  operationsMembershipBatchResponseSchema,
-  operationsRemindersRunResponseSchema,
-  operationsRetentionRunResponseSchema,
-} from "../../../../../shared/schemas/operations";
+  membershipBatchRunResponseSchema,
+  type MembershipBatchKey,
+} from "../../../../../shared/schemas/membership-batches";
+import { retentionRunResponseSchema } from "../../../../../shared/schemas/retention";
 
-type CommandKey = "preview" | "reminders" | "retention" | "consultation" | "ec-review" | "wg-chair-digest";
+type CommandKey = "preview" | "reminders" | "retention" | MembershipBatchKey;
 
+/**
+ * Each command targets the domain that owns the work, so its availability is
+ * derived from that domain's permission rather than one blanket operations
+ * grant.
+ */
 export function OperationActions({
   reminderLimit,
-  canRun,
+  canManageEmail,
+  canRunRetention,
   canAnonymizeUsers,
   canWriteMembership,
   canApproveMembership,
   reload,
 }: {
   reminderLimit: number;
-  canRun: boolean;
+  canManageEmail: boolean;
+  canRunRetention: boolean;
   canAnonymizeUsers: boolean;
   canWriteMembership: boolean;
   canApproveMembership: boolean;
@@ -38,50 +46,48 @@ export function OperationActions({
     }
   }
 
-  async function reminders(preview: boolean): Promise<string> {
+  async function reminders(mode: "preview" | "execute"): Promise<string> {
     const result = await postJson(
-      preview ? "/api/v1/operations/reminders/preview" : "/api/v1/operations/reminders/run",
-      { limit: reminderLimit },
-      operationsRemindersRunResponseSchema,
+      "/api/v1/email/reminders/runs",
+      { mode, limit: reminderLimit },
+      emailReminderRunResponseSchema,
     );
-    return preview
-      ? `${result.processed} reminder candidate(s) in the bounded preview.`
+    return mode === "preview"
+      ? `${result.processed} reminder candidate(s) resolved.`
       : `${result.processed} reminder action(s) queued.`;
   }
 
-  async function membershipBatch(kind: "consultation" | "ec-review" | "wg-chair-digest"): Promise<string> {
-    const result = await postJson(
-      `/api/v1/operations/membership-batches/${kind}/run`,
-      {},
-      operationsMembershipBatchResponseSchema,
-    );
-    if (kind === "consultation") return `${result.applicationsNotified ?? 0} consultation application(s) notified.`;
-    if (kind === "ec-review") return `${result.transitioned ?? 0} application(s) moved to EC review.`;
+  async function membershipBatch(batchKey: MembershipBatchKey): Promise<string> {
+    const result = await postJson(`/api/v1/membership/batches/${batchKey}/runs`, {}, membershipBatchRunResponseSchema);
+    if (batchKey === "consultation") return `${result.applicationsNotified ?? 0} consultation application(s) notified.`;
+    if (batchKey === "ec-review") return `${result.transitioned ?? 0} application(s) moved to EC review.`;
     return `${result.emailsSent ?? 0} chair digest email(s) queued.`;
   }
 
+  const canRunAnything = canManageEmail || canWriteMembership || canApproveMembership || canRunRetention;
+
   return (
-    <div class="border rounded p-3 mb-3" aria-label="Due work commands">
+    <div class="border rounded p-3 mb-3" aria-label="Operational commands">
       <div class="d-flex flex-wrap gap-2">
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
           disabled={busy !== null}
-          onClick={() => void run("preview", () => reminders(true))}
+          onClick={() => void run("preview", () => reminders("preview"))}
         >
           Preview reminders
         </button>
-        {canRun && (
+        {canManageEmail && (
           <button
             type="button"
             class="btn btn-sm btn-outline-primary"
             disabled={busy !== null}
-            onClick={() => void run("reminders", () => reminders(false))}
+            onClick={() => void run("reminders", () => reminders("execute"))}
           >
             Queue reminders
           </button>
         )}
-        {canRun && canWriteMembership && (
+        {canWriteMembership && (
           <button
             type="button"
             class="btn btn-sm btn-outline-primary"
@@ -91,7 +97,7 @@ export function OperationActions({
             Run consultation batch
           </button>
         )}
-        {canRun && canApproveMembership && (
+        {canApproveMembership && (
           <button
             type="button"
             class="btn btn-sm btn-outline-primary"
@@ -101,7 +107,7 @@ export function OperationActions({
             Run EC review batch
           </button>
         )}
-        {canRun && (
+        {canWriteMembership && (
           <button
             type="button"
             class="btn btn-sm btn-outline-primary"
@@ -111,7 +117,7 @@ export function OperationActions({
             Queue chair digest
           </button>
         )}
-        {canRun && canAnonymizeUsers && (
+        {canRunRetention && canAnonymizeUsers && (
           <button
             type="button"
             class="btn btn-sm btn-outline-danger"
@@ -120,9 +126,9 @@ export function OperationActions({
               if (!window.confirm("Run retention redaction for every currently eligible event and user?")) return;
               void run("retention", async () => {
                 const result = await postJson(
-                  "/api/v1/operations/retention/run",
-                  {},
-                  operationsRetentionRunResponseSchema,
+                  "/api/v1/retention/runs",
+                  { mode: "execute" },
+                  retentionRunResponseSchema,
                 );
                 return `Redacted ${result.redactedRegistrations} registration(s) and ${result.redactedUsers} user(s).`;
               });
@@ -132,7 +138,7 @@ export function OperationActions({
           </button>
         )}
       </div>
-      {!canRun && <p class="small text-muted mb-0 mt-2">Reminder preview is read-only.</p>}
+      {!canRunAnything && <p class="small text-muted mb-0 mt-2">Reminder preview is read-only.</p>}
     </div>
   );
 }
