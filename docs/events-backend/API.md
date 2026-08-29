@@ -177,6 +177,29 @@ Base path: `/api/v1`
   deliberately no second read model re-deriving that set. Preview requires
   `email:read`; executing additionally requires `email:manage`.
 
+## Scheduler
+
+- `GET /scheduler/jobs`
+- `POST /scheduler/jobs/:jobKey/runs`
+- `POST /scheduler/jobs/:jobKey/pause`
+- `POST /scheduler/jobs/:jobKey/resume`
+- The scheduler is the mechanism; a scheduled job is the resource it manages,
+  so jobs are nested under it. Cadence is a row value, not a cron expression:
+  one dispatcher trigger serves every job.
+- Reads require `scheduler:read`. A run, pause, or resume additionally requires
+  `scheduler:manage` **and** every grant the job's own domain requires, so
+  triggering through the scheduler cannot do what the caller could not do
+  directly — running retention still requires `users:anonymize`.
+- A manual run takes the same lease and D1 query budget as a scheduled pass, so
+  it cannot run concurrently with the dispatcher or exceed the bounds the
+  schedule respects.
+- `lastSuccessAt` is reported separately from `lastRunAt`, and
+  `consecutiveAbandoned` separately from `consecutiveFailures`: a job that runs
+  often but rarely succeeds, and a job that dies mid-run rather than raising,
+  are different failures and would otherwise be indistinguishable.
+- Pausing loses no work. Due work is derived from domain state on every pass
+  rather than queued, so a resumed job finds it again.
+
 ## Retention
 
 - `GET /retention/due`

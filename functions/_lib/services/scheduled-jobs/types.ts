@@ -1,3 +1,4 @@
+import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import type { D1QueryBudget } from "../../db/query-budget";
 import type { Env } from "../../types";
 
@@ -32,6 +33,15 @@ export interface ScheduledJobOutcome {
 
 export interface ScheduledJobDefinition {
   key: ScheduledJobKey;
+  /**
+   * Grants a manual trigger must hold in addition to `scheduler:manage`.
+   *
+   * The scheduled path runs as the platform, but a human triggering a job
+   * must not gain through the scheduler what they could not do directly —
+   * running retention would otherwise redact user data without
+   * `users:anonymize`.
+   */
+  requiredPermissions?: readonly Permission[];
   /**
    * How long a single run may hold its lease. A run that dies without
    * clearing the lease is reaped as abandoned once this elapses, so it must

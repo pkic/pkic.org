@@ -25,6 +25,8 @@ export const PERMISSIONS = [
   "analytics:read",
   "retention:read",
   "retention:run",
+  "scheduler:read",
+  "scheduler:manage",
   "access:grant",
   "access:revoke",
   "organizations:read",
