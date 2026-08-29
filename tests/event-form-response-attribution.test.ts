@@ -4,8 +4,8 @@ import { listCampaignRecipients } from "../functions/_lib/services/event-email-c
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { resolveEventFormResponse } from "../functions/_lib/services/forms";
 import { getProposalDetailData } from "../functions/_lib/services/proposal-detail";
-import { buildAdminRegistrationCsv } from "../functions/_lib/services/registrations/admin-export";
-import { getAdminRegistrationDetail } from "../functions/_lib/services/registrations/admin-detail";
+import { buildRegistrationCsv } from "../functions/_lib/services/registrations/export";
+import { getRegistrationDetail } from "../functions/_lib/services/registrations/detail";
 import { getCustomAnswerRows } from "../functions/_lib/utils/registration-email";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -179,7 +179,7 @@ describe("historical event form response attribution", () => {
       env.DB.prepare("UPDATE form_fields SET archived_at = datetime('now') WHERE id = ?").bind(proposalA.fieldId),
     ]);
 
-    const registrationDetail = await getAdminRegistrationDetail(env.DB, eventId, registrationAId);
+    const registrationDetail = await getRegistrationDetail(env.DB, eventId, registrationAId);
     expect(registrationDetail?.registration.customAnswers).toEqual({ archived_answer: "saved A" });
     expect(registrationDetail?.form).toMatchObject({ id: registrationA.formId });
     expect(registrationDetail?.form?.fields).toEqual(
@@ -214,7 +214,7 @@ describe("historical event form response attribution", () => {
       },
     ]);
 
-    const exported = await buildAdminRegistrationCsv(
+    const exported = await buildRegistrationCsv(
       env.DB,
       { id: eventId, source_mode: null },
       { maxRows: 10, maxBytes: 100_000 },

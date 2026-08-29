@@ -167,8 +167,8 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ],
     ["GET /api/v1/email/templates", () => callApp(anonGet("https://app.test/api/v1/email/templates"))],
     [
-      "GET /api/v1/admin/events/:slug/registrations",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations`)),
+      "GET /api/v1/events/:slug/registrations",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations`)),
     ],
     ["GET /api/v1/events/:slug/forms", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/forms`))],
     ["GET /api/v1/users/:id", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}`))],
@@ -244,10 +244,6 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "PATCH /api/v1/events/:slug/settings",
       () => callApp(anonPatch(`https://app.test/api/v1/events/${eventSlug}/settings`)),
     ],
-    [
-      "GET /api/v1/admin/events/:slug/terms",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/terms`)),
-    ],
     ["GET /api/v1/events/:slug/roles", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/roles`))],
     ["POST /api/v1/events/:slug/roles", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/roles`))],
     [
@@ -279,58 +275,58 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/email/campaigns`)),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/admit",
-      () =>
-        callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/admit`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/registrations/:registrationId/badge-role",
+      "POST /api/v1/events/:slug/registrations/:registrationId/admissions",
       () =>
         callApp(
-          anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/badge-role`),
+          anonPostBody(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/admissions`, {
+            mode: "vip",
+            reason: "Authentication boundary test",
+            dayDates: ["2026-12-01"],
+          }),
         ),
     ],
     [
-      "POST /api/v1/admin/events/:slug/waitlist/promote",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/waitlist/promote`)),
+      "GET /api/v1/events/:slug/registrations/:registrationId/badge",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/badge`)),
     ],
     [
-      "GET /api/v1/admin/events/:slug/registrations/:registrationId",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}`)),
+      "POST /api/v1/events/:slug/registrations/promotions",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/registrations/promotions`)),
     ],
     [
-      "PATCH /api/v1/admin/events/:slug/registrations/:registrationId",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}`)),
+      "GET /api/v1/events/:slug/registrations/:registrationId",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}`)),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/open-manage",
+      "PATCH /api/v1/events/:slug/registrations/:registrationId",
       () =>
         callApp(
-          anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/open-manage`),
+          anonPatch(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}`, {
+            action: "update",
+            attendanceType: "virtual",
+          }),
         ),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/regenerate-badge",
+      "POST /api/v1/events/:slug/registrations/:registrationId/access",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/access`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/registrations/:registrationId/badge",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/badge`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/registrations/:registrationId/notifications",
       () =>
         callApp(
-          anonPost(
-            `https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/regenerate-badge`,
-          ),
+          anonPostBody(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/notifications`, {
+            type: "confirmation",
+          }),
         ),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/resend-confirmation",
-      () =>
-        callApp(
-          anonPost(
-            `https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/resend-confirmation`,
-          ),
-        ),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/registrations/:registrationId/audit-log",
-      () =>
-        callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/audit-log`)),
+      "GET /api/v1/events/:slug/registrations/:registrationId/audit",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/audit`)),
     ],
     [
       "POST /api/v1/admin/proposals/:proposalId/finalize",

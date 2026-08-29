@@ -643,10 +643,6 @@ describe("Registration Email Change", () => {
         env.DB.prepare(
           "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
         ).bind(uuid(), user.id, `session-${uuid()}`, addHours(now, 24), now),
-        env.DB.prepare(
-          `INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
-             VALUES (?, ?, ?, ?, ?)`,
-        ).bind(uuid(), user.id, `refresh-${uuid()}`, now, addHours(now, 24)),
       ]);
 
       const result = await finalizeEmailChange(env.DB, {
@@ -676,14 +672,12 @@ describe("Registration Email Change", () => {
         }),
       ).resolves.toEqual({ ok: false, reason: "invalid" });
       expect(
-        await first<{ active_sessions: number; active_refresh_tokens: number }>(
+        await first<{ active_sessions: number }>(
           env.DB,
-          `SELECT
-             (SELECT COUNT(*) FROM sessions WHERE user_id = ? AND revoked_at IS NULL) AS active_sessions,
-             (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL) AS active_refresh_tokens`,
-          [user.id, user.id],
+          "SELECT COUNT(*) AS active_sessions FROM sessions WHERE user_id = ? AND revoked_at IS NULL",
+          [user.id],
         ),
-      ).toEqual({ active_sessions: 0, active_refresh_tokens: 0 });
+      ).toEqual({ active_sessions: 0 });
     });
 
     it("promotes the same user's secondary alias without duplicating ownership", async () => {

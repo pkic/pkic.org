@@ -251,7 +251,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     // A program_committee grant does not extend to general event management
     // (registrations) outside proposals/agenda — see P8's persona description.
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}/registrations`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}/registrations`)).status).toBe(403);
   });
 
   it("creating a role with a duplicate name returns 409", async () => {

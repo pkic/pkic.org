@@ -79,6 +79,6 @@ openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
 openapi.patch("/settings", EventSettingsPatch);
 openapi.get("/", EventDetailGet);
-app.all("/registrations", () => methodNotAllowed(["POST"]));
+app.all("/registrations", () => methodNotAllowed(["GET", "POST"]));
 
 export default openapi;

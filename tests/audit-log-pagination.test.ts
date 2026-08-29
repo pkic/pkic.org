@@ -100,7 +100,7 @@ describe("registration audit-log pagination (P6M-FT-02)", () => {
     }>();
     const staffToken = await createAdminSession(env.DB, adminUserId, "ft02-token");
     const response = await callAppGet(
-      `/api/v1/admin/events/${eventSlugRow!.slug}/registrations/${registrationId}/audit-log?limit=2&offset=0`,
+      `/api/v1/events/${eventSlugRow!.slug}/registrations/${registrationId}/audit?limit=2&offset=0`,
       staffToken,
     );
     expect(response.status).toBe(200);
@@ -110,7 +110,7 @@ describe("registration audit-log pagination (P6M-FT-02)", () => {
     expect(body.page.hasMore).toBe(true);
 
     const invalid = await callAppGet(
-      `/api/v1/admin/events/${eventSlugRow!.slug}/registrations/${registrationId}/audit-log?offset=-1`,
+      `/api/v1/events/${eventSlugRow!.slug}/registrations/${registrationId}/audit?offset=-1`,
       staffToken,
     );
     expect(invalid.status).toBe(400);

@@ -4,13 +4,10 @@ import { api } from "../../../../api";
 import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../../../types";
 import { useData } from "../../../../../hooks/useData";
-import {
-  EVENT_REGISTRATION_STATUSES,
-  eventRegistrationStatusLabel,
-} from "../../../../../../shared/schemas/event-registrations";
 import { AuditLogTable } from "../../../../components/AuditLogTable";
-import { badgeRoleInfoSchema } from "../../../../../../shared/schemas/route-contracts-admin-registrations";
-import { adminRegistrationUpdateResponseSchema } from "../../../../../../shared/schemas/route-contracts-admin-registrations";
+import { registrationBadgeResponseSchema } from "../../../../../../shared/schemas/participant-roles";
+import { eventRegistrationManagementUpdateResponseSchema } from "../../../../../../shared/schemas/route-contracts-event-registration-management";
+import { eventRegistrationPath, eventRegistrationResourcePath } from "../registration-paths";
 
 const ROLE_BADGE_COLOR: Record<string, string> = {
   attendee: "primary",
@@ -29,7 +26,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 
   const { loading } = useData(
     () =>
-      api(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`, badgeRoleInfoSchema).then((d) => {
+      api(eventRegistrationResourcePath(slug, regId, "badge"), registrationBadgeResponseSchema).then((d) => {
         setInfo(d);
         setSelectedRole(d.admin_override ?? "");
         return d;
@@ -41,7 +38,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
     setSaving(true);
     setSaveStatus("");
     try {
-      const res = await api(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`, badgeRoleInfoSchema, {
+      const res = await api(eventRegistrationResourcePath(slug, regId, "badge"), registrationBadgeResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ role: selectedRole || null }),
       });
@@ -96,7 +93,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 export function RegistrationAuditLogSection({ slug, regId }: { slug: string; regId: string }) {
   return (
     <AuditLogTable
-      endpoint={`/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`}
+      endpoint={eventRegistrationResourcePath(slug, regId, "audit")}
       actionCell={(entry) => <code class="small">{entry.action}</code>}
       detailsCell={(entry) =>
         entry.details ? (
@@ -155,7 +152,7 @@ export function RegistrationEmailEditor({
     setSaving(true);
     setError("");
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, adminRegistrationUpdateResponseSchema, {
+      await api(eventRegistrationPath(slug, regId), eventRegistrationManagementUpdateResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ action: "update", email: trimmed }),
       });
@@ -198,72 +195,6 @@ export function RegistrationEmailEditor({
         {isCancelled
           ? "Changing the email will restore this cancelled registration and send a confirmation email to the new address."
           : "Changing the email will require re-confirmation."}
-      </div>
-      {error && <div class="small text-danger mt-1">{error}</div>}
-    </div>
-  );
-}
-
-// ─── Force status panel ───────────────────────────────────────────────────────
-
-export function RegistrationForceStatusPanel({
-  currentStatus,
-  slug,
-  regId,
-  onSaved,
-}: {
-  currentStatus: string;
-  slug: string;
-  regId: string;
-  onSaved: () => void;
-}) {
-  const [selected, setSelected] = useState(currentStatus);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSave() {
-    if (selected === currentStatus) return;
-    setSaving(true);
-    setError("");
-    try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, adminRegistrationUpdateResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "force_status", status: selected }),
-      });
-      toast(`Status changed to ${selected}`, "success");
-      onSaved();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div>
-      <p class="small text-muted mb-2">
-        Override the registration lifecycle status. Restoring an active status re-evaluates day capacity and waitlist
-        placement.
-      </p>
-      <div class="d-flex align-items-center gap-2 flex-wrap">
-        <select
-          class="form-select form-select-sm adm-filter-select"
-          value={selected}
-          onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
-        >
-          {EVENT_REGISTRATION_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {eventRegistrationStatusLabel(status)}
-            </option>
-          ))}
-        </select>
-        <button
-          class="btn btn-sm btn-warning"
-          onClick={() => void handleSave()}
-          disabled={saving || selected === currentStatus}
-        >
-          {saving ? "Saving…" : "Apply"}
-        </button>
       </div>
       {error && <div class="small text-danger mt-1">{error}</div>}
     </div>

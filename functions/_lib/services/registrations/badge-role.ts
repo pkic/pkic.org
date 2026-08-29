@@ -1,8 +1,8 @@
 import {
-  ADMIN_BADGE_ROLES,
-  adminBadgeRoleResponseSchema,
-  type AdminBadgeRole,
-  type AdminBadgeRolePatch,
+  REGISTRATION_BADGE_ROLES,
+  registrationBadgeResponseSchema,
+  type RegistrationBadgeRole,
+  type RegistrationBadgePatch,
 } from "../../../../assets/shared/schemas/participant-roles";
 import { requirePermission } from "../../auth/permissions";
 import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
@@ -24,12 +24,12 @@ interface ParticipantRow {
   role: string;
 }
 
-function toAdminBadgeRole(value: string | null | undefined): AdminBadgeRole | null {
-  return ADMIN_BADGE_ROLES.find((role) => role === value) ?? null;
+function toRegistrationBadgeRole(value: string | null | undefined): RegistrationBadgeRole | null {
+  return REGISTRATION_BADGE_ROLES.find((role) => role === value) ?? null;
 }
 
-function resolveAutoRole(rows: ParticipantRow[]): AdminBadgeRole {
-  return toAdminBadgeRole(rows[0]?.role) ?? "attendee";
+function resolveAutoRole(rows: ParticipantRow[]): RegistrationBadgeRole {
+  return toRegistrationBadgeRole(rows[0]?.role) ?? "attendee";
 }
 
 async function loadBadgeRole(db: DatabaseLike, eventId: string, registrationId: string) {
@@ -55,19 +55,19 @@ async function loadBadgeRole(db: DatabaseLike, eventId: string, registrationId: 
   const registration = batchFirst<RegistrationRow>(registrationResult);
   if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   const autoDetected = resolveAutoRole(batchRows<ParticipantRow>(participantResult));
-  const adminOverride = toAdminBadgeRole(registration.override_role);
+  const registrationOverride = toRegistrationBadgeRole(registration.override_role);
   return {
     registration,
-    response: adminBadgeRoleResponseSchema.parse({
-      admin_override: adminOverride,
+    response: registrationBadgeResponseSchema.parse({
+      admin_override: registrationOverride,
       auto_detected: autoDetected,
-      effective_role: adminOverride ?? autoDetected,
-      available_roles: ADMIN_BADGE_ROLES,
+      effective_role: registrationOverride ?? autoDetected,
+      available_roles: REGISTRATION_BADGE_ROLES,
     }),
   };
 }
 
-export async function getAdminRegistrationBadgeRole(
+export async function getRegistrationBadge(
   db: DatabaseLike,
   actor: AuthAdmin,
   eventSlug: string,
@@ -78,10 +78,10 @@ export async function getAdminRegistrationBadgeRole(
   return (await loadBadgeRole(db, event.id, registrationId)).response;
 }
 
-export async function setAdminRegistrationBadgeRole(
+export async function setRegistrationBadge(
   db: DatabaseLike,
   actor: AuthAdmin,
-  input: { eventSlug: string; registrationId: string; patch: AdminBadgeRolePatch },
+  input: { eventSlug: string; registrationId: string; patch: RegistrationBadgePatch },
 ) {
   const event = await getEventBySlug(db, input.eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
@@ -114,7 +114,7 @@ export async function setAdminRegistrationBadgeRole(
   ]);
   const updated = (await loadBadgeRole(db, event.id, input.registrationId)).response;
   return {
-    response: adminBadgeRoleResponseSchema.parse({ ...updated, success: true }),
+    response: registrationBadgeResponseSchema.parse({ ...updated, success: true }),
     userId: current.registration.user_id,
   };
 }

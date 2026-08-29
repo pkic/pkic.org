@@ -5,7 +5,6 @@ import { enforceAdminRouteAuthorization } from "../../../_lib/auth/admin-route-p
 import { handleError } from "../../../_lib/http";
 import type { RequestDbContext } from "../../../_lib/db/context";
 import { createRequestScopedD1SessionMiddleware } from "../../../_lib/db/request-session-middleware";
-import events_Router from "./events/router";
 import proposals_Router from "./proposals/router";
 
 const app = new Hono<RequestDbContext>();
@@ -39,7 +38,6 @@ app.use(
   }),
 );
 
-openapi.route("/events", events_Router);
 openapi.route("/proposals", proposals_Router);
 
 export default openapi;

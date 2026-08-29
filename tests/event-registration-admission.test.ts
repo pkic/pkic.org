@@ -11,7 +11,7 @@ import {
 } from "../functions/_lib/services/registrations";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import app from "../functions/router";
-import { adminRegistrationAdmitResponseSchema } from "../assets/shared/schemas/route-contracts-admin-registrations";
+import { eventRegistrationAdmissionResponseSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
 
 async function seedInvite(
   _db: DatabaseLike,
@@ -80,7 +80,7 @@ async function seedWaitlistedVipScenario(): Promise<{
   return { adminToken, eventId, registrationId: vipRegistration.registration.id };
 }
 
-describe("admin VIP admit", () => {
+describe("event-registration admission", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -97,7 +97,7 @@ describe("admin VIP admit", () => {
     expect(before.status).toBe("waiting");
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/admit`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/admissions`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${adminToken}`,
@@ -114,7 +114,7 @@ describe("admin VIP admit", () => {
     );
 
     expect(response.status).toBe(200);
-    const admitPayload = adminRegistrationAdmitResponseSchema.parse(await response.json());
+    const admitPayload = eventRegistrationAdmissionResponseSchema.parse(await response.json());
     expect(admitPayload.registration).toMatchObject({ id: registrationId, status: "registered" });
     expect(admitPayload.registration).not.toHaveProperty("confirmation_link_secret");
     expect(admitPayload.registration).not.toHaveProperty("manage_link_secret");
@@ -182,7 +182,7 @@ describe("admin VIP admit", () => {
     ).run();
     try {
       const response = await app.fetch(
-        new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/admit`, {
+        new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/admissions`, {
           method: "POST",
           headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
           body: JSON.stringify({ mode: "vip", reason: "Rollback proof", dayDates: ["2026-12-01"] }),
@@ -220,7 +220,7 @@ describe("admin VIP admit", () => {
     const { adminToken, registrationId } = await seedWaitlistedVipScenario();
     const request = () =>
       app.fetch(
-        new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/admit`, {
+        new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/admissions`, {
           method: "POST",
           headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
           body: JSON.stringify({ mode: "vip", reason: "Retry proof", dayDates: ["2026-12-01"] }),

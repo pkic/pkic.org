@@ -61,7 +61,7 @@ function exportFormColumns(responses: Iterable<EventFormResponse | null>): Expor
   });
 }
 
-export async function buildAdminRegistrationCsv(
+export async function buildRegistrationCsv(
   db: DatabaseLike,
   event: EventFormResolutionEvent,
   limits: { maxRows: number; maxBytes: number },
@@ -136,13 +136,13 @@ export async function buildAdminRegistrationCsv(
   return { csv: encodeBoundedCsv([header, ...dataRows], limits.maxBytes), recordCount: rows.length };
 }
 
-export async function buildAdminRegistrationCsvWithAudit(
+export async function buildRegistrationCsvWithAudit(
   db: DatabaseLike,
   event: EventFormResolutionEvent,
   actorUserId: string,
   limits: { maxRows: number; maxBytes: number },
 ): Promise<{ csv: string; recordCount: number }> {
-  const result = await buildAdminRegistrationCsv(db, event, limits);
+  const result = await buildRegistrationCsv(db, event, limits);
   await writeAuditLog(db, "admin", actorUserId, "admin_registration_export", "event", event.id, {
     recordCount: result.recordCount,
   });

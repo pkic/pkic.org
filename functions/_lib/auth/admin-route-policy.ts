@@ -25,7 +25,6 @@ const DELEGATED_MODULES = new Map<string, string>([
   ["access-grants", "access-grants router"],
   ["applications", "membership application router"],
   ["consortium", "consortium router"],
-  ["events", "event router"],
   ["members", "membership router"],
   ["organizations", "organization router"],
   ["proposals", "proposal router"],
@@ -39,6 +38,7 @@ const DELEGATED_MODULES = new Map<string, string>([
 const RETIRED_MODULES = new Set([
   "donations",
   "email-templates",
+  "events",
   "forms",
   "leadership-positions",
   "membership-settings",

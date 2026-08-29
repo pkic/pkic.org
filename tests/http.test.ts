@@ -50,10 +50,10 @@ describe("HTTP method dispatch", () => {
       mounted: true,
     },
     {
-      label: "registration creation",
+      label: "event registration collection",
       path: "/events/event/registrations",
-      method: "GET",
-      allow: "POST",
+      method: "PUT",
+      allow: "GET, POST",
       mounted: true,
     },
     {

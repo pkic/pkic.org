@@ -10,22 +10,22 @@ export const EVENT_PARTICIPANT_ROLES = ["attendee", "speaker", "moderator", "pan
 export const eventParticipantRoleSchema = z.enum(EVENT_PARTICIPANT_ROLES);
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 
-export const ADMIN_BADGE_ROLES = EVENT_PARTICIPANT_ROLES;
-export const adminBadgeRoleSchema = z.enum(ADMIN_BADGE_ROLES);
-export type AdminBadgeRole = z.infer<typeof adminBadgeRoleSchema>;
+export const REGISTRATION_BADGE_ROLES = EVENT_PARTICIPANT_ROLES;
+export const registrationBadgeRoleSchema = z.enum(REGISTRATION_BADGE_ROLES);
+export type RegistrationBadgeRole = z.infer<typeof registrationBadgeRoleSchema>;
 
 /** Proposal referral badges may describe proposal ownership before acceptance. */
 export const SOCIAL_BADGE_ROLES = [...EVENT_PARTICIPANT_ROLES, "proposer", "co_speaker"] as const;
 export const socialBadgeRoleSchema = z.enum(SOCIAL_BADGE_ROLES);
 export type SocialBadgeRole = z.infer<typeof socialBadgeRoleSchema>;
 
-export const adminBadgeRolePatchSchema = z.object({ role: adminBadgeRoleSchema.nullable() });
-export type AdminBadgeRolePatch = z.infer<typeof adminBadgeRolePatchSchema>;
+export const registrationBadgePatchSchema = z.object({ role: registrationBadgeRoleSchema.nullable() });
+export type RegistrationBadgePatch = z.infer<typeof registrationBadgePatchSchema>;
 
-export const adminBadgeRoleResponseSchema = z.object({
+export const registrationBadgeResponseSchema = z.object({
   success: z.boolean().optional(),
-  admin_override: adminBadgeRoleSchema.nullable(),
-  auto_detected: adminBadgeRoleSchema,
-  effective_role: adminBadgeRoleSchema,
-  available_roles: z.array(adminBadgeRoleSchema).optional(),
+  admin_override: registrationBadgeRoleSchema.nullable(),
+  auto_detected: registrationBadgeRoleSchema,
+  effective_role: registrationBadgeRoleSchema,
+  available_roles: z.array(registrationBadgeRoleSchema),
 });

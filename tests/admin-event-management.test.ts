@@ -341,13 +341,13 @@ describe("admin event management endpoints", () => {
       ).bind(baseEventId, registrationId, userId),
     ]);
 
-    const listResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    const listResponse = await callAdmin("/api/v1/events/pqc-2026/registrations");
     expect(listResponse.status).toBe(200);
     const list = eventRegistrationsListResponseSchema.parse(await listResponse.json());
     expect(list.page.total).toBe(1);
     expect(list.registrations).toEqual([expect.objectContaining({ id: registrationId, referral_code: "first001" })]);
 
-    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${registrationId}`);
+    const detailResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${registrationId}`);
     expect(detailResponse.status).toBe(200);
     const detail = eventRegistrationDetailResponseSchema.parse(await detailResponse.json());
     expect(detail.registration.referral_code).toBe("first001");
@@ -727,7 +727,7 @@ describe("admin event management endpoints", () => {
     expect(cancelled.status).toBe("cancelled");
     expect(cancelled.cancelled_at).not.toBeNull();
 
-    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`);
+    const detailResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`);
     expect(detailResponse.status).toBe(200);
     const rawDetail = await detailResponse.json();
     const detail = eventRegistrationDetailResponseSchema.parse(rawDetail);
@@ -745,13 +745,10 @@ describe("admin event management endpoints", () => {
     ).rejects.toMatchObject({ code: "ALREADY_CANCELLED" });
 
     // Admin reinstates via the HTTP endpoint
-    const reinstateResponse = await callAdmin(
-      `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
-      },
-    );
+    const reinstateResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+    });
     expect(reinstateResponse.status).toBe(200);
     const reinstatePayload = (await reinstateResponse.json()) as { success: boolean; registration: { status: string } };
     expect(reinstatePayload.success).toBe(true);
@@ -789,7 +786,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const wrongEventPath = `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`;
+    const wrongEventPath = `/api/v1/events/pqc-2026/registrations/${created.registration.id}`;
     const ordinaryUpdate = await callAdmin(wrongEventPath, {
       method: "PATCH",
       body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
@@ -843,7 +840,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const response = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`, {
+    const response = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
       method: "PATCH",
       body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
     });
@@ -929,7 +926,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const overviewResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    const overviewResponse = await callAdmin("/api/v1/events/pqc-2026/registrations");
     expect(overviewResponse.status).toBe(200);
     const overview = (await overviewResponse.json()) as {
       stats: {
@@ -1082,9 +1079,7 @@ describe("admin event management endpoints", () => {
       day_changes: 1,
     });
 
-    const joinedResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
-    );
+    const joinedResponse = await callAdmin("/api/v1/events/pqc-2026/registrations?attendance_change=joined_in_person");
     expect(joinedResponse.status).toBe(200);
     const joined = (await joinedResponse.json()) as { registrations: Array<{ id: string }>; page: { total: number } };
     expect(joined.page.total).toBe(1);
@@ -1194,7 +1189,7 @@ describe("admin event management endpoints", () => {
     expect(stats.attendanceChanges.recent[0].days).toHaveLength(3);
 
     const leftInPersonResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=left_in_person",
+      "/api/v1/events/pqc-2026/registrations?attendance_change=left_in_person",
     );
     expect(leftInPersonResponse.status).toBe(200);
     const leftInPerson = (await leftInPersonResponse.json()) as {
@@ -1219,7 +1214,7 @@ describe("admin event management endpoints", () => {
     expect(leftInPerson.registrations[0].lastAttendanceChange.transitions[0].days).toHaveLength(3);
 
     const joinedInPersonResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
+      "/api/v1/events/pqc-2026/registrations?attendance_change=joined_in_person",
     );
     const joinedInPerson = (await joinedInPersonResponse.json()) as { page: { total: number } };
     expect(joinedInPerson.page.total).toBe(0);
@@ -1275,9 +1270,7 @@ describe("admin event management endpoints", () => {
       .bind(created.registration.id)
       .run();
 
-    const recentlyChangedResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=any",
-    );
+    const recentlyChangedResponse = await callAdmin("/api/v1/events/pqc-2026/registrations?attendance_change=any");
     const recentlyChanged = (await recentlyChangedResponse.json()) as {
       registrations: Array<{
         id: string;
@@ -1302,9 +1295,7 @@ describe("admin event management endpoints", () => {
     ).toEqual([["in_person->virtual"], ["virtual->on_demand"]]);
     expect(recentlyChanged.registrations[0].lastAttendanceChange.changedAt).toBe("2030-01-01T00:00:00.000Z");
 
-    const invalidFilterResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=unexpected",
-    );
+    const invalidFilterResponse = await callAdmin("/api/v1/events/pqc-2026/registrations?attendance_change=unexpected");
     expect(invalidFilterResponse.status).toBe(400);
     const invalidFilter = (await invalidFilterResponse.json()) as { error: { code: string } };
     expect(invalidFilter.error.code).toBe("VALIDATION_ERROR");
@@ -1343,13 +1334,13 @@ describe("admin event management endpoints", () => {
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
 
-    const page1Res = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=2&offset=0");
+    const page1Res = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=2&offset=0");
     expect(page1Res.status).toBe(200);
     const page1 = (await page1Res.json()) as ListResponse;
     expect(page1.registrations).toHaveLength(2);
     expect(page1.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
 
-    const page2Res = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=2&offset=2");
+    const page2Res = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=2&offset=2");
     expect(page2Res.status).toBe(200);
     const page2 = (await page2Res.json()) as ListResponse;
     expect(page2.registrations).toHaveLength(1);
@@ -1358,7 +1349,7 @@ describe("admin event management endpoints", () => {
     const ids = new Set([...page1.registrations, ...page2.registrations].map((r) => r.id));
     expect(ids.size).toBe(3);
 
-    const invalidLimitRes = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=not-a-number");
+    const invalidLimitRes = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=not-a-number");
     expect(invalidLimitRes.status).toBe(400);
   });
 

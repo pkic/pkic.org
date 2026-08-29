@@ -14,7 +14,7 @@ import type { AuthAdmin, Env } from "../functions/_lib/types";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
-import { badgeRegenerationQueuedResponseSchema } from "../assets/shared/schemas/route-contracts";
+import { eventRegistrationBadgeRegenerationResponseSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
 import { fetchGravatar } from "../functions/_lib/services/gravatar";
 import { validJpegBytes } from "./helpers/raster-images";
 
@@ -179,19 +179,16 @@ describe("registration badge regeneration", () => {
     ]);
   });
 
-  it("mounts the admin endpoint with the shared response contract", async () => {
+  it("mounts the canonical event resource with the shared response contract", async () => {
     const seeded = await seedRegistrationWithReferral();
     const token = await createAdminSession(env.DB, seeded.actor.id, "badge-regeneration-admin-token");
     const background: Promise<unknown>[] = [];
 
     const response = await app.fetch(
-      new Request(
-        `https://app.test/api/v1/admin/events/pqc-2026/registrations/${seeded.registrationId}/regenerate-badge`,
-        {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}` },
-        },
-      ),
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${seeded.registrationId}/badge`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      }),
       env,
       {
         passThroughOnException() {},
@@ -202,7 +199,7 @@ describe("registration badge regeneration", () => {
     );
 
     expect(response.status).toBe(202);
-    expect(badgeRegenerationQueuedResponseSchema.parse(await response.json())).toMatchObject({
+    expect(eventRegistrationBadgeRegenerationResponseSchema.parse(await response.json())).toMatchObject({
       success: true,
       status: "queued",
       referralCode: seeded.referralCode,

@@ -29,7 +29,7 @@ Base path: `/api/v1`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
   enables the management projection for both the list and the detail. `GET
-  /events` is the single event collection: visibility is filtered in D1 before
+/events` is the single event collection: visibility is filtered in D1 before
   counting and pagination, and only the projection differs by scope.
 - `POST /events/imports` creates or updates an event and its terms from an
   external generator. The generating system is named by the request body
@@ -76,9 +76,32 @@ Base path: `/api/v1`
   batch. The portal only renders the controls from the server-provided
   management capability.
 
-## Remaining legacy event integration
+## Event registration management
 
-- `GET /admin/events/:eventSlug/registrations`
+- `GET /events/:eventSlug/registrations`
+- `GET /events/:eventSlug/registrations/exports`
+- `POST /events/:eventSlug/registrations/promotions`
+- `GET /events/:eventSlug/registrations/:registrationId`
+- `PATCH /events/:eventSlug/registrations/:registrationId`
+- `POST /events/:eventSlug/registrations/:registrationId/access`
+- `POST /events/:eventSlug/registrations/:registrationId/admissions`
+- `GET /events/:eventSlug/registrations/:registrationId/audit`
+- `GET`, `PATCH`, and `POST /events/:eventSlug/registrations/:registrationId/badge`
+- `POST /events/:eventSlug/registrations/:registrationId/notifications`
+- These full attendee-management resources require a live, user-backed
+  event-scoped `events:manage` permission. The permission is repeated inside
+  every D1 read or mutation batch so a concurrent grant revocation fails the
+  request atomically.
+- Day waitlisting and admission remain per-day state. There is no generic
+  registration-level force-status action.
+- Selected-group attendance management remains under the group event resource
+  and uses its narrower `manage_attendance` capability and reduced attendee
+  projection.
+- The former `/admin/events/:eventSlug/registrations` and waitlist routes are
+  removed rather than retained as aliases.
+
+## Event import frontend routes
+
 - `POST /events/imports` supports optional `event.frontend.routes`:
 - `registration`, `registrationConfirm`, `proposal`, `registrationManage`, `proposalManage`
 - Route metadata is stored in `events.settings_json.frontend.routes`.

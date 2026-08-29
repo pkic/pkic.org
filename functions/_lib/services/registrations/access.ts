@@ -1,16 +1,16 @@
-import type { EventRecord } from "./events";
-import { registrationManagePageUrl } from "./frontend-links";
-import { writeAuditLog } from "./audit";
-import { getRegistrationById } from "./registrations";
-import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike } from "../types";
-import { sha256Hex } from "../utils/crypto";
-import { signAdminManageJwt } from "../utils/jwt";
-import { isUserBackedAuthAdmin } from "../auth/admin-identity";
+import type { EventRecord } from "../events";
+import { registrationManagePageUrl } from "../frontend-links";
+import { writeAuditLog } from "../audit";
+import { getRegistrationById } from "./queries";
+import { AppError } from "../../errors";
+import type { AuthAdmin, DatabaseLike } from "../../types";
+import { sha256Hex } from "../../utils/crypto";
+import { signAdminManageJwt } from "../../utils/jwt";
+import { isUserBackedAuthAdmin } from "../../auth/admin-identity";
 
 const ADMIN_MANAGE_SESSION_MINUTES = 15;
 
-export async function createAdminRegistrationManageUrl(
+export async function createRegistrationManageUrl(
   db: DatabaseLike,
   payload: {
     actor: AuthAdmin;

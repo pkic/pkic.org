@@ -131,7 +131,7 @@ export function AttendanceChangeDashboard({
                   {changes.recent.map((row) => (
                     <tr key={`${row.registration_id}:${row.changed_at}:${row.from_type}:${row.to_type}`}>
                       <td>
-                        <a class="small fw-semibold" href={`#/events/${slug}/registration/${row.registration_id}`}>
+                        <a class="small fw-semibold" href={`#/events/${slug}/registrations/${row.registration_id}`}>
                           {row.display_name ?? row.user_email ?? row.registration_id}
                         </a>
                         {row.display_name && row.user_email && <div class="small text-muted">{row.user_email}</div>}

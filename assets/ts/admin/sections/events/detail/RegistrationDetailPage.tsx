@@ -12,17 +12,17 @@ import {
   type EventRegistrationDetailResponse,
 } from "../../../../../shared/schemas/event-registration-detail";
 import {
-  adminRegistrationOpenManageResponseSchema,
-  adminRegistrationResendConfirmationResponseSchema,
-  badgeRegenerationQueuedResponseSchema,
-} from "../../../../../shared/schemas/route-contracts-admin-registrations";
+  eventRegistrationAccessResponseSchema,
+  eventRegistrationBadgeRegenerationResponseSchema,
+  eventRegistrationNotificationResponseSchema,
+} from "../../../../../shared/schemas/route-contracts-event-registration-management";
 import {
   BadgeRolePanel,
   RegistrationAuditLogSection,
   RegistrationEmailEditor,
-  RegistrationForceStatusPanel,
 } from "./registration-detail/RegistrationPanels";
 import { RegistrationActionCard } from "./registration-detail/RegistrationActionCard";
+import { eventRegistrationPath, eventRegistrationResourcePath, eventRegistrationsViewPath } from "./registration-paths";
 
 function attendanceTypeLabel(t: string): string {
   return { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" }[t] ?? t;
@@ -39,7 +39,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   const [regenerating, setRegenerating] = useState(false);
 
   const { data, loading, error, reload } = useData<EventRegistrationDetailResponse>(
-    async () => api(`/api/v1/admin/events/${slug}/registrations/${regId}`, eventRegistrationDetailResponseSchema),
+    async () => api(eventRegistrationPath(slug, regId), eventRegistrationDetailResponseSchema),
     [slug, regId],
   );
 
@@ -50,11 +50,11 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     setResendStatus("Sending…");
     try {
       await api(
-        `/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`,
-        adminRegistrationResendConfirmationResponseSchema,
+        eventRegistrationResourcePath(slug, regId, "notifications"),
+        eventRegistrationNotificationResponseSchema,
         {
           method: "POST",
-          body: "{}",
+          body: JSON.stringify({ type: "confirmation" }),
         },
       );
       toast("Confirmation email queued", "success");
@@ -70,8 +70,8 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     setOpeningManage(true);
     try {
       const { manageUrl } = await api(
-        `/api/v1/admin/events/${slug}/registrations/${regId}/open-manage`,
-        adminRegistrationOpenManageResponseSchema,
+        eventRegistrationResourcePath(slug, regId, "access"),
+        eventRegistrationAccessResponseSchema,
         { method: "POST", body: "{}" },
       );
       window.open(manageUrl, "_blank", "noopener");
@@ -85,14 +85,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleRegenerateBadge() {
     setRegenerating(true);
     try {
-      await api(
-        `/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`,
-        badgeRegenerationQueuedResponseSchema,
-        {
-          method: "POST",
-          body: "{}",
-        },
-      );
+      await api(eventRegistrationResourcePath(slug, regId, "badge"), eventRegistrationBadgeRegenerationResponseSchema, {
+        method: "POST",
+        body: "{}",
+      });
       toast("Badge regeneration queued", "success");
     } catch (e) {
       toast((e as Error).message, "error");
@@ -113,7 +109,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     <div>
       {/* Back + header */}
       <div class="d-flex align-items-center gap-2 mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/events/${slug}/registrations`)}>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(eventRegistrationsViewPath(slug))}>
           ← Back
         </button>
         <h5 class="mb-0">{name}</h5>
@@ -244,21 +240,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         </div>
         <div class="card-body">
           <RegistrationAuditLogSection slug={slug} regId={regId} />
-        </div>
-      </div>
-
-      {/* Force status */}
-      <div class="card mb-3">
-        <div class="card-header">
-          <h6 class="mb-0">Override Status</h6>
-        </div>
-        <div class="card-body">
-          <RegistrationForceStatusPanel
-            currentStatus={reg.status}
-            slug={slug}
-            regId={regId}
-            onSaved={() => void reload()}
-          />
         </div>
       </div>
     </div>

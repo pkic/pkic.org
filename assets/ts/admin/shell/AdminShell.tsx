@@ -94,7 +94,7 @@ export function AdminShell() {
               )}
             />
             <Route
-              path="/events/:slug/registration/:regId"
+              path="/events/:slug/registrations/:regId"
               component={({ params }: { params: { slug: string; regId: string } }) => (
                 <SectionWrapper title="Registration">
                   <RegistrationDetailPage slug={params.slug} regId={params.regId} />
