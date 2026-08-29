@@ -11,10 +11,19 @@ import { runScheduledDueWork } from "../scheduled-due-work";
 import { runSponsorshipDueWork } from "../sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "../votes-scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../wg-chair-digest";
+import { boundedNextRunAt, earliestRetentionDue, earliestSponsorshipRenewalDue } from "./next-due";
 import type { ScheduledJobDefinition } from "./types";
 
 /** Ten minutes covers the longest observed pass with room for a slow D1. */
 const DEFAULT_LEASE_SECONDS = 600;
+
+/**
+ * Reconciliation floors for the deadline-driven jobs. These are the longest a
+ * job may sleep when it has computed no nearer wake; the computed wake keeps
+ * them timely, so the floor no longer trades latency for cost.
+ */
+const RETENTION_INTERVAL_SECONDS = 86_400;
+const SPONSORSHIP_INTERVAL_SECONDS = 86_400;
 
 /**
  * Every recurring job the platform runs, keyed by the row in
@@ -60,6 +69,11 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     requiredPermissions: ["sponsorships:write"],
     run: async ({ env, d1QueryBudget }) => {
       await runSponsorshipDueWork(env.DB, env, getConfig(env).scheduledSponsorshipDueWorkLimit, d1QueryBudget);
+      // Renewals are day-scale. Waking at the next actual due instant means the
+      // daily reconciliation floor costs no timeliness.
+      return {
+        nextRunAt: boundedNextRunAt(await earliestSponsorshipRenewalDue(env.DB), SPONSORSHIP_INTERVAL_SECONDS),
+      };
     },
   },
   {
@@ -82,6 +96,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     requiredPermissions: ["retention:run", "users:anonymize"],
     run: async ({ env }) => {
       await runRetentionJob(env.DB);
+      return { nextRunAt: boundedNextRunAt(await earliestRetentionDue(env.DB), RETENTION_INTERVAL_SECONDS) };
     },
   },
   {
