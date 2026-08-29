@@ -5581,3 +5581,78 @@ WHERE id IN (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_email_template_versions_one_active
   ON email_template_versions(template_key)
   WHERE status = 'active';
+
+-- ── Scheduled job registry ───────────────────────────────────────────────
+--
+-- One row per recurring job, replacing a fixed cron expression per lane.
+-- The dispatcher is level-triggered: every job re-derives what is due from
+-- domain state on each run, so a missed schedule is self-healing and a state
+-- change never has to cancel anything. `wake_requested` is a latency hint set
+-- by producers, never the correctness mechanism.
+--
+-- A scheduled invocation that exceeds its CPU limit is terminated without
+-- running any error handler, so a crashed run cannot record its own failure.
+-- The lease is therefore the only reliable detector: a run writes
+-- `running_since` and `lease_expires_at` when it claims the job, and a run
+-- that dies leaves them behind for the next pass to reap as `abandoned`.
+CREATE TABLE scheduled_jobs (
+  job_key               TEXT NOT NULL PRIMARY KEY,
+  interval_seconds      INTEGER NOT NULL CHECK (interval_seconds > 0),
+  next_run_at           TEXT NOT NULL,
+  wake_requested        INTEGER NOT NULL DEFAULT 0 CHECK (wake_requested IN (0, 1)),
+
+  -- Separate from last_run_at on purpose: "ran 2 minutes ago, last succeeded
+  -- 3 days ago" is the alarming case a single timestamp hides.
+  last_run_at           TEXT,
+  last_success_at       TEXT,
+  last_status           TEXT CHECK (last_status IN ('succeeded', 'failed', 'abandoned', 'budget_exhausted')),
+  last_error            TEXT,
+  last_duration_ms      INTEGER,
+
+  -- A job that always dies mid-run is doing too much per tick; that is a
+  -- different defect from one that raises an error, so they count separately.
+  consecutive_failures  INTEGER NOT NULL DEFAULT 0,
+  consecutive_abandoned INTEGER NOT NULL DEFAULT 0,
+
+  running_since         TEXT,
+  lease_expires_at      TEXT,
+  run_token             TEXT,
+
+  paused_at             TEXT,
+  paused_by_user_id     TEXT,
+  paused_reason         TEXT,
+
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  CHECK ((running_since IS NULL) = (lease_expires_at IS NULL)),
+  CHECK ((running_since IS NULL) = (run_token IS NULL)),
+  FOREIGN KEY(paused_by_user_id) REFERENCES users(id)
+);
+
+-- The dispatcher's only selection path: unpaused jobs that are due or woken.
+CREATE INDEX idx_scheduled_jobs_due
+  ON scheduled_jobs(next_run_at, job_key)
+  WHERE paused_at IS NULL;
+
+-- The reaper's path: claimed runs whose lease has expired.
+CREATE INDEX idx_scheduled_jobs_expired_lease
+  ON scheduled_jobs(lease_expires_at)
+  WHERE running_since IS NOT NULL;
+
+CREATE INDEX idx_scheduled_jobs_paused
+  ON scheduled_jobs(paused_at)
+  WHERE paused_at IS NOT NULL;
+
+-- Seeded from the cron expressions these lanes previously used, so cadence
+-- becomes data rather than a deployment.
+INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
+  ('due_work',                  900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('on_hold_due_work',          900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('ec_auto_approve',           900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('google_groups_sync',        900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('sponsorship_due_work',      900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('votes_due_work',            900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('retention',               86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('consultation_batch',      86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('ec_review_batch',         86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('working_group_chair_digest', 604800, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
