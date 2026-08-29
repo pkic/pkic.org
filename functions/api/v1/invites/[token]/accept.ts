@@ -48,7 +48,7 @@ async function acceptInviteRequest(
   }
 
   const { prepared } = await prepareValidatedAttendeeRegistration(db, body, {
-    eventId: event.id,
+    event: { id: event.id, source_mode: event.source_mode },
     sourceType: "invite",
     invite,
     ip: c.req.raw.headers.get("cf-connecting-ip"),

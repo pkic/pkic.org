@@ -154,7 +154,7 @@ describe("shared proposal management components", () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         requests.push(url);
-        const body = url.includes("/me/proposal-programs")
+        const body = url.includes("/proposals/programs")
           ? {
               programs: [
                 {
@@ -221,7 +221,7 @@ describe("shared proposal management components", () => {
     );
     const root = mount(
       <ProposalCoSpeakerInviteForm
-        endpoint="/api/v1/groups/group-1/events/event-1/proposals/proposal-1/speakers"
+        endpoint="/api/v1/proposals/proposal-1/speakers"
         proposalId="proposal-1"
         event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
         onInvited={onInvited}
@@ -246,7 +246,7 @@ describe("shared proposal management components", () => {
     });
 
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe("/api/v1/groups/group-1/events/event-1/proposals/proposal-1/speakers");
+    expect(requests[0].url).toBe("/api/v1/proposals/proposal-1/speakers");
     expect(requests[0].url).not.toContain("/api/v1/admin");
     expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({
       email: "speaker@example.test",

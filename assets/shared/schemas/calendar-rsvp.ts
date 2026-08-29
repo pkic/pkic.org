@@ -8,8 +8,8 @@ const calendarRsvpSourceSchema = z.object({
   receivedAt: z.iso.datetime().optional(),
 });
 
-/** Canonical request contract for the signed internal RSVP endpoint. */
-export const internalCalendarRsvpIngestSchema = z.union([
+/** Canonical request contract for the signed calendar RSVP endpoint. */
+export const calendarRsvpIngestSchema = z.union([
   calendarRsvpSourceSchema.extend({
     calendarIcs: z.string().min(1).max(300_000),
     fromEmail: normalizedEmailSchema.optional(),

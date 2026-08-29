@@ -447,7 +447,6 @@ export async function prepareFinalizeEmailChange(
   // auth capabilities are checked against the current email when used.
   stmts.push(
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
-    db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
     prepareRotateUserRegistrationManageSecrets(db, user.id, now, registrationBefore.id),
     prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
   );

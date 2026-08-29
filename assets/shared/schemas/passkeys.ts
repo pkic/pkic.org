@@ -9,10 +9,9 @@
  * fully modeled field-by-field.
  */
 import { z } from "zod";
+import { userAuthEstablishedResponseSchema } from "./user-auth";
 import { databaseIdSchema } from "./identifiers";
-import { successResponseSchema } from "./api-common";
-import { publicAuthAdminSchema } from "./admin-auth";
-import { authMemberSchema } from "./member-auth";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
@@ -73,17 +72,10 @@ export const passkeySummarySchema = z.object({
 export type PasskeySummary = z.infer<typeof passkeySummarySchema>;
 export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySummarySchema) });
 
-export const passkeyAuthenticateCompleteBaseResponseSchema = successResponseSchema.extend({ expiresAt: z.string() });
-export const passkeyAuthenticateCompleteResponseSchema = passkeyAuthenticateCompleteBaseResponseSchema
-  .extend({
-    admin: publicAuthAdminSchema.optional(),
-    member: authMemberSchema.optional(),
-  })
-  .refine((value) => value.admin !== undefined || value.member !== undefined, {
-    message: "At least one authenticated capacity is required",
-  });
+export const passkeyAuthenticateCompleteResponseSchema = userAuthEstablishedResponseSchema;
 
 export const passkeyRegisterBeginRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Begin passkey registration",
   description: "Returns WebAuthn PublicKeyCredentialCreationOptions for an authenticated user.",
@@ -98,6 +90,7 @@ export const passkeyRegisterBeginRouteSchema = {
 };
 
 export const passkeyRegisterCompleteRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Complete passkey registration",
   description: "Verifies the credential and stores it in passkey_credentials.",
@@ -113,6 +106,7 @@ export const passkeyRegisterCompleteRouteSchema = {
 };
 
 export const passkeyAuthenticateBeginRouteSchema = {
+  ...publicOperation(),
   tags: ["Passkeys"],
   summary: "Begin passkey authentication",
   description: "Discovery flow, no authentication required.",
@@ -125,10 +119,11 @@ export const passkeyAuthenticateBeginRouteSchema = {
 };
 
 export const passkeyAuthenticateCompleteRouteSchema = {
+  ...publicOperation(),
   tags: ["Passkeys"],
   summary: "Complete passkey authentication",
   description:
-    "Verifies the assertion and creates every currently eligible staff/member session capacity for the identity.",
+    "Verifies the assertion and creates one user session with every currently eligible staff/member capacity.",
   request: {
     body: { content: { "application/json": { schema: passkeyAuthenticateCompleteSchema } }, required: true },
   },
@@ -143,6 +138,7 @@ export const passkeyAuthenticateCompleteRouteSchema = {
 };
 
 export const passkeysListRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "List the authenticated user's passkeys",
   responses: {
@@ -155,6 +151,7 @@ export const passkeysListRouteSchema = {
 };
 
 export const passkeyDeleteRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Remove a passkey",
   request: { params: passkeyIdParamsSchema },

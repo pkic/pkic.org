@@ -1,3 +1,5 @@
+import { isGoogleGroupsSuppressed } from "./observe-membership";
+import { supersedeSuppressedGoogleGroupsAdd } from "./sync-queue";
 import { logError, logInfo } from "../../logging";
 import type { DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -67,6 +69,7 @@ export async function processGoogleGroupsSyncQueue(
 
   let succeeded = 0;
   let failed = 0;
+  let suppressed = 0;
   const completedAddsByUser: Record<string, string[]> = {};
 
   for (const claim of claims) {
@@ -74,6 +77,17 @@ export async function processGoogleGroupsSyncQueue(
     const memberEmail = memberEmails.get(claim.id);
     if (!memberEmail) {
       if (await failGoogleGroupsSyncClaimForMissingUser(db, claim)) failed++;
+      continue;
+    }
+
+    // A person who left this group on the provider side must not be re-added
+    // by any queued work. Only an explicit resubscribe clears suppression.
+    if (
+      claim.action === "add_to_list" &&
+      (await isGoogleGroupsSuppressed(db, claim.user_id, claim.google_group_email))
+    ) {
+      await supersedeSuppressedGoogleGroupsAdd(db, claim);
+      suppressed++;
       continue;
     }
 
@@ -113,6 +127,7 @@ export async function processGoogleGroupsSyncQueue(
     processed: claims.length,
     succeeded,
     failed,
+    suppressed,
     skippedUnconfigured: false,
     completedAddsByUser,
   };

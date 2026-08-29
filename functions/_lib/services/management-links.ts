@@ -44,8 +44,8 @@ export function buildManagementLink(appBaseUrl: string, link: ManagementLink): s
     case "membership-application":
       return portalHashUrl(appBaseUrl, `/system/membership-applications/${encodeURIComponent(link.id)}`).toString();
     case "sponsorship-list":
-      return portalHashUrl(appBaseUrl, "/system/sponsorships").toString();
+      return portalHashUrl(appBaseUrl, "/sponsors").toString();
     case "sponsorship":
-      return portalHashUrl(appBaseUrl, `/system/sponsorships/${encodeURIComponent(link.id)}`).toString();
+      return portalHashUrl(appBaseUrl, `/sponsors/${encodeURIComponent(link.id)}`).toString();
   }
 }

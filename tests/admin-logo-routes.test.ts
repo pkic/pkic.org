@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleError } from "../functions/_lib/http";
+import app from "../functions/router";
 import { onRequest as organizationLogoRequest } from "../functions/api/v1/organizations/[organizationId]/logo";
-import { onRequest as sponsorshipLogoRequest } from "../functions/api/v1/sponsorships/[id]/logo";
 import { createAdminSession } from "./helpers/auth";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { validJpegBytes } from "./helpers/raster-images";
@@ -50,6 +50,20 @@ async function callLogoRoute(
     pending.push(promise);
   };
   const response = await callEndpoint(handler, context);
+  await Promise.all(pending);
+  return response;
+}
+
+async function callMountedLogoRoute(request: Request): Promise<Response> {
+  const pending: Promise<unknown>[] = [];
+  const response = await app.fetch(
+    request,
+    env as never,
+    {
+      passThroughOnException: () => {},
+      waitUntil: (promise: Promise<unknown>) => pending.push(promise),
+    } as never,
+  );
   await Promise.all(pending);
   return response;
 }
@@ -109,22 +123,14 @@ describe("shared organization logo route transport", () => {
       .bind(id)
       .run();
 
-    const putResponse = await callLogoRoute(
-      sponsorshipLogoRequest,
-      imageRequest(`/api/v1/sponsorships/${id}/logo`, token, "PUT"),
-      id,
-    );
+    const putResponse = await callMountedLogoRoute(imageRequest(`/api/v1/sponsors/${id}/logo`, token, "PUT"));
     expect(putResponse.status).toBe(200);
     const putBody = (await putResponse.json()) as { logoUrl: string; r2Key: string };
     expect(putBody.logoUrl).toBe(`/api/v1/sponsors/${id}/logo`);
     expect(putBody.r2Key).toMatch(new RegExp(`^sponsor-logos/${id}/`));
     expect(await env.ASSETS_BUCKET!.get(putBody.r2Key)).not.toBeNull();
 
-    const deleteResponse = await callLogoRoute(
-      sponsorshipLogoRequest,
-      imageRequest(`/api/v1/sponsorships/${id}/logo`, token, "DELETE"),
-      id,
-    );
+    const deleteResponse = await callMountedLogoRoute(imageRequest(`/api/v1/sponsors/${id}/logo`, token, "DELETE"));
     expect(deleteResponse.status).toBe(200);
     expect(await env.ASSETS_BUCKET!.get(putBody.r2Key)).toBeNull();
     expect(
@@ -154,11 +160,7 @@ describe("shared organization logo route transport", () => {
       ).bind(sponsorshipId, organizationId),
     ]);
 
-    const response = await callLogoRoute(
-      sponsorshipLogoRequest,
-      imageRequest(`/api/v1/sponsorships/${sponsorshipId}/logo`, token, "PUT"),
-      sponsorshipId,
-    );
+    const response = await callMountedLogoRoute(imageRequest(`/api/v1/sponsors/${sponsorshipId}/logo`, token, "PUT"));
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "SPONSORSHIP_IS_ORG_LINKED" } });
   });

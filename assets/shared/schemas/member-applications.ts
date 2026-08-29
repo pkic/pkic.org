@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { formFieldDefinitionSchema } from "./forms";
+import { activeFormSummarySchema } from "./forms";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "./membership-application-form";
 import { normalizedEmailSchema } from "./api-common";
 import {
   membershipCategorySchema,
@@ -9,10 +10,9 @@ import {
 } from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
+import { memberApplicationCapabilityQuerySchema } from "./membership-application-capability";
 import { emailDomainOf, isDisposableEmailDomain, isPersonalEmailAddress } from "../constants/email-domains";
 import {
-  applicationDocumentsListQuerySchema,
-  applicationDocumentsListResponseSchema,
   applicationDocumentUploadFormSchema,
   applicationDocumentUploadHeadersSchema,
   applicationDocumentUploadResponseSchema,
@@ -169,7 +169,6 @@ export const memberApplicationStatusResponseSchema = z.object({
 export type MemberApplicationStatusResponse = z.infer<typeof memberApplicationStatusResponseSchema>;
 
 export const memberApplicationIdParamsSchema = z.object({ id: databaseIdSchema });
-export const memberApplicationCapabilityQuerySchema = z.object({ token: z.string().min(16).max(64) });
 const memberApplicationCapabilityRequest = {
   params: memberApplicationIdParamsSchema,
   query: memberApplicationCapabilityQuerySchema,
@@ -192,22 +191,14 @@ export const memberApplicationStatusRouteSchema = {
 
 export const memberApplicationFormResponseSchema = z.object({
   categories: z.array(membershipCategoryCatalogEntrySchema),
-  form: z
-    .object({
-      id: z.string(),
-      key: z.string(),
-      title: z.string(),
-      description: z.string().nullable(),
-      fields: z.array(formFieldDefinitionSchema),
-    })
-    .nullable(),
+  form: activeFormSummarySchema.extend({ key: z.literal(MEMBERSHIP_APPLICATION_FORM_KEY) }).nullable(),
 });
 export type MemberApplicationFormResponse = z.infer<typeof memberApplicationFormResponseSchema>;
 
 export const memberApplicationFormRouteSchema = {
   tags: ["Members"],
   summary: "Get the current membership application form definition",
-  description: "Portal-managed form fields — staff-editable via the existing /api/v1/admin/forms endpoints.",
+  description: "Returns the active public membership application form definition.",
   responses: {
     "200": {
       description: "Active membership application form, or null if none configured.",
@@ -266,23 +257,5 @@ export const applicationConcernCreateRouteSchema = {
     "403": { description: "Only members in a voting membership category may submit a concern." },
     "404": { description: "Application not found." },
     "409": { description: "The application stage or the submitter's voting eligibility changed." },
-  },
-};
-
-export const applicationDocumentListRouteSchema = {
-  tags: ["Members"],
-  summary: "List a membership applicant's own uploaded documents",
-  description: "Token-gated.",
-  request: {
-    params: memberApplicationIdParamsSchema,
-    query: memberApplicationCapabilityQuerySchema.merge(applicationDocumentsListQuerySchema),
-  },
-  responses: {
-    "200": {
-      description: "Documents uploaded for this application.",
-      content: { "application/json": { schema: applicationDocumentsListResponseSchema } },
-    },
-    "401": { description: "Missing or invalid token." },
-    "404": { description: "Application not found." },
   },
 };

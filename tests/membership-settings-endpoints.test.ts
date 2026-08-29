@@ -1,7 +1,7 @@
 /**
  * membership-settings-endpoints.test.ts
  *
- * Canonical system-portal membership workflow settings and category metadata.
+ * Canonical membership workflow settings and category metadata.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -50,7 +50,7 @@ describe("Membership workflow settings", () => {
   });
 
   it("GET returns the seeded defaults", async () => {
-    const response = await call(adminToken, "/api/v1/system/membership-settings");
+    const response = await call(adminToken, "/api/v1/membership/settings");
     expect(response.status).toBe(200);
     const body = (await response.json()) as { consultationWindowDays: number; ecReviewWindowDays: number };
     expect(body.consultationWindowDays).toBe(7);
@@ -62,9 +62,14 @@ describe("Membership workflow settings", () => {
     expect(response.status).toBe(404);
   });
 
+  it("removes the former System API routes", async () => {
+    expect((await call(adminToken, "/api/v1/system/membership-settings")).status).toBe(404);
+    expect((await call(adminToken, "/api/v1/system/membership-categories")).status).toBe(404);
+  });
+
   it("PATCH updates only the provided fields", async () => {
     const current = await getMembershipSettings(env.DB);
-    const response = await call(adminToken, "/api/v1/system/membership-settings", {
+    const response = await call(adminToken, "/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: current.revision, consultationWindowDays: 10 }),
     });
@@ -87,12 +92,14 @@ describe("Membership workflow settings", () => {
     ).toEqual([{ actor_id: adminId }]);
   });
 
-  it("rejects the shared API key because system configuration requires an attributable user", async () => {
-    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/system/membership-settings", {
+  it("rejects the shared API key because membership configuration requires an attributable user", async () => {
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+    const settingsResponse = await call(apiKey, "/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: 0, consultationWindowDays: 12 }),
     });
-    expect(response.status).toBe(403);
+    expect(settingsResponse.status).toBe(403);
+    expect((await call(apiKey, "/api/v1/membership/categories")).status).toBe(403);
   });
 
   it("resetDb() does not wipe the singleton settings row (it is system reference data)", async () => {
@@ -116,16 +123,24 @@ describe("Membership workflow settings", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffId, "processor-settings-token");
 
-    const getResponse = await call(staffToken, "/api/v1/system/membership-settings");
+    const getResponse = await call(staffToken, "/api/v1/membership/settings");
     expect(getResponse.status).toBe(200);
+    expect((await call(staffToken, "/api/v1/membership/categories")).status).toBe(200);
     const current = (await getResponse.json()) as { revision: number };
 
-    const patchResponse = await call(staffToken, "/api/v1/system/membership-settings", {
+    const patchResponse = await call(staffToken, "/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: current.revision, ecReviewWindowDays: 14 }),
     });
     expect(patchResponse.status).toBe(403);
+    const category = await getMembershipCategory(env.DB, "H1");
+    const categoryPatchResponse = await call(staffToken, "/api/v1/membership/categories/H1", {
+      method: "PATCH",
+      body: JSON.stringify({ expectedRevision: category!.revision, label: "This must not save" }),
+    });
+    expect(categoryPatchResponse.status).toBe(403);
     expect((await getMembershipSettings(env.DB)).ec_review_window_days).toBe(7);
+    expect((await getMembershipCategory(env.DB, "H1"))!.label).toBe(category!.label);
   });
 
   it("a staff user with an unrelated role is denied", async () => {
@@ -147,7 +162,7 @@ describe("Membership workflow settings", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffId, "wgchair-settings-token");
 
-    const response = await call(staffToken, "/api/v1/system/membership-settings");
+    const response = await call(staffToken, "/api/v1/membership/settings");
     expect(response.status).toBe(403);
   });
 
@@ -155,7 +170,7 @@ describe("Membership workflow settings", () => {
     const current = await getMembershipCategory(env.DB, "H1");
     expect(current).not.toBeNull();
 
-    const response = await call(adminToken, "/api/v1/system/membership-categories/H1", {
+    const response = await call(adminToken, "/api/v1/membership/categories/H1", {
       method: "PATCH",
       body: JSON.stringify({
         expectedRevision: current!.revision,
@@ -183,7 +198,7 @@ describe("Membership workflow settings", () => {
       ),
     ).toEqual([{ action: "membership_category_updated", entity_id: "H1" }]);
 
-    const structuralChange = await call(adminToken, "/api/v1/system/membership-categories/H1", {
+    const structuralChange = await call(adminToken, "/api/v1/membership/categories/H1", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: body.category.revision, isIndividual: true }),
     });
@@ -196,7 +211,7 @@ describe("Membership workflow settings", () => {
       { consultationWindowDays: MEMBERSHIP_WINDOW_DAY_LIMITS.consultationWindowDays.max + 1 },
       { consultationEmailRecipients: "x".repeat(MEMBERSHIP_EMAIL_RECIPIENTS_MAX_LENGTH + 1) },
     ]) {
-      const response = await call(adminToken, "/api/v1/system/membership-settings", {
+      const response = await call(adminToken, "/api/v1/membership/settings", {
         method: "PATCH",
         body: JSON.stringify({ expectedRevision: settings.revision, ...invalidSettings }),
       });
@@ -210,7 +225,7 @@ describe("Membership workflow settings", () => {
       { description: "x".repeat(MEMBERSHIP_CATEGORY_DESCRIPTION_MAX_LENGTH + 1) },
       { displayOrder: -1 },
     ]) {
-      const response = await call(adminToken, "/api/v1/system/membership-categories/H4", {
+      const response = await call(adminToken, "/api/v1/membership/categories/H4", {
         method: "PATCH",
         body: JSON.stringify({ expectedRevision: category!.revision, ...invalidCategory }),
       });
@@ -222,12 +237,12 @@ describe("Membership workflow settings", () => {
 
   it("rejects stale settings and category revisions without partial writes", async () => {
     const settings = await getMembershipSettings(env.DB);
-    const first = await call(adminToken, "/api/v1/system/membership-settings", {
+    const first = await call(adminToken, "/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: settings.revision, consultationWindowDays: 9 }),
     });
     expect(first.status).toBe(200);
-    const stale = await call(adminToken, "/api/v1/system/membership-settings", {
+    const stale = await call(adminToken, "/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: settings.revision, ecReviewWindowDays: 20 }),
     });
@@ -235,12 +250,12 @@ describe("Membership workflow settings", () => {
     expect((await getMembershipSettings(env.DB)).ec_review_window_days).toBe(7);
 
     const category = await getMembershipCategory(env.DB, "A");
-    const categoryFirst = await call(adminToken, "/api/v1/system/membership-categories/A", {
+    const categoryFirst = await call(adminToken, "/api/v1/membership/categories/A", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: category!.revision, label: "Voting member" }),
     });
     expect(categoryFirst.status).toBe(200);
-    const categoryStale = await call(adminToken, "/api/v1/system/membership-categories/A", {
+    const categoryStale = await call(adminToken, "/api/v1/membership/categories/A", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: category!.revision, isVoting: false }),
     });

@@ -1,3 +1,5 @@
+import { nowIso } from "../../utils/time";
+import { deriveVoteStatus } from "./status";
 import type { GroupVoteStatisticsResponse } from "../../../../assets/shared/schemas/group-vote-statistics";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
@@ -10,7 +12,11 @@ interface ParticipationRow {
   vote_id: string;
   vote_type: "election" | "motion" | "consultation";
   electorate_mode: "per_member" | "per_person";
-  status: "scheduled" | "open" | "closed" | "cancelled";
+  opens_at: string;
+  closes_at: string;
+  opened_at: string | null;
+  closed_at: string | null;
+  cancelled_at: string | null;
   current_round: number;
   current_eligible: number;
   current_eligible_cast: number;
@@ -82,11 +88,12 @@ export async function getVoteStatisticsForManager(
   const effectiveBallots = count(participation.effective_ballots);
   const electionCounts = (electionResult.results ?? []) as unknown as ElectionCountRow[];
   const candidates = (candidateResult.results ?? []) as unknown as CandidateRow[];
+  const derivedStatus = deriveVoteStatus(participation, nowIso());
   return {
     voteId: participation.vote_id,
     groupId,
     round: count(participation.current_round),
-    status: participation.status,
+    status: derivedStatus,
     electorateMode: participation.electorate_mode,
     participation: {
       unit: participation.electorate_mode === "per_member" ? "member" : "person",
@@ -97,7 +104,7 @@ export async function getVoteStatisticsForManager(
       ballotsWithoutCurrentEligibility: Math.max(0, effectiveBallots - currentEligibleCast),
     },
     aggregate:
-      participation.status === "closed"
+      derivedStatus === "closed"
         ? participation.vote_type === "election"
           ? {
               availability: "available",
@@ -117,7 +124,7 @@ export async function getVoteStatisticsForManager(
                 abstain: count((motionResult.results?.[0] as MotionCountRow | undefined)?.abstain),
               },
             }
-        : participation.status === "cancelled"
+        : derivedStatus === "cancelled"
           ? { availability: "unavailable" }
           : { availability: "withheld_until_closed" },
   };

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
+import { eventSlugParamsSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { addDuplicateStringIssues } from "./refinements";
 import { proposalTypeSchema } from "./proposal-management";
@@ -14,6 +14,7 @@ export {
   eventSummarySchema,
   requiredTermSchema,
 } from "./event-read-models";
+import { publicOperation } from "./route-contract";
 export type { EventDayReadModel, EventSummary, RequiredTerm } from "./event-read-models";
 
 export const FORM_PURPOSES = [
@@ -93,7 +94,11 @@ export const formFieldInputSchema = z
     }
   });
 
-function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> }, context: z.RefinementCtx): void {
+/** Reused when a focused form context narrows the canonical creation shape. */
+export function addDuplicateFormFieldIssues(
+  value: { fields?: Array<{ key: string }> },
+  context: z.RefinementCtx,
+): void {
   addDuplicateStringIssues(value.fields ?? [], context, {
     value: (field) => field.key,
     path: (index) => ["fields", index, "key"],
@@ -101,22 +106,27 @@ function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> },
   });
 }
 
+/**
+ * Canonical editable form shape before the cross-field duplicate-key policy.
+ * Focused management contexts compose this object rather than copying its
+ * fields, then apply the same policy after narrowing `purpose`.
+ */
+export const formDefinitionCreateBaseSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9-]*$/),
+  purpose: formPurposeSchema,
+  title: z.string().trim().min(2).max(200),
+  description: z.string().trim().min(2).max(1000).optional(),
+  status: formStatusSchema.default("active"),
+  fields: z.array(formFieldInputSchema).max(50).default([]),
+});
+
 /** Canonical editable form definition; placement ownership is supplied by the route context. */
-export const formDefinitionCreateSchema = z
-  .object({
-    key: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .regex(/^[a-z][a-z0-9-]*$/),
-    purpose: formPurposeSchema,
-    title: z.string().trim().min(2).max(200),
-    description: z.string().trim().min(2).max(1000).optional(),
-    status: formStatusSchema.default("active"),
-    fields: z.array(formFieldInputSchema).max(50).default([]),
-  })
-  .superRefine(addDuplicateFormFieldIssues);
+export const formDefinitionCreateSchema = formDefinitionCreateBaseSchema.superRefine(addDuplicateFormFieldIssues);
 
 export const formDefinitionUpdateSchema = z
   .object({
@@ -178,8 +188,8 @@ const formPlacementInputShape = {
   contextRef: z.string().trim().min(1).max(200).nullable(),
   audience: z.string().trim().min(1).max(100),
   active: z.boolean(),
-  opensAt: z.iso.datetime().nullable().optional(),
-  closesAt: z.iso.datetime().nullable().optional(),
+  opensAt: utcInstantSchema.nullable().optional(),
+  closesAt: utcInstantSchema.nullable().optional(),
 };
 
 function addPlacementIssues(
@@ -234,8 +244,8 @@ export type FormPlacementsListQuery = z.infer<typeof formPlacementsListQuerySche
 
 export const eventAudienceSchema = z.enum(["attendee", "speaker"]);
 
-export const eventFormsQuerySchema = z.object({
-  purpose: eventFormsPurposeSchema.default("event_registration"),
+export const eventFormPlacementParamsSchema = eventSlugParamsSchema.extend({
+  purpose: eventFormsPurposeSchema,
 });
 
 export const eventFormsResponseSchema = z.object({
@@ -255,6 +265,7 @@ export const eventTermsResponseSchema = z.object({
 });
 
 export const eventTermsGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Events"],
   summary: "Get event terms",
   description: "Returns the required terms and conditions for a given event.",
@@ -268,17 +279,17 @@ export const eventTermsGetRouteSchema = {
 };
 
 export type EventFormsResponse = z.infer<typeof eventFormsResponseSchema>;
-export const eventFormsGetRouteSchema = {
+export const eventFormPlacementGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Events"],
-  summary: "Get an event form",
-  description: "Returns one event form, its terms, session types, and configurable attendance options.",
+  summary: "Get an event form placement",
+  description: "Returns the form placed for one event purpose with its terms, session types, and attendance options.",
   request: {
-    params: eventSlugParamsSchema,
-    query: eventFormsQuerySchema,
+    params: eventFormPlacementParamsSchema,
   },
   responses: {
     "200": {
-      description: "The event form configuration.",
+      description: "The resolved event form placement.",
       content: { "application/json": { schema: eventFormsResponseSchema } },
     },
     "400": { description: "Invalid form purpose." },

@@ -7,7 +7,8 @@ import {
   ADMIN_DONATIONS_REDIRECT_TARGET,
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
-  ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+  ADMIN_EVENTS_REDIRECT_TARGET,
+  ADMIN_FORMS_REDIRECT_TARGET,
   ADMIN_LEADERSHIP_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
@@ -17,7 +18,7 @@ import {
   ADMIN_OPERATIONS_REDIRECT_TARGET,
   ADMIN_USERS_REDIRECT_TARGET,
   legacyAdminRedirectTarget,
-} from "../../assets/ts/admin/shell/legacy-redirects";
+} from "../../assets/ts/legacy/admin-redirects";
 
 describe("legacy admin route redirects", () => {
   it("moves Dashboard and Stats bookmarks to focused System Analytics", () => {
@@ -78,6 +79,12 @@ describe("legacy admin route redirects", () => {
     expect(legacyAdminRedirectTarget("/email/templates?from=bookmark")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
   });
 
+  it("moves global form-management bookmarks to the portal forms surface", () => {
+    expect(legacyAdminRedirectTarget("/forms")).toBe(ADMIN_FORMS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/forms?from=bookmark")).toBe(ADMIN_FORMS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/forms/member-feedback")).toBe(ADMIN_FORMS_REDIRECT_TARGET);
+  });
+
   it("moves donation bookmarks to system management in the portal", () => {
     expect(legacyAdminRedirectTarget("/donations")).toBe(ADMIN_DONATIONS_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/donations?from=bookmark")).toBe(ADMIN_DONATIONS_REDIRECT_TARGET);
@@ -109,13 +116,18 @@ describe("legacy admin route redirects", () => {
     expect(legacyAdminRedirectTarget("/duework")).toBe(ADMIN_OPERATIONS_REDIRECT_TARGET);
   });
 
-  it("moves event invitation bookmarks to selected-group management", () => {
+  it("moves event-management bookmarks to the canonical portal workspace", () => {
     expect(legacyAdminRedirectTarget("/events/example/proposals/invites")).toBe(
-      ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+      `${ADMIN_EVENTS_REDIRECT_TARGET}/example/proposals/invites`,
     );
     expect(legacyAdminRedirectTarget("/events/example/registrations/invites?from=bookmark")).toBe(
-      ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+      `${ADMIN_EVENTS_REDIRECT_TARGET}/example/registrations/invites`,
     );
-    expect(legacyAdminRedirectTarget("/events/example/proposals")).toBeNull();
+    expect(legacyAdminRedirectTarget("/events/example/proposals")).toBe(
+      `${ADMIN_EVENTS_REDIRECT_TARGET}/example/proposals`,
+    );
+    expect(legacyAdminRedirectTarget("/events/example/proposal/proposal-1")).toBe(
+      `${ADMIN_EVENTS_REDIRECT_TARGET}/example/proposals/proposal-1`,
+    );
   });
 });

@@ -101,6 +101,7 @@ describe("portal group management resources", () => {
           eventSlug: "architecture-call",
           profileKey: "meeting",
           registrationPolicy: "no_registration",
+          visibility: "group_members",
           memberEligibility: "owner_group",
           guestPolicy: "occurrence_invitation",
           startsAt: "2026-09-01T15:00:00.000Z",
@@ -265,7 +266,7 @@ describe("portal group management resources", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ url, method, body });
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/user-catalog`)
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`)
           return json(usersPage(userId, "selected@example.test"));
         if (method === "POST") {
           return json({
@@ -402,8 +403,7 @@ describe("portal group management resources", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ url, method, body });
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/user-catalog`)
-          return json(usersPage(userId, "leader@example.test"));
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`) return json(usersPage(userId, "leader@example.test"));
         return json(leadership);
       }),
     );
@@ -447,8 +447,7 @@ describe("portal group management resources", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/user-catalog`)
-          return json(usersPage(userId, "leader@example.test"));
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`) return json(usersPage(userId, "leader@example.test"));
         if ((init.method ?? "GET") === "POST") {
           return new Response(
             JSON.stringify({ error: { code: "GROUP_AUTHORIZATION_CHANGED", message: "Management access changed." } }),

@@ -21,11 +21,15 @@ export const GroupEventProposalsList = openApiRoute(
       data.params.eventId,
       "proposals:read",
     );
-    const [event, access, result] = await Promise.all([
+    const [event, access] = await Promise.all([
       getEventById(db, context.eventId),
       getProposalAccessForEvent(db, context.eventId, actor),
-      listEventProposals(db, { ...data.query, eventId: context.eventId }),
     ]);
+    const result = await listEventProposals(db, {
+      ...data.query,
+      eventId: context.eventId,
+      searchPrivateFields: access.canReview,
+    });
     return json(
       eventProposalsResponseSchema.parse({
         event: { id: event.id, slug: event.slug, name: event.name },

@@ -35,23 +35,39 @@ describe("atomic service audit boundaries", () => {
     adminToken = await createAdminSession(env.DB, admin.id, "audit-boundary-admin");
   });
 
-  it("commits event creation and its audit record together", async () => {
-    const success = await call("/api/v1/admin/events", {
+  it("commits an event import and its audit record together", async () => {
+    const success = await call("/api/v1/events/imports", {
       method: "POST",
-      body: JSON.stringify({ slug: "audited-event", name: "Audited event", timezone: "UTC" }),
+      body: JSON.stringify({
+        source: "hugo",
+        event: {
+          slug: "audited-event",
+          name: "Audited event",
+          timezone: "UTC",
+          visibility: "invitation_only",
+        },
+      }),
     });
-    expect(success.status).toBe(201);
+    expect(success.status).toBe(200);
     expect(
       await queryAll(
         env.DB,
-        "SELECT id FROM audit_log WHERE action = 'event_created' AND entity_id = (SELECT id FROM events WHERE slug = 'audited-event')",
+        "SELECT id FROM audit_log WHERE action = 'event_imported' AND entity_id = (SELECT id FROM events WHERE slug = 'audited-event')",
       ),
     ).toHaveLength(1);
 
-    await rejectAuditAction("event_created");
-    const failed = await call("/api/v1/admin/events", {
+    await rejectAuditAction("event_imported");
+    const failed = await call("/api/v1/events/imports", {
       method: "POST",
-      body: JSON.stringify({ slug: "rolled-back-event", name: "Rolled back event", timezone: "UTC" }),
+      body: JSON.stringify({
+        source: "hugo",
+        event: {
+          slug: "rolled-back-event",
+          name: "Rolled back event",
+          timezone: "UTC",
+          visibility: "invitation_only",
+        },
+      }),
     });
     expect(failed.status).toBe(500);
     expect(await queryAll(env.DB, "SELECT id FROM events WHERE slug = 'rolled-back-event'")).toHaveLength(0);
@@ -79,7 +95,7 @@ describe("atomic service audit boundaries", () => {
       env.DB,
       "SELECT revision FROM membership_settings WHERE id = 'default'",
     );
-    const response = await call("/api/v1/system/membership-settings", {
+    const response = await call("/api/v1/membership/settings", {
       method: "PATCH",
       body: JSON.stringify({ expectedRevision: current.revision, consultationWindowDays: 31 }),
     });

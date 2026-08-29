@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  roleAssignmentContextSchema,
+  roleAssignmentTargetSchema,
   roleAssignmentSchema,
   userRoleResponseSchema,
 } from "../assets/shared/schemas/access-control";
@@ -28,18 +28,18 @@ import {
 } from "../assets/shared/schemas/event-series";
 import {
   authenticationResponseSchema,
-  passkeyAuthenticateCompleteBaseResponseSchema,
+  passkeyAuthenticateCompleteResponseSchema,
   publicKeyCredentialEnvelopeSchema,
   registrationResponseSchema,
 } from "../assets/shared/schemas/passkeys";
 import { successResponseSchema } from "../assets/shared/schemas/api-common";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
-import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
+import { userAuthEstablishedResponseSchema } from "../assets/shared/schemas/user-auth";
 import { memberCapacityMutationResponseSchema } from "../assets/shared/schemas/membership-management";
 import { emailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/email-templates";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
-import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
+import { eventAnalyticsResponseSchema } from "../assets/shared/schemas/event-analytics";
 import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
 import { eventInviteValiditySchema } from "../assets/shared/schemas/event-invite-validity";
 import { registrationInviteCreateSchema } from "../assets/shared/schemas/registration";
@@ -67,14 +67,14 @@ describe("canonical shared schema composition", () => {
   it("uses one event identity contract across event workflow responses", () => {
     expect(eventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
     expect(eventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);
-    expect(adminEventStatsResponseSchema.shape.event).toBe(eventSummarySchema);
+    expect(eventAnalyticsResponseSchema.shape.event).toBe(eventSummarySchema);
 
     const valid = { id: ID, slug: "pqc-2026", name: "PQC Conference 2026" };
     expect(eventSummarySchema.parse(valid)).toEqual(valid);
     for (const schema of [
       eventProposalsResponseSchema.shape.event,
       eventRegistrationsListResponseSchema.shape.event,
-      adminEventStatsResponseSchema.shape.event,
+      eventAnalyticsResponseSchema.shape.event,
     ]) {
       expect(schema.safeParse({ ...valid, id: "" }).success).toBe(false);
     }
@@ -84,13 +84,14 @@ describe("canonical shared schema composition", () => {
     for (const schema of [
       headshotUploadResponseSchema,
       memberAuthVerifyResponseSchema,
-      sponsorPortalAuthVerifyResponseSchema,
-      passkeyAuthenticateCompleteBaseResponseSchema,
+      userAuthEstablishedResponseSchema,
+      passkeyAuthenticateCompleteResponseSchema,
     ]) {
       expect(schema.shape.success).toBe(successResponseSchema.shape.success);
       expect(schema.safeParse({ success: false }).success).toBe(false);
     }
     expect(successResponseSchema.parse({ success: true })).toEqual({ success: true });
+    expect(passkeyAuthenticateCompleteResponseSchema).toBe(userAuthEstablishedResponseSchema);
   });
 
   it("keeps admin mutation payloads explicit instead of treating them as success-only commands", () => {
@@ -131,8 +132,8 @@ describe("canonical shared schema composition", () => {
 
   it("uses one role-assignment context contract for holder and user projections", () => {
     for (const field of ["contextType", "contextId", "expiresAt", "createdAt"] as const) {
-      expect(roleAssignmentSchema.shape[field]).toBe(roleAssignmentContextSchema.shape[field]);
-      expect(userRoleResponseSchema.shape[field]).toBe(roleAssignmentContextSchema.shape[field]);
+      expect(roleAssignmentSchema.shape[field]).toBe(roleAssignmentTargetSchema.shape[field]);
+      expect(userRoleResponseSchema.shape[field]).toBe(roleAssignmentTargetSchema.shape[field]);
     }
 
     expect(

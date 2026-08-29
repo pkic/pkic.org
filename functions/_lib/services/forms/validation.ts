@@ -1,7 +1,9 @@
 import { AppError } from "../../errors";
 import {
+  getActiveFormForEvent,
   getActiveFormForResolution,
   type ActiveFormDefinition,
+  type EventFormResolutionEvent,
   type EventFormResolution,
   type FormFieldDefinition,
   type FormPurpose,
@@ -30,6 +32,21 @@ export interface ValidatedCustomAnswers {
   answers: Record<string, CustomAnswerValue>;
   form: ActiveFormDefinition | null;
 }
+
+/**
+ * Event-flow callers must either provide the canonical event source mode or
+ * explicitly declare a narrow compatibility resolver. This prevents a new
+ * portal path from silently inheriting the legacy installation fallback.
+ */
+export type EventFormValidationTarget =
+  | { event: EventFormResolutionEvent; eventId?: never; resolution?: never }
+  | { event?: never; eventId: string; resolution: EventFormResolution };
+
+type EventFormValidationPayload = {
+  purpose: FormPurpose;
+  customAnswers?: Record<string, unknown>;
+  context?: ValidationContext;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -277,15 +294,11 @@ export function validateCustomAnswersAgainstForm(
 
 export async function validateCustomAnswersForSubmission(
   db: DatabaseLike,
-  payload: {
-    eventId: string;
-    purpose: FormPurpose;
-    customAnswers?: Record<string, unknown>;
-    context?: ValidationContext;
-    resolution?: EventFormResolution;
-  },
+  payload: EventFormValidationPayload & EventFormValidationTarget,
 ): Promise<ValidatedCustomAnswers> {
-  const form = await getActiveFormForResolution(db, payload.eventId, payload.purpose, payload.resolution);
+  const form = await (payload.event
+    ? getActiveFormForEvent(db, payload.event, payload.purpose)
+    : getActiveFormForResolution(db, payload.eventId, payload.purpose, payload.resolution));
 
   if (!form) {
     if (Object.keys(payload.customAnswers ?? {}).length > 0) {
@@ -304,13 +317,7 @@ export async function validateCustomAnswersForSubmission(
 
 export async function validateCustomAnswersByPurpose(
   db: DatabaseLike,
-  payload: {
-    eventId: string;
-    purpose: FormPurpose;
-    customAnswers?: Record<string, unknown>;
-    context?: ValidationContext;
-    resolution?: EventFormResolution;
-  },
+  payload: EventFormValidationPayload & EventFormValidationTarget,
 ): Promise<Record<string, CustomAnswerValue>> {
   return (await validateCustomAnswersForSubmission(db, payload)).answers;
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import {
+  activeEffectiveInviteExpirySql,
   effectiveInviteExpirySql,
   effectiveStoredInviteExpiry,
   prepareExpireEffectiveEventInvites,
@@ -187,6 +188,60 @@ describe("stored event invitation validity in D1", () => {
         [JSON.stringify(inviteIds.sort())],
       ),
     ).resolves.toEqual([{ status: "expired" }, { status: "expired" }]);
+  });
+
+  it("fails closed for unparseable stored timestamps and retires the unusable invite", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const inviteId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO invites
+         (id, event_id, invitee_email, invite_type, link_secret, status, source_type, expires_at, created_at)
+       VALUES (?, ?, 'malformed-expiry@example.test', 'attendee', ?, 'sent', 'test', 'not-a-date', ?)`,
+    )
+      .bind(inviteId, eventId, crypto.randomUUID(), "2026-01-01T00:00:00.000Z")
+      .run();
+
+    await expect(
+      queryAll<{ effective_expiry: string | null }>(
+        env.DB,
+        `SELECT ${effectiveInviteExpirySql("i", "e")} AS effective_expiry
+           FROM invites i JOIN events e ON e.id = i.event_id
+          WHERE i.id = ?`,
+        [inviteId],
+      ),
+    ).resolves.toEqual([{ effective_expiry: null }]);
+
+    await env.DB.batch([
+      prepareExpireEffectiveEventInvites(env.DB, {
+        eventId,
+        inviteType: "attendee",
+        now: "2026-01-02T00:00:00.000Z",
+      }),
+    ]);
+    await expect(queryAll(env.DB, "SELECT status FROM invites WHERE id = ?", [inviteId])).resolves.toEqual([
+      { status: "expired" },
+    ]);
+  });
+
+  it("uses the bounded event/status index and direct UTC comparisons for active invitations", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const effectiveExpiry = effectiveInviteExpirySql("i", "e");
+    const activePredicate = activeEffectiveInviteExpirySql(effectiveExpiry);
+    expect(activePredicate).not.toContain("unixepoch");
+
+    const plan = await queryAll<{ detail: string }>(
+      env.DB,
+      `EXPLAIN QUERY PLAN
+       SELECT i.id
+         FROM invites i
+         JOIN events e ON e.id = i.event_id
+        WHERE i.event_id = ?
+          AND i.status = 'sent'
+          AND i.invite_type = 'attendee'
+          AND ${activePredicate}`,
+      [eventId, "2026-01-01T00:00:00.000Z"],
+    );
+    expect(plan.map((row) => row.detail).join("\n")).toContain("idx_invites_event_status");
   });
 });
 

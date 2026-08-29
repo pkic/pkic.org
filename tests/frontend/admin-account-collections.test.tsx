@@ -62,7 +62,7 @@ describe("portal access-control collection pagination", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = requestUrl(input);
         requests.push(url);
-        if (url.pathname === "/api/v1/system/access-control/users") {
+        if (url.pathname === "/api/v1/permissions/subjects") {
           return jsonResponse({
             users: [
               {
@@ -88,7 +88,7 @@ describe("portal access-control collection pagination", () => {
             page: page(url, 1, 1),
           });
         }
-        if (url.pathname === "/api/v1/system/access-control/roles") {
+        if (url.pathname === "/api/v1/roles") {
           return jsonResponse({
             roles: [
               {
@@ -103,7 +103,7 @@ describe("portal access-control collection pagination", () => {
             page: page(url, 1, 1),
           });
         }
-        if (url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`) {
+        if (url.pathname === `/api/v1/users/${USER_ID}/roles`) {
           return jsonResponse({
             roles: [
               {
@@ -131,7 +131,7 @@ describe("portal access-control collection pagination", () => {
     void act(() => (container.querySelector(".portal-user-picker-results button") as HTMLButtonElement).click());
     await settle();
 
-    const initial = requests.find((url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`);
+    const initial = requests.find((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`);
     expect(initial?.searchParams.get("limit")).toBe("25");
     expect(initial?.searchParams.get("offset")).toBe("0");
     expect(initial?.searchParams.get("sort")).toBe("-created_at");
@@ -141,9 +141,7 @@ describe("portal access-control collection pagination", () => {
       (container.querySelector(".adm-pager .pagination .page-item:last-child button") as HTMLButtonElement).click(),
     );
     await settle();
-    const roleRequests = requests.filter(
-      (url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`,
-    );
+    const roleRequests = requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`);
     expect(roleRequests.at(-1)?.searchParams.get("offset")).toBe("25");
 
     const search = container.querySelector('input[placeholder="Search role assignments…"]') as HTMLInputElement;
@@ -153,11 +151,9 @@ describe("portal access-control collection pagination", () => {
     });
     await settle();
     expect(roleRequests.length).toBeLessThan(
-      requests.filter((url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`).length,
+      requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`).length,
     );
-    const searched = requests
-      .filter((url) => url.pathname === `/api/v1/system/access-control/users/${USER_ID}/roles`)
-      .at(-1);
+    const searched = requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`).at(-1);
     expect(searched?.searchParams.get("q")).toBe("membership");
     expect(searched?.searchParams.get("offset")).toBe("0");
   });

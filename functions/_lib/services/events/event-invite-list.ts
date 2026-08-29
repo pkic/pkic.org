@@ -8,7 +8,7 @@ import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
-import { effectiveInviteExpirySql } from "../../invite-validity";
+import { effectiveInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../../invite-validity";
 
 export type EventInviteRow = Omit<EventInviteSummary, "actions">;
 
@@ -53,7 +53,10 @@ export function buildEventInvitesPageQuery(eventId: string, query: EventInvitesL
   const bindings: unknown[] = [eventId];
   const effectiveExpiry = effectiveInviteExpirySql("i", "e");
   const effectiveStatus = `CASE
-    WHEN i.status = 'sent' AND (${effectiveExpiry} IS NULL OR unixepoch(${effectiveExpiry}) <= unixepoch())
+    WHEN i.status = 'sent' AND (${inactiveEffectiveInviteExpirySql(
+      effectiveExpiry,
+      "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+    )})
       THEN 'expired'
     ELSE i.status
   END`;

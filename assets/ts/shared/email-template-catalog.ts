@@ -8,7 +8,7 @@ import {
 import { getJson } from "./api-client";
 import type { ServerCatalog } from "./server-catalog";
 
-export const EMAIL_TEMPLATES_API = "/api/v1/system/email-templates";
+export const EMAIL_TEMPLATES_API = "/api/v1/email/templates";
 
 export function emailTemplateCatalog(
   templateKeyPrefix?: string,

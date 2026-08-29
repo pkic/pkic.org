@@ -11,7 +11,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
-import { queueAdminSignInCapability, redeemAdminSignInCapability } from "../functions/_lib/auth/admin";
+import { queueUserSignInCapability, redeemUserSignInCapability } from "../functions/_lib/auth/user-session";
 import { addUserEmail, removeUserEmail } from "../functions/_lib/services/user-emails";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 
@@ -326,20 +326,21 @@ describe("secondary user emails", () => {
       body: JSON.stringify({ email: "alias@example.test" }),
     });
 
-    const viaCanonical = await queueAdminSignInCapability(env.DB, {
+    const viaCanonical = await queueUserSignInCapability({
+      db: env.DB,
       email: "canonical@example.test",
       ttlMinutes: 15,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
-    expect(viaCanonical.queuedToken).not.toBeNull();
+    expect(viaCanonical?.queuedToken).toMatch(/^pkcq1_/);
 
-    const viaAlias = await queueAdminSignInCapability(env.DB, {
+    const viaAlias = await queueUserSignInCapability({
+      db: env.DB,
       email: "alias@example.test",
       ttlMinutes: 15,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
-    expect(viaAlias.queuedToken).toBeNull();
-    expect(viaAlias.admin).toBeNull();
+    expect(viaAlias).toBeNull();
   });
 
   it("invalidates an issued sign-in capability when the primary email changes", async () => {
@@ -354,12 +355,14 @@ describe("secondary user emails", () => {
       .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
       .run();
 
-    const issued = await queueAdminSignInCapability(env.DB, {
+    const issued = await queueUserSignInCapability({
+      db: env.DB,
       email: "change-before-link@example.test",
       ttlMinutes: 15,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
-    expect(issued.queuedToken).not.toBeNull();
+    expect(issued?.queuedToken).toMatch(/^pkcq1_/);
+    if (!issued) throw new Error("Expected canonical sign-in capability");
     const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(
       env.DB,
       env,
@@ -377,7 +380,7 @@ describe("secondary user emails", () => {
       .run();
 
     await expect(
-      redeemAdminSignInCapability(env.DB, {
+      redeemUserSignInCapability(env.DB, {
         token,
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         sessionTtlHours: 8,

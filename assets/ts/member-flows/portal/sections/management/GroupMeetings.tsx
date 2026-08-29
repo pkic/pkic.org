@@ -24,6 +24,7 @@ function initialDraft(): MeetingSeriesDraft {
     durationMinutes: 60,
     location: "",
     registrationPolicy: "no_registration",
+    visibility: "group_members",
     memberEligibility: "owner_group",
     guestPolicy: "occurrence_invitation",
   };
@@ -54,6 +55,7 @@ function CreateMeetingSeries({ groupId, onCreated }: { groupId: string; onCreate
         profileKey: draft.profileKey,
         policy: {
           registrationPolicy: draft.registrationPolicy,
+          visibility: draft.visibility,
           memberEligibility: draft.memberEligibility,
           guestPolicy: draft.guestPolicy,
         },

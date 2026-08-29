@@ -3,6 +3,7 @@ import { jsonErrorResponse } from "./api-common";
 import { groupVoteParamsSchema } from "./group-votes";
 import { databaseIdSchema } from "./identifiers";
 import { voteBallotCountsSchema, voteElectorateModeSchema, voteStatusSchema } from "./votes";
+import { requiresSession } from "./route-contract";
 
 const voteParticipationUnitSchema = z.enum(["member", "person"]);
 
@@ -49,6 +50,7 @@ export const groupVoteStatisticsResponseSchema = z.object({
 export type GroupVoteStatisticsResponse = z.infer<typeof groupVoteStatisticsResponseSchema>;
 
 export const groupVoteStatisticsRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Management"],
   summary: "Get aggregate vote participation statistics",
   description:

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, searchTermSchema } from "./pagination";
+import { requiresSession } from "./route-contract";
 
 export const USER_CATALOG_SORT_COLUMNS = ["email", "first_name", "last_name", "organization_name"] as const;
 
@@ -22,9 +23,10 @@ export const userCatalogListQuerySchema = listQuerySchema(USER_CATALOG_SORT_COLU
 export type UserCatalogListQuery = z.infer<typeof userCatalogListQuerySchema>;
 export const userCatalogListResponseSchema = paginatedResponseSchema("users", userCatalogItemSchema);
 
-export const groupUserCatalogRouteSchema = {
+export const groupUsersListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
-  summary: "Search active users for a group-management action",
+  summary: "Search active users available to a group-management action",
   description:
     "Returns only identity fields needed by a user selector. Search, sorting, counting, and pagination execute in D1 and require effective management permission for the selected group.",
   request: { params: groupReferenceParamsSchema, query: userCatalogListQuerySchema },

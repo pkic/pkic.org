@@ -9,6 +9,7 @@ import {
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
+const EVENT_SLUG = "event";
 const PROPOSAL_ID = "30000000-0000-4000-8000-000000000001";
 let container: HTMLElement | null = null;
 
@@ -85,7 +86,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push({ url, method: init?.method ?? "GET" });
-      if (url.startsWith("/api/v1/me/proposal-programs")) {
+      if (url.startsWith("/api/v1/proposals/programs")) {
         return json({
           programs: [
             {
@@ -97,7 +98,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
           page: { limit: 25, offset: 0, total: 1, hasMore: false },
         });
       }
-      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals?`)) {
+      if (url.startsWith(`/api/v1/events/${EVENT_SLUG}/proposals?`)) {
         return json({
           event: { id: EVENT_ID, slug: "event", name: "Program Event" },
           access: detailAccess,
@@ -112,7 +113,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
           page: { limit: 25, offset: 0, total: 1, hasMore: false },
         });
       }
-      if (url === `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`) {
+      if (url === `/api/v1/proposals/${PROPOSAL_ID}`) {
         return json({
           event: {
             startsAt: "2026-09-01T09:00:00.000Z",
@@ -126,7 +127,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
           sessionTypes: [{ label: "talk", requiresPresentation: true }],
         });
       }
-      if (url === `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/speakers`) {
+      if (url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`) {
         return json({
           proposal: {
             id: PROPOSAL_ID,
@@ -143,7 +144,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
           ],
         });
       }
-      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/audit-log`)) {
+      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/audit-log`)) {
         return json({
           auditLog: [
             {
@@ -161,7 +162,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
           page: { limit: 50, offset: 0, total: 1, hasMore: false },
         });
       }
-      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/reviews`)) {
+      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/reviews`)) {
         return json({
           proposalId: PROPOSAL_ID,
           reviews: [],
@@ -178,7 +179,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
           page: { limit: 25, offset: 0, total: 0, hasMore: false },
         });
       }
-      if (url.startsWith(`/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}/comments`)) {
+      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/comments`)) {
         return json({ comments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
       }
       return json({ error: { code: "UNEXPECTED", message: url } }, 500);
@@ -222,7 +223,7 @@ describe("group event proposal portal", () => {
     expect(calls.some(({ url }) => url.includes("/reviews"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/comments"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(false);
-    expect(calls.some(({ url }) => url.includes("/finalize"))).toBe(false);
+    expect(calls.some(({ url }) => url.includes("/decisions"))).toBe(false);
   });
 
   it("shows audit only to reviewers and never renders decision controls without finalize access", async () => {
@@ -241,12 +242,11 @@ describe("group event proposal portal", () => {
     expect(container.textContent).toContain("Reviews");
     expect(container.textContent).toContain("Audit log");
     expect(container.textContent).not.toContain("Final decision");
-    expect(calls.some(({ url }) => url.includes("/finalize-preview"))).toBe(false);
-    expect(calls.some(({ url }) => url.includes("/finalize"))).toBe(false);
+    expect(calls.some(({ url }) => url.includes("/decisions"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(true);
   });
 
-  it("loads speakers through the group route and keeps all speaker actions off admin paths", async () => {
+  it("loads speakers through the canonical proposal resource and keeps all actions off admin paths", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls, { ...access, canReview: true, canFinalize: true, eventPermissions: ["proposals:manage"] });
     container = document.createElement("div");
@@ -285,28 +285,24 @@ describe("group event proposal portal", () => {
     );
     await act(async () => profileReminder?.click());
     await settle();
-    expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/remind"))).toBe(true);
+    expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/reminders"))).toBe(true);
 
     const presentationReminder = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("Presentation reminder"),
     );
     await act(async () => presentationReminder?.click());
     await settle();
-    expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/remind-presentation"))).toBe(true);
+    expect(calls.filter(({ url, method }) => method === "POST" && url.endsWith("/reminders"))).toHaveLength(2);
 
     const gravatar = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("Fetch from Gravatar"),
     );
     await act(async () => gravatar?.click());
     await settle();
-    expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/gravatar"))).toBe(true);
-    expect(
-      portalSpeakerAssetPath(
-        `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`,
-        "speaker-1",
-        "headshot",
-      ),
-    ).toContain("/speakers/speaker-1/headshot");
+    expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/headshot"))).toBe(true);
+    expect(portalSpeakerAssetPath(`/api/v1/proposals/${PROPOSAL_ID}`, "speaker-1", "headshot")).toContain(
+      "/speakers/speaker-1/headshot",
+    );
 
     const remove = container.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]");
     const replacement = container.querySelector<HTMLSelectElement>("[data-replacement-proposer]");

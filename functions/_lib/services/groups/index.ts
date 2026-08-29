@@ -7,7 +7,7 @@ export * from "./automatic-enrollment-group";
 export * from "./governance";
 export * from "./management";
 export * from "./membership";
-export * from "./portal-context";
+export * from "./detail";
 export * from "./public-directory";
 export * from "./read-model";
 export * from "./self-participation";

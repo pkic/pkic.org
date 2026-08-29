@@ -1,42 +1,25 @@
 import { useEffect, useState } from "preact/hooks";
 import {
-  meetingGuestInvitationBootstrapResponseSchema,
-  meetingGuestInvitationVerifyResponseSchema,
+  meetingInvitationVerificationCreateResponseSchema,
+  meetingInvitationVerificationUpdateResponseSchema,
   meetingJoinLandingSchema,
   meetingJoinResponseSchema,
   type MeetingJoinLanding,
 } from "../../../shared/schemas/event-series";
-import { ApiClientError, getJson, postJson } from "../../shared/api-client";
+import { ApiClientError, getJson, patchJson, postJson } from "../../shared/api-client";
 import type { MeetingGuestInvitationFragment } from "./invitation-fragment";
 import { MeetingJoinForm } from "./MeetingJoinForm";
 
-type JoinPersona = "member" | "guest";
-
-function joinEndpoint(persona: JoinPersona, occurrenceId: string): string {
-  const encoded = encodeURIComponent(occurrenceId);
-  return persona === "member"
-    ? `/api/v1/me/meetings/occurrences/${encoded}/join`
-    : `/api/v1/meeting-guests/meetings/occurrences/${encoded}/join`;
+function occurrenceEndpoint(occurrenceId: string): string {
+  return `/api/v1/meetings/occurrences/${encodeURIComponent(occurrenceId)}`;
 }
 
-async function loadAuthenticatedLanding(
-  occurrenceId: string,
-  guestOnly = false,
-): Promise<{ landing: MeetingJoinLanding; persona: JoinPersona }> {
-  if (!guestOnly) {
-    try {
-      return {
-        landing: await getJson(joinEndpoint("member", occurrenceId), meetingJoinLandingSchema),
-        persona: "member",
-      };
-    } catch (error) {
-      if (!(error instanceof ApiClientError) || ![401, 403].includes(error.status)) throw error;
-    }
-  }
-  return {
-    landing: await getJson(joinEndpoint("guest", occurrenceId), meetingJoinLandingSchema),
-    persona: "guest",
-  };
+function verificationCollectionEndpoint(occurrenceId: string): string {
+  return `${occurrenceEndpoint(occurrenceId)}/invitations/verifications`;
+}
+
+async function loadAuthenticatedLanding(occurrenceId: string): Promise<MeetingJoinLanding> {
+  return getJson(`${occurrenceEndpoint(occurrenceId)}/join`, meetingJoinLandingSchema);
 }
 
 function errorMessage(error: unknown): string {
@@ -45,10 +28,9 @@ function errorMessage(error: unknown): string {
 
 export function App({ invitation }: { invitation: MeetingGuestInvitationFragment | null }) {
   const occurrenceId = invitation?.occurrenceId ?? new URLSearchParams(window.location.search).get("occurrence") ?? "";
-  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [verificationId, setVerificationId] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [landing, setLanding] = useState<MeetingJoinLanding | null>(null);
-  const [persona, setPersona] = useState<JoinPersona | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,18 +46,17 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
       try {
         if (invitation) {
           const challenge = await postJson(
-            "/api/v1/meeting-guests/invitations/bootstrap",
-            { token: invitation.token, occurrenceId },
-            meetingGuestInvitationBootstrapResponseSchema,
+            verificationCollectionEndpoint(occurrenceId),
+            { token: invitation.token },
+            meetingInvitationVerificationCreateResponseSchema,
           );
           if (!cancelled) {
-            setChallengeId(challenge.challengeId);
+            setVerificationId(challenge.verificationId);
           }
         } else {
           const authenticated = await loadAuthenticatedLanding(occurrenceId);
           if (!cancelled) {
-            setLanding(authenticated.landing);
-            setPersona(authenticated.persona);
+            setLanding(authenticated);
           }
         }
       } catch (caught) {
@@ -91,19 +72,17 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   }, [invitation, occurrenceId]);
 
   async function verifyGuest(): Promise<void> {
-    if (!challengeId) return;
+    if (!verificationId) return;
     setSubmitting(true);
     setError(null);
     try {
-      await postJson(
-        "/api/v1/meeting-guests/invitations/verify",
-        { challengeId, code: code.trim().toUpperCase() },
-        meetingGuestInvitationVerifyResponseSchema,
+      await patchJson(
+        `${verificationCollectionEndpoint(occurrenceId)}/${encodeURIComponent(verificationId)}`,
+        { code: code.trim().toUpperCase() },
+        meetingInvitationVerificationUpdateResponseSchema,
       );
-      const authenticated = await loadAuthenticatedLanding(occurrenceId, true);
-      setLanding(authenticated.landing);
-      setPersona("guest");
-      setChallengeId(null);
+      setLanding(await loadAuthenticatedLanding(occurrenceId));
+      setVerificationId(null);
       setCode("");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -113,7 +92,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   }
 
   async function join(acceptedTermIds: string[]): Promise<void> {
-    if (!landing || !persona) return;
+    if (!landing) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -121,7 +100,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
         .filter((term) => acceptedTermIds.includes(term.id) && !term.accepted)
         .map((term) => ({ termId: term.id, version: term.version }));
       const result = await postJson(
-        joinEndpoint(persona, occurrenceId),
+        `${occurrenceEndpoint(occurrenceId)}/join`,
         { landingRevision: landing.landingRevision, acceptedTerms, intentionalJoin: true },
         meetingJoinResponseSchema,
       );
@@ -135,7 +114,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   if (loading) {
     return <div class="text-muted py-5 text-center">Preparing secure meeting entry…</div>;
   }
-  if (challengeId) {
+  if (verificationId) {
     return (
       <div class="card shadow-sm">
         <div class="card-body p-4">

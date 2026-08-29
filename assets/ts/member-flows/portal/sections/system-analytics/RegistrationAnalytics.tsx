@@ -3,7 +3,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
-import { systemRegistrationAnalyticsResponseSchema } from "../../../../../shared/schemas/system-analytics";
+import { registrationAnalyticsResponseSchema } from "../../../../../shared/schemas/analytics";
 import { SimpleTable, StatusTable } from "./Tables";
 
 const ATTENDANCE_LABELS: Record<string, string> = {
@@ -13,10 +13,7 @@ const ATTENDANCE_LABELS: Record<string, string> = {
 };
 
 export function RegistrationAnalytics() {
-  const state = useData(
-    () => getJson("/api/v1/system/analytics/registrations", systemRegistrationAnalyticsResponseSchema),
-    [],
-  );
+  const state = useData(() => getJson("/api/v1/analytics/registrations", registrationAnalyticsResponseSchema), []);
 
   if (state.loading) return <Spinner />;
   if (state.error) return <ErrorAlert error={state.error} />;

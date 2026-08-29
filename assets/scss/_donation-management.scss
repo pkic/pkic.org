@@ -3,7 +3,6 @@ $adm-border: #dee2e6 !default;
 $adm-muted: #6c757d !default;
 $adm-green: #198754 !default;
 
-#admin-main,
 #portal-main {
   .adm-donation-action-btn {
     font-size: 0.7rem;
@@ -36,9 +35,7 @@ $adm-green: #198754 !default;
     }
   }
 
-  // Donation-management cards are shared by the portal and the retiring
-  // admin shell. Keep this visual vocabulary in one stylesheet so moving a
-  // destination does not create a second, subtly different implementation.
+  // Keep the donation-management visual vocabulary in one portal stylesheet.
   .adm-promoter-card {
     background: $adm-surface;
     border: 1px solid $adm-border;

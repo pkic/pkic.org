@@ -9,14 +9,13 @@ import { createInvite } from "../functions/_lib/services/invites";
 import {
   createRegistration as createRegistrationService,
   confirmRegistrationByToken,
-  forceRegistrationStatus,
   updateRegistrationByManageToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
-import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
+import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
-import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { createMemberSession } from "./helpers/auth";
 import {
   addRepresentative,
@@ -215,7 +214,7 @@ describe("registration workflows", () => {
     const response = await patchManage(
       confirmed.manageToken,
       { action: "update", email: "member-new@example.test" },
-      { cookie: `pkic_member_session=${encodeURIComponent(memberSession)}` },
+      { cookie: `pkic_session=${encodeURIComponent(memberSession)}` },
     );
 
     expect(response.status).toBe(200);
@@ -269,7 +268,7 @@ describe("registration workflows", () => {
     const rejected = await patchManage(
       confirmed.manageToken,
       { action: "update", email: "org-target-new@example.test" },
-      { cookie: `pkic_member_session=${encodeURIComponent(ordinarySession)}` },
+      { cookie: `pkic_session=${encodeURIComponent(ordinarySession)}` },
     );
     expect(rejected.status).toBe(403);
     await expect(rejected.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
@@ -278,7 +277,7 @@ describe("registration workflows", () => {
     const accepted = await patchManage(
       confirmed.manageToken,
       { action: "update", email: "org-target-new@example.test" },
-      { cookie: `pkic_member_session=${encodeURIComponent(contactSession)}` },
+      { cookie: `pkic_session=${encodeURIComponent(contactSession)}` },
     );
     expect(accepted.status).toBe(200);
     await expect(
@@ -1179,103 +1178,6 @@ describe("registration workflows", () => {
     expect(stored).toEqual({ status: "cancelled", attendance_type: "virtual" });
   });
 
-  it("rejects a stale admin force-status transition after an intervening registration transition", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-       VALUES ('admin-cas-user', 'admin-cas@example.test', 'admin-cas@example.test',
-               'Admin', 'CAS', datetime('now'), datetime('now'))`,
-    ).run();
-    const event = await getEventBySlug(env.DB, "pqc-2026");
-    const created = await createRegistrationService(env.DB, {
-      event,
-      userId: "admin-cas-user",
-      attendanceType: "virtual",
-      sourceType: "direct",
-      confirmationTtlHours: 48,
-      signingSecret: "test-signing-secret",
-    });
-    await confirmRegistrationByToken(env.DB, {
-      token: created.confirmationToken as string,
-      waitlistClaimWindowHours: 24,
-      signingSecret: "test-signing-secret",
-    });
-
-    const gate = gateNextBatch(env.DB);
-    const staleForce = forceRegistrationStatus(gate.db, {
-      registrationId: created.registration.id,
-      eventId,
-      status: "cancelled",
-      actorUserId: "admin-cas-actor",
-    });
-    await gate.reached;
-    await env.DB.prepare("UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?")
-      .bind(created.registration.id)
-      .run();
-    gate.release();
-
-    await expect(staleForce).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
-  });
-
-  it("commits one admin status notification when identical transitions race", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-       VALUES ('admin-race-user', 'admin-race@example.test', 'admin-race@example.test',
-               'Admin', 'Race', datetime('now'), datetime('now'))`,
-    ).run();
-    const event = await getEventBySlug(env.DB, "pqc-2026");
-    const created = await createRegistrationService(env.DB, {
-      event,
-      userId: "admin-race-user",
-      attendanceType: "virtual",
-      sourceType: "direct",
-      confirmationTtlHours: 48,
-      signingSecret: "test-signing-secret",
-    });
-    await confirmRegistrationByToken(env.DB, {
-      token: created.confirmationToken as string,
-      waitlistClaimWindowHours: 24,
-      signingSecret: "test-signing-secret",
-    });
-    const gatedDb = gateBatchGroup(env.DB, 2);
-    const attempt = () =>
-      forceRegistrationStatus(gatedDb, {
-        registrationId: created.registration.id,
-        eventId,
-        status: "cancelled",
-        actorUserId: "admin-race-actor",
-        notification: {
-          event,
-          appBaseUrl: "https://app.test",
-          templateKey: "registration_updated",
-          subject: `Registration updated for ${event.name}`,
-        },
-      });
-
-    const results = await Promise.allSettled([attempt(), attempt()]);
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
-    expect(results.find((result) => result.status === "rejected")?.reason).toMatchObject({
-      status: 409,
-      code: "REGISTRATION_CHANGED",
-    });
-    await expect(
-      queryAll<{ total: number }>(
-        env.DB,
-        `SELECT COUNT(*) AS total FROM email_outbox
-         WHERE template_key = 'registration_updated' AND recipient_email = 'admin-race@example.test'`,
-      ),
-    ).resolves.toEqual([{ total: 1 }]);
-    await expect(
-      queryAll<{ total: number }>(
-        env.DB,
-        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'admin_registration_force_status' AND entity_id = ?",
-        [created.registration.id],
-      ),
-    ).resolves.toEqual([{ total: 1 }]);
-  });
-
   it("rolls back a managed update when its durable notification cannot be queued", async () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
@@ -1413,7 +1315,7 @@ describe("registration workflows", () => {
           firstName: "After",
           email: "email-after@example.test",
         },
-        { cookie: `pkic_member_session=${encodeURIComponent(memberSession)}` },
+        { cookie: `pkic_session=${encodeURIComponent(memberSession)}` },
       );
       expect(response.status).toBe(500);
       const [registration] = await queryAll<{

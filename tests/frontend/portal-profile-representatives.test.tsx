@@ -124,7 +124,7 @@ describe("portal organization-contact representative controls", () => {
         const method = init?.method ?? request?.method ?? "GET";
         const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ url, method, body });
-        if (url.pathname === "/api/v1/me") return json(refreshed);
+        if (url.pathname === "/api/v1/users/current") return json(refreshed);
         if (method === "PATCH") {
           refreshed = currentProfile(true);
           return json({ success: true, representativeId: coworkerUserId });
@@ -174,6 +174,6 @@ describe("portal organization-contact representative controls", () => {
       ]),
     );
     expect(requests.some((request) => request.url.pathname.startsWith("/api/v1/admin/organizations"))).toBe(false);
-    expect(requests.filter((request) => request.url.pathname === "/api/v1/me")).toHaveLength(2);
+    expect(requests.filter((request) => request.url.pathname === "/api/v1/users/current")).toHaveLength(2);
   });
 });

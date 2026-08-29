@@ -15,6 +15,25 @@ function instant(value: string | null): number | null {
 }
 
 /**
+ * D1 stores instants as canonical millisecond UTC text. The round-trip check
+ * rejects malformed or non-canonical database values before lexical range
+ * comparisons are used.
+ */
+export function canonicalUtcInstantSql(valueSql: string): string {
+  return `(${valueSql}) IS NOT NULL
+    AND COALESCE((${valueSql}) = strftime('%Y-%m-%dT%H:%M:%fZ', (${valueSql})), 0)`;
+}
+
+/** Shared active/inactive predicates for every effective invitation deadline. */
+export function activeEffectiveInviteExpirySql(effectiveExpirySql: string, nowSql = "?"): string {
+  return `(${effectiveExpirySql}) IS NOT NULL AND (${effectiveExpirySql}) > ${nowSql}`;
+}
+
+export function inactiveEffectiveInviteExpirySql(effectiveExpirySql: string, nowSql = "?"): string {
+  return `(${effectiveExpirySql}) IS NULL OR (${effectiveExpirySql}) <= ${nowSql}`;
+}
+
+/**
  * Resolves the one canonical invitation deadline. New invitations require a
  * finite event window, default to the event start, and may never outlive the
  * event itself.
@@ -53,11 +72,12 @@ export function resolveEventInviteExpiry(
 export function effectiveInviteExpirySql(inviteAlias = "i", eventAlias = "e"): string {
   return `CASE
     WHEN ${eventAlias}.starts_at IS NULL OR ${eventAlias}.ends_at IS NULL
-      OR unixepoch(${eventAlias}.starts_at) IS NULL OR unixepoch(${eventAlias}.ends_at) IS NULL
-      OR unixepoch(${eventAlias}.ends_at) <= unixepoch(${eventAlias}.starts_at) THEN NULL
+      OR NOT (${canonicalUtcInstantSql(`${eventAlias}.starts_at`)})
+      OR NOT (${canonicalUtcInstantSql(`${eventAlias}.ends_at`)})
+      OR ${eventAlias}.ends_at <= ${eventAlias}.starts_at THEN NULL
     WHEN ${inviteAlias}.expires_at IS NULL THEN ${eventAlias}.starts_at
-    WHEN unixepoch(${inviteAlias}.expires_at) IS NULL THEN NULL
-    WHEN unixepoch(${inviteAlias}.expires_at) <= unixepoch(${eventAlias}.ends_at) THEN ${inviteAlias}.expires_at
+    WHEN NOT (${canonicalUtcInstantSql(`${inviteAlias}.expires_at`)}) THEN NULL
+    WHEN ${inviteAlias}.expires_at <= ${eventAlias}.ends_at THEN ${inviteAlias}.expires_at
     ELSE ${eventAlias}.ends_at
   END`;
 }
@@ -66,11 +86,12 @@ export function effectiveInviteExpirySql(inviteAlias = "i", eventAlias = "e"): s
 export function effectiveProposalSpeakerInviteExpirySql(speakerAlias = "ps", eventAlias = "e"): string {
   return `CASE
     WHEN ${eventAlias}.starts_at IS NULL OR ${eventAlias}.ends_at IS NULL
-      OR unixepoch(${eventAlias}.starts_at) IS NULL OR unixepoch(${eventAlias}.ends_at) IS NULL
-      OR unixepoch(${eventAlias}.ends_at) <= unixepoch(${eventAlias}.starts_at) THEN NULL
+      OR NOT (${canonicalUtcInstantSql(`${eventAlias}.starts_at`)})
+      OR NOT (${canonicalUtcInstantSql(`${eventAlias}.ends_at`)})
+      OR ${eventAlias}.ends_at <= ${eventAlias}.starts_at THEN NULL
     WHEN ${speakerAlias}.invite_expires_at IS NULL THEN ${eventAlias}.starts_at
-    WHEN unixepoch(${speakerAlias}.invite_expires_at) IS NULL THEN NULL
-    WHEN unixepoch(${speakerAlias}.invite_expires_at) <= unixepoch(${eventAlias}.ends_at)
+    WHEN NOT (${canonicalUtcInstantSql(`${speakerAlias}.invite_expires_at`)}) THEN NULL
+    WHEN ${speakerAlias}.invite_expires_at <= ${eventAlias}.ends_at
       THEN ${speakerAlias}.invite_expires_at
     ELSE ${eventAlias}.ends_at
   END`;
@@ -90,11 +111,12 @@ export function effectiveMeetingGuestInviteExpirySql(
   const endsAt = `CASE WHEN ${guestAlias}.occurrence_id IS NULL THEN ${eventAlias}.ends_at ELSE ${occurrenceAlias}.ends_at END`;
   return `CASE
     WHEN (${startsAt}) IS NULL OR (${endsAt}) IS NULL
-      OR unixepoch(${startsAt}) IS NULL OR unixepoch(${endsAt}) IS NULL
-      OR unixepoch(${endsAt}) <= unixepoch(${startsAt}) THEN NULL
+      OR NOT (${canonicalUtcInstantSql(startsAt)})
+      OR NOT (${canonicalUtcInstantSql(endsAt)})
+      OR (${endsAt}) <= (${startsAt}) THEN NULL
     WHEN ${guestAlias}.expires_at IS NULL THEN (${startsAt})
-    WHEN unixepoch(${guestAlias}.expires_at) IS NULL THEN NULL
-    WHEN unixepoch(${guestAlias}.expires_at) <= unixepoch(${endsAt}) THEN ${guestAlias}.expires_at
+    WHEN NOT (${canonicalUtcInstantSql(`${guestAlias}.expires_at`)}) THEN NULL
+    WHEN ${guestAlias}.expires_at <= (${endsAt}) THEN ${guestAlias}.expires_at
     ELSE (${endsAt})
   END`;
 }
@@ -124,11 +146,11 @@ export function eventInviteWindowEvidence(
             AND ends_at IS ?
             AND starts_at IS NOT NULL
             AND ends_at IS NOT NULL
-            AND unixepoch(starts_at) IS NOT NULL
-            AND unixepoch(ends_at) IS NOT NULL
-            AND unixepoch(ends_at) > unixepoch(starts_at)
-            AND unixepoch(?) > unixepoch(?)
-            AND unixepoch(?) <= unixepoch(ends_at)`,
+            AND ${canonicalUtcInstantSql("starts_at")}
+            AND ${canonicalUtcInstantSql("ends_at")}
+            AND ends_at > starts_at
+            AND ? > ?
+            AND ? <= ends_at`,
     bindings: [eventId, event.starts_at, event.ends_at, expiresAt, now, expiresAt],
   };
 }
@@ -148,11 +170,11 @@ export function eventOccurrenceInviteWindowEvidence(
             AND series_id = ?
             AND starts_at IS ?
             AND ends_at IS ?
-            AND unixepoch(starts_at) IS NOT NULL
-            AND unixepoch(ends_at) IS NOT NULL
-            AND unixepoch(ends_at) > unixepoch(starts_at)
-            AND unixepoch(?) > unixepoch(?)
-            AND unixepoch(?) <= unixepoch(ends_at)`,
+            AND ${canonicalUtcInstantSql("starts_at")}
+            AND ${canonicalUtcInstantSql("ends_at")}
+            AND ends_at > starts_at
+            AND ? > ?
+            AND ? <= ends_at`,
     bindings: [occurrenceId, seriesId, occurrence.starts_at, occurrence.ends_at, expiresAt, now, expiresAt],
   };
 }
@@ -179,11 +201,12 @@ export function eventInviteWindowsEvidence(
               WHERE e.id IS NULL
                  OR e.starts_at IS NOT x.starts_at
                  OR e.ends_at IS NOT x.ends_at
-                 OR unixepoch(e.starts_at) IS NULL
-                 OR unixepoch(e.ends_at) IS NULL
-                 OR unixepoch(e.ends_at) <= unixepoch(e.starts_at)
-                 OR unixepoch(x.expires_at) <= unixepoch(?)
-                 OR unixepoch(x.expires_at) > unixepoch(e.ends_at)
+                 OR NOT (${canonicalUtcInstantSql("e.starts_at")})
+                 OR NOT (${canonicalUtcInstantSql("e.ends_at")})
+                 OR NOT (${canonicalUtcInstantSql("x.expires_at")})
+                 OR e.ends_at <= e.starts_at
+                 OR x.expires_at <= ?
+                 OR x.expires_at > e.ends_at
             )`,
     bindings: [
       JSON.stringify(
@@ -207,8 +230,7 @@ export function activeInviteValidityEvidence(inviteId: string, now: string): Aut
           JOIN events e ON e.id = i.event_id
           WHERE i.id = ?
             AND i.status = 'sent'
-            AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-            AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?)`,
+            AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"))}`,
     bindings: [inviteId, now],
   };
 }
@@ -236,8 +258,7 @@ export function prepareExpireEffectiveEventInvites(
            FROM events e
            WHERE e.id = invites.event_id
              AND (
-               ${effectiveInviteExpirySql("invites", "e")} IS NULL
-               OR unixepoch(${effectiveInviteExpirySql("invites", "e")}) <= unixepoch(?)
+               ${inactiveEffectiveInviteExpirySql(effectiveInviteExpirySql("invites", "e"))}
              )
          )`,
     )

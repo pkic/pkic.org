@@ -6,7 +6,7 @@ import {
   type EventPromotersListQuery,
   type EventPromotersListResponse,
   type EventReferralCode,
-} from "../../../../assets/shared/schemas/admin-event-promoters";
+} from "../../../../assets/shared/schemas/event-promoters";
 import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -37,6 +37,40 @@ interface SummaryRow {
   total_referral_conversions: number;
 }
 
+interface EventPromoterRow {
+  user_id: string;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  organization: string | null;
+  job_title: string | null;
+  headshot_url: string | null;
+  invites_sent: number;
+  invites_accepted: number;
+  invites_declined: number;
+  invites_expired: number;
+  invite_conversion_rate: number | null;
+  last_invite_at: string | null;
+  referral_codes_issued: number;
+  referral_clicks: number;
+  referral_conversions: number;
+  impact_score: number;
+}
+
+interface EventReferralCodeRow {
+  code: string;
+  owner_type: string;
+  owner_id: string;
+  effective_user_id: string | null;
+  owner_email: string | null;
+  owner_first_name: string | null;
+  owner_last_name: string | null;
+  channel_hint: string | null;
+  clicks: number;
+  conversions: number;
+  created_at: string;
+}
+
 const PROMOTER_READ_MODEL = `
   WITH invite_stats AS (
     SELECT inviter_user_id AS user_id,
@@ -44,7 +78,7 @@ const PROMOTER_READ_MODEL = `
            COUNT(CASE WHEN status = 'accepted' THEN 1 END) AS invites_accepted,
            COUNT(CASE WHEN status = 'declined' THEN 1 END) AS invites_declined,
            COUNT(CASE WHEN status = 'expired' THEN 1 END) AS invites_expired,
-           MAX(created_at) AS last_invite_at
+           MAX(strftime('%Y-%m-%dT%H:%M:%fZ', created_at)) AS last_invite_at
       FROM invites
      WHERE event_id = ? AND invite_type = 'attendee' AND inviter_user_id IS NOT NULL
      GROUP BY inviter_user_id
@@ -101,7 +135,7 @@ const REFERRAL_CODE_SELECT = `
          rc.channel_hint,
          rc.clicks,
          rc.conversions,
-         rc.created_at
+         strftime('%Y-%m-%dT%H:%M:%fZ', rc.created_at) AS created_at
     FROM referral_codes rc
     LEFT JOIN registrations reg ON rc.owner_type = 'registration' AND reg.id = rc.owner_id
     LEFT JOIN users u ON u.id = COALESCE(rc.created_by_user_id, reg.user_id)
@@ -172,9 +206,48 @@ export async function listEventPromotionActivity(
     db.prepare("SELECT COUNT(*) AS total FROM referral_codes WHERE event_id = ?").bind(event.id),
   ]);
 
-  const { rows: pageRows, total } = decodeOffsetPageResults<EventPromoter | EventReferralCode>(pageResult, countResult);
-  const promoters = params.view === "promoters" ? (pageRows as EventPromoter[]) : [];
-  const referralCodes = params.view === "codes" ? (pageRows as EventReferralCode[]) : [];
+  const { rows: pageRows, total } = decodeOffsetPageResults<EventPromoterRow | EventReferralCodeRow>(
+    pageResult,
+    countResult,
+  );
+  const promoters: EventPromoter[] =
+    params.view === "promoters"
+      ? (pageRows as EventPromoterRow[]).map((row) => ({
+          userId: row.user_id,
+          email: row.email,
+          firstName: row.first_name,
+          lastName: row.last_name,
+          organization: row.organization,
+          jobTitle: row.job_title,
+          headshotUrl: row.headshot_url,
+          invitesSent: row.invites_sent,
+          invitesAccepted: row.invites_accepted,
+          invitesDeclined: row.invites_declined,
+          invitesExpired: row.invites_expired,
+          inviteConversionRate: row.invite_conversion_rate,
+          lastInviteAt: row.last_invite_at,
+          referralCodesIssued: row.referral_codes_issued,
+          referralClicks: row.referral_clicks,
+          referralConversions: row.referral_conversions,
+          impactScore: row.impact_score,
+        }))
+      : [];
+  const referralCodes: EventReferralCode[] =
+    params.view === "codes"
+      ? (pageRows as EventReferralCodeRow[]).map((row) => ({
+          code: row.code,
+          ownerType: row.owner_type,
+          ownerId: row.owner_id,
+          effectiveUserId: row.effective_user_id,
+          ownerEmail: row.owner_email,
+          ownerFirstName: row.owner_first_name,
+          ownerLastName: row.owner_last_name,
+          channelHint: row.channel_hint,
+          clicks: row.clicks,
+          conversions: row.conversions,
+          createdAt: row.created_at,
+        }))
+      : [];
   const summary = batchFirst<SummaryRow>(summaryResult);
   return {
     eventSlug: event.slug,

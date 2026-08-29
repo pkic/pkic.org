@@ -67,7 +67,7 @@ describe("proposal program selector", () => {
     const { eventId, groupId, token } = await setupProgram();
     const response = await app.fetch(
       new Request(
-        `https://app.test/api/v1/me/proposal-programs?limit=25&sort=eventName&groupId=${groupId}&eventId=${eventId}`,
+        `https://app.test/api/v1/proposals/programs?limit=25&sort=eventName&groupId=${groupId}&eventId=${eventId}`,
         {
           headers: { authorization: `Bearer ${token}` },
         },

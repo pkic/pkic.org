@@ -61,7 +61,6 @@ async function createPublicGroupEvent(page: Page, unique: string): Promise<{ id:
     await api(page, `${base}/${event.id}/registration-settings`, "PUT", {
       expectedUpdatedAt: terms.eventUpdatedAt,
       registrationPolicy: "public",
-      formId: null,
     }),
     200,
   );

@@ -2,9 +2,11 @@ import { useCallback } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import {
-  groupPortalContextResponseSchema,
+  authenticatedGroupDetailResponseSchema,
+  type AuthenticatedGroup,
   type Group,
-  type GroupPortalCapability,
+  type GroupCapability,
+  type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
@@ -29,7 +31,15 @@ import { groupContextNavigation } from "./group-context-navigation";
 
 const OVERVIEW_VIEW = "overview";
 
-function GroupContextHeader({ group }: { group: Group }) {
+/** Prevents a delayed selector response from overriding navigation to another portal section. */
+export function managementRouteOwnsHash(groupId: string | undefined, hash: string): boolean {
+  const path = hash.replace(/^#/, "").split("?", 1)[0].replace(/\/$/, "");
+  if (!groupId) return path === "/management";
+  const groupPath = `/groups/${encodeURIComponent(groupId)}`;
+  return path === groupPath || path.startsWith(`${groupPath}/`);
+}
+
+function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
     <div class="portal-management-context card border-0 shadow-sm">
       <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
@@ -60,25 +70,36 @@ function GroupContextHeader({ group }: { group: Group }) {
   );
 }
 
-export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string; view?: string }) {
+export function Management({
+  groupId,
+  view = OVERVIEW_VIEW,
+  resourceId,
+}: {
+  groupId?: string;
+  view?: string;
+  resourceId?: string;
+}) {
   const [, navigate] = useHashLocation();
   const selectGroup = useCallback(
     (group: Group | null) => {
+      if (!managementRouteOwnsHash(groupId, window.location.hash)) return;
       navigate(group ? `/groups/${encodeURIComponent(group.id)}/${OVERVIEW_VIEW}` : "/management");
     },
-    [navigate],
+    [groupId, navigate],
   );
   const detail = useData(
     () =>
       groupId
-        ? getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/context`, groupPortalContextResponseSchema)
+        ? getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema)
         : Promise.resolve(null),
     [groupId],
   );
   const group = detail.data?.group;
-  const capabilities = detail.data?.capabilities ?? ([] as GroupPortalCapability[]);
+  const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");
+  const settingsGroup: GroupSettingsDetail | null =
+    group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
 
   return (
     <div class="d-flex flex-column gap-3">
@@ -127,9 +148,9 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
               </div>
             </div>
           )}
-          {view === "settings" && canManage && (
+          {view === "settings" && canManage && settingsGroup && (
             <div class="d-flex flex-column gap-3">
-              <GroupSettingsForm group={group} onUpdated={detail.reload} />
+              <GroupSettingsForm group={settingsGroup} onUpdated={detail.reload} />
               <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
             </div>
           )}
@@ -142,10 +163,11 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
           {view === "forms" && <GroupForms key={group.id} groupId={group.id} canManage={canManage} />}
           {view === "votes" && (
             <GroupVotes
-              key={group.id}
+              key={`${group.id}:${resourceId ?? ""}`}
               groupId={group.id}
               canManage={canManage}
               canParticipate={capabilities.includes("participate")}
+              initialVoteId={resourceId}
             />
           )}
           {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}

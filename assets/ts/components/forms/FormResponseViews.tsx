@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
-import type { AdminFormSubmission } from "../../../shared/schemas/admin-forms";
+import type { FormSubmission } from "../../../shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import { formatDateTime } from "../../shared/ui";
@@ -454,7 +454,7 @@ export function FormResponseStats({
   );
 }
 
-export function FormSubmissionsTable<Response extends { submissions: AdminFormSubmission[]; page: PageInfo }>({
+export function FormSubmissionsTable<Response extends { submissions: FormSubmission[]; page: PageInfo }>({
   fields,
   endpoint,
   responseSchema,
@@ -468,7 +468,7 @@ export function FormSubmissionsTable<Response extends { submissions: AdminFormSu
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const answerColumns = fields.map((field) => ({
     header: { label: field.label, className: "adm-form-answer-col" },
-    cell: (submission: AdminFormSubmission) => {
+    cell: (submission: FormSubmission) => {
       const answer = compactAnswer(submission.answers?.[field.key], field);
       return (
         <span class="small adm-form-answer-cell" title={answer.title}>

@@ -1,7 +1,7 @@
 /**
  * My Organization — content editor + moderation status + logo upload +
  * secondary-contact nomination + sponsorship view.
- * GET /api/v1/me/organization is available to any
+ * The organization profile resource is available to any
  * org-tied member (read-only for non-contacts); submitting a content
  * change or logo is restricted to the primary/secondary contact
  * (org.isOrgContact), secondary-contact nomination to the primary contact
@@ -10,30 +10,30 @@
  */
 import { Fragment } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { getJson, patchJson, deleteJson, ApiClientError } from "../../../shared/api-client";
+import { getJson, postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
-import type { MyOrganizationProfile, MyOrganizationReview, MyOrganizationSponsorship } from "../types";
+import type { MyOrganizationProfile, MyOrganizationReview } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
-import { myOrganizationReviewsListRouteSchema } from "../../../../shared/schemas/me";
 import type { z } from "zod";
 import { uploadFile } from "../../../shared/file-upload";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import {
-  myOrganizationProfileSchema,
-  myOrganizationSponsorshipSchema,
-  myOrganizationContentChangeResponseSchema,
-  mySecondaryContactNominateResponseSchema,
-  myOrganizationLogoUploadResponseSchema,
-} from "../../../../shared/schemas/me";
+  organizationContentReviewCreateResponseSchema,
+  organizationContentReviewsListResponseSchema,
+  organizationLogoReviewResponseSchema,
+  organizationMemberProfileResponseSchema,
+} from "../../../../shared/schemas/organization-self-service";
+import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
 
-const myOrganizationReviewsResponseSchema =
-  myOrganizationReviewsListRouteSchema.responses["200"].content["application/json"].schema;
+export { RepresentativeSelect } from "./MyOrganizationGovernance";
+
+const organizationPath = (organizationId: string) => `/api/v1/organizations/${encodeURIComponent(organizationId)}`;
 
 const URL_FIELD_ORDER = ["website", "blogUrl", "blogFeedUrl", "pressUrl", "pressFeedUrl", "careersUrl"] as const;
 
@@ -50,7 +50,15 @@ function reviewStatusBadgeClass(status: string): string {
   }
 }
 
-function LogoUploader({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
+function LogoUploader({
+  organizationId,
+  org,
+  reload,
+}: {
+  organizationId: string;
+  org: MyOrganizationProfile;
+  reload: () => Promise<void>;
+}) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -58,9 +66,9 @@ function LogoUploader({ org, reload }: { org: MyOrganizationProfile; reload: () 
     setBusy(true);
     try {
       await uploadFile(
-        "/api/v1/me/organization/logo",
+        `${organizationPath(organizationId)}/logo`,
         file,
-        myOrganizationLogoUploadResponseSchema,
+        organizationLogoReviewResponseSchema,
         "Could not upload the organization logo.",
       );
       toast("Logo submitted for review", "success");
@@ -94,7 +102,15 @@ function LogoUploader({ org, reload }: { org: MyOrganizationProfile; reload: () 
   );
 }
 
-function OrganizationProfileCard({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
+function OrganizationProfileCard({
+  organizationId,
+  org,
+  reload,
+}: {
+  organizationId: string;
+  org: MyOrganizationProfile;
+  reload: () => Promise<void>;
+}) {
   const links = URL_FIELD_ORDER.filter((key) => org[key]);
 
   return (
@@ -114,7 +130,7 @@ function OrganizationProfileCard({ org, reload }: { org: MyOrganizationProfile; 
                 No logo
               </div>
             )}
-            {org.isOrgContact && <LogoUploader org={org} reload={reload} />}
+            {org.isOrgContact && <LogoUploader organizationId={organizationId} org={org} reload={reload} />}
           </div>
           <div class="col-md-9">
             {org.slogan && <p class="fst-italic text-muted mb-2">{org.slogan}</p>}
@@ -142,9 +158,11 @@ function OrganizationProfileCard({ org, reload }: { org: MyOrganizationProfile; 
 
 function PendingReviewBanner({
   review,
+  organizationId,
   onWithdrawn,
 }: {
   review: MyOrganizationReview;
+  organizationId: string;
   onWithdrawn: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -154,7 +172,10 @@ function PendingReviewBanner({
     if (!confirm("Withdraw this pending submission?")) return;
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/me/organization/reviews/${review.id}`, successResponseSchema);
+      await deleteJson(
+        `${organizationPath(organizationId)}/content/reviews/${encodeURIComponent(review.id)}`,
+        successResponseSchema,
+      );
       toast("Submission withdrawn", "success");
       await onWithdrawn();
     } catch (e) {
@@ -193,7 +214,15 @@ function PendingReviewBanner({
 
 type EditableField = (typeof URL_FIELD_ORDER)[number] | "slogan" | "description" | "contentMarkdown";
 
-function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
+function ContentEditForm({
+  organizationId,
+  org,
+  reload,
+}: {
+  organizationId: string;
+  org: MyOrganizationProfile;
+  reload: () => Promise<void>;
+}) {
   const initial = useMemo<Record<EditableField, string>>(
     () => ({
       slogan: org.slogan ?? "",
@@ -241,7 +270,11 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
 
     setSaving(true);
     try {
-      await patchJson("/api/v1/me/organization", changes, myOrganizationContentChangeResponseSchema);
+      await postJson(
+        `${organizationPath(organizationId)}/content/reviews`,
+        changes,
+        organizationContentReviewCreateResponseSchema,
+      );
       toast("Submitted for staff review", "success");
       await reload();
     } catch (err) {
@@ -321,26 +354,34 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
   );
 }
 
-function ContentEditorCard({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
+function ContentEditorCard({
+  organizationId,
+  org,
+  reload,
+}: {
+  organizationId: string;
+  org: MyOrganizationProfile;
+  reload: () => Promise<void>;
+}) {
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Edit organization content</div>
       <div class="card-body">
         {org.pendingReview ? (
-          <PendingReviewBanner review={org.pendingReview} onWithdrawn={reload} />
+          <PendingReviewBanner review={org.pendingReview} organizationId={organizationId} onWithdrawn={reload} />
         ) : (
-          <ContentEditForm org={org} reload={reload} />
+          <ContentEditForm organizationId={organizationId} org={org} reload={reload} />
         )}
       </div>
     </div>
   );
 }
 
-function ReviewHistoryCard() {
-  const history = useApiPage<z.infer<typeof myOrganizationReviewsResponseSchema>>(
-    "/api/v1/me/organization/reviews",
+function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
+  const history = useApiPage<z.infer<typeof organizationContentReviewsListResponseSchema>>(
+    `${organizationPath(organizationId)}/content/reviews`,
     { status: "history", sort: "-submittedAt" },
-    myOrganizationReviewsResponseSchema,
+    organizationContentReviewsListResponseSchema,
     (data) => data.reviews,
   );
   const reviews = history.data?.reviews ?? [];
@@ -380,138 +421,27 @@ function ReviewHistoryCard() {
   );
 }
 
-function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
-  const reps = (profileSignal.value?.organizationRepresentatives ?? []).filter((r) => !r.isPrimaryContact);
-  const [value, setValue] = useState(org.pendingSecondaryContactUserId ?? "");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => setValue(org.pendingSecondaryContactUserId ?? ""), [org.pendingSecondaryContactUserId]);
-
-  async function handleChange(next: string): Promise<void> {
-    setValue(next);
-    setSaving(true);
-    try {
-      await patchJson(
-        "/api/v1/me/organization/secondary-contact",
-        { userId: next || null },
-        mySecondaryContactNominateResponseSchema,
-      );
-      toast(next ? "Secondary contact nominated — pending staff confirmation" : "Nomination withdrawn", "success");
-      await reload();
-    } catch (e) {
-      setValue(org.pendingSecondaryContactUserId ?? "");
-      toast(e instanceof ApiClientError ? e.message : "Could not update nomination.", "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const nominee = reps.find((r) => r.userId === org.pendingSecondaryContactUserId);
-
-  return (
-    <div>
-      <h3 class="h6">Secondary contact</h3>
-      <p class="text-muted small">
-        A second representative who can manage the organization profile. Nominations are held until confirmed by staff.
-      </p>
-      {org.isPrimaryContact ? (
-        <RepresentativeSelect
-          className="portal-representative-select"
-          value={value}
-          disabled={saving}
-          emptyLabel="None"
-          representatives={reps}
-          onChange={(e) => void handleChange((e.target as HTMLSelectElement).value)}
-        />
-      ) : (
-        <p class="mb-0 small">
-          {org.pendingSecondaryContactUserId
-            ? `Pending: ${nominee?.name ?? nominee?.email ?? "a representative"}`
-            : "None pending"}
-        </p>
-      )}
-    </div>
-  );
-}
-
-export function RepresentativeSelect({
-  className,
-  value,
-  disabled,
-  emptyLabel,
-  representatives,
-  onChange,
-}: {
-  className: string;
-  value: string;
-  disabled: boolean;
-  emptyLabel: string;
-  representatives: Array<{ userId: string; name: string | null; email: string }>;
-  onChange: (event: Event) => void;
-}) {
-  return (
-    <select class={`form-select form-select-sm ${className}`} value={value} disabled={disabled} onChange={onChange}>
-      <option value="">{emptyLabel}</option>
-      {representatives.map((representative) => (
-        <option key={representative.userId} value={representative.userId}>
-          {representative.name ?? representative.email}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function GovernanceCard({ org, reload }: { org: MyOrganizationProfile; reload: () => Promise<void> }) {
-  return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Governance</div>
-      <div class="card-body d-flex flex-column gap-4">
-        <SecondaryContactSection org={org} reload={reload} />
-      </div>
-    </div>
-  );
-}
-
-function SponsorshipCard() {
-  const [sponsorship, setSponsorship] = useState<MyOrganizationSponsorship | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getJson("/api/v1/me/organization/sponsorship", myOrganizationSponsorshipSchema)
-      .then(setSponsorship)
-      .catch((e: unknown) => setError(e instanceof ApiClientError ? e.message : "Could not load sponsorship."));
-  }, []);
-
-  return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Sponsorship</div>
-      <div class="card-body">
-        {error && <ErrorAlert error={error} />}
-        {!sponsorship && !error ? (
-          <Spinner />
-        ) : sponsorship?.tier ? (
-          <p class="mb-0">
-            Active <span class="fw-semibold text-capitalize">{sponsorship.tier}</span> sponsor
-            {sponsorship.startDate && <> since {new Date(sponsorship.startDate).toLocaleDateString()}</>}.
-          </p>
-        ) : (
-          <p class="text-muted mb-0">Your organization is not currently a consortium sponsor.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function MyOrganization() {
+  const organizationId = profileSignal.value?.organizationId ?? null;
   const [org, setOrg] = useState<MyOrganizationProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!organizationId) {
+      setOrg(null);
+      setError("Your active membership is not tied to an organization.");
+      setErrorCode("NO_ORGANIZATION");
+      setLoading(false);
+      return;
+    }
     try {
-      const orgData = await getJson("/api/v1/me/organization", myOrganizationProfileSchema);
-      setOrg(orgData);
+      const response = await getJson(
+        `${organizationPath(organizationId)}/profile`,
+        organizationMemberProfileResponseSchema,
+      );
+      setOrg(response.organization);
       setError(null);
       setErrorCode(null);
     } catch (e) {
@@ -520,7 +450,7 @@ export function MyOrganization() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [organizationId]);
 
   useEffect(() => {
     void reload();
@@ -530,15 +460,17 @@ export function MyOrganization() {
   if (error) {
     return errorCode === "NO_ORGANIZATION" ? <div class="alert alert-info">{error}</div> : <ErrorAlert error={error} />;
   }
-  if (!org) return null;
+  if (!org || !organizationId) return null;
 
   return (
     <div class="d-flex flex-column gap-3 content-width-lg">
-      <OrganizationProfileCard org={org} reload={reload} />
-      {org.isOrgContact && <ContentEditorCard org={org} reload={reload} />}
-      {org.isOrgContact && <ReviewHistoryCard key={org.pendingReview?.id ?? "no-pending-review"} />}
-      <GovernanceCard org={org} reload={reload} />
-      <SponsorshipCard />
+      <OrganizationProfileCard organizationId={organizationId} org={org} reload={reload} />
+      {org.isOrgContact && <ContentEditorCard organizationId={organizationId} org={org} reload={reload} />}
+      {org.isOrgContact && (
+        <ReviewHistoryCard organizationId={organizationId} key={org.pendingReview?.id ?? "no-pending-review"} />
+      )}
+      <OrganizationGovernanceCard organizationId={organizationId} org={org} reload={reload} />
+      <OrganizationSponsorshipCard organizationId={organizationId} />
     </div>
   );
 }

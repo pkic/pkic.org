@@ -28,33 +28,29 @@ import { useData } from "../../../../hooks/useData";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 
-function proposalEndpoint(groupId: string, eventId: string, proposalId?: string): string {
-  const eventBase = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/proposals`;
-  return proposalId ? `${eventBase}/${encodeURIComponent(proposalId)}` : eventBase;
+function proposalResourcePath(proposalId: string, resource = ""): string {
+  const base = `/api/v1/proposals/${encodeURIComponent(proposalId)}`;
+  return resource ? `${base}/${resource}` : base;
 }
 
 function portalSpeakerPath(base: string, userId: string, suffix = ""): string {
   return `${base}/speakers/${encodeURIComponent(userId)}${suffix ? `/${suffix}` : ""}`;
 }
 
-export function portalSpeakerAssetPath(base: string, userId: string, asset: "headshot" | "gravatar"): string {
-  return `${base}/speakers/${encodeURIComponent(userId)}/${asset}`;
+export function portalSpeakerAssetPath(base: string, userId: string, _asset: "headshot" | "gravatar"): string {
+  return `${base}/speakers/${encodeURIComponent(userId)}/headshot`;
 }
 
 function GroupEventProposalDetail({
-  groupId,
-  eventId,
   proposalId,
   contextLabel,
   onBack,
 }: {
-  groupId: string;
-  eventId: string;
   proposalId: string;
   contextLabel: string | null;
   onBack: () => void;
 }) {
-  const base = proposalEndpoint(groupId, eventId, proposalId);
+  const base = proposalResourcePath(proposalId);
   const detail = useData(() => getJson(base, eventProposalDetailResponseSchema), [base]);
   const reviewComments = useProposalReviewComments(base, detail.reload, detail.data?.access.canReview === true);
   const [commentDraft, setCommentDraft] = useState("");
@@ -209,9 +205,11 @@ function GroupEventProposalDetail({
               proposal={proposal}
               reviewCount={proposal.review_count}
               minReviewsRequired={minReviewsRequired}
-              onPreview={(input) => postJson(`${base}/finalize-preview`, input, proposalDecisionPreviewResponseSchema)}
+              onPreview={(input) =>
+                postJson(`${base}/decisions/previews`, input, proposalDecisionPreviewResponseSchema)
+              }
               onFinalize={async (input) => {
-                await postJson(`${base}/finalize`, input, finalizeProposalResponseSchema);
+                await postJson(`${base}/decisions`, input, finalizeProposalResponseSchema);
               }}
               onFinalized={() => void detail.reload()}
               formatDate={fmt}
@@ -230,8 +228,10 @@ function GroupEventProposalDetail({
               notify={toast}
               endpoints={{
                 speakerPath: (_speakerProposalId, userId, suffix) => portalSpeakerPath(base, userId, suffix),
-                assetPath: (speakerProposalId, userId, asset) =>
-                  portalSpeakerAssetPath(proposalEndpoint(groupId, eventId, speakerProposalId), userId, asset),
+                assetPath: (_speakerProposalId, userId, asset) => portalSpeakerAssetPath(base, userId, asset),
+                reminderPath: (_speakerProposalId, userId) => portalSpeakerPath(base, userId, "reminders"),
+                reminderBody: (kind) => ({ kind }),
+                gravatarBody: { source: "gravatar" },
               }}
               inviteEndpoint={`${base}/speakers`}
               inviteWindow={detail.data.event}
@@ -242,7 +242,7 @@ function GroupEventProposalDetail({
             proposal={proposal}
             canCancel={access.canCancelAcceptedProposal}
             onCancel={async (comment) => {
-              const result = await postJson(`${base}/cancel`, { comment }, cancelAcceptedProposalResponseSchema);
+              const result = await postJson(`${base}/cancellations`, { comment }, cancelAcceptedProposalResponseSchema);
               return { notifiedSpeakerCount: result.notifiedSpeakerCount };
             }}
             onCanceled={(notifiedSpeakerCount) => {
@@ -304,24 +304,30 @@ function GroupEventProposalDetail({
 }
 
 /** Program committee surface for a proposal program owned by the selected group event. */
-export function GroupEventProposals({ groupId, eventId }: { groupId: string; eventId: string }) {
+export function GroupEventProposals({
+  groupId,
+  eventId,
+  eventSlug,
+}: {
+  groupId: string;
+  eventId: string;
+  eventSlug?: string;
+}) {
   const [selected, setSelected] = useState<EventProposalSummary | null>(null);
-  const endpoint = proposalEndpoint(groupId, eventId);
   const programCatalog = useData(
     () =>
       getJson(
-        `/api/v1/me/proposal-programs?groupId=${encodeURIComponent(groupId)}&eventId=${encodeURIComponent(eventId)}`,
+        `/api/v1/proposals/programs?groupId=${encodeURIComponent(groupId)}&eventId=${encodeURIComponent(eventId)}`,
         proposalProgramsListResponseSchema,
       ),
     [eventId, groupId],
   );
   const program = programCatalog.data?.programs[0];
+  const resolvedEventSlug = eventSlug ?? program?.event.slug;
 
   if (selected) {
     return (
       <GroupEventProposalDetail
-        groupId={groupId}
-        eventId={eventId}
         proposalId={selected.id}
         contextLabel={program ? `${program.group.name} / ${program.event.name}` : null}
         onBack={() => setSelected(null)}
@@ -339,12 +345,20 @@ export function GroupEventProposals({ groupId, eventId }: { groupId: string; eve
         </nav>
       )}
       <h6>Proposal program</h6>
-      <EventProposalsTable
-        endpoint={endpoint}
-        storageKey={`portal_proposal_filters_${groupId}_${eventId}`}
-        onSelect={setSelected}
-        empty="No proposals are available through this event."
-      />
+      {programCatalog.loading && !resolvedEventSlug ? (
+        <Spinner />
+      ) : programCatalog.error && !resolvedEventSlug ? (
+        <ErrorAlert error={programCatalog.error} />
+      ) : resolvedEventSlug ? (
+        <EventProposalsTable
+          endpoint={`/api/v1/events/${encodeURIComponent(resolvedEventSlug)}/proposals`}
+          storageKey={`portal_proposal_filters_${groupId}_${eventId}`}
+          onSelect={setSelected}
+          empty="No proposals are available through this event."
+        />
+      ) : (
+        <p class="text-muted fst-italic mb-0">This proposal program is not available.</p>
+      )}
     </section>
   );
 }

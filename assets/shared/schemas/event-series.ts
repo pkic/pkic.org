@@ -7,6 +7,7 @@ import {
   normalizedEmailSchema,
   tokenSchema,
   trimmedString,
+  utcInstantSchema,
 } from "./api-common";
 import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
@@ -14,6 +15,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpsCapabilityUrlSchema } from "./urls";
 import { eventGroupGrantSchemas } from "./resource-grants";
 import { eventInviteValiditySchema, eventInviteWindowSchema } from "./event-invite-validity";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
@@ -36,6 +38,16 @@ export const EVENT_PROFILE_LABELS: Record<EventProfileKey, string> = {
 export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
 export type EventSourceMode = z.infer<typeof eventSourceModeSchema>;
+
+export const EVENT_VISIBILITIES = ["invitation_only", "group_members", "all_members", "public"] as const;
+export const eventVisibilitySchema = z.enum(EVENT_VISIBILITIES);
+export type EventVisibility = z.infer<typeof eventVisibilitySchema>;
+export const EVENT_VISIBILITY_LABELS = {
+  invitation_only: "Invited participants only",
+  group_members: "Owning and shared group members",
+  all_members: "All members",
+  public: "Public",
+} as const satisfies Record<EventVisibility, string>;
 
 export const EVENT_REGISTRATION_POLICIES = [
   "no_registration",
@@ -63,6 +75,7 @@ export type EventMemberEligibility = z.infer<typeof eventMemberEligibilitySchema
 
 export const eventProfilePolicySchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
+  visibility: eventVisibilitySchema.default("group_members"),
   memberEligibility: eventMemberEligibilitySchema,
   guestPolicy: eventGuestPolicySchema,
 });
@@ -76,7 +89,16 @@ function isValidTimeZone(value: string): boolean {
   }
 }
 
-export const timeZoneSchema = z.string().trim().min(1).max(100).refine(isValidTimeZone, "Unknown IANA time zone");
+export const timeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine(isValidTimeZone, "Unknown IANA time zone")
+  .refine(
+    (value) => value === "UTC" || value.includes("/"),
+    "Use an IANA time zone identifier such as Europe/Amsterdam, not an abbreviation",
+  );
 export const recurrenceRuleSchema = z
   .string()
   .trim()
@@ -96,9 +118,10 @@ export const eventSeriesSchema = z.object({
   eventSlug: z.string(),
   profileKey: eventProfileKeySchema,
   registrationPolicy: eventRegistrationPolicySchema,
+  visibility: eventVisibilitySchema,
   memberEligibility: eventProfilePolicySchema.shape.memberEligibility.optional(),
   guestPolicy: eventGuestPolicySchema.optional(),
-  startsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -129,7 +152,7 @@ export const eventSeriesCreateSchema = z.object({
   eventSlug: z.string().trim().min(1).max(200),
   profileKey: eventProfileKeySchema.default("meeting"),
   policy: eventProfilePolicySchema,
-  startsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -145,17 +168,17 @@ export const eventSeriesUpdateSchema = eventSeriesCreateSchema.omit({ eventSlug:
   // must not silently reset a board meeting or workshop to `meeting`.
   profileKey: eventProfileKeySchema.optional(),
   active: z.boolean().optional(),
-  expectedUpdatedAt: z.iso.datetime(),
+  expectedUpdatedAt: utcInstantSchema,
 });
 
 export const eventSeriesMaterializeSchema = z.object({
-  through: z.iso.datetime(),
+  through: utcInstantSchema,
   maxOccurrences: z.number().int().min(1).max(500).default(200),
 });
 export const eventSeriesMaterializeResponseSchema = z.object({
   created: z.number().int().min(0),
   existing: z.number().int().min(0),
-  through: z.iso.datetime(),
+  through: utcInstantSchema,
 });
 
 export const EVENT_SERIES_SORT_COLUMNS = ["event_name", "next_occurrence_at", "created_at"] as const;
@@ -171,8 +194,8 @@ export type EventOccurrenceStatus = z.infer<typeof eventOccurrenceStatusSchema>;
 export const eventOccurrenceSchema = z.object({
   id: databaseIdSchema,
   seriesId: databaseIdSchema,
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
+  endsAt: utcInstantSchema,
   status: eventOccurrenceStatusSchema,
   locationOverride: z.string().nullable(),
   location: z.string().nullable(),
@@ -186,8 +209,8 @@ export const eventOccurrenceSchema = z.object({
 export type EventOccurrence = z.infer<typeof eventOccurrenceSchema>;
 
 const eventOccurrenceInputSchema = z.object({
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
+  endsAt: utcInstantSchema,
   locationOverride: trimmedString(0, 500).nullable().optional(),
   providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
@@ -199,7 +222,7 @@ export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
   .partial()
   .extend({
     status: eventOccurrenceStatusSchema.optional(),
-    expectedUpdatedAt: z.iso.datetime(),
+    expectedUpdatedAt: utcInstantSchema,
   })
   .refine((value) => !value.startsAt || !value.endsAt || value.endsAt > value.startsAt, {
     message: "Occurrence must end after it starts",
@@ -209,8 +232,8 @@ export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
 export const EVENT_OCCURRENCE_SORT_COLUMNS = ["starts_at", "ends_at", "status"] as const;
 export const eventOccurrencesListQuerySchema = listQuerySchema(EVENT_OCCURRENCE_SORT_COLUMNS).extend({
   status: eventOccurrenceStatusSchema.optional(),
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
+  from: utcInstantSchema.optional(),
+  to: utcInstantSchema.optional(),
 });
 export const eventOccurrencesListResponseSchema = paginatedResponseSchema("occurrences", eventOccurrenceSchema);
 
@@ -258,8 +281,8 @@ export const meetingJoinOccurrenceSchema = z.object({
   id: databaseIdSchema,
   seriesId: databaseIdSchema,
   eventName: z.string(),
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime(),
+  startsAt: utcInstantSchema,
+  endsAt: utcInstantSchema,
   location: z.string().nullable(),
 });
 export const meetingJoinTermSchema = z.object({
@@ -284,31 +307,29 @@ export const meetingJoinResponseSchema = z.object({
   redirectUrl: httpsCapabilityUrlSchema,
 });
 
-export const meetingGuestInvitationBootstrapSchema = z.object({
+export const meetingInvitationVerificationCreateSchema = z.object({
   token: tokenSchema,
-  occurrenceId: databaseIdSchema,
 });
-export const meetingGuestInvitationBootstrapResponseSchema = z.object({
-  challengeId: databaseIdSchema,
-  expiresAt: z.iso.datetime(),
+export const meetingInvitationVerificationCreateResponseSchema = z.object({
+  verificationId: databaseIdSchema,
+  expiresAt: utcInstantSchema,
 });
-export const meetingGuestInvitationVerifySchema = z.object({
-  challengeId: databaseIdSchema,
+export const meetingInvitationVerificationUpdateSchema = z.object({
   code: z
     .string()
     .trim()
     .regex(/^[A-HJ-NP-Z2-9]{8}$/),
 });
-export const meetingGuestInvitationVerifyResponseSchema = z.object({
+export const meetingInvitationVerificationUpdateResponseSchema = z.object({
   occurrenceId: databaseIdSchema,
-  expiresAt: z.iso.datetime(),
+  expiresAt: utcInstantSchema,
 });
 
 export const ATTENDANCE_VERIFICATION_SOURCES = ["microsoft_graph", "cloudflare_meet", "manual"] as const;
 export const attendanceVerificationSourceSchema = z.enum(ATTENDANCE_VERIFICATION_SOURCES);
 export const attendanceVerifySchema = z.object({
   source: attendanceVerificationSourceSchema,
-  verifiedAt: z.iso.datetime().optional(),
+  verifiedAt: utcInstantSchema.optional(),
   note: trimmedString(0, 500).optional(),
 });
 
@@ -339,6 +360,9 @@ export const groupMeetingSeriesParamsSchema = z.object({ groupId: groupReference
 export const eventSeriesParamsSchema = groupMeetingSeriesParamsSchema.extend({ seriesId: databaseIdSchema });
 export const eventOccurrenceParamsSchema = eventSeriesParamsSchema.extend({ occurrenceId: databaseIdSchema });
 export const meetingJoinOccurrenceParamsSchema = z.object({ occurrenceId: databaseIdSchema });
+export const meetingInvitationVerificationParamsSchema = meetingJoinOccurrenceParamsSchema.extend({
+  verificationId: databaseIdSchema,
+});
 export const eventGuestParamsSchema = eventOccurrenceParamsSchema.extend({ guestId: databaseIdSchema });
 export const eventAttendanceParamsSchema = eventOccurrenceParamsSchema.extend({ confirmationId: databaseIdSchema });
 
@@ -355,6 +379,7 @@ export const eventOccurrenceGuestResponseSchema = z.object({ guest: eventOccurre
 export const eventAttendanceResponseSchema = z.object({ confirmation: eventOccurrenceJoinConfirmationSchema });
 
 export const groupMeetingSeriesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List meeting series available through a group",
   description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -366,6 +391,7 @@ export const groupMeetingSeriesListRouteSchema = {
   },
 };
 export const groupMeetingSeriesCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Create a group-owned meeting series",
   request: {
@@ -375,6 +401,7 @@ export const groupMeetingSeriesCreateRouteSchema = {
   responses: { "201": { description: "Meeting series created." } },
 };
 export const eventSeriesUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Update a meeting series through a management group context",
   request: {
@@ -384,6 +411,7 @@ export const eventSeriesUpdateRouteSchema = {
   responses: { "200": { description: "Meeting series updated." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrencesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List occurrences in a meeting series",
   request: { params: eventSeriesParamsSchema, query: eventOccurrencesListQuerySchema },
@@ -394,6 +422,7 @@ export const eventOccurrencesListRouteSchema = {
   },
 };
 export const eventOccurrenceCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Create a meeting occurrence",
   request: {
@@ -403,6 +432,7 @@ export const eventOccurrenceCreateRouteSchema = {
   responses: { "201": { description: "Occurrence created." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Update a meeting occurrence",
   request: {
@@ -412,6 +442,7 @@ export const eventOccurrenceUpdateRouteSchema = {
   responses: { "200": { description: "Occurrence updated." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestInviteRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Invite a guest to one occurrence or explicitly to its series",
   request: {
@@ -421,6 +452,7 @@ export const eventOccurrenceGuestInviteRouteSchema = {
   responses: { "201": { description: "Guest invitation created." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List occurrence-specific and series-wide guests",
   description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
@@ -428,12 +460,14 @@ export const eventOccurrenceGuestsListRouteSchema = {
   responses: { "200": { description: "A bounded guest page." }, ...eventManagementErrorResponses },
 };
 export const eventOccurrenceGuestRevokeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Revoke a meeting guest and every active access capability",
   request: { params: eventGuestParamsSchema },
   responses: { "200": { description: "Guest access revoked." }, ...eventManagementErrorResponses },
 };
 export const eventSeriesCalendarRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Generate the current meeting-series calendar",
   request: { params: eventSeriesParamsSchema },
@@ -444,6 +478,7 @@ export const eventSeriesCalendarRouteSchema = {
   },
 };
 export const eventSeriesMaterializeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Idempotently materialize recurring meeting occurrences",
   description:
@@ -458,6 +493,7 @@ export const eventSeriesMaterializeRouteSchema = {
   },
 };
 export const eventOccurrenceAttendanceListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "List occurrence join confirmations and verified attendance",
   description: "Search, verification filtering, sorting, counting, and pagination are executed in D1.",
@@ -472,6 +508,7 @@ export const eventOccurrenceAttendanceListRouteSchema = {
   },
 };
 export const eventOccurrenceAttendanceVerifyRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Verify attendance separately from join confirmation",
   request: {
@@ -489,6 +526,7 @@ export const eventOccurrenceAttendanceVerifyRouteSchema = {
   },
 };
 export const meetingJoinLandingRouteSchema = {
+  ...requiresSession(),
   tags: ["Meetings"],
   summary: "Inspect a meeting occurrence through the authenticated attendee identity",
   request: { params: meetingJoinOccurrenceParamsSchema },
@@ -502,6 +540,7 @@ export const meetingJoinLandingRouteSchema = {
   },
 };
 export const meetingJoinConfirmRouteSchema = {
+  ...requiresSession(),
   tags: ["Meetings"],
   summary: "Intentionally confirm meeting entry and obtain the provider redirect",
   request: {
@@ -519,16 +558,18 @@ export const meetingJoinConfirmRouteSchema = {
   },
 };
 
-export const meetingGuestInvitationBootstrapRouteSchema = {
+export const meetingInvitationVerificationCreateRouteSchema = {
+  ...publicOperation(),
   tags: ["Meetings"],
   summary: "Start browser-bound verification for an invited meeting guest",
   request: {
-    body: { required: true, content: { "application/json": { schema: meetingGuestInvitationBootstrapSchema } } },
+    params: meetingJoinOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingInvitationVerificationCreateSchema } } },
   },
   responses: {
     "202": {
       description: "A one-time verification code was sent to the invited address.",
-      content: { "application/json": { schema: meetingGuestInvitationBootstrapResponseSchema } },
+      content: { "application/json": { schema: meetingInvitationVerificationCreateResponseSchema } },
     },
     "404": jsonErrorResponse("The invitation is invalid, expired, or no longer eligible."),
     "429": jsonErrorResponse("A verification code was requested too recently."),
@@ -536,16 +577,18 @@ export const meetingGuestInvitationBootstrapRouteSchema = {
   },
 };
 
-export const meetingGuestInvitationVerifyRouteSchema = {
+export const meetingInvitationVerificationUpdateRouteSchema = {
+  ...publicOperation(),
   tags: ["Meetings"],
   summary: "Exchange a mailbox code and browser challenge for a guest session",
   request: {
-    body: { required: true, content: { "application/json": { schema: meetingGuestInvitationVerifySchema } } },
+    params: meetingInvitationVerificationParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingInvitationVerificationUpdateSchema } } },
   },
   responses: {
     "200": {
       description: "Guest session established.",
-      content: { "application/json": { schema: meetingGuestInvitationVerifyResponseSchema } },
+      content: { "application/json": { schema: meetingInvitationVerificationUpdateResponseSchema } },
     },
     "401": jsonErrorResponse("The code or browser challenge is invalid."),
     "429": jsonErrorResponse("Too many verification attempts were made from this client."),

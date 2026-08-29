@@ -3,12 +3,9 @@ import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
-import {
-  adminFormSubmissionSchema,
-  FORM_SUBMISSIONS_SORT_COLUMNS,
-} from "../../../../assets/shared/schemas/admin-forms";
+import { formSubmissionSchema, FORM_SUBMISSIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/form-management";
 import type { DatabaseLike } from "../../types";
-import type { AdminSubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
+import type { SubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
 import {
   MERGED_SUBMISSION_COLUMNS,
   resolveFormSubmissionPopulation,
@@ -23,7 +20,7 @@ interface AnswerRow {
   data_json: string | null;
 }
 
-function submitterFromRow(row: MergedSubmissionRow): AdminSubmissionPayload["submitter"] {
+function submitterFromRow(row: MergedSubmissionRow): SubmissionPayload["submitter"] {
   if (!row.user_id) return null;
   return {
     id: row.user_id,
@@ -35,10 +32,7 @@ function submitterFromRow(row: MergedSubmissionRow): AdminSubmissionPayload["sub
 }
 
 /** Loads native form answers for only the already bounded page of rows. */
-async function attachSubmissionAnswers(
-  db: DatabaseLike,
-  rows: MergedSubmissionRow[],
-): Promise<AdminSubmissionPayload[]> {
+async function attachSubmissionAnswers(db: DatabaseLike, rows: MergedSubmissionRow[]): Promise<SubmissionPayload[]> {
   const submissionIds = rows.filter((row) => row.source === "submission").map((row) => row.source_id);
   const submissionFilter = buildD1JsonMembershipFilter("a.submission_id", submissionIds);
   const answerRows = submissionIds.length
@@ -101,7 +95,7 @@ export async function listFormSubmissions(
   const population = await resolveFormSubmissionPopulation(db, params);
   const page = await queryPage<MergedSubmissionRow>(db, buildFormSubmissionsPageQuery(population, params));
   const submissions = page.rows.length
-    ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => adminFormSubmissionSchema.parse(submission))
+    ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => formSubmissionSchema.parse(submission))
     : [];
 
   return {

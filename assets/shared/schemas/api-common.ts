@@ -53,6 +53,15 @@ export const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const tokenCharactersPattern = /^[A-Za-z0-9_.-]+$/;
 export const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
 
+/**
+ * Canonical wire/storage representation for an instant.
+ *
+ * Offsets and omitted fractional seconds are intentionally rejected: every
+ * backend and client receives the same millisecond-precision UTC value and
+ * localization remains a presentation-boundary concern.
+ */
+export const utcInstantSchema = z.iso.datetime({ precision: 3 });
+
 export function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }

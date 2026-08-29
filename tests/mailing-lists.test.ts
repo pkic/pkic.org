@@ -59,17 +59,11 @@ describe("Managed mailing list configuration", () => {
           ? { body: JSON.stringify({ email: "retired@example.test", label: "Retired", purpose: "custom" }) }
           : {}),
       });
-      expect(response.status, `${method} ${path}`).toBe(503);
-      await expect(response.json(), `${method} ${path}`).resolves.toMatchObject({
-        error: { code: "ADMIN_ROUTE_POLICY_MISSING" },
-      });
+      expect(response.status, `${method} ${path}`).toBe(404);
     }
 
     const staleSyncRoute = await call(adminToken, "/api/v1/admin/mailing-lists/sync", { method: "POST" });
-    expect(staleSyncRoute.status).toBe(503);
-    await expect(staleSyncRoute.json()).resolves.toMatchObject({
-      error: { code: "ADMIN_ROUTE_POLICY_MISSING" },
-    });
+    expect(staleSyncRoute.status).toBe(404);
   });
   it("uses the independently configured mailing-list category audiences", async () => {
     const votingCategoryEmails = await resolveAutoSyncListEmails(env.DB as any, "A");

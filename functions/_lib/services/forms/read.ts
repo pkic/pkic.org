@@ -1,5 +1,5 @@
 import { all, first } from "../../db/queries";
-import { AppError } from "../../errors";
+import { AppError, isAppError } from "../../errors";
 import { parseJsonSafe } from "../../utils/json";
 import type { DatabaseLike } from "../../types";
 import type {
@@ -165,30 +165,76 @@ export async function getManagedFormWithFields(
   return { form, fields: await loadFormFieldRows(db, form.id, true) };
 }
 
+/** Resolve one form through its event ownership or an unowned event placement. */
+export async function requireManagedEventForm(
+  db: DatabaseLike,
+  eventId: string,
+  formKey: string,
+  options: { ownedOnly?: boolean } = {},
+): Promise<ManagedFormWithFields> {
+  const aggregate = await getManagedFormWithFields(db, formKey);
+  if (!aggregate) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
+  const related = await first<{ found: number }>(
+    db,
+    `SELECT 1 AS found
+       FROM forms form
+      WHERE form.id = ?
+        AND (
+          (form.scope_type = 'event' AND form.scope_ref = ?)
+          OR (? = 0 AND EXISTS (
+            SELECT 1
+              FROM form_placements placement
+             WHERE placement.form_id = form.id
+               AND placement.owner_group_id IS NULL
+               AND placement.context_type = 'event'
+               AND placement.context_ref = ?
+          ))
+        )
+      LIMIT 1`,
+    [aggregate.form.id, eventId, options.ownedOnly ? 1 : 0, eventId],
+  );
+  if (!related) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found for this event`);
+  return aggregate;
+}
+
+type EventPlacementOwnershipPolicy = "legacy" | "portal_owner";
+
+type PlacedEventFormRow = FormRow & {
+  updated_at: string;
+  placement_id: string;
+  placement_owner_group_id: string | null;
+  event_owner_group_id: string | null;
+};
+
+/**
+ * Finds a currently open exact placement. Hugo compatibility may use any
+ * historic event placement; portal events must use the event owner's group
+ * form and fail closed for malformed records.
+ */
 async function findPlacedEventForm(
   db: DatabaseLike,
   eventId: string,
   purpose: FormPurpose,
   key?: string,
+  ownership: EventPlacementOwnershipPolicy = "legacy",
 ): Promise<{ form: FormRow & { updated_at: string }; placement: FormPlacement } | null> {
-  const rows = await all<
-    FormRow & {
-      updated_at: string;
-      placement_id: string;
-    }
-  >(
+  const rows = await all<PlacedEventFormRow>(
     db,
     `SELECT ${FORM_COLUMNS.split(", ")
       .map((column) => `f.${column}`)
       .join(", ")},
-            f.updated_at, fp.id AS placement_id
+            f.updated_at, fp.id AS placement_id,
+            fp.owner_group_id AS placement_owner_group_id,
+            event.owner_group_id AS event_owner_group_id
      FROM form_placements fp
      JOIN forms f ON f.id = fp.form_id
+     JOIN events event ON event.id = fp.context_ref
      WHERE fp.context_type = 'event'
        AND fp.context_ref = ?
        AND fp.active = 1
        AND f.status = 'active'
        AND f.purpose = ?
+       ${ownership === "portal_owner" ? "AND event.source_mode = 'portal'" : ""}
        ${purpose === "event_registration" || purpose === "proposal_submission" ? "AND fp.audience = ?" : ""}
        ${key ? "AND f.key = ?" : ""}
        AND (fp.opens_at IS NULL OR unixepoch(fp.opens_at) <= unixepoch())
@@ -207,6 +253,15 @@ async function findPlacedEventForm(
   }
   const row = rows[0];
   if (!row) return null;
+  if (
+    ownership === "portal_owner" &&
+    (!row.event_owner_group_id ||
+      row.placement_owner_group_id !== row.event_owner_group_id ||
+      row.scope_type !== "community" ||
+      row.scope_ref !== row.event_owner_group_id)
+  ) {
+    return null;
+  }
   const placement = await findActiveFormPlacement(db, row.id, { placementId: row.placement_id });
   return placement ? { form: row, placement } : null;
 }
@@ -276,9 +331,10 @@ async function findActiveForm(
 async function loadFormDefinition(
   db: DatabaseLike,
   resolved: { form: FormRow & { updated_at: string }; placement: FormPlacement | null } | null,
+  options: { includeArchived?: boolean } = {},
 ): Promise<ActiveFormDefinition | null> {
   if (!resolved) return null;
-  const fields = await loadFormFieldRows(db, resolved.form.id);
+  const fields = await loadFormFieldRows(db, resolved.form.id, options.includeArchived ?? false);
   const catalogs = await resolveFormFieldOptionCatalogs(db, fields);
 
   return {
@@ -300,7 +356,7 @@ async function loadFormDefinition(
 export async function getFormDefinitionByPlacement(
   db: DatabaseLike,
   placementId: string,
-  options: { acceptingResponses?: boolean } = {},
+  options: { acceptingResponses?: boolean; includeArchived?: boolean } = {},
 ): Promise<ActiveFormDefinition | null> {
   const row = await first<FormRow & { updated_at: string; placement_id: string }>(
     db,
@@ -321,7 +377,7 @@ export async function getFormDefinitionByPlacement(
   const placement = options.acceptingResponses
     ? await findActiveFormPlacement(db, row.id, { placementId: row.placement_id })
     : await findFormPlacement(db, row.id, { placementId: row.placement_id });
-  return loadFormDefinition(db, placement ? { form: row, placement } : null);
+  return loadFormDefinition(db, placement ? { form: row, placement } : null, options);
 }
 
 export async function getActiveFormByPurpose(
@@ -346,24 +402,72 @@ export async function getActiveEventFormByPurpose(
   return loadFormDefinition(db, await findPlacedEventForm(db, eventId, purpose));
 }
 
+/**
+ * Portal event forms are owned by the event's owning group. Do not treat a
+ * legacy event/global placement as equivalent merely because its event ID
+ * matches: that would let malformed or historical data become a live portal
+ * form. Such records fail closed and are repaired through group management.
+ */
+export async function getActivePortalEventFormByPurpose(
+  db: DatabaseLike,
+  eventId: string,
+  purpose: FormPurpose,
+): Promise<ActiveFormDefinition | null> {
+  return loadFormDefinition(db, await findPlacedEventForm(db, eventId, purpose, undefined, "portal_owner"));
+}
+
 export type EventFormResolution = "public_fallback" | "event_placement";
+
+/** Minimum event projection required to choose the public compatibility policy. */
+export interface EventFormResolutionEvent {
+  id: string;
+  source_mode: string | null;
+}
+
+/** Normalizes the nullable database source column before selecting a public flow policy. */
+export function toEventFormResolutionEvent(
+  event: Pick<EventFormResolutionEvent, "id"> & { source_mode: string | null | undefined },
+): EventFormResolutionEvent {
+  return { id: event.id, source_mode: event.source_mode ?? null };
+}
+
+/**
+ * Portal-created events own their event-flow configuration in D1 and must
+ * never inherit an older event-settings link or installation form. Hugo and
+ * integration records retain the explicit compatibility resolver until their
+ * authored configuration is migrated.
+ */
+export function eventFormResolutionFor(event: EventFormResolutionEvent): EventFormResolution {
+  return event.source_mode === "portal" ? "event_placement" : "public_fallback";
+}
 
 /** Selects the explicit compatibility policy used by each registration adapter. */
 export function getActiveFormForResolution(
   db: DatabaseLike,
   eventId: string,
   purpose: FormPurpose,
-  resolution: EventFormResolution = "public_fallback",
+  resolution: EventFormResolution,
 ): Promise<ActiveFormDefinition | null> {
   return resolution === "event_placement"
     ? getActiveEventFormByPurpose(db, eventId, purpose)
     : getActiveFormByPurpose(db, eventId, purpose);
 }
 
+/** Central event-aware resolver for every public and self-service event flow. */
+export function getActiveFormForEvent(
+  db: DatabaseLike,
+  event: EventFormResolutionEvent,
+  purpose: FormPurpose,
+): Promise<ActiveFormDefinition | null> {
+  return event.source_mode === "portal"
+    ? getActivePortalEventFormByPurpose(db, event.id, purpose)
+    : getActiveFormForResolution(db, event.id, purpose, eventFormResolutionFor(event));
+}
+
 /**
- * Resolves the active global (non-event-scoped) form for a given `forms.key`
- * — used by forms like the membership application that aren't tied
- * to an event, so the `findActiveForm` event-scoping logic above doesn't apply.
+ * Resolves an active global form only when it has exactly one active
+ * installation placement. Global response flows must never create answers
+ * without a normalized response-set attribution.
  */
 export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {
   const form = await first<FormRow & { updated_at: string }>(
@@ -375,9 +479,16 @@ export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise
     [key],
   );
   if (!form) return null;
-  const placement = await findActiveFormPlacement(db, form.id, {
-    contextType: "installation",
-    contextRef: null,
-  });
+  let placement: FormPlacement | null;
+  try {
+    placement = await findActiveFormPlacement(db, form.id, {
+      contextType: "installation",
+      contextRef: null,
+    });
+  } catch (error) {
+    if (isAppError(error) && error.code === "FORM_PLACEMENT_REQUIRED") return null;
+    throw error;
+  }
+  if (!placement) return null;
   return loadFormDefinition(db, { form, placement });
 }

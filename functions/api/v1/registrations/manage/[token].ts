@@ -32,7 +32,7 @@ async function handleRegistrationManagePatch(
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
     const { registration: current, isJwt, actorUserId } = resolved;
-    let authenticatedActor: { kind: "admin" | "member"; id: string } | null = null;
+    let authenticatedActor: { kind: "user"; id: string } | null = null;
     if (!isJwt && hasAuthenticatedSessionCookie(c.req.raw)) {
       try {
         const actor = await requireAnyActorFromRequest(c.env.DB, c.req.raw, c.env);

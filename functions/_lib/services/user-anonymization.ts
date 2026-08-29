@@ -51,9 +51,6 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
       .prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
       .bind(at, user.id),
     authorizedDb
-      .prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
-      .bind(at, user.id),
-    authorizedDb
       .prepare(
         `UPDATE registrations
             SET confirmation_link_secret = NULL,

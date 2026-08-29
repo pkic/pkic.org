@@ -10,15 +10,8 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
 import { groupLabelSchema } from "./groups";
-import {
-  staffApplicationDocumentSchema,
-  staffApplicationDocumentsListResponseSchema,
-  applicationDocumentsListQuerySchema,
-} from "./application-documents";
-
-export { staffApplicationDocumentSchema, staffApplicationDocumentsListResponseSchema } from "./application-documents";
-
-/** Allowlisted sort columns for GET /api/v1/system/membership-applications — see listMembershipApplications. */
+import { requiresPermissions } from "./route-contract";
+/** Allowlisted sort columns for GET /api/v1/members/applications — see listMembershipApplications. */
 export const MEMBERSHIP_APPLICATIONS_SORT_COLUMNS = [
   "applicant_name",
   "organization_name",
@@ -104,7 +97,7 @@ export const applicationStageTransitionResponseSchema = z.object({
 });
 export const applicationCommunicationCreateResponseSchema = z.object({ id: databaseIdSchema, createdAt: z.string() });
 export const applicationNoteCreateResponseSchema = applicationCommunicationCreateResponseSchema;
-export const staffEcDecisionCreateResponseSchema = membershipApplicationEcDecisionSchema;
+export const ecDecisionRecordResponseSchema = membershipApplicationEcDecisionSchema;
 export const applicationApproveResponseSchema = z.object({
   applicationId: databaseIdSchema,
   memberId: databaseIdSchema,
@@ -117,9 +110,9 @@ export type MembershipApplicationEvent = z.infer<typeof membershipApplicationEve
 export type MembershipApplicationCommunication = z.infer<typeof membershipApplicationCommunicationSchema>;
 export type MembershipApplicationConcern = z.infer<typeof membershipApplicationConcernSchema>;
 export type MembershipApplicationEcDecision = z.infer<typeof membershipApplicationEcDecisionSchema>;
-export type StaffApplicationDocument = z.infer<typeof staffApplicationDocumentSchema>;
 
 export const membershipApplicationsListRouteSchema = {
+  ...requiresPermissions("membership:read"),
   tags: ["Membership"],
   summary: "List membership applications (staff)",
   request: { query: membershipApplicationsListQuerySchema },
@@ -134,6 +127,7 @@ export const membershipApplicationsListRouteSchema = {
 };
 
 export const membershipApplicationDetailRouteSchema = {
+  ...requiresPermissions("membership:read"),
   tags: ["Membership"],
   summary: "Get a membership application's full detail (staff)",
   request: { params: z.object({ id: z.string() }) },
@@ -158,6 +152,7 @@ export const applicationStageTransitionSchema = z.object({
 });
 
 export const applicationStageTransitionRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Transition a membership application's stage",
   request: {
@@ -182,6 +177,7 @@ export const applicationCommunicationCreateSchema = z.object({
 });
 
 export const applicationCommunicationCreateRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Send a communication to an applicant",
   description: "Queues an email via the existing email_outbox and records it on the application's staff-only timeline.",
@@ -203,6 +199,7 @@ export const applicationNoteCreateSchema = z.object({
 });
 
 export const applicationNoteCreateRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Add an internal note to an application",
   description: "Never emailed; visible only to staff/processors.",
@@ -219,23 +216,26 @@ export const applicationNoteCreateRouteSchema = {
   },
 };
 
-export const staffEcDecisionCreateSchema = ecDecisionCreateSchema.safeExtend({
-  ecMemberUserId: databaseIdSchema,
+export const ecDecisionRecordSchema = ecDecisionCreateSchema.safeExtend({
+  ecMemberUserId: databaseIdSchema.optional(),
 });
 
-export const staffEcDecisionCreateRouteSchema = {
+export const ecDecisionRecordRouteSchema = {
   tags: ["Membership"],
-  summary: "Record an EC decision on behalf of an EC member (staff override)",
-  description: "Fallback for exceptional access cases; written to audit_log with actor and reason.",
+  "x-pkic-auth": { required: true },
+  summary: "Record an Executive Council decision",
+  description:
+    "An Executive Council member records their own decision by omitting ecMemberUserId. Staff with membership:approve may name an EC member only as an exceptional override. Both paths use the same application decision resource and audit trail.",
   request: {
     params: z.object({ id: z.string() }),
-    body: { content: { "application/json": { schema: staffEcDecisionCreateSchema } }, required: true },
+    body: { content: { "application/json": { schema: ecDecisionRecordSchema } }, required: true },
   },
   responses: {
     "201": {
       description: "Decision recorded.",
-      content: { "application/json": { schema: staffEcDecisionCreateResponseSchema } },
+      content: { "application/json": { schema: ecDecisionRecordResponseSchema } },
     },
+    "403": { description: "EC membership or membership:approve permission required." },
     "404": { description: "Application not found." },
     "409": { description: "Application is not currently in EC review." },
     "400": { description: "Missing required reason for a decline." },
@@ -243,6 +243,7 @@ export const staffEcDecisionCreateRouteSchema = {
 };
 
 export const applicationApproveRouteSchema = {
+  ...requiresPermissions("membership:approve"),
   tags: ["Membership"],
   summary: "Approve an application and run post-approval onboarding",
   request: { params: z.object({ id: z.string() }) },
@@ -293,6 +294,7 @@ export const applicationUpdateSchema = z
   );
 
 export const applicationUpdateRouteSchema = {
+  ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Correct an applicant's submitted fields (staff, does not transition stage)",
   description:
@@ -306,21 +308,5 @@ export const applicationUpdateRouteSchema = {
     "404": { description: "Application not found." },
     "409": { description: "The application changed concurrently or the corrected organization domain is unavailable." },
     "422": { description: "Invalid field values." },
-  },
-};
-
-export const staffApplicationDocumentsListRouteSchema = {
-  tags: ["Membership"],
-  summary: "List all documents uploaded for an application (staff)",
-  request: {
-    params: z.object({ id: databaseIdSchema }),
-    query: applicationDocumentsListQuerySchema,
-  },
-  responses: {
-    "200": {
-      description: "Documents.",
-      content: { "application/json": { schema: staffApplicationDocumentsListResponseSchema } },
-    },
-    "404": { description: "Application not found." },
   },
 };

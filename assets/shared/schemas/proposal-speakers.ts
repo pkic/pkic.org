@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { successResponseSchema } from "./api-common";
+import { successResponseSchema, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import {
   MAX_PROPOSAL_PARTICIPANTS,
@@ -14,7 +14,7 @@ export const proposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
   declinedAt: z.string().nullable(),
   declineReason: z.string().nullable(),
   termsAcceptedAt: z.string().nullable(),
-  inviteExpiresAt: z.iso.datetime().nullable(),
+  inviteExpiresAt: utcInstantSchema.nullable(),
   addedAt: z.string(),
   biography: z.string().nullable(),
   profileComplete: z.boolean(),
@@ -48,6 +48,9 @@ export const proposalSpeakerPatchResponseSchema = successResponseSchema.extend({
 export const proposalSpeakerReminderResponseSchema = successResponseSchema;
 export const proposalSpeakerRemindersResponseSchema = successResponseSchema.extend({
   queued: z.number().int().nonnegative(),
+});
+export const proposalSpeakerReminderRequestSchema = z.object({
+  kind: z.enum(["profile", "presentation"]),
 });
 
 export type ProposalSpeakerPatch = z.infer<typeof proposalSpeakerPatchSchema>;

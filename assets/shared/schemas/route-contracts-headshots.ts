@@ -88,14 +88,15 @@ const proposalSpeakerHeadshotParamsSchema = proposalManageTokenParamsSchema;
 const proposerManagedSpeakerHeadshotParamsSchema = proposalManageTokenParamsSchema.extend({
   userId: databaseIdSchema,
 });
-const adminProposalSpeakerHeadshotParamsSchema = proposalSpeakerIdParamsSchema;
+const managedProposalSpeakerHeadshotParamsSchema = proposalSpeakerIdParamsSchema;
 
 type HeadshotParamsSchema =
   | typeof proposalSpeakerHeadshotParamsSchema
   | typeof proposerManagedSpeakerHeadshotParamsSchema
-  | typeof adminProposalSpeakerHeadshotParamsSchema;
+  | typeof managedProposalSpeakerHeadshotParamsSchema;
 type HeadshotRouteOptions = {
   tags?: string[];
+  auth?: { required: true; scopes: readonly string[] };
   accessResponses?: Partial<Record<"401" | "403", { description: string }>>;
   notFoundDescription?: string;
 };
@@ -112,6 +113,7 @@ function privateHeadshotGetRouteSchema<TParams extends HeadshotParamsSchema>(
   return {
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
+    ...(options.auth ? { "x-pkic-auth": options.auth } : {}),
     request: { params },
     responses: {
       "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
@@ -130,6 +132,7 @@ function headshotPutRouteSchema<TParams extends HeadshotParamsSchema>(
   return {
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
+    ...(options.auth ? { "x-pkic-auth": options.auth } : {}),
     request: {
       params,
       body: { content: headshotUploadRequestContent, required: true },
@@ -154,6 +157,7 @@ function headshotDeleteRouteSchema<TParams extends HeadshotParamsSchema>(
   return {
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
+    ...(options.auth ? { "x-pkic-auth": options.auth } : {}),
     request: { params },
     responses: {
       "200": {
@@ -214,49 +218,58 @@ export const userHeadshotDeleteRouteSchema = {
   },
 };
 
-const adminReviewResponses = {
+const proposalReviewResponses = {
   "401": { description: "Staff authorization required." },
   "403": { description: "Proposal review permission required." },
 };
-const adminManageResponses = {
+const proposalManageResponses = {
   "401": { description: "Staff authorization required." },
   "403": { description: "Proposal management permission required." },
 };
-const adminProposalHeadshotOptions = {
-  tags: ["Admin proposals", "Headshots"],
-  accessResponses: adminManageResponses,
+const proposalManagementHeadshotOptions = {
+  tags: ["Proposal management", "Headshots"],
+  auth: { required: true, scopes: ["proposals:manage"] } as const,
+  accessResponses: proposalManageResponses,
   notFoundDescription: "Proposal speaker not found.",
 };
 
-export const adminProposalSpeakerHeadshotGetRouteSchema = privateHeadshotGetRouteSchema(
+export const proposalManagementSpeakerHeadshotGetRouteSchema = privateHeadshotGetRouteSchema(
   "Download a proposal-scoped speaker headshot",
-  adminProposalSpeakerHeadshotParamsSchema,
+  managedProposalSpeakerHeadshotParamsSchema,
   {
-    tags: adminProposalHeadshotOptions.tags,
-    accessResponses: adminReviewResponses,
+    tags: proposalManagementHeadshotOptions.tags,
+    auth: { required: true, scopes: ["proposals:score"] } as const,
+    accessResponses: proposalReviewResponses,
     notFoundDescription: "Proposal speaker or headshot not found.",
   },
 );
 
-export const adminProposalSpeakerHeadshotPutRouteSchema = headshotPutRouteSchema(
+export const proposalManagementSpeakerHeadshotPutRouteSchema = headshotPutRouteSchema(
   "Upload or replace a proposal-scoped speaker headshot",
-  adminProposalSpeakerHeadshotParamsSchema,
-  adminProposalHeadshotOptions,
+  managedProposalSpeakerHeadshotParamsSchema,
+  proposalManagementHeadshotOptions,
 );
 
-export const adminProposalSpeakerHeadshotDeleteRouteSchema = headshotDeleteRouteSchema(
+export const proposalManagementSpeakerHeadshotDeleteRouteSchema = headshotDeleteRouteSchema(
   "Delete a proposal-scoped speaker headshot",
-  adminProposalSpeakerHeadshotParamsSchema,
-  adminProposalHeadshotOptions,
+  managedProposalSpeakerHeadshotParamsSchema,
+  proposalManagementHeadshotOptions,
 );
 
-export const adminProposalSpeakerGravatarPostRouteSchema = {
-  tags: ["Admin proposals", "Headshots"],
+export const proposalManagementSpeakerGravatarPostRouteSchema = {
+  tags: ["Proposal management", "Headshots"],
   summary: "Import a proposal-scoped speaker Gravatar",
-  request: { params: adminProposalSpeakerHeadshotParamsSchema },
+  "x-pkic-auth": { required: true, scopes: ["proposals:manage"] },
+  request: {
+    params: managedProposalSpeakerHeadshotParamsSchema,
+    body: {
+      content: { "application/json": { schema: z.object({ source: z.literal("gravatar") }) } },
+      required: true,
+    },
+  },
   responses: {
     "200": { ...headshotUploadSuccessResponse, description: "Gravatar imported successfully." },
-    ...adminManageResponses,
+    ...proposalManageResponses,
     "404": { description: "Proposal speaker or Gravatar not found." },
     "503": { description: "Uploads bucket is not configured." },
   },

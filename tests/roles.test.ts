@@ -106,7 +106,7 @@ describe("roles (Built-in and custom roles)", () => {
     await assignRole(staffUserId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-multi-role-token");
 
-    const membershipCheck = await call(staffToken, "/api/v1/system/access-control/roles");
+    const membershipCheck = await call(staffToken, "/api/v1/roles");
     // membership_processor alone doesn't grant access:grant either — expect 403.
     expect(membershipCheck.status).toBe(403);
 
@@ -125,7 +125,7 @@ describe("roles (Built-in and custom roles)", () => {
       .run();
     await assignRole(staffUserId, "role-test-second", adminId);
 
-    const bothRolesCheck = await call(staffToken, "/api/v1/system/access-control/roles");
+    const bothRolesCheck = await call(staffToken, "/api/v1/roles");
     expect(bothRolesCheck.status).toBe(200);
   });
 
@@ -133,7 +133,7 @@ describe("roles (Built-in and custom roles)", () => {
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-union-token");
 
     // No role, no grant yet -> denied.
-    expect((await call(staffToken, "/api/v1/system/access-control/grants")).status).toBe(401);
+    expect((await call(staffToken, "/api/v1/permissions/grants")).status).toBe(401);
 
     // An individual permission_grants override is enough on its own, with no role assigned.
     await env.DB.prepare(
@@ -143,7 +143,7 @@ describe("roles (Built-in and custom roles)", () => {
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
 
-    expect((await call(staffToken, "/api/v1/system/access-control/grants")).status).toBe(200);
+    expect((await call(staffToken, "/api/v1/permissions/grants")).status).toBe(200);
   });
 
   it("a user_roles record with a context_id only grants access to that specific resource", async () => {
@@ -154,8 +154,8 @@ describe("roles (Built-in and custom roles)", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-context-role-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventBSlug}`)).status).toBe(404);
   });
 
   it("keeps authorization with the same user when an email changes and does not transfer it on address reuse", async () => {
@@ -176,8 +176,8 @@ describe("roles (Built-in and custom roles)", () => {
     const replacementUserId = await insertUser("staff-roles@example.test");
     const replacementToken = await createAdminSession(env.DB, replacementUserId, "replacement-address-token");
 
-    expect((await call(originalToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(replacementToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(401);
+    expect((await call(originalToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(replacementToken, `/api/v1/events/${eventASlug}`)).status).toBe(401);
   });
 
   it("expired user_roles records are not honored", async () => {
@@ -200,7 +200,7 @@ describe("roles (Built-in and custom roles)", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-expired-role-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
   });
 
   it("revoked user_roles records are not honored", async () => {
@@ -214,15 +214,15 @@ describe("roles (Built-in and custom roles)", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-revoked-role-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
   });
 
   it("admin role user can access all endpoints; membership_processor role user cannot access event management endpoints", async () => {
     await assignRole(staffUserId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-processor-token");
 
-    expect((await call(adminToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(403);
+    expect((await call(adminToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
   });
 
   it("event_organizer scoped to event A cannot access event B management endpoints", async () => {
@@ -233,8 +233,8 @@ describe("roles (Built-in and custom roles)", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-organizer-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventBSlug}`)).status).toBe(404);
     void eventBId;
   });
 
@@ -246,16 +246,16 @@ describe("roles (Built-in and custom roles)", () => {
     });
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-pc-token");
 
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}/proposals`)).status).toBe(200);
-    expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}/proposals`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}/proposals`)).status).toBe(200);
+    expect((await call(staffToken, `/api/v1/events/${eventBSlug}/proposals`)).status).toBe(403);
 
     // A program_committee grant does not extend to general event management
     // (registrations) outside proposals/agenda — see P8's persona description.
-    expect((await call(staffToken, `/api/v1/admin/events/${eventASlug}/registrations`)).status).toBe(403);
+    expect((await call(staffToken, `/api/v1/events/${eventASlug}/registrations`)).status).toBe(403);
   });
 
   it("creating a role with a duplicate name returns 409", async () => {
-    const response = await call(adminToken, "/api/v1/system/access-control/roles", {
+    const response = await call(adminToken, "/api/v1/roles", {
       method: "POST",
       body: JSON.stringify({ name: "admin", permissions: [] }),
     });
@@ -264,12 +264,12 @@ describe("roles (Built-in and custom roles)", () => {
 
   it("system roles cannot be deleted; custom roles can be deleted if not assigned to any user", async () => {
     const systemRole = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'admin'");
-    const deleteSystem = await call(adminToken, `/api/v1/system/access-control/roles/${systemRole[0].id}`, {
+    const deleteSystem = await call(adminToken, `/api/v1/roles/${systemRole[0].id}`, {
       method: "DELETE",
     });
     expect(deleteSystem.status).toBe(409);
 
-    const createResponse = await call(adminToken, "/api/v1/system/access-control/roles", {
+    const createResponse = await call(adminToken, "/api/v1/roles", {
       method: "POST",
       body: JSON.stringify({
         name: "custom_reviewer",
@@ -279,7 +279,7 @@ describe("roles (Built-in and custom roles)", () => {
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { role: { id: string } };
 
-    const deleteCustom = await call(adminToken, `/api/v1/system/access-control/roles/${created.role.id}`, {
+    const deleteCustom = await call(adminToken, `/api/v1/roles/${created.role.id}`, {
       method: "DELETE",
     });
     expect(deleteCustom.status).toBe(200);
@@ -289,7 +289,7 @@ describe("roles (Built-in and custom roles)", () => {
   });
 
   it("a custom role with assignment history cannot be deleted, including after revocation", async () => {
-    const createResponse = await call(adminToken, "/api/v1/system/access-control/roles", {
+    const createResponse = await call(adminToken, "/api/v1/roles", {
       method: "POST",
       body: JSON.stringify({
         name: "custom_in_use",
@@ -299,7 +299,7 @@ describe("roles (Built-in and custom roles)", () => {
     const created = (await createResponse.json()) as { role: { id: string } };
     await assignRole(staffUserId, created.role.id, adminId);
 
-    const deleteResponse = await call(adminToken, `/api/v1/system/access-control/roles/${created.role.id}`, {
+    const deleteResponse = await call(adminToken, `/api/v1/roles/${created.role.id}`, {
       method: "DELETE",
     });
     expect(deleteResponse.status).toBe(409);
@@ -307,7 +307,7 @@ describe("roles (Built-in and custom roles)", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE role_id = ?")
       .bind(created.role.id)
       .run();
-    const deleteAfterRevocation = await call(adminToken, `/api/v1/system/access-control/roles/${created.role.id}`, {
+    const deleteAfterRevocation = await call(adminToken, `/api/v1/roles/${created.role.id}`, {
       method: "DELETE",
     });
     expect(deleteAfterRevocation.status).toBe(409);
@@ -319,7 +319,7 @@ describe("roles (Built-in and custom roles)", () => {
   // ── Consolidated migration 0035: canonical group leadership roles ───────
 
   it("seeds group deputy lead with the same permission bundle as group lead", async () => {
-    const response = await call(adminToken, "/api/v1/system/access-control/roles");
+    const response = await call(adminToken, "/api/v1/roles");
     const body = (await response.json()) as {
       roles: Array<{
         id: string;
@@ -337,7 +337,7 @@ describe("roles (Built-in and custom roles)", () => {
   });
 
   it("does not seed legacy forum or working-group-specific leadership roles", async () => {
-    const response = await call(adminToken, "/api/v1/system/access-control/roles");
+    const response = await call(adminToken, "/api/v1/roles");
     const body = (await response.json()) as {
       roles: Array<{
         id: string;
@@ -353,8 +353,8 @@ describe("roles (Built-in and custom roles)", () => {
 
   // ── P6M-P2-07: `data.query`-driven sort + real pagination ────────────────
 
-  it("GET /api/v1/system/access-control/roles honors a valid ?sort= (resolved from data.query, not a second URL parse)", async () => {
-    const ascending = await call(adminToken, "/api/v1/system/access-control/roles?sort=name");
+  it("GET /api/v1/roles honors a valid ?sort= (resolved from data.query, not a second URL parse)", async () => {
+    const ascending = await call(adminToken, "/api/v1/roles?sort=name");
     expect(ascending.status).toBe(200);
     const ascendingBody = (await ascending.json()) as {
       roles: Array<{ name: string }>;
@@ -362,7 +362,7 @@ describe("roles (Built-in and custom roles)", () => {
     const ascendingNames = ascendingBody.roles.map((r) => r.name);
     expect(ascendingNames).toEqual([...ascendingNames].sort());
 
-    const descending = await call(adminToken, "/api/v1/system/access-control/roles?sort=-name");
+    const descending = await call(adminToken, "/api/v1/roles?sort=-name");
     expect(descending.status).toBe(200);
     const descendingBody = (await descending.json()) as {
       roles: Array<{ name: string }>;
@@ -371,14 +371,14 @@ describe("roles (Built-in and custom roles)", () => {
     expect(descendingNames).toEqual([...ascendingNames].reverse());
   });
 
-  it("GET /api/v1/system/access-control/roles rejects an unknown ?sort= column with 400 (rolesListQuerySchema's allowlist runs before the handler; nothing left in the handler quietly falls back)", async () => {
-    const response = await call(adminToken, "/api/v1/system/access-control/roles?sort=not_a_real_column");
+  it("GET /api/v1/roles rejects an unknown ?sort= column with 400 (rolesListQuerySchema's allowlist runs before the handler; nothing left in the handler quietly falls back)", async () => {
+    const response = await call(adminToken, "/api/v1/roles?sort=not_a_real_column");
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("GET /api/v1/system/access-control/roles applies shared search and returns the page role's permissions", async () => {
+  it("GET /api/v1/roles applies shared search and returns the page role's permissions", async () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
@@ -390,7 +390,7 @@ describe("roles (Built-in and custom roles)", () => {
       ).bind(crypto.randomUUID()),
     ]);
 
-    const response = await call(adminToken, "/api/v1/system/access-control/roles?q=catalog&limit=1");
+    const response = await call(adminToken, "/api/v1/roles?q=catalog&limit=1");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       roles: Array<{ name: string; permissions: string[] }>;
@@ -404,8 +404,8 @@ describe("roles (Built-in and custom roles)", () => {
     expect(body.page.total).toBe(1);
   });
 
-  it("GET /api/v1/system/access-control/roles paginates with real LIMIT/OFFSET and a page envelope", async () => {
-    const unpaged = await call(adminToken, "/api/v1/system/access-control/roles?sort=name");
+  it("GET /api/v1/roles paginates with real LIMIT/OFFSET and a page envelope", async () => {
+    const unpaged = await call(adminToken, "/api/v1/roles?sort=name");
     const unpagedBody = (await unpaged.json()) as {
       roles: Array<{ name: string }>;
       page: { total: number };
@@ -414,7 +414,7 @@ describe("roles (Built-in and custom roles)", () => {
     expect(totalRoles).toBeGreaterThan(2);
     expect(unpagedBody.roles).toHaveLength(totalRoles);
 
-    const firstPage = await call(adminToken, "/api/v1/system/access-control/roles?sort=name&limit=2&offset=0");
+    const firstPage = await call(adminToken, "/api/v1/roles?sort=name&limit=2&offset=0");
     expect(firstPage.status).toBe(200);
     const firstPageBody = (await firstPage.json()) as {
       roles: Array<{ name: string }>;
@@ -429,7 +429,7 @@ describe("roles (Built-in and custom roles)", () => {
     });
     expect(firstPageBody.roles.map((r) => r.name)).toEqual(unpagedBody.roles.slice(0, 2).map((r) => r.name));
 
-    const secondPage = await call(adminToken, "/api/v1/system/access-control/roles?sort=name&limit=2&offset=2");
+    const secondPage = await call(adminToken, "/api/v1/roles?sort=name&limit=2&offset=2");
     expect(secondPage.status).toBe(200);
     const secondPageBody = (await secondPage.json()) as {
       roles: Array<{ name: string }>;
@@ -439,15 +439,12 @@ describe("roles (Built-in and custom roles)", () => {
     expect(secondPageBody.roles.map((r) => r.name)).toEqual(unpagedBody.roles.slice(2, 4).map((r) => r.name));
   });
 
-  it("GET /api/v1/system/access-control/roles/:id/assignments searches, sorts, and paginates only effective holders", async () => {
+  it("GET /api/v1/roles/:id/assignments searches, sorts, and paginates only effective holders", async () => {
     const assignmentRole = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'event_volunteer'")
     )[0];
 
-    const emptyResponse = await call(
-      adminToken,
-      `/api/v1/system/access-control/roles/${assignmentRole.id}/assignments`,
-    );
+    const emptyResponse = await call(adminToken, `/api/v1/roles/${assignmentRole.id}/assignments`);
     expect(emptyResponse.status).toBe(200);
     expect(await emptyResponse.json()).toMatchObject({
       assignments: [],
@@ -477,7 +474,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     const searchResponse = await call(
       adminToken,
-      `/api/v1/system/access-control/roles/${assignmentRole.id}/assignments?q=${encodeURIComponent("Alpha Able")}&sort=name&limit=1&offset=0`,
+      `/api/v1/roles/${assignmentRole.id}/assignments?q=${encodeURIComponent("Alpha Able")}&sort=name&limit=1&offset=0`,
     );
     expect(searchResponse.status).toBe(200);
     expect(await searchResponse.json()).toMatchObject({
@@ -494,7 +491,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     const firstPage = await call(
       adminToken,
-      `/api/v1/system/access-control/roles/${assignmentRole.id}/assignments?sort=-email&limit=1&offset=0`,
+      `/api/v1/roles/${assignmentRole.id}/assignments?sort=-email&limit=1&offset=0`,
     );
     const firstBody = (await firstPage.json()) as {
       assignments: Array<{ userId: string }>;
@@ -510,7 +507,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     const finalPage = await call(
       adminToken,
-      `/api/v1/system/access-control/roles/${assignmentRole.id}/assignments?sort=-email&limit=1&offset=1`,
+      `/api/v1/roles/${assignmentRole.id}/assignments?sort=-email&limit=1&offset=1`,
     );
     expect(await finalPage.json()).toMatchObject({
       assignments: [{ userId: alphaUserId }],
@@ -518,12 +515,12 @@ describe("roles (Built-in and custom roles)", () => {
     });
   });
 
-  it("GET /api/v1/system/access-control/roles/:id/assignments returns 404 for an unknown role id", async () => {
-    const response = await call(adminToken, `/api/v1/system/access-control/roles/${crypto.randomUUID()}/assignments`);
+  it("GET /api/v1/roles/:id/assignments returns 404 for an unknown role id", async () => {
+    const response = await call(adminToken, `/api/v1/roles/${crypto.randomUUID()}/assignments`);
     expect(response.status).toBe(404);
   });
 
-  it("GET /api/v1/system/access-control/users/:userId/roles searches, sorts, and paginates non-revoked history", async () => {
+  it("GET /api/v1/users/:userId/roles searches, sorts, and paginates non-revoked history", async () => {
     const targetUserId = await insertUser("role-history@example.test");
     const roles = await queryAll<{ id: string; name: string }>(
       env.DB,
@@ -548,7 +545,7 @@ describe("roles (Built-in and custom roles)", () => {
       ).bind(crypto.randomUUID(), targetUserId, roles[2].id, adminId),
     ]);
 
-    const empty = await call(adminToken, `/api/v1/system/access-control/users/${staffUserId}/roles?q=no-such-role`);
+    const empty = await call(adminToken, `/api/v1/users/${staffUserId}/roles?q=no-such-role`);
     expect(await empty.json()).toMatchObject({
       roles: [],
       page: { limit: 25, offset: 0, total: 0, hasMore: false },
@@ -556,32 +553,26 @@ describe("roles (Built-in and custom roles)", () => {
 
     const searched = await call(
       adminToken,
-      `/api/v1/system/access-control/users/${targetUserId}/roles?q=${encodeURIComponent(roles[1].name)}&sort=role_name`,
+      `/api/v1/users/${targetUserId}/roles?q=${encodeURIComponent(roles[1].name)}&sort=role_name`,
     );
     expect(await searched.json()).toMatchObject({
       roles: [{ roleName: roles[1].name, expiresAt: "2020-01-01T00:00:00.000Z" }],
       page: { total: 1, hasMore: false },
     });
 
-    const firstPage = await call(
-      adminToken,
-      `/api/v1/system/access-control/users/${targetUserId}/roles?sort=role_name&limit=1&offset=0`,
-    );
+    const firstPage = await call(adminToken, `/api/v1/users/${targetUserId}/roles?sort=role_name&limit=1&offset=0`);
     expect(await firstPage.json()).toMatchObject({
       roles: [{ roleName: roles[0].name }],
       page: { limit: 1, offset: 0, total: 2, hasMore: true },
     });
-    const finalPage = await call(
-      adminToken,
-      `/api/v1/system/access-control/users/${targetUserId}/roles?sort=role_name&limit=1&offset=1`,
-    );
+    const finalPage = await call(adminToken, `/api/v1/users/${targetUserId}/roles?sort=role_name&limit=1&offset=1`);
     expect(await finalPage.json()).toMatchObject({
       roles: [{ roleName: roles[1].name }],
       page: { limit: 1, offset: 1, total: 2, hasMore: false },
     });
   });
 
-  it("POST /api/v1/system/access-control/users/:userId/roles rejects assigning a role that bundles a permission the caller doesn't hold (privilege escalation containment)", async () => {
+  it("POST /api/v1/users/:userId/roles rejects assigning a role that bundles a permission the caller doesn't hold (privilege escalation containment)", async () => {
     // Staff holds only access:grant — enough to call the endpoint, but not
     // enough to hand out role-admin, which bundles access:grant plus nearly
     // every other permission. Mirrors the containment check the
@@ -594,7 +585,7 @@ describe("roles (Built-in and custom roles)", () => {
       .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-escalation-token");
 
-    const escalate = await call(staffToken, `/api/v1/system/access-control/users/${staffUserId}/roles`, {
+    const escalate = await call(staffToken, `/api/v1/users/${staffUserId}/roles`, {
       method: "POST",
       body: JSON.stringify({ roleId: "role-admin" }),
     });
@@ -623,7 +614,7 @@ describe("roles (Built-in and custom roles)", () => {
         .run();
     }
 
-    const allowed = await call(staffToken, `/api/v1/system/access-control/users/${staffUserId}/roles`, {
+    const allowed = await call(staffToken, `/api/v1/users/${staffUserId}/roles`, {
       method: "POST",
       body: JSON.stringify({ roleId: "role-admin" }),
     });
@@ -843,11 +834,7 @@ describe("roles (Built-in and custom roles)", () => {
     ]);
     const targetToken = await createAdminSession(env.DB, staffUserId, `legacy-admin-${crypto.randomUUID()}`);
 
-    const response = await call(
-      adminToken,
-      `/api/v1/system/access-control/users/${staffUserId}/roles/${assignmentId}`,
-      { method: "DELETE" },
-    );
+    const response = await call(adminToken, `/api/v1/users/${staffUserId}/roles/${assignmentId}`, { method: "DELETE" });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true });
 
@@ -861,7 +848,7 @@ describe("roles (Built-in and custom roles)", () => {
         [staffUserId],
       ),
     ).toHaveLength(1);
-    expect((await call(targetToken, "/api/v1/system/access-control/roles")).status).toBe(401);
+    expect((await call(targetToken, "/api/v1/roles")).status).toBe(401);
   });
 
   it("rolls back legacy admin demotion and session revocation when the role target changes concurrently", async () => {
@@ -901,7 +888,7 @@ describe("roles (Built-in and custom roles)", () => {
 
   it("rejects API-key role assignment because System access control requires a user-backed session", async () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
-    const generic = await call(apiKey, `/api/v1/system/access-control/users/${staffUserId}/roles`, {
+    const generic = await call(apiKey, `/api/v1/users/${staffUserId}/roles`, {
       method: "POST",
       body: JSON.stringify({ roleId: "role-membership_processor" }),
     });
@@ -919,7 +906,7 @@ describe("roles (Built-in and custom roles)", () => {
     ).toHaveLength(0);
   });
 
-  describe("POST /api/v1/system/access-control/users/:userId/roles rejects representative role IDs granted outside an organization context", () => {
+  describe("POST /api/v1/users/:userId/roles rejects representative role IDs granted outside an organization context", () => {
     // An organization-contact role (primary/secondary contact) is
     // singleton-per-organization and carries a service-layer invariant (the
     // target user must actively represent the organization). The mounted
@@ -930,7 +917,7 @@ describe("roles (Built-in and custom roles)", () => {
     for (const roleId of [REPRESENTATIVE_ROLE_IDS.primaryContact, REPRESENTATIVE_ROLE_IDS.secondaryContact]) {
       it(`rejects ${roleId} with no context at all`, async () => {
         const { userId } = await insertOrgRepresentative(env.DB);
-        const response = await call(adminToken, `/api/v1/system/access-control/users/${userId}/roles`, {
+        const response = await call(adminToken, `/api/v1/users/${userId}/roles`, {
           method: "POST",
           body: JSON.stringify({ roleId }),
         });
@@ -946,7 +933,7 @@ describe("roles (Built-in and custom roles)", () => {
 
       it(`rejects ${roleId} with a group context`, async () => {
         const { userId } = await insertOrgRepresentative(env.DB);
-        const response = await call(adminToken, `/api/v1/system/access-control/users/${userId}/roles`, {
+        const response = await call(adminToken, `/api/v1/users/${userId}/roles`, {
           method: "POST",
           body: JSON.stringify({
             roleId,
@@ -966,7 +953,7 @@ describe("roles (Built-in and custom roles)", () => {
 
       it(`rejects ${roleId} with an event context`, async () => {
         const { userId } = await insertOrgRepresentative(env.DB);
-        const response = await call(adminToken, `/api/v1/system/access-control/users/${userId}/roles`, {
+        const response = await call(adminToken, `/api/v1/users/${userId}/roles`, {
           method: "POST",
           body: JSON.stringify({
             roleId,
@@ -986,7 +973,7 @@ describe("roles (Built-in and custom roles)", () => {
 
       it(`rejects ${roleId} with contextType='organization' but no contextId (schema-level rejection)`, async () => {
         const { userId } = await insertOrgRepresentative(env.DB);
-        const response = await call(adminToken, `/api/v1/system/access-control/users/${userId}/roles`, {
+        const response = await call(adminToken, `/api/v1/users/${userId}/roles`, {
           method: "POST",
           body: JSON.stringify({ roleId, contextType: "organization" }),
         });
@@ -1018,7 +1005,7 @@ describe("roles (Built-in and custom roles)", () => {
         contextId: representative.memberId,
       };
 
-      const denied = await call(staffToken, `/api/v1/system/access-control/users/${representative.userId}/roles`, {
+      const denied = await call(staffToken, `/api/v1/users/${representative.userId}/roles`, {
         method: "POST",
         body: JSON.stringify(input),
       });
@@ -1033,7 +1020,7 @@ describe("roles (Built-in and custom roles)", () => {
       )
         .bind(crypto.randomUUID(), staffUserId, adminId)
         .run();
-      const allowed = await call(staffToken, `/api/v1/system/access-control/users/${representative.userId}/roles`, {
+      const allowed = await call(staffToken, `/api/v1/users/${representative.userId}/roles`, {
         method: "POST",
         body: JSON.stringify(input),
       });
@@ -1111,7 +1098,7 @@ describe("roles (Built-in and custom roles)", () => {
         .bind(crypto.randomUUID(), staffUserId, adminId)
         .run();
       const staffToken = await createAdminSession(env.DB, staffUserId, `semantic-revoke-${crypto.randomUUID()}`);
-      const path = `/api/v1/system/access-control/users/${representative.userId}/roles/${assignment.id}`;
+      const path = `/api/v1/users/${representative.userId}/roles/${assignment.id}`;
 
       const denied = await call(staffToken, path, { method: "DELETE" });
       expect(denied.status).toBe(403);
@@ -1133,7 +1120,7 @@ describe("roles (Built-in and custom roles)", () => {
 
     it("still succeeds with a real organization context and an active representative", async () => {
       const { userId, memberId } = await insertOrgRepresentative(env.DB);
-      const response = await call(adminToken, `/api/v1/system/access-control/users/${userId}/roles`, {
+      const response = await call(adminToken, `/api/v1/users/${userId}/roles`, {
         method: "POST",
         body: JSON.stringify({
           roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,

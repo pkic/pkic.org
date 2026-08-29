@@ -1,4 +1,5 @@
 /** Ballot eligibility and atomic create-or-update submission. */
+import { isVoteAcceptingBallots } from "./status";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -31,7 +32,7 @@ async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: 
 }
 
 function assertVoteOpen(vote: VoteRow, now: string): void {
-  if (vote.status !== "open" || vote.opens_at > now || vote.closes_at <= now) {
+  if (!isVoteAcceptingBallots(vote, now)) {
     throw new AppError(409, "VOTE_NOT_OPEN", "This vote is not currently open for ballots");
   }
 }
@@ -140,7 +141,8 @@ function preparePerMemberBallotUpsert(
        FROM votes current_vote
        WHERE current_vote.id = ?
          AND current_vote.electorate_mode = 'per_member'
-         AND current_vote.status = 'open'
+         AND current_vote.closed_at IS NULL
+         AND current_vote.cancelled_at IS NULL
          AND current_vote.current_round = ?
          AND current_vote.transition_revision = ?
          AND current_vote.transition_processing_token IS NULL
@@ -220,7 +222,8 @@ function preparePerPersonBallotUpsert(
        FROM votes current_vote
        WHERE current_vote.id = ?
          AND current_vote.electorate_mode = 'per_person'
-         AND current_vote.status = 'open'
+         AND current_vote.closed_at IS NULL
+         AND current_vote.cancelled_at IS NULL
          AND current_vote.current_round = ?
          AND current_vote.transition_revision = ?
          AND current_vote.transition_processing_token IS NULL

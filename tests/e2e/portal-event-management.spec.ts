@@ -21,6 +21,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   await page.getByRole("button", { name: "Create event" }).click();
   await page.getByLabel("Event name").fill(eventName);
+  await page.getByLabel("Slug").fill(eventSlug);
   await expect(page.getByLabel("Slug")).toHaveValue(eventSlug);
   await page.getByLabel("Start date").fill("2027-06-10T09:00");
   await page.getByLabel("End date").fill("2027-06-10T17:00");
@@ -30,10 +31,16 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByLabel("Location").fill("Amsterdam and online");
   await page.getByLabel("Event resource URL").fill("https://example.test/portal-workshop");
   await page.getByRole("button", { name: "Add profile link" }).click();
+  const eventCreated = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/groups/${GROUP_ID}/events` &&
+      response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Create event", exact: true }).click();
+  expect((await eventCreated).status()).toBe(201);
 
   const row = page.getByRole("row").filter({ hasText: eventName });
-  await expect(row).toBeVisible();
+  await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole("button", { name: "Details" }).click();
   const detail = page.getByRole("region", { name: `${eventName} details` });
   await expect(detail.getByText("Amsterdam and online", { exact: true })).toBeVisible();
@@ -42,6 +49,21 @@ test("a portal manager creates and edits a group-owned standalone event", async 
     "https://example.test/portal-workshop",
   );
   await expect(page.getByRole("link", { name: "Open registration" })).toHaveCount(0);
+
+  const communications = detail.locator("details").filter({ has: page.getByText("Email campaigns", { exact: true }) });
+  await communications.getByText("Email campaigns", { exact: true }).click();
+  await communications.getByPlaceholder("Email subject").fill("Workshop planning update");
+  await communications.getByPlaceholder("Write your message here, or load a template above.").fill("Hello members");
+  const campaignPreview = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
+      response.url().endsWith("/email/campaigns/previews") &&
+      response.request().method() === "POST",
+  );
+  await communications.getByRole("button", { name: "Preview Email" }).click();
+  expect((await campaignPreview).status()).toBe(200);
+  await expect(communications.getByText("Email Preview", { exact: true })).toBeVisible();
+  await expect(communications.getByText("0 recipients", { exact: true })).toBeVisible();
 
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await registrationSetup.getByRole("button", { name: "Add attendee term" }).click();
@@ -70,16 +92,16 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await policySection.getByRole("button", { name: "Create registration form" }).click();
   const formEditor = policySection.locator(".card").filter({ hasText: "New registration form" });
   const formKey = `workshop-registration-${unique}`;
-  await formEditor.getByLabel("Key").fill(formKey);
-  await expect(formEditor.getByLabel("Key")).toHaveValue(formKey);
+  await formEditor.getByLabel("Key", { exact: true }).fill(formKey);
+  await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);
   await formEditor.getByLabel("Title").fill("Workshop registration questions");
-  await expect(formEditor.getByLabel("Key")).toHaveValue(formKey);
+  await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);
   await formEditor.getByPlaceholder("field_key").fill("participation_goal");
   await formEditor.getByPlaceholder("Field label").fill("What do you want to learn?");
   const formCreated = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
-      response.url().endsWith("/registration-settings/form") &&
+      response.url().endsWith("/forms/event_registration") &&
       response.request().method() === "POST",
   );
   await formEditor.getByRole("button", { name: "Create form" }).click();
@@ -169,10 +191,6 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   expect(configuration.registrationSettings.status, JSON.stringify(configuration.registrationSettings.body)).toBe(200);
   expect(groupEventRegistrationSettingsResponseSchema.parse(configuration.registrationSettings.body)).toMatchObject({
     registrationPolicy: "optional",
-    form: {
-      placement: { contextType: "event", audience: "attendee", active: true },
-      form: { title: "Workshop registration questions" },
-    },
   });
 
   const publicShells = [

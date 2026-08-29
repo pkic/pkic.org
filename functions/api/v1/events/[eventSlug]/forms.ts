@@ -1,51 +1,82 @@
-import { dispatchRequestMethod, json } from "../../../../_lib/http";
-import { getEventBySlug } from "../../../../_lib/services/events";
-import { getEventRegistrationConfiguration } from "../../../../_lib/services/events/registration-configuration";
-import { logError } from "../../../../_lib/logging";
-import { eventFormsGetRouteSchema, type EventFormsPurpose } from "../../../../../assets/shared/schemas/forms";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
+import {
+  formCreateResponseSchema,
+  formsListResponseSchema,
+} from "../../../../../assets/shared/schemas/form-management";
+import {
+  eventFormCreateRouteSchema,
+  eventFormsListRouteSchema,
+} from "../../../../../assets/shared/schemas/route-contracts-forms";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../../_lib/db/authorization-guard";
+import type { AdminContext } from "../../../../_lib/db/context";
+import { AppError } from "../../../../_lib/errors";
+import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { createManagedForm, listForms } from "../../../../_lib/services/forms";
+import { guardedEventFormsDatabase, requireEventFormsPermission } from "./forms/authorization";
 
-function isMissingTableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  return message.includes("no such table");
-}
+export const EventFormsListGet = openApiRoute(eventFormsListRouteSchema, async (c: AdminContext, data) => {
+  const { db, event } = await requireEventFormsPermission(c, data.params.eventSlug, "events:read");
+  const { linkedOnly, ...query } = data.query;
+  const { forms, total } = await listForms(db, {
+    ...query,
+    eventId: event.id,
+    includeGlobal: linkedOnly !== true,
+    responseContext: { type: "event", ref: event.id },
+  });
+  return json(
+    formsListResponseSchema.parse({
+      forms,
+      page: buildPageInfo(query.limit, query.offset, total, forms.length),
+    }),
+  );
+});
 
-async function getEventForm(c: any, purpose: EventFormsPurpose): Promise<Response> {
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-
+export const EventFormsCreatePost = openApiRoute(eventFormCreateRouteSchema, async (c: AdminContext, data) => {
+  const { actor, context, db, event } = await requireEventFormsPermission(c, data.params.eventSlug, "events:write");
+  const eventFlowForm = data.body.purpose === "event_registration" || data.body.purpose === "proposal_submission";
+  if (eventFlowForm && event.source_mode === "portal") {
+    throw new AppError(
+      403,
+      "PORTAL_EVENT_FORMS_OWNED_BY_GROUP",
+      "Event-flow forms for portal-owned events must be created and managed from the owning group",
+    );
+  }
+  const guardedDb = guardedEventFormsDatabase(db, actor, context);
   try {
-    return json(await getEventRegistrationConfiguration(c.env.DB, event, purpose));
+    const form = await createManagedForm(
+      guardedDb,
+      actor.id,
+      { type: "event", ref: event.id, eventSlug: event.slug },
+      data.body,
+      eventFlowForm
+        ? {
+            authorizationGuards: [
+              prepareAuthorizationGuard(guardedDb, {
+                sql: "SELECT 1 FROM events WHERE id = ? AND COALESCE(source_mode, '') <> 'portal'",
+                bindings: [event.id],
+              }),
+            ],
+          }
+        : undefined,
+    );
+    return json(
+      formCreateResponseSchema.parse({
+        success: true,
+        formId: form.id,
+        placementId: form.placementId,
+        key: form.key,
+      }),
+      201,
+    );
   } catch (error) {
-    if (isMissingTableError(error)) {
-      logError("EVENT_FORM_CONFIGURATION_SCHEMA_MISSING", { eventSlug: event.slug, purpose });
-      return json(
-        {
-          error: {
-            code: "BACKEND_SCHEMA_MISSING",
-            message: "Event registration schema is not available yet. Run the latest database migrations.",
-          },
-        },
-        503,
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        403,
+        "PORTAL_EVENT_FORMS_OWNED_BY_GROUP",
+        "Event-flow forms for portal-owned events must be created and managed from the owning group",
       );
     }
     throw error;
   }
-}
-
-export const EventFormsGet = openApiRoute(eventFormsGetRouteSchema, async (c: any, data) =>
-  getEventForm(c, data.query.purpose),
-);
-
-export async function onRequestGet(c: any): Promise<Response> {
-  const parsed = eventFormsGetRouteSchema.request.query.safeParse(
-    Object.fromEntries(new URL(c.req.raw.url).searchParams),
-  );
-  if (!parsed.success) {
-    return json({ error: { code: "VALIDATION_ERROR", message: "Invalid form purpose" } }, 400);
-  }
-  return getEventForm(c, parsed.data.purpose);
-}
-
-export async function onRequest(c: any): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet });
-}
+});

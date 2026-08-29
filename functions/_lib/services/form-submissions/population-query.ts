@@ -99,6 +99,7 @@ function nativeSubmissionBranch(params: {
   status?: string;
   attendanceType?: string;
   q?: string;
+  unownedOnly?: boolean;
 }): SqlFragment {
   const isRegistration = params.purpose === "event_registration";
   const isProposal = params.purpose === "proposal_submission";
@@ -172,7 +173,9 @@ function nativeSubmissionBranch(params: {
      ${status.sql}
      ${attendance.sql}
      ${eventScope.sql}
-     ${search.sql}`,
+       ${search.sql}
+       ${params.unownedOnly ? "AND fs.placement_id IS NULL" : ""}
+       ${params.unownedOnly ? "AND NOT EXISTS (SELECT 1 FROM form_placements restricted_placement WHERE restricted_placement.id = fs.placement_id AND restricted_placement.owner_group_id IS NOT NULL)" : ""}`,
     bindings: [
       ...responseSet.bindings,
       ...status.bindings,
@@ -191,6 +194,7 @@ function legacyRegistrationBranch(params: {
   status?: string;
   attendanceType?: string;
   q?: string;
+  unownedOnly?: boolean;
 }): SqlFragment {
   const status = optionalEquality("r.status", params.status);
   const attendance = optionalEquality("r.attendance_type", params.attendanceType);
@@ -229,6 +233,7 @@ function legacyRegistrationBranch(params: {
        ${status.sql}
        ${attendance.sql}
        ${search.sql}
+       ${params.unownedOnly ? "AND (r.form_placement_id IS NULL OR NOT EXISTS (SELECT 1 FROM form_placements restricted_placement WHERE restricted_placement.id = r.form_placement_id AND restricted_placement.owner_group_id IS NOT NULL))" : ""}
        AND NOT EXISTS (
          SELECT 1 FROM form_submissions fs2
          WHERE fs2.form_id = ? AND fs2.context_type = 'registration' AND fs2.context_ref = r.id
@@ -251,6 +256,7 @@ function legacyProposalBranch(params: {
   includeLegacyUnplaced: boolean;
   status?: string;
   q?: string;
+  unownedOnly?: boolean;
 }): SqlFragment {
   const status = optionalEquality("sp.status", params.status);
   const search = optionalSearch(params.q, [
@@ -288,6 +294,7 @@ function legacyProposalBranch(params: {
        AND sp.details_json IS NOT NULL
        ${status.sql}
        ${search.sql}
+       ${params.unownedOnly ? "AND (sp.form_placement_id IS NULL OR NOT EXISTS (SELECT 1 FROM form_placements restricted_placement WHERE restricted_placement.id = sp.form_placement_id AND restricted_placement.owner_group_id IS NOT NULL))" : ""}
        AND NOT EXISTS (
          SELECT 1 FROM form_submissions fs2
          WHERE fs2.form_id = ? AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
@@ -306,6 +313,7 @@ function buildMergedSubmissionsQuery(params: {
   purpose: string;
   eventId: string | null;
   scopeNativeRowsToEvent: boolean;
+  unownedOnly?: boolean;
 }): Pick<FormSubmissionPopulation, "cte" | "bindings"> {
   const branches = [
     nativeSubmissionBranch({
@@ -317,10 +325,11 @@ function buildMergedSubmissionsQuery(params: {
       status: params.status,
       attendanceType: params.attendanceType,
       q: params.q,
+      unownedOnly: params.unownedOnly,
     }),
   ];
 
-  if (params.eventId && params.purpose === "event_registration") {
+  if (!params.unownedOnly && params.eventId && params.purpose === "event_registration") {
     branches.push(
       legacyRegistrationBranch({
         eventId: params.eventId,
@@ -330,9 +339,10 @@ function buildMergedSubmissionsQuery(params: {
         status: params.status,
         attendanceType: params.attendanceType,
         q: params.q,
+        unownedOnly: params.unownedOnly,
       }),
     );
-  } else if (params.eventId && params.purpose === "proposal_submission") {
+  } else if (!params.unownedOnly && params.eventId && params.purpose === "proposal_submission") {
     branches.push(
       legacyProposalBranch({
         eventId: params.eventId,
@@ -341,6 +351,7 @@ function buildMergedSubmissionsQuery(params: {
         includeLegacyUnplaced: params.includeLegacyUnplaced,
         status: params.status,
         q: params.q,
+        unownedOnly: params.unownedOnly,
       }),
     );
   }
@@ -356,11 +367,26 @@ export async function resolveFormSubmissionPopulation(
   params: FormSubmissionFilters,
 ): Promise<FormSubmissionPopulation> {
   const form = await getFormByKey(db, params.formKey);
+  if (params.unownedOnly) {
+    const groupPlacement = await db
+      .prepare("SELECT 1 FROM form_placements WHERE form_id = ? AND owner_group_id IS NOT NULL LIMIT 1")
+      .bind(form.id)
+      .first();
+    if (groupPlacement) {
+      throw new AppError(404, "FORM_NOT_FOUND", "The requested form is not available in this context");
+    }
+  }
   const requestedEvent = params.eventSlug ? await getEventBySlug(db, params.eventSlug) : null;
   const placement = await findFormPlacement(db, form.id, {
     ...(params.placementId ? { placementId: params.placementId } : {}),
     ...(!params.placementId && requestedEvent ? { contextType: "event" as const, contextRef: requestedEvent.id } : {}),
+    ...(!params.placementId && !requestedEvent && params.installationOnly
+      ? { contextType: "installation" as const, contextRef: null }
+      : {}),
   });
+  if ((params.unownedOnly || params.installationOnly) && placement?.ownerGroupId !== null) {
+    throw new AppError(404, "FORM_PLACEMENT_NOT_FOUND", "The requested form response set was not found");
+  }
   if (params.placementId && !placement) {
     throw new AppError(404, "FORM_PLACEMENT_NOT_FOUND", "The requested form response set was not found");
   }
@@ -372,21 +398,32 @@ export async function resolveFormSubmissionPopulation(
     throw new AppError(400, "FORM_EVENT_SCOPE_MISMATCH", "The form does not belong to the requested event");
   }
   const eventId =
-    requestedEvent?.id ??
-    (placement?.contextType === "event" ? placement.contextRef : form.scope_type === "event" ? form.scope_ref : null);
+    params.unownedOnly || params.installationOnly
+      ? null
+      : (requestedEvent?.id ??
+        (placement?.contextType === "event"
+          ? placement.contextRef
+          : form.scope_type === "event"
+            ? form.scope_ref
+            : null));
   return {
     form,
     placement,
     ...buildMergedSubmissionsQuery({
       formId: form.id,
       placementId: placement?.id ?? null,
-      includeLegacyUnplaced: Boolean(placement && !params.placementId),
+      includeLegacyUnplaced: Boolean(
+        placement &&
+        !params.placementId &&
+        (form.purpose === "event_registration" || form.purpose === "proposal_submission"),
+      ),
       status: params.status,
       attendanceType: params.attendanceType,
       q: params.q,
       purpose: form.purpose,
       eventId,
       scopeNativeRowsToEvent: Boolean(params.eventSlug),
+      unownedOnly: params.unownedOnly,
     }),
   };
 }

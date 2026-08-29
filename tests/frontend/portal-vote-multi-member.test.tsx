@@ -2,12 +2,12 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PortalVote } from "../../assets/ts/member-flows/portal/types";
-import { VoteCard } from "../../assets/ts/member-flows/portal/sections/Votes/VoteCard";
+import type { MemberVote } from "../../assets/ts/member-flows/portal/types";
+import { VoteDetails } from "../../assets/ts/member-flows/portal/sections/Votes/VoteDetails";
 
 const mounted: HTMLElement[] = [];
 
-function multiMemberVote(): PortalVote {
+function multiMemberVote(): MemberVote {
   return {
     id: "00000000-0000-4000-8000-000000000001",
     slug: "member-motion",
@@ -62,7 +62,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("portal per-Member ballots", () => {
+describe("group-scoped per-Member ballots", () => {
   it("renders and submits a separate ballot for each represented organization", async () => {
     const requests: Array<{ url: URL; body: unknown }> = [];
     vi.stubGlobal(
@@ -83,9 +83,16 @@ describe("portal per-Member ballots", () => {
     document.body.append(container);
     mounted.push(container);
 
-    await act(() => render(<VoteCard vote={multiMemberVote()} onChanged={onChanged} />, container));
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
-    await act(() => (details as HTMLButtonElement).click());
+    await act(() =>
+      render(
+        <VoteDetails
+          vote={multiMemberVote()}
+          ballotEndpoint="/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots"
+          onChanged={onChanged}
+        />,
+        container,
+      ),
+    );
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("Organization B");
@@ -101,7 +108,10 @@ describe("portal per-Member ballots", () => {
 
     expect(requests).toEqual([
       {
-        url: new URL("/api/v1/portal/votes/00000000-0000-4000-8000-000000000001/ballots", location.origin),
+        url: new URL(
+          "/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots",
+          location.origin,
+        ),
         body: {
           choice: "in_favor",
           memberId: "00000000-0000-4000-8000-000000000020",

@@ -27,7 +27,7 @@ export const GroupEventRegistrationConfigGet = openApiRoute(
     const storedEvent = await getEventById(registrationDb, event.id);
     return json(
       eventFormsResponseSchema.parse(
-        await getEventRegistrationConfiguration(registrationDb, storedEvent, "event_registration", "event_placement"),
+        await getEventRegistrationConfiguration(registrationDb, storedEvent, "event_registration"),
       ),
     );
   },

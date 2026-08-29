@@ -27,7 +27,7 @@ import { signCapabilityToken } from "../functions/_lib/auth/capability-links";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
-import { createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -161,6 +161,7 @@ async function verifiedGuestSession(guestId: string, occurrenceId: string) {
   });
   const session = await issueMeetingGuestSession(env.DB, {
     challengeId: challenge.challengeId,
+    occurrenceId,
     authorizationHash,
     sessionTtlHours: 72,
   });
@@ -172,7 +173,7 @@ async function verifiedGuestSession(guestId: string, occurrenceId: string) {
   });
   const identity = await requireMeetingGuestFromRequest(
     env.DB,
-    new Request("https://app.test/api/v1/meeting-guests/session", {
+    new Request(`https://app.test/api/v1/meetings/occurrences/${occurrenceId}/join`, {
       headers: { authorization: `Bearer ${token}` },
     }),
     { INTERNAL_SIGNING_SECRET: SIGNING_SECRET },
@@ -187,7 +188,7 @@ beforeEach(async () => {
 describe("authenticated meeting entry", () => {
   it("never exposes landing identity without the exact member session", async () => {
     const { occurrence } = await fixture();
-    const response = await memberRequest(null, `/api/v1/me/meetings/occurrences/${occurrence.id}/join`);
+    const response = await memberRequest(null, `/api/v1/meetings/occurrences/${occurrence.id}/join`);
     expect(response.status).toBe(401);
     expect(JSON.stringify(await response.json())).not.toContain("meeting-security-member");
     expect(response.headers.get("cache-control")).toContain("no-store");
@@ -196,7 +197,7 @@ describe("authenticated meeting entry", () => {
 
   it("requires an explicit attend grant for shared-group member entry", async () => {
     const { admin, userId, series, occurrence, memberGroupId } = await fixture({ memberGroup: "shared" });
-    const path = `/api/v1/me/meetings/occurrences/${occurrence.id}/join`;
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
 
     for (const capability of ["view", "register", "manage"] as const) {
       await grantResourceToGroup(env.DB, admin, GROUP_ID, "event", series.eventId, {
@@ -262,7 +263,7 @@ describe("authenticated meeting entry", () => {
       .bind(termId, series.eventId)
       .run();
     const token = await createMemberSession(env.DB, userId, "member-meeting-session", SIGNING_SECRET);
-    const path = `/api/v1/me/meetings/occurrences/${occurrence.id}/join`;
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
     const landingResponse = await memberRequest(token, path);
     expect(landingResponse.status).toBe(200);
     const landing = (await landingResponse.json()) as {
@@ -328,7 +329,7 @@ describe("authenticated meeting entry", () => {
   it("rejects a stale landing revision when terms change", async () => {
     const { userId, series, occurrence } = await fixture();
     const token = await createMemberSession(env.DB, userId, "stale-landing-session", SIGNING_SECRET);
-    const path = `/api/v1/me/meetings/occurrences/${occurrence.id}/join`;
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
     const landing = (await (await memberRequest(token, path)).json()) as { landingRevision: string };
     await env.DB.prepare(
       `INSERT INTO event_terms
@@ -391,7 +392,7 @@ describe("authenticated meeting entry", () => {
   it("rejects identity fields supplied by the browser", async () => {
     const { userId, occurrence } = await fixture();
     const token = await createMemberSession(env.DB, userId, "identity-bound-session", SIGNING_SECRET);
-    const path = `/api/v1/me/meetings/occurrences/${occurrence.id}/join`;
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
     const landing = (await (await memberRequest(token, path)).json()) as { landingRevision: string };
     const response = await memberRequest(token, path, {
       method: "POST",
@@ -493,7 +494,7 @@ describe("authenticated meeting entry", () => {
     await expect(
       requireMeetingGuestFromRequest(
         env.DB,
-        new Request("https://app.test/api/v1/meeting-guests/session", {
+        new Request(`https://app.test/api/v1/meetings/occurrences/${occurrence.id}/join`, {
           headers: { authorization: `Bearer ${verified.token}` },
         }),
         { INTERNAL_SIGNING_SECRET: SIGNING_SECRET },
@@ -531,6 +532,7 @@ describe("authenticated meeting entry", () => {
     await expect(
       issueMeetingGuestSession(env.DB, {
         challengeId: challenge.challengeId,
+        occurrenceId: occurrence.id,
         authorizationHash: attackerHash,
         sessionTtlHours: 72,
       }),
@@ -551,25 +553,18 @@ describe("authenticated meeting entry", () => {
       seriesWide: true,
     });
     const verified = await verifiedGuestSession(guest.id, occurrence.id);
-    const landingResponse = await memberRequest(
-      verified.token,
-      `/api/v1/meeting-guests/meetings/occurrences/${occurrence.id}/join`,
-    );
+    const landingResponse = await memberRequest(verified.token, `/api/v1/meetings/occurrences/${occurrence.id}/join`);
     expect(landingResponse.status).toBe(200);
     const landing = (await landingResponse.json()) as { landingRevision: string };
 
-    const joinResponse = await memberRequest(
-      verified.token,
-      `/api/v1/meeting-guests/meetings/occurrences/${occurrence.id}/join`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          landingRevision: landing.landingRevision,
-          acceptedTerms: [],
-          intentionalJoin: true,
-        }),
-      },
-    );
+    const joinResponse = await memberRequest(verified.token, `/api/v1/meetings/occurrences/${occurrence.id}/join`, {
+      method: "POST",
+      body: JSON.stringify({
+        landingRevision: landing.landingRevision,
+        acceptedTerms: [],
+        intentionalJoin: true,
+      }),
+    });
     expect(joinResponse.status).toBe(200);
     expect(await joinResponse.json()).toMatchObject({ redirectUrl: "https://meet.example.test/authenticated-room" });
 
@@ -587,12 +582,44 @@ describe("authenticated meeting entry", () => {
     );
     const wrongOccurrence = await memberRequest(
       verified.token,
-      `/api/v1/meeting-guests/meetings/occurrences/${secondOccurrence.id}/join`,
+      `/api/v1/meetings/occurrences/${secondOccurrence.id}/join`,
     );
     expect(wrongOccurrence.status).toBe(403);
     expect(await wrongOccurrence.json()).toMatchObject({
       error: { code: "MEETING_GUEST_OCCURRENCE_FORBIDDEN" },
     });
+  });
+
+  it("prefers a live member capacity and falls back to the occurrence guest for staff-only identities", async () => {
+    const { admin, userId, series, occurrence } = await fixture();
+    const guest = await inviteTestOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      email: `identity-priority-${crypto.randomUUID()}@example.test`,
+      name: "Occurrence Guest Identity",
+      expiresAt: new Date(Date.now() + 5_400_000).toISOString(),
+    });
+    const verified = await verifiedGuestSession(guest.id, occurrence.id);
+    const guestCookie = `pkic_meeting_guest_session=${encodeURIComponent(verified.token)}`;
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
+
+    const memberToken = await createMemberSession(
+      env.DB,
+      userId,
+      `member-priority-${crypto.randomUUID()}`,
+      SIGNING_SECRET,
+    );
+    const memberLanding = await memberRequest(memberToken, path, { headers: { cookie: guestCookie } });
+    expect(memberLanding.status).toBe(200);
+    expect(await memberLanding.json()).not.toMatchObject({ name: "Occurrence Guest Identity" });
+
+    const staffToken = await createAdminSession(
+      env.DB,
+      admin.id,
+      `staff-guest-fallback-${crypto.randomUUID()}`,
+      SIGNING_SECRET,
+    );
+    const guestLanding = await memberRequest(staffToken, path, { headers: { cookie: guestCookie } });
+    expect(guestLanding.status).toBe(200);
+    expect(await guestLanding.json()).toMatchObject({ name: "Occurrence Guest Identity" });
   });
 
   it("allows only one guest session per browser challenge", async () => {
@@ -606,6 +633,7 @@ describe("authenticated meeting entry", () => {
     await expect(
       issueMeetingGuestSession(env.DB, {
         challengeId: verified.challenge.challengeId,
+        occurrenceId: occurrence.id,
         authorizationHash: verified.challenge.authorizationHash,
         sessionTtlHours: 72,
       }),
@@ -630,7 +658,7 @@ describe("authenticated meeting entry", () => {
     await expect(
       requireMeetingGuestFromRequest(
         env.DB,
-        new Request("https://app.test/api/v1/meeting-guests/session", {
+        new Request(`https://app.test/api/v1/meetings/occurrences/${occurrence.id}/join`, {
           headers: { authorization: `Bearer ${verified.token}` },
         }),
         { INTERNAL_SIGNING_SECRET: SIGNING_SECRET },

@@ -39,8 +39,18 @@ import {
 } from "./management";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
 
-type EventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
-type EventSeriesUpdateInput = z.infer<typeof eventSeriesUpdateSchema>;
+type ParsedEventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
+type EventSeriesCreateInput = Omit<ParsedEventSeriesCreateInput, "policy"> & {
+  policy: Omit<ParsedEventSeriesCreateInput["policy"], "visibility"> & {
+    visibility?: ParsedEventSeriesCreateInput["policy"]["visibility"];
+  };
+};
+type ParsedEventSeriesUpdateInput = z.infer<typeof eventSeriesUpdateSchema>;
+type EventSeriesUpdateInput = Omit<ParsedEventSeriesUpdateInput, "policy"> & {
+  policy?: Omit<NonNullable<ParsedEventSeriesUpdateInput["policy"]>, "visibility"> & {
+    visibility?: NonNullable<ParsedEventSeriesUpdateInput["policy"]>["visibility"];
+  };
+};
 
 interface GroupEventSeriesRow extends EventSeriesRow {
   granted_capabilities: string | null;
@@ -234,8 +244,8 @@ export async function createGroupEventSeries(
           `INSERT INTO events
              (id, slug, name, timezone, starts_at, ends_at, source_path, base_path,
               capacity_in_person, registration_mode, invite_limit_attendee, settings_json,
-              created_at, updated_at, owner_group_id, profile_key, source_mode, links_json)
-           VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?, 0, ?, ?, ?, ?, ?, 'portal', NULL)`,
+              visibility, created_at, updated_at, owner_group_id, profile_key, source_mode, links_json)
+           VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?, 0, ?, ?, ?, ?, ?, ?, 'portal', NULL)`,
         )
         .bind(
           eventId,
@@ -245,6 +255,7 @@ export async function createGroupEventSeries(
           `/portal/groups/${group.slug}/meetings`,
           input.policy.registrationPolicy,
           settings,
+          input.policy.visibility ?? "group_members",
           now,
           now,
           group.id,
@@ -351,13 +362,14 @@ export async function updateGroupEventSeries(
       db
         .prepare(
           `UPDATE events SET name = COALESCE(?, name), profile_key = COALESCE(?, profile_key),
-             registration_mode = COALESCE(?, registration_mode), settings_json = ?,
+             registration_mode = COALESCE(?, registration_mode), visibility = COALESCE(?, visibility), settings_json = ?,
              timezone = COALESCE(?, timezone), updated_at = ? WHERE id = ?`,
         )
         .bind(
           input.eventName ?? null,
           input.profileKey ?? null,
           input.policy?.registrationPolicy ?? null,
+          input.policy?.visibility ?? null,
           settings,
           input.timezone ?? null,
           now,

@@ -53,7 +53,7 @@ export async function resolveAuthMember(
   const token = await createMemberSession(db, userId, `vote-member-${suffix}`);
   return requireMemberFromRequest(
     db,
-    new Request("https://app.test/api/v1/portal/votes", {
+    new Request(`https://app.test/api/v1/groups/${TEST_GROUPS.allMembers}/votes`, {
       headers: { authorization: `Bearer ${token}` },
     }),
     env as never,

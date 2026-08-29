@@ -1,20 +1,27 @@
 import { z } from "zod";
-import { eventIdSchema, frontendPathPattern, jsonErrorResponse, successResponseSchema } from "./api-common";
+import {
+  eventIdSchema,
+  frontendPathPattern,
+  jsonErrorResponse,
+  successResponseSchema,
+  utcInstantSchema,
+} from "./api-common";
 import {
   eventAttendanceRegistrationsListResponseSchema,
   eventAttendanceRegistrationsQuerySchema,
 } from "./event-registrations";
 import {
-  attendeeInviteLimitSchema,
   eventCreateSchema,
   eventProfileCatalogResponseSchema,
+  eventResourceCoreSchema,
   eventSettingsSchema,
 } from "./event-management";
-import { eventFormsResponseSchema, formDefinitionCreateSchema, formPlacementSchema } from "./forms";
+import { eventFormsResponseSchema } from "./forms";
 import {
-  eventDaysReplaceResponseSchema,
-  eventDaysReplaceSchema,
-  eventDaysResponseSchema,
+  eventConfigurationRevisionSchema,
+  eventDaysManagementReplaceResponseSchema,
+  eventDaysManagementReplaceSchema,
+  eventDaysManagementResponseSchema,
   eventTermsReplaceSchema,
   eventTermsReplaceResponseSchema,
   eventTermsResponseSchema,
@@ -23,6 +30,7 @@ import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
   eventSourceModeSchema,
+  eventVisibilitySchema,
   standaloneEventProfileKeySchema,
 } from "./event-series";
 import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
@@ -45,6 +53,7 @@ import {
   eventRegistrationDayAttendanceChangeSchema,
   eventRegistrationDayAttendanceResponseSchema,
 } from "./event-registration-detail";
+import { requiresSession } from "./route-contract";
 
 export const GROUP_EVENTS_SORT_COLUMNS = ["name", "starts_at", "next_occurrence_at", "created_at"] as const;
 
@@ -52,29 +61,18 @@ export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLU
   profileKey: eventProfileKeySchema.optional(),
   registrationPolicy: eventRegistrationPolicySchema.optional(),
   sourceMode: eventSourceModeSchema.optional(),
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
+  from: utcInstantSchema.optional(),
+  to: utcInstantSchema.optional(),
 });
 export type GroupEventsListQuery = z.infer<typeof groupEventsListQuerySchema>;
 
-export const groupEventSchema = z.object({
-  id: eventIdSchema,
+export const groupEventSchema = eventResourceCoreSchema.extend({
   ownerGroupId: groupIdSchema,
   seriesId: databaseIdSchema.nullable(),
-  slug: z.string(),
   basePath: z.string().trim().regex(frontendPathPattern).max(300).nullable(),
-  name: z.string(),
-  timezone: z.string(),
-  startsAt: z.string().nullable(),
-  endsAt: z.string().nullable(),
-  profileKey: eventProfileKeySchema.nullable(),
-  sourceMode: eventSourceModeSchema.nullable(),
-  registrationPolicy: eventRegistrationPolicySchema,
-  inviteLimitAttendee: attendeeInviteLimitSchema,
   location: z.string().nullable(),
   links: linksSchema,
   nextOccurrenceAt: z.string().nullable(),
-  updatedAt: z.string(),
   capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
   /** Event-scoped proposal authority; never implies a generic event or group grant. */
   proposalAccess: proposalAccessSchema.nullable().default(null),
@@ -85,6 +83,7 @@ export const groupEventsListResponseSchema = paginatedResponseSchema("events", g
 export const groupEventDetailResponseSchema = z.object({ event: groupEventSchema });
 
 export const groupEventProfilesRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List active event profiles available to a group manager",
   description:
@@ -104,70 +103,29 @@ export const groupEventProfilesRouteSchema = {
 export const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
 const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
 const groupEventInviteParamsSchema = groupEventParamsSchema.extend({ inviteId: databaseIdSchema });
-const eventConfigurationRevisionSchema = z.object({
-  expectedUpdatedAt: z.iso.datetime(),
-});
-
 export const groupEventTermsReplaceSchema = eventConfigurationRevisionSchema.extend({
   configuration: eventTermsReplaceSchema,
 });
 export const groupEventTermsResponseSchema = eventTermsResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
 });
 export const groupEventTermsReplaceResponseSchema = eventTermsReplaceResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
 });
 
-export const groupEventDaysReplaceSchema = eventConfigurationRevisionSchema.extend({
-  configuration: eventDaysReplaceSchema,
-});
-export const groupEventDaysResponseSchema = eventDaysResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
-});
-export const groupEventDaysReplaceResponseSchema = eventDaysReplaceResponseSchema.extend({
-  eventUpdatedAt: z.iso.datetime(),
-});
-
-const groupEventRegistrationFormSchema = z.object({
-  placement: formPlacementSchema,
-  form: z.object({
-    id: databaseIdSchema,
-    key: z.string(),
-    title: z.string(),
-    description: z.string().nullable(),
-  }),
-});
+export const groupEventDaysReplaceSchema = eventDaysManagementReplaceSchema;
+export const groupEventDaysResponseSchema = eventDaysManagementResponseSchema;
+export const groupEventDaysReplaceResponseSchema = eventDaysManagementReplaceResponseSchema;
 
 export const groupEventRegistrationSettingsResponseSchema = z.object({
-  eventUpdatedAt: z.iso.datetime(),
+  eventUpdatedAt: utcInstantSchema,
   registrationPolicy: eventRegistrationPolicySchema,
-  form: groupEventRegistrationFormSchema.nullable(),
 });
 
 export const groupEventRegistrationSettingsUpdateSchema = z.object({
-  expectedUpdatedAt: z.iso.datetime(),
+  expectedUpdatedAt: utcInstantSchema,
   registrationPolicy: eventRegistrationPolicySchema,
-  /** Existing group-owned form definition to place, or null to remove it. */
-  formId: databaseIdSchema.nullable().optional(),
 });
-export const groupEventRegistrationFormCreateSchema = formDefinitionCreateSchema.safeExtend({
-  purpose: z.literal("event_registration"),
-});
-
-export const GROUP_EVENT_REGISTRATION_FORMS_SORT_COLUMNS = ["key", "title", "updated_at"] as const;
-export const groupEventRegistrationFormsQuerySchema = listQuerySchema(GROUP_EVENT_REGISTRATION_FORMS_SORT_COLUMNS);
-export type GroupEventRegistrationFormsQuery = z.infer<typeof groupEventRegistrationFormsQuerySchema>;
-export const groupEventRegistrationFormCatalogItemSchema = z.object({
-  id: databaseIdSchema,
-  key: z.string(),
-  title: z.string(),
-  description: z.string().nullable(),
-  updatedAt: z.string(),
-});
-export const groupEventRegistrationFormsResponseSchema = paginatedResponseSchema(
-  "forms",
-  groupEventRegistrationFormCatalogItemSchema,
-);
 
 /** A portal-managed event always has the selected group as its owner. */
 export const groupEventCreateSchema = eventCreateSchema
@@ -179,25 +137,30 @@ export const groupEventCreateSchema = eventCreateSchema
   .extend({
     profileKey: standaloneEventProfileKeySchema,
     registrationPolicy: z.literal("no_registration").default("no_registration"),
+    visibility: eventVisibilitySchema.default("group_members"),
     location: eventSettingsSchema.shape.location,
     links: linksSchema.optional(),
   });
-export type GroupEventCreateInput = z.infer<typeof groupEventCreateSchema>;
+type ParsedGroupEventCreateInput = z.infer<typeof groupEventCreateSchema>;
+export type GroupEventCreateInput = Omit<ParsedGroupEventCreateInput, "visibility"> & {
+  visibility?: ParsedGroupEventCreateInput["visibility"];
+};
 
 /** Optimistic concurrency keeps two group managers from silently overwriting each other. */
 export const groupEventSettingsUpdateSchema = eventSettingsSchema
   .omit({
-    registrationMode: true,
+    registrationPolicy: true,
     venue: true,
     virtualUrl: true,
   })
   .extend({
     links: linksSchema.optional(),
-    expectedUpdatedAt: z.iso.datetime(),
+    expectedUpdatedAt: utcInstantSchema,
   });
 export type GroupEventSettingsUpdateInput = z.infer<typeof groupEventSettingsUpdateSchema>;
 
 export const groupEventsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List events available through a group",
   description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -213,6 +176,7 @@ export const groupEventsListRouteSchema = {
 };
 
 export const groupEventDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get one event available through a group",
   request: { params: groupEventParamsSchema },
@@ -226,6 +190,7 @@ export const groupEventDetailRouteSchema = {
 };
 
 export const groupEventRegistrationConfigRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get registration configuration for a group event",
   description:
@@ -243,6 +208,7 @@ export const groupEventRegistrationConfigRouteSchema = {
 };
 
 export const groupEventTermsGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get terms for a managed group event",
   request: { params: groupEventParamsSchema },
@@ -259,6 +225,7 @@ export const groupEventTermsGetRouteSchema = {
 };
 
 export const groupEventTermsReplaceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Replace terms for a managed group event",
   description: "Replaces all audience term sets in one guarded D1 batch with an optimistic event revision.",
@@ -278,6 +245,7 @@ export const groupEventTermsReplaceRouteSchema = {
 };
 
 export const groupEventDaysGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get attendance days for a managed group event",
   description: "Attendance counts are aggregated in D1 and returned with the event revision.",
@@ -295,6 +263,7 @@ export const groupEventDaysGetRouteSchema = {
 };
 
 export const groupEventDaysReplaceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Replace attendance days for a managed group event",
   description: "Updates matching days in place and removes only unused omitted days in one guarded D1 batch.",
@@ -314,14 +283,15 @@ export const groupEventDaysReplaceRouteSchema = {
 };
 
 export const groupEventRegistrationSettingsGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get registration settings for a managed group event",
   description:
-    "Returns the canonical registration policy and the exact active attendee form placement, without global fallback.",
+    "Returns the canonical registration policy. The attendee form placement is managed through the purpose-parameterized event-form routes.",
   request: { params: groupEventParamsSchema },
   responses: {
     "200": {
-      description: "Registration policy and optional exact attendee form placement.",
+      description: "The event registration policy and its current event revision.",
       content: { "application/json": { schema: groupEventRegistrationSettingsResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
@@ -332,10 +302,10 @@ export const groupEventRegistrationSettingsGetRouteSchema = {
 };
 
 export const groupEventRegistrationSettingsPutRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update registration settings for a managed group event",
-  description:
-    "Atomically updates the canonical registration policy and attaches or removes one exact attendee form placement.",
+  description: "Atomically updates the canonical registration policy for a managed group event.",
   request: {
     params: groupEventParamsSchema,
     body: {
@@ -350,55 +320,14 @@ export const groupEventRegistrationSettingsPutRouteSchema = {
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
     "403": jsonErrorResponse("Event management access is required."),
-    "404": jsonErrorResponse("The event or selected group form is not available."),
-    "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
-    "422": jsonErrorResponse("Registration requires at least one required attendee term."),
-  },
-};
-
-export const groupEventRegistrationFormCreateRouteSchema = {
-  tags: ["Groups"],
-  summary: "Create an attendee form for a managed group event",
-  description:
-    "Creates one group-owned reusable attendee form with its exact event placement in the same guarded D1 command.",
-  request: {
-    params: groupEventParamsSchema,
-    body: {
-      required: true,
-      content: { "application/json": { schema: groupEventRegistrationFormCreateSchema } },
-    },
-  },
-  responses: {
-    "201": {
-      description: "The attendee form and exact event placement were created.",
-      content: { "application/json": { schema: groupEventRegistrationSettingsResponseSchema } },
-    },
-    "401": jsonErrorResponse("An authenticated portal identity is required."),
-    "403": jsonErrorResponse("Event management access is required."),
     "404": jsonErrorResponse("The event is not available through this group."),
     "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
     "422": jsonErrorResponse("Registration requires at least one required attendee term."),
-  },
-};
-
-export const groupEventRegistrationFormsListRouteSchema = {
-  tags: ["Groups"],
-  summary: "List reusable attendee forms for a managed group event",
-  description:
-    "Lists distinct active group-owned event-registration definitions with server-side search and pagination.",
-  request: { params: groupEventParamsSchema, query: groupEventRegistrationFormsQuerySchema },
-  responses: {
-    "200": {
-      description: "A bounded page of reusable group-owned attendee forms.",
-      content: { "application/json": { schema: groupEventRegistrationFormsResponseSchema } },
-    },
-    "401": jsonErrorResponse("An authenticated portal identity is required."),
-    "403": jsonErrorResponse("Event management access is required."),
-    "404": jsonErrorResponse("The event is not available through this group."),
   },
 };
 
 export const groupEventCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create a group-owned event",
   description: "Creates a portal-managed event owned by the selected group.",
@@ -418,6 +347,7 @@ export const groupEventCreateRouteSchema = {
 };
 
 export const groupEventSettingsUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update a group event's settings",
   description: "Updates one group-owned or explicitly managed event with an optimistic revision check.",
@@ -440,6 +370,7 @@ const groupEventAttendeeInvitesListQuerySchema = eventInvitesListQuerySchema.omi
 export type GroupEventAttendeeInvitesListQuery = z.infer<typeof groupEventAttendeeInvitesListQuerySchema>;
 
 export const groupEventInvitesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Event invites"],
   summary: "List attendee invitations for a managed group event",
   description: "Returns a bounded, attendee-only invitation projection with server-side search and pagination.",
@@ -456,6 +387,7 @@ export const groupEventInvitesListRouteSchema = {
 };
 
 export const groupEventInviteResendRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Event invites"],
   summary: "Resend an attendee invitation",
   description: "Re-queues an existing attendee invitation that has not been accepted or revoked.",
@@ -476,6 +408,7 @@ export const groupEventInviteResendRouteSchema = {
 };
 
 export const groupEventInviteRevokeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Event invites"],
   summary: "Revoke an attendee invitation",
   description: "Revokes a pending attendee invitation before it is accepted.",
@@ -494,6 +427,7 @@ export const groupEventInviteRevokeRouteSchema = {
 
 /** Reuses canonical list controls with an attendance-manager-only projection. */
 export const groupEventRegistrationsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List group event attendees",
   description: "Filtering, search, sorting, statistics, and pagination are executed in D1.",
@@ -510,6 +444,7 @@ export const groupEventRegistrationsListRouteSchema = {
 };
 
 export const groupEventRegistrationDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get one group event attendee for attendance management",
   description: "Returns only the identity and day attendance/waitlist fields needed by a group attendance manager.",
@@ -526,6 +461,7 @@ export const groupEventRegistrationDetailRouteSchema = {
 };
 
 export const groupEventRegistrationDayAttendancePatchRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update one group event attendee's day attendance",
   description: "Updates selected event days while preserving the day-level waitlist as the source of truth.",
@@ -546,6 +482,7 @@ export const groupEventRegistrationDayAttendancePatchRouteSchema = {
 };
 
 export const groupEventRegistrationAdmitRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Admit selected days for a group event attendee",
   description: "Admits selected waitlisted days without creating a registration-wide waitlisted state.",
@@ -566,6 +503,7 @@ export const groupEventRegistrationAdmitRouteSchema = {
 };
 
 export const groupEventRegistrationCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Register the authenticated user for a group event",
   description:

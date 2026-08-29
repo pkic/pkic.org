@@ -67,7 +67,7 @@ export function proposalAuditActionLabel(entry: AuditLogEntry): string {
       return "Speaker declined participation";
     case "speaker_profile_request_resent":
       return "Speaker profile request resent";
-    case "admin_opened_proposal_manage_page":
+    case "proposal_access_link_issued":
       return "Opened proposer manage page";
     default:
       return entry.action.replace(/_/g, " ");

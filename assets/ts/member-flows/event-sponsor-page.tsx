@@ -3,10 +3,10 @@
  * the "event-scoped sponsor page" Hugo Frontend
  * requires an eventId and no event-scoped page existed to host it).
  *
- * On submit, POSTs to /api/v1/sponsorship/checkout and follows the
+ * On submit, POSTs to /api/v1/sponsors/checkouts and follows the
  * returned Stripe Checkout URL. No `sponsorships` row exists yet at this
  * point — it's created idempotently by the webhook once payment
- * completes (functions/api/v1/sponsorship/checkout/webhook.ts) — so there
+ * completes (functions/api/v1/sponsors/checkouts/stripe.ts) — so there
  * is nothing to poll for locally; the post-redirect page is a static
  * thank-you (see content/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/),
  * matching own "staff always confirm before any access is granted"
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
         const basePath = currentBasePath();
 
         const data = await postJson(
-          `${apiBase}/sponsorship/checkout`,
+          `${apiBase}/sponsors/checkouts`,
           {
             checkoutAttemptId,
             contactName: [firstName, lastName].filter(Boolean).join(" "),

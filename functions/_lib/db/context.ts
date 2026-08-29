@@ -39,3 +39,13 @@ type RequestDbCarrier = Pick<AdminContext, "env"> &
 export function requestDb(c: RequestDbCarrier): DatabaseLike {
   return c.var?.requestDb ?? (c.get?.(REQUEST_DB_CONTEXT_KEY) as DatabaseLike | undefined) ?? c.env.DB;
 }
+
+/**
+ * Marks the response private for a route whose path is not covered by the
+ * middleware's staff-only prefixes. It applies `no-store` and the private
+ * response headers even when the request carries no session, so an
+ * unauthorized attempt is not treated as a cacheable public response.
+ */
+export function markResponseSensitive(c: Pick<AdminContext, "set">): void {
+  c.set?.(SENSITIVE_CONTEXT_KEY, true);
+}

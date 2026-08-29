@@ -15,6 +15,7 @@ export interface EventSeriesRow {
   event_slug: string;
   profile_key: EventSeries["profileKey"];
   registration_policy: EventSeries["registrationPolicy"];
+  visibility: EventSeries["visibility"];
   settings_json: string;
   starts_at: string;
   recurrence_rule: string;
@@ -33,7 +34,7 @@ export interface EventSeriesRow {
 
 export const EVENT_SERIES_SELECT = `SELECT series.id, series.event_id, event.owner_group_id,
   event.name AS event_name, event.slug AS event_slug, event.profile_key,
-  event.registration_mode AS registration_policy, event.settings_json,
+  event.registration_mode AS registration_policy, event.visibility, event.settings_json,
   series.starts_at, series.recurrence_rule, series.timezone, series.duration_minutes, series.location,
   series.provider_type, series.provider_data_json, series.active,
   event.starts_at AS event_starts_at, event.ends_at AS event_ends_at,
@@ -64,6 +65,7 @@ export function toEventSeries(row: EventSeriesRow): EventSeries {
     eventSlug: row.event_slug,
     profileKey: row.profile_key,
     registrationPolicy: row.registration_policy,
+    visibility: row.visibility,
     memberEligibility: rawEligibility === "group" ? "owner_group" : rawEligibility,
     guestPolicy: eventGuestPolicyFromSettings(row.settings_json),
     startsAt: row.starts_at,

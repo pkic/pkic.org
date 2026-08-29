@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { postJson, ApiClientError } from "../../../../shared/api-client";
 import { toast } from "../../ui";
-import type { PortalVote } from "../../types";
+import type { MemberVote } from "../../types";
 import { MOTION_CHOICES } from "./shared";
 import { submitBallotResponseSchema } from "../../../../../shared/schemas/votes";
 
@@ -12,10 +12,10 @@ export function BallotForm({
   endpoint,
   onCast,
 }: {
-  vote: PortalVote;
+  vote: MemberVote;
   memberId?: string;
   hasCastBallot?: boolean;
-  endpoint?: string;
+  endpoint: string;
   onCast: () => Promise<void>;
 }) {
   const [choice, setChoice] = useState<string>("");
@@ -24,11 +24,7 @@ export function BallotForm({
   async function submit(selected: string): Promise<void> {
     setSubmitting(true);
     try {
-      await postJson(
-        endpoint ?? `/api/v1/portal/votes/${vote.id}/ballots`,
-        { choice: selected, ...(memberId ? { memberId } : {}) },
-        submitBallotResponseSchema,
-      );
+      await postJson(endpoint, { choice: selected, ...(memberId ? { memberId } : {}) }, submitBallotResponseSchema);
       toast(hasCastBallot ? "Ballot updated" : "Ballot cast", "success");
       await onCast();
     } catch (e) {

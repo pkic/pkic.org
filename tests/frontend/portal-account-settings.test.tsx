@@ -51,7 +51,7 @@ describe("portal account settings capacity cutover", () => {
         throw new Error(`Unexpected member API request: ${url}`);
       }),
     );
-    portalSession.value = portalSessionFixture({ admin: true });
+    portalSession.value = portalSessionFixture({ staff: true });
 
     mount(<AccountSettings />);
     await settle();
@@ -64,7 +64,7 @@ describe("portal account settings capacity cutover", () => {
 
   it.each([
     ["member-only", { member: true }],
-    ["dual-capacity", { admin: true, member: true }],
+    ["dual-capacity", { staff: true, member: true }],
   ] as const)("loads notification preferences for a %s identity", async (_label, capacities) => {
     const requests: string[] = [];
     vi.stubGlobal(
@@ -75,7 +75,7 @@ describe("portal account settings capacity cutover", () => {
           location.origin,
         );
         requests.push(url.pathname);
-        if (url.pathname === "/api/v1/me/notification-preferences") {
+        if (url.pathname === "/api/v1/users/current/notifications/preferences") {
           return jsonResponse({
             workingGroupUpdates: true,
             voteReminders: true,
@@ -94,6 +94,6 @@ describe("portal account settings capacity cutover", () => {
     });
 
     expect(container.textContent).toContain("Notification preferences");
-    expect(requests).toEqual(["/api/v1/me/notification-preferences"]);
+    expect(requests).toEqual(["/api/v1/users/current/notifications/preferences"]);
   });
 });

@@ -122,7 +122,7 @@ describe("proposal speaker capacity conflicts", () => {
       .run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
@@ -210,7 +210,7 @@ describe("proposal speaker capacity conflicts", () => {
     });
     const racingDb = raceBeforeFirstBatch(async () => {
       const removal = await app.fetch(
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+        new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
           method: "DELETE",
           headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
           body: "{}",

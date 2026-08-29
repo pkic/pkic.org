@@ -260,7 +260,6 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     // the current email and eligibility when used.
     statements.push(
       db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
-      db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
     );
   }
   if (changingPrimaryEmail) {

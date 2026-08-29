@@ -10,7 +10,7 @@ import { json } from "../../../../_lib/http";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { listEmailOutbox } from "../../../../_lib/services/email-outbox";
 import { emailOutboxResponseSchema, emailOutboxQuerySchema } from "../../../../../assets/shared/schemas/email-outbox";
-import { requireSystemPermission } from "../../system/authorization";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 const emailOutboxGetRouteSchema = {
   tags: ["Email"],
@@ -28,6 +28,6 @@ const emailOutboxGetRouteSchema = {
 };
 
 export const EmailOutboxGet = openApiRoute(emailOutboxGetRouteSchema, async (c: AdminContext, data) => {
-  const { db } = await requireSystemPermission(c, "email:read");
+  const { db } = await requireStaffPermission(c, "email:read");
   return json(emailOutboxResponseSchema.parse(await listEmailOutbox(db, data.query)));
 });

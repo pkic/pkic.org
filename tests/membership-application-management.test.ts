@@ -1,11 +1,11 @@
 /**
  * membership-application-management.test.ts
  *
- * Canonical System membership-application management endpoints:
- *  - PATCH /api/v1/system/membership-applications/:id (Fix 3: correct applicant-submitted
+ * Canonical membership-application domain endpoints:
+ *  - PATCH /api/v1/members/applications/:id (Fix 3: correct applicant-submitted
  *    fields without transitioning stage)
- *  - GET /api/v1/system/membership-applications?sort=... (Fix 4: sortable columns)
- *  - POST /api/v1/operations/membership-batches/:kind/run
+ *  - GET /api/v1/members/applications?sort=... (Fix 4: sortable columns)
+ *  - POST /api/v1/membership/batches/:batchKey/runs
  *    (manual off-cycle triggers for the twice-weekly membership batches)
  *
  * Structure mirrors tests/admin-members.test.ts and
@@ -95,7 +95,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
   return { id };
 }
 
-describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit application fields)", () => {
+describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fields)", () => {
   let adminToken: string;
   let adminId: string;
   let adminActor: UserBackedAuthAdmin;
@@ -116,7 +116,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     });
     const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         applicantName: "Corrected Name",
@@ -158,6 +158,38 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     // duplicate-application detection (Fix 1's subject) doesn't desync.
     expect(rows[0].organization_domain).toBe("newdomain.test");
     expect(rows[0].stage).toBe("pending");
+  });
+
+  it("fails closed when answer edits encounter a weakened workflow policy field", async () => {
+    const formSubmissionId = await createApplicationFormSubmission({
+      job_title: "Engineer",
+      reason: "Original reason",
+    });
+    const { id } = await createApplication({ form_submission_id: formSubmissionId });
+    await env.DB.prepare(
+      `UPDATE form_fields
+       SET required = 0
+       WHERE form_id = (SELECT id FROM forms WHERE key = 'membership-application')
+         AND key = 'agrees_bylaws'`,
+    ).run();
+
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: { reason: "This must not persist" } }),
+    });
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "MEMBERSHIP_APPLICATION_POLICY_FIELDS_INVALID" },
+    });
+    expect(
+      await queryAll<{ data_json: string }>(
+        env.DB,
+        `SELECT answer.data_json
+         FROM form_submission_answers answer
+         WHERE answer.submission_id = ? AND answer.field_key = 'reason'`,
+        formSubmissionId,
+      ),
+    ).toEqual([{ data_json: JSON.stringify("Original reason") }]);
   });
 
   it("serializes concurrent edits with the application transition revision", async () => {
@@ -202,7 +234,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     const staleReminder = runOnHoldReminders(gate.db, env as any);
     await gate.reached;
 
-    const edit = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const edit = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantEmail: "updated@example.test" }),
     });
@@ -228,7 +260,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     });
     const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`);
     const body = (await response.json()) as {
       requestedWorkingGroups: Array<{ slug: string; name: string }>;
     };
@@ -307,7 +339,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
   it("records a member_application_events row for the edit, distinct from a stage transition (fromStage === toStage)", async () => {
     const { id } = await createApplication({ stage: "in_review" });
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Renamed Applicant" }),
     });
@@ -328,7 +360,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
 
   it("rejects API-key edits without side effects", async () => {
     const { id } = await createApplication({ stage: "in_review" });
-    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "API Key Correction" }),
     });
@@ -354,13 +386,13 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
   it("allows editing an already-approved application's details more than once (uq_member_application_events_approved must not reject the from_stage=to_stage='approved' marker event)", async () => {
     const { id } = await createApplication({ stage: "approved" });
 
-    const first = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const first = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "First Correction" }),
     });
     expect(first.status).toBe(200);
 
-    const second = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const second = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Second Correction" }),
     });
@@ -378,7 +410,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
   it("writes an audit_log entry for the edit", async () => {
     const { id } = await createApplication();
 
-    await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Audited Name" }),
     });
@@ -396,7 +428,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
   it("clears organizationName when the category is edited to an individual (org-less) category", async () => {
     const { id } = await createApplication({ membership_category: "F", organization_name: "Old Org" });
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ membershipCategory: "H6" }),
     });
@@ -413,7 +445,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
 
   it("rejects an empty patch body (no fields provided)", async () => {
     const { id } = await createApplication();
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({}),
     });
@@ -421,7 +453,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
   });
 
   it("returns 404 for a non-existent application", async () => {
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${crypto.randomUUID()}`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${crypto.randomUUID()}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Nobody" }),
     });
@@ -437,7 +469,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     });
     const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
 
-    const response = await call(staffToken, `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(staffToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Should Not Save" }),
     });
@@ -457,7 +489,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
     await assignRole(staffId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffId, "staff-membership-token");
 
-    const response = await call(staffToken, `/api/v1/system/membership-applications/${id}`, {
+    const response = await call(staffToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "Processor Edited" }),
     });
@@ -465,7 +497,7 @@ describe("PATCH /api/v1/system/membership-applications/:id (Fix 3 — edit appli
   });
 });
 
-describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortable columns)", () => {
+describe("GET /api/v1/members/applications?sort=... (Fix 4 — sortable columns)", () => {
   let adminToken: string;
   let adminId: string;
 
@@ -493,28 +525,28 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
   });
 
   it("defaults to created_at DESC when no sort param is given (unchanged behavior)", async () => {
-    const response = await call(adminToken, "/api/v1/system/membership-applications");
+    const response = await call(adminToken, "/api/v1/members/applications");
     expect(response.status).toBe(200);
     const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
   });
 
   it("sorts ascending by a valid allowlisted column (applicant_name)", async () => {
-    const response = await call(adminToken, "/api/v1/system/membership-applications?sort=applicant_name");
+    const response = await call(adminToken, "/api/v1/members/applications?sort=applicant_name");
     expect(response.status).toBe(200);
     const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
   });
 
   it("sorts descending with a leading '-'", async () => {
-    const response = await call(adminToken, "/api/v1/system/membership-applications?sort=-applicant_name");
+    const response = await call(adminToken, "/api/v1/members/applications?sort=-applicant_name");
     expect(response.status).toBe(200);
     const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Zed Applicant", "Amy Applicant"]);
   });
 
   it("applies the shared search contract in D1 and returns the matching page total", async () => {
-    const response = await call(adminToken, "/api/v1/system/membership-applications?q=amy%40example.test");
+    const response = await call(adminToken, "/api/v1/members/applications?q=amy%40example.test");
     expect(response.status).toBe(200);
     const body = membershipApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map(({ applicantName }) => applicantName)).toEqual(["Amy Applicant"]);
@@ -526,7 +558,7 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
 
     const response = await call(
       adminToken,
-      "/api/v1/system/membership-applications?q=consortium%20organizations&limit=1&offset=0",
+      "/api/v1/members/applications?q=consortium%20organizations&limit=1&offset=0",
     );
     expect(response.status).toBe(200);
     const body = membershipApplicationsListResponseSchema.parse(await response.json());
@@ -539,7 +571,7 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
   });
 
   it("exposes the D1-backed category catalog to readers and never the legacy admin route", async () => {
-    const catalog = await call(adminToken, "/api/v1/system/membership-categories");
+    const catalog = await call(adminToken, "/api/v1/membership/categories");
     expect(catalog.status).toBe(200);
     const catalogBody = membershipCategoryCatalogResponseSchema.parse(await catalog.json());
     expect(catalogBody.categories[0]).toMatchObject({
@@ -551,6 +583,18 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
     });
 
     expect((await call(adminToken, "/api/v1/admin/applications")).status).toBe(404);
+  });
+
+  it("mounts staff collection and public form routes in the domain router and removes the System endpoint", async () => {
+    expect((await call(adminToken, "/api/v1/members/applications")).status).toBe(200);
+    expect((await call(adminToken, "/api/v1/system/membership-applications")).status).toBe(404);
+
+    const publicForm = await app.fetch(
+      new Request("https://app.test/api/v1/members/applications/form"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(publicForm.status).toBe(200);
   });
 
   it("keeps read, write, and approval capabilities independently enforceable", async () => {
@@ -567,30 +611,30 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
     const approveToken = await createAdminSession(env.DB, approveUserId, "application-approver-token");
 
     const applicationId = crypto.randomUUID();
-    expect((await call(readToken, "/api/v1/system/membership-applications")).status).toBe(200);
+    expect((await call(readToken, "/api/v1/members/applications")).status).toBe(200);
     expect(
       (
-        await call(readToken, `/api/v1/system/membership-applications/${applicationId}`, {
+        await call(readToken, `/api/v1/members/applications/${applicationId}`, {
           method: "PATCH",
           body: JSON.stringify({ applicantName: "Must not write" }),
         })
       ).status,
     ).toBe(403);
 
-    expect((await call(writeToken, "/api/v1/system/membership-applications")).status).toBe(403);
+    expect((await call(writeToken, "/api/v1/members/applications")).status).toBe(403);
     expect(
       (
-        await call(writeToken, `/api/v1/system/membership-applications/${applicationId}`, {
+        await call(writeToken, `/api/v1/members/applications/${applicationId}`, {
           method: "PATCH",
           body: JSON.stringify({ applicantName: "Authorized but missing" }),
         })
       ).status,
     ).toBe(404);
 
-    expect((await call(approveToken, "/api/v1/system/membership-applications")).status).toBe(403);
+    expect((await call(approveToken, "/api/v1/members/applications")).status).toBe(403);
     expect(
       (
-        await call(approveToken, `/api/v1/system/membership-applications/${applicationId}/approve`, {
+        await call(approveToken, `/api/v1/members/applications/${applicationId}/approve`, {
           method: "POST",
         })
       ).status,
@@ -600,7 +644,7 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
   it("rejects an unknown/unsafe sort column with a 400 instead of silently ignoring it", async () => {
     const response = await call(
       adminToken,
-      `/api/v1/system/membership-applications?sort=${encodeURIComponent("id; DROP TABLE member_applications; --")}`,
+      `/api/v1/members/applications?sort=${encodeURIComponent("id; DROP TABLE member_applications; --")}`,
     );
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
@@ -611,7 +655,7 @@ describe("GET /api/v1/system/membership-applications?sort=... (Fix 4 — sortabl
   });
 });
 
-describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
+describe("POST /api/v1/membership/batches/:batchKey/runs", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -624,7 +668,7 @@ describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
   it("runConsultationBatch queues a consultation-batch email for applications in_consultation", async () => {
     await createApplication({ stage: "in_consultation" });
 
-    const response = await call(adminToken, "/api/v1/operations/membership-batches/consultation/run", {
+    const response = await call(adminToken, "/api/v1/membership/batches/consultation/runs", {
       method: "POST",
       body: JSON.stringify({}),
     });
@@ -646,7 +690,7 @@ describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
       .bind(new Date(Date.now() - 10 * 86_400_000).toISOString(), id)
       .run();
 
-    const response = await call(adminToken, "/api/v1/operations/membership-batches/ec-review/run", {
+    const response = await call(adminToken, "/api/v1/membership/batches/ec-review/runs", {
       method: "POST",
       body: JSON.stringify({}),
     });
@@ -661,18 +705,21 @@ describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
   it("rejects an unknown batch kind without running another batch", async () => {
     await createApplication({ stage: "in_consultation" });
 
-    const response = await call(adminToken, "/api/v1/operations/membership-batches/everything/run", {
+    const response = await call(adminToken, "/api/v1/membership/batches/everything/runs", {
       method: "POST",
       body: JSON.stringify({}),
     });
-    expect(response.status).toBe(404);
+    // One parameterised route validates the batch key against the shared
+    // catalog, so an unknown key is a contract violation rather than a
+    // missing route.
+    expect(response.status).toBe(400);
 
     const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
     expect(outbox).toHaveLength(0);
   });
 });
 
-describe("POST /api/v1/system/membership-applications/:id/communications", () => {
+describe("POST /api/v1/members/applications/:id/communications", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -684,7 +731,7 @@ describe("POST /api/v1/system/membership-applications/:id/communications", () =>
 
   it("commits its email intent, communication record, and audit atomically", async () => {
     const { id } = await createApplication({ applicant_email: "communication@example.test" });
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/communications`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/communications`, {
       method: "POST",
       body: JSON.stringify({ subject: "Additional information", body: "Please provide more detail." }),
     });
@@ -708,7 +755,7 @@ describe("POST /api/v1/system/membership-applications/:id/communications", () =>
     const { id } = await createApplication({ applicant_email: "service-actor@example.test" });
     const response = await call(
       env.ADMIN_API_KEY ?? "test-admin-key",
-      `/api/v1/system/membership-applications/${id}/communications`,
+      `/api/v1/members/applications/${id}/communications`,
       {
         method: "POST",
         body: JSON.stringify({ subject: "Not attributable", body: "This must not be queued." }),
@@ -736,7 +783,7 @@ describe("POST /api/v1/system/membership-applications/:id/communications", () =>
        END`,
     ).run();
 
-    const response = await call(adminToken, `/api/v1/system/membership-applications/${id}/communications`, {
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/communications`, {
       method: "POST",
       body: JSON.stringify({ subject: "Must roll back", body: "This cannot become partial." }),
     });

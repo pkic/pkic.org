@@ -13,7 +13,7 @@ describe("system email template endpoints", () => {
   it("lists active template versions through the router", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates");
+    const response = await callSystem("/api/v1/email/templates");
     expect(response.status).toBe(200);
 
     const payload = (await response.json()) as {
@@ -36,7 +36,7 @@ describe("system email template endpoints", () => {
   it("bounds the list with limit/offset and computes hasMore/total from a real COUNT, not a limit+1 slice", async () => {
     await setupSystemTemplates();
 
-    const page1 = await callSystem("/api/v1/system/email-templates?limit=1&offset=0&sort=template_key");
+    const page1 = await callSystem("/api/v1/email/templates?limit=1&offset=0&sort=template_key");
     expect(page1.status).toBe(200);
     const page1Payload = (await page1.json()) as {
       templates: Array<{ template_key: string }>;
@@ -48,13 +48,13 @@ describe("system email template endpoints", () => {
     expect(page1Payload.page.total).toBeGreaterThan(1);
     expect(page1Payload.page.hasMore).toBe(true);
 
-    const page2 = await callSystem("/api/v1/system/email-templates?limit=1&offset=1&sort=template_key");
+    const page2 = await callSystem("/api/v1/email/templates?limit=1&offset=1&sort=template_key");
     const page2Payload = (await page2.json()) as { templates: Array<{ template_key: string }> };
     expect(page2Payload.templates).toHaveLength(1);
     expect(page2Payload.templates[0].template_key).not.toBe(page1Payload.templates[0].template_key);
 
     const lastPage = await callSystem(
-      `/api/v1/system/email-templates?limit=1&offset=${page1Payload.page.total - 1}&sort=template_key`,
+      `/api/v1/email/templates?limit=1&offset=${page1Payload.page.total - 1}&sort=template_key`,
     );
     const lastPagePayload = (await lastPage.json()) as { page: { hasMore: boolean } };
     expect(lastPagePayload.page.hasMore).toBe(false);
@@ -63,7 +63,7 @@ describe("system email template endpoints", () => {
   it("filters the list by ?q= against template_key", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates?q=registration_confirm_email");
+    const response = await callSystem("/api/v1/email/templates?q=registration_confirm_email");
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { templates: Array<{ template_key: string }>; page: { total: number } };
     expect(payload.templates).toHaveLength(1);
@@ -74,7 +74,7 @@ describe("system email template endpoints", () => {
   it("rejects an unknown ?sort= column as a schema validation error", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates?sort=not_a_real_column");
+    const response = await callSystem("/api/v1/email/templates?sort=not_a_real_column");
     expect(response.status).toBe(400);
     const payload = (await response.json()) as { error: { code: string } };
     expect(payload.error.code).toBe("VALIDATION_ERROR");
@@ -82,18 +82,18 @@ describe("system email template endpoints", () => {
 
   it("filters template catalogs by a validated key prefix in D1", async () => {
     await setupSystemTemplates();
-    const response = await callSystem("/api/v1/system/email-templates?templateKeyPrefix=registration_");
+    const response = await callSystem("/api/v1/email/templates?templateKeyPrefix=registration_");
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { templates: Array<{ template_key: string }> };
     expect(payload.templates.length).toBeGreaterThan(0);
     expect(payload.templates.every((template) => template.template_key.startsWith("registration_"))).toBe(true);
-    expect((await callSystem("/api/v1/system/email-templates?templateKeyPrefix=bad%2A")).status).toBe(400);
+    expect((await callSystem("/api/v1/email/templates?templateKeyPrefix=bad%2A")).status).toBe(400);
   });
 
   it("renders preview HTML and text with seeded partials and layout", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates/preview", {
+    const response = await callSystem("/api/v1/email/templates/preview", {
       method: "POST",
       body: JSON.stringify({
         subjectTemplate: "Preview for {{eventName}}",
@@ -117,7 +117,7 @@ describe("system email template endpoints", () => {
   it("rejects preview data collections beyond the shared contract limit", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates/preview", {
+    const response = await callSystem("/api/v1/email/templates/preview", {
       method: "POST",
       body: JSON.stringify({
         content: "{{#each items}}{{/each}}",
@@ -132,7 +132,7 @@ describe("system email template endpoints", () => {
   it("fails closed when bounded preview input would amplify beyond the renderer limit", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates/preview", {
+    const response = await callSystem("/api/v1/email/templates/preview", {
       method: "POST",
       body: JSON.stringify({
         content: `{{#each items}}${"x".repeat(2_001)}{{/each}}`,
@@ -149,7 +149,7 @@ describe("system email template endpoints", () => {
   it("rejects an oversized subject override through the mounted preview route", async () => {
     await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates/preview", {
+    const response = await callSystem("/api/v1/email/templates/preview", {
       method: "POST",
       body: JSON.stringify({
         content: "Preview body",
@@ -166,7 +166,7 @@ describe("system email template endpoints", () => {
   it("attributes a new template version to the real staff user and audit actor", async () => {
     const { adminId } = await setupSystemTemplates();
 
-    const response = await callSystem("/api/v1/system/email-templates/attribution_test/versions", {
+    const response = await callSystem("/api/v1/email/templates/attribution_test/versions", {
       method: "POST",
       body: JSON.stringify({ content: "Attribution test body", contentType: "markdown" }),
     });
@@ -193,7 +193,7 @@ describe("system email template endpoints", () => {
     await setupSystemTemplates();
     const response = await callWithToken(
       env.ADMIN_API_KEY ?? "test-admin-key",
-      "/api/v1/system/email-templates/api_key_attribution_test/versions",
+      "/api/v1/email/templates/api_key_attribution_test/versions",
       {
         method: "POST",
         body: JSON.stringify({ content: "API-key attribution test body", contentType: "markdown" }),
@@ -218,7 +218,7 @@ describe("system email template endpoints", () => {
     ).run();
 
     try {
-      const response = await callSystem("/api/v1/system/email-templates/audit_rollback_test/versions", {
+      const response = await callSystem("/api/v1/email/templates/audit_rollback_test/versions", {
         method: "POST",
         body: JSON.stringify({ content: "Must roll back", contentType: "markdown" }),
       });
@@ -240,7 +240,7 @@ describe("system email template endpoints", () => {
   it("creates a new version, activates it, and rejects unknown versions", async () => {
     const { adminId } = await setupSystemTemplates();
 
-    const versionsResponse = await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions", {
+    const versionsResponse = await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
       method: "POST",
       body: JSON.stringify({
         content: "Updated confirmation body for {{firstName}}",
@@ -259,7 +259,7 @@ describe("system email template endpoints", () => {
     expect(versionsPayload.version.version).toBe(2);
     expect(versionsPayload.version.status).toBe("draft");
 
-    const activateResponse = await callSystem("/api/v1/system/email-templates/registration_confirm_email/activate", {
+    const activateResponse = await callSystem("/api/v1/email/templates/registration_confirm_email/activate", {
       method: "POST",
       body: JSON.stringify({ version: 2 }),
     });
@@ -295,7 +295,7 @@ describe("system email template endpoints", () => {
       content: "Updated confirmation body for {{firstName}}",
     });
 
-    const reactivateResponse = await callSystem("/api/v1/system/email-templates/registration_confirm_email/activate", {
+    const reactivateResponse = await callSystem("/api/v1/email/templates/registration_confirm_email/activate", {
       method: "POST",
       body: JSON.stringify({ version: 1 }),
     });
@@ -312,7 +312,7 @@ describe("system email template endpoints", () => {
     ]);
     await expect(resolveTemplate(env.DB, "registration_confirm_email")).resolves.toMatchObject({ version: 1 });
 
-    const missingResponse = await callSystem("/api/v1/system/email-templates/registration_confirm_email/activate", {
+    const missingResponse = await callSystem("/api/v1/email/templates/registration_confirm_email/activate", {
       method: "POST",
       body: JSON.stringify({ version: 999 }),
     });
@@ -323,7 +323,7 @@ describe("system email template endpoints", () => {
 
   it("rolls back activation when its audit row cannot be written", async () => {
     await setupSystemTemplates();
-    const createResponse = await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions", {
+    const createResponse = await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
       method: "POST",
       body: JSON.stringify({ content: "Activation audit rollback", contentType: "markdown" }),
     });
@@ -338,7 +338,7 @@ describe("system email template endpoints", () => {
     ).run();
 
     try {
-      const response = await callSystem("/api/v1/system/email-templates/registration_confirm_email/activate", {
+      const response = await callSystem("/api/v1/email/templates/registration_confirm_email/activate", {
         method: "POST",
         body: JSON.stringify({ version: 2 }),
       });
@@ -364,7 +364,7 @@ describe("system email template endpoints", () => {
   it("bounds GET .../:key/versions with limit/offset, ordered newest version first", async () => {
     await setupSystemTemplates();
 
-    await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions", {
+    await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
       method: "POST",
       body: JSON.stringify({
         content: "Updated confirmation body for {{firstName}}",
@@ -373,7 +373,7 @@ describe("system email template endpoints", () => {
       }),
     });
 
-    const unbounded = await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions");
+    const unbounded = await callSystem("/api/v1/email/templates/registration_confirm_email/versions");
     expect(unbounded.status).toBe(200);
     const unboundedPayload = (await unbounded.json()) as {
       versions: Array<{ version: number }>;
@@ -383,9 +383,7 @@ describe("system email template endpoints", () => {
     expect(unboundedPayload.page.total).toBe(2);
     expect(unboundedPayload.page.hasMore).toBe(false);
 
-    const page1 = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?limit=1&offset=0",
-    );
+    const page1 = await callSystem("/api/v1/email/templates/registration_confirm_email/versions?limit=1&offset=0");
     const page1Payload = (await page1.json()) as {
       versions: Array<{ version: number }>;
       page: { hasMore: boolean; total: number };
@@ -395,9 +393,7 @@ describe("system email template endpoints", () => {
     expect(page1Payload.page.hasMore).toBe(true);
     expect(page1Payload.page.total).toBe(2);
 
-    const page2 = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?limit=1&offset=1",
-    );
+    const page2 = await callSystem("/api/v1/email/templates/registration_confirm_email/versions?limit=1&offset=1");
     const page2Payload = (await page2.json()) as { versions: Array<{ version: number }>; page: { hasMore: boolean } };
     expect(page2Payload.versions).toHaveLength(1);
     expect(page2Payload.versions[0].version).toBe(1);
@@ -407,7 +403,7 @@ describe("system email template endpoints", () => {
   it("searches and sorts template versions in D1 through the shared list contract", async () => {
     await setupSystemTemplates();
 
-    await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions", {
+    await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
       method: "POST",
       body: JSON.stringify({
         content: "Updated confirmation body",
@@ -417,7 +413,7 @@ describe("system email template endpoints", () => {
     });
 
     const search = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?q=distinct&sort=version",
+      "/api/v1/email/templates/registration_confirm_email/versions?q=distinct&sort=version",
     );
     expect(search.status).toBe(200);
     const payload = (await search.json()) as {
@@ -429,21 +425,19 @@ describe("system email template endpoints", () => {
     ]);
     expect(payload.page.total).toBe(1);
 
-    const invalidSort = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?sort=body",
-    );
+    const invalidSort = await callSystem("/api/v1/email/templates/registration_confirm_email/versions?sort=body");
     expect(invalidSort.status).toBe(400);
   });
 
   it("filters one template's versions by lifecycle status in D1", async () => {
     await setupSystemTemplates();
-    await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions", {
+    await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
       method: "POST",
       body: JSON.stringify({ content: "Draft body", subjectTemplate: "Draft", contentType: "markdown" }),
     });
 
     const active = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?status=active&limit=1&sort=-version",
+      "/api/v1/email/templates/registration_confirm_email/versions?status=active&limit=1&sort=-version",
     );
     expect(active.status).toBe(200);
     const activePayload = (await active.json()) as {
@@ -454,7 +448,7 @@ describe("system email template endpoints", () => {
     expect(activePayload.page.total).toBe(1);
 
     const drafts = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?status=draft&limit=1&sort=-version",
+      "/api/v1/email/templates/registration_confirm_email/versions?status=draft&limit=1&sort=-version",
     );
     const draftPayload = (await drafts.json()) as {
       versions: Array<{ version: number; status: string }>;
@@ -462,12 +456,12 @@ describe("system email template endpoints", () => {
     };
     expect(draftPayload.versions).toEqual([expect.objectContaining({ version: 2, status: "draft" })]);
     expect(draftPayload.page.total).toBe(1);
-    await callSystem("/api/v1/system/email-templates/registration_confirm_email/activate", {
+    await callSystem("/api/v1/email/templates/registration_confirm_email/activate", {
       method: "POST",
       body: JSON.stringify({ version: 2 }),
     });
     const archived = await callSystem(
-      "/api/v1/system/email-templates/registration_confirm_email/versions?status=archived&limit=1",
+      "/api/v1/email/templates/registration_confirm_email/versions?status=archived&limit=1",
     );
     expect(archived.status).toBe(200);
     const archivedPayload = (await archived.json()) as {
@@ -477,7 +471,7 @@ describe("system email template endpoints", () => {
     expect(archivedPayload.versions).toEqual([expect.objectContaining({ version: 1, status: "archived" })]);
     expect(archivedPayload.page.total).toBe(1);
     expect(
-      (await callSystem("/api/v1/system/email-templates/registration_confirm_email/versions?status=deleted")).status,
+      (await callSystem("/api/v1/email/templates/registration_confirm_email/versions?status=deleted")).status,
     ).toBe(400);
   });
 
@@ -486,22 +480,22 @@ describe("system email template endpoints", () => {
     const readToken = await createStaffSession("email-templates:read");
     const writeToken = await createStaffSession("email-templates:write");
 
-    const readList = await callWithToken(readToken, "/api/v1/system/email-templates");
+    const readList = await callWithToken(readToken, "/api/v1/email/templates");
     expect(readList.status).toBe(200);
-    const readPreview = await callWithToken(readToken, "/api/v1/system/email-templates/preview", {
+    const readPreview = await callWithToken(readToken, "/api/v1/email/templates/preview", {
       method: "POST",
       body: JSON.stringify({ content: "Read-only preview", contentType: "markdown" }),
     });
     expect(readPreview.status).toBe(403);
-    const readCreate = await callWithToken(readToken, "/api/v1/system/email-templates/permission_split/versions", {
+    const readCreate = await callWithToken(readToken, "/api/v1/email/templates/permission_split/versions", {
       method: "POST",
       body: JSON.stringify({ content: "Read-only create", contentType: "markdown" }),
     });
     expect(readCreate.status).toBe(403);
 
-    const writeList = await callWithToken(writeToken, "/api/v1/system/email-templates");
+    const writeList = await callWithToken(writeToken, "/api/v1/email/templates");
     expect(writeList.status).toBe(403);
-    const writeCreate = await callWithToken(writeToken, "/api/v1/system/email-templates/permission_split/versions", {
+    const writeCreate = await callWithToken(writeToken, "/api/v1/email/templates/permission_split/versions", {
       method: "POST",
       body: JSON.stringify({ content: "Write-only create", contentType: "markdown" }),
     });
@@ -520,6 +514,17 @@ describe("system email template endpoints", () => {
       ["/api/v1/admin/email-templates/legacy/versions"],
       ["/api/v1/admin/email-templates/legacy/activate", { method: "POST", body: JSON.stringify({ version: 1 }) }],
       ["/api/v1/admin/email-templates/legacy/exists"],
+    ];
+    for (const [path, init] of oldRoutes) expect((await callSystem(path, init)).status).toBe(404);
+  });
+
+  it("does not retain the former generic system email-template route", async () => {
+    await setupSystemTemplates();
+    const oldRoutes: Array<[string, RequestInit?]> = [
+      ["/api/v1/system/email-templates"],
+      ["/api/v1/system/email-templates/preview", { method: "POST", body: JSON.stringify({ content: "old" }) }],
+      ["/api/v1/system/email-templates/example/versions"],
+      ["/api/v1/system/email-templates/example/activate", { method: "POST", body: JSON.stringify({ version: 1 }) }],
     ];
     for (const [path, init] of oldRoutes) expect((await callSystem(path, init)).status).toBe(404);
   });

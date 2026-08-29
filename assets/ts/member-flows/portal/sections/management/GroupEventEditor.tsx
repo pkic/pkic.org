@@ -1,8 +1,11 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
+  EVENT_VISIBILITIES,
+  EVENT_VISIBILITY_LABELS,
   standaloneEventProfileKeySchema,
   type EventRegistrationPolicy,
   type StandaloneEventProfileKey,
+  type EventVisibility,
 } from "../../../../../shared/schemas/event-series";
 import {
   eventProfileCatalogResponseSchema,
@@ -30,6 +33,7 @@ interface EventDraft {
   endsAt: string;
   profileKey: StandaloneEventProfileKey;
   registrationPolicy: EventRegistrationPolicy;
+  visibility: EventVisibility;
   inviteLimitAttendee: number;
   location: string;
   links: string[];
@@ -75,6 +79,7 @@ function initialDraft(event: GroupEvent | null): EventDraft {
     endsAt: localDateTime(event?.endsAt ?? null, timezone),
     profileKey,
     registrationPolicy: event?.registrationPolicy ?? "no_registration",
+    visibility: event?.visibility ?? "group_members",
     inviteLimitAttendee: event?.inviteLimitAttendee ?? 5,
     location: event?.location ?? "",
     links: event?.links ?? [],
@@ -100,6 +105,8 @@ export function GroupEventEditor({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const eventRevision = `${groupId}:${event?.id ?? "new"}:${event?.updatedAt ?? ""}`;
+  const renderedEventRevision = useRef(eventRevision);
   const isCreate = event === null;
   const profileCatalog = useData(
     () =>
@@ -121,10 +128,12 @@ export function GroupEventEditor({
   }, [isCreate, profileCatalog.data]);
 
   useEffect(() => {
+    if (renderedEventRevision.current === eventRevision) return;
+    renderedEventRevision.current = eventRevision;
     setDraft(initialDraft(event));
     setError(null);
     setStatus("");
-  }, [event?.id, event?.updatedAt]);
+  }, [eventRevision]);
 
   function update<Key extends keyof EventDraft>(key: Key, value: EventDraft[Key]): void {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -155,6 +164,7 @@ export function GroupEventEditor({
           endsAt,
           profileKey: standaloneEventProfileKeySchema.parse(draft.profileKey),
           registrationPolicy: "no_registration",
+          visibility: draft.visibility,
           inviteLimitAttendee: draft.inviteLimitAttendee,
           location: fieldValue(draft.location),
           links: draft.links,
@@ -176,6 +186,7 @@ export function GroupEventEditor({
         startsAt,
         endsAt,
         inviteLimitAttendee: draft.inviteLimitAttendee,
+        visibility: draft.visibility,
         location: fieldValue(draft.location),
         links: draft.links,
       });
@@ -282,6 +293,26 @@ export function GroupEventEditor({
             />
           </div>
         )}
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold" for={`group-event-visibility-${event?.id ?? "new"}`}>
+            Visibility
+          </label>
+          <select
+            id={`group-event-visibility-${event?.id ?? "new"}`}
+            class="form-select"
+            value={draft.visibility}
+            disabled={saving}
+            onChange={(inputEvent) =>
+              update("visibility", (inputEvent.target as HTMLSelectElement).value as EventVisibility)
+            }
+          >
+            {EVENT_VISIBILITIES.map((value) => (
+              <option key={value} value={value}>
+                {EVENT_VISIBILITY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
         <div class="col-md-4">
           <label class="form-label small fw-semibold" for={`group-event-location-${event?.id ?? "new"}`}>
             Location

@@ -1,8 +1,6 @@
-/** Token-gated supporting-document upload and bounded list endpoints. */
-import {
-  applicationDocumentListRouteSchema,
-  applicationDocumentUploadRouteSchema,
-} from "../../../../../../assets/shared/schemas/member-applications";
+/** Token-gated upload plus capability-or-staff bounded list endpoint. */
+import { applicationDocumentUploadRouteSchema } from "../../../../../../assets/shared/schemas/member-applications";
+import { applicationDocumentsReadRouteSchema } from "../../../../../../assets/shared/schemas/application-documents";
 import { getApplicationDocumentLimits } from "../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
@@ -13,9 +11,14 @@ import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 import { getClientIp } from "../../../../../_lib/request";
 import {
   listApplicationDocuments,
+  listStaffApplicationDocuments,
   uploadApplicationDocument,
 } from "../../../../../_lib/services/membership/applications/documents";
-import { verifyApplicationManageToken } from "../../../../../_lib/services/membership/applications/queries";
+import {
+  getMemberApplicationById,
+  verifyApplicationManageToken,
+} from "../../../../../_lib/services/membership/applications/queries";
+import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 
 async function requireApplication(db: ReturnType<typeof requestDb>, applicationId: string, token: string) {
   const application = await verifyApplicationManageToken(db, applicationId, token);
@@ -83,13 +86,23 @@ export const MembersApplicationsDocumentsPost = openApiRoute(
 );
 
 export const MembersApplicationsDocumentsGet = openApiRoute(
-  applicationDocumentListRouteSchema,
+  applicationDocumentsReadRouteSchema,
   async (c: AdminContext, data) => {
     c.set?.("sensitive", true);
-    await enforceDocumentIpRateLimit(c);
-    const db = requestDb(c);
-    const application = await requireApplication(db, data.params.id, data.query.token);
-    await enforceDocumentApplicationRateLimit(c, application.id);
-    return json(await listApplicationDocuments(db, application.id, data.query));
+    const { token, ...query } = data.query;
+    if (token) {
+      await enforceDocumentIpRateLimit(c);
+      const db = requestDb(c);
+      const application = await requireApplication(db, data.params.id, token);
+      await enforceDocumentApplicationRateLimit(c, application.id);
+      return json(await listApplicationDocuments(db, application.id, query));
+    }
+
+    const { db } = await requireStaffPermission(c, "membership:read");
+    const application = await getMemberApplicationById(db, data.params.id);
+    if (!application) {
+      throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
+    }
+    return json(await listStaffApplicationDocuments(db, application.id, query));
   },
 );

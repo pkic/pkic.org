@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventIdSchema } from "./api-common";
+import { booleanQueryFlagSchema, eventIdSchema } from "./api-common";
 import { eventSummarySchema } from "./event-read-models";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
@@ -26,6 +26,7 @@ export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SOR
   sort: sortColumnSchemaWithDefault(EVENT_PROPOSALS_SORT_COLUMNS, "-submittedAt"),
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
+  archived: booleanQueryFlagSchema.optional(),
 });
 export type EventProposalsListQuery = z.infer<typeof eventProposalsListQuerySchema>;
 

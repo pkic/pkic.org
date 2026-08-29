@@ -1,13 +1,40 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { SponsorsDisplayGet, SponsorsGet } from "./index";
-import { SponsorsIdLogoGet } from "./[id]/logo";
+import type { RequestDbContext } from "../../../_lib/db/context";
+import { SponsorAccessLinksCreate } from "./access-links";
+import { SponsorCheckoutCreate } from "./checkouts/index";
+import { SponsorStripeEventsCreate } from "./checkouts/stripe";
+import { SponsorCompaniesGet } from "./companies/index";
+import { SponsorInquiriesCreate } from "./inquiries";
+import { SponsorsCreate, SponsorsDisplayGet, SponsorsGet } from "./index";
+import { SponsorTierUpdate } from "./tiers/[id]";
+import { SponsorTiersGet } from "./tiers/index";
+import { SponsorEventsGet } from "./[id]/events";
+import { SponsorGet, SponsorUpdate } from "./[id]/index";
+import { SponsorsIdLogoDelete, SponsorsIdLogoGet, SponsorsIdLogoPut } from "./[id]/logo";
+import { SponsorStageUpdate } from "./[id]/stage";
+import { SponsorAttendeesList } from "./[sponsorshipId]/events/[eventId]/attendees";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.get("/", SponsorsGet);
+openapi.post("/", SponsorsCreate);
 openapi.get("/display", SponsorsDisplayGet);
+openapi.post("/inquiries", SponsorInquiriesCreate);
+openapi.post("/checkouts", SponsorCheckoutCreate);
+openapi.post("/checkouts/stripe/events", SponsorStripeEventsCreate);
+openapi.get("/tiers", SponsorTiersGet);
+openapi.patch("/tiers/:id", SponsorTierUpdate);
+openapi.post("/access-links", SponsorAccessLinksCreate);
+openapi.get("/companies", SponsorCompaniesGet);
+openapi.get("/:id/events/:eventId/attendees", SponsorAttendeesList);
+openapi.get("/:id/events", SponsorEventsGet);
+openapi.get("/:id", SponsorGet);
+openapi.patch("/:id", SponsorUpdate);
+openapi.patch("/:id/stage", SponsorStageUpdate);
 openapi.get("/:id/logo", SponsorsIdLogoGet);
+openapi.put("/:id/logo", SponsorsIdLogoPut);
+openapi.delete("/:id/logo", SponsorsIdLogoDelete);
 
 export default openapi;

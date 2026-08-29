@@ -10,8 +10,8 @@ import {
   type UserRoleAssignment,
 } from "../../../../../shared/schemas/access-control";
 import { fmt, toast } from "../../ui";
-import { ContextPicker, type PickedContext } from "./ContextPicker";
-import { systemRoleCatalog } from "./catalogs";
+import { TargetPicker, type PickedTarget } from "./TargetPicker";
+import { roleCatalog } from "./catalogs";
 
 /** Staff management: assign built-in roles, override individual permissions. */
 export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
@@ -19,31 +19,31 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
   const tableRef = useRef<ApiTableActions | null>(null);
   const [roleId, setRoleId] = useState("");
   const [roleLabel, setRoleLabel] = useState<string>();
-  const [context, setContext] = useState<PickedContext>({ contextType: null, contextId: null });
+  const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleAssign(e: Event) {
     e.preventDefault();
     if (!user || !roleId) return;
-    if (context.contextType && !context.contextId) {
+    if (target.targetType && !target.targetId) {
       toast("Pick a specific event/working group, or clear the context", "error");
       return;
     }
     setSubmitting(true);
     try {
       await postJson(
-        `/api/v1/system/access-control/users/${user.id}/roles`,
+        `/api/v1/users/${user.id}/roles`,
         {
           roleId,
-          contextType: context.contextType,
-          contextId: context.contextId,
+          contextType: target.targetType,
+          contextId: target.targetId,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         },
         userRoleResponseEnvelopeSchema,
       );
       toast("Role assigned", "success");
-      setContext({ contextType: null, contextId: null });
+      setTarget({ targetType: null, targetId: null });
       setExpiresAt("");
       await tableRef.current?.reload();
     } catch (err) {
@@ -57,7 +57,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
     if (!user) return;
     if (!confirm(`Revoke role "${assignment.roleName}"?`)) return;
     try {
-      await deleteJson(`/api/v1/system/access-control/users/${user.id}/roles/${assignment.id}`, successResponseSchema);
+      await deleteJson(`/api/v1/users/${user.id}/roles/${assignment.id}`, successResponseSchema);
       toast("Role revoked", "success");
       await tableRef.current?.reload();
     } catch (e) {
@@ -71,7 +71,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
       <div class="card-body">
         <div class="mb-3 portal-access-role-user-picker">
           <label class="form-label small fw-semibold">User</label>
-          <UserPicker endpoint="/api/v1/system/access-control/users" value={user} onChange={setUser} />
+          <UserPicker endpoint="/api/v1/permissions/subjects" value={user} onChange={setUser} />
         </div>
 
         {!user ? (
@@ -82,7 +82,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
               <form onSubmit={handleAssign} class="row g-2 align-items-end mb-3">
                 <div class="col-md-3">
                   <ServerSearchSelect
-                    catalog={systemRoleCatalog}
+                    catalog={roleCatalog}
                     label="Role"
                     value={roleId}
                     selectedLabel={roleLabel}
@@ -96,8 +96,8 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                   />
                 </div>
                 <div class="col-md-5">
-                  <label class="form-label small fw-semibold">Context</label>
-                  <ContextPicker value={context} onChange={setContext} disabled={submitting} />
+                  <label class="form-label small fw-semibold">Target</label>
+                  <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
                 </div>
                 <div class="col-md-2">
                   <label class="form-label small fw-semibold">Expires (optional)</label>
@@ -118,7 +118,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
             )}
 
             <ApiDataTable
-              endpoint={`/api/v1/system/access-control/users/${user.id}/roles`}
+              endpoint={`/api/v1/users/${user.id}/roles`}
               responseSchema={userRolesListResponseSchema}
               resolve={(response) => response.roles}
               resolvePage={(response) => response.page}

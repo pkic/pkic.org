@@ -5,7 +5,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { buildAdminEventsPageQuery, listAdminEvents } from "../functions/_lib/services/events/admin-list";
+import { buildManagedEventsPageQuery, listManagedEvents } from "../functions/_lib/services/events/catalog";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
   createRegistration,
@@ -14,7 +14,8 @@ import {
 } from "../functions/_lib/services/registrations";
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
-import { adminEventCreateResponseSchema } from "../assets/shared/schemas/admin-events";
+import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
+import { eventImportResponseSchema } from "../assets/shared/schemas/event-imports";
 import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
 import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/services/events/team";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
@@ -53,6 +54,26 @@ async function setupAdmin(): Promise<{ baseEventId: string }> {
   return { baseEventId: eventId };
 }
 
+/**
+ * Ownerless events are no longer created interactively. Tests that need one
+ * import it through the canonical event import resource, which is the only
+ * remaining way to introduce an event without an owning group.
+ */
+async function importEvent(slug: string, name: string, event: Record<string, unknown> = {}): Promise<Response> {
+  return callAdmin("/api/v1/events/imports", {
+    method: "POST",
+    body: JSON.stringify({
+      source: "hugo",
+      event: { slug, name, timezone: "UTC", visibility: "invitation_only", ...event },
+    }),
+  });
+}
+
+async function eventUpdatedAt(slug = "pqc-2026"): Promise<string> {
+  const [row] = await queryAll<{ updated_at: string }>(env.DB, "SELECT updated_at FROM events WHERE slug = ?", [slug]);
+  return row.updated_at;
+}
+
 async function createScopedEventManager(eventId: string) {
   const email = `event-manager-${crypto.randomUUID()}@example.test`;
   const userId = await insertUser(env.DB, email);
@@ -65,6 +86,8 @@ async function createScopedEventManager(eventId: string) {
     .run();
 
   return {
+    email,
+    userId,
     actor: createUserBackedAuthAdmin({
       id: userId,
       email,
@@ -81,61 +104,62 @@ describe("admin event management endpoints", () => {
     await resetDb();
   });
 
-  it("lists events and creates a new event", async () => {
+  it("retires ownerless admin event creation and lists through the canonical collection", async () => {
     await setupAdmin();
 
-    const createResponse = await callAdmin("/api/v1/admin/events", {
+    // Interactive ownerless creation is gone; events are created in the portal
+    // under an owning group, or imported from an external generator.
+    const retired = await callAdmin("/api/v1/admin/events", {
       method: "POST",
-      body: JSON.stringify({
-        slug: "pqc-2027",
-        name: "PQC 2027",
-        timezone: "Europe/Amsterdam",
-        startsAt: "2027-04-12T08:00:00.000Z",
-        endsAt: "2027-04-14T17:00:00.000Z",
-        registrationMode: "open",
-        inviteLimitAttendee: 10,
-        venue: "Amsterdam Congress Center",
-        virtualUrl: "https://pkic.org/live/",
-      }),
+      body: JSON.stringify({ slug: "pqc-2027", name: "PQC 2027", timezone: "Europe/Amsterdam" }),
     });
+    expect(retired.status).toBe(404);
 
-    expect(createResponse.status).toBe(201);
-    const createdPayload = adminEventCreateResponseSchema.parse(await createResponse.json());
-    expect(createdPayload.event.slug).toBe("pqc-2027");
-    expect(createdPayload.event.settings.venue).toBe("Amsterdam Congress Center");
-
-    const duplicateResponse = await callAdmin("/api/v1/admin/events", {
-      method: "POST",
-      body: JSON.stringify({
-        slug: "pqc-2027",
-        name: "PQC 2027 Duplicate",
-        timezone: "Europe/Amsterdam",
-        registrationMode: "open",
-        inviteLimitAttendee: 10,
-      }),
+    const imported = await importEvent("pqc-2027", "PQC 2027", {
+      timezone: "Europe/Amsterdam",
+      startsAt: "2027-04-12T08:00:00.000Z",
+      endsAt: "2027-04-14T17:00:00.000Z",
+      registrationMode: "open",
+      inviteLimitAttendee: 10,
     });
+    expect(imported.status).toBe(200);
+    const importedPayload = eventImportResponseSchema.parse(await imported.json());
+    expect(importedPayload.event.slug).toBe("pqc-2027");
+    expect(importedPayload.created).toBe(true);
 
-    expect(duplicateResponse.status).toBe(409);
-    const duplicatePayload = (await duplicateResponse.json()) as { error?: { code?: string } };
-    expect(duplicatePayload.error?.code).toBe("SLUG_TAKEN");
+    // Re-importing the same slug updates rather than conflicting.
+    const reimported = await importEvent("pqc-2027", "PQC 2027 Updated", { timezone: "Europe/Amsterdam" });
+    expect(reimported.status).toBe(200);
+    expect(eventImportResponseSchema.parse(await reimported.json()).created).toBe(false);
 
-    const listResponse = await callAdmin("/api/v1/admin/events");
+    const listResponse = await callAdmin("/api/v1/events");
     expect(listResponse.status).toBe(200);
     const listPayload = (await listResponse.json()) as {
-      events: Array<{ slug: string }>;
+      events: Array<{ slug: string; totalRegistrations?: number }>;
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
     expect(listPayload.events.map((event) => event.slug)).toEqual(expect.arrayContaining(["pqc-2026", "pqc-2027"]));
     expect(listPayload.page.total).toBeGreaterThanOrEqual(2);
+    // An events:read holder receives the management projection.
+    expect(listPayload.events[0].totalRegistrations).toBeDefined();
+  });
+
+  it("rejects an import that would retarget an event owned by another source", async () => {
+    await setupAdmin();
+    await env.DB.prepare("UPDATE events SET source_mode = 'integration' WHERE slug = 'pqc-2026'").run();
+
+    const response = await importEvent("pqc-2026", "Hijacked", {});
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "EVENT_SOURCE_CONFLICT" } });
   });
 
   it("validates admin event and form mutations through the canonical JSON boundary", async () => {
     await setupAdmin();
 
     for (const [path, method] of [
-      ["/api/v1/admin/events", "POST"],
-      ["/api/v1/admin/forms", "POST"],
-      ["/api/v1/admin/events/pqc-2026/forms", "POST"],
+      ["/api/v1/events/imports", "POST"],
+      ["/api/v1/forms", "POST"],
+      ["/api/v1/events/pqc-2026/forms", "POST"],
     ] as const) {
       const response = await callAdmin(path, { method, body: "{not-json" });
       expect(response.status, `${method} ${path}`).toBe(400);
@@ -147,16 +171,10 @@ describe("admin event management endpoints", () => {
 
   it("P6M-P2-04: bounds the events list with ?limit=/?offset= via the query schema (data.query, not a fetch-everything scan)", async () => {
     await setupAdmin();
-    await callAdmin("/api/v1/admin/events", {
-      method: "POST",
-      body: JSON.stringify({ slug: "bounded-a", name: "Bounded A", timezone: "UTC" }),
-    });
-    await callAdmin("/api/v1/admin/events", {
-      method: "POST",
-      body: JSON.stringify({ slug: "bounded-b", name: "Bounded B", timezone: "UTC" }),
-    });
+    await importEvent("bounded-a", "Bounded A");
+    await importEvent("bounded-b", "Bounded B");
 
-    const firstPage = await callAdmin("/api/v1/admin/events?limit=1&offset=0");
+    const firstPage = await callAdmin("/api/v1/events?limit=1&offset=0");
     expect(firstPage.status).toBe(200);
     const firstBody = (await firstPage.json()) as {
       events: unknown[];
@@ -167,12 +185,12 @@ describe("admin event management endpoints", () => {
     expect(firstBody.page.hasMore).toBe(true);
     expect(firstBody.page.total).toBeGreaterThanOrEqual(3);
 
-    const searched = await callAdmin("/api/v1/admin/events?q=bounded-b");
+    const searched = await callAdmin("/api/v1/events?q=bounded-b");
     const searchedBody = (await searched.json()) as { events: Array<{ slug: string }>; page: { total: number } };
     expect(searchedBody.events.map(({ slug }) => slug)).toEqual(["bounded-b"]);
     expect(searchedBody.page.total).toBe(1);
 
-    const invalidLimit = await callAdmin("/api/v1/admin/events?limit=0");
+    const invalidLimit = await callAdmin("/api/v1/events?limit=0");
     expect(invalidLimit.status).toBe(400);
   });
 
@@ -232,20 +250,24 @@ describe("admin event management endpoints", () => {
       ).bind(crypto.randomUUID(), unrelatedEventId, `unrelated-invite-${crypto.randomUUID()}`),
     ]);
 
-    const result = await listAdminEvents(env.DB, { limit: 1, offset: 0, sort: "name" });
+    const result = await listManagedEvents(
+      env.DB,
+      { userId: "admin-user", canReadAll: true },
+      { limit: 1, offset: 0, sort: "name" },
+    );
     expect(result.events).toHaveLength(1);
     expect(result.events[0]).toMatchObject({
       id: pageEventId,
-      total_registrations: 1,
-      confirmed_registrations: 1,
-      pending_invites: 1,
+      totalRegistrations: 1,
+      confirmedRegistrations: 1,
+      pendingInvites: 1,
     });
-    expect(result.page.total).toBeGreaterThanOrEqual(3);
+    expect(result.total).toBeGreaterThanOrEqual(3);
   });
 
   it("keeps the event count plan independent of registration and invite projections", async () => {
     await setupAdmin();
-    const query = buildAdminEventsPageQuery({ limit: 1, offset: 0 });
+    const query = buildManagedEventsPageQuery({ userId: "admin-user", canReadAll: true }, { limit: 1, offset: 0 });
     const { pageSql, countSql, bindings } = buildOffsetPageSql(query);
     const [pagePlan, countPlan] = await Promise.all([
       env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
@@ -319,13 +341,13 @@ describe("admin event management endpoints", () => {
       ).bind(baseEventId, registrationId, userId),
     ]);
 
-    const listResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    const listResponse = await callAdmin("/api/v1/events/pqc-2026/registrations");
     expect(listResponse.status).toBe(200);
     const list = eventRegistrationsListResponseSchema.parse(await listResponse.json());
     expect(list.page.total).toBe(1);
     expect(list.registrations).toEqual([expect.objectContaining({ id: registrationId, referral_code: "first001" })]);
 
-    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${registrationId}`);
+    const detailResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${registrationId}`);
     expect(detailResponse.status).toBe(200);
     const detail = eventRegistrationDetailResponseSchema.parse(await detailResponse.json());
     expect(detail.registration.referral_code).toBe("first001");
@@ -334,16 +356,15 @@ describe("admin event management endpoints", () => {
   it("returns details and persists settings updates", async () => {
     await setupAdmin();
 
-    const detailResponse = await callAdmin("/api/v1/admin/events/pqc-2026");
+    const detailResponse = await callAdmin("/api/v1/events/pqc-2026");
     expect(detailResponse.status).toBe(200);
-    const detailPayload = (await detailResponse.json()) as {
-      event: { slug: string; settings: Record<string, unknown> };
-    };
+    const detailPayload = eventManagementDetailResponseSchema.parse(await detailResponse.json());
     expect(detailPayload.event.slug).toBe("pqc-2026");
 
-    const patchResponse = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+    const patchResponse = await callAdmin("/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
       body: JSON.stringify({
+        expectedUpdatedAt: detailPayload.event.updatedAt,
         name: "PQC Conference 2026 - Updated",
         venue: "The Hague Conference Center",
         virtualUrl: "https://pkic.org/live/pqc-2026/",
@@ -358,20 +379,11 @@ describe("admin event management endpoints", () => {
     });
 
     expect(patchResponse.status).toBe(200);
-    const patchPayload = (await patchResponse.json()) as {
-      success: boolean;
-      event: {
-        name: string;
-        venue: string | null;
-        user_retention_days: number | null;
-        settings: Record<string, unknown>;
-      };
-    };
-    expect(patchPayload.success).toBe(true);
+    const patchPayload = eventManagementDetailResponseSchema.parse(await patchResponse.json());
     expect(patchPayload.event.name).toBe("PQC Conference 2026 - Updated");
     expect(patchPayload.event.settings.venue).toBe("The Hague Conference Center");
     expect(patchPayload.event.settings.virtualUrl).toBe("https://pkic.org/live/pqc-2026/");
-    expect(patchPayload.event.user_retention_days).toBe(180);
+    expect(patchPayload.event.userRetentionDays).toBe(180);
     expect(
       (
         patchPayload.event.settings.proposal as
@@ -396,24 +408,24 @@ describe("admin event management endpoints", () => {
       .bind("20000000-0000-4000-8000-000000000001")
       .run();
 
-    const detailResponse = await callAdmin("/api/v1/admin/events/pqc-2026");
+    const detailResponse = await callAdmin("/api/v1/events/pqc-2026");
     expect(detailResponse.status).toBe(200);
-    const detail = (await detailResponse.json()) as { event: Record<string, unknown> };
+    const detail = eventManagementDetailResponseSchema.parse(await detailResponse.json());
     expect(detail.event).toMatchObject({
       ownerGroupId: "20000000-0000-4000-8000-000000000001",
       sourceMode: "portal",
     });
 
-    const settingsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+    const settingsResponse = await callAdmin("/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
-      body: JSON.stringify({ registrationMode: "open" }),
+      body: JSON.stringify({ expectedUpdatedAt: detail.event.updatedAt, registrationPolicy: "public" }),
     });
-    expect(settingsResponse.status).toBe(403);
+    expect(settingsResponse.status).toBe(409);
     await expect(settingsResponse.json()).resolves.toMatchObject({
-      error: { code: "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP" },
+      error: { code: "EVENT_MANAGED_BY_GROUP" },
     });
 
-    const formResponse = await callAdmin("/api/v1/admin/events/pqc-2026/forms", {
+    const formResponse = await callAdmin("/api/v1/events/pqc-2026/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "portal-event-form",
@@ -425,16 +437,17 @@ describe("admin event management endpoints", () => {
     });
     expect(formResponse.status).toBe(403);
     await expect(formResponse.json()).resolves.toMatchObject({
-      error: { code: "PORTAL_EVENT_REGISTRATION_OWNED_BY_GROUP" },
+      error: { code: "PORTAL_EVENT_FORMS_OWNED_BY_GROUP" },
     });
   });
 
   it("rejects duplicate configurable session types case-insensitively", async () => {
     await setupAdmin();
 
-    const response = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+    const response = await callAdmin("/api/v1/events/pqc-2026/settings", {
       method: "PATCH",
       body: JSON.stringify({
+        expectedUpdatedAt: await eventUpdatedAt(),
         sessionTypes: [
           { label: "Ask Me Anything", requiresPresentation: false },
           { label: "ask me anything", requiresPresentation: true },
@@ -445,118 +458,153 @@ describe("admin event management endpoints", () => {
     expect(response.status).toBe(400);
   });
 
-  it("exposes permission grants after event-day editing moved to the group portal", async () => {
+  it("manages event team roles through the canonical event resource", async () => {
     await setupAdmin();
 
-    const permissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+    const roleResponse = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
       body: JSON.stringify({
         userEmail: "organizer@example.test",
-        permission: "organizer",
+        role: "organizer",
       }),
     });
 
-    expect(permissionResponse.status).toBe(201);
-    const permissionPayload = (await permissionResponse.json()) as {
-      permission: { id: string; user_email: string; permission: string };
+    expect(roleResponse.status).toBe(201);
+    const rolePayload = (await roleResponse.json()) as {
+      role: { id: string; userEmail: string; role: string };
     };
-    expect(permissionPayload.permission.user_email).toBe("organizer@example.test");
-    expect(permissionPayload.permission.permission).toBe("organizer");
+    expect(rolePayload.role.userEmail).toBe("organizer@example.test");
+    expect(rolePayload.role.role).toBe("organizer");
     expect(
       await queryAll<{ normalized_email: string }>(
         env.DB,
         `SELECT u.normalized_email
            FROM user_roles ur JOIN users u ON u.id = ur.user_id
           WHERE ur.id = ?`,
-        permissionPayload.permission.id,
+        rolePayload.role.id,
       ),
     ).toEqual([{ normalized_email: "organizer@example.test" }]);
 
-    const duplicatePermissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+    const duplicateRoleResponse = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
       body: JSON.stringify({
         userEmail: "organizer@example.test",
-        permission: "organizer",
+        role: "organizer",
       }),
     });
 
-    expect(duplicatePermissionResponse.status).toBe(409);
+    expect(duplicateRoleResponse.status).toBe(409);
 
-    const permissionListResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions");
-    expect(permissionListResponse.status).toBe(200);
-    const permissionListPayload = (await permissionListResponse.json()) as {
-      permissions: Array<{ user_email: string; permission: string }>;
+    const roleListResponse = await callAdmin("/api/v1/events/pqc-2026/roles");
+    expect(roleListResponse.status).toBe(200);
+    const roleListPayload = (await roleListResponse.json()) as {
+      roles: Array<{ userEmail: string; role: string }>;
     };
-    expect(permissionListPayload.permissions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ user_email: "organizer@example.test", permission: "organizer" }),
-      ]),
+    expect(roleListPayload.roles).toEqual(
+      expect.arrayContaining([expect.objectContaining({ userEmail: "organizer@example.test", role: "organizer" })]),
     );
   });
 
-  it("P6M-P2-06: searches, bounds, and sorts the event-team permissions list", async () => {
+  it("P6M-P2-06: searches, bounds, and sorts the event-team roles list", async () => {
     await setupAdmin();
 
-    for (const [email, permission] of [
+    for (const [email, role] of [
       ["p1@example.test", "organizer"],
       ["p2@example.test", "moderator"],
       ["p3@example.test", "volunteer"],
     ] as const) {
-      const res = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+      const res = await callAdmin("/api/v1/events/pqc-2026/roles", {
         method: "POST",
-        body: JSON.stringify({ userEmail: email, permission }),
+        body: JSON.stringify({ userEmail: email, role }),
       });
       expect(res.status).toBe(201);
     }
 
-    const firstPage = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=2&offset=0");
+    const firstPage = await callAdmin("/api/v1/events/pqc-2026/roles?limit=2&offset=0");
     expect(firstPage.status).toBe(200);
     const firstBody = (await firstPage.json()) as {
-      permissions: unknown[];
+      roles: unknown[];
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
-    expect(firstBody.permissions).toHaveLength(2);
+    expect(firstBody.roles).toHaveLength(2);
     expect(firstBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
 
-    const searched = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?q=p2%40example.test");
+    const searched = await callAdmin("/api/v1/events/pqc-2026/roles?q=p2%40example.test");
     const searchedBody = (await searched.json()) as {
-      permissions: Array<{ user_email: string }>;
+      roles: Array<{ userEmail: string }>;
       page: { total: number };
     };
-    expect(searchedBody.permissions.map(({ user_email }) => user_email)).toEqual(["p2@example.test"]);
+    expect(searchedBody.roles.map(({ userEmail }) => userEmail)).toEqual(["p2@example.test"]);
     expect(searchedBody.page.total).toBe(1);
 
-    const sorted = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?sort=created_at");
+    const sorted = await callAdmin("/api/v1/events/pqc-2026/roles?sort=createdAt");
     expect(sorted.status).toBe(200);
 
-    const invalidLimit = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=0");
+    const invalidLimit = await callAdmin("/api/v1/events/pqc-2026/roles?limit=0");
     expect(invalidLimit.status).toBe(400);
   });
 
-  it("keeps API-key audit identity separate from an event-team grantor user", async () => {
+  it("rejects API-key identities for event-team role writes", async () => {
     await setupAdmin();
     ADMIN_TOKEN = env.ADMIN_API_KEY ?? "test-admin-key";
 
-    const response = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+    const response = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", permission: "organizer" }),
+      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", role: "organizer" }),
     });
 
-    expect(response.status).toBe(201);
-    const payload = (await response.json()) as { permission: { id: string } };
+    expect(response.status).toBe(403);
     expect(
-      await queryAll<{ granted_by_user_id: string | null }>(
+      await queryAll<{ id: string }>(
         env.DB,
-        "SELECT granted_by_user_id FROM user_roles WHERE id = ?",
-        payload.permission.id,
+        `SELECT ur.id
+           FROM user_roles ur JOIN users u ON u.id = ur.user_id
+          WHERE u.normalized_email = 'api-key-organizer@example.test'`,
       ),
-    ).toEqual([{ granted_by_user_id: null }]);
+    ).toEqual([]);
+  });
+
+  it("enforces live event-scoped management permission on every role operation", async () => {
+    const { baseEventId } = await setupAdmin();
+    const readerId = await insertUser(env.DB, `event-team-reader-${crypto.randomUUID()}@example.test`);
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, baseEventId, readerId)
+      .run();
+    ADMIN_TOKEN = await createAdminSession(env.DB, readerId, `event-team-reader-${crypto.randomUUID()}`);
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(403);
+
+    const manager = await createScopedEventManager(baseEventId);
+    ADMIN_TOKEN = await createAdminSession(env.DB, manager.userId, `event-team-manager-${crypto.randomUUID()}`);
+
+    const assigned = await callAdmin("/api/v1/events/pqc-2026/roles", {
+      method: "POST",
+      body: JSON.stringify({ userEmail: "scoped-team-member@example.test", role: "moderator" }),
+    });
+    expect(assigned.status).toBe(201);
+    const assignment = (await assigned.json()) as { role: { id: string } };
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(200);
+
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(manager.roleAssignmentId)
+      .run();
+
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(401);
     expect(
-      await queryAll<{ actor_id: string | null }>(
-        env.DB,
-        "SELECT actor_id FROM audit_log WHERE action = 'event_permission_granted' AND entity_type = 'event'",
-      ),
-    ).toEqual([{ actor_id: "api-key" }]);
+      (
+        await callAdmin(`/api/v1/events/pqc-2026/roles/${assignment.role.id}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
+        assignment.role.id,
+      ]),
+    ).toEqual([{ revoked_at: null }]);
   });
 
   it("rolls back an event-team grant when the scoped manager loses authority before commit", async () => {
@@ -568,7 +616,7 @@ describe("admin event management endpoints", () => {
     );
 
     await expect(
-      grantEventTeamRole(racedDb, actor, "pqc-2026", { userEmail: targetEmail, permission: "organizer" }),
+      grantEventTeamRole(racedDb, actor, "pqc-2026", { userEmail: targetEmail, role: "organizer" }),
     ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [targetEmail])).toHaveLength(0);
     expect(
@@ -582,7 +630,7 @@ describe("admin event management endpoints", () => {
       ),
     ).toHaveLength(0);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_granted' AND entity_id = ?", [
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_assigned' AND entity_id = ?", [
         eventId,
       ]),
     ).toHaveLength(0);
@@ -594,7 +642,7 @@ describe("admin event management endpoints", () => {
     const targetEmail = `event-team-target-race-${crypto.randomUUID()}@example.test`;
     const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
       userEmail: targetEmail,
-      permission: "organizer",
+      role: "organizer",
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(created.id).run(),
@@ -610,7 +658,7 @@ describe("admin event management endpoints", () => {
       ]),
     ).toEqual([expect.objectContaining({ revoked_at: expect.any(String) })]);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_revoked' AND entity_id = ?", [
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_revoked' AND entity_id = ?", [
         eventId,
       ]),
     ).toHaveLength(0);
@@ -621,7 +669,7 @@ describe("admin event management endpoints", () => {
     const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
     const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
       userEmail: `event-team-revoke-race-${crypto.randomUUID()}@example.test`,
-      permission: "organizer",
+      role: "organizer",
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleAssignmentId).run(),
@@ -637,7 +685,7 @@ describe("admin event management endpoints", () => {
       ]),
     ).toEqual([{ revoked_at: null }]);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_permission_revoked' AND entity_id = ?", [
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_revoked' AND entity_id = ?", [
         eventId,
       ]),
     ).toHaveLength(0);
@@ -679,7 +727,7 @@ describe("admin event management endpoints", () => {
     expect(cancelled.status).toBe("cancelled");
     expect(cancelled.cancelled_at).not.toBeNull();
 
-    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`);
+    const detailResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`);
     expect(detailResponse.status).toBe(200);
     const rawDetail = await detailResponse.json();
     const detail = eventRegistrationDetailResponseSchema.parse(rawDetail);
@@ -697,13 +745,10 @@ describe("admin event management endpoints", () => {
     ).rejects.toMatchObject({ code: "ALREADY_CANCELLED" });
 
     // Admin reinstates via the HTTP endpoint
-    const reinstateResponse = await callAdmin(
-      `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
-      },
-    );
+    const reinstateResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+    });
     expect(reinstateResponse.status).toBe(200);
     const reinstatePayload = (await reinstateResponse.json()) as { success: boolean; registration: { status: string } };
     expect(reinstatePayload.success).toBe(true);
@@ -721,11 +766,8 @@ describe("admin event management endpoints", () => {
 
   it("does not let an event route mutate a registration owned by another event", async () => {
     await setupAdmin();
-    const createEventResponse = await callAdmin("/api/v1/admin/events", {
-      method: "POST",
-      body: JSON.stringify({ slug: "other-event", name: "Other Event", timezone: "UTC" }),
-    });
-    expect(createEventResponse.status).toBe(201);
+    const createEventResponse = await importEvent("other-event", "Other Event");
+    expect(createEventResponse.status).toBe(200);
 
     const otherEvent = await getEventBySlug(env.DB, "other-event");
     const userId = crypto.randomUUID();
@@ -744,7 +786,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const wrongEventPath = `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`;
+    const wrongEventPath = `/api/v1/events/pqc-2026/registrations/${created.registration.id}`;
     const ordinaryUpdate = await callAdmin(wrongEventPath, {
       method: "PATCH",
       body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
@@ -798,7 +840,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const response = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`, {
+    const response = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
       method: "PATCH",
       body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
     });
@@ -884,7 +926,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const overviewResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    const overviewResponse = await callAdmin("/api/v1/events/pqc-2026/registrations");
     expect(overviewResponse.status).toBe(200);
     const overview = (await overviewResponse.json()) as {
       stats: {
@@ -898,7 +940,7 @@ describe("admin event management endpoints", () => {
       virtual: { accepted: 1, waitlisted: 0 },
     });
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       registrations: {
@@ -914,7 +956,7 @@ describe("admin event management endpoints", () => {
       ]),
     );
 
-    const platformStatsResponse = await callAdmin("/api/v1/system/analytics/summary");
+    const platformStatsResponse = await callAdmin("/api/v1/analytics/summary");
     expect(platformStatsResponse.status).toBe(200);
     const platformStats = (await platformStatsResponse.json()) as {
       topEvents: Array<{ slug: string; confirmed: number; total: number }>;
@@ -974,7 +1016,7 @@ describe("admin event management endpoints", () => {
     );
     expect(history).toEqual([{ from_type: "in_person", to_type: "virtual", changed_by: "system" }]);
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       attendanceChanges: { changedAttendees: number; dayChanges: number };
@@ -1015,7 +1057,7 @@ describe("admin event management endpoints", () => {
       .bind(created.registration.id)
       .run();
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       attendanceChanges: {
@@ -1037,9 +1079,7 @@ describe("admin event management endpoints", () => {
       day_changes: 1,
     });
 
-    const joinedResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
-    );
+    const joinedResponse = await callAdmin("/api/v1/events/pqc-2026/registrations?attendance_change=joined_in_person");
     expect(joinedResponse.status).toBe(200);
     const joined = (await joinedResponse.json()) as { registrations: Array<{ id: string }>; page: { total: number } };
     expect(joined.page.total).toBe(1);
@@ -1083,7 +1123,7 @@ describe("admin event management endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const initialStatsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const initialStatsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(initialStatsResponse.status).toBe(200);
     const initialStats = (await initialStatsResponse.json()) as {
       attendanceChanges: { changedAttendees: number; dayChanges: number };
@@ -1103,7 +1143,7 @@ describe("admin event management endpoints", () => {
       "admin:test",
     );
 
-    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    const statsResponse = await callAdmin("/api/v1/events/pqc-2026/analytics");
     expect(statsResponse.status).toBe(200);
     const stats = (await statsResponse.json()) as {
       attendanceChanges: {
@@ -1149,7 +1189,7 @@ describe("admin event management endpoints", () => {
     expect(stats.attendanceChanges.recent[0].days).toHaveLength(3);
 
     const leftInPersonResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=left_in_person",
+      "/api/v1/events/pqc-2026/registrations?attendance_change=left_in_person",
     );
     expect(leftInPersonResponse.status).toBe(200);
     const leftInPerson = (await leftInPersonResponse.json()) as {
@@ -1174,7 +1214,7 @@ describe("admin event management endpoints", () => {
     expect(leftInPerson.registrations[0].lastAttendanceChange.transitions[0].days).toHaveLength(3);
 
     const joinedInPersonResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
+      "/api/v1/events/pqc-2026/registrations?attendance_change=joined_in_person",
     );
     const joinedInPerson = (await joinedInPersonResponse.json()) as { page: { total: number } };
     expect(joinedInPerson.page.total).toBe(0);
@@ -1230,9 +1270,7 @@ describe("admin event management endpoints", () => {
       .bind(created.registration.id)
       .run();
 
-    const recentlyChangedResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=any",
-    );
+    const recentlyChangedResponse = await callAdmin("/api/v1/events/pqc-2026/registrations?attendance_change=any");
     const recentlyChanged = (await recentlyChangedResponse.json()) as {
       registrations: Array<{
         id: string;
@@ -1257,9 +1295,7 @@ describe("admin event management endpoints", () => {
     ).toEqual([["in_person->virtual"], ["virtual->on_demand"]]);
     expect(recentlyChanged.registrations[0].lastAttendanceChange.changedAt).toBe("2030-01-01T00:00:00.000Z");
 
-    const invalidFilterResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=unexpected",
-    );
+    const invalidFilterResponse = await callAdmin("/api/v1/events/pqc-2026/registrations?attendance_change=unexpected");
     expect(invalidFilterResponse.status).toBe(400);
     const invalidFilter = (await invalidFilterResponse.json()) as { error: { code: string } };
     expect(invalidFilter.error.code).toBe("VALIDATION_ERROR");
@@ -1298,13 +1334,13 @@ describe("admin event management endpoints", () => {
       page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
 
-    const page1Res = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=2&offset=0");
+    const page1Res = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=2&offset=0");
     expect(page1Res.status).toBe(200);
     const page1 = (await page1Res.json()) as ListResponse;
     expect(page1.registrations).toHaveLength(2);
     expect(page1.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
 
-    const page2Res = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=2&offset=2");
+    const page2Res = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=2&offset=2");
     expect(page2Res.status).toBe(200);
     const page2 = (await page2Res.json()) as ListResponse;
     expect(page2.registrations).toHaveLength(1);
@@ -1313,16 +1349,16 @@ describe("admin event management endpoints", () => {
     const ids = new Set([...page1.registrations, ...page2.registrations].map((r) => r.id));
     expect(ids.size).toBe(3);
 
-    const invalidLimitRes = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=not-a-number");
+    const invalidLimitRes = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=not-a-number");
     expect(invalidLimitRes.status).toBe(400);
   });
 
   // PR #1 review Phase 4 item 1: bare GET/POST /admin/events previously had
-  // no permission check at all beyond bare authentication — any
-  // authenticated staff-portal actor, including one with zero role or
-  // permission grants, could list events and (more seriously) create new
-  // ones. Now requires events:read/events:write respectively.
-  it("a staff user without events:write cannot create an event, and without events:read cannot list them", async () => {
+  // no permission check at all beyond bare authentication. Both routes are now
+  // retired. The canonical collection is auth-aware instead of permission-
+  // gated: a staff actor without events:read still sees the events their
+  // audience allows, but only through the reduced projection.
+  it("gives a staff user without events:read the reduced projection, and no retired creation route", async () => {
     await setupAdmin();
     const staffId = crypto.randomUUID();
     await env.DB.prepare(
@@ -1340,31 +1376,47 @@ describe("admin event management endpoints", () => {
       .bind(crypto.randomUUID(), staffId)
       .run();
     const staffToken = await createAdminSession(env.DB, staffId, "no-events-perm-token");
-
-    const createResponse = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${staffToken}` },
-        body: JSON.stringify({
-          slug: "should-not-be-created",
-          name: "Should Not Be Created",
-          timezone: "Europe/Amsterdam",
-          registrationMode: "open",
-          inviteLimitAttendee: 10,
+    const asStaff = (path: string, init: RequestInit = {}) =>
+      app.fetch(
+        new Request(`https://app.test${path}`, {
+          ...init,
+          headers: { "content-type": "application/json", authorization: `Bearer ${staffToken}`, ...init.headers },
         }),
-      }),
-      env as any,
-      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-    );
-    expect(createResponse.status).toBe(403);
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
 
-    const listResponse = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events", {
-        headers: { authorization: `Bearer ${staffToken}` },
-      }),
-      env as any,
-      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-    );
-    expect(listResponse.status).toBe(403);
+    // The retired ownerless creation route no longer exists at all.
+    expect(
+      (
+        await asStaff("/api/v1/admin/events", {
+          method: "POST",
+          body: JSON.stringify({ slug: "should-not-be-created", name: "Should Not Be Created", timezone: "UTC" }),
+        })
+      ).status,
+    ).toBe(404);
+
+    // Importing requires events:write, which this user does not hold.
+    expect(
+      (
+        await asStaff("/api/v1/events/imports", {
+          method: "POST",
+          body: JSON.stringify({
+            source: "hugo",
+            event: { slug: "nope", name: "Nope", timezone: "UTC", visibility: "invitation_only" },
+          }),
+        })
+      ).status,
+    ).toBe(403);
+
+    // The collection itself is readable, but only in the reduced projection.
+    const listResponse = await asStaff("/api/v1/events");
+    expect(listResponse.status).toBe(200);
+    const payload = (await listResponse.json()) as { events: Array<Record<string, unknown>> };
+    for (const event of payload.events) {
+      expect(event.totalRegistrations).toBeUndefined();
+      expect(event.sourcePath).toBeUndefined();
+      expect(event.accessLevel).toBeDefined();
+    }
   });
 });

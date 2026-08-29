@@ -2,16 +2,16 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
-const SYSTEM_TEMPLATES_API = "/api/v1/system/email-templates";
+const EMAIL_TEMPLATES_API = "/api/v1/email/templates";
 const REMOVED_ADMIN_TEMPLATES_API = "/api/v1/admin/email-templates";
 
 test("permitted staff create, preview, activate, and reopen an email template through the portal", async ({ page }) => {
-  const systemRequests: string[] = [];
+  const emailTemplateRequests: string[] = [];
   const removedAdminRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname === SYSTEM_TEMPLATES_API || pathname.startsWith(`${SYSTEM_TEMPLATES_API}/`)) {
-      systemRequests.push(`${request.method()} ${pathname}`);
+    if (pathname === EMAIL_TEMPLATES_API || pathname.startsWith(`${EMAIL_TEMPLATES_API}/`)) {
+      emailTemplateRequests.push(`${request.method()} ${pathname}`);
     }
     if (pathname === REMOVED_ADMIN_TEMPLATES_API || pathname.startsWith(`${REMOVED_ADMIN_TEMPLATES_API}/`)) {
       removedAdminRequests.push(`${request.method()} ${pathname}`);
@@ -34,7 +34,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
 
   const createResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${SYSTEM_TEMPLATES_API}/${templateKey}/versions` &&
+      new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/${templateKey}/versions` &&
       response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Create Template" }).click();
@@ -45,7 +45,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await page.locator("#email-template-editor-body").fill(revisedBody);
   const previewResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${SYSTEM_TEMPLATES_API}/preview` && response.request().method() === "POST",
+      new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/preview` && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Render Preview" }).click();
   expect((await previewResponse).status()).toBe(200);
@@ -57,7 +57,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
 
   const saveResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${SYSTEM_TEMPLATES_API}/${templateKey}/versions` &&
+      new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/${templateKey}/versions` &&
       response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Save as Draft" }).click();
@@ -67,7 +67,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   const versionTwoRow = page.getByRole("row").filter({ has: page.getByText("v2", { exact: true }) });
   const activateResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${SYSTEM_TEMPLATES_API}/${templateKey}/activate` &&
+      new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/${templateKey}/activate` &&
       response.request().method() === "POST",
   );
   await versionTwoRow.getByRole("button", { name: "Activate" }).click();
@@ -95,12 +95,12 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(page).toHaveURL(/\/portal\/#\/system\/email-templates$/);
   await expect(page.getByRole("link", { name: "Email Templates" })).toBeVisible();
 
-  expect(systemRequests).toEqual(
+  expect(emailTemplateRequests).toEqual(
     expect.arrayContaining([
-      `GET ${SYSTEM_TEMPLATES_API}`,
-      `POST ${SYSTEM_TEMPLATES_API}/${templateKey}/versions`,
-      `POST ${SYSTEM_TEMPLATES_API}/preview`,
-      `POST ${SYSTEM_TEMPLATES_API}/${templateKey}/activate`,
+      `GET ${EMAIL_TEMPLATES_API}`,
+      `POST ${EMAIL_TEMPLATES_API}/${templateKey}/versions`,
+      `POST ${EMAIL_TEMPLATES_API}/preview`,
+      `POST ${EMAIL_TEMPLATES_API}/${templateKey}/activate`,
     ]),
   );
   expect(removedAdminRequests).toEqual([]);

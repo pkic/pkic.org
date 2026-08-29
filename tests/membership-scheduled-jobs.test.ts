@@ -616,8 +616,8 @@ describe("Membership scheduled jobs", () => {
 
     const ecUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'decliner@example.test', 'decliner@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
+       VALUES (?, 'decliner@example.test', 'decliner@example.test', 'user', 1, 1, datetime('now'), datetime('now'))`,
     )
       .bind(ecUserId)
       .run();
@@ -644,8 +644,8 @@ describe("Membership scheduled jobs", () => {
     });
     const ecUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'set-based-decliner@example.test', 'set-based-decliner@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
+       VALUES (?, 'set-based-decliner@example.test', 'set-based-decliner@example.test', 'user', 1, 1, datetime('now'), datetime('now'))`,
     )
       .bind(ecUserId)
       .run();

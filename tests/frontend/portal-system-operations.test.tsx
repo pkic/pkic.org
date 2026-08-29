@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DueWork } from "../../assets/ts/member-flows/portal/sections/system-operations/DueWork";
+import { ScheduledWork } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledWork";
 import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
 
 let container: HTMLDivElement | null = null;
@@ -29,7 +29,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("portal Operations due-work reads", () => {
+describe("portal Operations scheduled-work reads", () => {
   it("loads only the bounded GET projection and makes no command request on mount", async () => {
     const requests: Array<{ method: string; url: URL; body: unknown }> = [];
     vi.stubGlobal(
@@ -41,7 +41,7 @@ describe("portal Operations due-work reads", () => {
         );
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
         requests.push({ method, url, body: null });
-        if (url.pathname === "/api/v1/operations/due-work") {
+        if (url.pathname === "/api/v1/retention/due") {
           return json({
             items: [],
             counts: { all: 0, outbox: 0, reminders: 0, cleanup: 0 },
@@ -56,16 +56,20 @@ describe("portal Operations due-work reads", () => {
     document.body.append(container);
     await act(() =>
       render(
-        <DueWork canRun={false} canAnonymizeUsers={false} canWriteMembership={false} canApproveMembership={false} />,
+        <ScheduledWork
+          canManageEmail={false}
+          canRunRetention={true}
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
         container!,
       ),
     );
     await settle();
 
-    expect(requests.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual(["GET /api/v1/operations/due-work"]);
-    expect(container.textContent).toContain(
-      "Run controls are available only to staff with the relevant operation permissions",
-    );
+    expect(requests.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual(["GET /api/v1/retention/due"]);
+    expect(container.textContent).toContain("available only to staff holding that domain");
     expect(
       requests.some(
         ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
@@ -230,8 +234,9 @@ describe("portal Operations outbox reads", () => {
 });
 
 describe("portal Operations command visibility", () => {
-  async function renderDueWork(options: {
-    canRun: boolean;
+  async function renderScheduledWork(options: {
+    canManageEmail: boolean;
+    canRunRetention: boolean;
     canAnonymizeUsers: boolean;
     canWriteMembership: boolean;
     canApproveMembership: boolean;
@@ -243,7 +248,7 @@ describe("portal Operations command visibility", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
-        if (url.pathname === "/api/v1/operations/due-work") {
+        if (url.pathname === "/api/v1/retention/due") {
           return json({
             items: [],
             counts: { all: 0, outbox: 0, reminders: 0, cleanup: 0 },
@@ -253,7 +258,7 @@ describe("portal Operations command visibility", () => {
         throw new Error(`Unexpected request: ${url.pathname}`);
       }),
     );
-    await act(() => render(<DueWork {...options} />, container!));
+    await act(() => render(<ScheduledWork {...options} />, container!));
     await settle();
   }
 
@@ -261,8 +266,9 @@ describe("portal Operations command visibility", () => {
     container = document.createElement("div");
     document.body.append(container);
 
-    await renderDueWork({
-      canRun: false,
+    await renderScheduledWork({
+      canManageEmail: false,
+      canRunRetention: true,
       canAnonymizeUsers: false,
       canWriteMembership: false,
       canApproveMembership: false,
@@ -274,20 +280,24 @@ describe("portal Operations command visibility", () => {
     expect(container.textContent).not.toContain("Run EC review batch");
     expect(container.textContent).not.toContain("Run retention redaction");
 
-    await renderDueWork({
-      canRun: true,
+    await renderScheduledWork({
+      canManageEmail: true,
+      canRunRetention: true,
       canAnonymizeUsers: false,
       canWriteMembership: false,
       canApproveMembership: false,
     });
     expect(container.textContent).toContain("Queue reminders");
-    expect(container.textContent).toContain("Queue chair digest");
+    // The chair digest queues member email, so it now requires membership:write
+    // rather than a blanket operational run grant.
+    expect(container.textContent).not.toContain("Queue chair digest");
     expect(container.textContent).not.toContain("Run consultation batch");
     expect(container.textContent).not.toContain("Run EC review batch");
     expect(container.textContent).not.toContain("Run retention redaction");
 
-    await renderDueWork({
-      canRun: true,
+    await renderScheduledWork({
+      canManageEmail: true,
+      canRunRetention: true,
       canAnonymizeUsers: true,
       canWriteMembership: true,
       canApproveMembership: true,
@@ -309,14 +319,14 @@ describe("portal Operations command visibility", () => {
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
         const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
         requests.push({ method, url, body });
-        if (url.pathname === "/api/v1/operations/due-work") {
+        if (url.pathname === "/api/v1/retention/due") {
           return json({
             items: [],
             counts: { all: 0, outbox: 0, reminders: 0, cleanup: 0 },
             page: { limit: 25, offset: 0, total: 0, hasMore: false },
           });
         }
-        if (url.pathname === "/api/v1/operations/reminders/preview") {
+        if (url.pathname === "/api/v1/email/reminders/runs") {
           return json({
             success: true,
             dryRun: true,
@@ -343,7 +353,13 @@ describe("portal Operations command visibility", () => {
     document.body.append(container);
     await act(() =>
       render(
-        <DueWork canRun={false} canAnonymizeUsers={false} canWriteMembership={false} canApproveMembership={false} />,
+        <ScheduledWork
+          canManageEmail={false}
+          canRunRetention={true}
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
         container!,
       ),
     );
@@ -355,7 +371,7 @@ describe("portal Operations command visibility", () => {
       previewButton.click();
     });
     await settle();
-    expect(requests.find(({ url }) => url.pathname === "/api/v1/operations/reminders/preview")).toMatchObject({
+    expect(requests.find(({ url }) => url.pathname === "/api/v1/email/reminders/runs")).toMatchObject({
       method: "POST",
       body: { limit: 120 },
     });

@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe("portal organization content reviews", () => {
-  it("loads, reviews, and rejects through only the canonical system API", async () => {
+  it("loads, reviews, and rejects through only the canonical organizations API", async () => {
     const requests: Array<{ method: string; url: URL; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -97,7 +97,7 @@ describe("portal organization content reviews", () => {
     await settle();
 
     expect(container.textContent).toContain("Example Member");
-    expect(requests[0]?.url.pathname).toBe("/api/v1/system/organization-content-reviews");
+    expect(requests[0]?.url.pathname).toBe("/api/v1/organizations/content-reviews");
     expect(requests[0]?.url.searchParams.get("status")).toBe("pending");
     expect(requests[0]?.url.searchParams.get("sort")).toBe("-submittedAt");
     expect(requests[0]?.url.searchParams.get("limit")).toBe("50");
@@ -121,8 +121,9 @@ describe("portal organization content reviews", () => {
       method: "POST",
       body: { reviewerNote: "Please use a factual slogan." },
     });
-    expect(rejection?.url.pathname).toBe(`/api/v1/system/organization-content-reviews/${REVIEW_ID}/reject`);
+    expect(rejection?.url.pathname).toBe(`/api/v1/organizations/content-reviews/${REVIEW_ID}/reject`);
     expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
+    expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/system/"))).toBe(true);
   });
 
   it("renders a status-scoped empty page and sends status changes back to D1", async () => {

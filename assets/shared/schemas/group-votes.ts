@@ -5,22 +5,22 @@ import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema } from "./pagination";
 import { voteGroupGrantSchemas } from "./resource-grants";
 import {
-  portalVoteSchema,
-  portalVotesListQuerySchema,
+  memberVoteSchema,
   submitBallotResponseSchema,
   submitBallotSchema,
   voteFullResultSchema,
   voteSummaryFieldsSchema,
-  voteTypeSchema,
+  votesListQuerySchema,
 } from "./votes";
 import { voteLifecycleTransitionNameSchema } from "./vote-management";
+import { requiresSession } from "./route-contract";
 
 const voteCapabilitiesSchema = z
   .array(voteGroupGrantSchemas.capabilitySchema)
   .max(voteGroupGrantSchemas.capabilities.length);
 export const availableVoteTransitionsSchema = z.array(voteLifecycleTransitionNameSchema).max(3).default([]);
 
-export const groupVotesListQuerySchema = portalVotesListQuerySchema.extend({ type: voteTypeSchema.optional() });
+export const groupVotesListQuerySchema = votesListQuerySchema;
 export type GroupVotesListQuery = z.infer<typeof groupVotesListQuerySchema>;
 
 export const groupVoteSchema = z.object({
@@ -32,7 +32,7 @@ export type GroupVote = z.infer<typeof groupVoteSchema>;
 export const groupVotesListResponseSchema = paginatedResponseSchema("votes", groupVoteSchema);
 
 export const groupVoteParamsSchema = groupReferenceParamsSchema.extend({ voteId: databaseIdSchema });
-export const groupVoteDetailSchema = portalVoteSchema.extend({
+export const groupVoteDetailSchema = memberVoteSchema.extend({
   capabilities: voteCapabilitiesSchema,
   availableTransitions: availableVoteTransitionsSchema,
 });
@@ -40,6 +40,7 @@ export type GroupVoteDetail = z.infer<typeof groupVoteDetailSchema>;
 export const groupVoteDetailResponseSchema = z.object({ vote: groupVoteDetailSchema });
 
 export const groupVotesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List votes available through a group",
   description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -55,6 +56,7 @@ export const groupVotesListRouteSchema = {
 };
 
 export const groupVoteDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get a vote through one group context",
   request: { params: groupVoteParamsSchema },
@@ -69,6 +71,7 @@ export const groupVoteDetailRouteSchema = {
 };
 
 export const groupVoteBallotRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Cast or update a ballot through one group context",
   request: {
@@ -88,6 +91,7 @@ export const groupVoteBallotRouteSchema = {
 
 export const groupVoteResultsResponseSchema = z.object({ result: voteFullResultSchema });
 export const groupVoteResultsRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get closed-vote results through one group context",
   request: { params: groupVoteParamsSchema },

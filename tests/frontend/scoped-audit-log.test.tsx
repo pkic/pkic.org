@@ -4,9 +4,9 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuditLogEntry } from "../../assets/shared/schemas/audit-log";
-import { AuditLogSection } from "../../assets/ts/admin/sections/events/detail/proposal-detail/AuditLogSection";
+import { AuditLogSection } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/AuditLogSection";
 import { ProposalAuditLog } from "../../assets/ts/components/proposals/ProposalAuditLog";
-import { RegistrationAuditLogSection } from "../../assets/ts/admin/sections/events/detail/registration-detail/RegistrationPanels";
+import { RegistrationAuditLogSection } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationPanels";
 
 const mounted: HTMLElement[] = [];
 
@@ -120,8 +120,8 @@ afterEach(() => {
 describe("scoped audit-log server pagination", () => {
   it("pages proposal audit entries with the shared limit/offset pager", async () => {
     await assertPagedAuditLog(
-      <AuditLogSection proposalId="proposal-1" />,
-      "/api/v1/admin/proposals/proposal-1/audit-log",
+      <AuditLogSection proposalId="proposal-1" enabled />,
+      "/api/v1/proposals/proposal-1/audit-log",
       "proposal_edited",
       "Proposal updated",
       "proposal_decision_recorded",
@@ -129,10 +129,10 @@ describe("scoped audit-log server pagination", () => {
     );
   });
 
-  it("pages the group-scoped proposal audit endpoint through the shared audit UI", async () => {
+  it("pages the canonical proposal audit endpoint through the shared audit UI", async () => {
     await assertPagedAuditLog(
-      <ProposalAuditLog endpoint="/api/v1/groups/group-1/events/event-1/proposals/proposal-1/audit-log" />,
-      "/api/v1/groups/group-1/events/event-1/proposals/proposal-1/audit-log",
+      <ProposalAuditLog endpoint="/api/v1/proposals/proposal-1/audit-log" />,
+      "/api/v1/proposals/proposal-1/audit-log",
       "proposal_decision_recorded",
       "Decision recorded",
       "proposal_review_upserted",
@@ -143,7 +143,7 @@ describe("scoped audit-log server pagination", () => {
   it("pages registration audit entries with the shared limit/offset pager", async () => {
     await assertPagedAuditLog(
       <RegistrationAuditLogSection slug="event-2026" regId="registration-1" />,
-      "/api/v1/admin/events/event-2026/registrations/registration-1/audit-log",
+      "/api/v1/events/event-2026/registrations/registration-1/audit",
       "registration_created",
       "registration_created",
       "registration_updated",

@@ -1,12 +1,12 @@
 import {
-  EVENT_TEAM_PERMISSION_ROLE_IDS,
+  EVENT_TEAM_ROLE_IDS,
   EVENT_TEAM_SORT_COLUMNS,
-  type AdminEventPermissionInput,
-  type AdminEventTeamListQuery,
-  type AdminEventTeamListItem,
+  type EventTeamListQuery,
+  type EventTeamRole,
+  type EventTeamRoleAssignment,
+  type EventTeamRoleCreate,
   type EventTeamRoleId,
-  type EventTeamPermission,
-} from "../../../../assets/shared/schemas/admin-events";
+} from "../../../../assets/shared/schemas/event-team";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { requirePermission } from "../../auth/permissions";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
@@ -15,7 +15,7 @@ import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
-import type { AuthAdmin, DatabaseLike } from "../../types";
+import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { normalizeEmail } from "../../validation";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
@@ -24,26 +24,26 @@ import { commitAccessControlMutation } from "../access-control/authorization";
 import { getEventBySlug } from "../events";
 import { findUserByEmail } from "../users";
 
-const EVENT_TEAM_ROLE_IDS = Object.values(EVENT_TEAM_PERMISSION_ROLE_IDS) as EventTeamRoleId[];
-const EVENT_TEAM_ROLE_ID_BINDINGS = EVENT_TEAM_ROLE_IDS.map(() => "?").join(", ");
-const ROLE_ID_TO_PERMISSION = Object.fromEntries(
-  Object.entries(EVENT_TEAM_PERMISSION_ROLE_IDS).map(([permission, roleId]) => [roleId, permission]),
-) as Record<EventTeamRoleId, EventTeamPermission>;
+const PERSISTED_EVENT_TEAM_ROLE_IDS = Object.values(EVENT_TEAM_ROLE_IDS) as EventTeamRoleId[];
+const EVENT_TEAM_ROLE_ID_BINDINGS = PERSISTED_EVENT_TEAM_ROLE_IDS.map(() => "?").join(", ");
+const ROLE_ID_TO_ROLE = Object.fromEntries(
+  Object.entries(EVENT_TEAM_ROLE_IDS).map(([role, roleId]) => [roleId, role]),
+) as Record<EventTeamRoleId, EventTeamRole>;
 
 /**
  * Converts persisted event-team role IDs back into the shared API vocabulary.
  * Unknown IDs indicate corrupted or incomplete role configuration and must not
- * be emitted as an invalid response with an undefined permission.
+ * be emitted as an invalid response.
  */
-export function eventTeamPermissionForRoleId(roleId: string): EventTeamPermission {
-  const permission = ROLE_ID_TO_PERMISSION[roleId as EventTeamRoleId];
-  if (!permission) {
+export function eventTeamRoleForRoleId(roleId: string): EventTeamRole {
+  const role = ROLE_ID_TO_ROLE[roleId as EventTeamRoleId];
+  if (!role) {
     throw new AppError(500, "INVALID_EVENT_TEAM_ROLE", "Event-team data contains an unsupported role");
   }
-  return permission;
+  return role;
 }
 
-interface PermissionRow {
+interface RoleAssignmentRow {
   id: string;
   user_email: string;
   user_id: string;
@@ -56,20 +56,20 @@ interface PermissionRow {
 
 export async function listEventTeam(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   eventSlug: string,
-  query: AdminEventTeamListQuery,
-): Promise<{ permissions: AdminEventTeamListItem[]; page: PageInfo }> {
+  query: EventTeamListQuery,
+): Promise<{ roles: EventTeamRoleAssignment[]; page: PageInfo }> {
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
   const { q, sort, limit, offset } = query;
   const orderBy = resolveMappedOrderBy(
     sort,
     {
-      user_email: "subject.normalized_email",
-      role_id: "ur.role_id",
-      created_at: "ur.created_at",
-      expires_at: "ur.expires_at",
+      userEmail: "subject.normalized_email",
+      role: "ur.role_id",
+      createdAt: "ur.created_at",
+      expiresAt: "ur.expires_at",
     } satisfies Record<(typeof EVENT_TEAM_SORT_COLUMNS)[number], string>,
     "ur.role_id ASC, subject.normalized_email ASC",
     "ur.id ASC",
@@ -77,9 +77,12 @@ export async function listEventTeam(
   const search = q ? buildD1TextSearchFilter(q, ["subject.normalized_email", "ur.role_id"]) : null;
   const searchSql = search ? `AND ${search.sql}` : "";
   const bindings = search?.bindings ?? [];
-  const { rows, total } = await queryPage<PermissionRow>(db, {
+  const { rows, total } = await queryPage<RoleAssignmentRow>(db, {
     sql: `SELECT ur.id, subject.normalized_email AS user_email, ur.user_id, ur.role_id,
-                   ur.granted_by_user_id AS granted_by_id, ur.expires_at, ur.created_at,
+                   ur.granted_by_user_id AS granted_by_id,
+                   CASE WHEN ur.expires_at IS NULL THEN NULL
+                        ELSE strftime('%Y-%m-%dT%H:%M:%fZ', ur.expires_at) END AS expires_at,
+                   strftime('%Y-%m-%dT%H:%M:%fZ', ur.created_at) AS created_at,
                    u.email AS granter_email
               FROM user_roles ur
               JOIN users subject ON subject.id = ur.user_id
@@ -87,34 +90,34 @@ export async function listEventTeam(
              WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
                AND ur.role_id IN (${EVENT_TEAM_ROLE_ID_BINDINGS})
                ${searchSql}`,
-    bindings: [event.id, ...EVENT_TEAM_ROLE_IDS, ...bindings],
+    bindings: [event.id, ...PERSISTED_EVENT_TEAM_ROLE_IDS, ...bindings],
     orderBy,
     limit,
     offset,
   });
-  const permissions = rows.map((row) => ({
+  const roles = rows.map((row) => ({
     id: row.id,
-    user_email: row.user_email,
-    user_id: row.user_id,
-    permission: eventTeamPermissionForRoleId(row.role_id),
-    granted_by_id: row.granted_by_id,
-    expires_at: row.expires_at,
-    created_at: row.created_at,
-    granter_email: row.granter_email,
+    userEmail: row.user_email,
+    userId: row.user_id,
+    role: eventTeamRoleForRoleId(row.role_id),
+    grantedByUserId: row.granted_by_id,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    granterEmail: row.granter_email,
   }));
-  return { permissions, page: buildPageInfo(limit, offset, total, permissions.length) };
+  return { roles, page: buildPageInfo(limit, offset, total, roles.length) };
 }
 
 export async function grantEventTeamRole(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   eventSlug: string,
-  input: AdminEventPermissionInput,
-): Promise<Pick<AdminEventTeamListItem, "id" | "user_email" | "permission" | "expires_at" | "created_at">> {
+  input: EventTeamRoleCreate,
+): Promise<EventTeamRoleAssignment> {
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
   const normalizedEmail = normalizeEmail(input.userEmail);
-  const roleId = EVENT_TEAM_PERMISSION_ROLE_IDS[input.permission];
+  const roleId = EVENT_TEAM_ROLE_IDS[input.role];
   const user = await findUserByEmail(db, normalizedEmail);
   const userId = user?.id ?? uuid();
   const id = uuid();
@@ -147,10 +150,10 @@ export async function grantEventTeamRole(
           db,
           "admin",
           actor.id,
-          "event_permission_granted",
+          "event_team_role_assigned",
           "event",
           event.id,
-          { email: normalizedEmail, permission: input.permission, expiresAt },
+          { email: normalizedEmail, role: input.role, expiresAt },
           now,
         ),
       ],
@@ -160,18 +163,27 @@ export async function grantEventTeamRole(
       if (error.message.includes("users.")) {
         throw new AppError(409, "IDENTITY_CHANGED", "An account for this email was created concurrently; retry");
       }
-      throw new AppError(409, "DUPLICATE", "This permission already exists");
+      throw new AppError(409, "DUPLICATE", "This role assignment already exists");
     }
     throw error;
   }
-  return { id, user_email: normalizedEmail, permission: input.permission, expires_at: expiresAt, created_at: now };
+  return {
+    id,
+    userEmail: normalizedEmail,
+    userId,
+    role: input.role,
+    grantedByUserId: adminDatabaseUserId(actor),
+    expiresAt,
+    createdAt: now,
+    granterEmail: actor.email,
+  };
 }
 
 export async function revokeEventTeamRole(
   db: DatabaseLike,
-  actor: AuthAdmin,
+  actor: UserBackedAuthAdmin,
   eventSlug: string,
-  permissionId: string,
+  roleAssignmentId: string,
 ): Promise<void> {
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
@@ -181,9 +193,9 @@ export async function revokeEventTeamRole(
        FROM user_roles ur
        JOIN users subject ON subject.id = ur.user_id
       WHERE ur.id = ? AND ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL`,
-    [permissionId, event.id],
+    [roleAssignmentId, event.id],
   );
-  if (!row) throw new AppError(404, "NOT_FOUND", "Permission grant not found");
+  if (!row) throw new AppError(404, "NOT_FOUND", "Event team role assignment not found");
   const now = nowIso();
   await commitAccessControlMutation(
     db,
@@ -191,7 +203,7 @@ export async function revokeEventTeamRole(
     [{ permission: "events:manage", context: { type: "event", id: event.id } }],
     [
       db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
-      prepareAuditLogAfterOneChange(db, "admin", actor.id, "event_permission_revoked", "event", event.id, {
+      prepareAuditLogAfterOneChange(db, "admin", actor.id, "event_team_role_revoked", "event", event.id, {
         email: row.user_email,
         role_id: row.role_id,
       }),

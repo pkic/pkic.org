@@ -1,8 +1,7 @@
 import { first } from "../db/queries";
 import type { DatabaseLike } from "../types";
-import { parseJsonSafe } from "../utils/json";
 import { resolveEventSessionTypes } from "./events";
-import { getActiveFormByPurpose } from "./forms";
+import { resolveEventFormResponse } from "./forms";
 
 interface ProposalDetailRow {
   id: string;
@@ -18,6 +17,7 @@ interface ProposalDetailRow {
   updated_at: string;
   canceled_at: string | null;
   cancellation_comment: string | null;
+  form_placement_id: string | null;
   proposer_email: string;
   proposer_first_name: string | null;
   proposer_last_name: string | null;
@@ -29,6 +29,7 @@ interface ProposalDetailRow {
   event_starts_at: string | null;
   event_ends_at: string | null;
   event_timezone: string;
+  event_source_mode: string | null;
 }
 
 export async function getProposalDetailData(db: DatabaseLike, proposalId: string) {
@@ -36,11 +37,12 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
     db,
     `SELECT
        sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type,
-       sp.title, sp.abstract, sp.details_json, sp.review_round, sp.submitted_at, sp.updated_at,
+       sp.title, sp.abstract, sp.details_json, sp.form_placement_id, sp.review_round, sp.submitted_at, sp.updated_at,
        sp.canceled_at, sp.cancellation_comment,
        u.email AS proposer_email, u.first_name AS proposer_first_name,
        u.last_name AS proposer_last_name, e.settings_json AS event_settings_json,
        e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, e.timezone AS event_timezone,
+       e.source_mode AS event_source_mode,
        (SELECT COUNT(*) FROM proposal_reviews pr
         WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) AS review_count,
        pd.final_status AS decision_status, pd.decision_note,
@@ -49,12 +51,18 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
      JOIN users u ON u.id = sp.proposer_user_id
      JOIN events e ON e.id = sp.event_id
      LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-     WHERE sp.id = ?`,
+     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
     [proposalId],
   );
   if (!proposal) return null;
 
-  const proposalForm = await getActiveFormByPurpose(db, proposal.event_id, "proposal_submission");
+  const formResponse = await resolveEventFormResponse(db, {
+    source: "proposal",
+    sourceId: proposal.id,
+    event: { id: proposal.event_id, source_mode: proposal.event_source_mode },
+    formPlacementId: proposal.form_placement_id,
+    answersJson: proposal.details_json,
+  });
   return {
     eventId: proposal.event_id,
     event: {
@@ -82,16 +90,16 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
       decision_status: proposal.decision_status,
       decision_note: proposal.decision_note,
       decision_decided_at: proposal.decision_decided_at,
-      details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
+      details: formResponse?.answers ?? null,
     },
     form:
-      proposalForm == null
+      formResponse?.form == null
         ? null
         : {
-            id: proposalForm.id,
-            title: proposalForm.title,
-            description: proposalForm.description,
-            fields: proposalForm.fields,
+            id: formResponse.form.id,
+            title: formResponse.form.title,
+            description: formResponse.form.description,
+            fields: formResponse.form.fields,
           },
     sessionTypes: resolveEventSessionTypes(proposal.event_settings_json),
   };

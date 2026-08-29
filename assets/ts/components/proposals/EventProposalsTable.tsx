@@ -6,6 +6,7 @@ import { FilterSelect } from "../FilterSelect";
 import {
   eventProposalsResponseSchema,
   type EventProposalSummary,
+  type ProposalAccess,
   type ProposalStats,
 } from "../../../shared/schemas/event-proposals";
 import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../shared/schemas/proposal-status";
@@ -80,13 +81,14 @@ export function EventProposalsTable({
   endpoint: string;
   storageKey?: string;
   onSelect: (proposal: EventProposalSummary) => void;
-  toolbarPrefix?: (actions: ApiTableActions) => ComponentChildren;
+  toolbarPrefix?: (actions: ApiTableActions, access: ProposalAccess | null) => ComponentChildren;
   empty?: string;
 }) {
   const initialFilters = loadSavedFilters(storageKey);
   const [statusFilter, setStatusFilter] = useState(initialFilters.status);
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(initialFilters.recommendation);
   const [stats, setStats] = useState<ProposalStats | null>(null);
+  const [access, setAccess] = useState<ProposalAccess | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
 
   useEffect(() => {
@@ -109,7 +111,10 @@ export function EventProposalsTable({
         responseSchema={eventProposalsResponseSchema}
         resolve={(response) => response.proposals}
         resolvePage={(response) => response.page}
-        onData={(response) => setStats(response.stats)}
+        onData={(response) => {
+          setStats(response.stats);
+          setAccess(response.access);
+        }}
         paginate
         initialSort="-submittedAt"
         searchPlaceholder="Search proposals / reviews…"
@@ -120,7 +125,7 @@ export function EventProposalsTable({
         actionsRef={tableRef}
         toolbar={({ resetPage }) => (
           <>
-            {toolbarPrefix?.({ reload: () => tableRef.current?.reload() ?? Promise.resolve(), resetPage })}
+            {toolbarPrefix?.({ reload: () => tableRef.current?.reload() ?? Promise.resolve(), resetPage }, access)}
             <FilterSelect
               ariaLabel="Proposal status"
               value={statusFilter}

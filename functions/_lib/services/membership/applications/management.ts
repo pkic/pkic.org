@@ -11,7 +11,9 @@ import { buildD1TextSearchFilter } from "../../../db/search";
 import { AppError } from "../../../errors";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
-import { emailDomain, INDIVIDUAL_MEMBERSHIP_CATEGORIES, MEMBERSHIP_APPLICATION_FORM_KEY } from "./create";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
+import { requireMembershipApplicationPolicyFields } from "../application-form";
+import { emailDomain, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
 import {
   getApplicationAnswers,
   getMemberApplicationById,
@@ -235,7 +237,7 @@ export async function getMembershipApplicationDetail(
 // Corrects applicant-submitted data (e.g. a mistyped email domain) without
 // moving the application through the stage machine — a distinct
 // operation from transitionApplicationStage. Route layer
-// (functions/api/v1/system/membership-applications/[id]/index.ts) writes the audit_log
+// (functions/api/v1/members/applications/[id]/index.ts) writes the audit_log
 // entry; this function only touches member_applications and records a
 // member_application_events row so the correction shows up in the
 // application's timeline. Per consolidated migration 0035's own note, member_application_events
@@ -370,6 +372,7 @@ export async function updateMembershipApplication(
       if (!form) {
         throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
       }
+      requireMembershipApplicationPolicyFields(form.fields);
       const normalizedAnswers = await validateCustomAnswersAgainstForm(form, {
         customAnswers: mergedAnswers,
         errorStatus: 422,

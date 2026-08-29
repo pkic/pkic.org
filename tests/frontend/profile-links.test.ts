@@ -4,7 +4,7 @@ import { normalizeProfileLinks } from "../../assets/ts/shared/widgets/profile-li
 
 // normalizeProfileLinks (P10-R01) is the single canonical normalizer shared by
 // every profile-links-editing call site: the admin user editor and admin
-// proposal-speaker editor (assets/ts/admin/sections/Users.tsx,
+// proposal-speaker editor (the portal event proposal workspace,
 // .../events/detail/ProposalDetailPage.tsx) and the two token-authenticated
 // proposal/speaker manage pages (assets/ts/event-flows/proposal-manage-page.tsx,
 // .../speaker-manage-page.tsx). Before this consolidation each of those had

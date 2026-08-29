@@ -1,29 +1,20 @@
 import { sha256Hex } from "../../functions/_lib/utils/crypto";
 import { nowIso, addHours } from "../../functions/_lib/utils/time";
-import { signAdminSessionToken } from "../../functions/_lib/auth/admin";
-import { createUserBackedAuthAdmin } from "../../functions/_lib/auth/admin-identity";
-import { signMemberSessionToken } from "../../functions/_lib/auth/member";
-import { AUTH_SCOPES } from "../../functions/_lib/auth/scopes";
+import { signUserSessionToken } from "../../functions/_lib/auth/user-session";
+import { signMcpSessionToken } from "../../functions/_lib/auth/mcp-session";
 import type { AuthScope } from "../../functions/_lib/auth/scopes";
-import { first } from "../../functions/_lib/db/queries";
 import type { DatabaseLike } from "../../functions/_lib/types";
 import { env } from "cloudflare:test";
 
 /**
- * Signs a session token whose `scopes` claim matches `adminUserId`'s real DB
- * role (see issueAdminSession's `role === "admin" ? AUTH_SCOPES : []`
- * convention in functions/_lib/auth/admin.ts) instead of always granting the
- * full legacy AUTH_SCOPES set regardless of role — P4-R01: a hardcoded
- * `role: "admin"` here would silently no-op any test asserting legacy-scope
- * denial for a non-admin-role user, since getAdminBySessionClaims trusts the
- * token's own `scopes` claim rather than re-deriving it from the DB.
+ * Creates a canonical user session for a staff fixture. Staff permissions are
+ * resolved from live D1 and are never encoded in the user JWT.
  */
 export async function createAdminSession(
   db: DatabaseLike,
   adminUserId: string,
   rawToken: string,
   signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
-  options: { scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -39,27 +30,44 @@ export async function createAdminSession(
     .bind(sessionId, adminUserId, tokenHash, expiresAt, now)
     .run();
 
-  const userRow = await first<{ email: string; role: string }>(db, "SELECT email, role FROM users WHERE id = ?", [
-    adminUserId,
-  ]);
-  const role = userRow?.role ?? "admin";
-  const email = userRow?.email ?? "admin@example.test";
-
-  return signAdminSessionToken(signingSecret, {
-    admin: createUserBackedAuthAdmin({
-      id: adminUserId,
-      email,
-      role,
-      scopes: options.scopes ?? (role === "admin" ? [...AUTH_SCOPES] : []),
-    }),
-    sessionId,
-    expiresAt,
-    scopes: options.scopes,
-    scopeRestricted: options.scopeRestricted,
+  return signUserSessionToken(signingSecret, {
+    sub: adminUserId,
+    sid: sessionId,
+    exp: Math.floor(new Date(expiresAt).getTime() / 1000),
   });
 }
 
-/** member-facing session — mirrors createAdminSession's shape. */
+/** Creates an explicitly marked, scope-restricted MCP machine session. */
+export async function createMcpSession(
+  db: DatabaseLike,
+  user: { id: string; email: string; role: string },
+  rawToken: string,
+  scopes: readonly AuthScope[],
+  signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+): Promise<string> {
+  const sessionId = crypto.randomUUID();
+  const tokenHash = await sha256Hex(rawToken);
+  const now = nowIso();
+  const expiresAt = addHours(now, 8);
+  await db
+    .prepare(
+      `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
+       VALUES (?, ?, ?, ?, NULL, ?)`,
+    )
+    .bind(sessionId, user.id, tokenHash, expiresAt, now)
+    .run();
+
+  return signMcpSessionToken(signingSecret, {
+    sub: user.id,
+    sid: sessionId,
+    email: user.email,
+    role: user.role,
+    scopes: [...scopes],
+    exp: Math.floor(new Date(expiresAt).getTime() / 1000),
+  });
+}
+
+/** Canonical user session whose live capacity is an active membership. */
 export async function createMemberSession(
   db: DatabaseLike,
   userId: string,
@@ -77,5 +85,9 @@ export async function createMemberSession(
     .bind(sessionId, userId, tokenHash, expiresAt, now)
     .run();
 
-  return signMemberSessionToken(signingSecret, { userId, sessionId, expiresAt });
+  return signUserSessionToken(signingSecret, {
+    sub: userId,
+    sid: sessionId,
+    exp: Math.floor(new Date(expiresAt).getTime() / 1000),
+  });
 }

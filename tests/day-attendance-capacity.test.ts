@@ -7,7 +7,6 @@ import {
   admitRegistration,
   createRegistration,
   confirmRegistrationByToken,
-  forceRegistrationStatus,
   updateRegistrationById,
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
@@ -629,14 +628,18 @@ describe("day attendance capacity", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
-
-    await forceRegistrationStatus(env.DB, {
-      registrationId: target.registration.id,
-      eventId,
-      status: "registered",
-      actorUserId: admin.id,
-    });
+    await updateRegistrationById(
+      env.DB,
+      {
+        registrationId: target.registration.id,
+        eventId,
+        action: "update",
+        attendanceType: "in_person",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+        waitlistClaimWindowHours: 24,
+      },
+      "admin:test",
+    );
 
     const rows = await queryAll<{ status: string }>(
       env.DB,

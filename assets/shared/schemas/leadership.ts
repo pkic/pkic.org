@@ -3,6 +3,7 @@ import { trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { publicOrganizationPersonSchema } from "./public-person";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { publicOperation, requiresAnyPermissions, requiresPermissions } from "./route-contract";
 
 /**
  * Leadership positions (consolidated migration 0035) — Board of Directors and Executive
@@ -71,6 +72,7 @@ export const leadershipAffiliationsResponseSchema = z.object({
 export const leadershipAffiliationsParamsSchema = z.object({ userId: databaseIdSchema });
 
 export const leadershipAffiliationsRouteSchema = {
+  ...requiresAnyPermissions(["access:grant"], ["access:revoke"]),
   tags: ["Leadership"],
   summary: "List a user's eligible leadership affiliations",
   request: { params: leadershipAffiliationsParamsSchema },
@@ -96,6 +98,7 @@ export const leadershipPositionsListResponseSchema = paginatedResponseSchema(
 export type LeadershipPositionsListResponse = z.infer<typeof leadershipPositionsListResponseSchema>;
 
 export const leadershipPositionsListRouteSchema = {
+  ...requiresAnyPermissions(["access:grant"], ["access:revoke"]),
   tags: ["Leadership"],
   summary: "List Board / Executive Council positions",
   description: "A searchable, sortable, bounded page of positions for the requested body.",
@@ -109,6 +112,7 @@ export const leadershipPositionsListRouteSchema = {
 };
 
 export const leadershipPositionsCreateRouteSchema = {
+  ...requiresPermissions("access:grant"),
   tags: ["Leadership"],
   summary: "Add a Board / Executive Council position",
   request: {
@@ -125,6 +129,7 @@ export const leadershipPositionsCreateRouteSchema = {
 };
 
 export const leadershipPositionUpdateRouteSchema = {
+  ...requiresPermissions("access:grant"),
   tags: ["Leadership"],
   summary: "Update a Board / Executive Council position",
   description: "Change the title and/or from/till dates of an existing position.",
@@ -143,6 +148,7 @@ export const leadershipPositionUpdateRouteSchema = {
 };
 
 export const leadershipPositionDeleteRouteSchema = {
+  ...requiresPermissions("access:revoke"),
   tags: ["Leadership"],
   summary: "Remove a Board / Executive Council position",
   request: { params: leadershipPositionIdParamsSchema },
@@ -168,6 +174,7 @@ export type LeadershipPublicPerson = z.infer<typeof leadershipPublicPersonSchema
 export type LeadershipPublicResponse = z.infer<typeof leadershipPublicResponseSchema>;
 
 export const leadershipPublicRouteSchema = {
+  ...publicOperation(),
   tags: ["Leadership"],
   summary: "Public Board / Executive Council roster",
   request: { params: z.object({ body: leadershipBodySchema }) },
@@ -187,6 +194,7 @@ export const consortiumChairsPublicResponseSchema = z.object({
 export type ConsortiumChairsPublicResponse = z.infer<typeof consortiumChairsPublicResponseSchema>;
 
 export const consortiumChairsPublicRouteSchema = {
+  ...publicOperation(),
   tags: ["Leadership"],
   summary: "Public consortium chair / vice chair",
   description:

@@ -1,6 +1,6 @@
 import type { MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
 
-/** Application-answer keys editable via PATCH /api/v1/system/membership-applications/:id (Fix 3). */
+/** Application-answer keys editable via PATCH /api/v1/members/applications/:id (Fix 3). */
 export interface ApplicationEditFormValue {
   applicantName: string;
   applicantEmail: string;

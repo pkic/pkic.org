@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe("portal System Analytics", () => {
-  it("loads only the focused endpoint for the selected tab and never calls the admin API", async () => {
+  it("loads only the focused domain endpoint for the selected tab and never calls a legacy API", async () => {
     const paths: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -94,20 +94,21 @@ describe("portal System Analytics", () => {
     const overview = mount();
     await settle();
     expect(overview.textContent).toContain("Total Registrations");
-    expect(paths).toEqual(["/api/v1/system/analytics/summary"]);
+    expect(paths).toEqual(["/api/v1/analytics/summary"]);
 
     void act(() => render(null, overview));
     const registrations = mount("registrations");
     await settle();
     expect(registrations.textContent).toContain("2026-W34");
-    expect(paths.at(-1)).toBe("/api/v1/system/analytics/registrations");
+    expect(paths.at(-1)).toBe("/api/v1/analytics/registrations");
 
     void act(() => render(null, registrations));
     const donations = mount("donations");
     await settle();
     expect(donations.textContent).toContain("Total Gross (USD)");
-    expect(paths.at(-1)).toBe("/api/v1/system/analytics/donations");
+    expect(paths.at(-1)).toBe("/api/v1/analytics/donations");
     expect(paths.some((path) => path.startsWith("/api/v1/admin/"))).toBe(false);
+    expect(paths.some((path) => path.startsWith("/api/v1/system/analytics/"))).toBe(false);
   });
 
   it("escapes database-controlled status labels in generated chart markup", async () => {

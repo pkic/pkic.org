@@ -11,6 +11,7 @@ import {
   representativeRestoreSchema,
   representationDomainAssessmentSchema,
 } from "./organization-representation";
+import { requiresSession } from "./route-contract";
 
 export const organizationRepresentativeCollectionParamsSchema = z.object({ organizationId: databaseIdSchema });
 export const organizationRepresentativeParamsSchema = organizationRepresentativeCollectionParamsSchema.extend({
@@ -18,6 +19,7 @@ export const organizationRepresentativeParamsSchema = organizationRepresentative
 });
 
 export const organizationRepresentativesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "List organization representatives",
   description: "Filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -35,10 +37,11 @@ export const organizationRepresentativesListRouteSchema = {
 };
 
 export const organizationRepresentativeAssociateRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "Associate an organization representative",
   description:
-    "Association is immediate and does not require recipient acceptance. The direct-email variant requires an attributable membership:write staff session; organization contacts may only associate an existing user.",
+    "Association is immediate and does not require recipient acceptance. Organization contacts may add a coworker by email; staff with membership:write may also provide profile metadata.",
   request: {
     params: organizationRepresentativeCollectionParamsSchema,
     body: { required: true, content: { "application/json": { schema: representativeAssociateSchema } } },
@@ -56,6 +59,7 @@ export const organizationRepresentativeAssociateRouteSchema = {
 };
 
 export const organizationRepresentativeUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "Update an organization representative profile setting",
   request: {
@@ -73,6 +77,7 @@ export const organizationRepresentativeUpdateRouteSchema = {
 };
 
 export const organizationRepresentativeBlockRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "Remove and block an organization representative",
   request: {
@@ -89,6 +94,7 @@ export const organizationRepresentativeBlockRouteSchema = {
 };
 
 export const organizationRepresentativeRestoreRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "Explicitly restore a blocked organization representative",
   request: {
@@ -105,6 +111,7 @@ export const organizationRepresentativeRestoreRouteSchema = {
 };
 
 export const representationDomainAssessmentRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "Assess whether one of the caller's email addresses can establish representation",
   request: { query: z.object({ email: normalizedEmailSchema }) },
@@ -118,6 +125,7 @@ export const representationDomainAssessmentRouteSchema = {
 
 export const representationReconcileResponseSchema = z.object({ representativeIds: z.array(databaseIdSchema) });
 export const representationReconcileRouteSchema = {
+  ...requiresSession(),
   tags: ["Organizations"],
   summary: "Reconcile the caller's verified claimed-domain representations",
   responses: {

@@ -71,8 +71,8 @@ export async function requireGroupEventProposalContext(
 
 /**
  * Rechecks the immutable path tuple in the same D1 batch as a proposal write.
- * Permission-specific guards remain in the proposal use case, so the existing
- * admin adapter and this group adapter share the same domain transition.
+ * Permission-specific guards remain in the proposal use case, so canonical
+ * proposal commands and group event workflows share the same domain transition.
  */
 export function prepareGroupEventProposalContextGuard(
   db: DatabaseLike,

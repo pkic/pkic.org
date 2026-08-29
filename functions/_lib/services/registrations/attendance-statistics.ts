@@ -1,5 +1,5 @@
-import { all } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import { batchFirst, batchRows } from "../../db/pagination";
+import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 
 export interface AttendanceStatusCount {
   accepted: number;
@@ -70,13 +70,10 @@ export interface AttendanceChangeStatistics {
  * A registration is waitlisted until every requested day has either been
  * accepted or removed from the active queue.
  */
-export async function getAttendanceStatusByType(
-  db: DatabaseLike,
-  eventId: string,
-): Promise<Record<string, AttendanceStatusCount>> {
-  const rows = await all<AttendanceStatusRow>(
-    db,
-    `SELECT r.attendance_type,
+export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId: string): StatementLike {
+  return db
+    .prepare(
+      `SELECT r.attendance_type,
             SUM(CASE WHEN active_waitlist.registration_id IS NULL THEN 1 ELSE 0 END) AS accepted,
             SUM(CASE WHEN active_waitlist.registration_id IS NULL THEN 0 ELSE 1 END) AS waitlisted
      FROM registrations r
@@ -87,25 +84,32 @@ export async function getAttendanceStatusByType(
      ) active_waitlist ON active_waitlist.registration_id = r.id
      WHERE r.event_id = ? AND r.status = 'registered'
      GROUP BY r.attendance_type`,
-    [eventId, eventId],
-  );
+    )
+    .bind(eventId, eventId);
+}
 
+export function decodeAttendanceStatusByType(result: D1StatementResult): Record<string, AttendanceStatusCount> {
   return Object.fromEntries(
-    rows.map((row) => [
+    batchRows<AttendanceStatusRow>(result).map((row) => [
       row.attendance_type ?? "not_attending",
       { accepted: Number(row.accepted ?? 0), waitlisted: Number(row.waitlisted ?? 0) },
     ]),
   );
 }
 
-export async function getAttendanceChangeStatistics(
+export async function getAttendanceStatusByType(
   db: DatabaseLike,
   eventId: string,
-): Promise<AttendanceChangeStatistics> {
-  const [summaryRows, transitionRows, byDayRows, recentRows] = await Promise.all([
-    all<AttendanceChangeSummaryRow>(
-      db,
-      `SELECT COUNT(*) AS day_changes,
+): Promise<Record<string, AttendanceStatusCount>> {
+  const [result] = await db.batch([prepareAttendanceStatusByTypeStatement(db, eventId)]);
+  return decodeAttendanceStatusByType(result);
+}
+
+export function prepareAttendanceChangeStatisticsStatements(db: DatabaseLike, eventId: string): StatementLike[] {
+  return [
+    db
+      .prepare(
+        `SELECT COUNT(*) AS day_changes,
               COUNT(DISTINCT h.registration_id) AS changed_attendees,
               COUNT(DISTINCT CASE
                 WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
@@ -129,11 +133,11 @@ export async function getAttendanceChangeStatistics(
          AND h.event_day_id IS NOT NULL
          AND h.changed_by <> 'system'
          AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')`,
-      [eventId],
-    ),
-    all<AttendanceChangeTransitionRow>(
-      db,
-      `SELECT COALESCE(h.from_type, 'not_attending') AS from_type,
+      )
+      .bind(eventId),
+    db
+      .prepare(
+        `SELECT COALESCE(h.from_type, 'not_attending') AS from_type,
               COALESCE(h.to_type, 'not_attending') AS to_type,
               COUNT(DISTINCT h.registration_id) AS attendees,
               COUNT(*) AS day_changes
@@ -145,11 +149,11 @@ export async function getAttendanceChangeStatistics(
          AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
        GROUP BY COALESCE(h.from_type, 'not_attending'), COALESCE(h.to_type, 'not_attending')
        ORDER BY attendees DESC, day_changes DESC`,
-      [eventId],
-    ),
-    all<AttendanceChangeDayRow>(
-      db,
-      `SELECT ed.day_date,
+      )
+      .bind(eventId),
+    db
+      .prepare(
+        `SELECT ed.day_date,
               COALESCE(ed.label, ed.day_date) AS label,
               ed.sort_order,
               COUNT(DISTINCT h.registration_id) AS changed_attendees,
@@ -170,11 +174,11 @@ export async function getAttendanceChangeStatistics(
          AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
        GROUP BY ed.id
        ORDER BY ed.sort_order ASC, ed.day_date ASC`,
-      [eventId],
-    ),
-    all<RecentAttendanceChangeRow>(
-      db,
-      `SELECT h.registration_id,
+      )
+      .bind(eventId),
+    db
+      .prepare(
+        `SELECT h.registration_id,
               h.changed_at,
               ed.day_date,
               COALESCE(ed.label, ed.day_date) AS day_label,
@@ -191,11 +195,14 @@ export async function getAttendanceChangeStatistics(
          AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
        ORDER BY h.changed_at DESC, ed.sort_order ASC
        LIMIT 200`,
-      [eventId],
-    ),
-  ]);
+      )
+      .bind(eventId),
+  ];
+}
 
-  const summary = summaryRows[0] ?? {
+export function decodeAttendanceChangeStatistics(results: D1StatementResult[]): AttendanceChangeStatistics {
+  const [summaryResult, transitionResult, byDayResult, recentResult] = results;
+  const summary = batchFirst<AttendanceChangeSummaryRow>(summaryResult) ?? {
     day_changes: 0,
     changed_attendees: 0,
     left_in_person_attendees: 0,
@@ -203,6 +210,10 @@ export async function getAttendanceChangeStatistics(
     joined_in_person_attendees: 0,
     joined_in_person_day_changes: 0,
   };
+  const transitionRows = batchRows<AttendanceChangeTransitionRow>(transitionResult);
+  const byDayRows = batchRows<AttendanceChangeDayRow>(byDayResult);
+  const recentRows = batchRows<RecentAttendanceChangeRow>(recentResult);
+
   const recentByChange = new Map<
     string,
     Omit<RecentAttendanceChangeRow, "day_date" | "day_label"> & {
@@ -249,4 +260,11 @@ export async function getAttendanceChangeStatistics(
     })),
     recent: [...recentByChange.values()],
   };
+}
+
+export async function getAttendanceChangeStatistics(
+  db: DatabaseLike,
+  eventId: string,
+): Promise<AttendanceChangeStatistics> {
+  return decodeAttendanceChangeStatistics(await db.batch(prepareAttendanceChangeStatisticsStatements(db, eventId)));
 }

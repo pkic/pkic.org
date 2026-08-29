@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import {
-  adminFormSubmissionStatsResponseSchema,
-  adminFormSubmissionsResponseSchema,
-} from "../assets/shared/schemas/admin-forms";
+  formSubmissionStatsResponseSchema,
+  formSubmissionsResponseSchema,
+} from "../assets/shared/schemas/form-management";
 import {
   resolveFormSubmissionPopulation,
   selectFromSubmissionPopulation,
@@ -38,6 +38,7 @@ async function insertForm(
   purpose: "event_registration" | "proposal_submission",
   fieldKey: string,
   scopeRef: string | null = null,
+  placeOnDefaultEvent = false,
 ): Promise<string> {
   const formId = crypto.randomUUID();
   await env.DB.batch([
@@ -50,6 +51,16 @@ async function insertForm(
          (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
        VALUES (?, ?, ?, ?, 'text', 0, NULL, NULL, 10, datetime('now'))`,
     ).bind(crypto.randomUUID(), formId, fieldKey, `${fieldKey} label`),
+    ...(scopeRef || !placeOnDefaultEvent
+      ? []
+      : [
+          env.DB.prepare(
+            `INSERT INTO form_placements
+               (id, form_id, owner_group_id, context_type, context_ref, audience, active,
+                opens_at, closes_at, created_at, updated_at)
+             VALUES (?, ?, NULL, 'event', ?, ?, 1, NULL, NULL, datetime('now'), datetime('now'))`,
+          ).bind(crypto.randomUUID(), formId, eventId, purpose),
+        ]),
   ]);
   return formId;
 }
@@ -145,17 +156,18 @@ async function backfillSourceAnswer(options: {
 }
 
 async function readPopulation(formKey: string, filters: Record<string, string>) {
-  const query = new URLSearchParams({ ...filters, limit: "1" });
-  const statsQuery = new URLSearchParams(filters);
+  const { eventSlug = "pqc-2026", ...responseFilters } = filters;
+  const query = new URLSearchParams({ ...responseFilters, limit: "1" });
+  const statsQuery = new URLSearchParams(responseFilters);
   const [listResponse, statsResponse] = await Promise.all([
-    adminGet(`/api/v1/admin/forms/${formKey}/submissions?${query}`),
-    adminGet(`/api/v1/admin/forms/${formKey}/submissions/stats?${statsQuery}`),
+    adminGet(`/api/v1/events/${eventSlug}/forms/${formKey}/submissions?${query}`),
+    adminGet(`/api/v1/events/${eventSlug}/forms/${formKey}/submissions/stats?${statsQuery}`),
   ]);
   expect(listResponse.status).toBe(200);
   expect(statsResponse.status).toBe(200);
   return {
-    list: adminFormSubmissionsResponseSchema.parse(await listResponse.json()),
-    stats: adminFormSubmissionStatsResponseSchema.parse(await statsResponse.json()),
+    list: formSubmissionsResponseSchema.parse(await listResponse.json()),
+    stats: formSubmissionStatsResponseSchema.parse(await statsResponse.json()),
   };
 }
 
@@ -196,7 +208,7 @@ describe("form-submission read-model population", () => {
   });
 
   it("keeps registration filters, page totals, and statistics identical before and after backfill", async () => {
-    const formId = await insertForm("registration-population", "event_registration", "food");
+    const formId = await insertForm("registration-population", "event_registration", "food", null, true);
     const legacyUser = await insertUser("needle-legacy@example.test");
     const backfilledUser = await insertUser("needle-backfilled@example.test");
     const cancelledUser = await insertUser("needle-cancelled@example.test");
@@ -295,7 +307,7 @@ describe("form-submission read-model population", () => {
   });
 
   it("keeps proposal status and title search stable after answers are backfilled", async () => {
-    const formId = await insertForm("proposal-population", "proposal_submission", "audience");
+    const formId = await insertForm("proposal-population", "proposal_submission", "audience", null, true);
     const legacyUser = await insertUser("legacy-speaker@example.test");
     const backfilledUser = await insertUser("backfilled-speaker@example.test");
     const unrelatedUser = await insertUser("unrelated-speaker@example.test");
@@ -337,7 +349,7 @@ describe("form-submission read-model population", () => {
   });
 
   it("preserves boolean labels and skips malformed legacy answer JSON", async () => {
-    const formId = await insertForm("boolean-population", "event_registration", "food");
+    const formId = await insertForm("boolean-population", "event_registration", "food", null, true);
     const trueUser = await insertUser("boolean-true@example.test");
     const falseUser = await insertUser("boolean-false@example.test");
     const backfilledUser = await insertUser("boolean-backfilled@example.test");
@@ -383,10 +395,10 @@ describe("form-submission read-model population", () => {
       .run();
 
     const response = await adminGet(
-      "/api/v1/admin/forms/boolean-population/submissions/stats?eventSlug=pqc-2026&status=registered",
+      "/api/v1/events/pqc-2026/forms/boolean-population/submissions/stats?status=registered",
     );
     expect(response.status).toBe(200);
-    const result = adminFormSubmissionStatsResponseSchema.parse(await response.json());
+    const result = formSubmissionStatsResponseSchema.parse(await response.json());
     expect(result.total).toBe(4);
     expect(result.stats).toEqual([
       expect.objectContaining({
@@ -404,11 +416,9 @@ describe("form-submission read-model population", () => {
     await insertForm("event-scoped-population", "event_registration", "food", eventId);
     await insertEvent("unrelated-event");
 
-    const response = await adminGet(
-      "/api/v1/admin/forms/event-scoped-population/submissions?eventSlug=unrelated-event",
-    );
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "FORM_EVENT_SCOPE_MISMATCH" } });
+    const response = await adminGet("/api/v1/events/unrelated-event/forms/event-scoped-population/submissions");
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "FORM_NOT_FOUND" } });
   });
 
   it("keeps unattributed legacy submissions scoped to their own form when a sole placement is inferred", async () => {
@@ -447,5 +457,42 @@ describe("form-submission read-model population", () => {
     const query = selectFromSubmissionPopulation(population, "SELECT id FROM merged ORDER BY id ASC");
     const rows = await queryAll<{ id: string }>(env.DB, query.sql, query.bindings);
     expect(rows.map((row) => row.id)).toEqual([legacySubmissionId, placedSubmissionId].sort());
+  });
+
+  it("uses the installation response set for global management and excludes grouped placements", async () => {
+    const formId = await insertForm("global-unowned-population", "event_registration", "food");
+    await env.DB.prepare(
+      `INSERT INTO form_placements
+         (id, form_id, owner_group_id, context_type, context_ref, audience, active,
+          opens_at, closes_at, created_at, updated_at)
+       VALUES (?, ?, NULL, 'installation', NULL, 'attendee', 1, NULL, NULL, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), formId)
+      .run();
+
+    const population = await resolveFormSubmissionPopulation(env.DB, {
+      formKey: "global-unowned-population",
+      unownedOnly: true,
+    });
+    expect(population.placement?.contextType).toBe("installation");
+    expect(population.cte).toContain("fs.placement_id IS NULL");
+    expect(population.cte).toContain("restricted_placement.owner_group_id IS NOT NULL");
+  });
+
+  it("keeps the global default population pinned to the installation placement", async () => {
+    const formId = await insertForm("global-installation-default", "event_registration", "answer");
+    await env.DB.prepare(
+      `INSERT INTO form_placements
+         (id, form_id, owner_group_id, context_type, context_ref, audience, active,
+          opens_at, closes_at, created_at, updated_at)
+       VALUES (?, ?, NULL, 'installation', NULL, 'survey', 1, NULL, NULL, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), formId)
+      .run();
+    const population = await resolveFormSubmissionPopulation(env.DB, {
+      formKey: "global-installation-default",
+      installationOnly: true,
+    });
+    expect(population.placement).toMatchObject({ contextType: "installation", ownerGroupId: null });
   });
 });

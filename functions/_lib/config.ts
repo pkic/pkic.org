@@ -136,6 +136,7 @@ export function getConfig(env: Env, request?: Request) {
     scheduledStorageDeletionLimit: parseIntOrDefault(env.SCHEDULED_STORAGE_DELETION_LIMIT, 25),
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),
     scheduledRsvpEnforcementLimit: Math.min(requestedRsvpLimit, rsvpStatementCeiling),
+    scheduledJobsPerPass: Math.min(20, Math.max(1, parseIntOrDefault(env.SCHEDULED_JOBS_PER_PASS, 5))),
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),
     scheduledDueWorkMaxMs: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_MS, 600_000),
     // D1 allows a finite number of statements per Worker invocation and
@@ -162,9 +163,9 @@ export function getConfig(env: Env, request?: Request) {
       500,
       Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100)),
     ),
-    adminCampaignMaxRecipients: Math.min(
+    eventCampaignMaxRecipients: Math.min(
       10_000,
-      Math.max(1, parseIntOrDefault(env.ADMIN_CAMPAIGN_MAX_RECIPIENTS, 2_000)),
+      Math.max(1, parseIntOrDefault(env.EVENT_CAMPAIGN_MAX_RECIPIENTS, 2_000)),
     ),
     sendgridApiBase: env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send",
   };

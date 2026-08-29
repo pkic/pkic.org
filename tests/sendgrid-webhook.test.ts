@@ -11,7 +11,7 @@ function executionContext(): ExecutionContext {
 
 async function callWebhook(environment: Env, body: string, headers: HeadersInit = {}): Promise<Response> {
   return app.fetch(
-    new Request("https://pkic.org/api/v1/webhooks/sendgrid", {
+    new Request("https://pkic.org/api/v1/email/sendgrid/webhook", {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body,

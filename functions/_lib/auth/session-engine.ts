@@ -1,6 +1,6 @@
 /**
  * Shared revocable-session mechanism used by admin.ts, member.ts, and
- * sponsor-portal.ts. Persona-specific eligibility and authorization remain
+ * user-session.ts. Capacity-specific eligibility and authorization remain
  * separate; cookie transport, JWT claim shape, and session-row lifecycle are
  * centralized here.
  */
@@ -102,20 +102,20 @@ export function hasBaseSessionTokenClaims(claims: object, expectedTyp: string): 
   );
 }
 
-// ── Session rows (`sessions` for admin/member, `sponsor_portal_sessions`) ──
+// ── Session rows ──
 
 export interface SessionTableConfig {
   table: string;
   subjectColumn: string;
 }
 
-/** Generic session-row INSERT — same shape across admin/member/sponsor-portal, differing only by table + subject column. */
+/** Generic session-row INSERT — table and subject column are explicit. */
 export async function prepareSessionRow(
   db: DatabaseLike,
   config: SessionTableConfig,
   subjectId: string,
   sessionTtlHours: number,
-): Promise<{ sessionId: string; expiresAt: string; statement: StatementLike }> {
+): Promise<{ sessionId: string; expiresAt: string; createdAt: string; statement: StatementLike }> {
   const sessionId = uuid();
   const sessionHash = await sha256Hex(randomToken(24));
   const now = nowIso();
@@ -124,6 +124,7 @@ export async function prepareSessionRow(
   return {
     sessionId,
     expiresAt,
+    createdAt: now,
     statement: db
       .prepare(
         `INSERT INTO ${config.table} (id, ${config.subjectColumn}, token_hash, expires_at, revoked_at, created_at)
@@ -148,23 +149,36 @@ export interface PlainSessionRow {
   id: string;
   subjectId: string;
   expiresAt: string;
+  createdAt: string;
   revokedAt: string | null;
 }
 
-/** Plain session-row SELECT (no eligibility join) — used by member/sponsor-portal, which re-check eligibility separately after this. */
+/** Plain session-row SELECT (no eligibility join); callers re-check live eligibility separately. */
 export async function fetchSessionRow(
   db: DatabaseLike,
   config: SessionTableConfig,
   sessionId: string,
   subjectId: string,
 ): Promise<PlainSessionRow | null> {
-  const row = await first<{ id: string; subject_id: string; expires_at: string; revoked_at: string | null }>(
+  const row = await first<{
+    id: string;
+    subject_id: string;
+    expires_at: string;
+    created_at: string;
+    revoked_at: string | null;
+  }>(
     db,
-    `SELECT id, ${config.subjectColumn} AS subject_id, expires_at, revoked_at FROM ${config.table} WHERE id = ? AND ${config.subjectColumn} = ?`,
+    `SELECT id, ${config.subjectColumn} AS subject_id, expires_at, created_at, revoked_at FROM ${config.table} WHERE id = ? AND ${config.subjectColumn} = ?`,
     [sessionId, subjectId],
   );
   if (!row) return null;
-  return { id: row.id, subjectId: row.subject_id, expiresAt: row.expires_at, revokedAt: row.revoked_at };
+  return {
+    id: row.id,
+    subjectId: row.subject_id,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    revokedAt: row.revoked_at,
+  };
 }
 
 /** Throws the standardized 401 AUTH_INVALID/AUTH_REVOKED/AUTH_EXPIRED trio — same codes and logic everywhere, message text parameterized by entity label. */

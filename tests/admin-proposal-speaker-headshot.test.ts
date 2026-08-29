@@ -44,7 +44,7 @@ async function callAdmin(
   bucket = new FakeUploadsBucket(),
 ): Promise<{ response: Response; bucket: FakeUploadsBucket }> {
   const response = await app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${userId}/${suffix}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${userId}/${suffix}`, {
       ...init,
       headers: { authorization: `Bearer ${token}`, ...init.headers },
     }),
@@ -90,7 +90,7 @@ describe("admin proposal speaker headshots", () => {
     expect(response.status).toBe(200);
     const payload = headshotUploadResponseSchema.parse(await response.json());
     expect(payload.r2Key).toMatch(new RegExp(`^proposal-headshots/${proposalId}/${userId}/`));
-    expect(payload.headshotUrl).toContain(`/api/v1/admin/proposals/${proposalId}/speakers/${userId}/headshot`);
+    expect(payload.headshotUrl).toContain(`/api/v1/proposals/${proposalId}/speakers/${userId}/headshot`);
     expect(new URL(payload.headshotUrl).searchParams.get("v")).toBeTruthy();
 
     const [user] = await queryAll<{ headshot_r2_key: string | null }>(
@@ -116,7 +116,18 @@ describe("admin proposal speaker headshots", () => {
       vi.fn().mockResolvedValue(new Response(validJpegBytes(), { headers: { "content-type": "image/jpeg" } })),
     );
 
-    const { response } = await callAdmin(token, proposalId, userId, "gravatar", { method: "POST" }, bucket);
+    const { response } = await callAdmin(
+      token,
+      proposalId,
+      userId,
+      "headshot",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: "gravatar" }),
+      },
+      bucket,
+    );
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { r2Key: string };
     expect(payload.r2Key).toMatch(new RegExp(`^proposal-headshots/${proposalId}/${userId}/`));
@@ -131,7 +142,18 @@ describe("admin proposal speaker headshots", () => {
       "fetch",
       vi.fn().mockResolvedValue(new Response(validPngBytes(4097, 1), { headers: { "content-type": "image/png" } })),
     );
-    const { response: rejected } = await callAdmin(token, proposalId, userId, "gravatar", { method: "POST" }, bucket);
+    const { response: rejected } = await callAdmin(
+      token,
+      proposalId,
+      userId,
+      "headshot",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: "gravatar" }),
+      },
+      bucket,
+    );
     expect(rejected.status).toBe(404);
     expect(
       await queryAll<{ headshot_r2_key: string | null }>(

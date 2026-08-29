@@ -4,11 +4,15 @@ const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-rev
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 
 function isPublicCacheableGet(pathname: string): boolean {
-  return /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname);
+  return (
+    pathname === "/api/v1/events" ||
+    /^\/api\/v1\/events\/[^/]+$/.test(pathname) ||
+    /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname)
+  );
 }
 
 /**
- * Returns true for staff-only and internal route families that must never be
+ * Returns true for staff-only and signed integration routes that must never be
  * cached regardless of whether the handler calls markSensitive().
  * All other routes signal sensitivity by calling markSensitive(context) at
  * the top of their handler so the middleware reads it from context.data.
@@ -16,10 +20,24 @@ function isPublicCacheableGet(pathname: string): boolean {
 function isSensitiveArchitecturePath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/admin/") ||
+    pathname.startsWith("/api/v1/analytics/") ||
+    pathname === "/api/v1/audit-log" ||
+    pathname.startsWith("/api/v1/audit-log/") ||
     pathname.startsWith("/api/v1/email/") ||
-    pathname.startsWith("/api/v1/internal/") ||
-    pathname.startsWith("/api/v1/operations/") ||
-    pathname.startsWith("/api/v1/system/")
+    pathname === "/api/v1/calendar/rsvp" ||
+    pathname.startsWith("/api/v1/membership/") ||
+    pathname.startsWith("/api/v1/organizations/") ||
+    pathname.startsWith("/api/v1/retention/") ||
+    pathname.startsWith("/api/v1/scheduler/") ||
+    pathname.startsWith("/api/v1/permissions/") ||
+    /^\/api\/v1\/proposals\/[^/]+(?:\/|$)/.test(pathname) ||
+    pathname === "/api/v1/users/current" ||
+    pathname.startsWith("/api/v1/users/current/") ||
+    pathname === "/api/v1/roles" ||
+    pathname.startsWith("/api/v1/roles/") ||
+    /^\/api\/v1\/users\/[^/]+\/roles(?:\/|$)/.test(pathname) ||
+    pathname === "/api/v1/leadership/positions" ||
+    pathname.startsWith("/api/v1/leadership/positions/")
   );
 }
 

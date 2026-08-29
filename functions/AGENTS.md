@@ -9,3 +9,4 @@
 - Do not issue per-row D1 queries on list or read-model paths. Use joins, set-based queries, or bounded batches.
 - Preserve the dependency direction from shared contracts to domain policy, persistence, focused use cases, and thin route adapters.
 - Generic infrastructure such as the email outbox must not import feature services. Feature use cases may depend on infrastructure interfaces.
+- Produce stored and returned instants through `_lib/utils/time.ts` so every write is ISO-8601 UTC with `Z`. Do not emit a server-local or SQL-defaulted timestamp.

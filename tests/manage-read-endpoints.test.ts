@@ -236,17 +236,14 @@ describe("manage read endpoints", () => {
     });
 
     const openResponse = await callApp(
-      new Request(
-        `https://app.test/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}/open-manage`,
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${adminToken}`,
-            "cf-connecting-ip": "203.0.113.30",
-            "user-agent": "admin-browser",
-          },
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${created.registration.id}/access`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          "cf-connecting-ip": "203.0.113.30",
+          "user-agent": "admin-browser",
         },
-      ),
+      }),
     );
 
     expect(openResponse.status).toBe(200);
@@ -395,7 +392,7 @@ describe("manage read endpoints", () => {
            manage_link_secret, created_at, updated_at
          ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
       ).bind(registrationId, eventId, registrationUserId, crypto.randomUUID()),
-      ...(["events:read", "events:write", "donations:read"] as const).map((permission) =>
+      ...(["events:read", "events:write", "events:manage", "donations:read"] as const).map((permission) =>
         env.DB.prepare(
           `INSERT INTO permission_grants
              (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
@@ -413,7 +410,7 @@ describe("manage read endpoints", () => {
 
     const scopedAdminToken = await createAdminSession(env.DB, scopedAdminId, "scoped-admin-manage-token");
     const openResponse = await callApp(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/open-manage`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/access`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${scopedAdminToken}`,

@@ -1,3 +1,4 @@
+import { deriveVoteStatus } from "./status";
 import type { VoteLifecycleTransition } from "../../../../assets/shared/schemas/vote-management";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { createDurableJobLease } from "../../jobs/lease";
@@ -31,7 +32,9 @@ async function openManagedVote(
   vote: VoteRow,
   throughGroupId: string,
 ): Promise<ManagedVoteTransitionResult> {
-  if (vote.status !== "scheduled") {
+  // Manual open runs the open side effects early; it is refused once they
+  // have already run or the vote is over.
+  if (deriveVoteStatus(vote, nowIso()) !== "scheduled") {
     throw new AppError(422, "VOTE_CANNOT_OPEN", "Only a scheduled vote can be opened");
   }
   const now = nowIso();
@@ -44,15 +47,16 @@ async function openManagedVote(
       db
         .prepare(
           `UPDATE votes
-           SET status = 'open', opens_at = CASE WHEN opens_at > ? THEN ? ELSE opens_at END,
+           SET opened_at = ?, opens_at = CASE WHEN opens_at > ? THEN ? ELSE opens_at END,
                transition_revision = transition_revision + 1, updated_at = ?
            WHERE id = ?
-             AND status = 'scheduled'
+             AND opened_at IS NULL
+             AND cancelled_at IS NULL
              AND transition_revision = ?
              AND transition_processing_token IS NULL
              AND closes_at > ?`,
         )
-        .bind(now, now, now, vote.id, vote.transition_revision, now),
+        .bind(now, now, now, now, vote.id, vote.transition_revision, now),
       prepareAuditLogAfterOneChange(
         db,
         "admin",
@@ -80,24 +84,26 @@ async function cancelManagedVote(
   throughGroupId: string,
   reason: string,
 ): Promise<ManagedVoteTransitionResult> {
-  if (vote.status !== "scheduled" && vote.status !== "open") {
+  const now = nowIso();
+  const currentStatus = deriveVoteStatus(vote, now);
+  if (currentStatus !== "scheduled" && currentStatus !== "open") {
     throw new AppError(422, "VOTE_CANNOT_CANCEL", "Only a scheduled or open vote can be cancelled");
   }
-  const now = nowIso();
   try {
     await db.batch([
       await prepareVoteManagementAuthorizationGuard(db, actor, vote.id, throughGroupId),
       db
         .prepare(
           `UPDATE votes
-           SET status = 'cancelled', cancellation_reason = ?, transition_revision = transition_revision + 1,
+           SET cancelled_at = ?, cancellation_reason = ?, transition_revision = transition_revision + 1,
                transition_processing_token = NULL, transition_lease_expires_at = NULL, updated_at = ?
            WHERE id = ?
-             AND status IN ('scheduled', 'open')
+             AND cancelled_at IS NULL
+             AND closed_at IS NULL
              AND transition_revision = ?
              AND (transition_processing_token IS NULL OR transition_lease_expires_at <= ?)`,
         )
-        .bind(reason, now, vote.id, vote.transition_revision, now),
+        .bind(now, reason, now, vote.id, vote.transition_revision, now),
       prepareAuditLogAfterOneChange(
         db,
         "admin",
@@ -105,7 +111,7 @@ async function cancelManagedVote(
         "vote_cancelled",
         "vote",
         vote.id,
-        { reason, previousStatus: vote.status },
+        { reason, previousStatus: currentStatus },
         now,
       ),
       db
@@ -146,7 +152,8 @@ async function claimManagedVoteClose(
            SET transition_processing_token = ?, transition_lease_expires_at = ?,
                transition_revision = transition_revision + 1, updated_at = ?
            WHERE id = ?
-             AND status = 'open'
+             AND closed_at IS NULL
+             AND cancelled_at IS NULL
              AND current_round = ?
              AND transition_revision = ?
              AND closes_at = ?
@@ -193,10 +200,10 @@ async function closeManagedVote(
   vote: VoteRow,
   throughGroupId: string,
 ): Promise<ManagedVoteTransitionResult> {
-  if (vote.status !== "open") {
+  const now = nowIso();
+  if (deriveVoteStatus(vote, now) !== "open") {
     throw new AppError(422, "VOTE_CANNOT_CLOSE", "Only an open vote can be closed");
   }
-  const now = nowIso();
   const claimed = await claimManagedVoteClose(db, actor, vote, throughGroupId, now);
   try {
     const outcome = await closeClaimedVote(db, claimed, now, {

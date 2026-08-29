@@ -148,11 +148,13 @@ export async function createManagedFormPlacement(
   actorId: string,
   formId: string,
   input: FormPlacementCreateInput,
+  authorizationGuards: readonly StatementLike[] = [],
 ): Promise<FormPlacement> {
   const now = nowIso();
   const prepared = prepareFormPlacement(db, formId, input, now);
   try {
     await db.batch([
+      ...authorizationGuards,
       prepared.statement,
       prepareAuditLog(
         db,
@@ -209,6 +211,7 @@ export async function updateManagedFormPlacement(
   input: FormPlacementUpdateInput,
   auditScope: AuditScope | null = null,
   authorizationGuards: readonly StatementLike[] = [],
+  nextAuthorizationGuards: (next: FormPlacement) => readonly StatementLike[] = () => [],
 ): Promise<FormPlacement> {
   const currentRow = await getFormPlacementRow(db, formId, placementId);
   if (!currentRow) throw new AppError(404, "FORM_PLACEMENT_NOT_FOUND", "Form placement not found");
@@ -228,6 +231,15 @@ export async function updateManagedFormPlacement(
   try {
     await db.batch([
       ...authorizationGuards,
+      ...nextAuthorizationGuards({
+        ...next,
+        opensAt: next.opensAt ?? null,
+        closesAt: next.closesAt ?? null,
+        id: placementId,
+        formId,
+        createdAt: current.createdAt,
+        updatedAt: now,
+      }),
       db
         .prepare(
           `UPDATE form_placements
@@ -288,9 +300,11 @@ export async function listFormPlacements(
   db: DatabaseLike,
   formId: string,
   query: FormPlacementsListQuery,
+  options: { unownedOnly?: boolean } = {},
 ): Promise<{ placements: FormPlacement[]; total: number }> {
   const conditions = ["form_id = ?"];
   const bindings: unknown[] = [formId];
+  if (options.unownedOnly) conditions.push("owner_group_id IS NULL");
   if (query.ownerGroupId) {
     conditions.push("owner_group_id = ?");
     bindings.push(query.ownerGroupId);

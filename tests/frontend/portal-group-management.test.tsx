@@ -2,7 +2,10 @@
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Management } from "../../assets/ts/member-flows/portal/sections/management/Management";
+import {
+  Management,
+  managementRouteOwnsHash,
+} from "../../assets/ts/member-flows/portal/sections/management/Management";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const navigate = vi.fn();
@@ -50,6 +53,17 @@ function group(revision = 0) {
   } as const;
 }
 
+function configuration(revision = 0) {
+  return {
+    governanceInheritanceMode: "inherited",
+    eligibilityMode: "managed",
+    automaticEnrollmentMode: "none",
+    allowAutomaticOptOut: false,
+    minEndorsersForBallot: 2,
+    revision,
+  } as const;
+}
+
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
@@ -75,6 +89,13 @@ afterEach(() => {
 });
 
 describe("portal selected-group management", () => {
+  it("does not let delayed group selection override another portal route", () => {
+    expect(managementRouteOwnsHash(undefined, "#/management")).toBe(true);
+    expect(managementRouteOwnsHash(undefined, "#/system/users")).toBe(false);
+    expect(managementRouteOwnsHash(GROUP_ID, `#/groups/${GROUP_ID}/settings`)).toBe(true);
+    expect(managementRouteOwnsHash(GROUP_ID, "#/system/users")).toBe(false);
+  });
+
   it("loads one server-derived group context and updates through the canonical group route", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     let revision = 0;
@@ -94,10 +115,11 @@ describe("portal selected-group management", () => {
           });
         }
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "GET") {
-          return json({ group: group(revision) });
-        }
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/context` && method === "GET") {
-          return json({ group: group(revision), capabilities: ["view", "manage"] });
+          return json({
+            group: group(revision),
+            capabilities: ["view", "manage"],
+            configuration: configuration(revision),
+          });
         }
         if (url.pathname === `/api/v1/groups/${GROUP_ID}/category-rules` && method === "GET") {
           return json({ groupId: GROUP_ID, revision, rules: [] });
@@ -135,7 +157,8 @@ describe("portal selected-group management", () => {
     expect(
       requests.some(({ url }) => url.pathname === "/api/v1/groups" && url.searchParams.get("manageable") === "true"),
     ).toBe(true);
-    expect(requests.some(({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}/context`)).toBe(true);
+    expect(requests.some(({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}`)).toBe(true);
+    expect(requests.some(({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}/context`)).toBe(false);
     expect(requests.some(({ url }) => url.searchParams.has("manageable") && url.pathname.includes(GROUP_ID))).toBe(
       false,
     );
@@ -169,7 +192,7 @@ describe("portal selected-group management", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/context`) {
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}`) {
           return json({ group: group(), capabilities: ["view", "participate"] });
         }
         throw new Error(`Unexpected request: ${url.pathname}`);

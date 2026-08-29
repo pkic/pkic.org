@@ -14,12 +14,14 @@ export function ProposalSpeakerHeadshotManager({
   assetPath,
   onSaved,
   notify,
+  gravatarBody,
 }: {
   speaker: ProposalSpeaker;
   proposalId: string;
   name: string;
   canEdit: boolean;
   assetPath: (proposalId: string, userId: string, asset: "headshot" | "gravatar") => string;
+  gravatarBody?: unknown;
   onSaved: (userId: string, patch: Partial<ProposalSpeaker>) => void;
   notify?: (message: string, type: ToastType) => void;
 }) {
@@ -38,7 +40,10 @@ export function ProposalSpeakerHeadshotManager({
   async function fetchGravatar() {
     setStatus("Looking up Gravatar...");
     try {
-      const data = await requestJson(path("gravatar"), headshotUrlResponseSchema, { method: "POST" });
+      const data = await requestJson(path("gravatar"), headshotUrlResponseSchema, {
+        method: "POST",
+        ...(gravatarBody === undefined ? {} : { body: JSON.stringify(gravatarBody) }),
+      });
       onSaved(speaker.userId, { headshotUrl: data.headshotUrl, hasHeadshot: Boolean(data.headshotUrl) });
       setStatus("Gravatar imported");
       notify?.("Gravatar imported successfully", "success");

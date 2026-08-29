@@ -269,8 +269,8 @@ async function processOutboxRow(
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
     const dataWithPartials = { ...payload, _partials: partials };
     const bodyOverride =
-      typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent
-        ? payload.__adminCampaignBodyContent
+      typeof payload.__eventCampaignBodyContent === "string" && payload.__eventCampaignBodyContent
+        ? payload.__eventCampaignBodyContent
         : null;
 
     let subject: string;
@@ -287,7 +287,7 @@ async function processOutboxRow(
       resolvedTemplateVersion = template.version;
       resolvedContentType = template.contentType as EmailContentType;
       const customText =
-        typeof payload.__adminCampaignCustomText === "string" ? payload.__adminCampaignCustomText : null;
+        typeof payload.__eventCampaignCustomText === "string" ? payload.__eventCampaignCustomText : null;
       contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);
       subject = renderSubject(template.subjectTemplate, row.subject ?? "PKI Consortium Update", dataWithPartials);
     }

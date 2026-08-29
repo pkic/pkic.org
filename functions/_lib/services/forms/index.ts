@@ -1,10 +1,14 @@
 export {
   getActiveFormByPurpose,
   getActiveEventFormByPurpose,
+  getActivePortalEventFormByPurpose,
+  getActiveFormForEvent,
   getActiveFormForResolution,
+  toEventFormResolutionEvent,
   getGlobalFormByKey,
   getFormDefinitionByPlacement,
   getManagedFormWithFields,
+  requireManagedEventForm,
   mapManagedFormFields,
   parseFormFieldOptionSource,
   resolveFormFieldOptionCatalogs,
@@ -12,6 +16,7 @@ export {
   type ManagedFormWithFields,
   type FormFieldDefinition,
   type EventFormResolution,
+  type EventFormResolutionEvent,
 } from "./read";
 export type { FormPurpose } from "../../../../assets/shared/schemas/forms";
 
@@ -36,11 +41,16 @@ export {
   type ValidationContext,
 } from "./validation";
 
-export { listAdminForms, type AdminFormSummaryRow } from "./list";
+export { listForms, type FormSummaryRow } from "./list";
 
 export { createManagedForm, prepareManagedForm, removeManagedForm, updateManagedForm } from "./management";
 export type { ManagedFormRemovalAction } from "./management";
-
+export {
+  prepareManagedFormPlacementTargetGuard,
+  requireGlobalFormPlacementTargetBoundary,
+  requireManagedFormMutationBoundary,
+  requireManagedFormPlacementTargetBoundary,
+} from "./management-boundary";
 export {
   createManagedFormPlacement,
   findActiveFormPlacement,
@@ -60,3 +70,11 @@ export {
   prepareReplaceContextFormSubmission,
   prepareUpdateFormSubmission,
 } from "./submission-command";
+
+export {
+  resolveEventFormResponse,
+  resolveEventFormResponses,
+  type EventFormResponse,
+  type EventFormResponseInput,
+  type EventFormResponseSource,
+} from "./response-attribution";

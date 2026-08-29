@@ -1,0 +1,140 @@
+import { getConfig } from "../../config";
+import {
+  runConsultationBatch,
+  runEcReviewBatch,
+  runEcWindowAutoApprove,
+  runGoogleGroupsSyncPass,
+} from "../membership/scheduled-jobs";
+import { runOnHoldReminders } from "../membership/on-hold-reminders";
+import { runRetentionJob } from "../retention";
+import { runScheduledDueWork } from "../scheduled-due-work";
+import { runSponsorshipDueWork } from "../sponsorship-scheduled-jobs";
+import { runVotesDueWork } from "../votes-scheduled-jobs";
+import { runWeeklyWgChairDigest } from "../wg-chair-digest";
+import {
+  boundedNextRunAt,
+  earliestRetentionDue,
+  earliestSponsorshipRenewalDue,
+  earliestVoteTransitionDue,
+} from "./next-due";
+import type { ScheduledJobDefinition } from "./types";
+
+/** Ten minutes covers the longest observed pass with room for a slow D1. */
+const DEFAULT_LEASE_SECONDS = 600;
+
+/**
+ * Reconciliation floors for the deadline-driven jobs. These are the longest a
+ * job may sleep when it has computed no nearer wake; the computed wake keeps
+ * them timely, so the floor no longer trades latency for cost.
+ */
+const RETENTION_INTERVAL_SECONDS = 86_400;
+const SPONSORSHIP_INTERVAL_SECONDS = 86_400;
+/**
+ * Votes wake at their next real deadline, so this is only the reconciliation
+ * floor. It stays short because a vote deadline is user-visible: the tally
+ * should be frozen promptly after the window closes.
+ */
+const VOTES_INTERVAL_SECONDS = 900;
+
+/**
+ * Every recurring job the platform runs, keyed by the row in
+ * `scheduled_jobs`. Cadence lives in that row rather than here, so changing
+ * how often a job runs is a data change instead of a deployment.
+ */
+export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
+  {
+    key: "due_work",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["email:manage"],
+    run: async ({ env, d1QueryBudget }) => {
+      await runScheduledDueWork(env, { d1QueryBudget });
+    },
+  },
+  {
+    key: "on_hold_due_work",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:write"],
+    run: async ({ env, d1QueryBudget }) => {
+      await runOnHoldReminders(env.DB, env, getConfig(env).scheduledOnHoldReminderLimit, d1QueryBudget);
+    },
+  },
+  {
+    key: "ec_auto_approve",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:approve"],
+    run: async ({ env, d1QueryBudget }) => {
+      await runEcWindowAutoApprove(env.DB, env, getConfig(env).scheduledEcAutoApproveLimit, d1QueryBudget);
+    },
+  },
+  {
+    key: "google_groups_sync",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:write"],
+    run: async ({ env, d1QueryBudget }) => {
+      await runGoogleGroupsSyncPass(env.DB, env, getConfig(env).scheduledGoogleGroupsSyncLimit, d1QueryBudget);
+    },
+  },
+  {
+    key: "sponsorship_due_work",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["sponsorships:write"],
+    run: async ({ env, d1QueryBudget }) => {
+      await runSponsorshipDueWork(env.DB, env, getConfig(env).scheduledSponsorshipDueWorkLimit, d1QueryBudget);
+      // Renewals are day-scale. Waking at the next actual due instant means the
+      // daily reconciliation floor costs no timeliness.
+      return {
+        nextRunAt: boundedNextRunAt(await earliestSponsorshipRenewalDue(env.DB), SPONSORSHIP_INTERVAL_SECONDS),
+      };
+    },
+  },
+  {
+    key: "votes_due_work",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["votes:manage"],
+    run: async ({ env, d1QueryBudget }) => {
+      const config = getConfig(env);
+      await runVotesDueWork(
+        env.DB,
+        { ...env, SCHEDULED_VOTE_NOTIFICATION_LIMIT: String(config.scheduledVoteNotificationLimit) },
+        config.scheduledVoteDueWorkLimit,
+        d1QueryBudget,
+      );
+      return {
+        nextRunAt: boundedNextRunAt(await earliestVoteTransitionDue(env.DB), VOTES_INTERVAL_SECONDS),
+      };
+    },
+  },
+  {
+    key: "retention",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["retention:run", "users:anonymize"],
+    run: async ({ env }) => {
+      await runRetentionJob(env.DB);
+      return { nextRunAt: boundedNextRunAt(await earliestRetentionDue(env.DB), RETENTION_INTERVAL_SECONDS) };
+    },
+  },
+  {
+    key: "consultation_batch",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:write"],
+    run: async ({ env }) => {
+      await runConsultationBatch(env.DB, env, getConfig(env).scheduledConsultationBatchLimit);
+    },
+  },
+  {
+    key: "ec_review_batch",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:approve"],
+    run: async ({ env }) => {
+      await runEcReviewBatch(env.DB, env);
+    },
+  },
+  {
+    key: "working_group_chair_digest",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:write"],
+    run: async ({ env }) => {
+      await runWeeklyWgChairDigest(env.DB, env);
+    },
+  },
+];

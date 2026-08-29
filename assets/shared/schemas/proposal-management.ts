@@ -13,6 +13,7 @@ import {
   successResponseSchema,
   tokenSchema,
   trimmedString,
+  utcInstantSchema,
 } from "./api-common";
 import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
@@ -176,7 +177,7 @@ export const finalizeProposalSchema = z
   .object({
     finalStatus: proposalDecisionStatusSchema,
     decisionNote: trimmedString(3, 10_000).optional(),
-    presentationDeadline: z.iso.datetime().optional(),
+    presentationDeadline: utcInstantSchema.optional(),
   })
   .superRefine((value, context) => {
     if (value.finalStatus === "needs-work" && !value.decisionNote) {
@@ -282,13 +283,13 @@ export const coSpeakerInviteSchema = z.object({
   firstName: firstNameSchema.optional(),
   lastName: lastNameSchema.optional(),
   role: speakerRoleSchema.exclude(["proposer"]).default("speaker"),
-  expiresAt: z.iso.datetime().optional(),
+  expiresAt: utcInstantSchema.optional(),
 });
 
 export const coSpeakerInviteResponseSchema = successResponseSchema.extend({
   email: normalizedEmailSchema,
   role: speakerRoleSchema,
-  expiresAt: z.iso.datetime(),
+  expiresAt: utcInstantSchema,
   queued: z.boolean(),
 });
 

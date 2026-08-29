@@ -22,7 +22,7 @@ export { PERMISSIONS, isPermission, type Permission };
 
 /**
  * Every permission string in the system (table, plus the
- * `organizations`/`sponsorships`/`sponsor-portal` additions pulled forward
+ * `organizations`/`sponsorships` additions pulled forward
  *, plus the `admin:read`/`admin:write` fallback pair for
  * admin routes not yet mapped to a named module — see consolidated migration 0035's
  * header comment).
@@ -236,7 +236,7 @@ export function preparePermissionsAuthorizationGuard(
  * service. The guard and the caller's statements commit or roll back as one D1
  * batch, while each domain retains its own public error code and message.
  */
-export function guardPermissionMutationDatabase(
+export function guardPermissionDatabase(
   db: DatabaseLike,
   actor: AuthAdmin,
   requirements: readonly PermissionRequirement[],
@@ -254,6 +254,16 @@ export function guardPermissionMutationDatabase(
       throw error;
     }
   });
+}
+
+/** Backward-compatible domain name for mutation callers; behavior is identical. */
+export function guardPermissionMutationDatabase(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  requirements: readonly PermissionRequirement[],
+  authorizationChangedError: () => AppError,
+): DatabaseLike {
+  return guardPermissionDatabase(db, actor, requirements, authorizationChangedError);
 }
 
 interface EmailRow {

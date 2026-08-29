@@ -1,7 +1,7 @@
 /**
  * My Application — View original application, status history,
  * and timeline. Most members have exactly one application, but the backend
- * (GET /api/v1/me/applications) returns every application matching the
+ * (GET /api/v1/users/current/applications) returns every application matching the
  * caller's email, so this renders as a list that expands into a detail view
  * (master/detail within a single tab — no route param, since
  * scoped the nav shell's routing to top-level sections only).
@@ -22,7 +22,7 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 
   useEffect(() => {
     let cancelled = false;
-    getJson(`/api/v1/me/applications/${id}`, myApplicationDetailSchema)
+    getJson(`/api/v1/users/current/applications/${id}`, myApplicationDetailSchema)
       .then((d) => {
         if (!cancelled) setDetail(d);
       })
@@ -105,7 +105,7 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 
 export function MyApplications() {
   const page = useApiPage(
-    "/api/v1/me/applications",
+    "/api/v1/users/current/applications",
     { sort: "-createdAt" },
     myApplicationsListResponseSchema,
     (data) => data.applications,

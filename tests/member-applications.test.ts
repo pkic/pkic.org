@@ -517,7 +517,11 @@ describe("POST/GET /api/v1/members/applications/:id/documents", () => {
       `/api/v1/members/applications/${created.applicationId}/documents?token=${created.manageToken}`,
     );
     expect(listResponse.status).toBe(200);
-    const listBody = applicationDocumentsListResponseSchema.parse(await listResponse.json());
+    const rawListBody = await listResponse.json();
+    expect((rawListBody as { documents: Array<Record<string, unknown>> }).documents[0]).not.toHaveProperty(
+      "uploadedByEmail",
+    );
+    const listBody = applicationDocumentsListResponseSchema.parse(rawListBody);
     expect(listBody.documents).toHaveLength(1);
     expect(listBody.documents[0].filename).toBe("registration.pdf");
     expect(listBody.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });

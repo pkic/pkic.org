@@ -39,7 +39,7 @@ test("submits a generic consortium sponsor inquiry using D1 tiers", async ({ pag
     );
 
   const responsePromise = page.waitForResponse(
-    (response) => response.url().endsWith("/api/v1/sponsorship/inquiries") && response.request().method() === "POST",
+    (response) => response.url().endsWith("/api/v1/sponsors/inquiries") && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: /submit your interest/i }).click();
   const response = await responsePromise;

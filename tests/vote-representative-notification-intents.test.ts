@@ -122,7 +122,9 @@ describe("durable vote representative notifications", () => {
     const vote = await createCanonicalVote(env.DB, admin, {
       title: '[Vote](https://attacker.invalid/vote) <script src="https://attacker.invalid/vote.js"></script>',
     });
-    await env.DB.prepare("UPDATE votes SET status = 'closed' WHERE id = ?").bind(vote.id).run();
+    await env.DB.prepare("UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+      .bind(vote.id)
+      .run();
 
     const first = await runVotesDueWork(env.DB, env, 10);
     const second = await runVotesDueWork(env.DB, env, 10);
@@ -139,6 +141,7 @@ describe("durable vote representative notifications", () => {
       "SELECT payload_json FROM email_outbox WHERE idempotency_key LIKE 'member-vote-representative-notify:%'",
     );
     const payload = JSON.parse(queued.payload_json) as Record<string, unknown>;
+    expect(payload.voteUrl).toBe(`/portal/#/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`);
     for (const contentType of ["markdown", "html"] as const) {
       const rendered = await renderEmail(
         "{{representativeName}} {{organizationName}} {{voteTitle}}",
@@ -168,7 +171,8 @@ describe("durable vote representative notifications", () => {
     ).run();
 
     await expect(runVotesDueWork(env.DB, env, 10)).rejects.toThrow("notification snapshot rejected by test");
-    expect(await queryAll(env.DB, "SELECT status FROM votes WHERE id = ?", vote.id)).toEqual([{ status: "scheduled" }]);
+    // The rollback means the open side effects never ran.
+    expect(await queryAll(env.DB, "SELECT opened_at FROM votes WHERE id = ?", vote.id)).toEqual([{ opened_at: null }]);
     expect(
       await queryAll(
         env.DB,

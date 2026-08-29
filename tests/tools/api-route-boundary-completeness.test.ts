@@ -5,32 +5,12 @@ import { listTypeScriptFiles, readTypeScriptSource, REPOSITORY_ROOT, sourceLine 
 
 const API_ROOT = join(REPOSITORY_ROOT, "functions/api/v1");
 const RAW_ROUTE_ALLOWLIST = new Set([
-  "functions/api/v1/admin/auth/router.ts:get:/session",
-  "functions/api/v1/admin/auth/router.ts:post:/logout",
-  "functions/api/v1/admin/auth/router.ts:post:/request-link",
-  "functions/api/v1/admin/auth/router.ts:post:/verify-link",
-  "functions/api/v1/admin/events/[eventSlug]/registrations/router.ts:get:/export",
-  "functions/api/v1/auth/member/router.ts:post:/logout",
-  "functions/api/v1/auth/member/router.ts:post:/request-link",
-  "functions/api/v1/auth/member/router.ts:post:/verify-link",
-  "functions/api/v1/auth/sponsor-portal/router.ts:post:/request-link",
-  "functions/api/v1/auth/sponsor-portal/router.ts:post:/verify-link",
-  "functions/api/v1/headshots/[userId]/router.ts:get:/:file",
+  "functions/api/v1/users/[userId]/headshots/router.ts:get:/:file",
   "functions/api/v1/og/donation/router.ts:get:/:session_id",
   "functions/api/v1/og/router.ts:get:/:code",
   "functions/api/v1/proposals/speaker/[token]/router.ts:get:/presentation/download",
-  "functions/api/v1/sponsor-portal/events/[eventId]/attendees/router.ts:get:/export",
-  "functions/api/v1/sponsor-portal/router.ts:post:/logout",
 ]);
-const MANUAL_JSON_ALLOWLIST = new Set([
-  "functions/api/v1/admin/auth/request-link.ts",
-  "functions/api/v1/admin/auth/verify-link.ts",
-  "functions/api/v1/auth/member/request-link.ts",
-  "functions/api/v1/auth/member/verify-link.ts",
-  "functions/api/v1/auth/passkeys/register-complete.ts",
-  "functions/api/v1/auth/sponsor-portal/request-link.ts",
-  "functions/api/v1/auth/sponsor-portal/verify-link.ts",
-]);
+const MANUAL_JSON_ALLOWLIST = new Set(["functions/api/v1/auth/passkeys/register-complete.ts"]);
 
 type SourceDetails = {
   path: string;
@@ -100,7 +80,7 @@ describe("API route boundary completeness", () => {
     expect(registrations).toEqual([...RAW_ROUTE_ALLOWLIST].sort());
   });
 
-  it("limits manual JSON parsing to explicit auth-first and internal boundaries", () => {
+  it("limits manual JSON parsing to explicit auth-first and signed-integration boundaries", () => {
     const violations = sources
       .filter((details) => !MANUAL_JSON_ALLOWLIST.has(details.relativePath))
       .flatMap(manualJsonParsing);

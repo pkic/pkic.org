@@ -91,7 +91,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   await jsonResponse(
     page.request,
     "PATCH",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/stage`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
     {
       toStage: "in_review",
     },
@@ -99,7 +99,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   await jsonResponse(
     page.request,
     "PATCH",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/stage`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
     {
       toStage: "in_consultation",
     },
@@ -107,7 +107,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   await jsonResponse(
     page.request,
     "PATCH",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/stage`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
     {
       toStage: "ec_review",
     },
@@ -115,7 +115,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
   const approved = await jsonResponse(
     page.request,
     "POST",
-    `/api/v1/system/membership-applications/${stringProperty(application, "applicationId")}/approve`,
+    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/approve`,
   );
   return {
     email,
@@ -164,7 +164,7 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
   // access, rather than pretending the global admin is a staff persona.
   await jsonResponse(page.request, "DELETE", `/api/v1/members/capacities/${membershipId}`);
   for (const groupId of groupIds) {
-    await jsonResponse(page.request, "POST", `/api/v1/system/access-control/users/${userId}/roles`, {
+    await jsonResponse(page.request, "POST", `/api/v1/users/${userId}/roles`, {
       roleId: "role-group_lead",
       contextType: "group",
       contextId: groupId,
@@ -174,7 +174,7 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
 }
 
 async function assertGroupCapabilities(page: Page, groupId: string, expected: string[]): Promise<void> {
-  const response = await page.request.get(`/api/v1/groups/${groupId}/context`);
+  const response = await page.request.get(`/api/v1/groups/${groupId}`);
   const body = (await response.json()) as JsonRecord;
   expect(response.status(), JSON.stringify(body)).toBe(200);
   expect(body.capabilities).toEqual(expected);
@@ -193,8 +193,8 @@ function groupNavigation(page: Page, groupName: string) {
 async function anonymousDenied(browser: Browser, groupId: string): Promise<void> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  const response = await page.request.get(`/api/v1/groups/${groupId}/context`);
-  expect(response.status()).toBe(401);
+  const response = await page.request.get(`/api/v1/groups/${groupId}`);
+  expect(response.status()).toBe(404);
   await page.goto(`/portal/#/groups/${groupId}/overview`);
   await expect(page.locator("#portal-inp-email")).toBeVisible();
   await context.close();

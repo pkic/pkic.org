@@ -1,6 +1,6 @@
 /**
  * Member self-service. All endpoints operate on the
- * caller's own identity, resolved from a member session — never a
+ * caller's own identity, resolved from the shared human session — never a
  * target-user path parameter.
  */
 import { z } from "zod";
@@ -9,15 +9,8 @@ import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
-import { voteTypeSchema, voteStatusSchema } from "./votes";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { groupIdSchema } from "./groups";
-import {
-  contentReviewStatusSchema,
-  organizationContentReviewSchema,
-  organizationEditableContentSchema,
-  organizationProfileContentFieldsSchema,
-} from "./organization-profile";
+import { requiresSession } from "./route-contract";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: databaseIdSchema,
@@ -30,7 +23,7 @@ export const myOrganizationRepresentativeSchema = z.object({
 
 // One membership context (own org-less membership, or an organization
 // actively represented) a member can act as. A person can hold more than
-// one at once — see functions/_lib/auth/member.ts.
+// one at once — see functions/_lib/auth/user-session.ts.
 export const myActiveMembershipSchema = z.object({
   memberId: databaseIdSchema,
   organizationId: databaseIdSchema.nullable(),
@@ -70,8 +63,9 @@ export const myProfileSchema = z.object({
 });
 
 export const myProfileGetRouteSchema = {
-  tags: ["Me"],
-  summary: "Get my profile",
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Get the current user's member profile",
   responses: {
     "200": { description: "My profile.", content: { "application/json": { schema: myProfileSchema } } },
   },
@@ -82,10 +76,11 @@ export const myActiveMembershipSwitchSchema = z.object({
 });
 
 export const myActiveMembershipSwitchRouteSchema = {
-  tags: ["Me"],
-  summary: "Switch my active membership context",
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Replace the current user's active membership context",
   description:
-    "Only meaningful for a member who represents more than one organization (or an organization plus an individual membership) concurrently. Re-verifies memberId against the caller's own live eligible memberships — a member can never select one they don't actually hold — then reissues the session cookie scoped to it.",
+    "Only meaningful for a user who represents more than one organization (or an organization plus an individual membership) concurrently. Re-verifies memberId against the caller's own live eligible memberships — a user can never select one they don't actually hold — then reissues the shared human session cookie scoped to it.",
   request: {
     body: { content: { "application/json": { schema: myActiveMembershipSwitchSchema } }, required: true },
   },
@@ -103,11 +98,13 @@ export const myProfileUpdateSchema = z.object({
   biography: z.string().trim().max(5000).optional(),
   links: linksSchema.optional(),
   organizationName: z.string().trim().max(200).optional(),
+  showOnOrgProfile: z.boolean().optional(),
 });
 
 export const myProfileUpdateRouteSchema = {
-  tags: ["Me"],
-  summary: "Update my profile",
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Update the current user's member profile",
   description: "organizationName is only honored for org-less categories (H5/H6/H7); ignored otherwise.",
   request: {
     body: { content: { "application/json": { schema: myProfileUpdateSchema } }, required: true },
@@ -130,8 +127,9 @@ export type MyApplicationsListQuery = z.infer<typeof myApplicationsListQuerySche
 export const myApplicationsListResponseSchema = paginatedResponseSchema("applications", myApplicationSummarySchema);
 
 export const myApplicationsListRouteSchema = {
-  tags: ["Me"],
-  summary: "My application history",
+  ...requiresSession(),
+  tags: ["Users", "Membership"],
+  summary: "List the current user's application history",
   request: { query: myApplicationsListQuerySchema },
   responses: {
     "200": {
@@ -172,8 +170,9 @@ export const myApplicationDetailSchema = z.object({
 });
 
 export const myApplicationDetailRouteSchema = {
-  tags: ["Me"],
-  summary: "My application detail: original application, status history, and timeline",
+  ...requiresSession(),
+  tags: ["Users", "Membership"],
+  summary: "Get the current user's application detail, status history, and timeline",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": { description: "My application.", content: { "application/json": { schema: myApplicationDetailSchema } } },
@@ -181,223 +180,12 @@ export const myApplicationDetailRouteSchema = {
   },
 };
 
-export const myVoteHistoryEntrySchema = z.object({
-  voteId: databaseIdSchema,
-  slug: z.string(),
-  title: z.string(),
-  voteType: voteTypeSchema,
-  ownerGroupId: groupIdSchema,
-  memberId: databaseIdSchema.nullable(),
-  status: voteStatusSchema,
-  choice: z.string(),
-  submittedAt: z.string(),
-});
-
-export const myVotesListQuerySchema = listQuerySchema(["title", "status", "submittedAt"] as const);
-export type MyVotesListQuery = z.infer<typeof myVotesListQuerySchema>;
-export const myVotesListResponseSchema = paginatedResponseSchema("votes", myVoteHistoryEntrySchema);
-
-export const myVotesListRouteSchema = {
-  tags: ["Me"],
-  summary: "My vote history",
-  description: "Every ballot the caller has cast, most recent first.",
-  request: { query: myVotesListQuerySchema },
-  responses: {
-    "200": {
-      description: "My votes.",
-      content: { "application/json": { schema: myVotesListResponseSchema } },
-    },
-  },
-};
-
-export const myOrganizationVisibilityUpdateSchema = z.object({
-  showOnOrgProfile: z.boolean(),
-});
-export const myOrganizationVisibilityUpdateResponseSchema = successResponseSchema.extend({
-  showOnOrgProfile: z.boolean(),
-});
-
-export const myOrganizationVisibilityUpdateRouteSchema = {
-  tags: ["Me"],
-  summary: "Toggle whether I appear on my organization's public page",
-  request: {
-    body: { content: { "application/json": { schema: myOrganizationVisibilityUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Updated.",
-      content: { "application/json": { schema: myOrganizationVisibilityUpdateResponseSchema } },
-    },
-  },
-};
-
-export const addCoworkerSchema = z.object({
-  name: z.string().trim().min(1).max(160),
-  email: z.string().email(),
-});
-
-export const addedCoworkerSchema = z.object({
-  representativeId: databaseIdSchema,
-  membershipId: databaseIdSchema,
-  userId: databaseIdSchema,
-  name: z.string(),
-  email: z.string().email(),
-});
-export type AddedCoworker = z.infer<typeof addedCoworkerSchema>;
-
-export const addCoworkerRouteSchema = {
-  tags: ["Me"],
-  summary: "Enroll a coworker as a representative of my organization (self-service)",
-  description:
-    "Only the organization's primary or secondary contact may call this. The new representative's category is inherited from the organization's shared membership category (member_category_assignments).",
-  request: {
-    body: { content: { "application/json": { schema: addCoworkerSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Coworker enrolled.",
-      content: {
-        "application/json": {
-          schema: addedCoworkerSchema,
-        },
-      },
-    },
-    "403": { description: "Caller is not an org contact, or has no organization." },
-    "409": { description: "Email already holds an active membership, or the org has no membership category set." },
-  },
-};
-
-// ── Organization profile & content moderation ────────────────
-
-export const myOrganizationReviewSchema = organizationContentReviewSchema;
-export const myOrganizationLogoUploadResponseSchema = successResponseSchema.extend({ r2Key: z.string().min(1) });
-export const myHeadshotUploadResponseSchema = successResponseSchema.extend({ r2Key: z.string().min(1) });
-
-export const myOrganizationProfileSchema = z
-  .object({
-    id: databaseIdSchema,
-    name: z.string(),
-    isOrgContact: z.boolean(),
-    isPrimaryContact: z.boolean(),
-    pendingSecondaryContactUserId: databaseIdSchema.nullable(),
-    pendingReview: myOrganizationReviewSchema.nullable(),
-  })
-  .extend(organizationProfileContentFieldsSchema.shape);
-
-export const myOrganizationProfileGetRouteSchema = {
-  tags: ["Me"],
-  summary: "View my organization's current live profile",
-  responses: {
-    "200": {
-      description: "My organization's profile.",
-      content: { "application/json": { schema: myOrganizationProfileSchema } },
-    },
-    "403": { description: "Caller has no organization." },
-  },
-};
-
-export const myOrganizationContentChangeSchema = organizationEditableContentSchema;
-export const myOrganizationContentChangeResponseSchema = z.object({ review: myOrganizationReviewSchema });
-
-export const myOrganizationContentChangeRouteSchema = {
-  tags: ["Me"],
-  summary: "Submit an organization content change for staff review",
-  description:
-    "Only the org's primary or secondary contact may call this. Queues the change in the moderation queue — the live profile is unchanged until a staff admin approves it. Only one pending submission per organization at a time.",
-  request: {
-    body: { content: { "application/json": { schema: myOrganizationContentChangeSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Submitted for review.",
-      content: { "application/json": { schema: myOrganizationContentChangeResponseSchema } },
-    },
-    "403": { description: "Caller is not an org contact, or has no organization." },
-    "409": { description: "A submission is already pending review." },
-    "422": { description: "No editable fields were submitted." },
-  },
-};
-
-export const myOrganizationReviewsListQuerySchema = listQuerySchema(["submittedAt", "status"] as const).extend({
-  status: z.union([contentReviewStatusSchema, z.literal("history")]).default("history"),
-});
-export type MyOrganizationReviewsListQuery = z.infer<typeof myOrganizationReviewsListQuerySchema>;
-export const myOrganizationReviewsListResponseSchema = paginatedResponseSchema("reviews", myOrganizationReviewSchema);
-
-export const myOrganizationReviewsListRouteSchema = {
-  tags: ["Me"],
-  summary: "Status of my organization's pending/past content submissions",
-  request: { query: myOrganizationReviewsListQuerySchema },
-  responses: {
-    "200": {
-      description: "My organization's review history.",
-      content: {
-        "application/json": {
-          schema: myOrganizationReviewsListResponseSchema,
-        },
-      },
-    },
-    "403": { description: "Caller has no organization." },
-  },
-};
-
-export const myOrganizationReviewWithdrawRouteSchema = {
-  tags: ["Me"],
-  summary: "Withdraw a pending organization content submission",
-  request: { params: z.object({ id: databaseIdSchema }) },
-  responses: {
-    "200": { description: "Withdrawn." },
-    "404": { description: "Review not found." },
-    "409": { description: "Only a pending review can be withdrawn." },
-  },
-};
-
-export const myOrganizationLogoUploadRouteSchema = {
-  tags: ["Me"],
-  summary: "Propose a new organization logo",
-  description:
-    "multipart/form-data with a single 'file' field. Held in R2 staging and folds into the org's single pending content review until a staff admin approves it.",
-  responses: {
-    "200": {
-      description: "Staged.",
-      content: { "application/json": { schema: myOrganizationLogoUploadResponseSchema } },
-    },
-    "403": { description: "Caller is not an org contact, or has no organization." },
-    "413": { description: "File too large." },
-    "415": { description: "Unsupported file type." },
-  },
-};
-
-export const mySecondaryContactNominateSchema = z.object({
-  userId: databaseIdSchema.nullable(),
-});
-export const mySecondaryContactNominateResponseSchema = z.object({
-  pendingSecondaryContactUserId: databaseIdSchema.nullable(),
-});
-
-export const mySecondaryContactNominateRouteSchema = {
-  tags: ["Me"],
-  summary: "Nominate a secondary contact for my organization",
-  description:
-    "Only the primary contact may call this. Held as a pending nomination (organization_secondary_contact_nominations) until a staff admin confirms it. Pass userId: null to withdraw a pending nomination.",
-  request: {
-    body: { content: { "application/json": { schema: mySecondaryContactNominateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Nomination recorded.",
-      content: { "application/json": { schema: mySecondaryContactNominateResponseSchema } },
-    },
-    "403": { description: "Only the primary contact may nominate a secondary contact." },
-    "422": {
-      description: "Nominee is not an active member of the same organization, or is already the primary contact.",
-    },
-  },
-};
+export const myHeadshotUploadResponseSchema = successResponseSchema;
 
 export const myHeadshotUploadRouteSchema = {
-  tags: ["Me"],
-  summary: "Upload my headshot",
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Replace the current user's headshot",
   description: "multipart/form-data with a single 'file' field. JPEG, PNG, or WebP, up to 5MB.",
   responses: {
     "200": {
@@ -424,8 +212,9 @@ export const myNotificationPreferencesSchema = z.object({
 });
 
 export const myNotificationPreferencesGetRouteSchema = {
-  tags: ["Me"],
-  summary: "Get my email notification preferences",
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Get the current user's email notification preferences",
   responses: {
     "200": {
       description: "My notification preferences (all default to true/opted-in).",
@@ -437,8 +226,9 @@ export const myNotificationPreferencesGetRouteSchema = {
 export const myNotificationPreferencesUpdateSchema = myNotificationPreferencesSchema.partial();
 
 export const myNotificationPreferencesUpdateRouteSchema = {
-  tags: ["Me"],
-  summary: "Update my email notification preferences",
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Update the current user's email notification preferences",
   request: {
     body: { content: { "application/json": { schema: myNotificationPreferencesUpdateSchema } }, required: true },
   },
@@ -446,24 +236,6 @@ export const myNotificationPreferencesUpdateRouteSchema = {
     "200": {
       description: "Updated preferences.",
       content: { "application/json": { schema: myNotificationPreferencesSchema } },
-    },
-  },
-};
-
-// ── Organization sponsorship view ────────────────────
-
-export const myOrganizationSponsorshipSchema = z.object({
-  tier: z.string().nullable(),
-  startDate: z.string().nullable(),
-});
-
-export const myOrganizationSponsorshipGetRouteSchema = {
-  tags: ["Me"],
-  summary: "View my organization's active consortium sponsorship tier + start date",
-  responses: {
-    "200": {
-      description: "Current sponsorship, or nulls if the organization is not currently a sponsor.",
-      content: { "application/json": { schema: myOrganizationSponsorshipSchema } },
     },
   },
 };

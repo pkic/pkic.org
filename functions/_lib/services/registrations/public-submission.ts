@@ -17,7 +17,6 @@ import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } fro
 import { registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
-import type { EventFormResolution } from "../forms";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
@@ -47,7 +46,6 @@ export interface EventRegistrationSubmissionMetadata {
   config: PublicRegistrationSubmissionConfig;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
   authorizationGuards?: readonly StatementLike[];
-  formResolution?: EventFormResolution;
 }
 
 function requireRegistrationPolicy(
@@ -104,7 +102,6 @@ export async function submitEventRegistration(
   }
 
   const { prepared, requiredTerms } = await prepareValidatedAttendeeRegistration(db, body, {
-    eventId: event.id,
     sourceType: invite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
     referredByCode: body.referralCode,
@@ -119,7 +116,7 @@ export async function submitEventRegistration(
     confirmationTtlHours: metadata.config.confirmationLinkTtlHours,
     referralCodeLength: metadata.config.referralCodeLength,
     authorizationGuards: metadata.authorizationGuards,
-    formResolution: metadata.formResolution,
+    event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity: metadata.verifiedIdentity,
   });
   const { user, referralCode } = prepared;
@@ -136,7 +133,12 @@ export async function submitEventRegistration(
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
-  const customAnswerRows = await getCustomAnswerRows(db, event.id, registration.custom_answers_json);
+  const customAnswerRows = await getCustomAnswerRows(db, {
+    sourceId: registration.id,
+    event: { id: event.id, source_mode: event.source_mode ?? null },
+    formPlacementId: registration.form_placement_id,
+    answersJson: registration.custom_answers_json,
+  });
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),

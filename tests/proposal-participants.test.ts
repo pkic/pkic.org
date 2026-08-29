@@ -496,7 +496,7 @@ describe("proposal participants", () => {
     const adminToken = await createAdminSession(env.DB, adminRow.id, "token-admin-badge-role");
 
     const pendingResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/badge`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       env as any,
@@ -529,7 +529,7 @@ describe("proposal participants", () => {
     expect(acceptedParticipant.status).toBe("active");
 
     const acceptedResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/badge`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       env as any,
@@ -545,7 +545,7 @@ describe("proposal participants", () => {
     expect(acceptedPayload.effective_role).toBe("speaker");
 
     const overrideResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/badge`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
         body: JSON.stringify({ role: "staff" }),
@@ -580,7 +580,7 @@ describe("proposal participants", () => {
       "content-type": "application/json",
     };
     const unattributableSet = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/badge`, {
         method: "PATCH",
         headers: apiKeyHeaders,
         body: JSON.stringify({ role: "moderator" }),
@@ -601,7 +601,7 @@ describe("proposal participants", () => {
     ).toEqual([{ role: "staff", set_by_user_id: adminRow.id }]);
 
     const apiKeyClear = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/badge`, {
         method: "PATCH",
         headers: apiKeyHeaders,
         body: JSON.stringify({ role: "attendee" }),
@@ -609,17 +609,20 @@ describe("proposal participants", () => {
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
-    expect(apiKeyClear.status).toBe(200);
+    expect(apiKeyClear.status).toBe(403);
+    await expect(apiKeyClear.json()).resolves.toMatchObject({
+      error: { code: "USER_BACKED_ADMIN_REQUIRED" },
+    });
     await expect(
       queryAll(env.DB, "SELECT role FROM registration_badge_role_overrides WHERE registration_id = ?", [
         registrationId,
       ]),
-    ).resolves.toHaveLength(0);
+    ).resolves.toEqual([{ role: "staff" }]);
     expect(
       await queryAll<{ actor_id: string | null }>(
         env.DB,
         "SELECT actor_id FROM audit_log WHERE action = 'admin_badge_role_set' ORDER BY created_at, id",
       ),
-    ).toEqual([{ actor_id: adminRow.id }, { actor_id: "api-key" }]);
+    ).toEqual([{ actor_id: adminRow.id }]);
   });
 });

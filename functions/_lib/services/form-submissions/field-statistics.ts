@@ -1,7 +1,7 @@
 import { batchFirst, batchRows } from "../../db/pagination";
 import { parseJsonSafe } from "../../utils/json";
 import { parseFormFieldOptions } from "../../../../assets/shared/schemas/form-field-rules";
-import { adminFormSubmissionStatsResponseSchema } from "../../../../assets/shared/schemas/admin-forms";
+import { formSubmissionStatsResponseSchema } from "../../../../assets/shared/schemas/form-management";
 import type { DatabaseLike } from "../../types";
 import type { FieldRow, FieldStatPayload, GetFormSubmissionStatsParams, GetFormSubmissionStatsResult } from "./types";
 import { parseFormFieldOptionSource, resolveFormFieldOptionCatalogs } from "../forms/read";
@@ -163,7 +163,7 @@ export async function getFormSubmissionStats(
   // active form rendering no longer offers those values for new responses.
   const catalogs = await resolveFormFieldOptionCatalogs(db, fields, { includeInactive: true });
 
-  return adminFormSubmissionStatsResponseSchema.parse({
+  return formSubmissionStatsResponseSchema.parse({
     form: {
       id: population.form.id,
       key: population.form.key,

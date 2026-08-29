@@ -73,7 +73,7 @@ export async function runVotesDueWork(
       organizationName: emailPlainText(recipient.organizationName),
       voteTitle: emailPlainText(recipient.voteTitle),
       closesAt: recipient.closesAt,
-      voteUrl: `/portal/votes/${recipient.voteId}`,
+      voteUrl: `/portal/#/groups/${encodeURIComponent(recipient.ownerGroupId)}/votes/${encodeURIComponent(recipient.voteId)}`,
     },
     requiredVoteNotification: {
       voteId: recipient.voteId,

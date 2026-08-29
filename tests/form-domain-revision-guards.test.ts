@@ -4,7 +4,7 @@ import { proposalCreateSchema } from "../assets/shared/schemas/proposal-manageme
 import type { DatabaseLike } from "../functions/_lib/types";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
 import { getEventById } from "../functions/_lib/services/events";
-import { validateCustomAnswersForSubmission } from "../functions/_lib/services/forms";
+import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "../functions/_lib/services/forms";
 import { saveProposalManageChanges } from "../functions/_lib/services/proposal-self-service";
 import { submitProposal } from "../functions/_lib/services/proposal-submission";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
@@ -63,6 +63,7 @@ function editFormBeforeFirstBatch(formId: string): DatabaseLike {
 }
 
 async function prepareRegistration(eventId: string, answer: string) {
+  const event = await getEventById(env.DB as unknown as DatabaseLike, eventId);
   return prepareValidatedAttendeeRegistration(
     env.DB as unknown as DatabaseLike,
     {
@@ -77,7 +78,7 @@ async function prepareRegistration(eventId: string, answer: string) {
       ],
     },
     {
-      eventId,
+      event: { id: event.id, source_mode: event.source_mode },
       invite: null,
       sourceType: "direct",
       ip: null,
@@ -94,7 +95,7 @@ async function submitCurrentProposal(eventId: string, answer: string) {
   const database = env.DB as unknown as DatabaseLike;
   const event = await getEventById(database, eventId);
   const validated = await validateCustomAnswersForSubmission(database, {
-    eventId,
+    event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
     purpose: "proposal_submission",
     customAnswers: { answer },
   });
@@ -154,7 +155,7 @@ describe("form revision guards on registration and proposal commands", () => {
     const database = env.DB as unknown as DatabaseLike;
     const event = await getEventById(database, eventId);
     const validated = await validateCustomAnswersForSubmission(database, {
-      eventId,
+      event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
       purpose: "proposal_submission",
       customAnswers: { answer: "before edit" },
     });

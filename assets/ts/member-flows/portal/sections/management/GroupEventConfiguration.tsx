@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { EventDaysEditor } from "./EventDaysEditor";
+import { EventFormPlacementEditor } from "./EventFormPlacementEditor";
 import { EventRegistrationSettingsEditor } from "./EventRegistrationSettingsEditor";
 import { EventTermsEditor } from "./EventTermsEditor";
 
@@ -19,6 +20,7 @@ export function GroupEventConfiguration({
     setUpdatedAt(nextUpdatedAt);
     void onUpdated?.();
   };
+  const canConfigureForms = event.sourceMode === "portal";
 
   return (
     <section class="border-top pt-3" aria-label={`Configure ${event.name} registration`}>
@@ -40,9 +42,27 @@ export function GroupEventConfiguration({
             eventId={event.id}
             expectedUpdatedAt={updatedAt}
             onRevision={recordRevision}
+            showFormConfiguration={canConfigureForms}
           />
         </div>
       </details>
+      {canConfigureForms && (
+        <details class="card mb-3">
+          <summary class="card-header fw-semibold">Proposal submission questions</summary>
+          <div class="card-body">
+            <p class="small text-muted">
+              Select or create the questions speakers answer when submitting a proposal for this event.
+            </p>
+            <EventFormPlacementEditor
+              groupId={groupId}
+              eventId={event.id}
+              purpose="proposal_submission"
+              expectedUpdatedAt={updatedAt}
+              onRevision={recordRevision}
+            />
+          </div>
+        </details>
+      )}
       <details class="card mb-3">
         <summary class="card-header fw-semibold">Attendance days</summary>
         <div class="card-body">

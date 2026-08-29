@@ -58,19 +58,22 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
     );
     const token = await createAdminSession(env.DB, admin.id, "p4r01-admin-token");
 
-    // /api/v1/admin/events remains legacy-scope-gated (requires admin:read).
-    const response = await callAppGet("/api/v1/admin/events", token);
+    // The admin event subresources remain legacy-scope-gated; a real
+    // role='admin' user passes through requirePermission's role bypass.
+    const response = await callAppGet("/api/v1/events/pqc-2026/registrations", token);
     expect(response.status).toBe(200);
   });
 
   it("does NOT grant legacy AUTH_SCOPES for a non-admin-role staff user", async () => {
+    // insertNonAdminStaffUser seeds the event; the gate resolves it before
+    // checking permission, so this proves a 403 rather than a 404.
     const staffId = await insertNonAdminStaffUser("p4r01-staff@wf.test");
     const token = await createAdminSession(env.DB, staffId, "p4r01-staff-token");
 
-    // Same legacy-scope-gated path — a role='user' actor with no admin:read
-    // scope must be denied, proving the token's scopes claim reflects the
+    // Same legacy-scope-gated path — a role='user' actor with no events:read
+    // grant must be denied, proving the token's scopes claim reflects the
     // real DB role rather than always granting full AUTH_SCOPES.
-    const response = await callAppGet("/api/v1/admin/events", token);
+    const response = await callAppGet("/api/v1/events/pqc-2026/registrations", token);
     expect(response.status).toBe(403);
   });
 });

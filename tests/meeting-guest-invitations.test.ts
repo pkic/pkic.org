@@ -137,6 +137,14 @@ function cookiePair(setCookie: string, name: string): string {
   return match[1];
 }
 
+function verificationCollection(occurrenceId: string): string {
+  return `/api/v1/meetings/occurrences/${occurrenceId}/invitations/verifications`;
+}
+
+function verificationResource(occurrenceId: string, verificationId: string): string {
+  return `${verificationCollection(occurrenceId)}/${verificationId}`;
+}
+
 async function queuedInvitationToken(outboxId: string): Promise<string> {
   const payloadJson = await env.DB.prepare("SELECT payload_json FROM email_outbox WHERE id = ?")
     .bind(outboxId)
@@ -193,6 +201,18 @@ afterEach(() => {
 });
 
 describe("external meeting guest invitations", () => {
+  it("does not mount the superseded actor-specific meeting routes", async () => {
+    for (const path of [
+      "/api/v1/meeting-guests/invitations/bootstrap",
+      "/api/v1/meeting-guests/invitations/verify",
+      `/api/v1/meeting-guests/meetings/occurrences/${crypto.randomUUID()}/join`,
+      `/api/v1/me/meetings/occurrences/${crypto.randomUUID()}/join`,
+    ]) {
+      const { response } = await routeRequest(path, { method: "POST", body: "{}" });
+      expect(response.status, path).toBe(404);
+    }
+  });
+
   it("sends a secret-bound invitation and establishes an occurrence-scoped session through the mounted routes", async () => {
     const { admin, series, occurrence } = await fixture();
     const recipientEmail = `browser-guest-${crypto.randomUUID()}@example.test`;
@@ -235,19 +255,20 @@ describe("external meeting guest invitations", () => {
     const invitationToken = invitationMessage.match(/token=(pkc1_[A-Za-z0-9_.-]+)/)?.[1];
     expect(invitationToken).toBeTruthy();
 
-    const bootstrap = await routeRequest("/api/v1/meeting-guests/invitations/bootstrap", {
+    const bootstrap = await routeRequest(verificationCollection(occurrence.id), {
       method: "POST",
-      body: JSON.stringify({ token: invitationToken, occurrenceId: occurrence.id }),
+      body: JSON.stringify({ token: invitationToken }),
     });
     expect(bootstrap.response.status, await bootstrap.response.clone().text()).toBe(202);
     expect(bootstrap.response.headers.get("cache-control")).toContain("no-store");
     expect(bootstrap.response.headers.get("referrer-policy")).toBe("no-referrer");
-    const challenge = await bootstrap.response.json<{ challengeId: string; expiresAt: string }>();
+    const challenge = await bootstrap.response.json<{ verificationId: string; expiresAt: string }>();
     expect(challenge).not.toHaveProperty("emailHint");
     expect(JSON.stringify(challenge)).not.toContain("example.test");
     const challengeSetCookie = bootstrap.response.headers.get("set-cookie") ?? "";
     expect(challengeSetCookie).toContain("HttpOnly");
     expect(challengeSetCookie).toContain("SameSite=Strict");
+    expect(challengeSetCookie).toContain(`Path=${verificationCollection(occurrence.id)}`);
     const challengeCookie = cookiePair(challengeSetCookie, "pkic_meeting_guest_challenge");
     await Promise.all(bootstrap.pending);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -256,23 +277,31 @@ describe("external meeting guest invitations", () => {
     const verificationCode = codeMessage.match(/\b([A-HJ-NP-Z2-9]{8})\b/)?.[1];
     expect(verificationCode).toBeTruthy();
 
-    const forwarded = await routeRequest("/api/v1/meeting-guests/invitations/verify", {
-      method: "POST",
-      body: JSON.stringify({ challengeId: challenge.challengeId, code: verificationCode }),
+    const forwarded = await routeRequest(verificationResource(occurrence.id, challenge.verificationId), {
+      method: "PATCH",
+      body: JSON.stringify({ code: verificationCode }),
     });
     expect(forwarded.response.status).toBe(401);
 
-    const wrongCode = await routeRequest("/api/v1/meeting-guests/invitations/verify", {
-      method: "POST",
+    const wrongCode = await routeRequest(verificationResource(occurrence.id, challenge.verificationId), {
+      method: "PATCH",
       headers: { cookie: challengeCookie },
-      body: JSON.stringify({ challengeId: challenge.challengeId, code: "AAAAAAAA" }),
+      body: JSON.stringify({ code: "AAAAAAAA" }),
     });
     expect(wrongCode.response.status).toBe(401);
 
-    const verified = await routeRequest("/api/v1/meeting-guests/invitations/verify", {
-      method: "POST",
+    const wrongOccurrence = await routeRequest(verificationResource(crypto.randomUUID(), challenge.verificationId), {
+      method: "PATCH",
       headers: { cookie: challengeCookie },
-      body: JSON.stringify({ challengeId: challenge.challengeId, code: verificationCode }),
+      body: JSON.stringify({ code: verificationCode }),
+    });
+    expect(wrongOccurrence.response.status).toBe(401);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM meeting_guest_sessions").first<number>("total")).toBe(0);
+
+    const verified = await routeRequest(verificationResource(occurrence.id, challenge.verificationId), {
+      method: "PATCH",
+      headers: { cookie: challengeCookie },
+      body: JSON.stringify({ code: verificationCode }),
     });
     expect(verified.response.status, await verified.response.clone().text()).toBe(200);
     expect(await verified.response.json()).toMatchObject({ occurrenceId: occurrence.id });
@@ -280,9 +309,10 @@ describe("external meeting guest invitations", () => {
     expect(sessionSetCookie).toContain("pkic_meeting_guest_session=");
     expect(sessionSetCookie).toContain("pkic_meeting_guest_challenge=");
     expect(sessionSetCookie).toContain("Max-Age=0");
+    expect(sessionSetCookie).toContain(`Path=/api/v1/meetings/occurrences/${occurrence.id}`);
     const sessionCookie = cookiePair(sessionSetCookie, "pkic_meeting_guest_session");
 
-    const landing = await routeRequest(`/api/v1/meeting-guests/meetings/occurrences/${occurrence.id}/join`, {
+    const landing = await routeRequest(`/api/v1/meetings/occurrences/${occurrence.id}/join`, {
       headers: { cookie: sessionCookie },
     });
     expect(landing.response.status, await landing.response.clone().text()).toBe(200);
@@ -291,10 +321,10 @@ describe("external meeting guest invitations", () => {
       affiliation: "External Organization",
     });
 
-    const replay = await routeRequest("/api/v1/meeting-guests/invitations/verify", {
-      method: "POST",
+    const replay = await routeRequest(verificationResource(occurrence.id, challenge.verificationId), {
+      method: "PATCH",
       headers: { cookie: challengeCookie },
-      body: JSON.stringify({ challengeId: challenge.challengeId, code: verificationCode }),
+      body: JSON.stringify({ code: verificationCode }),
     });
     expect(replay.response.status).toBe(409);
   });
@@ -381,12 +411,12 @@ describe("external meeting guest invitations", () => {
       .bind(new Date(Date.now() - 60_000).toISOString(), challenge.challengeId)
       .run();
 
-    const response = await routeRequest("/api/v1/meeting-guests/invitations/verify", {
-      method: "POST",
+    const response = await routeRequest(verificationResource(occurrence.id, challenge.challengeId), {
+      method: "PATCH",
       headers: {
         cookie: `pkic_meeting_guest_challenge=${encodeURIComponent(challenge.browserSecret)}`,
       },
-      body: JSON.stringify({ challengeId: challenge.challengeId, code: challenge.verificationCode }),
+      body: JSON.stringify({ code: challenge.verificationCode }),
     });
     expect(response.response.status, await response.response.clone().text()).toBe(410);
   });
@@ -427,10 +457,10 @@ describe("external meeting guest invitations", () => {
     const token = await queuedInvitationToken(invited.outboxId);
     const request = {
       method: "POST",
-      body: JSON.stringify({ token, occurrenceId: occurrence.id }),
+      body: JSON.stringify({ token }),
     };
 
-    const unavailable = await routeRequest("/api/v1/meeting-guests/invitations/bootstrap", request, {
+    const unavailable = await routeRequest(verificationCollection(occurrence.id), request, {
       EMAIL_RATE_LIMITER: undefined,
     });
     expect(unavailable.response.status).toBe(503);
@@ -442,10 +472,10 @@ describe("external meeting guest invitations", () => {
       "fetch",
       vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "rate-test" } })),
     );
-    const first = await routeRequest("/api/v1/meeting-guests/invitations/bootstrap", request);
+    const first = await routeRequest(verificationCollection(occurrence.id), request);
     expect(first.response.status).toBe(202);
     await Promise.all(first.pending);
-    const repeated = await routeRequest("/api/v1/meeting-guests/invitations/bootstrap", request);
+    const repeated = await routeRequest(verificationCollection(occurrence.id), request);
     expect(repeated.response.status).toBe(429);
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS total FROM meeting_guest_browser_challenges").first<number>("total"),
@@ -509,9 +539,9 @@ describe("external meeting guest invitations", () => {
        END`,
     ).run();
     try {
-      const bootstrap = await routeRequest("/api/v1/meeting-guests/invitations/bootstrap", {
+      const bootstrap = await routeRequest(verificationCollection(occurrence.id), {
         method: "POST",
-        body: JSON.stringify({ token, occurrenceId: occurrence.id }),
+        body: JSON.stringify({ token }),
       });
       expect(bootstrap.response.status).toBe(500);
       expect(

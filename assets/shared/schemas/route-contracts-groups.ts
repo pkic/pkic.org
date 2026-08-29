@@ -5,7 +5,6 @@ import {
   groupCategoryRulesReplaceSchema,
   groupCategoryRulesResponseSchema,
   groupCreationCapabilitiesResponseSchema,
-  groupGetQuerySchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
   groupAutomaticEnrollmentPreferenceSchema,
   groupCreateSchema,
@@ -18,7 +17,7 @@ import {
   groupMembershipParamsSchema,
   groupMembershipsListQuerySchema,
   groupMembershipsListResponseSchema,
-  groupPortalContextResponseSchema,
+  groupDetailResponseSchema,
   groupReferenceParamsSchema,
   groupResponseSchema,
   groupTypesListQuerySchema,
@@ -28,8 +27,10 @@ import {
   groupsListResponseSchema,
 } from "./groups";
 import { databaseIdSchema } from "./identifiers";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const groupTypesListRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
   summary: "List configured group types",
   request: { query: groupTypesListQuerySchema },
@@ -42,6 +43,7 @@ export const groupTypesListRouteSchema = {
 };
 
 export const groupCreationCapabilitiesRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Resolve whether the current identity may create a top-level group",
   responses: {
@@ -53,6 +55,7 @@ export const groupCreationCapabilitiesRouteSchema = {
 };
 
 export const groupsListRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
   summary: "List groups visible to the caller",
   description:
@@ -68,34 +71,23 @@ export const groupsListRouteSchema = {
 };
 
 export const groupGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
-  summary: "Get one group",
-  request: { params: groupReferenceParamsSchema, query: groupGetQuerySchema },
+  summary: "Get one group with caller-appropriate detail",
+  description:
+    "Public callers receive a data-minimized group projection. Authenticated callers receive the visible group and their live view, participation, and management capabilities.",
+  request: { params: groupReferenceParamsSchema },
   responses: {
-    "200": { description: "Group detail.", content: { "application/json": { schema: groupResponseSchema } } },
-    "401": jsonErrorResponse("An authenticated management identity is required for a manageable lookup."),
-    "403": jsonErrorResponse("The caller lacks effective management permission."),
+    "200": {
+      description: "Group detail scoped to the caller.",
+      content: { "application/json": { schema: groupDetailResponseSchema } },
+    },
     "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
 
-export const groupPortalContextRouteSchema = {
-  tags: ["Groups"],
-  summary: "Resolve one selected-group portal context",
-  description:
-    "Returns live view, participation, and management capabilities for the authenticated portal identity. The browser derives selected-group navigation from this projection.",
-  request: { params: groupReferenceParamsSchema },
-  responses: {
-    "200": {
-      description: "Selected group and the caller's effective portal capabilities.",
-      content: { "application/json": { schema: groupPortalContextResponseSchema } },
-    },
-    "401": jsonErrorResponse("Portal authentication is required."),
-    "404": jsonErrorResponse("Group not found or unavailable to this identity."),
-  },
-};
-
 export const groupCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create a group",
   request: { body: { required: true, content: { "application/json": { schema: groupCreateSchema } } } },
@@ -107,6 +99,7 @@ export const groupCreateRouteSchema = {
 };
 
 export const groupUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update a group",
   description: "Send expectedRevision from the group response to reject an edit based on stale state.",
@@ -122,6 +115,7 @@ export const groupUpdateRouteSchema = {
 };
 
 export const groupMembershipsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List group membership capacities",
   description: "One row is one user participating for one Member; a user may appear more than once.",
@@ -136,6 +130,7 @@ export const groupMembershipsListRouteSchema = {
 };
 
 export const groupJoinRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Join a group",
   description: "all_eligible requires explicit confirmation; selected requires a non-empty Member subset.",
@@ -154,6 +149,7 @@ export const groupJoinRouteSchema = {
 };
 
 export const groupLeaveRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Leave selected capacities or the whole group",
   request: {
@@ -170,6 +166,7 @@ export const groupLeaveRouteSchema = {
 };
 
 export const groupAutomaticEnrollmentPreferenceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Opt out of or re-enter automatic enrollment",
   request: {
@@ -187,6 +184,7 @@ export const groupAutomaticEnrollmentPreferenceRouteSchema = {
 
 export const groupMemberManageParamsSchema = groupReferenceParamsSchema.extend({ userId: databaseIdSchema });
 export const groupMemberAddRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Add group membership capacities for another user",
   request: {
@@ -204,6 +202,7 @@ export const groupMemberAddRouteSchema = {
 };
 
 export const groupMembershipEndRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "End one group membership capacity",
   request: { params: groupMembershipParamsSchema },
@@ -218,6 +217,7 @@ export const groupMembershipEndRouteSchema = {
 };
 
 export const groupLeadershipListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List effective local and inherited group leadership",
   request: { params: groupReferenceParamsSchema },
@@ -230,6 +230,7 @@ export const groupLeadershipListRouteSchema = {
 };
 
 export const groupLeadershipAssignRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Assign local group leadership",
   request: {
@@ -243,6 +244,7 @@ export const groupLeadershipAssignRouteSchema = {
 };
 
 export const groupCategoryRulesReplaceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Replace category eligibility and automatic-enrollment rules",
   description: "Send expectedRevision from the group response to reject a replacement based on stale state.",
@@ -261,6 +263,7 @@ export const groupCategoryRulesReplaceRouteSchema = {
 };
 
 export const groupCategoryRulesGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get category eligibility and automatic-enrollment rules",
   request: { params: groupReferenceParamsSchema },
@@ -278,6 +281,7 @@ export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.
   userRoleId: databaseIdSchema,
 });
 export const groupLeadershipRevokeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Revoke a local leadership assignment",
   request: { params: groupLeadershipAssignmentParamsSchema },
@@ -288,6 +292,7 @@ export const groupLeadershipRevokeRouteSchema = {
 };
 
 export const groupAuditLogListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Audit log"],
   summary: "List audit entries scoped to one group",
   description: "Exact filters, search, sorting, counting, and pagination are executed in D1.",

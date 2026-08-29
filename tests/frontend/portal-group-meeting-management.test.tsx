@@ -45,6 +45,7 @@ describe("portal group meeting management", () => {
       eventSlug: "materialized-call",
       profileKey: "meeting",
       registrationPolicy: "no_registration",
+      visibility: "group_members",
       memberEligibility: "owner_group",
       guestPolicy: "occurrence_invitation",
       startsAt: "2026-09-01T13:00:00.000Z",

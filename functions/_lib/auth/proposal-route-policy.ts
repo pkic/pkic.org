@@ -11,7 +11,8 @@ export function proposalPermissionForRequest(path: string, method: string): Perm
   if (/\/(?:audit-log|reviews|comments)(?:\/|$)/.test(path)) {
     return "proposals:score";
   }
-  if (/\/cancel\/?$/.test(path) && normalizedMethod === "POST") return "proposals:cancel_accepted";
+  if (/\/speakers\/?$/.test(path) && normalizedMethod === "GET") return "proposals:score";
+  if (/\/cancellations\/?$/.test(path) && normalizedMethod === "POST") return "proposals:cancel_accepted";
   if (!WRITE_METHODS.has(normalizedMethod)) return "proposals:read";
   return "proposals:manage";
 }
@@ -22,7 +23,7 @@ export function proposalPermissionForRequest(path: string, method: string): Perm
  * applicable permission after loading the proposal.
  */
 export function proposalPermissionAlternativesForRequest(path: string, method: string): readonly Permission[] {
-  if (method.toUpperCase() === "PATCH" && /\/api\/v1\/admin\/proposals\/[^/]+\/?$/.test(path)) {
+  if (method.toUpperCase() === "PATCH" && /\/api\/v1\/proposals\/[^/]+\/?$/.test(path)) {
     return ["proposals:manage", "proposals:edit_accepted_abstract"];
   }
   return [proposalPermissionForRequest(path, method)];

@@ -8,14 +8,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
 import type { ProposalRow } from "./proposal-read";
-import {
-  getVoteRowOrThrow,
-  toVoteSummary,
-  uniqueSlug,
-  type ThresholdType,
-  type VoteStatus,
-  type VoteSummary,
-} from "./shared";
+import { getVoteRowOrThrow, toVoteSummary, uniqueSlug, type ThresholdType, type VoteSummary } from "./shared";
 import { ACTIVE_GROUP_VOTER_SQL, activeGroupVoterBindings, activeGroupVoterSql } from "./voter-eligibility";
 import { requireSupportedVoteProposalType, validateVoteConfiguration } from "./configuration";
 
@@ -62,7 +55,6 @@ interface ConversionFields {
   opensAt: string;
   closesAt: string;
   thresholdType: ThresholdType;
-  status: VoteStatus;
 }
 
 async function buildConversionFields(db: DatabaseLike, proposal: ProposalRow): Promise<ConversionFields> {
@@ -85,7 +77,6 @@ async function buildConversionFields(db: DatabaseLike, proposal: ProposalRow): P
     opensAt,
     closesAt,
     thresholdType,
-    status: new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled",
   };
 }
 
@@ -103,9 +94,9 @@ function buildConversionStatements(
         `INSERT INTO votes
            (id, slug, title, description, vote_type, owner_group_id, electorate_mode,
             created_by_user_id, proposed_by_user_id,
-            source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round, status,
+            source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round,
             result_json, visibility, public_detail_level, created_at, updated_at)
-         SELECT ?, ?, ?, ?, ?, ?, 'per_member', NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
+         SELECT ?, ?, ?, ?, ?, ?, 'per_member', NULL, ?, ?, ?, ?, ?, ?, 1, NULL, 'private', 'aggregate', ?, ?
          FROM vote_proposals
          WHERE id = ? AND status = 'open_for_endorsement'${guardSql}`,
       )
@@ -122,7 +113,6 @@ function buildConversionStatements(
         fields.thresholdType,
         fields.opensAt,
         fields.closesAt,
-        fields.status,
         fields.now,
         fields.now,
         proposal.id,

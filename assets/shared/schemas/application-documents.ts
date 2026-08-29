@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { memberApplicationManageTokenSchema } from "./membership-application-capability";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchemaWithDefault } from "./pagination";
 
 /** Canonical upload policy shared by the OpenAPI contract and backend validation. */
@@ -21,6 +22,11 @@ export const applicationDocumentsListQuerySchema = searchableListQuerySchema(
   { limit: 25 },
 );
 export type ApplicationDocumentsListQuery = z.infer<typeof applicationDocumentsListQuerySchema>;
+
+/** An applicant capability selects the applicant-safe projection; no token selects the staff projection. */
+export const applicationDocumentsReadQuerySchema = applicationDocumentsListQuerySchema.extend({
+  token: memberApplicationManageTokenSchema.optional(),
+});
 
 export const applicationDocumentSchema = z.object({
   id: databaseIdSchema,
@@ -62,3 +68,29 @@ export const staffApplicationDocumentsListResponseSchema = paginatedResponseSche
   staffApplicationDocumentSchema,
 );
 export type StaffApplicationDocumentsListResponse = z.infer<typeof staffApplicationDocumentsListResponseSchema>;
+
+/** The staff document schema extends the applicant-safe base document schema. */
+export const applicationDocumentsReadResponseSchema = z.union([
+  staffApplicationDocumentsListResponseSchema,
+  applicationDocumentsListResponseSchema,
+]);
+
+export const applicationDocumentsReadRouteSchema = {
+  tags: ["Members"],
+  summary: "List membership application documents",
+  description:
+    "With a valid applicant token, returns the applicant-safe document projection. Without a token, requires a live user-backed membership:read permission and returns the staff projection, including uploader email.",
+  request: {
+    params: z.object({ id: databaseIdSchema }),
+    query: applicationDocumentsReadQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Applicant-safe or staff document projection, selected by the request authentication context.",
+      content: { "application/json": { schema: applicationDocumentsReadResponseSchema } },
+    },
+    "401": { description: "Invalid applicant token." },
+    "403": { description: "A token was not supplied and the caller lacks membership:read." },
+    "404": { description: "Application not found for an authorized staff request." },
+  },
+};

@@ -40,7 +40,7 @@ export function requireUserBackedAuthAdmin(actor: AuthAdmin): UserBackedAuthAdmi
     throw new AppError(
       403,
       "USER_BACKED_ADMIN_REQUIRED",
-      "This action requires an attributable admin session rather than the shared API key",
+      "This action requires an attributable user session rather than the shared API key",
     );
   }
   return actor;

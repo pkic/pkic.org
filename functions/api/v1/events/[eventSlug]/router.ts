@@ -1,29 +1,84 @@
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
 import { fromHono } from "chanfana";
 import { methodNotAllowed } from "../../../../_lib/http";
-import { EventFormsGet } from "./forms";
+import { EventFormsCreatePost, EventFormsListGet } from "./forms";
+import { EventFormPlacementGet } from "./forms/placements";
 import { EventsEventSlugInvitesPost } from "./invites";
-import { EventsEventSlugProposalsPost } from "./proposals";
+import { EventProposalsListGet, EventsEventSlugProposalsPost } from "./proposals";
 import { EventsEventSlugRegistrationsPost } from "./registrations";
-import { EventsEventSlugSpeakerInvitesPost } from "./speaker-invites";
+import { EventSpeakerInvitationsPost } from "./speakers/invitations";
 import { TermsGet } from "./terms";
-import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsor-tiers";
+import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsors/tiers";
+import { EventDetailGet } from "./index";
+import { EventSettingsPatch } from "./settings";
+import { EventDaysGet, EventDaysPut } from "./days";
+import { EventTeamRoleCreate, EventTeamRolesList } from "./roles";
+import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
+import { EventPromotersList } from "./promoters";
+import { EventPresentationArchiveGet } from "./presentations/archive";
+import { EventAnalyticsGet } from "./analytics";
+import emailRouter from "./email/router";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
+import eventForms_Router from "./forms/[formKey]/router";
+import type { RequestDbContext } from "../../../../_lib/db/context";
+import { requestDb } from "../../../../_lib/db/context";
+import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-openapi.get("/forms", EventFormsGet);
+async function requireEventFormsIdentity(c: Context<RequestDbContext>, next: Next) {
+  await requireUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  await next();
+}
+
+async function requireEventManagementIdentity(c: Context<RequestDbContext>, next: Next) {
+  await requireUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  await next();
+}
+
+// The resolved active placement is intentionally public and must be mounted
+// before the authenticated event-form management subtree.
+openapi.get("/forms/placements/:purpose", EventFormPlacementGet);
+
+app.use("/settings", requireEventManagementIdentity);
+app.use("/days", requireEventManagementIdentity);
+app.use("/roles", requireEventManagementIdentity);
+app.use("/roles/*", requireEventManagementIdentity);
+app.use("/promoters", requireEventManagementIdentity);
+app.use("/presentations/archive", requireEventManagementIdentity);
+app.use("/analytics", requireEventManagementIdentity);
+app.use("/email", requireEventManagementIdentity);
+app.use("/email/*", requireEventManagementIdentity);
+
+app.use("/forms", requireEventFormsIdentity);
+app.use("/forms/*", requireEventFormsIdentity);
+
+openapi.get("/forms", EventFormsListGet);
+openapi.post("/forms", EventFormsCreatePost);
+openapi.route("/forms/:formKey", eventForms_Router);
 openapi.post("/invites", EventsEventSlugInvitesPost);
 openapi.post("/proposals", EventsEventSlugProposalsPost);
+openapi.get("/proposals", EventProposalsListGet);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);
-openapi.post("/speaker-invites", EventsEventSlugSpeakerInvitesPost);
+openapi.post("/speakers/invitations", EventSpeakerInvitationsPost);
 openapi.get("/terms", TermsGet);
-openapi.get("/sponsor-tiers", EventSponsorTiersGet);
-openapi.put("/sponsor-tiers", EventSponsorTiersPut);
+openapi.get("/sponsors/tiers", EventSponsorTiersGet);
+openapi.put("/sponsors/tiers", EventSponsorTiersPut);
+openapi.get("/roles", EventTeamRolesList);
+openapi.post("/roles", EventTeamRoleCreate);
+openapi.delete("/roles/:roleAssignmentId", EventTeamRoleDelete);
+openapi.get("/promoters", EventPromotersList);
+openapi.get("/presentations/archive", EventPresentationArchiveGet);
+openapi.get("/analytics", EventAnalyticsGet);
+openapi.route("/email", emailRouter);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
-app.all("/registrations", () => methodNotAllowed(["POST"]));
+openapi.get("/days", EventDaysGet);
+openapi.put("/days", EventDaysPut);
+openapi.patch("/settings", EventSettingsPatch);
+openapi.get("/", EventDetailGet);
+app.all("/registrations", () => methodNotAllowed(["GET", "POST"]));
 
 export default openapi;

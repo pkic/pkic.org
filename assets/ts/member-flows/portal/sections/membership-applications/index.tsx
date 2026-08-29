@@ -33,7 +33,7 @@ export function MembershipApplications({
 
   useEffect(() => {
     let cancelled = false;
-    void getJson("/api/v1/system/membership-categories", membershipCategoryCatalogResponseSchema)
+    void getJson("/api/v1/membership/categories", membershipCategoryCatalogResponseSchema)
       .then((response) => {
         if (!cancelled) setCategories(response.categories);
       })

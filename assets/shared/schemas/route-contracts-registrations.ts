@@ -15,8 +15,10 @@ import {
   registrationResendConfirmationSchema,
 } from "./registration";
 import { jsonResponse, requiredJsonBody } from "./openapi";
+import { publicOperation } from "./route-contract";
 
 export const registrationResendManageLinkRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Resend registration management link",
   description:
@@ -37,6 +39,7 @@ export const registrationResendManageLinkRouteSchema = {
 };
 
 export const eventRegistrationCreateRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Register for an event",
   description:
@@ -54,6 +57,7 @@ export const eventRegistrationCreateRouteSchema = {
 };
 
 export const registrationResendConfirmationRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Resend registration confirmation email",
   description:
@@ -84,6 +88,7 @@ export const registrationResendConfirmationRouteSchema = {
 };
 
 export const registrationConfirmEmailGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Confirm registration by email link",
   description:
@@ -107,6 +112,7 @@ export const registrationConfirmEmailGetRouteSchema = {
 };
 
 export const registrationConfirmEmailPostRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Confirm registration",
   description:
@@ -126,6 +132,7 @@ export const registrationConfirmEmailPostRouteSchema = {
 };
 
 export const registrationConfirmInfoGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Preview registration confirmation details",
   description:
@@ -140,6 +147,7 @@ export const registrationConfirmInfoGetRouteSchema = {
 };
 
 export const registrationManageReadRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Read registration self-service state",
   request: { params: registrationManageTokenParamsSchema },
@@ -151,6 +159,7 @@ export const registrationManageReadRouteSchema = {
 };
 
 export const registrationManageUpdateRouteSchema = {
+  ...publicOperation(),
   tags: ["Registrations"],
   summary: "Update registration self-service state",
   request: {

@@ -88,13 +88,15 @@ describe("selected-group vote participation", () => {
 
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate />, container));
-    await settle();
-
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
-    await act(() => (details as HTMLButtonElement).click());
+    await act(() =>
+      render(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate initialVoteId={VOTE_ID} />, container),
+    );
     await settle();
     expect(container.textContent).toContain("Example Organization");
+    expect(requests).toContainEqual({
+      path: `/api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}`,
+      method: "GET",
+    });
 
     const inFavor = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "In favor",

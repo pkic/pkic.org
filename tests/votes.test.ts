@@ -7,6 +7,7 @@ import {
   groupVoteResultsResponseSchema,
   groupVotesListResponseSchema,
 } from "../assets/shared/schemas/group-votes";
+import { publicVotesListResponseSchema } from "../assets/shared/schemas/votes";
 import {
   groupVoteBallotsAuditResponseSchema,
   groupVoteLifecycleTransitionResponseSchema,
@@ -37,7 +38,6 @@ import {
   endorseVoteProposal,
   getVoteProposalDetailForMember,
   getVoteResultsForMember,
-  listMyVoteHistory,
   listBallotsForManager,
   listVisibleVotesForMember,
   listVoteProposals,
@@ -1053,7 +1053,9 @@ describe("canonical group voting", () => {
       totalBallots: 1,
       outcome: "passed" as const,
     };
-    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+    await env.DB.prepare(
+      "UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), result_json = ? WHERE id = ?",
+    )
       .bind(JSON.stringify(result), vote.id)
       .run();
     await env.DB.prepare(
@@ -1081,7 +1083,7 @@ describe("canonical group voting", () => {
     const vote = await createCanonicalVote(env.DB, admin, { title: "Public result" });
     await env.DB.prepare(
       `UPDATE votes
-       SET status = 'closed', visibility = 'public', public_detail_level = 'outcome_only',
+       SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), visibility = 'public', public_detail_level = 'outcome_only',
            result_json = '{"thresholdType":"simple_majority","counts":{"in_favor":2,"opposed":0,"abstain":0},"totalBallots":2,"outcome":"passed"}'
        WHERE id = ?`,
     )
@@ -1094,6 +1096,64 @@ describe("canonical group voting", () => {
       expect.objectContaining({ ownerGroupId: TEST_GROUPS.pqc, result: { outcome: "passed" } }),
     ]);
     expect(body.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("uses the ordinary All Members group for generic voting without a portal API", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.allMembers, capacity.userId, [capacity.memberId]);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `all-members-vote-${crypto.randomUUID()}`);
+
+    const createResponse = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.allMembers}/votes`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "All Members policy motion",
+        voteType: "motion",
+        electorateMode: "per_member",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    });
+    expect(createResponse.status, await createResponse.clone().text()).toBe(200);
+    const vote = groupVoteMutationResponseSchema.parse(await createResponse.json()).vote;
+    expect(vote.ownerGroupId).toBe(TEST_GROUPS.allMembers);
+
+    const detailResponse = await call(memberToken, `/api/v1/groups/${TEST_GROUPS.allMembers}/votes/${vote.id}`);
+    expect(detailResponse.status, await detailResponse.clone().text()).toBe(200);
+    expect(groupVoteDetailResponseSchema.parse(await detailResponse.json()).vote).toMatchObject({
+      id: vote.id,
+      ownerGroupId: TEST_GROUPS.allMembers,
+      canCastBallot: true,
+      capabilities: expect.arrayContaining(["view", "participate"]),
+    });
+    expect(
+      (
+        await call(memberToken, `/api/v1/groups/${TEST_GROUPS.allMembers}/votes/${vote.id}/ballots`, {
+          method: "POST",
+          body: JSON.stringify({ memberId: capacity.memberId, choice: "in_favor" }),
+        })
+      ).status,
+    ).toBe(200);
+
+    expect((await call(memberToken, "/api/v1/portal/votes")).status).toBe(404);
+    expect((await call(memberToken, "/api/v1/me/votes")).status).toBe(404);
+    expect(
+      (
+        await call(memberToken, "/api/v1/portal/vote-proposals", {
+          method: "POST",
+          body: JSON.stringify({ title: "Legacy", description: "Legacy adapter", voteType: "motion" }),
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it("keeps the top-level vote collection a public projection", async () => {
+    const privateVote = await createCanonicalVote(env.DB, admin, { title: "Private selected-group vote" });
+
+    const response = await callAnonymous("/api/v1/votes?sort=title");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = publicVotesListResponseSchema.parse(await response.json());
+    expect(body.votes.map((vote) => vote.id)).not.toContain(privateVote.id);
+    expect(body.votes.every((vote) => !("canCastBallot" in vote) && !("memberBallots" in vote))).toBe(true);
   });
 
   it("lists one selected group's votes for participants and staff-only managers", async () => {
@@ -1119,6 +1179,46 @@ describe("canonical group voting", () => {
     const manager = groupVotesListResponseSchema.parse(await managerResponse.json());
     expect(manager.votes[0]).toMatchObject({ id: vote.id, capabilities: expect.arrayContaining(["view", "manage"]) });
     expect(manager.votes[0].capabilities).not.toContain("participate");
+  });
+
+  it("applies the shared owner, type, status, date, and search filters in D1", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `group-filter-${crypto.randomUUID()}`);
+    const selected = await createCanonicalVote(env.DB, admin, {
+      title: "Filtered current vote",
+      closesAt: "2027-01-15T12:00:00.000Z",
+    });
+    await createCanonicalVote(env.DB, admin, {
+      title: "Filtered future vote",
+      closesAt: "2100-01-15T12:00:00.000Z",
+    });
+    const shared = await createCanonicalVote(env.DB, admin, {
+      title: "Filtered shared vote",
+      ownerGroupId: TEST_GROUPS.cm,
+      closesAt: "2027-01-15T12:00:00.000Z",
+    });
+    await env.DB.prepare(
+      "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'view', datetime('now'))",
+    )
+      .bind(shared.id, TEST_GROUPS.pqc)
+      .run();
+
+    const params = new URLSearchParams({
+      ownerGroupId: TEST_GROUPS.pqc,
+      type: "motion",
+      status: "open",
+      from: "2026-01-01",
+      to: "2028-01-01",
+      q: "Filtered",
+      sort: "title",
+    });
+    const response = await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes?${params}`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(groupVotesListResponseSchema.parse(await response.json())).toMatchObject({
+      votes: [{ id: selected.id }],
+      page: { total: 1, hasMore: false },
+    });
   });
 
   it("opens and cancels a vote through an exact group while retracting stale actions", async () => {
@@ -1247,8 +1347,8 @@ describe("canonical group voting", () => {
       transitionManagedVote(env.DB, admin, vote.id, { transition: "close" }, TEST_GROUPS.pqc),
     ).rejects.toThrow("manual close audit rejected by test");
     expect(
-      await queryAll(env.DB, "SELECT status, transition_processing_token FROM votes WHERE id = ?", vote.id),
-    ).toEqual([{ status: "open", transition_processing_token: null }]);
+      await queryAll(env.DB, "SELECT closed_at, transition_processing_token FROM votes WHERE id = ?", vote.id),
+    ).toEqual([{ closed_at: null, transition_processing_token: null }]);
     await env.DB.prepare("DROP TRIGGER test_reject_manual_vote_close_audit").run();
   });
 
@@ -1273,7 +1373,7 @@ describe("canonical group voting", () => {
     await expect(pending).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
     );
-    expect(await queryAll(env.DB, "SELECT status FROM votes WHERE id = ?", vote.id)).toEqual([{ status: "scheduled" }]);
+    expect(await queryAll(env.DB, "SELECT opened_at FROM votes WHERE id = ?", vote.id)).toEqual([{ opened_at: null }]);
   });
 
   it("binds vote detail, ballots, and results to the selected group", async () => {
@@ -1322,7 +1422,9 @@ describe("canonical group voting", () => {
       totalBallots: 1,
       outcome: "passed",
     };
-    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+    await env.DB.prepare(
+      "UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), result_json = ? WHERE id = ?",
+    )
       .bind(JSON.stringify(result), vote.id)
       .run();
     expect((await call(token, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/results`)).status).toBe(404);
@@ -1344,7 +1446,9 @@ describe("canonical group voting", () => {
       totalBallots: 0,
       outcome: "failed",
     };
-    await env.DB.prepare("UPDATE votes SET status = 'closed', result_json = ? WHERE id = ?")
+    await env.DB.prepare(
+      "UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), result_json = ? WHERE id = ?",
+    )
       .bind(JSON.stringify(result), vote.id)
       .run();
     await env.DB.prepare(
@@ -1375,26 +1479,33 @@ describe("canonical group voting", () => {
     expect(groupVoteResultsResponseSchema.parse(await resultsResponse.json()).result).toEqual(result);
   });
 
-  it("records per-Member history and closes a motion from SQL aggregates", async () => {
+  it("records per-Member ballots and closes a motion from SQL aggregates", async () => {
     const capacity = await createOrganizationCapacity(env.DB);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
     const vote = await createCanonicalVote(env.DB, admin, {
       closesAt: new Date(Date.now() + 100).toISOString(),
     });
     const member = await resolveAuthMember(env.DB, capacity.userId);
+    const memberToken = await createMemberSession(env.DB, capacity.userId, `ballot-detail-${crypto.randomUUID()}`);
     await submitBallot(env.DB, member, vote.id, capacity.memberId, "in_favor", null);
-    const history = await listMyVoteHistory(env.DB, member, { limit: 20, offset: 0 });
-    expect(history.votes[0]).toMatchObject({ voteId: vote.id, memberId: capacity.memberId, choice: "in_favor" });
+    const detail = await call(memberToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`);
+    expect(groupVoteDetailResponseSchema.parse(await detail.json()).vote).toMatchObject({
+      id: vote.id,
+      hasCastBallot: true,
+      memberBallots: [{ memberId: capacity.memberId, hasCastBallot: true }],
+    });
     await env.DB.prepare("UPDATE votes SET closes_at = ? WHERE id = ?")
       .bind(new Date(Date.now() - 100).toISOString(), vote.id)
       .run();
     expect((await closeDueVotes(env.DB, 10)).closed).toContain(vote.id);
-    const [closed] = await queryAll<{ status: string; result_json: string }>(
+    const [closed] = await queryAll<{ closed_at: string | null; result_json: string }>(
       env.DB,
-      "SELECT status, result_json FROM votes WHERE id = ?",
+      "SELECT closed_at, result_json FROM votes WHERE id = ?",
       vote.id,
     );
-    expect(closed.status).toBe("closed");
+    // The close side effects ran, which is the fact worth asserting; whether
+    // the vote reads as closed follows from the schedule either way.
+    expect(closed.closed_at).not.toBeNull();
     expect(JSON.parse(closed.result_json)).toMatchObject({ outcome: "passed", totalBallots: 1 });
   });
 
@@ -1428,7 +1539,7 @@ describe("canonical group voting", () => {
       20,
       0,
     ]);
-    expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_status/);
+    expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_schedule/);
     expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_group_grants_group/);
     const groupProposals = buildOffsetPageSql(
       buildGroupVoteProposalsPageQuery({ userId: admin.id, admin }, TEST_GROUPS.pqc, {

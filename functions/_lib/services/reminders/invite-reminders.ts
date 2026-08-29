@@ -12,7 +12,11 @@ import {
 } from "../reminders-support";
 import { attendeeEffectiveDeadline, batchQueueEmailsAndUpdateState } from "./shared";
 import type { DatabaseLike } from "../../types";
-import { effectiveInviteExpirySql, eventInviteWindowsEvidence } from "../../invite-validity";
+import {
+  activeEffectiveInviteExpirySql,
+  effectiveInviteExpirySql,
+  eventInviteWindowsEvidence,
+} from "../../invite-validity";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 
 export async function runInviteReminders(
@@ -52,8 +56,7 @@ export async function runInviteReminders(
        FROM invites i
        JOIN events e ON e.id = i.event_id
        WHERE i.status = 'sent'
-         AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-         AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?)
+         AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"))}
          AND i.reminder_count < ?
          AND (i.reminders_paused_until IS NULL OR i.reminders_paused_until <= ?)
          AND COALESCE(i.last_communication_at, i.created_at) <= ?

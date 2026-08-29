@@ -1,7 +1,7 @@
 /**
  * me-organization-members.test.ts
  *
- * POST /api/v1/me/organization/members — member-portal self-service
+ * POST /api/v1/organizations/:organizationId/representatives — member self-service
  * coworker enrollment (see functions/_lib/services/member-organization.ts).
  * Mirrors me-endpoints.test.ts's setup/imports pattern for
  * member-session-authenticated requests.
@@ -70,38 +70,40 @@ async function seedOrgWithContact(
   return { organizationId, userId, memberId };
 }
 
-describe("POST /api/v1/me/organization/members — self-service coworker enrollment", () => {
+describe("POST organization representatives — self-service coworker enrollment", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
   it("lets the primary contact add a coworker as a new representative of the same organization", async () => {
-    const { memberId, userId } = await seedOrgWithContact("primary@example.test", "F");
+    const { organizationId, memberId, userId } = await seedOrgWithContact("primary@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "coworker-happy-token");
 
-    const response = await call(token, "/api/v1/me/organization/members", {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
       method: "POST",
-      body: JSON.stringify({ name: "New Coworker", email: "coworker@example.test" }),
+      body: JSON.stringify({
+        kind: "email",
+        name: "New Coworker",
+        email: "coworker@example.test",
+        showOnOrganizationProfile: true,
+      }),
     });
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      representativeId: string;
-      membershipId: string;
-      userId: string;
-      name: string;
-      email: string;
-    };
-    expect(body.name).toBe("New Coworker");
-    expect(body.email).toBe("coworker@example.test");
-    expect(body.membershipId).toBe(memberId);
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { representativeId: string };
+    const [createdUser] = await queryAll<{ id: string; email: string }>(
+      env.DB,
+      "SELECT id, email FROM users WHERE normalized_email = ?",
+      "coworker@example.test",
+    );
+    expect(createdUser.email).toBe("coworker@example.test");
 
     // The coworker gets an organization_representatives row against the
     // SAME aggregate, not a new members row.
     const repRows = await queryAll<{ id: string; member_id: string; left_at: string | null }>(
       env.DB,
       "SELECT id, member_id, left_at FROM organization_representatives WHERE user_id = ?",
-      body.userId,
+      createdUser.id,
     );
     expect(repRows).toHaveLength(1);
     expect(body.representativeId).toBe(repRows[0].id);
@@ -111,33 +113,45 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
     const memberRows = await queryAll<{ total: number }>(
       env.DB,
       "SELECT COUNT(*) AS total FROM members WHERE user_id = ?",
-      body.userId,
+      createdUser.id,
     );
     expect(Number(memberRows[0].total)).toBe(0);
   });
 
   it("lets the secondary contact add a coworker too", async () => {
-    const { userId } = await seedOrgWithContact("secondary@example.test", "A", { contactSlot: "secondary" });
+    const { organizationId, userId } = await seedOrgWithContact("secondary@example.test", "A", {
+      contactSlot: "secondary",
+    });
     const token = await createMemberSession(env.DB, userId, "coworker-secondary-token");
 
-    const response = await call(token, "/api/v1/me/organization/members", {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
       method: "POST",
-      body: JSON.stringify({ name: "Another Coworker", email: "another-coworker@example.test" }),
+      body: JSON.stringify({
+        kind: "email",
+        name: "Another Coworker",
+        email: "another-coworker@example.test",
+        showOnOrganizationProfile: true,
+      }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
   });
 
   it("rejects a non-contact org member with 403", async () => {
-    const { memberId } = await seedOrgWithContact("primary2@example.test", "F");
+    const { organizationId, memberId } = await seedOrgWithContact("primary2@example.test", "F");
     // A second representative of the same org who is neither primary nor secondary contact.
     const nonContactUserId = await insertUser(env.DB, "non-contact@example.test");
     await addRepresentative(env.DB, memberId, nonContactUserId);
     const token = await createMemberSession(env.DB, nonContactUserId, "non-contact-token");
 
-    const response = await call(token, "/api/v1/me/organization/members", {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
       method: "POST",
-      body: JSON.stringify({ name: "Should Fail", email: "should-fail@example.test" }),
+      body: JSON.stringify({
+        kind: "email",
+        name: "Should Fail",
+        email: "should-fail@example.test",
+        showOnOrganizationProfile: true,
+      }),
     });
 
     expect(response.status).toBe(403);
@@ -149,26 +163,36 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
     const { userId } = await insertIndividualMember(env.DB, "H6", "individual@example.test");
     const token = await createMemberSession(env.DB, userId, "individual-token");
 
-    const response = await call(token, "/api/v1/me/organization/members", {
+    const response = await call(token, `/api/v1/organizations/${crypto.randomUUID()}/representatives`, {
       method: "POST",
-      body: JSON.stringify({ name: "Should Fail", email: "should-fail-2@example.test" }),
+      body: JSON.stringify({
+        kind: "email",
+        name: "Should Fail",
+        email: "should-fail-2@example.test",
+        showOnOrganizationProfile: true,
+      }),
     });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("NO_ORGANIZATION");
+    expect(body.error.code).toBe("ORGANIZATION_NOT_FOUND");
   });
 
   it("rejects an email that is already an active representative of this same organization with 409", async () => {
-    const { memberId, userId } = await seedOrgWithContact("primary3@example.test", "F");
+    const { organizationId, memberId, userId } = await seedOrgWithContact("primary3@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "already-member-token");
     // Someone already an active representative of this exact organization.
     const existingRepUserId = await insertUser(env.DB, "existing-rep@example.test");
     await addRepresentative(env.DB, memberId, existingRepUserId);
 
-    const response = await call(token, "/api/v1/me/organization/members", {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
       method: "POST",
-      body: JSON.stringify({ name: "Existing Rep", email: "existing-rep@example.test" }),
+      body: JSON.stringify({
+        kind: "email",
+        name: "Existing Rep",
+        email: "existing-rep@example.test",
+        showOnOrganizationProfile: true,
+      }),
     });
 
     expect(response.status).toBe(409);
@@ -178,10 +202,15 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
 
   it("rejects unauthenticated requests with 401", async () => {
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/me/organization/members", {
+      new Request(`https://app.test/api/v1/organizations/${crypto.randomUUID()}/representatives`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "Nobody", email: "nobody@example.test" }),
+        body: JSON.stringify({
+          kind: "email",
+          name: "Nobody",
+          email: "nobody@example.test",
+          showOnOrganizationProfile: true,
+        }),
       }),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,

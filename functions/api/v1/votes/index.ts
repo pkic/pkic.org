@@ -1,7 +1,4 @@
-/**
- * GET /api/v1/votes — public, machine-consumable, filterable, paginated
- * list of votes with visibility='public'.
- */
+/** GET /api/v1/votes — public cross-group vote projection. */
 import { json } from "../../../_lib/http";
 import { listPublicVotes } from "../../../_lib/services/votes";
 import { publicVotesListResponseSchema, publicVotesListRouteSchema } from "../../../../assets/shared/schemas/votes";

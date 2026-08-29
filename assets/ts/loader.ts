@@ -6,7 +6,7 @@
  * at module level), so importing it is sufficient to initialize it.
  *
  * Convention: data-module="<path-relative-to-assets/ts-without-.ts>"
- *   data-module="admin/index"                       → ./admin/index
+ *   data-module="legacy/admin-redirect"             → ./legacy/admin-redirect
  *   data-module="event-flows/registration-page"     → ./event-flows/registration-page
  *   data-module="shared/donation-form"              → ./shared/donation-form
  *
@@ -20,7 +20,7 @@
 // import() into a separate chunk. Only the chunk requested by the page is
 // ever fetched by the browser.
 const modules: Record<string, () => Promise<unknown>> = {
-  "admin/index": () => import("./admin/index"),
+  "legacy/admin-redirect": () => import("./legacy/admin-redirect"),
   "invite-decline": () => import("./invite-decline"),
   "event-flows/registration-page": () => import("./event-flows/registration-page"),
   "event-flows/registration-confirm-page": () => import("./event-flows/registration-confirm-page"),
@@ -42,7 +42,6 @@ const modules: Record<string, () => Promise<unknown>> = {
   "member-flows/vote-detail-page": () => import("./member-flows/vote-detail-page"),
   "member-flows/event-sponsor-page": () => import("./member-flows/event-sponsor-page"),
   "member-flows/portal-page": () => import("./member-flows/portal-page"),
-  "member-flows/sponsor-portal-page": () => import("./member-flows/sponsor-portal-page"),
   "member-flows/meeting-join-page": () => import("./member-flows/meeting-join-page"),
   "shared/donation-form": () => import("./shared/donation/form"),
   "shared/donation-thank-you": () => import("./shared/donation/thank-you"),

@@ -213,14 +213,62 @@ CREATE INDEX idx_invites_recovery_email_created
 CREATE INDEX idx_invites_event_type_created
   ON invites(event_id, invite_type, created_at DESC, id ASC);
 
--- This migration is unreleased: normalize legacy invitations onto the same
--- finite event window used by every new dispatch. Existing earlier deadlines
--- remain earlier; NULL or overly-late deadlines become the event start/end.
+-- This migration is unreleased. Canonical invitation predicates compare UTC
+-- instants as text, so first normalize every parseable legacy event/invite
+-- value to the exact millisecond UTC representation used by application
+-- writes. Do not invent a value for unparseable legacy text: it remains
+-- fail-closed and is reported by the migration verification tests.
+UPDATE events
+SET starts_at = strftime('%Y-%m-%dT%H:%M:%fZ', starts_at)
+WHERE starts_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', starts_at) IS NOT NULL
+  AND starts_at <> strftime('%Y-%m-%dT%H:%M:%fZ', starts_at);
+
+UPDATE events
+SET ends_at = strftime('%Y-%m-%dT%H:%M:%fZ', ends_at)
+WHERE ends_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', ends_at) IS NOT NULL
+  AND ends_at <> strftime('%Y-%m-%dT%H:%M:%fZ', ends_at);
+
+UPDATE invites
+SET expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', expires_at)
+WHERE expires_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS NOT NULL
+  AND expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', expires_at);
+
+UPDATE proposal_speakers
+SET invite_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at)
+WHERE invite_expires_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at) IS NOT NULL
+  AND invite_expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at);
+
+-- An unparseable invite deadline or event window cannot be repaired without
+-- inventing authorization. Retire those legacy rows explicitly so they do not
+-- remain misleadingly sent or retain the active-invite uniqueness slot.
+UPDATE invites
+SET status = 'expired'
+WHERE status = 'sent'
+  AND (
+    (expires_at IS NOT NULL AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS NULL)
+    OR NOT EXISTS (
+      SELECT 1
+      FROM events event
+      WHERE event.id = invites.event_id
+        AND event.starts_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at)
+        AND event.ends_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at)
+        AND event.ends_at > event.starts_at
+    )
+  );
+
+-- Normalize legacy invitations onto the same finite event window used by
+-- every new dispatch. Existing earlier deadlines remain earlier; missing or
+-- overly-late deadlines become the event start/end. Unparseable values are
+-- deliberately left unchanged and therefore cannot authorize an invite.
 UPDATE invites
 SET expires_at = (
   SELECT CASE
     WHEN invites.expires_at IS NULL THEN event.starts_at
-    WHEN unixepoch(invites.expires_at) <= unixepoch(event.ends_at) THEN invites.expires_at
+    WHEN invites.expires_at <= event.ends_at THEN invites.expires_at
     ELSE event.ends_at
   END
   FROM events event
@@ -232,7 +280,13 @@ WHERE EXISTS (
   WHERE event.id = invites.event_id
     AND event.starts_at IS NOT NULL
     AND event.ends_at IS NOT NULL
-    AND unixepoch(event.ends_at) > unixepoch(event.starts_at)
+    AND event.starts_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at)
+    AND event.ends_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at)
+    AND event.ends_at > event.starts_at
+    AND (
+      invites.expires_at IS NULL
+      OR invites.expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', invites.expires_at)
+    )
 );
 
 CREATE INDEX idx_proposal_speakers_user_active
@@ -943,7 +997,7 @@ CREATE INDEX idx_referral_conversions_code_created
 --    — required immediately by POST /api/v1/members/applications.
 --
 -- 2. sponsorships / sponsorship_events —
---    required immediately by POST /api/v1/sponsorship/inquiries and
+--    required immediately by POST /api/v1/sponsors/inquiries and
 --    /checkout. Only the columns needed to record an inquiry/checkout are
 --    exercised in the beginning; the full sales-pipeline admin UI is later.
 --    Two columns beyond the schema are added here because of initial changes
@@ -1013,6 +1067,8 @@ CREATE INDEX idx_member_applications_stage ON member_applications(stage);
 -- ORDER BY stage_entered_at LIMIT ? (PR #1 review §9.1) with a direct index
 -- range scan instead of a full per-stage table scan.
 CREATE INDEX idx_member_applications_stage_entered_at ON member_applications(stage, stage_entered_at, id);
+CREATE INDEX idx_member_applications_membership_category
+  ON member_applications(membership_category);
 CREATE INDEX idx_member_applications_consultation_due
   ON member_applications(stage, consultation_notified_at, stage_entered_at, id)
   WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL;
@@ -1154,6 +1210,9 @@ CREATE TABLE sponsorships (
 CREATE INDEX idx_sponsorships_stage ON sponsorships(pipeline_stage);
 CREATE INDEX idx_sponsorships_event ON sponsorships(event_id);
 CREATE INDEX idx_sponsorships_org ON sponsorships(organization_id);
+CREATE INDEX idx_sponsorships_active_event_contact
+  ON sponsorships(lower(trim(contact_email)), event_id, id)
+  WHERE sponsor_type = 'event' AND pipeline_stage = 'active' AND contact_email IS NOT NULL;
 CREATE INDEX idx_sponsorships_active_consortium_org_projection
   ON sponsorships(organization_id, start_date DESC, id)
   WHERE sponsor_type = 'consortium' AND pipeline_stage = 'active';
@@ -1215,11 +1274,11 @@ INSERT INTO group_types
    default_automatic_enrollment_mode, default_allow_automatic_opt_out, default_visibility,
    active, sort_order, created_at, updated_at)
 VALUES
-  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 'public', 1, 10, datetime('now'), datetime('now')),
-  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 'participants', 1, 20, datetime('now'), datetime('now')),
-  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 'participants', 1, 30, datetime('now'), datetime('now')),
-  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 40, datetime('now'), datetime('now')),
-  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 50, datetime('now'), datetime('now'));
+  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 'public', 1, 10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 'participants', 1, 20, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 'participants', 1, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 40, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 50, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 CREATE TABLE groups (
   id                          TEXT NOT NULL PRIMARY KEY,
@@ -1270,6 +1329,11 @@ CREATE TABLE leadership_positions (
   FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(member_id) REFERENCES members(id)
 );
+
+-- Public roster lookups by represented Member, and Member deletes.
+CREATE INDEX idx_leadership_positions_member
+  ON leadership_positions(member_id)
+  WHERE member_id IS NOT NULL;
 
 CREATE INDEX idx_leadership_positions_body_dates
   ON leadership_positions(body, ends_at, starts_at DESC, id);
@@ -1510,33 +1574,33 @@ INSERT OR IGNORE INTO groups
 VALUES
   ('20000000-0000-4000-8000-000000000001', 'community', NULL, 'All Members', 'all-members',
    'The default communication and coordination group for active consortium members.',
-   'authenticated', 'inherited', 'category', 'category', 1, 1, 0, 1, datetime('now'), datetime('now')),
+   'authenticated', 'inherited', 'category', 'category', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000002', 'board', NULL, 'Executive Council', 'executive-council',
    'The consortium governing group.',
-   'participants', 'inherited', 'managed', 'none', 0, 0, 0, 1, datetime('now'), datetime('now')),
+   'participants', 'inherited', 'managed', 'none', 0, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000003', 'working_group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000004', 'working_group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000005', 'working_group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000006', 'working_group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000007', 'working_group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   'public', 'inherited', 'category', 'none', 1, 1, 0, 1, datetime('now'), datetime('now')),
+   'public', 'inherited', 'category', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000008', 'working_group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, datetime('now'), datetime('now'));
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
   (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
 VALUES
-  ('20000000-0000-4000-8000-000000000007', 'A', 1, 0, datetime('now'), datetime('now'));
+  ('20000000-0000-4000-8000-000000000007', 'A', 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
   (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
@@ -1545,8 +1609,8 @@ SELECT
   code,
   1,
   1,
-  datetime('now'),
-  datetime('now')
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ','now')
 FROM membership_categories;
 
 -- ── Reusable live-editable forms ──────────────────────────────────
@@ -1891,49 +1955,49 @@ VALUES (
   lower(hex(randomblob(16))), 'membership-application', 'global', NULL, 'application', 'active',
   'PKI Consortium Membership Application',
   'Application form for prospective PKI Consortium members.',
-  datetime('now'), datetime('now')
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
 );
 
 INSERT OR IGNORE INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
 VALUES
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'job_title', 'Role / Job Title', 'text', 0, NULL, NULL, 10, datetime('now')),
+   'job_title', 'Role / Job Title', 'text', 0, NULL, NULL, 10, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'linkedin', 'LinkedIn Profile', 'url', 0, NULL, NULL, 20, datetime('now')),
+   'linkedin', 'LinkedIn Profile', 'url', 0, NULL, NULL, 20, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'organization_website', 'Organization Website', 'url', 0, NULL, NULL, 30, datetime('now')),
+   'organization_website', 'Organization Website', 'url', 0, NULL, NULL, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'about_yourself', 'About Yourself', 'textarea', 0, NULL, NULL, 40, datetime('now')),
+   'about_yourself', 'About Yourself', 'textarea', 0, NULL, NULL, 40, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'about_organization', 'About Your Organization', 'textarea', 0, NULL, NULL, 50, datetime('now')),
+   'about_organization', 'About Your Organization', 'textarea', 0, NULL, NULL, 50, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'reason', 'Why do you want to join PKI Consortium?', 'textarea', 1, NULL, NULL, 60, datetime('now')),
+   'reason', 'Why do you want to join PKI Consortium?', 'textarea', 1, NULL, NULL, 60, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'working_groups', 'Working Groups of Interest', 'multi_select', 0,
    NULL,
-   '{"uiWidget":"checkboxes"}', 70, datetime('now')),
+   '{"uiWidget":"checkboxes"}', 70, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'contribution_type', 'How do you expect to participate?', 'select', 0,
    '[{"value":"active","label":"Actively contribute to the consortium and its mission"},{"value":"observer","label":"Observe without actively contributing"}]',
-   '{"helpText":"Members are not required to attend every meeting or participate in every activity."}', 80, datetime('now')),
+   '{"helpText":"Members are not required to attend every meeting or participate in every activity."}', 80, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'wants_to_present', 'I would like to introduce myself, my organization, and our participation goals to the consortium', 'boolean', 0,
-   NULL, NULL, 90, datetime('now')),
+   NULL, NULL, 90, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'interested_in_sponsoring', 'I would like to discuss sponsoring or donating to the consortium', 'boolean', 0,
-   NULL, '{"helpText":"Membership has no fee; sponsorships and donations support the consortium."}', 100, datetime('now')),
+   NULL, '{"helpText":"Membership has no fee; sponsorships and donations support the consortium."}', 100, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'agrees_bylaws', 'I and my organization (if applicable) agree to follow the PKI Consortium Bylaws', 'boolean', 1,
-   NULL, '{"requireTrue":true,"referenceLink":{"href":"/bylaws/","label":"Read the PKI Consortium Bylaws"}}', 110, datetime('now')),
+   NULL, '{"requireTrue":true,"referenceLink":{"href":"/bylaws/","label":"Read the PKI Consortium Bylaws"}}', 110, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'agrees_code_of_conduct', 'I and my organization (if applicable) agree to follow the PKI Consortium Code of Conduct', 'boolean', 1,
-   NULL, '{"requireTrue":true,"referenceLink":{"href":"/code-of-conduct/","label":"Read the PKI Consortium Code of Conduct"}}', 120, datetime('now')),
+   NULL, '{"requireTrue":true,"referenceLink":{"href":"/code-of-conduct/","label":"Read the PKI Consortium Code of Conduct"}}', 120, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'agrees_ipr_policy', 'I and my organization (if applicable) agree to follow the PKI Consortium IPR Policy', 'boolean', 1,
-   NULL, '{"requireTrue":true,"referenceLink":{"href":"/ipr/","label":"Read the PKI Consortium IPR Policy"}}', 130, datetime('now')),
+   NULL, '{"requireTrue":true,"referenceLink":{"href":"/ipr/","label":"Read the PKI Consortium IPR Policy"}}', 130, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'warranted_authority', 'I represent and warrant that I have authority to submit this application and agree to be bound by these terms', 'boolean', 1,
-   NULL, '{"requireTrue":true}', 140, datetime('now'));
+   NULL, '{"requireTrue":true}', 140, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 UPDATE form_fields
 SET option_source = 'active_working_groups'
@@ -1958,8 +2022,8 @@ VALUES (
   1,
   NULL,
   NULL,
-  datetime('now'),
-  datetime('now')
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ','now')
 );
 
 -- ── Email templates ──────────────────────────────────────
@@ -1977,7 +2041,7 @@ The accepted session **{{proposalTitleText}}** for **{{eventNameText}}** has bee
 Reason: {{cancellationCommentText}}
 
 No further speaker action is required.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'membership_join_verify', 1,
@@ -1987,7 +2051,7 @@ No further speaker action is required.',
 [Verify email and continue]({{verificationUrl}})
 
 If you did not request this link, you can safely ignore this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-received', 1,
@@ -2000,7 +2064,7 @@ You can check the status of your application at any time:
 [Check application status]({{statusUrl}})
 
 If you have any questions, just reply to this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-brochure', 1,
@@ -2012,7 +2076,7 @@ Thank you for your interest in sponsoring the PKI Consortium{{#if eventNameText}
 Brochure: [{{brochureUrl}}]({{brochureUrl}})
 
 A member of our team will follow up with you shortly to discuss next steps.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-new-inquiry', 1,
@@ -2026,7 +2090,7 @@ A member of our team will follow up with you shortly to discuss next steps.',
 - Notes: {{notesText}}
 
 [View sponsorship]({{managementUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
 -- Section: Membership category assignment + organization representatives
@@ -2057,6 +2121,10 @@ CREATE TABLE member_category_assignments (
   FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(category_code) REFERENCES membership_categories(code)
 );
+
+-- Category reference reads and any category evolution touch this FK column.
+CREATE INDEX idx_member_category_assignments_category
+  ON member_category_assignments(category_code);
 
 -- ── Organization representatives ─────────────────────────────────────────
 -- The N people who represent an organization-tied membership aggregate.
@@ -2273,7 +2341,7 @@ END;
 
 -- Section: Fine-Grained Access Control
 --
--- Adds the roles/user_roles/permission_grants/refresh_tokens model from,
+-- Adds the roles/user_roles/permission_grants model from,
 -- seeds the built-in roles from, and executes the
 -- backfills (event_permissions → user_roles, users.role='admin' →
 -- user_roles), then drops event_permissions resolution.
@@ -2292,7 +2360,10 @@ END;
 -- the new model because authorization must not transfer if an address is
 -- later released and reused by another account.
 --
--- `permission_grants` and `refresh_tokens` are created exactly as specified.
+-- `permission_grants` is created exactly as specified. The draft
+-- `refresh_tokens` table is intentionally omitted: canonical user sessions
+-- and stateless capability links have their own revocation mechanisms, and no
+-- production flow issues or consumes refresh tokens.
 
 CREATE TABLE roles (
   id             TEXT    NOT NULL PRIMARY KEY,
@@ -2527,17 +2598,6 @@ BEGIN
   SELECT RAISE(ABORT, 'MEMBERSHIP_HAS_AUTHORIZATION_CONTEXT');
 END;
 
-CREATE TABLE refresh_tokens (
-  id           TEXT NOT NULL PRIMARY KEY,
-  user_id      TEXT NOT NULL,
-  token_hash   TEXT NOT NULL UNIQUE,
-  issued_at    TEXT NOT NULL,
-  expires_at   TEXT NOT NULL,
-  revoked_at   TEXT,
-  last_used_at TEXT,
-  FOREIGN KEY(user_id) REFERENCES users(id)
-);
-
 -- ── Built-in system roles ────────────────────────────────────────────
 --
 -- Fixed, human-readable primary keys (not randomblob) so this migration can
@@ -2555,16 +2615,16 @@ CREATE TABLE refresh_tokens (
 -- record with an empty permission bundle.
 
 INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES
-  ('role-admin', 'admin', 'Full access', 1, datetime('now'), datetime('now')),
-  ('role-membership_processor', 'membership_processor', 'Membership workflow only', 1, datetime('now'), datetime('now')),
-  ('role-group_lead', 'group_lead', 'Leads a group and, by policy, its descendants', 1, datetime('now'), datetime('now')),
-  ('role-group_deputy_lead', 'group_deputy_lead', 'Acts with the same group-management capabilities as a group lead', 1, datetime('now'), datetime('now')),
-  ('role-event_organizer', 'event_organizer', 'Full management of a specific event', 1, datetime('now'), datetime('now')),
-  ('role-program_committee', 'program_committee', 'Proposal review and agenda setting for a specific event', 1, datetime('now'), datetime('now')),
-  ('role-member', 'member', 'Legacy authenticated member classification', 1, datetime('now'), datetime('now')),
-  ('role-interested_parties', 'interested_parties', 'Legacy interested-party classification', 1, datetime('now'), datetime('now')),
-  ('role-event_moderator', 'event_moderator', 'Event-scoped proposal review, no finalize (backfilled from event_permissions.moderator)', 1, datetime('now'), datetime('now')),
-  ('role-event_volunteer', 'event_volunteer', 'Historical placeholder, no permissions (backfilled from event_permissions.volunteer)', 1, datetime('now'), datetime('now'));
+  ('role-admin', 'admin', 'Full access', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-membership_processor', 'membership_processor', 'Membership workflow only', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_lead', 'group_lead', 'Leads a group and, by policy, its descendants', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_deputy_lead', 'group_deputy_lead', 'Acts with the same group-management capabilities as a group lead', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-event_organizer', 'event_organizer', 'Full management of a specific event', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-program_committee', 'program_committee', 'Proposal review and agenda setting for a specific event', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-member', 'member', 'Legacy authenticated member classification', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-interested_parties', 'interested_parties', 'Legacy interested-party classification', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-event_moderator', 'event_moderator', 'Event-scoped proposal review, no finalize (backfilled from event_permissions.moderator)', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-event_volunteer', 'event_volunteer', 'Historical placeholder, no permissions (backfilled from event_permissions.volunteer)', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 -- ── Default permission bundles ──────────────────────────────────────────────
 --
@@ -2585,88 +2645,91 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
 -- granted via canFinalize.
 
 INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
-  (lower(hex(randomblob(16))), 'role-admin', 'membership:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'membership:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'membership:approve', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'events:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'events:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'events:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'groups:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'groups:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'email:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'email:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'donations:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'donations:sync', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'users:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'users:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'users:anonymize', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'audit:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'analytics:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'operations:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'operations:run', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'access:grant', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'access:revoke', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'organizations:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'organizations:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'organizations:content-review', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'sponsorships:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'sponsorships:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'votes:create', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'votes:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'proposals:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'proposals:score', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'proposals:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'proposals:edit_accepted_abstract', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'proposals:cancel_accepted', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'agenda:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'agenda:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'sponsor-portal:attendee-data', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'admin:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'admin:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'membership:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'membership:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'membership:approve', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'events:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'events:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'events:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'groups:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'groups:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'forms:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'forms:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'donations:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'donations:sync', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'users:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'users:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'users:anonymize', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'audit:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'analytics:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'retention:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'retention:run', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'scheduler:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'scheduler:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'access:grant', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'access:revoke', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'organizations:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'organizations:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'organizations:content-review', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'sponsorships:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'sponsorships:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'votes:create', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'votes:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:score', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:edit_accepted_abstract', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'proposals:cancel_accepted', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'agenda:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'agenda:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'admin:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'admin:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
-  (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:approve', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:approve', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
-  (lower(hex(randomblob(16))), 'role-group_lead', 'groups:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-group_lead', 'groups:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-group_lead', 'votes:create', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-group_lead', 'votes:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'groups:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'groups:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'votes:create', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'votes:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
-  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'groups:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'groups:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'votes:create', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'votes:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'groups:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'groups:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'votes:create', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'votes:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'events:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'events:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'events:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:score', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:edit_accepted_abstract', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:cancel_accepted', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'events:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'events:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'events:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:score', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:edit_accepted_abstract', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:cancel_accepted', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
-  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:score', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:edit_accepted_abstract', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:cancel_accepted', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:score', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:edit_accepted_abstract', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'proposals:cancel_accepted', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-program_committee', 'agenda:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 
-  (lower(hex(randomblob(16))), 'role-event_moderator', 'proposals:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_moderator', 'proposals:score', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-event_moderator', 'agenda:read', datetime('now'));
+  (lower(hex(randomblob(16))), 'role-event_moderator', 'proposals:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_moderator', 'proposals:score', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-event_moderator', 'agenda:read', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 -- ── Backfill: users.role='admin' → user_roles ────────────────────────
 
 INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
-SELECT lower(hex(randomblob(16))), u.id, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
+SELECT lower(hex(randomblob(16))), u.id, 'role-admin', NULL, NULL, NULL, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
 FROM users u
 WHERE u.role = 'admin';
 
@@ -2714,8 +2777,8 @@ DROP TABLE event_permissions;
 -- group leadership designations.
 
 INSERT INTO roles (id, name, description, is_system_role, single_holder_per_context, created_at, updated_at) VALUES
-  ('role-primary_contact', 'primary_contact', 'Primary point of contact for an organization membership', 1, 1, datetime('now'), datetime('now')),
-  ('role-secondary_contact', 'secondary_contact', 'Secondary point of contact for an organization membership', 1, 1, datetime('now'), datetime('now'));
+  ('role-primary_contact', 'primary_contact', 'Primary point of contact for an organization membership', 1, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-secondary_contact', 'secondary_contact', 'Secondary point of contact for an organization membership', 1, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 
 
@@ -3068,7 +3131,7 @@ CREATE TABLE membership_settings (
   FOREIGN KEY(updated_by_user_id) REFERENCES users(id)
 );
 
-INSERT INTO membership_settings (id, updated_at) VALUES ('default', datetime('now'));
+INSERT INTO membership_settings (id, updated_at) VALUES ('default', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 -- ── Email templates ────────────────────────────────────────────────
 -- 14 net-new templates wired to a trigger in this stage, plus
@@ -3087,7 +3150,7 @@ VALUES
 Before we can continue reviewing your application, please confirm that you are authorized to represent {{organizationName}} as a PKI Consortium member.
 
 Reply to this email or update your application: [Check application status]({{statusUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-hold-org-email', 1,
@@ -3097,7 +3160,7 @@ Reply to this email or update your application: [Check application status]({{sta
 The email address on your application appears to be a personal address rather than an organizational one. Please resubmit your application using your organization''s email domain.
 
 [Check application status]({{statusUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-hold-pki-experience', 1,
@@ -3107,7 +3170,7 @@ The email address on your application appears to be a personal address rather th
 As an individual (H6) applicant, please provide additional detail about your PKI background and experience within the next {{deadlineDays}} days.
 
 Reply to this email or update your application: [Check application status]({{statusUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-hold-org-application', 1,
@@ -3117,7 +3180,7 @@ Reply to this email or update your application: [Check application status]({{sta
 Based on your application, we believe you should apply as an organizational member rather than an individual. Please resubmit your application under the appropriate organizational category.
 
 [Check application status]({{statusUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-hold-information', 1,
@@ -3127,7 +3190,7 @@ Based on your application, we believe you should apply as an organizational memb
 {{requestDetails}}
 
 Reply to this email or update your application: [Check application status]({{statusUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-in-consultation', 1,
@@ -3137,7 +3200,7 @@ Reply to this email or update your application: [Check application status]({{sta
 Your application has moved into our member consultation period, during which current members may raise questions or concerns. This typically takes up to {{consultationWindowDays}} days.
 
 [Check application status]({{statusUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-declined', 1,
@@ -3149,7 +3212,7 @@ After review, we are unable to approve your PKI Consortium membership applicatio
 {{reason}}{{/reason}}
 
 If you have questions, please reply to this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-closed-no-response', 1,
@@ -3159,7 +3222,7 @@ If you have questions, please reply to this email.',
 We did not receive a response to our request within the {{deadlineDays}}-day window, so your application has been closed. You are welcome to reapply at any time.
 
 If this was a mistake, please reply to this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'consultation-batch', 1,
@@ -3171,7 +3234,7 @@ If this was a mistake, please reply to this email.',
 {{/applications}}
 
 Members with concerns may reply to this list or submit a concern via the portal.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'ec-review-batch', 1,
@@ -3183,7 +3246,7 @@ Members with concerns may reply to this list or submit a concern via the portal.
 {{/applications}}
 
 If no EC member records a decision within {{ecReviewWindowDays}} days, applications are auto-approved.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'application-approved-welcome', 1,
@@ -3198,7 +3261,7 @@ Working groups joined: {{workingGroups}}
 {{/workingGroups}}
 
 We look forward to your participation.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'org-contact-assigned', 1,
@@ -3206,7 +3269,7 @@ We look forward to your participation.',
     'Hi {{memberName}},
 
 You have been designated the {{contactRole}} contact for your organization''s PKI Consortium profile. You can now submit organization profile changes for staff review.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'member-account-claim', 1,
@@ -3216,7 +3279,7 @@ You have been designated the {{contactRole}} contact for your organization''s PK
 Your PKI Consortium member account has been created. Use the link below to sign in for the first time:
 
 [Sign in]({{loginUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'mailing-list-enrolled', 1,
@@ -3228,7 +3291,7 @@ You have been added to the following PKI Consortium mailing lists:
 {{#lists}}
 - {{.}}
 {{/lists}}',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'group-membership-welcome', 1,
@@ -3236,27 +3299,17 @@ You have been added to the following PKI Consortium mailing lists:
     'Hi {{memberName}},
 
 You have joined {{groupName}}. If this group has meetings, you can view upcoming occurrences and calendar subscriptions in the portal.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
-    lower(hex(randomblob(16))), 'member_magic_link', 1,
-    'Your PKI Consortium member sign-in link',
+    lower(hex(randomblob(16))), 'user_magic_link', 1,
+    'Your PKI Consortium sign-in link',
     'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
 
 [Sign in]({{magicLinkUrl}})
 
 If you did not request this link, you can safely ignore this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
-  ),
-  (
-    lower(hex(randomblob(16))), 'portal_magic_link', 1,
-    'Your PKI Consortium portal sign-in link',
-    'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
-
-[Sign in]({{magicLinkUrl}})
-
-If you did not request this link, you can safely ignore this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'existing-member-claim', 1,
@@ -3266,7 +3319,7 @@ If you did not request this link, you can safely ignore this email.',
 As part of our transition to the new PKI Consortium member portal, an account has been created for you. Use the link below to claim it:
 
 [Claim your account]({{loginUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
 -- Section: Secondary email addresses
@@ -3311,7 +3364,7 @@ VALUES (
 [Confirm this new email address]({{confirmationUrl}})
 
 The account login email will change only after you open this link. If you did not request this change, do not open the link.',
-  'markdown', NULL, '', 'active', NULL, datetime('now')
+  'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
 );
 
 INSERT OR IGNORE INTO email_template_versions
@@ -3328,7 +3381,7 @@ VALUES (
 The old address is not required to approve this change. The new address must be confirmed before the login email changes.
 
 If you did not expect this request, [contact the PKI Consortium]({{contactUrl}}) promptly.',
-  'markdown', NULL, '', 'active', NULL, datetime('now')
+  'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
 );
 
 CREATE UNIQUE INDEX uq_users_pending_email_change_registration
@@ -3709,15 +3762,15 @@ INSERT INTO mailing_lists
    subscription_default, posting_policy, moderation_policy,
    auto_sync_categories_json, active, created_at, updated_at)
 VALUES
-  ('30000000-0000-4000-8000-000000000001', 'pkic@lists.pkic.org', 'All Members', 'all_members', '20000000-0000-4000-8000-000000000001', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000002', 'consultation@lists.pkic.org', 'Member Consultation', 'consultation', '20000000-0000-4000-8000-000000000001', 0, 'eligible_categories', 'subscribers', 'moderated', '["A","B","C","D","E","F","G"]', 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000003', 'ec@lists.pkic.org', 'Executive Council', 'group', '20000000-0000-4000-8000-000000000002', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000004', 'pqc@lists.pkic.org', 'Post-Quantum Cryptography WG', 'group', '20000000-0000-4000-8000-000000000003', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000005', 'ca@lists.pkic.org', 'Certificate Authority WG', 'group', '20000000-0000-4000-8000-000000000007', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000006', 'tcwg@lists.pkic.org', 'Trust Chain WG', 'group', '20000000-0000-4000-8000-000000000006', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000007', 'cm@lists.pkic.org', 'Cryptographic Module WG', 'group', '20000000-0000-4000-8000-000000000004', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000008', 'pkimm@lists.pkic.org', 'PKI Maturity Model WG', 'group', '20000000-0000-4000-8000-000000000005', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('30000000-0000-4000-8000-000000000009', 'cbom@lists.pkic.org', 'Cryptographic Bill of Materials WG', 'group', '20000000-0000-4000-8000-000000000008', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now'));
+  ('30000000-0000-4000-8000-000000000001', 'pkic@lists.pkic.org', 'All Members', 'all_members', '20000000-0000-4000-8000-000000000001', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000002', 'consultation@lists.pkic.org', 'Member Consultation', 'consultation', '20000000-0000-4000-8000-000000000001', 0, 'eligible_categories', 'subscribers', 'moderated', '["A","B","C","D","E","F","G"]', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000003', 'ec@lists.pkic.org', 'Executive Council', 'group', '20000000-0000-4000-8000-000000000002', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000004', 'pqc@lists.pkic.org', 'Post-Quantum Cryptography WG', 'group', '20000000-0000-4000-8000-000000000003', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000005', 'ca@lists.pkic.org', 'Certificate Authority WG', 'group', '20000000-0000-4000-8000-000000000007', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000006', 'tcwg@lists.pkic.org', 'Trust Chain WG', 'group', '20000000-0000-4000-8000-000000000006', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000007', 'cm@lists.pkic.org', 'Cryptographic Module WG', 'group', '20000000-0000-4000-8000-000000000004', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000008', 'pkimm@lists.pkic.org', 'PKI Maturity Model WG', 'group', '20000000-0000-4000-8000-000000000005', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('30000000-0000-4000-8000-000000000009', 'cbom@lists.pkic.org', 'Cryptographic Bill of Materials WG', 'group', '20000000-0000-4000-8000-000000000008', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 -- ── New email templates ──────────────────────────────────────────
 -- org-contact-assigned already shipped with consolidated migration 0035 (wired to
@@ -3732,7 +3785,7 @@ VALUES
     'A content change has been submitted for **{{organizationName}}** by {{submitterName}}.
 
 [Review the submission]({{reviewUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'org-content-approved', 1,
@@ -3740,7 +3793,7 @@ VALUES
     'Hi {{contactName}},
 
 The content changes you submitted for {{organizationName}}''s profile have been approved and are now live.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'org-content-rejected', 1,
@@ -3752,7 +3805,7 @@ The content changes you submitted for {{organizationName}}''s profile were not a
 {{reviewerNote}}
 
 You may revise and resubmit at any time.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
 -- Section: Sponsorship Management
@@ -3760,23 +3813,19 @@ You may revise and resubmit at any time.',
 -- `sponsorships`/`sponsorship_events` are created earlier in this migration
 -- forward for inquiry/checkout endpoints) with every column
 -- schema calls for. What's still missing for the full sales-pipeline/
--- sponsor-portal feature:
+-- sponsor management and attendee-access feature:
 --
 -- 1. `organizations.sponsor_tier`/`sponsor_start_date` — written when a
 --    consortium sponsorship goes active, cleared when it lapses.
 -- 2. `event_sponsor_attendee_tiers` — per-event config of which sponsor
 --    tiers get attendee-data access.
--- 3. `sponsor_portal_sessions` — a sponsor contact has no `users` row ("no
---    separate account required"), so the existing `sessions` table (with
---    `user_id NOT NULL`) cannot be reused. Sessions are scoped to
---    `sponsorship_id` instead.
--- 4. Migrate the live `sponsors`/`sponsor_events` rows into
+-- 3. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
 --    against anything already there). Keep the legacy source tables as a
 --    rollback/reconciliation source until the backfill has been verified in
 --    preview and production. A later, explicitly approved migration may drop
 --    them after that verification; application code must not write to them.
--- 5. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
+-- 4. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
 --    `sponsorship-lapsed-staff`, `sponsorship-active-confirmation`,
 --    `sponsor-portal-access`) — `sponsorship-brochure`/`sponsorship-new-inquiry`
 --    are seeded earlier in this migration.
@@ -3802,32 +3851,6 @@ CREATE TABLE event_sponsor_attendee_tiers (
   updated_at               TEXT NOT NULL,
   UNIQUE(event_id, tier_name)
 );
-
--- ── Sponsor portal sessions (no `users` row — see header) ──────────────────
-
-CREATE TABLE sponsor_portal_sessions (
-  id             TEXT NOT NULL PRIMARY KEY,
-  sponsorship_id TEXT NOT NULL REFERENCES sponsorships(id),
-  token_hash     TEXT NOT NULL UNIQUE,
-  expires_at     TEXT NOT NULL,
-  revoked_at     TEXT,
-  created_at     TEXT NOT NULL
-);
-
-CREATE INDEX idx_sponsor_portal_sessions_sponsorship ON sponsor_portal_sessions(sponsorship_id);
-
--- The authenticated sponsor identity is the current contact mailbox. Any
--- change to that mailbox revokes existing bearer sessions immediately, no
--- matter which present or future management path performs the update.
-CREATE TRIGGER revoke_sponsor_portal_sessions_on_contact_email_change
-AFTER UPDATE OF contact_email ON sponsorships
-WHEN lower(trim(COALESCE(OLD.contact_email, ''))) <> lower(trim(COALESCE(NEW.contact_email, '')))
-BEGIN
-  UPDATE sponsor_portal_sessions
-     SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-   WHERE sponsorship_id = NEW.id
-     AND revoked_at IS NULL;
-END;
 
 -- ── Migrate live `sponsors`/`sponsor_events` rows first ───────
 -- (must run before any future YAML-scan pass — see scripts/migrate-sponsors-yaml-to-d1.mjs
@@ -3928,7 +3951,7 @@ VALUES
     'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (60 days from now).
 
 [View sponsorship]({{managementUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-renewal-reminder-30', 1,
@@ -3936,7 +3959,7 @@ VALUES
     'The {{tierText}} sponsorship for {{organizationNameText}} renews on {{renewalDate}} (30 days from now).
 
 [View sponsorship]({{managementUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-lapsed-staff', 1,
@@ -3944,7 +3967,7 @@ VALUES
     'The {{tierText}} sponsorship for {{organizationNameText}} passed its renewal date ({{renewalDate}}) with no renewal recorded and has been automatically marked lapsed.
 
 [View sponsorship]({{managementUrl}})',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-active-confirmation', 1,
@@ -3952,19 +3975,19 @@ VALUES
     'Hi {{contactNameText}},
 
 Your {{tierText}} sponsorship for {{organizationNameText}} is now active{{#startDate}} as of {{startDate}}{{/startDate}}. Thank you for supporting the PKI Consortium.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsor-portal-access', 1,
-    'Access your sponsor portal',
+    'Access your sponsor workspace',
     'Hi {{contactNameText}},
 
 As a {{tierText}} sponsor of {{eventNameText}}, you can view and export basic attendee information for attendees who agreed to share their details with sponsors.
 
-[Access your sponsor portal]({{portalUrl}})
+[Access your sponsor workspace]({{portalUrl}})
 
-This link expires in {{expiresInMinutes}} minutes; you can request a new one at any time from the sponsor portal sign-in page.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+This link expires in {{expiresInMinutes}} minutes; you can request a new one at any time from the sponsor workspace sign-in page.',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
 -- Section: Group-owned events, recurring series, and meeting entry
@@ -3984,22 +4007,30 @@ CREATE TABLE event_profiles (
 );
 
 INSERT INTO event_profiles (key, label, description, active, sort_order, created_at, updated_at) VALUES
-  ('meeting', 'Meeting', 'A recurring or one-off group meeting.', 1, 10, datetime('now'), datetime('now')),
-  ('board_meeting', 'Board Meeting', 'A meeting for a governing group.', 1, 20, datetime('now'), datetime('now')),
-  ('conference', 'Conference', 'A multi-session conference.', 1, 30, datetime('now'), datetime('now')),
-  ('workshop', 'Workshop', 'An interactive workshop that may permit public registration.', 1, 40, datetime('now'), datetime('now')),
-  ('tutorial', 'Tutorial', 'A focused educational event.', 1, 50, datetime('now'), datetime('now'));
+  ('meeting', 'Meeting', 'A recurring or one-off group meeting.', 1, 10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('board_meeting', 'Board Meeting', 'A meeting for a governing group.', 1, 20, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('conference', 'Conference', 'A multi-session conference.', 1, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('workshop', 'Workshop', 'An interactive workshop that may permit public registration.', 1, 40, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('tutorial', 'Tutorial', 'A focused educational event.', 1, 50, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 ALTER TABLE events ADD COLUMN owner_group_id TEXT REFERENCES groups(id);
 ALTER TABLE events ADD COLUMN profile_key TEXT REFERENCES event_profiles(key);
 ALTER TABLE events ADD COLUMN source_mode TEXT;
 ALTER TABLE events ADD COLUMN links_json TEXT;
+-- Audience policy is deliberately separate from registration and meeting-entry
+-- policy. Keep validation in shared application schemas so extending the
+-- catalog never requires rebuilding the D1 events table.
+ALTER TABLE events ADD COLUMN visibility TEXT NOT NULL DEFAULT 'invitation_only';
 -- allowed source_mode: hugo | portal | integration
 
 CREATE INDEX idx_events_owner_profile
   ON events(owner_group_id, profile_key, starts_at, id);
 CREATE INDEX idx_events_source_mode
   ON events(source_mode, updated_at, id);
+CREATE INDEX idx_events_visibility_schedule
+  ON events(visibility, starts_at, ends_at, id);
+CREATE INDEX idx_events_owner_visibility_schedule
+  ON events(owner_group_id, visibility, starts_at, id);
 
 CREATE TRIGGER trg_portal_events_require_owner_insert
 BEFORE INSERT ON events
@@ -4338,7 +4369,7 @@ You have been invited to {{eventName}}, starting {{startsAt}}.
 [Open your meeting invitation]({{invitationUrl}})
 
 For your protection, opening the invitation starts a separate verification step. The meeting destination is shown only after verification and acceptance of the current meeting terms.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'meeting-guest-verification-code', 1,
@@ -4350,7 +4381,7 @@ Enter this code in the same browser where you opened the meeting invitation:
 {{verificationCode}}
 
 This code expires at {{expiresAt}}. If you did not request it, you may ignore this email.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
 -- One canonical SQL read model defines whether a meeting subject may enter an
@@ -4736,8 +4767,8 @@ SELECT
   'no_registration',
   0,
   '{"memberEligibility":"owner_group","guestPolicy":"occurrence_invitation"}',
-  datetime('now'),
-  datetime('now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'),
   id,
   CASE WHEN type_key = 'board' THEN 'board_meeting' ELSE 'meeting' END,
   'portal'
@@ -4809,8 +4840,13 @@ CREATE TABLE votes (
   transition_revision   INTEGER NOT NULL DEFAULT 0,
   transition_processing_token TEXT,
   transition_lease_expires_at TEXT,
-  status                TEXT NOT NULL,
-  -- allowed: scheduled | open | closed | cancelled
+  -- Lifecycle facts: WHICH side effects have already run. Whether the ballot
+  -- box is open is NOT stored — it is derived from opens_at/closes_at, so it
+  -- cannot drift from the schedule while a transition job is late. Conflating
+  -- the two previously let a vote read as open past its own deadline.
+  opened_at             TEXT,
+  closed_at             TEXT,
+  cancelled_at          TEXT,
   cancellation_reason   TEXT,
   result_json           TEXT,
   visibility             TEXT NOT NULL DEFAULT 'private',
@@ -4821,10 +4857,17 @@ CREATE TABLE votes (
   updated_at            TEXT NOT NULL
 );
 
-CREATE INDEX idx_votes_group_status
-  ON votes(owner_group_id, status, opens_at, id);
-CREATE INDEX idx_votes_status_opens_at ON votes(status, opens_at, id);
-CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at, id);
+CREATE INDEX idx_votes_group_schedule
+  ON votes(owner_group_id, opens_at, id);
+-- The dispatcher's two selection paths. Partial on the lifecycle fact rather
+-- than a status string, so each index covers exactly the rows still needing
+-- that side effect.
+CREATE INDEX idx_votes_pending_open
+  ON votes(opens_at, id)
+  WHERE opened_at IS NULL AND cancelled_at IS NULL;
+CREATE INDEX idx_votes_pending_close
+  ON votes(closes_at, id)
+  WHERE closed_at IS NULL AND cancelled_at IS NULL;
 CREATE INDEX idx_votes_visibility ON votes(visibility, closes_at);
 
 CREATE TABLE vote_group_grants (
@@ -4945,6 +4988,12 @@ CREATE TABLE vote_proposals (
   updated_at          TEXT NOT NULL
 );
 
+-- Resolves the proposal that produced a vote, and keeps a vote delete from
+-- scanning every proposal. Partial: most proposals never reach a vote.
+CREATE INDEX idx_vote_proposals_vote
+  ON vote_proposals(vote_id)
+  WHERE vote_id IS NOT NULL;
+
 CREATE INDEX idx_vote_proposals_group_status
   ON vote_proposals(owner_group_id, status, created_at, id);
 
@@ -5023,7 +5072,7 @@ A vote is now open for {{organizationName}}: "{{voteTitle}}".
 Each represented organization has a separate ballot. Any active representative may submit or update this organization''s ballot; the latest authorized submission before close is effective.
 
 Voting closes {{closesAt}}. Cast this organization''s ballot in the portal at {{voteUrl}}.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'vote-proposal-rejected', 1,
@@ -5035,7 +5084,7 @@ Your proposed vote "{{proposalTitle}}" was not approved.
 Reason: {{rejectionReason}}
 
 You may submit a revised proposal at any time.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
 -- Section: Notification preferences (Member Portal Navigation
@@ -5117,7 +5166,7 @@ Here is a summary of {{groupName}} membership changes over the past week:
 {{/left}}
 
 You are receiving this because you are a leader of this group. You can turn this off any time in your portal Account Settings under Notification preferences.',
-  'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
 );
 
 -- Section: sponsorship tier config
@@ -5495,6 +5544,11 @@ CREATE TABLE proposal_review_history (
   FOREIGN KEY(reviewer_user_id) REFERENCES users(id)
 );
 
+-- Reviews are read back for one proposal in round order. Without this the
+-- lookup scans the whole history and a proposal delete scans it again.
+CREATE INDEX idx_proposal_review_history_proposal
+  ON proposal_review_history(proposal_id, review_round, review_id);
+
 INSERT INTO proposal_decision_history (
   id, proposal_id, review_round, decided_by_user_id, final_status,
   decision_note, min_reviews_required, review_count, decided_at, decision_sequence
@@ -5543,7 +5597,7 @@ VALUES (
 {{changeMessage}}
 
 Actions you take in this representative capacity are attributed to {{organizationName}}. No acceptance is required. If this change is unexpected, please contact an authorized contact for the organization.',
-  'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+  'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
 );
 
 -- Email rendering has one canonical active version per template. Normalize any
@@ -5567,3 +5621,125 @@ WHERE id IN (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_email_template_versions_one_active
   ON email_template_versions(template_key)
   WHERE status = 'active';
+
+-- ── Scheduled job registry ───────────────────────────────────────────────
+--
+-- One row per recurring job, replacing a fixed cron expression per lane.
+-- The dispatcher is level-triggered: every job re-derives what is due from
+-- domain state on each run, so a missed schedule is self-healing and a state
+-- change never has to cancel anything. `wake_requested` is a latency hint set
+-- by producers, never the correctness mechanism.
+--
+-- A scheduled invocation that exceeds its CPU limit is terminated without
+-- running any error handler, so a crashed run cannot record its own failure.
+-- The lease is therefore the only reliable detector: a run writes
+-- `running_since` and `lease_expires_at` when it claims the job, and a run
+-- that dies leaves them behind for the next pass to reap as `abandoned`.
+CREATE TABLE scheduled_jobs (
+  job_key               TEXT NOT NULL PRIMARY KEY,
+  interval_seconds      INTEGER NOT NULL CHECK (interval_seconds > 0),
+  next_run_at           TEXT NOT NULL,
+  wake_requested        INTEGER NOT NULL DEFAULT 0 CHECK (wake_requested IN (0, 1)),
+
+  -- Separate from last_run_at on purpose: "ran 2 minutes ago, last succeeded
+  -- 3 days ago" is the alarming case a single timestamp hides.
+  last_run_at           TEXT,
+  last_success_at       TEXT,
+  last_status           TEXT CHECK (last_status IN ('succeeded', 'failed', 'abandoned', 'budget_exhausted')),
+  last_error            TEXT,
+  last_duration_ms      INTEGER,
+
+  -- A job that always dies mid-run is doing too much per tick; that is a
+  -- different defect from one that raises an error, so they count separately.
+  consecutive_failures  INTEGER NOT NULL DEFAULT 0,
+  consecutive_abandoned INTEGER NOT NULL DEFAULT 0,
+
+  running_since         TEXT,
+  lease_expires_at      TEXT,
+  run_token             TEXT,
+
+  paused_at             TEXT,
+  paused_by_user_id     TEXT,
+  paused_reason         TEXT,
+
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  CHECK ((running_since IS NULL) = (lease_expires_at IS NULL)),
+  CHECK ((running_since IS NULL) = (run_token IS NULL)),
+  FOREIGN KEY(paused_by_user_id) REFERENCES users(id)
+);
+
+-- The dispatcher's only selection path: unpaused jobs that are due or woken.
+CREATE INDEX idx_scheduled_jobs_due
+  ON scheduled_jobs(next_run_at, job_key)
+  WHERE paused_at IS NULL;
+
+-- The reaper's path: claimed runs whose lease has expired.
+CREATE INDEX idx_scheduled_jobs_expired_lease
+  ON scheduled_jobs(lease_expires_at)
+  WHERE running_since IS NOT NULL;
+
+CREATE INDEX idx_scheduled_jobs_paused
+  ON scheduled_jobs(paused_at)
+  WHERE paused_at IS NOT NULL;
+
+-- Seeded from the cron expressions these lanes previously used, so cadence
+-- becomes data rather than a deployment.
+INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
+  ('due_work',                  900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('on_hold_due_work',          900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('ec_auto_approve',           900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('google_groups_sync',        900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('sponsorship_due_work',    86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('votes_due_work',            900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('retention',               86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('consultation_batch',      86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('ec_review_batch',         86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('working_group_chair_digest', 604800, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- ── Google Groups observed membership ────────────────────────────────────
+--
+-- Desired state records what we intend; this records what the provider
+-- actually reported. Keeping them apart is what makes an unsubscribe
+-- detectable: a member we once observed present who is now absent has left,
+-- and must not be silently re-added by any reconciliation.
+--
+-- `confirmed_subscribed_at` is the first time we saw them present, so an
+-- absence is only meaningful once presence was actually confirmed. Without
+-- it, a member queued but not yet added would look like an unsubscribe.
+CREATE TABLE google_groups_observed_membership (
+  user_id                  TEXT NOT NULL,
+  google_group_email       TEXT NOT NULL,
+
+  confirmed_subscribed_at  TEXT,
+  last_observed_present_at TEXT,
+  last_observed_absent_at  TEXT,
+
+  -- Set once, when a previously confirmed member is first seen absent.
+  unsubscribed_at          TEXT,
+  -- How we learned of it. 'provider_absence' is the always-available
+  -- inference; the audit-log sources are enrichment and may be unavailable,
+  -- because Groups audit events are retained for 180 days and do not cover
+  -- every removal path.
+  unsubscribe_source       TEXT CHECK (
+    unsubscribe_source IN ('provider_absence', 'self_unsubscribe', 'admin_removed', 'account_removed')
+  ),
+  -- Cleared only by an explicit local resubscribe, never by reconciliation.
+  suppressed               INTEGER NOT NULL DEFAULT 0 CHECK (suppressed IN (0, 1)),
+
+  created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (user_id, google_group_email),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  CHECK (unsubscribed_at IS NULL OR confirmed_subscribed_at IS NOT NULL),
+  CHECK ((unsubscribed_at IS NULL) = (unsubscribe_source IS NULL))
+);
+
+-- Suppression lookup on the add path, and the unsubscribe-notification sweep.
+CREATE INDEX idx_google_groups_observed_suppressed
+  ON google_groups_observed_membership(user_id, google_group_email)
+  WHERE suppressed = 1;
+
+CREATE INDEX idx_google_groups_observed_unsubscribed
+  ON google_groups_observed_membership(unsubscribed_at, user_id)
+  WHERE unsubscribed_at IS NOT NULL;

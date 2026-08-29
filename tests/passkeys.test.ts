@@ -144,8 +144,8 @@ describe("passkeys (WebAuthn)", () => {
     const listResponse = await call("/api/v1/auth/passkeys", {}, apiKey);
 
     for (const response of [beginResponse, listResponse]) {
-      expect(response.status).toBe(403);
-      await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_INVALID" } });
     }
     await expect(queryAll(env.DB, "SELECT id FROM passkey_credentials")).resolves.toHaveLength(0);
     await expect(
@@ -189,7 +189,7 @@ describe("passkeys (WebAuthn)", () => {
     const persist = (suffix: string) =>
       persistVerifiedPasskeyCredential(
         env.DB,
-        { id: userId, kind: "admin" },
+        { id: userId, kind: "user" },
         {
           credentialId: `final-slot-${suffix}`,
           publicKey: "AQ",
@@ -277,19 +277,19 @@ describe("passkeys (WebAuthn)", () => {
     expect(completeResponse.status).toBe(200);
     const body = passkeyAuthenticateCompleteResponseSchema.parse(await completeResponse.json());
     expect(body.success).toBe(true);
-    expect(body.admin).toBeDefined();
-    if (!body.admin) throw new Error("Expected an admin passkey session");
-    expect(body.admin.id).toBe(userId);
-    expect(body.admin).not.toHaveProperty("identityType");
-    expect(body.admin).not.toHaveProperty("sessionId");
-    expect(body.admin).not.toHaveProperty("state");
-    const adminCookie = completeResponse.headers.get("set-cookie") ?? "";
-    expect(adminCookie).toContain("pkic_admin_session=");
-    expect(adminCookie).toContain("Path=/api/v1");
-    expect(adminCookie).toContain("HttpOnly");
-    expect(adminCookie).toContain("SameSite=Strict");
-    expect(adminCookie).toContain("Secure");
-    expect(adminCookie).not.toContain("pkic_member_session=");
+    expect(body.staff).toBeDefined();
+    if (!body.staff) throw new Error("Expected a staff passkey session");
+    expect(body.staff.id).toBe(userId);
+    expect(body.staff).not.toHaveProperty("identityType");
+    expect(body.staff).not.toHaveProperty("sessionId");
+    expect(body.staff).not.toHaveProperty("state");
+    const userCookie = completeResponse.headers.get("set-cookie") ?? "";
+    expect(userCookie).toContain("pkic_session=");
+    expect(userCookie).toContain("Path=/api/v1");
+    expect(userCookie).toContain("HttpOnly");
+    expect(userCookie).toContain("SameSite=Strict");
+    expect(userCookie).toContain("Secure");
+    expect(userCookie).not.toMatch(/pkic_(?:admin|member)_session=/);
     expect(completeResponse.headers.get("cache-control")).toBe("no-store, max-age=0");
 
     const rows = await queryAll<{ sign_count: number }>(
@@ -308,7 +308,7 @@ describe("passkeys (WebAuthn)", () => {
     expect(replayResponse.status).toBe(400);
   });
 
-  it("atomically establishes both independent capacities for a staff member identity", async () => {
+  it("atomically establishes both capacities in one user session", async () => {
     await addActiveIndividualMembership(userId);
     const { authenticator } = await registerPasskey();
     const sessionsBefore = await queryAll<{ total: number }>(
@@ -331,18 +331,18 @@ describe("passkeys (WebAuthn)", () => {
 
     expect(response.status).toBe(200);
     const body = passkeyAuthenticateCompleteResponseSchema.parse(await response.json());
-    expect(body.admin?.id).toBe(userId);
+    expect(body.staff?.id).toBe(userId);
     expect(body.member?.userId).toBe(userId);
     const cookies = response.headers.get("set-cookie") ?? "";
-    expect(cookies).toContain("pkic_admin_session=");
-    expect(cookies).toContain("pkic_member_session=");
+    expect(cookies).toContain("pkic_session=");
+    expect(cookies).not.toMatch(/pkic_(?:admin|member)_session=/);
 
     const sessionsAfter = await queryAll<{ total: number }>(
       env.DB,
       "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
       userId,
     );
-    expect(sessionsAfter[0].total - sessionsBefore[0].total).toBe(2);
+    expect(sessionsAfter[0].total - sessionsBefore[0].total).toBe(1);
     await expect(
       queryAll<{ details_json: string }>(
         env.DB,
@@ -578,17 +578,17 @@ describe("member passkey login (generalizing passkeys beyond staff)", () => {
       body: JSON.stringify({ challengeToken: authBegin.challengeToken, response: assertion }),
     });
     expect(completeResponse.status).toBe(200);
-    const body = (await completeResponse.json()) as { success: boolean; member?: { userId: string }; admin?: unknown };
+    const body = (await completeResponse.json()) as { success: boolean; member?: { userId: string }; staff?: unknown };
     expect(body.success).toBe(true);
     expect(body.member?.userId).toBe(memberUserId);
-    expect(body.admin).toBeUndefined();
+    expect(body.staff).toBeUndefined();
     const memberCookie = completeResponse.headers.get("set-cookie") ?? "";
-    expect(memberCookie).toContain("pkic_member_session=");
+    expect(memberCookie).toContain("pkic_session=");
     expect(memberCookie).toContain("Path=/api/v1");
     expect(memberCookie).toContain("HttpOnly");
     expect(memberCookie).toContain("SameSite=Strict");
     expect(memberCookie).toContain("Secure");
-    expect(memberCookie).not.toContain("pkic_admin_session=");
+    expect(memberCookie).not.toMatch(/pkic_(?:admin|member)_session=/);
     expect(completeResponse.headers.get("cache-control")).toBe("no-store, max-age=0");
   });
 });

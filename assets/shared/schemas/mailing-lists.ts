@@ -4,6 +4,7 @@ import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { membershipCategorySelectionSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { requiresSession } from "./route-contract";
 
 export const MAILING_LIST_PURPOSES = ["all_members", "consultation", "group", "custom"] as const;
 export const mailingListPurposeSchema = z.enum(MAILING_LIST_PURPOSES);
@@ -88,6 +89,7 @@ export const mailingListPreferenceMutationResponseSchema = successResponseSchema
 });
 
 export const groupMailingListCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create a mailing list owned by a group",
   request: {
@@ -103,6 +105,7 @@ export const groupMailingListCreateRouteSchema = {
 };
 
 export const groupMailingListUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update a group-owned mailing list",
   request: {
@@ -118,6 +121,7 @@ export const groupMailingListUpdateRouteSchema = {
 };
 
 export const groupMailingListArchiveRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Archive a group-owned mailing list",
   description: "Archives the configuration without deleting subscription history or the external list.",
@@ -126,6 +130,7 @@ export const groupMailingListArchiveRouteSchema = {
 };
 
 export const groupMailingListManagementRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List mailing-list configurations managed by a group",
   description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
@@ -139,6 +144,7 @@ export const groupMailingListManagementRouteSchema = {
 };
 
 export const groupMailingListSubscriptionsRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List the caller's effective subscriptions for one group",
   request: { params: groupReferenceParamsSchema, query: groupMailingListSubscriptionsQuerySchema },
@@ -151,6 +157,7 @@ export const groupMailingListSubscriptionsRouteSchema = {
 };
 
 export const groupMailingListPreferenceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Set or clear the caller's subscription preference",
   request: {

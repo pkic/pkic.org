@@ -3,7 +3,7 @@
  *
  * Integration-level security test that verifies:
  *
- *  1. Every protected admin / internal endpoint enforces authentication and
+ *  1. Every protected staff or signed-integration endpoint enforces authentication and
  *     rejects unauthenticated requests with AUTH_REQUIRED.
  *
  *  2. The session-token validation logic handles all invalid-credential
@@ -21,20 +21,18 @@ import { SELF, env } from "cloudflare:test";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { PERMISSION_DENIED_MESSAGE } from "../assets/shared/auth-errors";
-import { signAdminSessionToken } from "../functions/_lib/auth/admin";
+import { signUserSessionToken } from "../functions/_lib/auth/user-session";
+import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
+import { signJwt } from "../functions/_lib/utils/jwt";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Public endpoint handlers ──────────────────────────────────────────────────
 import { onRequestGet as eventTermsGet } from "../functions/api/v1/events/[eventSlug]/terms";
-import {
-  onRequestGet as eventFormsGet,
-  onRequest as eventFormsRequest,
-} from "../functions/api/v1/events/[eventSlug]/forms";
-import { onRequest as geoRequest } from "../functions/api/v1/geo";
-import { geoResponseSchema } from "../assets/shared/schemas/geolocation";
+import { onRequest as geolocationCountryRequest } from "../functions/api/v1/geolocation/country";
+import { geolocationCountryResponseSchema } from "../assets/shared/schemas/geolocation";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -63,6 +61,12 @@ function bearerGet(url: string, token: string): Request {
   return new Request(url, { headers: { authorization: `Bearer ${token}` } });
 }
 
+function mcpBearerGet(url: string, token: string): Request {
+  return new Request(url, {
+    headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp" },
+  });
+}
+
 /** Makes a PATCH request with no Authorization header. */
 function anonPatch(url: string, body: unknown = {}): Request {
   return new Request(url, {
@@ -88,7 +92,7 @@ async function insertSession(
   _db: DatabaseLike,
   userId: string,
   rawToken: string,
-  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
+  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[] } = {},
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -102,12 +106,20 @@ async function insertSession(
   `,
   ).run();
 
-  return signAdminSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
-    admin: { identityType: "user", id: userId, email: "admin@example.test", role: "admin" },
-    sessionId,
-    expiresAt,
-    scopes: opts.scopes,
-    scopeRestricted: opts.scopeRestricted,
+  if (opts.scopes) {
+    return signMcpSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+      sub: userId,
+      sid: sessionId,
+      email: "admin@example.test",
+      role: "admin",
+      scopes: opts.scopes,
+      exp: Math.floor(new Date(expiresAt).getTime() / 1000),
+    });
+  }
+  return signUserSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+    sub: userId,
+    sid: sessionId,
+    exp: Math.floor(new Date(expiresAt).getTime() / 1000),
   });
 }
 
@@ -140,66 +152,64 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   // Each entry: [description, thunk that invokes the real router with no auth]
   const cases: [string, () => Promise<Response>][] = [
     ["GET /api/v1/users", () => callApp(anonGet("https://app.test/api/v1/users"))],
+    ["GET /api/v1/analytics/summary", () => callApp(anonGet("https://app.test/api/v1/analytics/summary"))],
     [
-      "GET /api/v1/system/analytics/summary",
-      () => callApp(anonGet("https://app.test/api/v1/system/analytics/summary")),
+      "GET /api/v1/leadership/positions",
+      () => callApp(anonGet("https://app.test/api/v1/leadership/positions?body=board")),
     ],
     ["GET /api/v1/donations", () => callApp(anonGet("https://app.test/api/v1/donations"))],
-    ["GET /api/v1/system/audit-log", () => callApp(anonGet("https://app.test/api/v1/system/audit-log"))],
-    ["GET /api/v1/system/email-templates", () => callApp(anonGet("https://app.test/api/v1/system/email-templates"))],
-    ["GET /api/v1/admin/events", () => callApp(anonGet("https://app.test/api/v1/admin/events"))],
+    ["GET /api/v1/audit-log", () => callApp(anonGet("https://app.test/api/v1/audit-log"))],
+    ["GET /api/v1/membership/settings", () => callApp(anonGet("https://app.test/api/v1/membership/settings"))],
+    ["GET /api/v1/membership/categories", () => callApp(anonGet("https://app.test/api/v1/membership/categories"))],
     [
-      "GET /api/v1/admin/events/:slug/registrations",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations`)),
+      "GET /api/v1/organizations/content-reviews",
+      () => callApp(anonGet("https://app.test/api/v1/organizations/content-reviews")),
     ],
+    ["GET /api/v1/email/templates", () => callApp(anonGet("https://app.test/api/v1/email/templates"))],
     [
-      "GET /api/v1/admin/events/:slug/forms",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/forms`)),
+      "GET /api/v1/events/:slug/registrations",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations`)),
     ],
+    ["GET /api/v1/events/:slug/forms", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/forms`))],
     ["GET /api/v1/users/:id", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}`))],
     ["POST /api/v1/email/outbox/process", () => callApp(anonPost("https://app.test/api/v1/email/outbox/process"))],
     [
-      "POST /api/v1/operations/reminders/run",
-      () => callApp(anonPost("https://app.test/api/v1/operations/reminders/run")),
+      "POST /api/v1/email/reminders/runs",
+      () => callApp(anonPostBody("https://app.test/api/v1/email/reminders/runs", { mode: "execute", limit: 10 })),
     ],
     [
-      "POST /api/v1/operations/retention/run",
-      () => callApp(anonPost("https://app.test/api/v1/operations/retention/run")),
+      "POST /api/v1/retention/runs",
+      () => callApp(anonPostBody("https://app.test/api/v1/retention/runs", { mode: "execute" })),
     ],
     [
       "POST /api/v1/email/outbox/reset-failed",
       () => callApp(anonPostBody("https://app.test/api/v1/email/outbox/reset-failed", { ids: [crypto.randomUUID()] })),
     ],
     // ── Additional admin endpoints ──────────────────────────────────────────
-    ["POST /api/v1/admin/events", () => callApp(anonPost("https://app.test/api/v1/admin/events"))],
     ["POST /api/v1/donations/sync", () => callApp(anonPost("https://app.test/api/v1/donations/sync"))],
     [
-      "POST /api/v1/system/email-templates/preview",
-      () => callApp(anonPostBody("https://app.test/api/v1/system/email-templates/preview", { content: "preview" })),
+      "POST /api/v1/email/templates/preview",
+      () => callApp(anonPostBody("https://app.test/api/v1/email/templates/preview", { content: "preview" })),
     ],
     [
-      "POST /api/v1/system/email-templates/:key/activate",
-      () =>
-        callApp(anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/activate`, { version: 1 })),
+      "POST /api/v1/email/templates/:key/activate",
+      () => callApp(anonPostBody(`https://app.test/api/v1/email/templates/${templateKey}/activate`, { version: 1 })),
     ],
     [
-      "POST /api/v1/system/email-templates/:key/versions",
+      "POST /api/v1/email/templates/:key/versions",
       () =>
         callApp(
-          anonPostBody(`https://app.test/api/v1/system/email-templates/${templateKey}/versions`, {
+          anonPostBody(`https://app.test/api/v1/email/templates/${templateKey}/versions`, {
             content: "version",
           }),
         ),
     ],
-    ["GET /api/v1/admin/forms/:formKey", () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}`))],
-    ["PATCH /api/v1/admin/forms/:formKey", () => callApp(anonPatch(`https://app.test/api/v1/admin/forms/${formKey}`))],
+    ["GET /api/v1/forms/:formKey", () => callApp(anonGet(`https://app.test/api/v1/forms/${formKey}`))],
+    ["PATCH /api/v1/forms/:formKey", () => callApp(anonPatch(`https://app.test/api/v1/forms/${formKey}`))],
+    ["DELETE /api/v1/forms/:formKey", () => callApp(anonDelete(`https://app.test/api/v1/forms/${formKey}`))],
     [
-      "DELETE /api/v1/admin/forms/:formKey",
-      () => callApp(anonDelete(`https://app.test/api/v1/admin/forms/${formKey}`)),
-    ],
-    [
-      "GET /api/v1/admin/forms/:formKey/submissions",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}/submissions`)),
+      "GET /api/v1/forms/:formKey/submissions",
+      () => callApp(anonGet(`https://app.test/api/v1/forms/${formKey}/submissions`)),
     ],
     [
       "PATCH /api/v1/users/:userId (global role)",
@@ -219,167 +229,153 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     ],
     ["* /api/v1/users/:userId/headshot", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/headshot`))],
     [
-      "POST /api/v1/admin/events/sync-from-hugo",
-      () => callApp(anonPost("https://app.test/api/v1/admin/events/sync-from-hugo")),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug (detail)",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/days",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/days`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/forms",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/forms`)),
-    ],
-    [
-      "PATCH /api/v1/admin/events/:slug/settings",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/events/${eventSlug}/settings`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/terms",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/terms`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/permissions",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/permissions`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/permissions",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/permissions`)),
-    ],
-    [
-      "DELETE /api/v1/admin/events/:slug/permissions/:permId",
-      () => callApp(anonDelete(`https://app.test/api/v1/admin/events/${eventSlug}/permissions/${permId}`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/promoters",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/promoters`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/proposals",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/proposals`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/emails/campaign/preview",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/emails/campaign/preview`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/emails/campaign/send",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/emails/campaign/send`)),
-    ],
-    [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/admit",
-      () =>
-        callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/admit`)),
-    ],
-    [
-      "GET /api/v1/admin/events/:slug/registrations/:registrationId/badge-role",
+      "POST /api/v1/events/imports",
       () =>
         callApp(
-          anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/badge-role`),
+          anonPostBody("https://app.test/api/v1/events/imports", {
+            source: "hugo",
+            event: { slug: "anon-import", name: "Anon import", timezone: "UTC", visibility: "invitation_only" },
+          }),
+        ),
+    ],
+    ["GET /api/v1/events/:slug/days", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/days`))],
+    ["POST /api/v1/events/:slug/forms", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/forms`))],
+    [
+      "PATCH /api/v1/events/:slug/settings",
+      () => callApp(anonPatch(`https://app.test/api/v1/events/${eventSlug}/settings`)),
+    ],
+    ["GET /api/v1/events/:slug/roles", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/roles`))],
+    ["POST /api/v1/events/:slug/roles", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/roles`))],
+    [
+      "DELETE /api/v1/events/:slug/roles/:roleAssignmentId",
+      () => callApp(anonDelete(`https://app.test/api/v1/events/${eventSlug}/roles/${permId}`)),
+    ],
+    [
+      "GET /api/v1/events/:slug/promoters",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/promoters`)),
+    ],
+    [
+      "GET /api/v1/events/:slug/analytics",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/analytics`)),
+    ],
+    [
+      "GET /api/v1/events/:slug/presentations/archive",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/presentations/archive`)),
+    ],
+    [
+      "GET /api/v1/events/:slug/proposals",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/proposals`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/email/campaigns/previews",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/email/campaigns/previews`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/email/campaigns",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/email/campaigns`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/registrations/:registrationId/admissions",
+      () =>
+        callApp(
+          anonPostBody(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/admissions`, {
+            mode: "vip",
+            reason: "Authentication boundary test",
+            dayDates: ["2026-12-01"],
+          }),
         ),
     ],
     [
-      "POST /api/v1/admin/events/:slug/waitlist/promote",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/waitlist/promote`)),
+      "GET /api/v1/events/:slug/registrations/:registrationId/badge",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/badge`)),
     ],
     [
-      "GET /api/v1/admin/events/:slug/registrations/:registrationId",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}`)),
+      "POST /api/v1/events/:slug/registrations/promotions",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/registrations/promotions`)),
     ],
     [
-      "PATCH /api/v1/admin/events/:slug/registrations/:registrationId",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}`)),
+      "GET /api/v1/events/:slug/registrations/:registrationId",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}`)),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/open-manage",
+      "PATCH /api/v1/events/:slug/registrations/:registrationId",
       () =>
         callApp(
-          anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/open-manage`),
+          anonPatch(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}`, {
+            action: "update",
+            attendanceType: "virtual",
+          }),
         ),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/regenerate-badge",
+      "POST /api/v1/events/:slug/registrations/:registrationId/access",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/access`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/registrations/:registrationId/badge",
+      () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/badge`)),
+    ],
+    [
+      "POST /api/v1/events/:slug/registrations/:registrationId/notifications",
       () =>
         callApp(
-          anonPost(
-            `https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/regenerate-badge`,
-          ),
+          anonPostBody(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/notifications`, {
+            type: "confirmation",
+          }),
         ),
     ],
     [
-      "POST /api/v1/admin/events/:slug/registrations/:registrationId/resend-confirmation",
-      () =>
-        callApp(
-          anonPost(
-            `https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/resend-confirmation`,
-          ),
-        ),
+      "GET /api/v1/events/:slug/registrations/:registrationId/audit",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/audit`)),
     ],
     [
-      "GET /api/v1/admin/events/:slug/registrations/:registrationId/audit-log",
-      () =>
-        callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/audit-log`)),
+      "POST /api/v1/proposals/:proposalId/decisions",
+      () => callApp(anonPost(`https://app.test/api/v1/proposals/${proposalId}/decisions`)),
     ],
     [
-      "POST /api/v1/admin/proposals/:proposalId/finalize",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`)),
+      "GET /api/v1/proposals/:proposalId/reviews",
+      () => callApp(anonGet(`https://app.test/api/v1/proposals/${proposalId}/reviews`)),
     ],
     [
-      "GET /api/v1/admin/proposals/:proposalId/reviews",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`)),
+      "POST /api/v1/proposals/:proposalId/reviews",
+      () => callApp(anonPost(`https://app.test/api/v1/proposals/${proposalId}/reviews`)),
     ],
     [
-      "POST /api/v1/admin/proposals/:proposalId/reviews",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`)),
+      "PATCH /api/v1/proposals/:proposalId/reviews/:reviewId",
+      () => callApp(anonPatch(`https://app.test/api/v1/proposals/${proposalId}/reviews/${reviewId}`)),
     ],
     [
-      "PATCH /api/v1/admin/proposals/:proposalId/reviews/:reviewId",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews/${reviewId}`)),
+      "GET /api/v1/proposals/:proposalId/speakers",
+      () => callApp(anonGet(`https://app.test/api/v1/proposals/${proposalId}/speakers`)),
+    ],
+    // ── permission, role, and user-role endpoints ───────────
+    ["GET /api/v1/permissions/grants", () => callApp(anonGet("https://app.test/api/v1/permissions/grants"))],
+    ["POST /api/v1/permissions/grants", () => callApp(anonPost("https://app.test/api/v1/permissions/grants"))],
+    [
+      "DELETE /api/v1/permissions/grants/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/permissions/grants/${grantId}`)),
+    ],
+    ["GET /api/v1/permissions/subjects", () => callApp(anonGet("https://app.test/api/v1/permissions/subjects"))],
+    [
+      "GET /api/v1/permissions/targets",
+      () => callApp(anonGet("https://app.test/api/v1/permissions/targets?contextType=event")),
+    ],
+    ["GET /api/v1/roles", () => callApp(anonGet("https://app.test/api/v1/roles"))],
+    ["POST /api/v1/roles", () => callApp(anonPost("https://app.test/api/v1/roles"))],
+    ["DELETE /api/v1/roles/:id", () => callApp(anonDelete(`https://app.test/api/v1/roles/${roleId}`))],
+    [
+      "GET /api/v1/roles/:id/assignments",
+      () => callApp(anonGet(`https://app.test/api/v1/roles/${roleId}/assignments`)),
+    ],
+    ["GET /api/v1/users/:userId/roles", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/roles`))],
+    ["POST /api/v1/users/:userId/roles", () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/roles`))],
+    [
+      "DELETE /api/v1/users/:userId/roles/:userRoleId",
+      () => callApp(anonDelete(`https://app.test/api/v1/users/${userId}/roles/${userRoleId}`)),
     ],
     [
-      "GET /api/v1/admin/proposals/:proposalId/speakers",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
-    ],
-    // ── system access control endpoints ─────────────────────
-    [
-      "GET /api/v1/system/access-control/grants",
-      () => callApp(anonGet("https://app.test/api/v1/system/access-control/grants")),
-    ],
-    [
-      "POST /api/v1/system/access-control/grants",
-      () => callApp(anonPost("https://app.test/api/v1/system/access-control/grants")),
-    ],
-    [
-      "DELETE /api/v1/system/access-control/grants/:id",
-      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/grants/${grantId}`)),
-    ],
-    [
-      "GET /api/v1/system/access-control/roles",
-      () => callApp(anonGet("https://app.test/api/v1/system/access-control/roles")),
-    ],
-    [
-      "POST /api/v1/system/access-control/roles",
-      () => callApp(anonPost("https://app.test/api/v1/system/access-control/roles")),
-    ],
-    [
-      "DELETE /api/v1/system/access-control/roles/:id",
-      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/roles/${roleId}`)),
-    ],
-    [
-      "GET /api/v1/system/access-control/users/:userId/roles",
-      () => callApp(anonGet(`https://app.test/api/v1/system/access-control/users/${userId}/roles`)),
-    ],
-    [
-      "POST /api/v1/system/access-control/users/:userId/roles",
-      () => callApp(anonPost(`https://app.test/api/v1/system/access-control/users/${userId}/roles`)),
-    ],
-    [
-      "DELETE /api/v1/system/access-control/users/:userId/roles/:userRoleId",
-      () => callApp(anonDelete(`https://app.test/api/v1/system/access-control/users/${userId}/roles/${userRoleId}`)),
+      "PATCH /api/v1/users/:userId/roles/:userRoleId",
+      () => callApp(anonPatch(`https://app.test/api/v1/users/${userId}/roles/${userRoleId}`)),
     ],
     // ── passkey endpoints ───────────────────────────────────
     // authenticate/begin and authenticate/complete are deliberately excluded
@@ -420,9 +416,10 @@ describe("session-token validation", () => {
     await resetDb();
   });
   let adminId: string;
+  let eventId: string;
 
   beforeEach(async () => {
-    await seedEventAndAdmin(env.DB);
+    ({ eventId } = await seedEventAndAdmin(env.DB));
     // Retrieve the admin user id that seedEventAndAdmin created
     const row = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     adminId = row.id;
@@ -444,6 +441,18 @@ describe("session-token validation", () => {
     const response = await callUsers("wrong-token");
     expect(response.status).toBe(401);
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_INVALID");
+  });
+
+  it("rejects a cryptographically valid legacy human admin-session JWT", async () => {
+    const legacyToken = await signJwt(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+      typ: "admin-session",
+      sub: adminId,
+      sid: crypto.randomUUID(),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const response = await callUsers(legacyToken);
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_INVALID" } });
   });
 
   it("rejects an expired session → AUTH_EXPIRED", async () => {
@@ -507,9 +516,8 @@ describe("session-token validation", () => {
   it("rejects scoped sessions when the endpoint requires a different scope", async () => {
     const token = await insertSession(env.DB, adminId, "proposal-read-token", {
       scopes: ["proposals:read"],
-      scopeRestricted: true,
     });
-    const response = await callUsers(token);
+    const response = await callApp(mcpBearerGet("https://app.test/api/v1/users", token));
     expect(response.status).toBe(403);
     expect((await response.json()) as { error?: { code?: string; message?: string } }).toEqual({
       error: {
@@ -521,17 +529,41 @@ describe("session-token validation", () => {
   });
 
   it("requires proposal access in addition to event access for presentation archives", async () => {
-    const token = await insertSession(env.DB, adminId, "event-read-token", {
-      scopes: ["events:read"],
-      scopeRestricted: true,
-    });
-    const response = await callApp(
-      bearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
-    );
+    const readerId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'archive-reader@example.test', 'archive-reader@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(readerId)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, eventId, adminId)
+      .run();
+    const token = await createAdminSession(env.DB, readerId, `archive-reader-${crypto.randomUUID()}`);
+    const response = await callApp(bearerGet("https://app.test/api/v1/events/pqc-2026/presentations/archive", token));
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "SCOPE_REQUIRED", message: PERMISSION_DENIED_MESSAGE },
+      error: { code: "PERMISSION_REQUIRED" },
+    });
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'proposals:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, eventId, adminId)
+      .run();
+    const authorizedResponse = await callApp(
+      bearerGet("https://app.test/api/v1/events/pqc-2026/presentations/archive", token),
+    );
+    expect(authorizedResponse.status).toBe(404);
+    await expect(authorizedResponse.json()).resolves.toMatchObject({
+      error: { code: "PRESENTATIONS_NOT_FOUND" },
     });
   });
 });
@@ -574,10 +606,10 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects POST to GET-only /api/v1/system/analytics/summary", async () => {
+  it("rejects POST to GET-only /api/v1/analytics/summary", async () => {
     const token = await createAdminSession(env.DB, adminId, "stats-method-enforcement-token");
     const response = await callApp(
-      new Request("https://app.test/api/v1/system/analytics/summary", {
+      new Request("https://app.test/api/v1/analytics/summary", {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       }),
@@ -588,23 +620,14 @@ describe("HTTP method enforcement", () => {
   it.each([
     "/api/v1/email/outbox/process",
     "/api/v1/email/outbox/reset-failed",
-    "/api/v1/operations/reminders/run",
-    "/api/v1/operations/retention/run",
+    "/api/v1/email/reminders/runs",
+    "/api/v1/retention/runs",
   ])("does not accept GET on POST-only %s", async (path) => {
     const token = await createAdminSession(env.DB, adminId, `method-${path}`);
     const response = await callApp(
       new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${token}` } }),
     );
     expect(response.status).not.toBe(200);
-  });
-
-  it("rejects POST to GET-only /api/v1/events/:slug/forms → 405", async () => {
-    const response = await eventFormsRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/events/pqc-2026/forms", { method: "POST" }), {
-        eventSlug: "pqc-2026",
-      }),
-    );
-    expect(response.status).toBe(405);
   });
 });
 
@@ -630,35 +653,35 @@ describe("public endpoints — accessible without credentials", () => {
     expect(Array.isArray(body.terms)).toBe(true);
   });
 
-  it("GET /api/v1/geo returns 200 for a same-origin request without Authorization header", async () => {
-    const response = await geoRequest(
+  it("GET /api/v1/geolocation/country returns 200 for a same-origin request without Authorization header", async () => {
+    const response = await geolocationCountryRequest(
       createContext(
         appEnv,
-        new Request("https://app.test/api/v1/geo", {
+        new Request("https://app.test/api/v1/geolocation/country", {
           headers: { "sec-fetch-site": "same-origin" },
         }),
         {},
       ),
     );
     expect(response.status).toBe(200);
-    const body = geoResponseSchema.parse(await response.json());
+    const body = geolocationCountryResponseSchema.parse(await response.json());
     expect(body.country).toBeNull();
   });
 
-  it("GET /api/v1/geo returns and validates Cloudflare's country hint", async () => {
-    const request = new Request("https://app.test/api/v1/geo", {
+  it("GET /api/v1/geolocation/country returns and validates Cloudflare's country hint", async () => {
+    const request = new Request("https://app.test/api/v1/geolocation/country", {
       headers: { "sec-fetch-site": "same-origin" },
     });
     Object.defineProperty(request, "cf", { value: { country: "NL" } });
 
-    const response = await geoRequest(createContext(appEnv, request, {}));
+    const response = await geolocationCountryRequest(createContext(appEnv, request, {}));
 
     expect(response.status).toBe(200);
-    expect(geoResponseSchema.parse(await response.json())).toEqual({ country: "NL" });
+    expect(geolocationCountryResponseSchema.parse(await response.json())).toEqual({ country: "NL" });
   });
 
-  it("GET /api/v1/geo rejects cross-origin requests (CSRF guard) without any credentials needed", async () => {
-    const response = await geoRequest(
+  it("GET /api/v1/geolocation/country rejects cross-origin requests (CSRF guard) without any credentials needed", async () => {
+    const response = await geolocationCountryRequest(
       createContext(
         appEnv,
         new Request("https://evil.example.com/steal", {
@@ -673,9 +696,9 @@ describe("public endpoints — accessible without credentials", () => {
     expect(response.status).toBe(403);
   });
 
-  it("GET /api/v1/events/:slug/forms returns 200 without Authorization header", async () => {
-    const response = await eventFormsGet(
-      createContext(appEnv, new Request("https://app.test/api/v1/events/pqc-2026/forms"), { eventSlug: "pqc-2026" }),
+  it("GET /api/v1/events/:slug/forms/placements/:purpose returns 200 without Authorization header", async () => {
+    const response = await callApp(
+      new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
     );
     expect(response.status).toBe(200);
   });

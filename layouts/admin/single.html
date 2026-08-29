@@ -1,11 +1,6 @@
-{{ define "head_extra" }}
-{{ $adminCss := resources.Get "scss/admin.scss" | css.Sass }}
-{{ if eq hugo.Environment "production" }}{{ $adminCss = $adminCss | resources.Fingerprint }}{{ end }}
-<link rel="stylesheet" href="{{ $adminCss.RelPermalink }}" {{ if eq hugo.Environment "production" }}integrity="{{ $adminCss.Data.Integrity }}"{{ end }}>
-{{ end }}
-
 {{ define "main" }}
-<div id="admin-app" data-module="admin/index">{{/* Preact mounts here */}}</div>
-<div id="toast-area"></div>
-{{ partial "headshot-modals.html" . }}
+<div class="container py-5" data-module="legacy/admin-redirect">
+  <p>Opening the PKI Consortium portal…</p>
+  <p><a href="/portal/">Continue to the portal</a></p>
+</div>
 {{ end }}

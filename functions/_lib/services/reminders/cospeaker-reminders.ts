@@ -9,7 +9,7 @@ import type { DatabaseLike } from "../../types";
 import { proposalSpeakerEffectiveProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "../proposal-status-policy";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
-import { effectiveProposalSpeakerInviteExpirySql } from "../../invite-validity";
+import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../../invite-validity";
 
 export async function runCoSpeakerInviteReminders(
   db: DatabaseLike,
@@ -49,8 +49,7 @@ export async function runCoSpeakerInviteReminders(
        WHERE ps.status = 'invited'
          AND ps.role <> 'proposer'
          AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
-         AND ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NOT NULL
-         AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) > unixepoch(?)
+         AND ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))}
          AND (e.starts_at IS NULL OR e.starts_at > ?)
          AND ps.speaker_invite_reminder_count < ?
          AND (ps.speaker_invite_reminders_paused_until IS NULL OR ps.speaker_invite_reminders_paused_until <= ?)

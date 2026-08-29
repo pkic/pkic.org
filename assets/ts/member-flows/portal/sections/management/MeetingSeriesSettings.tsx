@@ -22,6 +22,7 @@ function draftFromSeries(series: GroupEventSeries): MeetingSeriesDraft {
     durationMinutes: series.durationMinutes,
     location: series.location ?? "",
     registrationPolicy: series.registrationPolicy,
+    visibility: series.visibility,
     memberEligibility: series.memberEligibility ?? "owner_group",
     guestPolicy: series.guestPolicy ?? "none",
   };
@@ -68,11 +69,13 @@ export function MeetingSeriesSettings({
       if (location !== series.location) changes.location = location;
       if (
         draft.registrationPolicy !== series.registrationPolicy ||
+        draft.visibility !== series.visibility ||
         draft.memberEligibility !== (series.memberEligibility ?? "owner_group") ||
         draft.guestPolicy !== (series.guestPolicy ?? "none")
       ) {
         changes.policy = {
           registrationPolicy: draft.registrationPolicy,
+          visibility: draft.visibility,
           memberEligibility: draft.memberEligibility,
           guestPolicy: draft.guestPolicy,
         };

@@ -14,34 +14,36 @@ import type {
   myApplicationTimelineEntrySchema,
   myApplicationCommunicationEntrySchema,
   myApplicationDetailSchema,
-  myOrganizationReviewSchema,
-  myOrganizationProfileSchema,
-  myOrganizationSponsorshipSchema,
 } from "../../../shared/schemas/me";
+import {
+  organizationActiveSponsorshipSchema,
+  organizationMemberProfileSchema,
+} from "../../../shared/schemas/organization-self-service";
+import { organizationContentReviewSchema } from "../../../shared/schemas/organization-profile";
 import type {
   voteTypeSchema,
   candidateSummarySchema,
-  portalVoteSchema,
+  memberVoteSchema,
   proposalSummarySchema,
   motionVoteResultSchema,
   electionRoundTallySchema,
   electionVoteResultSchema,
 } from "../../../shared/schemas/votes";
-import type { portalSessionResponseSchema } from "../../../shared/schemas/portal-auth";
+import type { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 
 export type OrganizationRepresentative = z.infer<typeof myOrganizationRepresentativeSchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type MyProfileUpdateInput = z.infer<typeof myProfileUpdateSchema>;
 export type NotificationPreferences = z.infer<typeof myNotificationPreferencesSchema>;
-export type PortalSession = z.infer<typeof portalSessionResponseSchema>;
+export type PortalSession = z.infer<typeof userAuthSessionResponseSchema>;
 
 export type MyApplicationSummary = z.infer<typeof myApplicationSummarySchema>;
 export type MyApplicationTimelineEntry = z.infer<typeof myApplicationTimelineEntrySchema>;
 export type MyApplicationCommunicationEntry = z.infer<typeof myApplicationCommunicationEntrySchema>;
 export type MyApplicationDetail = z.infer<typeof myApplicationDetailSchema>;
-export type MyOrganizationReview = z.infer<typeof myOrganizationReviewSchema>;
-export type MyOrganizationProfile = z.infer<typeof myOrganizationProfileSchema>;
-export type MyOrganizationSponsorship = z.infer<typeof myOrganizationSponsorshipSchema>;
+export type MyOrganizationReview = z.infer<typeof organizationContentReviewSchema>;
+export type MyOrganizationProfile = z.infer<typeof organizationMemberProfileSchema>;
+export type MyOrganizationSponsorship = z.infer<typeof organizationActiveSponsorshipSchema>;
 
 export type VoteType = z.infer<typeof voteTypeSchema>;
 export type VoteCandidate = z.infer<typeof candidateSummarySchema>;
@@ -50,6 +52,6 @@ export type MotionVoteResult = z.infer<typeof motionVoteResultSchema>;
 export type ElectionRoundTally = z.infer<typeof electionRoundTallySchema>;
 export type ElectionVoteResult = z.infer<typeof electionVoteResultSchema>;
 
-export type PortalVote = z.infer<typeof portalVoteSchema>;
+export type MemberVote = z.infer<typeof memberVoteSchema>;
 
 export type VoteProposal = z.infer<typeof proposalSummarySchema>;

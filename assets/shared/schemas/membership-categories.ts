@@ -73,6 +73,7 @@ export const membershipCategoryCatalogResponseSchema = z.object({
 export const membershipCategoryCatalogRouteSchema = {
   tags: ["Membership"],
   summary: "List the configured membership-category catalog",
+  "x-pkic-auth": { required: true, scopes: ["membership:read"] },
   responses: {
     "200": {
       description: "Membership categories in configured display order.",
@@ -102,6 +103,7 @@ export const membershipCategoryResponseSchema = z.object({ category: membershipC
 export const membershipCategoryUpdateRouteSchema = {
   tags: ["Membership"],
   summary: "Update configurable membership-category metadata",
+  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
   request: {
     params: membershipCategoryParamsSchema,
     body: { content: { "application/json": { schema: membershipCategoryUpdateSchema } }, required: true },

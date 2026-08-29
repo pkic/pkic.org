@@ -19,7 +19,11 @@ import { isProposalInactiveStatus } from "./proposal-status-policy";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
 import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
-import { effectiveProposalSpeakerInviteExpirySql, effectiveStoredInviteExpiry } from "../invite-validity";
+import {
+  activeEffectiveInviteExpirySql,
+  effectiveProposalSpeakerInviteExpirySql,
+  effectiveStoredInviteExpiry,
+} from "../invite-validity";
 
 interface ReminderProposal {
   id: string;
@@ -99,8 +103,7 @@ function prepareReminderSnapshotGuard(
         AND (
           ps.status <> 'invited'
           OR (
-            ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NOT NULL
-            AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) > unixepoch(?)
+            ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))}
           )
         )
     )`,
@@ -350,8 +353,9 @@ export async function remindProposalSpeakerByProposer(
                  AND (
                    proposal_speakers.status <> 'invited'
                    OR (
-                     ${effectiveProposalSpeakerInviteExpirySql("proposal_speakers", "e")} IS NOT NULL
-                     AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("proposal_speakers", "e")}) > unixepoch(?)
+                     ${activeEffectiveInviteExpirySql(
+                       effectiveProposalSpeakerInviteExpirySql("proposal_speakers", "e"),
+                     )}
                    )
                  )
                  AND u.id = ? AND u.email = ?

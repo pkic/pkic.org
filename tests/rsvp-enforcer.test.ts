@@ -2,10 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { recordCalendarRsvpEvent } from "../functions/_lib/services/calendar-rsvp";
 import { runRsvpEnforcer } from "../functions/_lib/services/rsvp-enforcer";
-import {
-  fetchAdminRegistrationWithDetails,
-  toAdminRegistrationDetail,
-} from "../functions/_lib/services/registrations/admin-detail";
+import { fetchRegistrationWithDetails, toRegistrationDetail } from "../functions/_lib/services/registrations/detail";
 import { listEventRegistrations } from "../functions/_lib/services/registrations/event-registrations";
 import { listDueRsvpEnforcementCandidates } from "../functions/_lib/services/rsvp-enforcement/candidates";
 import { buildRsvpDayAction, commitRsvpDayAction } from "../functions/_lib/services/rsvp-enforcement/day-action";
@@ -394,9 +391,9 @@ describe("day-scoped RSVP enforcement", () => {
     const seeded = await seedTwoDayRegistration();
     await recordResponse(seeded, "declined", seeded.dayOneDate, hoursFromNow(-4), "detail-day-one");
     await recordResponse(seeded, "accepted", seeded.dayTwoDate, hoursFromNow(-3), "detail-day-two");
-    const row = await fetchAdminRegistrationWithDetails(env.DB, seeded.eventId, seeded.registrationId);
+    const row = await fetchRegistrationWithDetails(env.DB, seeded.eventId, seeded.registrationId);
     expect(row).not.toBeNull();
-    const detail = toAdminRegistrationDetail(row!);
+    const detail = toRegistrationDetail(row!);
     expect(detail.rsvpByDay).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ event_day_id: seeded.dayOneId, status: "declined" }),

@@ -11,7 +11,7 @@ import {
   commitEventResourceManagementBatch,
   requireEventResourceManagementContext,
 } from "../event-series/management";
-import { getEventRegistrationAttendanceDetail } from "./admin-detail";
+import { getEventRegistrationAttendanceDetail } from "./detail";
 import { admitRegistration } from "./admission";
 import { updateRegistrationDayAttendance } from "./day-attendance-management";
 

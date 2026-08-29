@@ -17,27 +17,31 @@ import {
 } from "../assets/shared/schemas/pagination";
 import { donationsListQuerySchema } from "../assets/shared/schemas/donation-management";
 import { usersListQuerySchema } from "../assets/shared/schemas/user-management";
-import { systemAuditLogListQuerySchema } from "../assets/shared/schemas/system-audit-log";
+import { auditLogListQuerySchema } from "../assets/shared/schemas/audit-log";
 import {
   emailTemplateVersionsListQuerySchema,
   emailTemplatesListQuerySchema,
   emailTemplatesSortValueSchema,
 } from "../assets/shared/schemas/email-templates";
-import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/shared/schemas/admin-events";
+import { eventsListQuerySchema } from "../assets/shared/schemas/event-management";
+import { eventTeamSortValueSchema } from "../assets/shared/schemas/event-team";
 import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
-import { formSubmissionsSortValueSchema } from "../assets/shared/schemas/admin-forms";
-import { adminFormSubmissionsQuerySchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
-import { dueWorkListQuerySchema as adminDueWorkListQuerySchema } from "../assets/shared/schemas/operations";
+import {
+  formSubmissionsQuerySchema,
+  formSubmissionsSortValueSchema,
+  formsListQuerySchema,
+} from "../assets/shared/schemas/form-management";
+import { pendingWorkListQuerySchema } from "../assets/shared/schemas/pending-work";
 import { myApplicationsListQuerySchema } from "../assets/shared/schemas/me";
 import { presentationVersionsListQuerySchema } from "../assets/shared/schemas/presentation-versions";
 import { proposalCommentsListQuerySchema } from "../assets/shared/schemas/proposal-comments";
 import { proposalReviewsListQuerySchema } from "../assets/shared/schemas/proposal-reviews";
 import { sponsorsListQuerySchema } from "../assets/shared/schemas/public-sponsors";
-import { sponsorPortalAttendeesListQuerySchema } from "../assets/shared/schemas/sponsor-portal";
+import { sponsorAttendeesListQuerySchema } from "../assets/shared/schemas/sponsor-access";
 import { publicVotesListQuerySchema } from "../assets/shared/schemas/votes";
-import { adminEventProposalsQuerySchema } from "../assets/shared/schemas/admin-events";
+import { eventProposalsListQuerySchema } from "../assets/shared/schemas/event-proposals";
 import { emailOutboxQuerySchema as adminEmailOutboxQuerySchema } from "../assets/shared/schemas/email-outbox";
-import { eventPromotersListQuerySchema } from "../assets/shared/schemas/admin-event-promoters";
+import { eventPromotersListQuerySchema } from "../assets/shared/schemas/event-promoters";
 import { membersListQuerySchema } from "../assets/shared/schemas/members-directory";
 import { applicationDocumentsListQuerySchema } from "../assets/shared/schemas/application-documents";
 
@@ -97,11 +101,11 @@ describe("shared list/search contract", () => {
     expect(proposalCommentsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(proposalReviewsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(presentationVersionsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
-    expect(adminDueWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
+    expect(pendingWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(donationsListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
-    expect(sponsorPortalAttendeesListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
-    expect(adminFormsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
-    expect(adminFormSubmissionsQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
+    expect(sponsorAttendeesListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
+    expect(formsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
+    expect(formSubmissionsQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
     expect(sponsorsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
     expect(applicationDocumentsListQuerySchema.parse({})).toMatchObject({
       limit: 25,
@@ -111,26 +115,16 @@ describe("shared list/search contract", () => {
   });
 
   it("resolves domain filter and sort defaults in the same endpoint contracts", () => {
-    expect(adminEventProposalsQuerySchema.parse({})).toMatchObject({ sort: "-submittedAt", limit: 50, offset: 0 });
+    expect(eventProposalsListQuerySchema.parse({})).toMatchObject({ sort: "-submittedAt", limit: 50, offset: 0 });
     expect(adminEmailOutboxQuerySchema.parse({})).toMatchObject({ dueNow: false, limit: 50, offset: 0 });
     expect(eventPromotersListQuerySchema.parse({})).toMatchObject({ view: "promoters", limit: 50, offset: 0 });
     expect(membersListQuerySchema.parse({})).toMatchObject({ group: "all", limit: 50, offset: 0 });
-    expect(adminDueWorkListQuerySchema.parse({})).toMatchObject({
-      bucket: "all",
-      includeRetention: false,
-      reminderLimit: 120,
-      outboxLimit: 120,
-      cleanupLimit: 120,
-      limit: 25,
-      offset: 0,
-    });
+    expect(pendingWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
   });
 
   it("parses explicit false query flags as false instead of JavaScript truthiness", () => {
     expect(adminEmailOutboxQuerySchema.parse({ dueNow: "false" }).dueNow).toBe(false);
     expect(adminEmailOutboxQuerySchema.parse({ dueNow: "true" }).dueNow).toBe(true);
-    expect(adminDueWorkListQuerySchema.parse({ includeRetention: "false" }).includeRetention).toBe(false);
-    expect(adminDueWorkListQuerySchema.parse({ includeRetention: "true" }).includeRetention).toBe(true);
   });
 
   it("rejects invalid defaults when a route contract is declared", () => {
@@ -185,9 +179,9 @@ describe("consolidated per-endpoint sort schemas still validate their own allowl
     expect(usersListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
-  it("systemAuditLogListQuerySchema sort", () => {
-    expect(systemAuditLogListQuerySchema.safeParse({ sort: "action" }).success).toBe(true);
-    expect(systemAuditLogListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
+  it("auditLogListQuerySchema sort", () => {
+    expect(auditLogListQuerySchema.safeParse({ sort: "action" }).success).toBe(true);
+    expect(auditLogListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
   it("emailTemplatesSortValueSchema", () => {
@@ -195,13 +189,15 @@ describe("consolidated per-endpoint sort schemas still validate their own allowl
     expect(emailTemplatesSortValueSchema.safeParse("bogus").success).toBe(false);
   });
 
-  it("eventsListSortValueSchema", () => {
-    expect(eventsListSortValueSchema.safeParse("starts_at").success).toBe(true);
-    expect(eventsListSortValueSchema.safeParse("bogus").success).toBe(false);
+  it("eventsListQuerySchema sort", () => {
+    expect(eventsListQuerySchema.safeParse({ sort: "starts_at" }).success).toBe(true);
+    expect(eventsListQuerySchema.safeParse({ sort: "total_registrations" }).success).toBe(true);
+    expect(eventsListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
   it("eventTeamSortValueSchema", () => {
-    expect(eventTeamSortValueSchema.safeParse("role_id").success).toBe(true);
+    expect(eventTeamSortValueSchema.safeParse("role").success).toBe(true);
+    expect(eventTeamSortValueSchema.safeParse("-createdAt").success).toBe(true);
     expect(eventTeamSortValueSchema.safeParse("bogus").success).toBe(false);
   });
 

@@ -21,9 +21,9 @@ describe("shared cookie parsing", () => {
     );
 
     const request = new Request("https://app.test", {
-      headers: { cookie: "noise=%; pkic_member_session=valid%2Etoken" },
+      headers: { cookie: "noise=%; pkic_session=valid%2Etoken" },
     });
-    expect(getSessionCookieToken(request, "pkic_member_session")).toBe("valid.token");
+    expect(getSessionCookieToken(request, "pkic_session")).toBe("valid.token");
     expect(getSessionCookieToken(request, "noise")).toBeNull();
   });
 });

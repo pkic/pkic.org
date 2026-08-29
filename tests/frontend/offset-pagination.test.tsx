@@ -5,18 +5,18 @@ import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/admin-event-promoters";
+import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/event-promoters";
 import {
   donationPromotersListResponseSchema,
   donationsListResponseSchema,
 } from "../../assets/shared/schemas/donation-management";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
-import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
+import { ApiDataTable } from "../../assets/ts/components/ApiDataTable";
 import { ApplicationDocumentsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDocumentsCard";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
-import { DueWorkTable } from "../../assets/ts/member-flows/portal/sections/system-operations/DueWorkTable";
-import { Promoters } from "../../assets/ts/admin/sections/events/detail/Promoters";
+import { RetentionDueTable } from "../../assets/ts/member-flows/portal/sections/system-operations/RetentionDueTable";
+import { Promoters } from "../../assets/ts/member-flows/portal/sections/events/detail/Promoters";
 import { Pager } from "../../assets/ts/components/Pager";
 import { useApiPage } from "../../assets/ts/hooks/useApiPage";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
@@ -169,7 +169,7 @@ describe("canonical offset pagination", () => {
 
     function Harness() {
       const listing = useApiPage(
-        "/api/v1/me/groups",
+        "/api/v1/users/current/groups",
         { view: "joined", q: "alpha" },
         responseSchema,
         (data) => data.groups,
@@ -341,7 +341,7 @@ describe("canonical offset pagination", () => {
     await settle();
 
     expect(requests.at(-1)?.pathname).toBe(
-      "/api/v1/system/membership-applications/00000000-0000-4000-8000-000000000010/documents",
+      "/api/v1/members/applications/00000000-0000-4000-8000-000000000010/documents",
     );
     expect(requests.at(-1)?.searchParams.get("limit")).toBe("10");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
@@ -400,23 +400,23 @@ describe("canonical offset pagination", () => {
             view: "promoters",
             promoters: [
               {
-                user_id: "user-1",
+                userId: "00000000-0000-4000-8000-000000000001",
                 email: "ada@example.test",
-                first_name: "Ada",
-                last_name: "Lovelace",
+                firstName: "Ada",
+                lastName: "Lovelace",
                 organization: null,
-                job_title: null,
-                headshot_url: null,
-                invites_sent: 1,
-                invites_accepted: 1,
-                invites_declined: 0,
-                invites_expired: 0,
-                invite_conversion_rate: 100,
-                last_invite_at: null,
-                referral_codes_issued: 0,
-                referral_clicks: 0,
-                referral_conversions: 0,
-                impact_score: 1,
+                jobTitle: null,
+                headshotUrl: null,
+                invitesSent: 1,
+                invitesAccepted: 1,
+                invitesDeclined: 0,
+                invitesExpired: 0,
+                inviteConversionRate: 100,
+                lastInviteAt: null,
+                referralCodesIssued: 0,
+                referralClicks: 0,
+                referralConversions: 0,
+                impactScore: 1,
               },
             ],
             referralCodes: [],
@@ -447,7 +447,7 @@ describe("canonical offset pagination", () => {
     await settle();
     void act(() => nextButton(eventPromoters).click());
     await settle();
-    expect(requests.at(-1)?.pathname).toBe("/api/v1/admin/events/summit/promoters");
+    expect(requests.at(-1)?.pathname).toBe("/api/v1/events/summit/promoters");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("50");
 
     requests.length = 0;
@@ -457,7 +457,7 @@ describe("canonical offset pagination", () => {
     expect(codeViewRequests.map((url) => url.searchParams.get("offset"))).toEqual(["0"]);
   });
 
-  it("uses the shared pager for email outbox and due-work filters", async () => {
+  it("uses the shared pager for email outbox and retention filters", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -548,31 +548,24 @@ describe("canonical offset pagination", () => {
     expect(filteredEmailRequest.searchParams.get("offset")).toBe("0");
     void act(() => render(null, email));
 
-    const dueWork = mount(<DueWorkTable reminderLimit={50} outboxLimit={50} includeRetention={false} />);
+    const retention = mount(<RetentionDueTable />);
     await settle();
-    const initialDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(initialDueWorkRequest.searchParams.get("sort")).toBe("dueAt");
-    expect(initialDueWorkRequest.searchParams.get("bucket")).toBe("all");
-    void act(() => nextButton(dueWork).click());
+    const initialRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(initialRetentionRequest.searchParams.get("sort")).toBe("dueAt");
+    void act(() => nextButton(retention).click());
     await settle();
-    expect(latestRequest(requests, "/api/v1/operations/due-work").searchParams.get("offset")).toBe("25");
-    const pageSize = dueWork.querySelector(".adm-pager-size") as HTMLSelectElement;
+    expect(latestRequest(requests, "/api/v1/retention/due").searchParams.get("offset")).toBe("25");
+    const pageSize = retention.querySelector(".adm-pager-size") as HTMLSelectElement;
     pageSize.value = "50";
     void act(() => {
       pageSize.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
-    const resizedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(resizedDueWorkRequest.searchParams.get("limit")).toBe("50");
-    expect(resizedDueWorkRequest.searchParams.get("offset")).toBe("0");
-    const outboxTab = [...dueWork.querySelectorAll("button")].find((button) => button.textContent?.includes("Outbox"))!;
-    void act(() => outboxTab.click());
-    await settle();
-    const filteredDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(filteredDueWorkRequest.searchParams.get("bucket")).toBe("outbox");
-    expect(filteredDueWorkRequest.searchParams.get("offset")).toBe("0");
+    const resizedRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(resizedRetentionRequest.searchParams.get("limit")).toBe("50");
+    expect(resizedRetentionRequest.searchParams.get("offset")).toBe("0");
 
-    const search = dueWork.querySelector<HTMLInputElement>('input[placeholder="Search this preview batch…"]')!;
+    const search = retention.querySelector<HTMLInputElement>('input[placeholder="Search event name or slug…"]')!;
     search.value = "ada";
     void act(() => {
       search.dispatchEvent(new Event("input", { bubbles: true }));
@@ -581,17 +574,17 @@ describe("canonical offset pagination", () => {
       search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     await settle();
-    const searchedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(searchedDueWorkRequest.searchParams.get("q")).toBe("ada");
-    expect(searchedDueWorkRequest.searchParams.get("offset")).toBe("0");
+    const searchedRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(searchedRetentionRequest.searchParams.get("q")).toBe("ada");
+    expect(searchedRetentionRequest.searchParams.get("offset")).toBe("0");
 
-    const titleSort = [...dueWork.querySelectorAll<HTMLButtonElement>(".tbl-sort-btn")].find((button) =>
-      button.textContent?.includes("Target"),
+    const titleSort = [...retention.querySelectorAll<HTMLButtonElement>(".tbl-sort-btn")].find((button) =>
+      button.textContent?.includes("Event"),
     )!;
     void act(() => titleSort.click());
     await settle();
-    const sortedDueWorkRequest = latestRequest(requests, "/api/v1/operations/due-work");
-    expect(sortedDueWorkRequest.searchParams.get("sort")).toBe("-title");
-    expect(sortedDueWorkRequest.searchParams.get("q")).toBe("ada");
+    const sortedRetentionRequest = latestRequest(requests, "/api/v1/retention/due");
+    expect(sortedRetentionRequest.searchParams.get("sort")).toBe("-title");
+    expect(sortedRetentionRequest.searchParams.get("q")).toBe("ada");
   });
 });

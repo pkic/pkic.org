@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { expectAdminSessionLanding } from "./helpers/admin-auth";
+import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -381,19 +381,7 @@ async function fillProposal(
 }
 
 async function signInAsAdmin(page: Page, scope: "browser-waitlist" | "browser-presentation"): Promise<void> {
-  const adminEmail = e2eAdminEmail(scope);
-  await page.goto("/admin/");
-  await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-
-  await page.locator("#inp-email").fill(adminEmail);
-  await page.locator("#btn-send").click();
-  await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
-
-  const magicEmail = await waitForEmail(adminEmail, "sign-in");
-  const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
-
-  await page.goto(magicUrl);
-  await expectAdminSessionLanding(page);
+  await signInAsE2eStaff(page, e2eAdminEmail(scope));
 }
 
 async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string; slug: string; groupId: string }> {
@@ -516,7 +504,6 @@ async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string;
         body: JSON.stringify({
           expectedUpdatedAt: days.body.eventUpdatedAt,
           registrationPolicy: "public",
-          formId: null,
         }),
       });
       if (settings.status !== 200) {
@@ -1093,34 +1080,16 @@ test.describe("browser workflows", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  test("covers admin sign-in via magic link", async ({ page }) => {
+  test("covers unified user sign-in via magic link", async ({ page }) => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
 
     const adminEmail = e2eAdminEmail("browser-auth");
 
-    // Admin page must display the login form (no active session)
-    await page.goto("/admin/");
-    await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-
-    // Request a magic link for the seeded admin account
-    await page.locator("#inp-email").fill(adminEmail);
-    await page.locator("#btn-send").click();
-    // The form is hidden and the sent-confirmation panel is shown
-    await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
-    await screenshot("01-magic-link-sent");
-
-    // Wait for the email (subject: "Your PKI Consortium admin sign-in link")
-    const magicEmail = await waitForEmail(adminEmail, "sign-in");
-    // The email contains a link to /admin/?token=…
-    const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
-
-    // Navigating to the magic link URL triggers the DOMContentLoaded handler
-    // which reads ?token=, calls /api/v1/admin/auth/verify-link, and enters the canonical portal
-    await page.goto(magicUrl);
-    await expectAdminSessionLanding(page);
-    await screenshot("02-system-analytics-loaded");
+    await signInAsE2eStaff(page, adminEmail);
+    await expectStaffSessionLanding(page);
+    await screenshot("01-system-analytics-loaded");
 
     errorMonitor.assertClean();
   });
@@ -1222,7 +1191,7 @@ test.describe("browser workflows", () => {
 
     // Nominate speakers via the API (no browser page exists for this endpoint)
     const speakerInviteStatus = await page.evaluate(async (token) => {
-      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/speaker-invites", {
+      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/speakers/invitations", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1442,7 +1411,7 @@ test.describe("browser workflows", () => {
 
     // Accept the proposal. The e2e server is configured with DEFAULT_MIN_PROPOSAL_REVIEWS=0.
     const finalizeResult = await page.evaluate(async (id) => {
-      const res = await fetch(`/api/v1/admin/proposals/${id}/finalize`, {
+      const res = await fetch(`/api/v1/proposals/${id}/decisions`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },

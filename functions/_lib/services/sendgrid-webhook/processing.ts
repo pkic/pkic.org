@@ -1,4 +1,4 @@
-import type { SendgridEvent } from "../../../../assets/shared/schemas/route-contracts-webhooks";
+import type { SendgridEvent } from "../../../../assets/shared/schemas/email-webhook";
 import { chunkJsonRows } from "../../db/json-bulk";
 import { logInfo } from "../../logging";
 import type { Env } from "../../types";
