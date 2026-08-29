@@ -1116,6 +1116,18 @@ Status: In progress
       resource; the former
       `/api/v1/admin/events/:eventSlug/promoters` handler is removed rather
       than retained as an alias.
+      Event presentation downloads now use the canonical
+      `/api/v1/events/:eventSlug/presentations/archive` resource. The default
+      archive contains each accepted proposal's current presentation, while
+      the validated `versions=all` query includes retained versions. The
+      route requires exact live, user-backed event-scoped `proposals:read`,
+      streams a no-store ZIP from R2, and returns no archive when the event has
+      no presentations. Proposal-management UI actions are derived from the
+      response access capabilities and remain absent without proposal-read
+      access. Mounted permission, archive-content, route-retirement, OpenAPI,
+      frontend, and browser regressions cover both modes; the verb-oriented
+      `/api/v1/admin/events/:eventSlug/presentations/download` handler is
+      removed rather than retained as an alias.
       Program-committee proposal management now uses the same selected-group
       event context. Neutral shared contracts and components serve the portal
       and the temporary admin adapter for detail, reviews, comments, accepted
@@ -1639,8 +1651,9 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the canonical event
-      visibility, resource, team-role, and promoter cutovers with 2,282 backend
-      tests (one skipped), 343 frontend tests, and 80 tooling tests. Type checks, ESLint,
+      visibility, resource, team-role, promoter, and presentation-archive
+      cutovers with 2,283 backend tests (one skipped), 343 frontend tests, and
+      80 tooling tests. Type checks, ESLint,
       SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.

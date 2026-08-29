@@ -1,6 +1,5 @@
 import {
   eventIdSchema,
-  eventSlugParamsSchema,
   emailMessageTypeSchema,
   frontendPathPattern,
   slugPattern,
@@ -45,20 +44,6 @@ export const adminEventSummarySchema = z.object({
 export const adminEventCreateResponseSchema = eventManagementDetailResponseSchema;
 export type AdminEventSummary = z.infer<typeof adminEventSummarySchema>;
 export const adminEventsListResponseSchema = paginatedResponseSchema("events", adminEventSummarySchema);
-
-export const eventPresentationArchiveQuerySchema = z.object({
-  versions: z.literal("all").optional(),
-});
-export const eventPresentationArchiveDownloadRouteSchema = {
-  tags: ["Admin events"],
-  summary: "Download event presentations",
-  request: { params: eventSlugParamsSchema, query: eventPresentationArchiveQuerySchema },
-  responses: {
-    "200": { description: "ZIP archive of current presentations, or every version when versions=all." },
-    "404": { description: "No presentations found." },
-    "503": { description: "Presentation storage is not configured." },
-  },
-};
 
 const termSchema = z.object({
   termKey: z.string().trim().regex(termKeyPattern),

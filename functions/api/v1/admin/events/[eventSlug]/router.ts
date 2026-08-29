@@ -5,7 +5,6 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
-import { AdminEventPresentationsDownloadGet } from "./presentations/download";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { AdminEventRegistrationsGet } from "./registrations";
 import { AdminEventsEventSlugStatsGet } from "./stats";
@@ -62,7 +61,6 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 
 app.use("*", requireEventManagementAccess);
 
-openapi.get("/presentations/download", AdminEventPresentationsDownloadGet);
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 openapi.get("/registrations", AdminEventRegistrationsGet);
 openapi.get("/stats", AdminEventsEventSlugStatsGet);

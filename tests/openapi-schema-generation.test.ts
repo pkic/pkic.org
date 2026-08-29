@@ -206,6 +206,8 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"]).toBeUndefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/promoters"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/promoters"]).toBeUndefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/presentations/archive"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/presentations/download"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/bulk"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"]).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/bulk"].post).toBeDefined();

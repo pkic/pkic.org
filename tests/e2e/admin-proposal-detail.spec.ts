@@ -492,7 +492,8 @@ test("renders the admin proposal detail workflow with submission answers and ope
   expect(consoleErrors).toEqual([]);
 });
 
-test("offers an event-level presentation ZIP from the proposals overview", async ({ page }) => {
+test("offers event presentation archives only with proposal read access", async ({ page }) => {
+  let canReadPresentations = false;
   await page.route("**/api/v1/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -547,11 +548,11 @@ test("offers an event-level presentation ZIP from the proposals overview", async
           event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference 2026" },
           access: {
             canReview: true,
-            canRead: true,
+            canRead: canReadPresentations,
             canFinalize: true,
             canEditAcceptedAbstract: true,
             canCancelAcceptedProposal: true,
-            eventPermissions: ["review", "finalize"],
+            eventPermissions: canReadPresentations ? ["proposals:read", "review", "finalize"] : ["review", "finalize"],
           },
           stats: { byStatus: {}, byRecommendation: {}, reviewedCount: 0, unreviewedCount: 0, total: 0 },
         }),
@@ -562,13 +563,19 @@ test("offers an event-level presentation ZIP from the proposals overview", async
   await page.goto("/admin/#/events/pqc-2026/proposals");
 
   const currentDownload = page.getByRole("link", { name: "Current presentations" });
-  await expect(currentDownload).toBeVisible();
-  await expect(currentDownload).toHaveAttribute("href", "/api/v1/admin/events/pqc-2026/presentations/download");
-
   const allVersionsDownload = page.getByRole("link", { name: "All versions" });
+  await expect(currentDownload).toHaveCount(0);
+  await expect(allVersionsDownload).toHaveCount(0);
+
+  canReadPresentations = true;
+  await page.reload();
+
+  await expect(currentDownload).toBeVisible();
+  await expect(currentDownload).toHaveAttribute("href", "/api/v1/events/pqc-2026/presentations/archive");
+
   await expect(allVersionsDownload).toBeVisible();
   await expect(allVersionsDownload).toHaveAttribute(
     "href",
-    "/api/v1/admin/events/pqc-2026/presentations/download?versions=all",
+    "/api/v1/events/pqc-2026/presentations/archive?versions=all",
   );
 });

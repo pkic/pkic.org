@@ -19,6 +19,7 @@ import {
   eventTeamRolesResponseSchema,
 } from "./event-team";
 import { eventPromotersListQuerySchema, eventPromotersListResponseSchema } from "./event-promoters";
+import { eventPresentationArchiveQuerySchema } from "./event-presentations";
 
 export const eventDetailRouteSchema = {
   tags: ["Events"],
@@ -191,4 +192,18 @@ export const eventPromotersListRouteSchema = {
     "404": jsonErrorResponse("Event not found."),
   },
   "x-pkic-auth": { required: true, scopes: ["events:read"] },
+};
+
+export const eventPresentationArchiveRouteSchema = {
+  tags: ["Events"],
+  summary: "Download an event presentation archive",
+  request: { params: eventSlugParamsSchema, query: eventPresentationArchiveQuerySchema },
+  responses: {
+    "200": { description: "ZIP archive of current presentations, or every retained version when versions=all." },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Proposal read permission is required."),
+    "404": jsonErrorResponse("Event or presentations not found."),
+    "503": jsonErrorResponse("Presentation storage is not configured."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["proposals:read"] },
 };

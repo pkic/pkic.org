@@ -255,6 +255,10 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/promoters`)),
     ],
     [
+      "GET /api/v1/events/:slug/presentations/archive",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/presentations/archive`)),
+    ],
+    [
       "GET /api/v1/admin/events/:slug/proposals",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/proposals`)),
     ],
@@ -408,9 +412,10 @@ describe("session-token validation", () => {
     await resetDb();
   });
   let adminId: string;
+  let eventId: string;
 
   beforeEach(async () => {
-    await seedEventAndAdmin(env.DB);
+    ({ eventId } = await seedEventAndAdmin(env.DB));
     // Retrieve the admin user id that seedEventAndAdmin created
     const row = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     adminId = row.id;
@@ -520,16 +525,41 @@ describe("session-token validation", () => {
   });
 
   it("requires proposal access in addition to event access for presentation archives", async () => {
-    const token = await insertSession(env.DB, adminId, "event-read-token", {
-      scopes: ["events:read"],
-    });
-    const response = await callApp(
-      mcpBearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
-    );
+    const readerId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'archive-reader@example.test', 'archive-reader@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(readerId)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, eventId, adminId)
+      .run();
+    const token = await createAdminSession(env.DB, readerId, `archive-reader-${crypto.randomUUID()}`);
+    const response = await callApp(bearerGet("https://app.test/api/v1/events/pqc-2026/presentations/archive", token));
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "SCOPE_REQUIRED", message: PERMISSION_DENIED_MESSAGE },
+      error: { code: "PERMISSION_REQUIRED" },
+    });
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'proposals:read', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), readerId, eventId, adminId)
+      .run();
+    const authorizedResponse = await callApp(
+      bearerGet("https://app.test/api/v1/events/pqc-2026/presentations/archive", token),
+    );
+    expect(authorizedResponse.status).toBe(404);
+    await expect(authorizedResponse.json()).resolves.toMatchObject({
+      error: { code: "PRESENTATIONS_NOT_FOUND" },
     });
   });
 });

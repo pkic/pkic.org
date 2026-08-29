@@ -12,24 +12,26 @@ function ProposalsList({ slug }: { slug: string }) {
       endpoint={`/api/v1/admin/events/${encodeURIComponent(slug)}/proposals`}
       storageKey={`adm_proposal_filters_${slug}`}
       onSelect={(proposal) => navigate(`/events/${slug}/proposal/${proposal.id}`)}
-      toolbarPrefix={() => (
-        <div class="btn-group" role="group" aria-label="Download event presentations">
-          <a
-            class="btn btn-sm btn-outline-secondary"
-            href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download`}
-            title="Download the current presentation for every accepted proposal"
-          >
-            ↓ Current presentations
-          </a>
-          <a
-            class="btn btn-sm btn-outline-secondary"
-            href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download?versions=all`}
-            title="Download every retained presentation version for accepted proposals"
-          >
-            All versions
-          </a>
-        </div>
-      )}
+      toolbarPrefix={(_, access) =>
+        access?.canRead ? (
+          <div class="btn-group" role="group" aria-label="Download event presentations">
+            <a
+              class="btn btn-sm btn-outline-secondary"
+              href={`/api/v1/events/${encodeURIComponent(slug)}/presentations/archive`}
+              title="Download the current presentation for every accepted proposal"
+            >
+              ↓ Current presentations
+            </a>
+            <a
+              class="btn btn-sm btn-outline-secondary"
+              href={`/api/v1/events/${encodeURIComponent(slug)}/presentations/archive?versions=all`}
+              title="Download every retained presentation version for accepted proposals"
+            >
+              All versions
+            </a>
+          </div>
+        ) : null
+      }
     />
   );
 }

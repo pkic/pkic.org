@@ -750,7 +750,7 @@ describe("presentation versioning", () => {
     bucket.getFailures.add(secondKey);
 
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", {
+      new Request("https://app.test/api/v1/events/pqc-2026/presentations/archive", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -771,9 +771,18 @@ describe("presentation versioning", () => {
     expect(archiveText).not.toContain("superseded-version-marker");
     expect(archiveText).not.toContain("second-presentation-marker");
 
+    const retiredRoute = await app.fetch(
+      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(retiredRoute.status).toBe(404);
+
     bucket.getFailures.clear();
     const allVersionsResponse = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download?versions=all", {
+      new Request("https://app.test/api/v1/events/pqc-2026/presentations/archive?versions=all", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
