@@ -55,10 +55,10 @@ describe("bounded canonical vote lifecycle", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT status, transition_processing_token IS NOT NULL AS leased FROM votes WHERE id = ?",
+        "SELECT closed_at, transition_processing_token IS NOT NULL AS leased FROM votes WHERE id = ?",
         vote.id,
       ),
-    ).toEqual([{ status: "open", leased: 1 }]);
+    ).toEqual([{ closed_at: null, leased: 1 }]);
     expect((await closeDueVotes(env.DB, 10)).closed).toEqual([]);
 
     await env.DB.prepare("DROP TRIGGER test_reject_vote_close_audit").run();
@@ -100,8 +100,8 @@ describe("bounded canonical vote lifecycle", () => {
       .bind(new Date(Date.now() - 1_000).toISOString(), vote.id)
       .run();
     expect((await closeDueVotes(env.DB, 10)).roundsAdvanced).toEqual([vote.id]);
-    expect(await queryAll(env.DB, "SELECT current_round, status FROM votes WHERE id = ?", vote.id)).toEqual([
-      { current_round: 2, status: "open" },
+    expect(await queryAll(env.DB, "SELECT current_round, closed_at FROM votes WHERE id = ?", vote.id)).toEqual([
+      { current_round: 2, closed_at: null },
     ]);
 
     for (const voter of voters) {
@@ -118,12 +118,12 @@ describe("bounded canonical vote lifecycle", () => {
       .bind(new Date(Date.now() - 1_000).toISOString(), vote.id)
       .run();
     expect((await closeDueVotes(env.DB, 10)).closed).toEqual([vote.id]);
-    const [closed] = await queryAll<{ status: string; result_json: string }>(
+    const [closed] = await queryAll<{ closed_at: string | null; result_json: string }>(
       env.DB,
-      "SELECT status, result_json FROM votes WHERE id = ?",
+      "SELECT closed_at, result_json FROM votes WHERE id = ?",
       vote.id,
     );
-    expect(closed.status).toBe("closed");
+    expect(closed.closed_at).not.toBeNull();
     expect(JSON.parse(closed.result_json)).toMatchObject({ winnerCandidateId: byName.get("Alice") });
   });
 

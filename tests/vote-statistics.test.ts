@@ -63,7 +63,9 @@ describe("group vote statistics", () => {
     });
     expect(statistics.aggregate).toEqual({ availability: "withheld_until_closed" });
 
-    await env.DB.prepare("UPDATE votes SET status = 'closed' WHERE id = ?").bind(vote.id).run();
+    await env.DB.prepare("UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+      .bind(vote.id)
+      .run();
     const closed = groupVoteStatisticsResponseSchema.parse(
       await (await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/statistics`)).json(),
     );
@@ -173,7 +175,9 @@ describe("group vote statistics", () => {
       null,
       TEST_GROUPS.pqc,
     );
-    await env.DB.prepare("UPDATE votes SET status = 'closed' WHERE id = ?").bind(vote.id).run();
+    await env.DB.prepare("UPDATE votes SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+      .bind(vote.id)
+      .run();
 
     const response = groupVoteStatisticsResponseSchema.parse(
       await (await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/statistics`)).json(),

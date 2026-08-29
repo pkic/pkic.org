@@ -1,3 +1,5 @@
+import { nowIso } from "../../utils/time";
+import { deriveVoteStatus, isVoteAcceptingBallots, voteStatusSql } from "./status";
 import {
   groupVoteDetailSchema,
   groupVoteSchema,
@@ -67,14 +69,13 @@ function contextualVoteCapabilities(
   capabilities: VoteGroupCapability[],
   nowMs: number,
 ): VoteGroupCapability[] {
-  const votingOpen =
-    row.status === "open" &&
-    Date.parse(row.opens_at) <= nowMs &&
-    Date.parse(row.closes_at) > nowMs &&
-    row.transition_processing_token === null;
+  const now = new Date(nowMs).toISOString();
+  // A transition in flight still blocks participation, but open-ness itself is
+  // purely the schedule.
+  const votingOpen = isVoteAcceptingBallots(row, now) && row.transition_processing_token === null;
+  const closed = deriveVoteStatus(row, now) === "closed";
   return capabilities.filter(
-    (capability) =>
-      (capability !== "participate" || votingOpen) && (capability !== "view_results" || row.status === "closed"),
+    (capability) => (capability !== "participate" || votingOpen) && (capability !== "view_results" || closed),
   );
 }
 
@@ -87,10 +88,11 @@ function availableVoteTransitions(
   const leaseAvailable =
     row.transition_processing_token === null ||
     (row.transition_lease_expires_at !== null && Date.parse(row.transition_lease_expires_at) <= nowMs);
-  if (row.status === "scheduled") {
+  const status = deriveVoteStatus(row, new Date(nowMs).toISOString());
+  if (status === "scheduled") {
     return Date.parse(row.closes_at) > nowMs ? ["open", "cancel"] : ["cancel"];
   }
-  return row.status === "open" && leaseAvailable ? ["close", "cancel"] : [];
+  return status === "open" && leaseAvailable ? ["close", "cancel"] : [];
 }
 
 function rowAccess(row: GroupVoteRow): GroupResourceContextAccess {
@@ -157,9 +159,12 @@ export function buildGroupVotesPageQuery(
   const conditions: string[] = [];
   const bindings: unknown[] = [...accessibleVotes.bindings, groupId];
   if (query.status?.length) {
-    const status = buildD1JsonMembershipFilter("vote.status", query.status);
+    // Status is derived, so the filter carries the two instants the CASE needs.
+    // They precede the membership binding because they appear first in the SQL.
+    const now = nowIso();
+    const status = buildD1JsonMembershipFilter(voteStatusSql("vote"), query.status);
     conditions.push(status.sql);
-    bindings.push(...status.bindings);
+    bindings.push(now, now, ...status.bindings);
   }
   if (query.type) {
     conditions.push("vote.vote_type = ?");
@@ -178,12 +183,7 @@ export function buildGroupVotesPageQuery(
     bindings.push(query.to);
   }
   if (query.q) {
-    const search = buildD1TextSearchFilter(query.q, [
-      "vote.title",
-      "vote.description",
-      "vote.status",
-      "vote.vote_type",
-    ]);
+    const search = buildD1TextSearchFilter(query.q, ["vote.title", "vote.description", "vote.vote_type"]);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
@@ -203,7 +203,11 @@ export function buildGroupVotesPageQuery(
       query.sort,
       {
         title: "vote.title COLLATE NOCASE",
-        status: "vote.status",
+        status: `CASE
+          WHEN vote.cancelled_at IS NOT NULL THEN 3
+          WHEN vote.closed_at IS NOT NULL THEN 2
+          ELSE 1
+        END`,
         closes_at: "vote.closes_at",
         created_at: "vote.created_at",
       } satisfies Record<(typeof VOTES_LIST_SORT_COLUMNS)[number], string>,
@@ -238,7 +242,9 @@ export async function getGroupVoteDetail(
   const { row, capabilities } = await resolveGroupVote(db, viewer, groupId, voteId);
   const [hydrated] = await hydrateVotesForUser(db, [row], viewer.userId, groupId);
   const result: VoteResult =
-    row.status === "closed" && capabilities.includes("view_results") ? closedVoteResult(row) : null;
+    deriveVoteStatus(row, nowIso()) === "closed" && capabilities.includes("view_results")
+      ? closedVoteResult(row)
+      : null;
   return groupVoteDetailSchema.parse({
     ...hydrated,
     result,
