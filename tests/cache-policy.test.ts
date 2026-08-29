@@ -65,7 +65,7 @@ describe("cache policy middleware", () => {
     "/api/v1/membership/settings",
     "/api/v1/organizations/content-reviews",
     "/api/v1/email/outbox",
-    "/api/v1/operations/due-work",
+    "/api/v1/retention/due",
     "/api/v1/permissions/grants",
     "/api/v1/permissions/targets",
     "/api/v1/roles",

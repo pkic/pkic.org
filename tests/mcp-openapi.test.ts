@@ -146,10 +146,10 @@ describe("OpenAPI auth decoration", () => {
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
       paths: {
-        "/api/v1/operations/reminders/run": {
+        "/api/v1/email/reminders/runs": {
           post: {
             operationId: "runReminders",
-            [AUTH_EXTENSION]: { required: true, scopes: ["operations:read", "operations:run"] },
+            [AUTH_EXTENSION]: { required: true, scopes: ["email:read", "email:manage"] },
           },
         },
         "/api/v1/events/{eventSlug}/invites": {
@@ -164,12 +164,12 @@ describe("OpenAPI auth decoration", () => {
       },
     });
 
-    const operationsCommand = decorated.paths["/api/v1/operations/reminders/run"].post;
-    expect(operationsCommand.security).toEqual([{ BearerAuth: ["operations:read", "operations:run"] }]);
+    const operationsCommand = decorated.paths["/api/v1/email/reminders/runs"].post;
+    expect(operationsCommand.security).toEqual([{ BearerAuth: ["email:read", "email:manage"] }]);
     expect(operationsCommand[AUTH_EXTENSION]).toEqual({
       required: true,
       scheme: "BearerAuth",
-      scopes: ["operations:read", "operations:run"],
+      scopes: ["email:read", "email:manage"],
     });
 
     const inviteOperation = decorated.paths["/api/v1/events/{eventSlug}/invites"].post;
