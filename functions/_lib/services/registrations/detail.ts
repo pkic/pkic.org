@@ -16,7 +16,7 @@ import { listDayWaitlistForRegistration } from "./day-waitlist";
 
 const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration", "r.id");
 
-export interface AdminRegistrationDetailRow {
+export interface RegistrationDetailRow {
   id: string;
   event_id: string;
   user_id: string;
@@ -35,12 +35,12 @@ export interface AdminRegistrationDetailRow {
   form_placement_id: string | null;
 }
 
-export async function fetchAdminRegistrationWithDetails(
+export async function fetchRegistrationWithDetails(
   db: DatabaseLike,
   eventId: string,
   registrationId: string,
-): Promise<AdminRegistrationDetailRow | null> {
-  return first<AdminRegistrationDetailRow>(
+): Promise<RegistrationDetailRow | null> {
+  return first<RegistrationDetailRow>(
     db,
     `SELECT r.id, r.event_id, r.user_id, r.status, r.cancellation_reason_code, r.attendance_type, r.source_type,
             r.custom_answers_json, r.form_placement_id, r.created_at, r.updated_at,
@@ -101,8 +101,8 @@ export async function getRegistrationNormalizedEmail(
   return row?.normalized_email ?? null;
 }
 
-export function toAdminRegistrationDetail(
-  registration: AdminRegistrationDetailRow,
+export function toRegistrationDetail(
+  registration: RegistrationDetailRow,
   customAnswers: Record<string, unknown> | null = parseJsonSafe<Record<string, unknown> | null>(
     registration.custom_answers_json,
     null,
@@ -130,12 +130,12 @@ export function toAdminRegistrationDetail(
   };
 }
 
-export async function getAdminRegistrationDetail(
+export async function getRegistrationDetail(
   db: DatabaseLike,
   eventId: string,
   registrationId: string,
 ): Promise<EventRegistrationDetailResponse | null> {
-  const registration = await fetchAdminRegistrationWithDetails(db, eventId, registrationId);
+  const registration = await fetchRegistrationWithDetails(db, eventId, registrationId);
   if (!registration) return null;
 
   const [dayAttendance, dayWaitlist] = await Promise.all([
@@ -152,7 +152,7 @@ export async function getAdminRegistrationDetail(
   });
 
   return eventRegistrationDetailResponseSchema.parse({
-    registration: toAdminRegistrationDetail(registration, formResponse?.answers ?? null),
+    registration: toRegistrationDetail(registration, formResponse?.answers ?? null),
     form:
       formResponse?.form == null
         ? null
@@ -169,7 +169,7 @@ export async function getAdminRegistrationDetail(
 
 /**
  * Returns the least-privilege projection required by a group attendance
- * manager. Keep this separate from the legacy administrator detail response so
+ * manager. Keep this separate from the full registration detail response so
  * form answers and referral data cannot cross the group-management boundary.
  */
 export async function getEventRegistrationAttendanceDetail(

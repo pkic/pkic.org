@@ -10,7 +10,7 @@ import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
 import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } from "./registration";
 import { EVENT_REGISTRATION_STATUSES, eventRegistrationStatusSchema } from "./event-registrations";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
-import { adminBadgeRolePatchSchema, adminBadgeRoleResponseSchema } from "./participant-roles";
+import { registrationBadgePatchSchema, registrationBadgeResponseSchema } from "./participant-roles";
 
 export const ADMIN_REGISTRATION_FORCE_STATUSES = EVENT_REGISTRATION_STATUSES;
 export const adminRegistrationForceStatusSchema = eventRegistrationStatusSchema;
@@ -103,7 +103,7 @@ export const adminRegistrationBadgeRoleGetRouteSchema = {
   responses: {
     "200": {
       description: "The configured, detected, and effective badge roles.",
-      content: { "application/json": { schema: adminBadgeRoleResponseSchema } },
+      content: { "application/json": { schema: registrationBadgeResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
     "404": { description: "Event or registration not found." },
@@ -114,12 +114,12 @@ export const adminRegistrationBadgeRolePatchRouteSchema = {
   summary: "Override a registration badge role",
   request: {
     params: adminRegistrationParamsSchema,
-    body: { content: { "application/json": { schema: adminBadgeRolePatchSchema } }, required: true },
+    body: { content: { "application/json": { schema: registrationBadgePatchSchema } }, required: true },
   },
   responses: {
     "200": {
       description: "Updated badge-role configuration.",
-      content: { "application/json": { schema: adminBadgeRoleResponseSchema } },
+      content: { "application/json": { schema: registrationBadgeResponseSchema } },
     },
     "400": { description: "Invalid badge-role payload." },
     "401": { description: "Admin authorization required." },

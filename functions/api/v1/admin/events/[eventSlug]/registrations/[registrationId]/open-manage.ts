@@ -2,7 +2,7 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { json } from "../../../../../../../_lib/http";
-import { createAdminRegistrationManageUrl } from "../../../../../../../_lib/services/admin-registration-manage-access";
+import { createRegistrationManageUrl } from "../../../../../../../_lib/services/registrations/access";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { adminRegistrationOpenManageResponseSchema } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
 import { adminRegistrationOpenManageRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
@@ -23,7 +23,7 @@ async function handleAdminRegistrationOpenManage(
   const event = await getEventBySlug(db, data.params.eventSlug);
   const ip =
     c.req.raw.headers.get("cf-connecting-ip") ?? c.req.raw.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
-  const manageUrl = await createAdminRegistrationManageUrl(db, {
+  const manageUrl = await createRegistrationManageUrl(db, {
     actor,
     event,
     registrationId: data.params.registrationId,

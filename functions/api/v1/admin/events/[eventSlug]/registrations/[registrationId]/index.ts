@@ -36,11 +36,11 @@ import {
 import type { ValidatedData } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import {
-  fetchAdminRegistrationWithDetails,
-  getAdminRegistrationDetail,
+  fetchRegistrationWithDetails,
+  getRegistrationDetail,
   getRegistrationNormalizedEmail,
-  toAdminRegistrationDetail,
-} from "../../../../../../../_lib/services/registrations/admin-detail";
+  toRegistrationDetail,
+} from "../../../../../../../_lib/services/registrations/detail";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ async function handleAdminRegistrationGet(
 ): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
-  const detail = await getAdminRegistrationDetail(requestDb(c), event.id, data.params.registrationId);
+  const detail = await getRegistrationDetail(requestDb(c), event.id, data.params.registrationId);
   if (!detail) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
@@ -92,11 +92,11 @@ async function handleAdminRegistrationPatch(
       c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, forced.outboxId));
     }
 
-    const updated = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, registrationId);
+    const updated = await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId);
     return json(
       adminRegistrationUpdateResponseSchema.parse({
         success: true,
-        registration: updated ? toAdminRegistrationDetail(updated) : null,
+        registration: updated ? toRegistrationDetail(updated) : null,
       }),
     );
   }
@@ -116,7 +116,7 @@ async function handleAdminRegistrationPatch(
       : null;
   const customAnswers = validatedForm?.answers ?? {};
   const currentRegistration = validatedForm?.form
-    ? await fetchAdminRegistrationWithDetails(requestDb(c), event.id, registrationId)
+    ? await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId)
     : null;
   const formSubmission =
     validatedForm?.form && currentRegistration
@@ -208,11 +208,11 @@ async function handleAdminRegistrationPatch(
     c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, queuedOutboxId));
   }
 
-  const result = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, updated.id);
+  const result = await fetchRegistrationWithDetails(requestDb(c), event.id, updated.id);
   return json(
     adminRegistrationUpdateResponseSchema.parse({
       success: true,
-      registration: result ? toAdminRegistrationDetail(result) : null,
+      registration: result ? toRegistrationDetail(result) : null,
       emailChanged,
     }),
   );

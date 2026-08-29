@@ -1,4 +1,4 @@
-import { adminBadgeRoleResponseSchema } from "../../../../../../../../assets/shared/schemas/participant-roles";
+import { registrationBadgeResponseSchema } from "../../../../../../../../assets/shared/schemas/participant-roles";
 import {
   adminRegistrationBadgeRoleGetRouteSchema,
   adminRegistrationBadgeRolePatchRouteSchema,
@@ -8,8 +8,8 @@ import { requestDb, type AdminContext } from "../../../../../../../_lib/db/conte
 import { json } from "../../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import {
-  getAdminRegistrationBadgeRole,
-  setAdminRegistrationBadgeRole,
+  getRegistrationBadge,
+  setRegistrationBadge,
 } from "../../../../../../../_lib/services/registrations/badge-role";
 import type { ValidatedData } from "chanfana";
 
@@ -18,8 +18,8 @@ type GetData = ValidatedData<typeof adminRegistrationBadgeRoleGetRouteSchema>;
 async function handleGet(c: AdminContext, data: GetData): Promise<Response> {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   return json(
-    adminBadgeRoleResponseSchema.parse(
-      await getAdminRegistrationBadgeRole(requestDb(c), actor, data.params.eventSlug, data.params.registrationId),
+    registrationBadgeResponseSchema.parse(
+      await getRegistrationBadge(requestDb(c), actor, data.params.eventSlug, data.params.registrationId),
     ),
   );
 }
@@ -29,12 +29,12 @@ async function handlePatch(
   data: ValidatedData<typeof adminRegistrationBadgeRolePatchRouteSchema>,
 ): Promise<Response> {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const result = await setAdminRegistrationBadgeRole(requestDb(c), actor, {
+  const result = await setRegistrationBadge(requestDb(c), actor, {
     eventSlug: data.params.eventSlug,
     registrationId: data.params.registrationId,
     patch: data.body,
   });
-  return json(adminBadgeRoleResponseSchema.parse(result.response));
+  return json(registrationBadgeResponseSchema.parse(result.response));
 }
 
 export const AdminRegistrationBadgeRoleGet = openApiRoute(adminRegistrationBadgeRoleGetRouteSchema, handleGet);
