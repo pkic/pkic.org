@@ -9,6 +9,7 @@ import { newCapabilityLinkSecret, signedOrQueuedCapability } from "./capability-
 import type { DatabaseLike, StatementLike } from "../types";
 import { INVITE_COLUMNS, type InviteInviterInfo, type InviteRecord } from "./invite-types";
 import {
+  activeEffectiveInviteExpirySql,
   effectiveInviteExpirySql,
   eventInviteWindowEvidence,
   inviteExpirySeconds,
@@ -150,8 +151,7 @@ export async function createInvite(
        AND EXISTS (
          SELECT 1 FROM events e
          WHERE e.id = invites.event_id
-           AND ${effectiveInviteExpirySql("invites", "e")} IS NOT NULL
-           AND unixepoch(${effectiveInviteExpirySql("invites", "e")}) > unixepoch(?)
+           AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("invites", "e"))}
        )
      LIMIT 1`,
     [payload.eventId, inviteeEmail, payload.inviteType, now],

@@ -3,7 +3,7 @@ import { attendeeRegistrationClosesAt, type DueInviteRow } from "../reminders-su
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { stringifyJson } from "../../utils/json";
-import { effectiveProposalSpeakerInviteExpirySql } from "../../invite-validity";
+import { effectiveProposalSpeakerInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../../invite-validity";
 
 export interface SpeakerReminderRecipientSnapshot {
   speakerId: string;
@@ -67,8 +67,7 @@ export function prepareCoSpeakerInviteReminderGuard(
                   OR e.id != json_extract(candidate.value, '$.eventId')
                   OR e.starts_at IS NOT json_extract(candidate.value, '$.eventStartsAt')
                   OR e.ends_at IS NOT json_extract(candidate.value, '$.eventEndsAt')
-                  OR ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NULL
-                  OR unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) <= unixepoch(?)
+                  OR (${inactiveEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))})
             )`,
     bindings: [stringifyJson(snapshots), now],
   });

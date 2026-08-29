@@ -19,6 +19,7 @@ import {
 } from "./capability-token";
 import type { CapabilityPurpose, CapabilityVerifyResult } from "./capability-token";
 import {
+  activeEffectiveInviteExpirySql,
   effectiveInviteExpirySql,
   effectiveMeetingGuestInviteExpirySql,
   effectiveProposalSpeakerInviteExpirySql,
@@ -180,8 +181,10 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
            FROM invites i
            JOIN events e ON e.id = i.event_id
            WHERE i.id = ? AND i.status = 'sent'
-             AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-             AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch()`;
+             AND ${activeEffectiveInviteExpirySql(
+               effectiveInviteExpirySql("i", "e"),
+               "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+             )}`;
     case "proposal_manage":
       return "SELECT manage_link_secret AS link_secret FROM session_proposals WHERE id = ?";
     case "speaker_manage":
@@ -197,8 +200,7 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
                  AND guest_occurrence.series_id = guest.series_id
                WHERE guest.id = ?
                  AND guest.revoked_at IS NULL
-                 AND ${effectiveExpiry} IS NOT NULL
-                 AND unixepoch(${effectiveExpiry}) > unixepoch()`;
+                 AND ${activeEffectiveInviteExpirySql(effectiveExpiry, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")}`;
     }
     case "member_join_verify":
     case "member_join_apply":
@@ -230,8 +232,10 @@ async function loadCapabilityLinkSecret(
             AND (
               ps.status = 'confirmed'
               OR (ps.status = 'invited' AND
-                ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NOT NULL
-                AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) > unixepoch()
+                ${activeEffectiveInviteExpirySql(
+                  effectiveProposalSpeakerInviteExpirySql("ps", "e"),
+                  "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+                )}
               )
             )`
       : capabilitySecretQuery(purpose, allowInactiveInvite),

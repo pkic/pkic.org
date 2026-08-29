@@ -8,7 +8,7 @@ import {
   proposalSpeakerEffectiveProfileColumns,
   type ProposalSpeakerUserProfile,
 } from "./proposal-speakers";
-import { effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
+import { effectiveProposalSpeakerInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../invite-validity";
 
 export interface SpeakerWithContext {
   speaker: ProposalSpeakerRecord;
@@ -103,10 +103,10 @@ export async function getSpeakerByManageToken(
        ps.invite_expires_at AS ps_invite_expires_at,
        CASE
          WHEN ps.status IN ('invited', 'pending')
-           AND (
-             ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NULL
-             OR unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) <= unixepoch('now')
-           )
+           AND (${inactiveEffectiveInviteExpirySql(
+             effectiveProposalSpeakerInviteExpirySql("ps", "e"),
+             "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+           )})
          THEN 1 ELSE 0
        END AS ps_invite_expired,
        sp.id              AS sp_id,

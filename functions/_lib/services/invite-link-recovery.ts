@@ -8,7 +8,11 @@ import { newCapabilityLinkSecret } from "../auth/capability-links";
 import { buildInviteEmailQueueRow } from "./invite-email";
 import { isStaleInviteTransition, prepareInviteTransitionGuardStatements } from "./invite-lifecycle";
 import type { EventRouteRow } from "./reminders-support";
-import { effectiveInviteExpirySql, eventInviteWindowsEvidence } from "../invite-validity";
+import {
+  activeEffectiveInviteExpirySql,
+  effectiveInviteExpirySql,
+  eventInviteWindowsEvidence,
+} from "../invite-validity";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 
 export const INVITE_LINK_RECOVERY_LIMIT = 20;
@@ -159,8 +163,10 @@ export async function recoverInviteLinksByEmail(
        JOIN events e ON e.id = i.event_id
        WHERE i.invitee_email = ?
          AND i.status = 'sent'
-         AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-         AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch()
+         AND ${activeEffectiveInviteExpirySql(
+           effectiveInviteExpirySql("i", "e"),
+           "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         )}
      )
      SELECT
        id, invitee_email, invitee_first_name, invitee_last_name, invite_type, link_secret, expires_at,

@@ -14,7 +14,7 @@ import {
 import { first } from "../../db/queries";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
-import { effectiveMeetingGuestInviteExpirySql } from "../../invite-validity";
+import { activeEffectiveInviteExpirySql, effectiveMeetingGuestInviteExpirySql } from "../../invite-validity";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
@@ -43,8 +43,10 @@ const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrenc
     WHERE guest.series_id = occurrence.series_id
       AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
       AND guest.revoked_at IS NULL
-      AND ${effectiveMeetingGuestInviteExpirySql("guest", "occurrence", "event")}
-          > strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS guest_count,
+      AND ${activeEffectiveInviteExpirySql(
+        effectiveMeetingGuestInviteExpirySql("guest", "occurrence", "event"),
+        "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+      )}) AS guest_count,
   (SELECT COUNT(*) FROM event_occurrence_join_confirmations confirmation
     WHERE confirmation.occurrence_id = occurrence.id) AS join_confirmed_count,
   (SELECT COUNT(*) FROM event_occurrence_join_confirmations confirmation

@@ -213,14 +213,62 @@ CREATE INDEX idx_invites_recovery_email_created
 CREATE INDEX idx_invites_event_type_created
   ON invites(event_id, invite_type, created_at DESC, id ASC);
 
--- This migration is unreleased: normalize legacy invitations onto the same
--- finite event window used by every new dispatch. Existing earlier deadlines
--- remain earlier; NULL or overly-late deadlines become the event start/end.
+-- This migration is unreleased. Canonical invitation predicates compare UTC
+-- instants as text, so first normalize every parseable legacy event/invite
+-- value to the exact millisecond UTC representation used by application
+-- writes. Do not invent a value for unparseable legacy text: it remains
+-- fail-closed and is reported by the migration verification tests.
+UPDATE events
+SET starts_at = strftime('%Y-%m-%dT%H:%M:%fZ', starts_at)
+WHERE starts_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', starts_at) IS NOT NULL
+  AND starts_at <> strftime('%Y-%m-%dT%H:%M:%fZ', starts_at);
+
+UPDATE events
+SET ends_at = strftime('%Y-%m-%dT%H:%M:%fZ', ends_at)
+WHERE ends_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', ends_at) IS NOT NULL
+  AND ends_at <> strftime('%Y-%m-%dT%H:%M:%fZ', ends_at);
+
+UPDATE invites
+SET expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', expires_at)
+WHERE expires_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS NOT NULL
+  AND expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', expires_at);
+
+UPDATE proposal_speakers
+SET invite_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at)
+WHERE invite_expires_at IS NOT NULL
+  AND strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at) IS NOT NULL
+  AND invite_expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at);
+
+-- An unparseable invite deadline or event window cannot be repaired without
+-- inventing authorization. Retire those legacy rows explicitly so they do not
+-- remain misleadingly sent or retain the active-invite uniqueness slot.
+UPDATE invites
+SET status = 'expired'
+WHERE status = 'sent'
+  AND (
+    (expires_at IS NOT NULL AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS NULL)
+    OR NOT EXISTS (
+      SELECT 1
+      FROM events event
+      WHERE event.id = invites.event_id
+        AND event.starts_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at)
+        AND event.ends_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at)
+        AND event.ends_at > event.starts_at
+    )
+  );
+
+-- Normalize legacy invitations onto the same finite event window used by
+-- every new dispatch. Existing earlier deadlines remain earlier; missing or
+-- overly-late deadlines become the event start/end. Unparseable values are
+-- deliberately left unchanged and therefore cannot authorize an invite.
 UPDATE invites
 SET expires_at = (
   SELECT CASE
     WHEN invites.expires_at IS NULL THEN event.starts_at
-    WHEN unixepoch(invites.expires_at) <= unixepoch(event.ends_at) THEN invites.expires_at
+    WHEN invites.expires_at <= event.ends_at THEN invites.expires_at
     ELSE event.ends_at
   END
   FROM events event
@@ -232,7 +280,13 @@ WHERE EXISTS (
   WHERE event.id = invites.event_id
     AND event.starts_at IS NOT NULL
     AND event.ends_at IS NOT NULL
-    AND unixepoch(event.ends_at) > unixepoch(event.starts_at)
+    AND event.starts_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at)
+    AND event.ends_at = strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at)
+    AND event.ends_at > event.starts_at
+    AND (
+      invites.expires_at IS NULL
+      OR invites.expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', invites.expires_at)
+    )
 );
 
 CREATE INDEX idx_proposal_speakers_user_active

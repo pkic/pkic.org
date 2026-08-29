@@ -23,8 +23,12 @@ function applyMigrationsBefore0035(db: DatabaseSync): void {
 
 function seedRepresentativePre0035State(db: DatabaseSync): void {
   db.exec(`
-    INSERT INTO events (id, slug, name, timezone, created_at, updated_at)
-    VALUES ('event-1', 'upgrade-test', 'Upgrade test', 'UTC', '2025-01-01', '2025-01-01');
+    INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
+    VALUES (
+      'event-1', 'upgrade-test', 'Upgrade test', 'UTC',
+      '2025-02-01 09:00:00+00:00', '2025-02-01T17:00:00Z',
+      '2025-01-01', '2025-01-01'
+    );
 
     INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
     VALUES
@@ -128,10 +132,15 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
        '{"pendingEventField":"kept"}', '2025-01-04', '2025-01-04');
 
     INSERT INTO invites
-      (id, event_id, invitee_email, invite_type, link_secret, status, created_at)
+      (id, event_id, invitee_email, invite_type, link_secret, status, expires_at, created_at)
     VALUES
-      ('invite-old', 'event-1', 'invitee@example.test', 'attendee', 'token-old', 'sent', '2025-01-01'),
-      ('invite-new', 'event-1', 'invitee@example.test', 'attendee', 'token-new', 'sent', '2025-01-02');
+      ('invite-old', 'event-1', 'invitee@example.test', 'attendee', 'token-old', 'sent', NULL, '2025-01-01'),
+      ('invite-new', 'event-1', 'invitee@example.test', 'attendee', 'token-new', 'sent',
+       '2025-02-02T09:00:00+00:00', '2025-01-02'),
+      ('invite-early', 'event-1', 'early@example.test', 'attendee', 'token-early', 'sent',
+       '2025-02-01T12:00:00Z', '2025-01-02'),
+      ('invite-malformed', 'event-1', 'malformed@example.test', 'attendee', 'token-malformed', 'sent',
+       'not-a-date', '2025-01-02');
 
     INSERT INTO donations
       (id, checkout_session_id, name, email, currency, gross_amount, status, created_at)
@@ -459,9 +468,15 @@ describe("consolidated pending migration upgrade", () => {
         status: "pending",
       },
     ]);
-    expect(db.prepare("SELECT id, status FROM invites ORDER BY id").all()).toEqual([
-      { id: "invite-new", status: "revoked" },
-      { id: "invite-old", status: "sent" },
+    expect(db.prepare("SELECT starts_at, ends_at FROM events WHERE id = 'event-1'").get()).toEqual({
+      starts_at: "2025-02-01T09:00:00.000Z",
+      ends_at: "2025-02-01T17:00:00.000Z",
+    });
+    expect(db.prepare("SELECT id, status, expires_at FROM invites ORDER BY id").all()).toEqual([
+      { id: "invite-early", status: "sent", expires_at: "2025-02-01T12:00:00.000Z" },
+      { id: "invite-malformed", status: "expired", expires_at: "not-a-date" },
+      { id: "invite-new", status: "revoked", expires_at: "2025-02-01T17:00:00.000Z" },
+      { id: "invite-old", status: "sent", expires_at: "2025-02-01T09:00:00.000Z" },
     ]);
     expect(db.prepare("SELECT code, donation_id, clicks FROM donation_promoters ORDER BY code").all()).toEqual([
       { code: "NEWCODE1", donation_id: null, clicks: 3 },

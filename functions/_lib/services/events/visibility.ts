@@ -1,5 +1,5 @@
 import type { UserSessionResult } from "../../auth/user-session";
-import { effectiveInviteExpirySql } from "../../invite-validity";
+import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 
 export interface EventAudienceViewer {
   userId: string | null;
@@ -94,8 +94,10 @@ export function buildEventAudiencePredicate(
                  SELECT audience_user.normalized_email FROM users audience_user WHERE audience_user.id = ?
                )
                AND audience_invite.status IN ('sent', 'accepted')
-               AND ${effectiveInviteExpirySql("audience_invite", eventAlias)} IS NOT NULL
-               AND unixepoch(${effectiveInviteExpirySql("audience_invite", eventAlias)}) > unixepoch()
+               AND ${activeEffectiveInviteExpirySql(
+                 effectiveInviteExpirySql("audience_invite", eventAlias),
+                 "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+               )}
           )
         )
       )

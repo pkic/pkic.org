@@ -12,7 +12,7 @@ import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
-import { effectiveInviteExpirySql } from "../../invite-validity";
+import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -203,8 +203,10 @@ export function buildEventRegistrationStatsQuery(eventIds: readonly string[]) {
            JOIN events e ON e.id = i.event_id
           WHERE i.status = 'sent'
             AND i.invite_type = 'attendee'
-            AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-            AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch()
+            AND ${activeEffectiveInviteExpirySql(
+              effectiveInviteExpirySql("i", "e"),
+              "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+            )}
           GROUP BY i.event_id
        )
        SELECT pe.event_id,

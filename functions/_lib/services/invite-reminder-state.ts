@@ -3,7 +3,7 @@ import { nowIso } from "../utils/time";
 import { issueDatabaseCapability } from "./capability-links";
 import type { DatabaseLike } from "../types";
 import { inviteColumnProjection, type InviteRecord } from "./invite-types";
-import { effectiveInviteExpirySql } from "../invite-validity";
+import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../invite-validity";
 
 export async function listPendingInviteReminders(db: DatabaseLike): Promise<InviteRecord[]> {
   return all<InviteRecord>(
@@ -13,8 +13,7 @@ export async function listPendingInviteReminders(db: DatabaseLike): Promise<Invi
      JOIN events e ON e.id = i.event_id
      WHERE i.status = 'sent'
        AND i.reminder_count < 3
-       AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-       AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?)
+       AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"))}
      ORDER BY i.created_at ASC`,
     [nowIso()],
   );

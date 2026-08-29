@@ -6,7 +6,7 @@ import { buildEventEmailVariables, type EventRecord } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
-import { effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
+import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { nowIso } from "../utils/time";
 import { queuedSpeakerManageToken } from "./proposal-speakers";
 
@@ -65,8 +65,7 @@ export async function queueProposalSpeakerManageLinkRecovery(
        AND (
          ps.status = 'confirmed'
          OR (
-           ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NOT NULL
-           AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) > unixepoch(?)
+           ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))}
          )
        )
        AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
@@ -121,8 +120,7 @@ export async function queueProposalSpeakerManageLinkRecovery(
                AND (
                  ps.status = 'confirmed'
                  OR (
-                   ${effectiveProposalSpeakerInviteExpirySql("ps", "e")} IS NOT NULL
-                   AND unixepoch(${effectiveProposalSpeakerInviteExpirySql("ps", "e")}) > unixepoch(?)
+                   ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))}
                  )
                )
                AND u.normalized_email = ? AND u.updated_at = ?`,

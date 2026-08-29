@@ -11,6 +11,7 @@ import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { newCapabilityLinkSecret } from "../../auth/capability-links";
 import {
+  activeEffectiveInviteExpirySql,
   effectiveMeetingGuestInviteExpirySql,
   eventInviteWindowEvidence,
   eventOccurrenceInviteWindowEvidence,
@@ -37,8 +38,7 @@ const EFFECTIVE_GUEST_COLUMNS = `guest.id, guest.series_id, guest.occurrence_id,
   guest.normalized_email, guest.name, guest.affiliation, guest.invitation_secret, guest.invitation_version,
   COALESCE(${EFFECTIVE_GUEST_EXPIRY}, guest.expires_at) AS expires_at,
   CASE WHEN guest.revoked_at IS NULL
-         AND ${EFFECTIVE_GUEST_EXPIRY} IS NOT NULL
-         AND unixepoch(${EFFECTIVE_GUEST_EXPIRY}) > unixepoch()
+         AND ${activeEffectiveInviteExpirySql(EFFECTIVE_GUEST_EXPIRY, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")}
        THEN 1 ELSE 0 END AS active,
   guest.revoked_at, guest.created_at, guest.updated_at`;
 const EFFECTIVE_GUEST_FROM = `FROM event_occurrence_guests guest

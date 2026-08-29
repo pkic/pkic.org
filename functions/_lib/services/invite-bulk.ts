@@ -7,6 +7,7 @@ import { sha256Hex } from "../utils/crypto";
 import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../email/outbox-queue";
 import type { DatabaseLike, StatementLike } from "../types";
 import {
+  activeEffectiveInviteExpirySql,
   effectiveInviteExpirySql,
   eventInviteWindowEvidence,
   inviteExpirySeconds,
@@ -172,8 +173,7 @@ export async function bulkCreateInvites(
            AND i.invite_type = ?2
            AND i.status = 'sent'
            AND i.invitee_email IN (SELECT value FROM json_each(?3))
-           AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-           AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?4)`,
+           AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"), "?4")}`,
       )
       .bind(payload.event.id, inviteType, emailsJson, now),
   ])) as Array<{ results?: Array<Record<string, string>> }>;
@@ -329,8 +329,7 @@ export async function bulkCreateInvites(
            AND i.invite_type = ?2
            AND i.status = 'sent'
            AND i.invitee_email IN (SELECT value FROM json_each(?3))
-           AND ${effectiveInviteExpirySql("i", "e")} IS NOT NULL
-           AND unixepoch(${effectiveInviteExpirySql("i", "e")}) > unixepoch(?4)`,
+           AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"), "?4")}`,
       )
       .bind(payload.event.id, inviteType, JSON.stringify(unresolvedEmails), now)
       .all<{ invitee_email: string }>();
