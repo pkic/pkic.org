@@ -341,16 +341,16 @@ describe("portal capability-derived navigation", () => {
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });
 
-  it("exposes System Operations for either global email or operations read authority", () => {
+  it("exposes System Operations for either global email or retention read authority", () => {
     const emailReader = portalSessionFixture({
       staff: true,
       staffRole: "user",
       grants: [{ permission: "email:read", contextType: null, contextId: null }],
     });
-    const operationsReader = portalSessionFixture({
+    const retentionReader = portalSessionFixture({
       staff: true,
       staffRole: "user",
-      grants: [{ permission: "operations:read", contextType: null, contextId: null }],
+      grants: [{ permission: "retention:read", contextType: null, contextId: null }],
     });
     const writeOnly = portalSessionFixture({
       staff: true,
@@ -360,7 +360,7 @@ describe("portal capability-derived navigation", () => {
     const contextual = portalSessionFixture({
       staff: true,
       staffRole: "user",
-      grants: [{ permission: "operations:read", contextType: "group", contextId: "group-1" }],
+      grants: [{ permission: "retention:read", contextType: "group", contextId: "group-1" }],
     });
 
     expect(portalSystemNavigationItems(emailReader)).toContainEqual({
@@ -368,7 +368,7 @@ describe("portal capability-derived navigation", () => {
       section: "system",
       label: "Operations",
     });
-    expect(portalSystemNavigationItems(operationsReader)).toContainEqual({
+    expect(portalSystemNavigationItems(retentionReader)).toContainEqual({
       path: "/system/operations",
       section: "system",
       label: "Operations",

@@ -25,7 +25,7 @@ interface RetentionPreviewRow {
   total_users: number;
 }
 
-const DUE_RETENTION_PREDICATE = `
+export const DUE_RETENTION_PREDICATE = `
   e.ends_at IS NOT NULL
   AND datetime(e.ends_at) < datetime('now', '-' || rp.user_retention_days || ' days')
 `;

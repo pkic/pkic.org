@@ -5,7 +5,7 @@
  *  - PATCH /api/v1/members/applications/:id (Fix 3: correct applicant-submitted
  *    fields without transitioning stage)
  *  - GET /api/v1/members/applications?sort=... (Fix 4: sortable columns)
- *  - POST /api/v1/operations/membership-batches/:kind/run
+ *  - POST /api/v1/membership/batches/:batchKey/runs
  *    (manual off-cycle triggers for the twice-weekly membership batches)
  *
  * Structure mirrors tests/admin-members.test.ts and
@@ -655,7 +655,7 @@ describe("GET /api/v1/members/applications?sort=... (Fix 4 — sortable columns)
   });
 });
 
-describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
+describe("POST /api/v1/membership/batches/:batchKey/runs", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -668,7 +668,7 @@ describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
   it("runConsultationBatch queues a consultation-batch email for applications in_consultation", async () => {
     await createApplication({ stage: "in_consultation" });
 
-    const response = await call(adminToken, "/api/v1/operations/membership-batches/consultation/run", {
+    const response = await call(adminToken, "/api/v1/membership/batches/consultation/runs", {
       method: "POST",
       body: JSON.stringify({}),
     });
@@ -690,7 +690,7 @@ describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
       .bind(new Date(Date.now() - 10 * 86_400_000).toISOString(), id)
       .run();
 
-    const response = await call(adminToken, "/api/v1/operations/membership-batches/ec-review/run", {
+    const response = await call(adminToken, "/api/v1/membership/batches/ec-review/runs", {
       method: "POST",
       body: JSON.stringify({}),
     });
@@ -705,11 +705,14 @@ describe("POST /api/v1/operations/membership-batches/:kind/run", () => {
   it("rejects an unknown batch kind without running another batch", async () => {
     await createApplication({ stage: "in_consultation" });
 
-    const response = await call(adminToken, "/api/v1/operations/membership-batches/everything/run", {
+    const response = await call(adminToken, "/api/v1/membership/batches/everything/runs", {
       method: "POST",
       body: JSON.stringify({}),
     });
-    expect(response.status).toBe(404);
+    // One parameterised route validates the batch key against the shared
+    // catalog, so an unknown key is a contract violation rather than a
+    // missing route.
+    expect(response.status).toBe(400);
 
     const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
     expect(outbox).toHaveLength(0);

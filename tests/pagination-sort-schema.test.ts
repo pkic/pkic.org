@@ -31,7 +31,7 @@ import {
   formSubmissionsSortValueSchema,
   formsListQuerySchema,
 } from "../assets/shared/schemas/form-management";
-import { dueWorkListQuerySchema as adminDueWorkListQuerySchema } from "../assets/shared/schemas/operations";
+import { pendingWorkListQuerySchema } from "../assets/shared/schemas/pending-work";
 import { myApplicationsListQuerySchema } from "../assets/shared/schemas/me";
 import { presentationVersionsListQuerySchema } from "../assets/shared/schemas/presentation-versions";
 import { proposalCommentsListQuerySchema } from "../assets/shared/schemas/proposal-comments";
@@ -101,7 +101,7 @@ describe("shared list/search contract", () => {
     expect(proposalCommentsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(proposalReviewsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(presentationVersionsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
-    expect(adminDueWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
+    expect(pendingWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(donationsListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
     expect(sponsorPortalAttendeesListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
     expect(formsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
@@ -119,22 +119,12 @@ describe("shared list/search contract", () => {
     expect(adminEmailOutboxQuerySchema.parse({})).toMatchObject({ dueNow: false, limit: 50, offset: 0 });
     expect(eventPromotersListQuerySchema.parse({})).toMatchObject({ view: "promoters", limit: 50, offset: 0 });
     expect(membersListQuerySchema.parse({})).toMatchObject({ group: "all", limit: 50, offset: 0 });
-    expect(adminDueWorkListQuerySchema.parse({})).toMatchObject({
-      bucket: "all",
-      includeRetention: false,
-      reminderLimit: 120,
-      outboxLimit: 120,
-      cleanupLimit: 120,
-      limit: 25,
-      offset: 0,
-    });
+    expect(pendingWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
   });
 
   it("parses explicit false query flags as false instead of JavaScript truthiness", () => {
     expect(adminEmailOutboxQuerySchema.parse({ dueNow: "false" }).dueNow).toBe(false);
     expect(adminEmailOutboxQuerySchema.parse({ dueNow: "true" }).dueNow).toBe(true);
-    expect(adminDueWorkListQuerySchema.parse({ includeRetention: "false" }).includeRetention).toBe(false);
-    expect(adminDueWorkListQuerySchema.parse({ includeRetention: "true" }).includeRetention).toBe(true);
   });
 
   it("rejects invalid defaults when a route contract is declared", () => {

@@ -170,19 +170,34 @@ Base path: `/api/v1`
 - `POST /email/outbox/reset-failed`
 - Outbox reads require `email:read`; bounded processing and explicit selected-row
   reset additionally require `email:manage`.
-- `GET /operations/due-work`
-- `POST /operations/reminders/preview`
-- `POST /operations/reminders/run`
-- `POST /operations/retention/run`
-- `POST /operations/membership-batches/consultation/run`
-- `POST /operations/membership-batches/ec-review/run`
-- `POST /operations/membership-batches/wg-chair-digest/run`
-- Due-work reads and reminder preview require `operations:read`. Runs additionally
-  require `operations:run`; retention, consultation, and EC review retain their
-  exact `users:anonymize`, `membership:write`, or `membership:approve`
-  permission.
-- Manual commands require a user-backed staff session. Service API keys cannot
-  invoke them.
+- `POST /email/reminders/runs`
+- Reminder cycles are an email producer: every reminder they resolve is queued
+  into the durable outbox. `mode: "preview"` resolves the same batch without
+  queueing, and is the canonical way to see which reminders are due — there is
+  deliberately no second read model re-deriving that set. Preview requires
+  `email:read`; executing additionally requires `email:manage`.
+
+## Retention
+
+- `GET /retention/due`
+- `POST /retention/runs`
+- Data retention is its own governance domain: `retention_policies` decides how
+  long identifying registration and user data is kept. Reads require
+  `retention:read`; a run additionally requires `retention:run` and
+  `users:anonymize`, both re-evaluated inside the same D1 batch as the
+  redaction and its audit record.
+
+## Membership batches
+
+- `POST /membership/batches/:batchKey/runs`
+- One parameterised route serves every batch, so adding a batch does not add a
+  route family. `consultation` requires `membership:write` and `ec-review`
+  requires `membership:approve`, re-evaluated inside the batch's own write
+  batch.
+- There is no cross-domain due-work endpoint. Each domain serves its own pending
+  list, so counts are exact rather than a merge of independently capped windows.
+- Manual runs require a user-backed staff session; service API keys cannot
+  invoke them, and each run reuses the scheduled D1 query budget.
 
 ## Referral and signed internal ingestion
 
