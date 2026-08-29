@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { groupLabelSchema, groupReferenceParamsSchema } from "./groups";
-import { jsonErrorResponse } from "./api-common";
+import { jsonErrorResponse, utcInstantSchema } from "./api-common";
 
 /** The population represented by the membership counts. */
 export const GROUP_STATS_SCOPES = ["current", "historical"] as const;
@@ -15,8 +15,8 @@ export const groupStatsQuerySchema = z
   .object({
     scope: groupStatsScopeSchema.default("current"),
     timezone: z.literal("UTC").default("UTC"),
-    from: z.iso.datetime().optional(),
-    to: z.iso.datetime().optional(),
+    from: utcInstantSchema.optional(),
+    to: utcInstantSchema.optional(),
   })
   .superRefine((value, context) => {
     if (value.from && value.to && value.from >= value.to) {
@@ -30,9 +30,9 @@ const participationCountSchema = z.object({ count: countSchema });
 
 export const groupStatsResponseSchema = z.object({
   group: groupLabelSchema,
-  generatedAt: z.iso.datetime(),
+  generatedAt: utcInstantSchema,
   scope: groupStatsScopeSchema,
-  window: z.object({ from: z.iso.datetime().nullable(), to: z.iso.datetime() }),
+  window: z.object({ from: utcInstantSchema.nullable(), to: utcInstantSchema }),
   participation: z.object({
     /** Distinct people, independent of how many Members they represent. */
     people: participationCountSchema,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, pageInfoSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
@@ -45,7 +46,7 @@ export const eventPromoterSchema = z.object({
   invitesDeclined: z.number().int().nonnegative(),
   invitesExpired: z.number().int().nonnegative(),
   inviteConversionRate: z.number().nullable(),
-  lastInviteAt: z.iso.datetime().nullable(),
+  lastInviteAt: utcInstantSchema.nullable(),
   referralCodesIssued: z.number().int().nonnegative(),
   referralClicks: z.number().int().nonnegative(),
   referralConversions: z.number().int().nonnegative(),
@@ -64,7 +65,7 @@ export const eventReferralCodeSchema = z.object({
   channelHint: z.string().nullable(),
   clicks: z.number().int().nonnegative(),
   conversions: z.number().int().nonnegative(),
-  createdAt: z.iso.datetime(),
+  createdAt: utcInstantSchema,
 });
 export type EventReferralCode = z.infer<typeof eventReferralCodeSchema>;
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
+import { eventSlugParamsSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { addDuplicateStringIssues } from "./refinements";
 import { proposalTypeSchema } from "./proposal-management";
@@ -187,8 +187,8 @@ const formPlacementInputShape = {
   contextRef: z.string().trim().min(1).max(200).nullable(),
   audience: z.string().trim().min(1).max(100),
   active: z.boolean(),
-  opensAt: z.iso.datetime().nullable().optional(),
-  closesAt: z.iso.datetime().nullable().optional(),
+  opensAt: utcInstantSchema.nullable().optional(),
+  closesAt: utcInstantSchema.nullable().optional(),
 };
 
 function addPlacementIssues(

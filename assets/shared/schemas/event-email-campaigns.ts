@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emailMessageTypeSchema, successResponseSchema } from "./api-common";
+import { emailMessageTypeSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
 import { attendanceTypeSchema } from "./registration";
 
@@ -37,7 +37,7 @@ export const eventEmailCampaignPreviewResponseSchema = successResponseSchema.ext
   recipientCount: z.number().int().nonnegative(),
   batchCount: z.number().int().nonnegative(),
   previewToken: eventEmailCampaignCreateInputSchema.shape.previewToken,
-  previewExpiresAt: z.iso.datetime(),
+  previewExpiresAt: utcInstantSchema,
   sampleRecipients: z.array(z.string().email()),
   subject: z.string(),
   html: z.string(),
