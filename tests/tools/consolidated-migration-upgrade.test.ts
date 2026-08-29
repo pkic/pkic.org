@@ -24,11 +24,27 @@ function applyMigrationsBefore0035(db: DatabaseSync): void {
 function seedRepresentativePre0035State(db: DatabaseSync): void {
   db.exec(`
     INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
-    VALUES (
-      'event-1', 'upgrade-test', 'Upgrade test', 'UTC',
-      '2025-02-01 09:00:00+00:00', '2025-02-01T17:00:00Z',
-      '2025-01-01', '2025-01-01'
-    );
+    VALUES
+      (
+        'event-1', 'upgrade-test', 'Upgrade test', 'UTC',
+        '2025-02-01 09:00:00+00:00', '2025-02-01T17:00:00Z',
+        '2025-01-01', '2025-01-01'
+      ),
+      (
+        'event-future', 'future-upgrade-test', 'Future upgrade test', 'UTC',
+        '2099-02-01 09:00:00+00:00', '2099-02-01T17:00:00Z',
+        '2025-01-01', '2025-01-01'
+      ),
+      (
+        'event-malformed', 'malformed-upgrade-test', 'Malformed upgrade test', 'UTC',
+        'not-a-date', 'also-not-a-date',
+        '2025-01-01', '2025-01-01'
+      ),
+      (
+        'event-reversed', 'reversed-upgrade-test', 'Reversed upgrade test', 'UTC',
+        '2099-03-02T09:00:00Z', '2099-03-01T17:00:00Z',
+        '2025-01-01', '2025-01-01'
+      );
 
     INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
     VALUES
@@ -140,7 +156,22 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
       ('invite-early', 'event-1', 'early@example.test', 'attendee', 'token-early', 'sent',
        '2025-02-01T12:00:00Z', '2025-01-02'),
       ('invite-malformed', 'event-1', 'malformed@example.test', 'attendee', 'token-malformed', 'sent',
-       'not-a-date', '2025-01-02');
+       'not-a-date', '2025-01-02'),
+      ('invite-future-old', 'event-future', ' Duplicate@Example.Test ', 'attendee', 'token-future-old', 'sent',
+       NULL, '2025-01-01'),
+      ('invite-future-new', 'event-future', 'duplicate@example.test', 'attendee', 'token-future-new', 'sent',
+       '2099-02-02T09:00:00+00:00', '2025-01-02'),
+      ('invite-future-tie-a', 'event-future', 'tie@example.test', 'attendee', 'token-future-tie-a', 'sent',
+       NULL, '2025-01-03'),
+      ('invite-future-tie-z', 'event-future', 'tie@example.test', 'attendee', 'token-future-tie-z', 'sent',
+       NULL, '2025-01-03'),
+      ('invite-blank', 'event-future', '   ', 'attendee', 'token-blank', 'sent',
+       NULL, '2025-01-02'),
+      ('invite-bad-event', 'event-malformed', 'bad-event@example.test', 'attendee', 'token-bad-event', 'sent',
+       NULL, '2025-01-02'),
+      ('invite-reversed-event', 'event-reversed', 'reversed-event@example.test', 'attendee',
+       'token-reversed-event', 'sent',
+       NULL, '2025-01-02');
 
     INSERT INTO donations
       (id, checkout_session_id, name, email, currency, gross_amount, status, created_at)
@@ -481,16 +512,136 @@ describe("consolidated pending migration upgrade", () => {
         status: "pending",
       },
     ]);
-    expect(db.prepare("SELECT starts_at, ends_at FROM events WHERE id = 'event-1'").get()).toEqual({
-      starts_at: "2025-02-01T09:00:00.000Z",
-      ends_at: "2025-02-01T17:00:00.000Z",
-    });
-    expect(db.prepare("SELECT id, status, expires_at FROM invites ORDER BY id").all()).toEqual([
-      { id: "invite-early", status: "sent", expires_at: "2025-02-01T12:00:00.000Z" },
-      { id: "invite-malformed", status: "expired", expires_at: "not-a-date" },
-      { id: "invite-new", status: "revoked", expires_at: "2025-02-01T17:00:00.000Z" },
-      { id: "invite-old", status: "sent", expires_at: "2025-02-01T09:00:00.000Z" },
+    expect(
+      db
+        .prepare(
+          `SELECT id, starts_at, ends_at
+             FROM events
+            WHERE id IN ('event-1', 'event-future', 'event-malformed', 'event-reversed')
+            ORDER BY id`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: "event-1",
+        starts_at: "2025-02-01T09:00:00.000Z",
+        ends_at: "2025-02-01T17:00:00.000Z",
+      },
+      { id: "event-future", starts_at: "2099-02-01T09:00:00.000Z", ends_at: "2099-02-01T17:00:00.000Z" },
+      { id: "event-malformed", starts_at: "not-a-date", ends_at: "also-not-a-date" },
+      { id: "event-reversed", starts_at: "2099-03-02T09:00:00.000Z", ends_at: "2099-03-01T17:00:00.000Z" },
     ]);
+    expect(db.prepare("SELECT id, invitee_email, status, expires_at FROM invites ORDER BY id").all()).toEqual([
+      { id: "invite-bad-event", invitee_email: "bad-event@example.test", status: "expired", expires_at: null },
+      { id: "invite-blank", invitee_email: "", status: "expired", expires_at: "2099-02-01T09:00:00.000Z" },
+      {
+        id: "invite-early",
+        invitee_email: "early@example.test",
+        status: "expired",
+        expires_at: "2025-02-01T12:00:00.000Z",
+      },
+      {
+        id: "invite-future-new",
+        invitee_email: "duplicate@example.test",
+        status: "sent",
+        expires_at: "2099-02-01T17:00:00.000Z",
+      },
+      {
+        id: "invite-future-old",
+        invitee_email: "duplicate@example.test",
+        status: "revoked",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-future-tie-a",
+        invitee_email: "tie@example.test",
+        status: "revoked",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-future-tie-z",
+        invitee_email: "tie@example.test",
+        status: "sent",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-malformed",
+        invitee_email: "malformed@example.test",
+        status: "expired",
+        expires_at: "not-a-date",
+      },
+      {
+        id: "invite-new",
+        invitee_email: "invitee@example.test",
+        status: "expired",
+        expires_at: "2025-02-01T17:00:00.000Z",
+      },
+      {
+        id: "invite-old",
+        invitee_email: "invitee@example.test",
+        status: "expired",
+        expires_at: "2025-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-reversed-event",
+        invitee_email: "reversed-event@example.test",
+        status: "expired",
+        expires_at: null,
+      },
+    ]);
+    expect(
+      db
+        .prepare(
+          `SELECT invite.id
+             FROM invites invite
+             LEFT JOIN events event ON event.id = invite.event_id
+            WHERE invite.status = 'sent'
+              AND (
+                invite.invitee_email = ''
+                OR invite.invitee_email <> lower(trim(invite.invitee_email))
+                OR invite.expires_at IS NULL
+                OR strftime('%Y-%m-%dT%H:%M:%fZ', invite.expires_at) IS NULL
+                OR invite.expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', invite.expires_at)
+                OR invite.expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                OR strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at) IS NULL
+                OR strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at) IS NULL
+                OR event.starts_at <> strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at)
+                OR event.ends_at <> strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at)
+                OR event.ends_at <= event.starts_at
+                OR invite.expires_at > event.ends_at
+              )`,
+        )
+        .all(),
+    ).toEqual([]);
+    expect(
+      db
+        .prepare(
+          `SELECT DISTINCT event.id
+             FROM events event
+             JOIN invites invite ON invite.event_id = event.id
+            WHERE strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at) IS NULL
+               OR strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at) IS NULL
+               OR event.starts_at <> strftime('%Y-%m-%dT%H:%M:%fZ', event.starts_at)
+               OR event.ends_at <> strftime('%Y-%m-%dT%H:%M:%fZ', event.ends_at)
+               OR event.ends_at <= event.starts_at
+            ORDER BY event.id`,
+        )
+        .all(),
+    ).toEqual([{ id: "event-malformed" }, { id: "event-reversed" }]);
+    expect(
+      db
+        .prepare(
+          `SELECT id
+             FROM invites
+            WHERE expires_at IS NOT NULL
+              AND (
+                strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS NULL
+                OR expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', expires_at)
+              )
+            ORDER BY id`,
+        )
+        .all(),
+    ).toEqual([{ id: "invite-malformed" }]);
     expect(db.prepare("SELECT code, donation_id, clicks FROM donation_promoters ORDER BY code").all()).toEqual([
       { code: "NEWCODE1", donation_id: null, clicks: 3 },
       { code: "OLDCODE1", donation_id: "donation-1", clicks: 7 },
