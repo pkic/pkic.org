@@ -29,6 +29,7 @@ unproved rather than assumed.
 | Narrow mobile navigation: toggle, backdrop, Escape, focus restoration                      | `tests/e2e/portal-mobile-navigation.spec.ts`      |
 | Narrow and desktop navigation expose the same authorized destinations                      | `tests/e2e/portal-mobile-navigation.spec.ts`      |
 | Known sponsorship tier submits and renders both messages                                   | `tests/e2e/sponsor-application.spec.ts`           |
+| Organization contact adds, blocks, and explicitly restores a representative                | `tests/e2e/portal-system-organizations.spec.ts`   |
 
 ## Already proved by a browser journey
 
@@ -60,9 +61,6 @@ rendering and permission-derived-control dimension, not the rule itself.
 - Forms remaining editable after responses, with stable field and option
   identities — `tests/form-placements.test.ts`, `tests/form-answers.test.ts`,
   `tests/form-domain-revision-guards.test.ts`.
-- Representative association, block, and explicit restore —
-  `tests/organization-representation-endpoints.test.ts`, and the
-  no-silent-restore rule in `tests/member-join.test.ts`.
 - Recurring series materialization and generated calendars —
   `tests/event-series-platform.test.ts`.
 - Meeting entry security and guest invitation invalidation —
@@ -71,13 +69,6 @@ rendering and permission-derived-control dimension, not the rule itself.
 
 ## Unproved
 
-- **Blocking and restoring a representative has no portal control.** The
-  matrix asks an authorized organization contact to add, block, and restore a
-  representative. Adding is in
-  `tests/e2e/portal-system-organizations.spec.ts`, and the block and restore
-  APIs exist and are tested, but nothing in `assets/ts` calls them — so this
-  item cannot be performed in the portal at all, by a tester or a user. It
-  needs a UI before it can be either manually tested or browser-covered.
 - Losing a capacity entirely (rather than switching away from it) while the
   other is preserved. Switching is now covered; revocation is not.
 - Multi-organization participation: joining every eligible capacity, selecting

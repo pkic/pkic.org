@@ -59,12 +59,47 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page).toHaveURL(/\/portal\/#\/system\/organizations$/);
   await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();
 
+  await page.context().clearCookies();
+  await signInToPortal(page, primaryEmail);
+  await page.goto("/portal/#/profile");
+  await expect(page.getByRole("heading", { name: "Organization representatives", exact: true })).toBeVisible();
+
+  let representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
+  await expect(representativeRow).toContainText("Active");
+  const blockResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "DELETE",
+  );
+  page.once("dialog", (dialog) => dialog.accept());
+  await representativeRow.getByRole("button", { name: "Block Secondary Representative as representative" }).click();
+  expect((await blockResponse).status()).toBe(200);
+
+  representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
+  await expect(representativeRow).toContainText("Blocked");
+  const restoreResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+\/restore$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST",
+  );
+  page.once("dialog", (dialog) => dialog.accept());
+  await representativeRow.getByRole("button", { name: "Restore Secondary Representative as representative" }).click();
+  expect((await restoreResponse).status()).toBe(200);
+
+  representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
+  await expect(representativeRow).toContainText("Active");
+  await expect(
+    representativeRow.getByRole("button", { name: "Block Secondary Representative as representative" }),
+  ).toBeVisible();
+
   expect(canonicalRequests).toEqual(
     expect.arrayContaining([
       "GET /api/v1/organizations",
       "POST /api/v1/organizations",
       expect.stringMatching(/^GET \/api\/v1\/organizations\/[^/]+$/),
       expect.stringMatching(/^POST \/api\/v1\/organizations\/[^/]+\/representatives$/),
+      expect.stringMatching(/^DELETE \/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+$/),
+      expect.stringMatching(/^POST \/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+\/restore$/),
     ]),
   );
   expect(legacyRequests).toEqual([]);

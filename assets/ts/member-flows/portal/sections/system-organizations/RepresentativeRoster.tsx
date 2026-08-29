@@ -1,10 +1,11 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { representativeMutationResponseSchema } from "../../../../../shared/schemas/organization-representation";
-import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { FormActions } from "../../../../components/FormActions";
+import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
-import { deleteJson, patchJson, postJson } from "../../../../shared/api-client";
+import { postJson } from "../../../../shared/api-client";
+import { OrganizationRepresentativeDirectory } from "../OrganizationRepresentativeDirectory";
 import { toast } from "../../ui";
 
 function AddRepresentativeForm({
@@ -103,71 +104,6 @@ function AddRepresentativeForm({
   );
 }
 
-function RepresentativeVisibility({
-  organizationId,
-  representative,
-  onChanged,
-}: {
-  organizationId: string;
-  representative: OrganizationDetail["representatives"][number];
-  onChanged: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-
-  async function updateVisibility(showOnOrganizationProfile: boolean) {
-    setBusy(true);
-    try {
-      await patchJson(
-        `/api/v1/organizations/${encodeURIComponent(organizationId)}/representatives/${encodeURIComponent(representative.userId)}`,
-        { showOnOrganizationProfile },
-        successResponseSchema,
-      );
-      await onChanged();
-    } catch (caught) {
-      toast((caught as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove() {
-    if (!confirm(`Remove ${representative.name} as a representative? Their user account is not deleted.`)) return;
-    setBusy(true);
-    try {
-      await deleteJson(
-        `/api/v1/organizations/${encodeURIComponent(organizationId)}/representatives/${encodeURIComponent(representative.userId)}`,
-        successResponseSchema,
-      );
-      toast("Representative removed", "success");
-      await onChanged();
-    } catch (caught) {
-      toast((caught as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <td class="text-center">
-        <input
-          aria-label={`Show ${representative.name} on organization profile`}
-          type="checkbox"
-          class="form-check-input"
-          checked={representative.showOnOrgProfile}
-          disabled={busy}
-          onChange={(event) => void updateVisibility((event.target as HTMLInputElement).checked)}
-        />
-      </td>
-      <td class="text-end">
-        <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
-          Remove
-        </button>
-      </td>
-    </>
-  );
-}
-
 export function RepresentativeRoster({
   organization,
   canManageRepresentatives,
@@ -178,6 +114,7 @@ export function RepresentativeRoster({
   onChanged: () => Promise<void>;
 }) {
   const [showAdd, setShowAdd] = useState(false);
+  const directoryRef = useRef<ApiTableActions | null>(null);
 
   return (
     <section class="card border-0 shadow-sm" aria-labelledby="organization-representatives-heading">
@@ -196,58 +133,20 @@ export function RepresentativeRoster({
             onAdded={async () => {
               setShowAdd(false);
               await onChanged();
+              await directoryRef.current?.reload();
             }}
             onCancel={() => setShowAdd(false)}
           />
         </div>
       )}
-      <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0">
-          <thead class="table-dark">
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Status</th>
-              <th scope="col">Contact role</th>
-              {canManageRepresentatives && (
-                <th scope="col" class="text-center">
-                  On profile
-                </th>
-              )}
-              {canManageRepresentatives && <th scope="col" />}
-            </tr>
-          </thead>
-          <tbody>
-            {organization.representatives.length === 0 ? (
-              <tr>
-                <td colSpan={canManageRepresentatives ? 5 : 3} class="text-center text-muted fst-italic py-3">
-                  No representatives
-                </td>
-              </tr>
-            ) : (
-              organization.representatives.map((representative) => (
-                <tr key={representative.representativeId}>
-                  <td>
-                    <strong>{representative.name}</strong>
-                    <div class="mono text-muted small">{representative.email}</div>
-                    {representative.jobTitle && <div class="small text-muted">{representative.jobTitle}</div>}
-                  </td>
-                  <td>{representative.status}</td>
-                  <td class="small">
-                    {representative.isPrimaryContact && <span class="badge text-bg-primary me-1">Primary</span>}
-                    {representative.isSecondaryContact && <span class="badge text-bg-info">Secondary</span>}
-                  </td>
-                  {canManageRepresentatives && (
-                    <RepresentativeVisibility
-                      organizationId={organization.id}
-                      representative={representative}
-                      onChanged={onChanged}
-                    />
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div class="card-body p-3">
+        <OrganizationRepresentativeDirectory
+          organizationId={organization.id}
+          activeRepresentatives={organization.representatives}
+          canManage={canManageRepresentatives}
+          onChanged={onChanged}
+          actionsRef={directoryRef}
+        />
       </div>
     </section>
   );
