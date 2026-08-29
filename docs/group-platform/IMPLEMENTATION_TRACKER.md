@@ -295,9 +295,15 @@ Status: In progress
       drive creation, resend, bulk replacement, reminder selection, and pending
       counts. Omitted deadlines resolve to the current event start. Legacy null
       or overlong expiries are bounded by the event, and shortening an event
-      makes stale invitations logically expired. Duplicate classification and
-      the final guarded D1 batch use the same predicate, so replacement cannot
-      race with an event schedule or invitation change. The selected-group
+      makes stale invitations logically expired. The unreleased consolidated
+      migration also normalizes invitation recipient email, expires elapsed or
+      otherwise unsafe active invitations, and retains the newest still-valid
+      duplicate with deterministic tie-breaking. Ambiguous raw timestamps are
+      preserved for diagnosis but cannot remain active; the migration test
+      audits both the authority-bearing rows and the known unresolved values.
+      Duplicate classification and the final guarded D1 batch use the same
+      predicate, so replacement cannot race with an event schedule or
+      invitation change. The selected-group
       portal, resend actions, and peer attendee/speaker nomination route all
       reuse this contract and command boundary. The duplicate admin invitation
       UI and API have been removed rather than kept as a compatibility
@@ -1488,8 +1494,7 @@ Status: In progress
       Every mutation repeats its live permission and exact state predicates in
       the same D1 batch as the write and attributed audit record. The former
       admin Organization components, API handlers, route mount, and
-      admin-prefixed schema/service aliases are removed; old bookmarks return
-      404. Mounted permission, API-key denial,
+      admin-prefixed schema/service aliases are removed; old bookmarks return 404. Mounted permission, API-key denial,
       revocation-race, revision-race, contract, query-plan, profile-contact,
       and frontend tests cover the cutover. A focused real Worker/D1 browser
       journey creates an organization, adds a representative, verifies the
