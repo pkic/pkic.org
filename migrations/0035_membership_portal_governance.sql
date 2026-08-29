@@ -5658,3 +5658,50 @@ INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
   ('consultation_batch',      86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('ec_review_batch',         86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('working_group_chair_digest', 604800, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- ── Google Groups observed membership ────────────────────────────────────
+--
+-- Desired state records what we intend; this records what the provider
+-- actually reported. Keeping them apart is what makes an unsubscribe
+-- detectable: a member we once observed present who is now absent has left,
+-- and must not be silently re-added by any reconciliation.
+--
+-- `confirmed_subscribed_at` is the first time we saw them present, so an
+-- absence is only meaningful once presence was actually confirmed. Without
+-- it, a member queued but not yet added would look like an unsubscribe.
+CREATE TABLE google_groups_observed_membership (
+  user_id                  TEXT NOT NULL,
+  google_group_email       TEXT NOT NULL,
+
+  confirmed_subscribed_at  TEXT,
+  last_observed_present_at TEXT,
+  last_observed_absent_at  TEXT,
+
+  -- Set once, when a previously confirmed member is first seen absent.
+  unsubscribed_at          TEXT,
+  -- How we learned of it. 'provider_absence' is the always-available
+  -- inference; the audit-log sources are enrichment and may be unavailable,
+  -- because Groups audit events are retained for 180 days and do not cover
+  -- every removal path.
+  unsubscribe_source       TEXT CHECK (
+    unsubscribe_source IN ('provider_absence', 'self_unsubscribe', 'admin_removed', 'account_removed')
+  ),
+  -- Cleared only by an explicit local resubscribe, never by reconciliation.
+  suppressed               INTEGER NOT NULL DEFAULT 0 CHECK (suppressed IN (0, 1)),
+
+  created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (user_id, google_group_email),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  CHECK (unsubscribed_at IS NULL OR confirmed_subscribed_at IS NOT NULL),
+  CHECK ((unsubscribed_at IS NULL) = (unsubscribe_source IS NULL))
+);
+
+-- Suppression lookup on the add path, and the unsubscribe-notification sweep.
+CREATE INDEX idx_google_groups_observed_suppressed
+  ON google_groups_observed_membership(user_id, google_group_email)
+  WHERE suppressed = 1;
+
+CREATE INDEX idx_google_groups_observed_unsubscribed
+  ON google_groups_observed_membership(unsubscribed_at, user_id)
+  WHERE unsubscribed_at IS NOT NULL;

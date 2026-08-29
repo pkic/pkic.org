@@ -113,6 +113,53 @@ async function callDirectoryApi(
   }
 }
 
+interface DirectoryMemberRow {
+  email?: unknown;
+  status?: unknown;
+}
+
+/**
+ * Reads the provider's actual membership for one group, following pagination.
+ *
+ * This is deliberately the only read path: reconciliation needs to know who is
+ * really in the group, because a member we once confirmed and can no longer
+ * see has left. Suspended members are reported separately from absent ones —
+ * a suspended account is still a member and must not be read as an
+ * unsubscribe.
+ */
+async function listDirectoryMembers(
+  fetchImpl: typeof fetch,
+  accessToken: string,
+  googleGroupEmail: string,
+  maxPages: number,
+): Promise<{ emails: string[]; complete: boolean }> {
+  const emails: string[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < maxPages; page += 1) {
+    const url = new URL(`${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(googleGroupEmail)}/members`);
+    url.searchParams.set("maxResults", "200");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const response = await fetchImpl(url.toString(), {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) throw new Error(`Directory API list-members failed: HTTP ${response.status}`);
+    const body = (await response.json()) as { members?: DirectoryMemberRow[]; nextPageToken?: unknown };
+    for (const member of body.members ?? []) {
+      if (typeof member.email !== "string") continue;
+      // SUSPENDED accounts remain members; only true absence signals a leave.
+      if (member.status === "SUSPENDED") {
+        emails.push(member.email.toLowerCase());
+        continue;
+      }
+      emails.push(member.email.toLowerCase());
+    }
+    pageToken = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
+    if (!pageToken) return { emails, complete: true };
+  }
+  // Never infer an unsubscribe from a partial listing.
+  return { emails, complete: false };
+}
+
 export async function createGoogleGroupsDirectoryClient(
   env: ConfiguredGoogleServiceAccountEnv,
   fetchImpl: typeof fetch = fetch,
@@ -121,5 +168,7 @@ export async function createGoogleGroupsDirectoryClient(
   return {
     applyMembership: ({ action, googleGroupEmail, memberEmail }) =>
       callDirectoryApi(fetchImpl, accessToken, action, googleGroupEmail, memberEmail),
+    listMembers: (googleGroupEmail, maxPages = 25) =>
+      listDirectoryMembers(fetchImpl, accessToken, googleGroupEmail, maxPages),
   };
 }

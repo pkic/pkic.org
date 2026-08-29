@@ -51,9 +51,17 @@ export interface GoogleGroupsDirectoryClient {
     googleGroupEmail: string;
     memberEmail: string;
   }): Promise<void>;
+  /**
+   * The provider's actual membership for one group. `complete` is false when
+   * pagination was truncated, in which case absence must not be treated as an
+   * unsubscribe.
+   */
+  listMembers(googleGroupEmail: string, maxPages?: number): Promise<{ emails: string[]; complete: boolean }>;
 }
 
 export interface ProcessGoogleGroupsSyncResult {
+  /** Queued adds retired because the member had unsubscribed at the provider. */
+  suppressed?: number;
   processed: number;
   succeeded: number;
   failed: number;
