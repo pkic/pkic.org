@@ -33,7 +33,7 @@ import {
   type VoteResult,
   type VoteRow,
 } from "./shared";
-import { hydrateVotesForUser } from "./portal";
+import { hydrateVotesForUser } from "./member-read-model";
 
 interface GroupVoteRow extends VoteRow {
   granted_capabilities: string | null;
@@ -164,6 +164,18 @@ export function buildGroupVotesPageQuery(
   if (query.type) {
     conditions.push("vote.vote_type = ?");
     bindings.push(query.type);
+  }
+  if (query.ownerGroupId) {
+    conditions.push("vote.owner_group_id = ?");
+    bindings.push(query.ownerGroupId);
+  }
+  if (query.from) {
+    conditions.push("vote.closes_at >= ?");
+    bindings.push(query.from);
+  }
+  if (query.to) {
+    conditions.push("vote.closes_at <= ?");
+    bindings.push(query.to);
   }
   if (query.q) {
     const search = buildD1TextSearchFilter(query.q, [

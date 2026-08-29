@@ -287,17 +287,6 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(afterBody.headshotUrl).toBe(`/api/v1/headshots/${userId}/123.jpg`);
   });
 
-  it("GET /api/v1/me/votes returns an empty, paginated history when the caller has no ballots", async () => {
-    const userId = await insertActiveMember("votes-stub@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "votes-stub-token");
-
-    const response = await call(token, "/api/v1/me/votes");
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { votes: unknown[]; page: unknown };
-    expect(body.votes).toEqual([]);
-    expect(body.page).toEqual({ limit: 50, offset: 0, total: 0, hasMore: false });
-  });
-
   it("rejects unauthenticated access to every /me endpoint", async () => {
     const response = await app.fetch(
       new Request("https://app.test/api/v1/me/groups"),

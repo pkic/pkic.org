@@ -1,9 +1,9 @@
-/** Portal vote discovery, detail, results, and the caller's ballot history. */
+/** Member-scoped vote discovery, detail, and results for group resource adapters. */
 import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
+import { resolveOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import { canMemberAccessGroupResource } from "../resource-grants/access";
 import { votingMembershipCategoryExistsSql } from "../membership/categories";
@@ -17,9 +17,7 @@ import {
   type VoteFullResult,
   type VoteResult,
   type VoteRow,
-  type VoteStatus,
   type VoteSummary,
-  type VoteType,
 } from "./shared";
 import { publicResultForDetailLevel } from "./public";
 import {
@@ -29,8 +27,7 @@ import {
   voteViewGroupPredicate,
 } from "./vote-access";
 import type { AuthMember, DatabaseLike } from "../../types";
-import type { MyVotesListQuery } from "../../../../assets/shared/schemas/me";
-import { VOTES_LIST_SORT_COLUMNS, type PortalVotesListQuery } from "../../../../assets/shared/schemas/votes";
+import { VOTES_LIST_SORT_COLUMNS, type VotesListQuery } from "../../../../assets/shared/schemas/votes";
 
 export interface EligibleMemberBallot {
   memberId: string;
@@ -38,7 +35,7 @@ export interface EligibleMemberBallot {
   hasCastBallot: boolean;
 }
 
-export interface PortalVoteSummary extends VoteSummary {
+export interface MemberVoteSummary extends VoteSummary {
   candidates: CandidateSummary[] | null;
   canCastBallot: boolean;
   hasCastBallot: boolean;
@@ -191,7 +188,7 @@ export async function hydrateVotesForUser(
   rows: VoteRow[],
   userId: string,
   throughGroupId?: string,
-): Promise<PortalVoteSummary[]> {
+): Promise<MemberVoteSummary[]> {
   if (rows.length === 0) return [];
   const voteIds = rows.map((row) => row.id);
   const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
@@ -233,8 +230,8 @@ export async function hydrateVotesForUser(
 export async function listVisibleVotesForMember(
   db: DatabaseLike,
   member: AuthMember,
-  params: PortalVotesListQuery,
-): Promise<{ votes: PortalVoteSummary[]; total: number }> {
+  params: VotesListQuery,
+): Promise<{ votes: MemberVoteSummary[]; total: number }> {
   const filters = [
     `(votes.visibility = 'public' OR EXISTS (
        SELECT 1
@@ -245,6 +242,14 @@ export async function listVisibleVotesForMember(
      ))`,
   ];
   const bindings: unknown[] = [member.userId];
+  if (params.type) {
+    filters.push("votes.vote_type = ?");
+    bindings.push(params.type);
+  }
+  if (params.ownerGroupId) {
+    filters.push("votes.owner_group_id = ?");
+    bindings.push(params.ownerGroupId);
+  }
   if (params.status && params.status.length > 0) {
     const statusFilter = buildD1JsonMembershipFilter("status", params.status);
     filters.push(statusFilter.sql);
@@ -254,6 +259,14 @@ export async function listVisibleVotesForMember(
     const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type"]);
     filters.push(search.sql);
     bindings.push(...search.bindings);
+  }
+  if (params.from) {
+    filters.push("votes.closes_at >= ?");
+    bindings.push(params.from);
+  }
+  if (params.to) {
+    filters.push("votes.closes_at <= ?");
+    bindings.push(params.to);
   }
   const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
   const { rows, total } = await queryPage<VoteRow>(db, {
@@ -270,7 +283,7 @@ export async function getVoteDetailForMember(
   db: DatabaseLike,
   member: AuthMember,
   voteIdOrSlug: string,
-): Promise<PortalVoteSummary> {
+): Promise<MemberVoteSummary> {
   const row = await getVoteRowOrThrow(db, voteIdOrSlug);
   if (row.visibility !== "public" && !(await canMemberAccessGroupResource(db, member.userId, "vote", row.id, "view"))) {
     throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
@@ -288,71 +301,4 @@ export async function getVoteResultsForMember(
     throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   }
   return closedVoteResult(row);
-}
-
-export interface MyVoteHistoryEntry {
-  voteId: string;
-  slug: string;
-  title: string;
-  voteType: VoteType;
-  ownerGroupId: string;
-  memberId: string | null;
-  status: VoteStatus;
-  choice: string;
-  submittedAt: string;
-}
-
-export async function listMyVoteHistory(
-  db: DatabaseLike,
-  member: AuthMember,
-  params: MyVotesListQuery,
-): Promise<{ votes: MyVoteHistoryEntry[]; total: number }> {
-  const conditions = ["b.user_id = ?"];
-  const bindings: unknown[] = [member.userId];
-  if (params.q) {
-    const search = buildD1TextSearchFilter(params.q, ["v.title", "v.status", "v.vote_type", "b.choice"]);
-    conditions.push(search.sql);
-    bindings.push(...search.bindings);
-  }
-  const orderBy = resolveMappedOrderBy(
-    params.sort,
-    { title: "v.title COLLATE NOCASE", status: "v.status", submittedAt: "b.updated_at" },
-    "b.updated_at DESC",
-    "b.id ASC",
-  );
-  const { rows, total } = await queryPage<{
-    vote_id: string;
-    slug: string;
-    title: string;
-    vote_type: VoteType;
-    owner_group_id: string;
-    member_id: string | null;
-    status: VoteStatus;
-    choice: string;
-    submitted_at: string;
-  }>(db, {
-    sql: `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.owner_group_id,
-                 b.member_id, v.status, b.choice, b.updated_at AS submitted_at
-          FROM vote_ballots b
-          JOIN votes v ON v.id = b.vote_id
-          WHERE ${conditions.join(" AND ")}`,
-    bindings,
-    orderBy,
-    limit: params.limit,
-    offset: params.offset,
-  });
-  return {
-    votes: rows.map((row) => ({
-      voteId: row.vote_id,
-      slug: row.slug,
-      title: row.title,
-      voteType: row.vote_type,
-      ownerGroupId: row.owner_group_id,
-      memberId: row.member_id,
-      status: row.status,
-      choice: row.choice,
-      submittedAt: row.submitted_at,
-    })),
-    total,
-  };
 }

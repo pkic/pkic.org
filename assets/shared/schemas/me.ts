@@ -9,9 +9,7 @@ import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
-import { voteTypeSchema, voteStatusSchema } from "./votes";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { groupIdSchema } from "./groups";
 import {
   contentReviewStatusSchema,
   organizationContentReviewSchema,
@@ -178,35 +176,6 @@ export const myApplicationDetailRouteSchema = {
   responses: {
     "200": { description: "My application.", content: { "application/json": { schema: myApplicationDetailSchema } } },
     "404": { description: "Not found, or does not belong to the caller." },
-  },
-};
-
-export const myVoteHistoryEntrySchema = z.object({
-  voteId: databaseIdSchema,
-  slug: z.string(),
-  title: z.string(),
-  voteType: voteTypeSchema,
-  ownerGroupId: groupIdSchema,
-  memberId: databaseIdSchema.nullable(),
-  status: voteStatusSchema,
-  choice: z.string(),
-  submittedAt: z.string(),
-});
-
-export const myVotesListQuerySchema = listQuerySchema(["title", "status", "submittedAt"] as const);
-export type MyVotesListQuery = z.infer<typeof myVotesListQuerySchema>;
-export const myVotesListResponseSchema = paginatedResponseSchema("votes", myVoteHistoryEntrySchema);
-
-export const myVotesListRouteSchema = {
-  tags: ["Me"],
-  summary: "My vote history",
-  description: "Every ballot the caller has cast, most recent first.",
-  request: { query: myVotesListQuerySchema },
-  responses: {
-    "200": {
-      description: "My votes.",
-      content: { "application/json": { schema: myVotesListResponseSchema } },
-    },
   },
 };
 

@@ -139,6 +139,7 @@ describe("durable vote representative notifications", () => {
       "SELECT payload_json FROM email_outbox WHERE idempotency_key LIKE 'member-vote-representative-notify:%'",
     );
     const payload = JSON.parse(queued.payload_json) as Record<string, unknown>;
+    expect(payload.voteUrl).toBe(`/portal/#/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`);
     for (const contentType of ["markdown", "html"] as const) {
       const rendered = await renderEmail(
         "{{representativeName}} {{organizationName}} {{voteTitle}}",

@@ -932,8 +932,17 @@ Status: In progress
       read model are deleted. The unused global
       `/api/v1/admin/vote-proposals` adapter is also removed; its admin-only
       route contracts and unscoped read model no longer remain as a second
-      implementation. The selected-group and member portal routes now compose
-      the neutral canonical proposal list and rejection schemas.
+      implementation. The duplicate `/api/v1/portal/votes`,
+      `/api/v1/portal/vote-proposals`, and `/api/v1/me/votes` adapters and the
+      separate top-level member Votes workspace are removed. Authenticated
+      discovery, participation, history state, results, proposals, and
+      management now use only `/api/v1/groups/:groupId/...`; consortium-wide
+      usage is the same implementation in the automatically enrolled All
+      Members group. `/api/v1/votes` remains a deliberately minimized public
+      cross-group projection and omits private, ballot, and member-state data;
+      published cancellations remain visible. Representative notifications link to the owning
+      group's Votes view. The group proposal routes compose the neutral
+      canonical proposal list and rejection schemas.
       Portal membership and leadership selectors no longer cross the global
       admin-user boundary: one group-scoped catalog returns only active users'
       selection fields after required server-side search, enforces an eight-row

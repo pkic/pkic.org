@@ -68,7 +68,15 @@ function GroupContextHeader({ group }: { group: Group }) {
   );
 }
 
-export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string; view?: string }) {
+export function Management({
+  groupId,
+  view = OVERVIEW_VIEW,
+  resourceId,
+}: {
+  groupId?: string;
+  view?: string;
+  resourceId?: string;
+}) {
   const [, navigate] = useHashLocation();
   const selectGroup = useCallback(
     (group: Group | null) => {
@@ -151,10 +159,11 @@ export function Management({ groupId, view = OVERVIEW_VIEW }: { groupId?: string
           {view === "forms" && <GroupForms key={group.id} groupId={group.id} canManage={canManage} />}
           {view === "votes" && (
             <GroupVotes
-              key={group.id}
+              key={`${group.id}:${resourceId ?? ""}`}
               groupId={group.id}
               canManage={canManage}
               canParticipate={capabilities.includes("participate")}
+              initialVoteId={resourceId}
             />
           )}
           {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}

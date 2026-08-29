@@ -32,7 +32,6 @@ import sponsorship_Router from "./sponsorship/router";
 import sponsorships_Router from "./sponsorships/router";
 import sponsorPortal_Router from "./sponsor-portal/router";
 import users_Router from "./users/router";
-import portal_Router from "./portal/router";
 import votes_Router from "./votes/router";
 
 const app = new Hono();
@@ -77,7 +76,6 @@ openapi.route("/sponsorship", sponsorship_Router);
 openapi.route("/sponsorships", sponsorships_Router);
 openapi.route("/sponsor-portal", sponsorPortal_Router);
 openapi.route("/users", users_Router);
-openapi.route("/portal", portal_Router);
 openapi.route("/votes", votes_Router);
 
 export default openapi;

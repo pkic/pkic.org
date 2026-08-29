@@ -5,7 +5,7 @@ import {
 } from "../assets/shared/schemas/membership-categories";
 import { groupMailingListCreateSchema } from "../assets/shared/schemas/mailing-lists";
 import { voteCreateInputSchema } from "../assets/shared/schemas/vote-management";
-import { submitProposalSchema } from "../assets/shared/schemas/votes";
+import { groupVoteProposalCreateSchema } from "../assets/shared/schemas/group-vote-proposals";
 
 const groupId = "20000000-0000-4000-8000-000000000001";
 
@@ -30,11 +30,10 @@ describe("membership category selection contract", () => {
       }).success,
     ).toBe(false);
     expect(
-      submitProposalSchema.safeParse({
+      groupVoteProposalCreateSchema.safeParse({
         title: "Duplicate category proposal",
         description: "A sufficiently complete proposal description.",
         voteType: "motion",
-        ownerGroupId: groupId,
         eligibleCategories: duplicateSelection,
       }).success,
     ).toBe(false);

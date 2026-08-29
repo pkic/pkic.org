@@ -57,7 +57,9 @@ through capabilities and policy rather than type-specific route branches.
 
 An automatically enrolled all-members group is an ordinary top-level group. It
 is a communication convenience, not the parent of every working group.
-Opting out of it cannot affect eligibility for unrelated groups.
+Opting out of it cannot affect eligibility for unrelated groups. Consortium-wide
+events, forms, votes, proposals, meetings, and mailing lists use the same group
+resources in this group; they do not create a second global collaboration API.
 
 ## Hierarchy and governance
 
@@ -298,7 +300,11 @@ replacement. Removing a representative never deletes history. A primary or
 secondary contact may submit a corrective ballot.
 
 Vote configuration controls whether an electorate is per Member or per person.
-The policy is shared across all group types.
+The policy is shared across all group types. Authenticated discovery,
+participation, proposals, results, and management always use the owning group's
+routes. `/api/v1/votes` is only a public cross-group read projection of votes
+whose publication policy permits it; it does not expose ballot state or private
+configuration.
 
 ## API and service boundaries
 

@@ -5,13 +5,12 @@ import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema } from "./pagination";
 import { voteGroupGrantSchemas } from "./resource-grants";
 import {
-  portalVoteSchema,
-  portalVotesListQuerySchema,
+  memberVoteSchema,
   submitBallotResponseSchema,
   submitBallotSchema,
   voteFullResultSchema,
   voteSummaryFieldsSchema,
-  voteTypeSchema,
+  votesListQuerySchema,
 } from "./votes";
 import { voteLifecycleTransitionNameSchema } from "./vote-management";
 
@@ -20,7 +19,7 @@ const voteCapabilitiesSchema = z
   .max(voteGroupGrantSchemas.capabilities.length);
 export const availableVoteTransitionsSchema = z.array(voteLifecycleTransitionNameSchema).max(3).default([]);
 
-export const groupVotesListQuerySchema = portalVotesListQuerySchema.extend({ type: voteTypeSchema.optional() });
+export const groupVotesListQuerySchema = votesListQuerySchema;
 export type GroupVotesListQuery = z.infer<typeof groupVotesListQuerySchema>;
 
 export const groupVoteSchema = z.object({
@@ -32,7 +31,7 @@ export type GroupVote = z.infer<typeof groupVoteSchema>;
 export const groupVotesListResponseSchema = paginatedResponseSchema("votes", groupVoteSchema);
 
 export const groupVoteParamsSchema = groupReferenceParamsSchema.extend({ voteId: databaseIdSchema });
-export const groupVoteDetailSchema = portalVoteSchema.extend({
+export const groupVoteDetailSchema = memberVoteSchema.extend({
   capabilities: voteCapabilitiesSchema,
   availableTransitions: availableVoteTransitionsSchema,
 });
