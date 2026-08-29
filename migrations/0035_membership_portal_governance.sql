@@ -1013,6 +1013,8 @@ CREATE INDEX idx_member_applications_stage ON member_applications(stage);
 -- ORDER BY stage_entered_at LIMIT ? (PR #1 review §9.1) with a direct index
 -- range scan instead of a full per-stage table scan.
 CREATE INDEX idx_member_applications_stage_entered_at ON member_applications(stage, stage_entered_at, id);
+CREATE INDEX idx_member_applications_membership_category
+  ON member_applications(membership_category);
 CREATE INDEX idx_member_applications_consultation_due
   ON member_applications(stage, consultation_notified_at, stage_entered_at, id)
   WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL;
@@ -1270,6 +1272,11 @@ CREATE TABLE leadership_positions (
   FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(member_id) REFERENCES members(id)
 );
+
+-- Public roster lookups by represented Member, and Member deletes.
+CREATE INDEX idx_leadership_positions_member
+  ON leadership_positions(member_id)
+  WHERE member_id IS NOT NULL;
 
 CREATE INDEX idx_leadership_positions_body_dates
   ON leadership_positions(body, ends_at, starts_at DESC, id);
@@ -2057,6 +2064,10 @@ CREATE TABLE member_category_assignments (
   FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(category_code) REFERENCES membership_categories(code)
 );
+
+-- Category reference reads and any category evolution touch this FK column.
+CREATE INDEX idx_member_category_assignments_category
+  ON member_category_assignments(category_code);
 
 -- ── Organization representatives ─────────────────────────────────────────
 -- The N people who represent an organization-tied membership aggregate.
@@ -4945,6 +4956,12 @@ CREATE TABLE vote_proposals (
   updated_at          TEXT NOT NULL
 );
 
+-- Resolves the proposal that produced a vote, and keeps a vote delete from
+-- scanning every proposal. Partial: most proposals never reach a vote.
+CREATE INDEX idx_vote_proposals_vote
+  ON vote_proposals(vote_id)
+  WHERE vote_id IS NOT NULL;
+
 CREATE INDEX idx_vote_proposals_group_status
   ON vote_proposals(owner_group_id, status, created_at, id);
 
@@ -5494,6 +5511,11 @@ CREATE TABLE proposal_review_history (
   FOREIGN KEY(proposal_id) REFERENCES session_proposals(id),
   FOREIGN KEY(reviewer_user_id) REFERENCES users(id)
 );
+
+-- Reviews are read back for one proposal in round order. Without this the
+-- lookup scans the whole history and a proposal delete scans it again.
+CREATE INDEX idx_proposal_review_history_proposal
+  ON proposal_review_history(proposal_id, review_round, review_id);
 
 INSERT INTO proposal_decision_history (
   id, proposal_id, review_round, decided_by_user_id, final_status,
