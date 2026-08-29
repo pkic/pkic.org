@@ -48,6 +48,29 @@ function emptyStatement(query: string, queries: string[], options: StatementOpti
           revoked_at: null,
         } as T;
       }
+      if (query.includes("FROM events WHERE slug")) {
+        return {
+          id: "event-1",
+          slug: "pqc-2026",
+          name: "PQC 2026",
+          timezone: "UTC",
+          starts_at: null,
+          ends_at: null,
+          source_path: null,
+          base_path: null,
+          capacity_in_person: null,
+          registration_mode: "open",
+          visibility: "public",
+          invite_limit_attendee: 5,
+          invite_limit_speaker_nomination: 10,
+          settings_json: "{}",
+          owner_group_id: null,
+          profile_key: null,
+          source_mode: null,
+          links_json: null,
+          updated_at: new Date().toISOString(),
+        } as T;
+      }
       if (query.includes("SELECT id, email, role, active FROM users u WHERE u.id")) {
         return {
           id: "admin-user",
@@ -107,7 +130,7 @@ describe("D1 read replication", () => {
     const adminToken = await createAdminToken();
 
     const response = await adminRouter.fetch(
-      new Request("https://app.test/events", {
+      new Request("https://app.test/events/pqc-2026/registrations", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
@@ -138,7 +161,7 @@ describe("D1 read replication", () => {
     const adminToken = await createAdminToken();
 
     const responsePromise = adminRouter.fetch(
-      new Request("https://app.test/events", {
+      new Request("https://app.test/events/pqc-2026/registrations", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       env,
@@ -158,7 +181,7 @@ describe("D1 read replication", () => {
     const adminToken = await createAdminToken("prior/bookmark");
 
     const response = await adminRouter.fetch(
-      new Request("https://app.test/events", {
+      new Request("https://app.test/events/pqc-2026/registrations", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
