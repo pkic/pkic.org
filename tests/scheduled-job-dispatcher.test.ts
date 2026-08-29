@@ -219,3 +219,45 @@ describe("computed next wake", () => {
     expect(boundedNextRunAt(overdue, floorSeconds)! >= new Date(Date.now() - 5_000).toISOString()).toBe(true);
   });
 });
+
+describe("vote transition wake", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it("wakes at the soonest pending vote open or close, ignoring settled votes", async () => {
+    const { earliestVoteTransitionDue } = await import("../functions/_lib/services/scheduled-jobs/next-due");
+    const group = "20000000-0000-4000-8000-000000000001";
+    const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+
+    const insert = (
+      id: string,
+      opensAt: string,
+      closesAt: string,
+      opened: boolean,
+      closed: boolean,
+      cancelled: boolean,
+    ) =>
+      env.DB.prepare(
+        `INSERT INTO votes (id, slug, title, vote_type, owner_group_id, electorate_mode, threshold_type,
+                            opens_at, closes_at, opened_at, closed_at, cancelled_at, created_at, updated_at)
+         VALUES (?, ?, 'V', 'motion', ?, 'per_member', 'simple_majority', ?, ?,
+                 ${opened ? NOW : "NULL"}, ${closed ? NOW : "NULL"}, ${cancelled ? NOW : "NULL"}, ${NOW}, ${NOW})`,
+      )
+        .bind(id, `v-${id}`, group, opensAt, closesAt)
+        .run();
+
+    await insert("v1", "2030-01-01T00:00:00.000Z", "2030-02-01T00:00:00.000Z", false, false, false);
+    await insert("v2", "2029-06-01T00:00:00.000Z", "2029-07-01T00:00:00.000Z", false, false, false);
+    // Settled votes need no further transition and must not pull the wake earlier.
+    await insert("v3", "2027-01-01T00:00:00.000Z", "2027-02-01T00:00:00.000Z", false, false, true);
+    await insert("v4", "2028-01-01T00:00:00.000Z", "2028-02-01T00:00:00.000Z", true, true, false);
+
+    expect(await earliestVoteTransitionDue(env.DB)).toBe("2029-06-01T00:00:00.000Z");
+  });
+
+  it("reports no deadline when every vote is settled", async () => {
+    const { earliestVoteTransitionDue } = await import("../functions/_lib/services/scheduled-jobs/next-due");
+    expect(await earliestVoteTransitionDue(env.DB)).toBeNull();
+  });
+});
