@@ -351,3 +351,23 @@ export async function recordGoogleGroupsDirectoryFailure(
 }
 
 export type { GoogleGroupsSyncAction, GoogleGroupsSyncQueueRow };
+
+/**
+ * Retires a queued add for someone who has left the group on the provider
+ * side. It is marked superseded rather than failed: nothing went wrong, the
+ * intent is simply no longer valid, and retrying it would re-subscribe
+ * somebody who opted out.
+ */
+export async function supersedeSuppressedGoogleGroupsAdd(
+  db: DatabaseLike,
+  claim: ClaimedGoogleGroupsSyncRow,
+): Promise<void> {
+  await run(
+    db,
+    `UPDATE google_groups_sync_queue
+        SET status = 'superseded', processed_at = ?, processing_token = NULL, lease_expires_at = NULL,
+            last_error = 'Suppressed: the member unsubscribed on the provider side'
+      WHERE id = ? AND processing_token = ?`,
+    [nowIso(), claim.id, claim.processing_token],
+  );
+}
