@@ -42,3 +42,28 @@ export async function earliestSponsorshipRenewalDue(db: DatabaseLike): Promise<s
   );
   return row?.due_at ?? null;
 }
+
+/**
+ * Earliest instant a vote next needs the scheduler: the soonest pending open
+ * or pending close.
+ *
+ * Safe only because vote open-ness is derived from the schedule rather than a
+ * stored status. A late run now delays the side effects — representative
+ * notifications and freezing the tally — but can never misrepresent whether a
+ * vote is open, so the job no longer has to poll to keep state truthful.
+ */
+export async function earliestVoteTransitionDue(db: DatabaseLike): Promise<string | null> {
+  const row = await first<{ due_at: string | null }>(
+    db,
+    `SELECT MIN(due_at) AS due_at FROM (
+       SELECT MIN(opens_at) AS due_at
+         FROM votes
+        WHERE opened_at IS NULL AND cancelled_at IS NULL
+       UNION ALL
+       SELECT MIN(closes_at) AS due_at
+         FROM votes
+        WHERE closed_at IS NULL AND cancelled_at IS NULL
+     )`,
+  );
+  return row?.due_at ?? null;
+}

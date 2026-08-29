@@ -11,7 +11,12 @@ import { runScheduledDueWork } from "../scheduled-due-work";
 import { runSponsorshipDueWork } from "../sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "../votes-scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../wg-chair-digest";
-import { boundedNextRunAt, earliestRetentionDue, earliestSponsorshipRenewalDue } from "./next-due";
+import {
+  boundedNextRunAt,
+  earliestRetentionDue,
+  earliestSponsorshipRenewalDue,
+  earliestVoteTransitionDue,
+} from "./next-due";
 import type { ScheduledJobDefinition } from "./types";
 
 /** Ten minutes covers the longest observed pass with room for a slow D1. */
@@ -24,6 +29,12 @@ const DEFAULT_LEASE_SECONDS = 600;
  */
 const RETENTION_INTERVAL_SECONDS = 86_400;
 const SPONSORSHIP_INTERVAL_SECONDS = 86_400;
+/**
+ * Votes wake at their next real deadline, so this is only the reconciliation
+ * floor. It stays short because a vote deadline is user-visible: the tally
+ * should be frozen promptly after the window closes.
+ */
+const VOTES_INTERVAL_SECONDS = 900;
 
 /**
  * Every recurring job the platform runs, keyed by the row in
@@ -88,6 +99,9 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
         config.scheduledVoteDueWorkLimit,
         d1QueryBudget,
       );
+      return {
+        nextRunAt: boundedNextRunAt(await earliestVoteTransitionDue(env.DB), VOTES_INTERVAL_SECONDS),
+      };
     },
   },
   {
