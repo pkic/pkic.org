@@ -22,7 +22,7 @@ import { openapi } from "../functions/router";
  * security requirement — counting emitted `security` instead would file that
  * verified route alongside the ones nobody has examined.
  */
-const UNDECLARED_BUDGET = 180;
+const UNDECLARED_BUDGET = 143;
 
 function operationsWithoutSecurity(): string[] {
   const spec = openapi.schema as {

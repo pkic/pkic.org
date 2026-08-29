@@ -3,6 +3,7 @@ import { successResponseSchema, tokenSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { inviteAcceptAttendeeSchema, inviteDeclineSchema, inviteTypeSchema } from "./registration";
 import { httpOrSameOriginUrlSchema } from "./urls";
+import { publicOperation } from "./route-contract";
 
 export const inviteCapabilityParamsSchema = z.object({ token: tokenSchema });
 export const inviteCapabilityQuerySchema = z.object({ id: databaseIdSchema.optional() });
@@ -57,6 +58,7 @@ export const inviteReminderPreferenceResponseSchema = successResponseSchema.exte
 });
 
 export const inviteInfoRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Get invite metadata",
   request: inviteCapabilityRequest,
@@ -69,6 +71,7 @@ export const inviteInfoRouteSchema = {
 };
 
 export const inviteDeclineInfoRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Get invite decline metadata",
   request: inviteCapabilityRequest,
@@ -81,6 +84,7 @@ export const inviteDeclineInfoRouteSchema = {
 };
 
 export const inviteDeclineRedirectRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Redirect an invite decline link",
   request: inviteCapabilityRequest,
@@ -88,6 +92,7 @@ export const inviteDeclineRedirectRouteSchema = {
 };
 
 export const inviteDeclineRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Decline or forward an invite",
   request: {
@@ -103,6 +108,7 @@ export const inviteDeclineRouteSchema = {
 };
 
 export const inviteAcceptRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Accept an invite",
   request: {
@@ -125,6 +131,7 @@ export const inviteAcceptRouteSchema = {
 };
 
 export const inviteReminderPreferenceRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Update invite reminder preferences",
   request: {

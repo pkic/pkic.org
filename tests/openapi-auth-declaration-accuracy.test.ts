@@ -18,32 +18,51 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     await resetDb();
   });
 
-  const declaredPublic = ["/api/v1/groups/types", "/api/v1/groups", "/api/v1/votes", "/api/v1/votes/feed.rss"];
-
-  it.each(declaredPublic)("%s is reachable without credentials, as declared", async (path) => {
-    const response = await callApi(env, path);
-    expect(response.status).not.toBe(401);
-    expect(response.status).not.toBe(403);
-  });
-
   it("answers 404, not 401, for a path with no route — so the checks below mean something", async () => {
     const response = await callApi(env, "/api/v1/groups/any-group/not-a-real-resource");
     expect(response.status).toBe(404);
   });
 
-  const declaredSessionRequired: [string, RequestInit?][] = [
-    ["/api/v1/users/current/groups"],
-    ["/api/v1/groups/any-group/context"],
-    ["/api/v1/groups/any-group/votes"],
-    ["/api/v1/groups/any-group/forms"],
-    ["/api/v1/groups/any-group/events"],
-    ["/api/v1/groups/any-group/vote-proposals"],
+  const declaredPublic = [
+    "/api/v1",
+    "/api/v1/groups",
+    "/api/v1/groups/types",
+    "/api/v1/votes",
+    "/api/v1/votes/feed.rss",
+    "/api/v1/geolocation/country",
+    "/api/v1/leadership/consortium-chairs",
+    "/api/v1/invites/no-such-token/info",
   ];
 
-  it.each(declaredSessionRequired)("%s rejects an anonymous caller, as declared", async (path, init) => {
-    const response = await callApi(env, path, init);
-    // 401 specifically: a 404 here would mean the route resolves group identity
+  it.each(declaredPublic)("%s is reachable without credentials, as declared", async (path) => {
+    const response = await callApi(env, path);
+    // A public route may answer 404 for a token or slug that does not exist;
+    // what it must never do is demand credentials.
+    expect(response.status).not.toBe(401);
+    expect(response.status).not.toBe(403);
+  });
+
+  const declaredSessionRequired = [
+    "/api/v1/auth/session",
+    "/api/v1/auth/passkeys",
+    "/api/v1/users/current/groups",
+    "/api/v1/groups/any-group/context",
+    "/api/v1/groups/any-group/votes",
+    "/api/v1/groups/any-group/forms",
+    "/api/v1/groups/any-group/events",
+    "/api/v1/groups/any-group/vote-proposals",
+    "/api/v1/groups/any-group/mailing-lists",
+  ];
+
+  it.each(declaredSessionRequired)("%s rejects an anonymous caller, as declared", async (path) => {
+    const response = await callApi(env, path);
+    // 401 specifically: a 404 here would mean the route resolves the resource
     // before authenticating, which leaks existence to anonymous callers.
     expect({ path, status: response.status }).toEqual({ path, status: 401 });
+  });
+
+  it("audit log reads demand the declared permission, not merely a session", async () => {
+    const response = await callApi(env, "/api/v1/audit-log");
+    expect([401, 403]).toContain(response.status);
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { httpUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
+import { publicOperation } from "./route-contract";
 
 export const sendgridEventSchema = z
   .object({
@@ -23,6 +24,7 @@ export const sendgridEventBatchSchema = z.array(sendgridEventSchema).max(500);
 export type SendgridEvent = z.infer<typeof sendgridEventSchema>;
 
 export const sendgridWebhookPostRouteSchema = {
+  ...publicOperation(),
   tags: ["Email"],
   summary: "Receive SendGrid event webhooks",
   description:

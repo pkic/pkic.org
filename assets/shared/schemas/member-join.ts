@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api-common";
 import { authMemberSchema } from "./member-auth";
+import { publicOperation } from "./route-contract";
 
 export const memberJoinApplicantKindSchema = z.enum(["organization", "individual"]);
 export type MemberJoinApplicantKind = z.infer<typeof memberJoinApplicantKindSchema>;
@@ -33,6 +34,7 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
 ]);
 
 export const memberJoinStartRouteSchema = {
+  ...publicOperation(),
   tags: ["Members"],
   summary: "Start a verified membership join flow",
   description:
@@ -49,6 +51,7 @@ export const memberJoinStartRouteSchema = {
 };
 
 export const memberJoinVerifyRouteSchema = {
+  ...publicOperation(),
   tags: ["Members"],
   summary: "Verify a membership join email",
   description:

@@ -151,7 +151,11 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/internal/retention/run"]).toBeUndefined();
     expect(spec.paths["/api/v1/internal/calendar/rsvp"]).toBeUndefined();
     expect(spec.paths["/api/v1/calendar/rsvp"].post).toBeDefined();
-    expect(spec.paths["/api/v1/calendar/rsvp"].post[AUTH_EXTENSION]).toBeUndefined();
+    // RSVP is authorized by the signature on the link it arrives with, not by
+    // a session, so it declares itself public and publishes no bearer
+    // requirement. The declaration is what separates that verified decision
+    // from a route nobody has examined.
+    expect(spec.paths["/api/v1/calendar/rsvp"].post[AUTH_EXTENSION]).toEqual({ required: false });
     expect(spec.paths["/api/v1/calendar/rsvp"].post.security).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}"]).toBeUndefined();

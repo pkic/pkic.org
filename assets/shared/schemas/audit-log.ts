@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { requiresPermissions } from "./route-contract";
 
 export const SCOPED_AUDIT_LOG_SORT_COLUMNS = ["createdAt", "action", "actor"] as const;
 
@@ -51,6 +52,7 @@ export const auditLogListResponseSchema = paginatedResponseSchema("entries", aud
 export type AuditLogListResponse = z.infer<typeof auditLogListResponseSchema>;
 
 export const auditLogListRouteSchema = {
+  ...requiresPermissions("audit:read"),
   tags: ["Audit log"],
   summary: "List platform-wide audit log entries",
   description:

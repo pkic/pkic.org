@@ -4,6 +4,7 @@ import { publicAuthAdminSchema } from "./admin-auth";
 import { authMemberSchema } from "./member-auth";
 import { emailRecoveryRequestSchema, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const userAuthRequestSchema = emailRecoveryRequestSchema;
 export const userAuthVerifySchema = magicLinkVerifySchema;
@@ -35,6 +36,7 @@ export const userAuthEstablishedResponseSchema = requireCapacity(
 );
 
 export const userAuthRequestRouteSchema = {
+  ...publicOperation(),
   tags: ["Authentication"],
   summary: "Request a user sign-in link",
   description: "Sends an enumeration-safe sign-in link when the address has an active user capacity.",
@@ -50,6 +52,7 @@ export const userAuthRequestRouteSchema = {
 };
 
 export const userAuthVerifyRouteSchema = {
+  ...publicOperation(),
   tags: ["Authentication"],
   summary: "Verify a user sign-in link",
   request: {
@@ -64,6 +67,7 @@ export const userAuthVerifyRouteSchema = {
 };
 
 export const userAuthSessionRouteSchema = {
+  ...requiresSession(),
   tags: ["Authentication"],
   summary: "Get the current user identity and capacities",
   responses: {
@@ -76,6 +80,7 @@ export const userAuthSessionRouteSchema = {
 };
 
 export const userAuthLogoutRouteSchema = {
+  ...requiresSession(),
   tags: ["Authentication"],
   summary: "Sign out the current user identity",
   responses: {

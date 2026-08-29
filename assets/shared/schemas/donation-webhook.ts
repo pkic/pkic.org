@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { stripeCheckoutSessionIdSchema, stripeCurrencySchema, stripeEventEnvelopeSchema } from "./stripe";
+import { publicOperation } from "./route-contract";
 
 export const stripeWebhookEnvelopeSchema = stripeEventEnvelopeSchema;
 
@@ -24,6 +25,7 @@ export const stripeCheckoutSessionSchema = z
   .passthrough();
 
 export const stripeWebhookPostRouteSchema = {
+  ...publicOperation(),
   tags: ["Donations"],
   summary: "Receive Stripe webhook events",
   description:

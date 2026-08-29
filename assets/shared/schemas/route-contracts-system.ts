@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { publicOperation } from "./route-contract";
 
 export const apiRootGetRouteSchema = {
+  ...publicOperation(),
   tags: ["System"],
   summary: "Get API status",
   description: "Returns the API name, version, documentation URL, and current health status.",

@@ -14,6 +14,7 @@ import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
 import { publicAuthAdminSchema } from "./admin-auth";
 import { authMemberSchema } from "./member-auth";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
@@ -86,6 +87,7 @@ export const passkeyAuthenticateCompleteResponseSchema = passkeyAuthenticateComp
   });
 
 export const passkeyRegisterBeginRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Begin passkey registration",
   description: "Returns WebAuthn PublicKeyCredentialCreationOptions for an authenticated user.",
@@ -100,6 +102,7 @@ export const passkeyRegisterBeginRouteSchema = {
 };
 
 export const passkeyRegisterCompleteRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Complete passkey registration",
   description: "Verifies the credential and stores it in passkey_credentials.",
@@ -115,6 +118,7 @@ export const passkeyRegisterCompleteRouteSchema = {
 };
 
 export const passkeyAuthenticateBeginRouteSchema = {
+  ...publicOperation(),
   tags: ["Passkeys"],
   summary: "Begin passkey authentication",
   description: "Discovery flow, no authentication required.",
@@ -127,6 +131,7 @@ export const passkeyAuthenticateBeginRouteSchema = {
 };
 
 export const passkeyAuthenticateCompleteRouteSchema = {
+  ...publicOperation(),
   tags: ["Passkeys"],
   summary: "Complete passkey authentication",
   description:
@@ -145,6 +150,7 @@ export const passkeyAuthenticateCompleteRouteSchema = {
 };
 
 export const passkeysListRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "List the authenticated user's passkeys",
   responses: {
@@ -157,6 +163,7 @@ export const passkeysListRouteSchema = {
 };
 
 export const passkeyDeleteRouteSchema = {
+  ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Remove a passkey",
   request: { params: passkeyIdParamsSchema },
