@@ -17,6 +17,7 @@ import { resolveRepresentativeRoleHolders } from "./membership/representative-ro
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
 import type { MyApplicationsListQuery } from "../../../assets/shared/schemas/me";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import { publicUserHeadshotPath } from "./user-headshot";
 
 export interface MyOrganizationRepresentative {
   userId: string;
@@ -110,9 +111,7 @@ function toProfile(
     organizationName: row.org_name ?? row.organization_name,
     memberSince: row.member_since ?? row.member_created_at,
     showOnOrgProfile: row.show_on_org_profile === 1,
-    // Public capability-URL path (functions/api/v1/headshots/:userId/:file) —
-    // matches admin/users/[userId]/index.ts's identical construction.
-    headshotUrl: row.headshot_r2_key ? `/api/v1/${row.headshot_r2_key}` : null,
+    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
     // organization is locked to membership for org-tied categories;
     // H5/H6/H7 (org-less) may set a free-text organization name.
     canEditOrganizationName: isIndividual,

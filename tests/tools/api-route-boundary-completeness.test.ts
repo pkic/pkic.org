@@ -7,7 +7,7 @@ const API_ROOT = join(REPOSITORY_ROOT, "functions/api/v1");
 const RAW_ROUTE_ALLOWLIST = new Set([
   "functions/api/v1/auth/sponsor-portal/router.ts:post:/request-link",
   "functions/api/v1/auth/sponsor-portal/router.ts:post:/verify-link",
-  "functions/api/v1/headshots/[userId]/router.ts:get:/:file",
+  "functions/api/v1/users/[userId]/headshots/router.ts:get:/:file",
   "functions/api/v1/og/donation/router.ts:get:/:session_id",
   "functions/api/v1/og/router.ts:get:/:code",
   "functions/api/v1/proposals/speaker/[token]/router.ts:get:/presentation/download",

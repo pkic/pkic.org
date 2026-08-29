@@ -58,20 +58,25 @@ export function privateUserHeadshotResponse(bucket: R2Bucket, key: string): Prom
   });
 }
 
-export function publicUserHeadshotUrl(
-  appBaseUrl: string,
-  storageKey: string | null,
-  updatedAt?: string | null,
-): string | null {
+export function publicUserHeadshotPath(storageKey: string | null): string | null {
   if (!storageKey) return null;
   const segments = storageKey.split("/").filter(Boolean);
   if (segments[0] === "headshots") segments.shift();
   if (segments.length < 2) return null;
 
-  const url = new URL(
-    `/api/v1/headshots/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`,
-    appBaseUrl,
-  );
+  const [userId, ...fileSegments] = segments;
+  const encodedFile = fileSegments.map((segment) => encodeURIComponent(segment)).join("/");
+  return `/api/v1/users/${encodeURIComponent(userId)}/headshots/${encodedFile}`;
+}
+
+export function publicUserHeadshotUrl(
+  appBaseUrl: string,
+  storageKey: string | null,
+  updatedAt?: string | null,
+): string | null {
+  const path = publicUserHeadshotPath(storageKey);
+  if (!path) return null;
+  const url = new URL(path, appBaseUrl);
   if (updatedAt) url.searchParams.set("v", updatedAt);
   return url.toString();
 }

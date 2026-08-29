@@ -310,7 +310,7 @@ describe("Current-user and application self-service", () => {
 
     const afterResponse = await call(token, "/api/v1/users/current");
     const afterBody = (await afterResponse.json()) as { headshotUrl: string | null };
-    expect(afterBody.headshotUrl).toBe(`/api/v1/headshots/${userId}/123.jpg`);
+    expect(afterBody.headshotUrl).toBe(`/api/v1/users/${userId}/headshots/123.jpg`);
   });
 
   it("rejects unauthenticated current-user access and does not retain moved /me paths", async () => {
