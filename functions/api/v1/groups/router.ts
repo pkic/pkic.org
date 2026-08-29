@@ -39,12 +39,6 @@ import {
 import { GroupMeetingGuestRevoke } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/[guestId]";
 import { GroupMeetingAttendanceList } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/index";
 import { GroupMeetingAttendanceVerify } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/[confirmationId]";
-import {
-  eventGrantRoutes,
-  formPlacementGrantRoutes,
-  mailingListGrantRoutes,
-  voteGrantRoutes,
-} from "./resource-grant-handlers";
 import { GroupFormCreate, GroupFormsList } from "./[groupId]/forms/index";
 import {
   GroupFormDefinitionGet,
@@ -56,10 +50,6 @@ import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submis
 import { GroupEventsCreate, GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventProfilesList } from "./[groupId]/events/profiles";
 import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
-import {
-  GroupEventEmailCampaignCreate,
-  GroupEventEmailCampaignPreviewCreate,
-} from "./[groupId]/events/[eventId]/email-campaigns";
 import { GroupEventProposalsList } from "./[groupId]/events/[eventId]/proposals";
 import {
   GroupEventProposalDetailGet,
@@ -118,7 +108,9 @@ import {
   GroupEventFormPut,
   GroupEventFormsList,
 } from "./[groupId]/events/[eventId]/forms";
+import { registerGroupEventEmailCampaignRoutes } from "./register-group-event-email-campaign-routes";
 import { registerGroupEventInviteRoutes } from "./register-group-event-invite-routes";
+import { registerGroupResourceGrantRoutes } from "./register-group-resource-grant-routes";
 import { GroupAuditLogList } from "./[groupId]/audit-log";
 import { GroupStatsGet } from "./[groupId]/stats";
 import { GroupUserCatalogList } from "./[groupId]/user-catalog";
@@ -185,8 +177,7 @@ openapi.post("/:groupId/events", GroupEventsCreate);
 openapi.get("/:groupId/events/profiles", GroupEventProfilesList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
-openapi.post("/:groupId/events/:eventId/email/campaigns/previews", GroupEventEmailCampaignPreviewCreate);
-openapi.post("/:groupId/events/:eventId/email/campaigns", GroupEventEmailCampaignCreate);
+registerGroupEventEmailCampaignRoutes(openapi);
 openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
 openapi.get("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalDetailGet);
 openapi.patch("/:groupId/events/:eventId/proposals/:proposalId", GroupEventProposalPatch);
@@ -289,17 +280,6 @@ openapi.put(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/attendance/:confirmationId",
   GroupMeetingAttendanceVerify,
 );
-openapi.get("/:groupId/forms/:placementId/grants", formPlacementGrantRoutes.list);
-openapi.post("/:groupId/forms/:placementId/grants", formPlacementGrantRoutes.create);
-openapi.delete("/:groupId/forms/:placementId/grants/:granteeGroupId/:capability", formPlacementGrantRoutes.revoke);
-openapi.get("/:groupId/events/:eventId/grants", eventGrantRoutes.list);
-openapi.post("/:groupId/events/:eventId/grants", eventGrantRoutes.create);
-openapi.delete("/:groupId/events/:eventId/grants/:granteeGroupId/:capability", eventGrantRoutes.revoke);
-openapi.get("/:groupId/votes/:voteId/grants", voteGrantRoutes.list);
-openapi.post("/:groupId/votes/:voteId/grants", voteGrantRoutes.create);
-openapi.delete("/:groupId/votes/:voteId/grants/:granteeGroupId/:capability", voteGrantRoutes.revoke);
-openapi.get("/:groupId/mailing-lists/:listId/grants", mailingListGrantRoutes.list);
-openapi.post("/:groupId/mailing-lists/:listId/grants", mailingListGrantRoutes.create);
-openapi.delete("/:groupId/mailing-lists/:listId/grants/:granteeGroupId/:capability", mailingListGrantRoutes.revoke);
+registerGroupResourceGrantRoutes(openapi);
 
 export default openapi;

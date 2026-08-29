@@ -4,12 +4,9 @@ import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
 import { buildPersonalCampaignTemplateData } from "./event-email-campaign/template-data";
-import {
-  chunkRecipients,
-  findBroadcastOnlyTemplateRefs,
-  type EventEmailCampaignInput,
-  type PreparedEventEmailCampaign,
-} from "./event-email-campaign";
+import { chunkRecipients } from "./event-email-campaign/batching";
+import { findBroadcastOnlyTemplateRefs } from "./event-email-campaign/broadcast-safety";
+import type { EventEmailCampaignInput, PreparedEventEmailCampaign } from "./event-email-campaign/types";
 
 /** Builds and atomically queues every outbox row for a validated campaign. */
 export async function queueEventEmailCampaign(
