@@ -128,11 +128,7 @@ export async function recordJobOutcome(
 
 /** Marks a job for the next dispatcher pass without waiting for its interval. */
 export async function requestJobWake(db: DatabaseLike, jobKey: ScheduledJobKey): Promise<void> {
-  await run(
-    db,
-    `UPDATE scheduled_jobs SET wake_requested = 1, updated_at = ${NOW_SQL} WHERE job_key = ?`,
-    [jobKey],
-  );
+  await run(db, `UPDATE scheduled_jobs SET wake_requested = 1, updated_at = ${NOW_SQL} WHERE job_key = ?`, [jobKey]);
 }
 
 /**
@@ -143,12 +139,13 @@ export async function dispatchScheduledJobs(
   env: Env,
   definitions: readonly ScheduledJobDefinition[],
   options: { maxJobsPerPass: number; d1QueryBudget: number },
-): Promise<{ reaped: number; ran: number }> {
+): Promise<{ reaped: number; ran: number; failed: number }> {
   const byKey = new Map(definitions.map((definition) => [definition.key, definition]));
   const reaped = await reapAbandonedRuns(env.DB);
   const runnable = await selectRunnableJobs(env.DB, options.maxJobsPerPass);
 
   let ran = 0;
+  let failed = 0;
   for (const row of runnable) {
     const definition = byKey.get(row.job_key);
     if (!definition) continue;
@@ -182,8 +179,10 @@ export async function dispatchScheduledJobs(
         durationMs: Date.now() - startedAt,
         error: error instanceof Error ? error.message.slice(0, 500) : "Unknown scheduled job failure",
       });
+      ran += 1;
+      failed += 1;
       logInfo("SCHEDULED_JOB_FAILED", { job: row.job_key });
     }
   }
-  return { reaped, ran };
+  return { reaped, ran, failed };
 }
