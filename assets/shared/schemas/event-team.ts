@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 
@@ -28,8 +29,8 @@ export const eventTeamRoleAssignmentSchema = z.object({
   userId: databaseIdSchema,
   role: eventTeamRoleSchema,
   grantedByUserId: databaseIdSchema.nullable(),
-  expiresAt: z.iso.datetime().nullable(),
-  createdAt: z.iso.datetime(),
+  expiresAt: utcInstantSchema.nullable(),
+  createdAt: utcInstantSchema,
   granterEmail: z.email().nullable(),
 });
 export type EventTeamRoleAssignment = z.infer<typeof eventTeamRoleAssignmentSchema>;
@@ -39,7 +40,7 @@ export const eventTeamRolesResponseSchema = paginatedResponseSchema("roles", eve
 export const eventTeamRoleCreateSchema = z.object({
   userEmail: z.email().trim().toLowerCase(),
   role: eventTeamRoleSchema,
-  expiresAt: z.iso.datetime().nullable().optional(),
+  expiresAt: utcInstantSchema.nullable().optional(),
 });
 export type EventTeamRoleCreate = z.infer<typeof eventTeamRoleCreateSchema>;
 
