@@ -22,19 +22,25 @@ export function PortalNavigationShell({ children, displayName, session }: Portal
   const [signingOut, setSigningOut] = useState(false);
   const closeNavigation = () => setNavigationOpen(false);
 
+  // Attach once and test the state inside, rather than attaching only while
+  // the drawer is open. Effects run after paint, so the open drawer is on
+  // screen for a frame before its own Escape listener exists — an Escape
+  // pressed in that window was silently dropped, leaving the drawer stuck
+  // open for anyone quick or driving the portal from the keyboard.
   useEffect(() => {
-    if (!navigationOpen) return;
-
     const closeWithEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      event.preventDefault();
-      setNavigationOpen(false);
-      document.getElementById("portal-sidebar-toggle")?.focus();
+      setNavigationOpen((open) => {
+        if (!open) return open;
+        event.preventDefault();
+        document.getElementById("portal-sidebar-toggle")?.focus();
+        return false;
+      });
     };
 
     document.addEventListener("keydown", closeWithEscape);
     return () => document.removeEventListener("keydown", closeWithEscape);
-  }, [navigationOpen]);
+  }, []);
 
   return (
     <div id="portal-root">

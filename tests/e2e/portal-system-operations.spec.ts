@@ -29,9 +29,9 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
 
   await expect(page.getByRole("heading", { name: "System Operations" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Email Outbox" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Due Work" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Scheduled Work" })).toBeVisible();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/email/outbox")).toBe(true);
-  await page.getByRole("tab", { name: "Due Work" }).click();
+  await page.getByRole("tab", { name: "Scheduled Work" }).click();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/retention/due")).toBe(true);
 
   await page.goto("/admin/#/email/outbox");
