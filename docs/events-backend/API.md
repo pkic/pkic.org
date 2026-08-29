@@ -199,12 +199,14 @@ Base path: `/api/v1`
 - Manual runs require a user-backed staff session; service API keys cannot
   invoke them, and each run reuses the scheduled D1 query budget.
 
-## Referral and signed internal ingestion
+## Referral and signed calendar ingestion
 
 - `GET /r/:code`
-- `POST /internal/calendar/rsvp`
+- `POST /calendar/rsvp`
 - The calendar endpoint uses its bounded, replay-protected request-signature
-  boundary. The retired internal email, reminder, job, and retention command
+  boundary. Existing calendar UIDs and signed RSVP email addresses remain
+  valid because the transport URL is not embedded in issued ICS files. The
+  retired internal email, reminder, job, and retention command
   routes return 404.
 
 ## Legacy removal

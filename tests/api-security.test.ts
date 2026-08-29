@@ -3,7 +3,7 @@
  *
  * Integration-level security test that verifies:
  *
- *  1. Every protected admin / internal endpoint enforces authentication and
+ *  1. Every protected staff or signed-integration endpoint enforces authentication and
  *     rejects unauthenticated requests with AUTH_REQUIRED.
  *
  *  2. The session-token validation logic handles all invalid-credential

@@ -17,7 +17,7 @@ function callAppWithoutOauth(request: Request): Promise<Response> {
   );
 }
 
-describe("public and internal router smoke tests", () => {
+describe("public and integration resource router smoke tests", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -72,9 +72,9 @@ describe("public and internal router smoke tests", () => {
     expect(Array.isArray(payload.terms)).toBe(true);
   });
 
-  it("rejects an unsigned internal calendar RSVP request", async () => {
+  it("rejects an unsigned calendar RSVP integration request", async () => {
     const response = await callApp(
-      new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+      new Request("https://app.test/api/v1/calendar/rsvp", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -90,6 +90,20 @@ describe("public and internal router smoke tests", () => {
     expect(response.status).toBe(401);
     const payload = (await response.json()) as { error?: { code?: string } };
     expect(payload.error?.code).toBe("INVALID_SIGNATURE");
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+  });
+
+  it("does not retain the superseded internal calendar route", async () => {
+    const response = await callApp(
+      new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("serves the MCP Streamable HTTP endpoint", async () => {

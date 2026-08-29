@@ -38,13 +38,13 @@ function callApp(request: Request): Promise<Response> {
 
 const internalSecret = "test-internal-secret";
 
-describe("POST /api/v1/internal/calendar/rsvp", () => {
+describe("POST /api/v1/calendar/rsvp", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
   it("rejects unsigned requests", async () => {
-    const request = new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+    const request = new Request("https://app.test/api/v1/calendar/rsvp", {
       method: "POST",
       body: JSON.stringify({
         provider: "cloudflare_email_route",
@@ -80,7 +80,7 @@ describe("POST /api/v1/internal/calendar/rsvp", () => {
     });
 
     const signed = await signBody(internalSecret, body);
-    const request = new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+    const request = new Request("https://app.test/api/v1/calendar/rsvp", {
       method: "POST",
       body,
       headers: {
@@ -120,7 +120,7 @@ describe("POST /api/v1/internal/calendar/rsvp", () => {
     for (let i = 0; i < 2; i += 1) {
       const body = JSON.stringify(payload);
       const signed = await signBody(internalSecret, body);
-      const request = new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+      const request = new Request("https://app.test/api/v1/calendar/rsvp", {
         method: "POST",
         body,
         headers: {
@@ -152,7 +152,7 @@ describe("POST /api/v1/internal/calendar/rsvp", () => {
     const timestamp = String(Math.floor(Date.now() / 1000) + offsetSeconds);
     const signed = await signBody(internalSecret, body, timestamp);
     const response = await callApp(
-      new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+      new Request("https://app.test/api/v1/calendar/rsvp", {
         method: "POST",
         body,
         headers: {
@@ -176,7 +176,7 @@ describe("POST /api/v1/internal/calendar/rsvp", () => {
     });
     const signed = await signBody(internalSecret, `${body} `);
     const response = await callApp(
-      new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+      new Request("https://app.test/api/v1/calendar/rsvp", {
         method: "POST",
         body,
         headers: {
@@ -192,7 +192,7 @@ describe("POST /api/v1/internal/calendar/rsvp", () => {
   it("bounds the signed body before retaining or parsing it", async () => {
     const timestamp = String(Math.floor(Date.now() / 1000));
     const response = await callApp(
-      new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+      new Request("https://app.test/api/v1/calendar/rsvp", {
         method: "POST",
         body: "x".repeat(INTERNAL_CALENDAR_RSVP_MAX_BYTES + 1),
         headers: {
@@ -216,7 +216,7 @@ describe("POST /api/v1/internal/calendar/rsvp", () => {
     });
     const signed = await signBody(internalSecret, body);
     const response = await callApp(
-      new Request("https://app.test/api/v1/internal/calendar/rsvp", {
+      new Request("https://app.test/api/v1/calendar/rsvp", {
         method: "POST",
         body,
         headers: {

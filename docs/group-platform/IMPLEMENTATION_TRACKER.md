@@ -1430,8 +1430,12 @@ Status: In progress
       still rechecks the live permissions. The former admin Email and Due Work
       consumers and their
       admin/internal handlers are removed rather than retained as parallel
-      implementations; only signed calendar RSVP ingestion remains under
-      `/api/v1/internal`. Old bookmarks redirect to the portal. Mounted
+      implementations; signed calendar RSVP ingestion now belongs to the
+      canonical `/api/v1/calendar/rsvp` resource and the generic
+      `/api/v1/internal` router is removed. Existing calendar UIDs and signed
+      RSVP email addresses remain unchanged, so replies from already-issued
+      calendar files continue through the same ingestion service. Old
+      bookmarks redirect to the portal. Mounted
       permission, revocation, audit, reset-isolation, concurrency, schema,
       frontend, cache-policy, and route-removal regressions cover the cutover;
       the focused real Worker/D1 browser journey also verifies canonical

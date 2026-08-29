@@ -1,5 +1,6 @@
 /** Compatibility barrel for route contracts grouped by API domain. */
 export * from "./route-contracts-system";
+export * from "./route-contracts-calendar";
 export * from "./route-contracts-forms";
 export * from "./route-contracts-events";
 export * from "./route-contracts-headshots";
