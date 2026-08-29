@@ -350,7 +350,7 @@ async function main(): Promise<void> {
 
   try {
     const forms = await getJson(
-      `${apiBase}/events/${eventSlug}/forms?purpose=proposal_submission`,
+      `${apiBase}/events/${eventSlug}/form-configurations/proposal_submission`,
       eventFormsResponseSchema,
     );
     eventName = forms.event.name;

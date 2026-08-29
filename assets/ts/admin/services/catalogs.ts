@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../shared/schemas/admin-events";
-import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
+import { formsListResponseSchema, type FormSummary } from "../../../shared/schemas/form-management";
 import { groupsListResponseSchema, type Group } from "../../../shared/schemas/groups";
 import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
 import type { ServerCatalog } from "../../shared/server-catalog";
@@ -30,14 +30,14 @@ export function activeAdminWorkingGroupCatalog(): typeof adminGroupCatalog {
   return { ...adminGroupCatalog, params: { active: "true", typeKey: "working_group" } };
 }
 
-export function adminEventFormCatalog(
+export function eventFormCatalog(
   eventSlug: string,
   purpose: EventFormsPurpose,
   status?: FormStatus,
-): AdminCatalog<AdminFormSummary, z.infer<typeof adminFormsListResponseSchema>> {
+): AdminCatalog<FormSummary, z.infer<typeof formsListResponseSchema>> {
   return {
-    endpoint: `/api/v1/admin/events/${encodeURIComponent(eventSlug)}/forms`,
-    responseSchema: adminFormsListResponseSchema,
+    endpoint: `/api/v1/events/${encodeURIComponent(eventSlug)}/forms`,
+    responseSchema: formsListResponseSchema,
     resolveItems: (response) => response.forms,
     resolvePage: (response) => response.page,
     itemKey: (item) => item.key,

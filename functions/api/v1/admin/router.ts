@@ -7,7 +7,6 @@ import type { RequestDbContext } from "../../../_lib/db/context";
 import { createRequestScopedD1SessionMiddleware } from "../../../_lib/db/request-session-middleware";
 import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
 import events_Router from "./events/router";
-import forms_Router from "./forms/router";
 import proposals_Router from "./proposals/router";
 
 const app = new Hono<RequestDbContext>();
@@ -44,7 +43,6 @@ app.use(
 openapi.get("/events", AdminEventsListGet);
 openapi.post("/events", AdminEventsCreatePost);
 openapi.route("/events", events_Router);
-openapi.route("/forms", forms_Router);
 openapi.route("/proposals", proposals_Router);
 
 export default openapi;

@@ -25,6 +25,12 @@ const MANAGEMENT_NAV_ITEM: PortalNavItem = {
   label: "Management",
 };
 
+const FORMS_NAV_ITEM: PortalNavItem = {
+  path: "/forms",
+  section: "forms",
+  label: "Forms",
+};
+
 const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   {
     path: "/system/analytics",
@@ -111,6 +117,7 @@ const CAPACITY_ROUTE_PATHS = new Set([
   ...MEMBER_NAV_ITEMS.map((item) => item.path),
   ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
   MANAGEMENT_NAV_ITEM.path,
+  FORMS_NAV_ITEM.path,
   ...SYSTEM_NAV_ITEMS.map((item) => item.path),
   ACCOUNT_NAV_ITEM.path,
 ]);
@@ -148,6 +155,7 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
   return [
     ...(session?.member ? MEMBER_NAV_ITEMS : []),
     ...(session?.staff ? [MANAGEMENT_NAV_ITEM] : []),
+    ...(portalHasGlobalPermission(session, "forms:read") ? [FORMS_NAV_ITEM] : []),
     ...(systemHome ? [{ ...systemHome, label: "System" }] : []),
     ...(session?.member || session?.staff ? [ACCOUNT_NAV_ITEM] : []),
   ];
@@ -167,11 +175,21 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
     location === MANAGEMENT_NAV_ITEM.path || location.startsWith(`${MANAGEMENT_NAV_ITEM.path}/`);
   const isSystemRoute = location === "/system" || location.startsWith("/system/");
   const isSelectedGroupRoute = location.startsWith("/groups/");
-  if (!CAPACITY_ROUTE_PATHS.has(location) && !isManagementRoute && !isSystemRoute && !isSelectedGroupRoute) return null;
+  const isFormsRoute = location === "/forms" || location.startsWith("/forms/");
+  if (
+    !CAPACITY_ROUTE_PATHS.has(location) &&
+    !isManagementRoute &&
+    !isSystemRoute &&
+    !isSelectedGroupRoute &&
+    !isFormsRoute
+  ) {
+    return null;
+  }
   if (portalNavigationItems(session).some((item) => item.path === location)) return null;
   if (isManagementRoute && session?.staff) return null;
   if (isSystemRoute && portalHasSystemManagement(session)) return null;
   if (isSelectedGroupRoute && (session?.member || session?.staff)) return null;
+  if (isFormsRoute && portalHasGlobalPermission(session, "forms:read")) return null;
   return portalDefaultPath(session);
 }
 

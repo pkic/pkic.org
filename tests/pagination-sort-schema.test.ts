@@ -25,8 +25,11 @@ import {
 } from "../assets/shared/schemas/email-templates";
 import { eventsListSortValueSchema, eventTeamSortValueSchema } from "../assets/shared/schemas/admin-events";
 import { eventInvitesSortValueSchema } from "../assets/shared/schemas/event-invites";
-import { formSubmissionsSortValueSchema } from "../assets/shared/schemas/admin-forms";
-import { adminFormSubmissionsQuerySchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
+import {
+  formSubmissionsQuerySchema,
+  formSubmissionsSortValueSchema,
+  formsListQuerySchema,
+} from "../assets/shared/schemas/form-management";
 import { dueWorkListQuerySchema as adminDueWorkListQuerySchema } from "../assets/shared/schemas/operations";
 import { myApplicationsListQuerySchema } from "../assets/shared/schemas/me";
 import { presentationVersionsListQuerySchema } from "../assets/shared/schemas/presentation-versions";
@@ -100,8 +103,8 @@ describe("shared list/search contract", () => {
     expect(adminDueWorkListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(donationsListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
     expect(sponsorPortalAttendeesListQuerySchema.parse({})).toMatchObject({ limit: 100, offset: 0 });
-    expect(adminFormsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
-    expect(adminFormSubmissionsQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
+    expect(formsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
+    expect(formSubmissionsQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
     expect(sponsorsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
     expect(applicationDocumentsListQuerySchema.parse({})).toMatchObject({
       limit: 25,

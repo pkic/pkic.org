@@ -77,10 +77,10 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await policySection.getByRole("button", { name: "Create registration form" }).click();
   const formEditor = policySection.locator(".card").filter({ hasText: "New registration form" });
   const formKey = `workshop-registration-${unique}`;
-  await formEditor.getByLabel("Key").fill(formKey);
-  await expect(formEditor.getByLabel("Key")).toHaveValue(formKey);
+  await formEditor.getByLabel("Key", { exact: true }).fill(formKey);
+  await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);
   await formEditor.getByLabel("Title").fill("Workshop registration questions");
-  await expect(formEditor.getByLabel("Key")).toHaveValue(formKey);
+  await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);
   await formEditor.getByPlaceholder("field_key").fill("participation_goal");
   await formEditor.getByPlaceholder("Field label").fill("What do you want to learn?");
   const formCreated = page.waitForResponse(

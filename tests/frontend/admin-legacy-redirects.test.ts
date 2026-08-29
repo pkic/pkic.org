@@ -8,6 +8,7 @@ import {
   ADMIN_AUDIT_LOG_REDIRECT_TARGET,
   ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET,
   ADMIN_EVENT_INVITATIONS_REDIRECT_TARGET,
+  ADMIN_FORMS_REDIRECT_TARGET,
   ADMIN_LEADERSHIP_REDIRECT_TARGET,
   ADMIN_MAILING_LISTS_REDIRECT_TARGET,
   ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET,
@@ -76,6 +77,12 @@ describe("legacy admin route redirects", () => {
   it("moves email templates to system management in the portal", () => {
     expect(legacyAdminRedirectTarget("/email/templates")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
     expect(legacyAdminRedirectTarget("/email/templates?from=bookmark")).toBe(ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET);
+  });
+
+  it("moves global form-management bookmarks to the portal forms surface", () => {
+    expect(legacyAdminRedirectTarget("/forms")).toBe(ADMIN_FORMS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/forms?from=bookmark")).toBe(ADMIN_FORMS_REDIRECT_TARGET);
+    expect(legacyAdminRedirectTarget("/forms/member-feedback")).toBe(ADMIN_FORMS_REDIRECT_TARGET);
   });
 
   it("moves donation bookmarks to system management in the portal", () => {

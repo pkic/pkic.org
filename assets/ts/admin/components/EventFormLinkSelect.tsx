@@ -1,4 +1,4 @@
-import { adminEventFormCatalog } from "../services/catalogs";
+import { eventFormCatalog } from "../services/catalogs";
 import { ServerSearchSelect } from "./ServerSearchSelect";
 
 export function EventFormLinkSelect({
@@ -23,7 +23,7 @@ export function EventFormLinkSelect({
   return (
     <div class="col-md-6">
       <ServerSearchSelect
-        catalog={adminEventFormCatalog(eventSlug, purpose, "active")}
+        catalog={eventFormCatalog(eventSlug, purpose, "active")}
         label={label}
         value={value}
         selectedLabel={value ? `${value} (linked)` : undefined}

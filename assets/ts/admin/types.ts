@@ -26,9 +26,9 @@ import type { ProposalAccess as CanonicalProposalAccess } from "../../shared/sch
 import type { ProposalSpeaker as CanonicalAdminProposalSpeaker } from "../../shared/schemas/proposal-speakers";
 import type { FormFieldDefinition as CanonicalFormFieldDefinition } from "../../shared/schemas/forms";
 import type {
-  AdminFormSubmission as CanonicalAdminFormSubmission,
-  AdminFormSummary as CanonicalAdminEventFormSummary,
-} from "../../shared/schemas/admin-forms";
+  FormSubmission as CanonicalFormSubmission,
+  FormSummary as CanonicalFormSummary,
+} from "../../shared/schemas/form-management";
 import type { MemberCapacitySummary as CanonicalMemberCapacitySummary } from "../../shared/schemas/membership-management";
 import type { AdminEventStatsResponse as CanonicalEventStatsResponse } from "../../shared/schemas/admin-analytics";
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
@@ -40,7 +40,7 @@ export type EventDetail = CanonicalAdminEventDetail;
 export type AdminEventDay = z.infer<typeof eventDaysResponseSchema>["days"][number];
 export type AdminAttendanceOption = AdminEventDay["attendanceOptions"][number];
 
-export type AdminEventFormSummary = CanonicalAdminEventFormSummary;
+export type AdminEventFormSummary = CanonicalFormSummary;
 
 export type AdminFormDetailField = CanonicalFormFieldDefinition;
 
@@ -54,7 +54,7 @@ export interface AdminRegistrationDay {
 
 export type BadgeRoleInfo = z.infer<typeof badgeRoleInfoSchema>;
 
-export type AdminFormSubmission = CanonicalAdminFormSubmission;
+export type AdminFormSubmission = CanonicalFormSubmission;
 
 export type EventPermission = CanonicalEventPermission;
 

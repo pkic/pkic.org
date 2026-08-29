@@ -1,10 +1,10 @@
 import { z } from "zod";
 import {
-  adminFormSubmissionSchema,
-  adminFormSubmissionStatsQuerySchema,
-  adminFormSubmissionStatSchema,
-  adminFormSubmissionsQuerySchema,
-} from "./admin-forms";
+  formSubmissionSchema,
+  formSubmissionStatsQuerySchema,
+  formSubmissionStatSchema,
+  formSubmissionsQuerySchema,
+} from "./form-management";
 import { jsonErrorResponse, successResponseSchema } from "./api-common";
 import {
   formDefinitionCreateSchema,
@@ -81,21 +81,18 @@ export type GroupFormSubmissionInput = z.infer<typeof groupFormSubmissionSchema>
 
 export const groupFormSubmissionResponseSchema = successResponseSchema.extend({ submissionId: databaseIdSchema });
 
-export const groupFormSubmissionsQuerySchema = adminFormSubmissionsQuerySchema.omit({
+export const groupFormSubmissionsQuerySchema = formSubmissionsQuerySchema.omit({
   placementId: true,
   eventSlug: true,
 });
 export type GroupFormSubmissionsQuery = z.infer<typeof groupFormSubmissionsQuerySchema>;
-export const groupFormSubmissionStatsQuerySchema = adminFormSubmissionStatsQuerySchema.omit({
+export const groupFormSubmissionStatsQuerySchema = formSubmissionStatsQuerySchema.omit({
   placementId: true,
   eventSlug: true,
 });
 export type GroupFormSubmissionStatsQuery = z.infer<typeof groupFormSubmissionStatsQuerySchema>;
 
-export const groupFormSubmissionsResponseSchema = paginatedResponseSchema(
-  "submissions",
-  adminFormSubmissionSchema,
-).extend({
+export const groupFormSubmissionsResponseSchema = paginatedResponseSchema("submissions", formSubmissionSchema).extend({
   form: groupFormReferenceSchema,
   placement: formPlacementSchema,
 });
@@ -104,7 +101,7 @@ export const groupFormSubmissionStatsResponseSchema = z.object({
   form: groupFormReferenceSchema,
   placement: formPlacementSchema,
   total: z.number().int().nonnegative(),
-  stats: z.array(adminFormSubmissionStatSchema),
+  stats: z.array(formSubmissionStatSchema),
 });
 
 export const groupFormPlacementUpdateSchema = formPlacementPolicyUpdateSchema;

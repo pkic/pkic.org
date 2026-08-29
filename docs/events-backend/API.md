@@ -56,7 +56,7 @@ Base path: `/api/v1`
 - `POST /events/:eventSlug/registrations`
 - `POST /events/:eventSlug/registrations/confirm-email`
 - `GET /events/:eventSlug/registrations/confirm-email?token=...`
-- `GET /events/:eventSlug/forms?purpose=event_registration|proposal_submission`
+- `GET /events/:eventSlug/form-configurations/:purpose`
 - `GET /registrations/manage/:token`
 - `PATCH /registrations/manage/:token`
 - `POST /events/:eventSlug/invites`
@@ -69,7 +69,7 @@ Base path: `/api/v1`
 ## Terms and proposals
 
 - `POST /events/:eventSlug/proposals`
-- `GET /events/:eventSlug/forms?purpose=event_registration|proposal_submission`
+- `GET /events/:eventSlug/form-configurations/:purpose`
 - `GET /proposals/manage/:token`
 - `PATCH /proposals/manage/:token`
 - Proposal participants:

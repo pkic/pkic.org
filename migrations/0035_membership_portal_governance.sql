@@ -2595,6 +2595,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'groups:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'forms:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'forms:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email:manage', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'donations:read', datetime('now')),

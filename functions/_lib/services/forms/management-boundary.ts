@@ -12,10 +12,7 @@ type FormMutationTarget = { id: string; scope_type: string; purpose: FormPurpose
  * event-flow definition/placement owned by a portal event. Those aggregates
  * have canonical group-scoped authorization and guarded lifecycle commands.
  */
-export async function requireLegacyAdminFormMutationBoundary(
-  db: DatabaseLike,
-  form: FormMutationTarget,
-): Promise<void> {
+export async function requireManagedFormMutationBoundary(db: DatabaseLike, form: FormMutationTarget): Promise<void> {
   if (form.scope_type === "community") {
     throw new AppError(
       403,
@@ -44,8 +41,45 @@ export async function requireLegacyAdminFormMutationBoundary(
   }
 }
 
+/** Rejects a known portal-event target before a global placement mutation reaches its D1 batch. */
+export async function requireManagedFormPlacementTargetBoundary(
+  db: DatabaseLike,
+  form: Pick<FormMutationTarget, "purpose">,
+  target: Pick<FormPlacement, "contextType" | "contextRef">,
+): Promise<void> {
+  if (
+    (form.purpose !== "event_registration" && form.purpose !== "proposal_submission") ||
+    target.contextType !== "event" ||
+    !target.contextRef
+  ) {
+    return;
+  }
+  const portalEvent = await first<{ id: string }>(
+    db,
+    "SELECT id FROM events WHERE id = ? AND source_mode = 'portal' LIMIT 1",
+    [target.contextRef],
+  );
+  if (portalEvent) {
+    throw new AppError(
+      403,
+      "PORTAL_EVENT_FORM_MANAGEMENT_REQUIRED",
+      "Portal event-flow forms must be changed from their owning group context.",
+    );
+  }
+}
+
+/** Global form management may target only installation-wide or event response sets. */
+export function requireGlobalFormPlacementTargetBoundary(target: Pick<FormPlacement, "contextType">): void {
+  if (target.contextType === "installation" || target.contextType === "event") return;
+  throw new AppError(
+    400,
+    "FORM_PLACEMENT_CONTEXT_UNSUPPORTED",
+    "Group and organization placements must be managed from their owning resource context.",
+  );
+}
+
 /** Rechecks the target event inside the same D1 mutation batch to close the route-to-write race. */
-export function prepareLegacyAdminFormPlacementTargetGuard(
+export function prepareManagedFormPlacementTargetGuard(
   db: DatabaseLike,
   form: Pick<FormMutationTarget, "purpose">,
   target: Pick<FormPlacement, "contextType" | "contextRef">,

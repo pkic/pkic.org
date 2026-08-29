@@ -61,7 +61,7 @@
 - [x] Add TypeScript frontend structure (`assets/ts/event-flows`, `assets/ts/shared`) and strict frontend tsconfig.
 - [x] Add frontend test/typecheck scripts and include them in `pnpm run check`.
 - [x] Add event route metadata support in sync schema (`event.frontend.routes`) and backend route resolver.
-- [x] Add forms hydration endpoint (`GET /events/:eventSlug/forms`) with required terms in response.
+- [x] Add forms hydration endpoint (`GET /events/:eventSlug/form-configurations/:purpose`) with required terms in response.
 - [x] Add manage token read endpoints (`GET /registrations/manage/:token`, `GET /proposals/manage/:token`).
 - [x] Refactor backend-generated event links (invites, referral redirects, manage URLs) to route resolver.
 - [x] Add Hugo shortcodes and event-specific pages for registration/proposal/confirm/manage flows.

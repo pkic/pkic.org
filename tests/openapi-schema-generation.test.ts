@@ -25,7 +25,8 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/remind"].post).toBeDefined();
     expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/{userId}"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/forms"]).toBeUndefined();
+    expect(spec.paths["/api/v1/forms"].get).toBeDefined();
+    expect(spec.paths["/api/v1/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/members/applications"].post).toBeDefined();
     expect(spec.paths["/api/v1/members/applications"].get).toBeDefined();
     expect(spec.paths["/api/v1/members/applications/form"].get).toBeDefined();
@@ -179,8 +180,12 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/email-templates/{key}/versions"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/leadership-positions"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/leadership-positions/{id}"]).toBeUndefined();
-    expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/forms/{formKey}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/form-configurations/{purpose}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/forms"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/days"].get).toBeDefined();

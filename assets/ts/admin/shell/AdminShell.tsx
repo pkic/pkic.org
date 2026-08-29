@@ -5,7 +5,6 @@ import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
-import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
 import {
@@ -26,6 +25,7 @@ import {
   ADMIN_SPONSORSHIPS_REDIRECT_TARGET,
   ADMIN_OPERATIONS_REDIRECT_TARGET,
   ADMIN_USERS_REDIRECT_TARGET,
+  ADMIN_FORMS_REDIRECT_TARGET,
 } from "./legacy-redirects";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
@@ -146,18 +146,14 @@ export function AdminShell() {
 
             <Route
               path="/forms/:formKey"
-              component={({ params }: { params: { formKey: string } }) => (
-                <SectionWrapper title="Form">
-                  <FormDetailPage formKey={params.formKey} />
-                </SectionWrapper>
+              component={() => (
+                <PortalRedirect target={ADMIN_FORMS_REDIRECT_TARGET} message="Forms have moved to the portal." />
               )}
             />
             <Route
               path="/forms"
               component={() => (
-                <SectionWrapper title="Forms">
-                  <Forms />
-                </SectionWrapper>
+                <PortalRedirect target={ADMIN_FORMS_REDIRECT_TARGET} message="Forms have moved to the portal." />
               )}
             />
 

@@ -134,8 +134,8 @@ describe("admin event management endpoints", () => {
 
     for (const [path, method] of [
       ["/api/v1/admin/events", "POST"],
-      ["/api/v1/admin/forms", "POST"],
-      ["/api/v1/admin/events/pqc-2026/forms", "POST"],
+      ["/api/v1/forms", "POST"],
+      ["/api/v1/events/pqc-2026/forms", "POST"],
     ] as const) {
       const response = await callAdmin(path, { method, body: "{not-json" });
       expect(response.status, `${method} ${path}`).toBe(400);
@@ -413,7 +413,7 @@ describe("admin event management endpoints", () => {
       error: { code: "PORTAL_EVENT_FORMS_OWNED_BY_GROUP" },
     });
 
-    const formResponse = await callAdmin("/api/v1/admin/events/pqc-2026/forms", {
+    const formResponse = await callAdmin("/api/v1/events/pqc-2026/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "portal-event-form",

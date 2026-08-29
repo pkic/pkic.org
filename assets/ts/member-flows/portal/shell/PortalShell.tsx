@@ -10,6 +10,7 @@ import { Groups } from "../sections/Groups";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
+import { Forms } from "../sections/Forms";
 import { SystemManagement } from "../sections/SystemManagement";
 import { Management } from "../sections/management/Management";
 import { GroupEventProposals } from "../sections/management/GroupEventProposals";
@@ -65,6 +66,29 @@ export function PortalShell() {
     <Router hook={useHashLocation}>
       <PortalNavigationShell session={portalSession.value} displayName={displayName}>
         <Switch>
+          {portalHasGlobalPermission(portalSession.value, "forms:read") && (
+            <Route
+              path="/forms/:formKey"
+              component={({ params }: { params: { formKey: string } }) => (
+                <SectionWrapper title="Forms">
+                  <Forms
+                    formKey={params.formKey}
+                    canWrite={portalHasGlobalPermission(portalSession.value, "forms:write")}
+                  />
+                </SectionWrapper>
+              )}
+            />
+          )}
+          {portalHasGlobalPermission(portalSession.value, "forms:read") && (
+            <Route
+              path="/forms"
+              component={() => (
+                <SectionWrapper title="Forms">
+                  <Forms canWrite={portalHasGlobalPermission(portalSession.value, "forms:write")} />
+                </SectionWrapper>
+              )}
+            />
+          )}
           {hasAdminCapacity && (
             <Route
               path="/groups/:groupId/events/:eventId/proposals"

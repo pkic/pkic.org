@@ -1,7 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
 import { fromHono } from "chanfana";
 import { methodNotAllowed } from "../../../../_lib/http";
-import { EventFormsGet } from "./forms";
+import { EventFormsCreatePost, EventFormsListGet } from "./forms";
+import { EventFormConfigurationGet } from "./form-configurations";
 import { EventsEventSlugInvitesPost } from "./invites";
 import { EventsEventSlugProposalsPost } from "./proposals";
 import { EventsEventSlugRegistrationsPost } from "./registrations";
@@ -10,11 +11,26 @@ import { TermsGet } from "./terms";
 import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsor-tiers";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
+import eventForms_Router from "./forms/[formKey]/router";
+import type { RequestDbContext } from "../../../../_lib/db/context";
+import { requestDb } from "../../../../_lib/db/context";
+import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-openapi.get("/forms", EventFormsGet);
+async function requireEventFormsIdentity(c: Context<RequestDbContext>, next: Next) {
+  await requireUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  await next();
+}
+
+app.use("/forms", requireEventFormsIdentity);
+app.use("/forms/*", requireEventFormsIdentity);
+
+openapi.get("/forms", EventFormsListGet);
+openapi.post("/forms", EventFormsCreatePost);
+openapi.route("/forms/:formKey", eventForms_Router);
+openapi.get("/form-configurations/:purpose", EventFormConfigurationGet);
 openapi.post("/invites", EventsEventSlugInvitesPost);
 openapi.post("/proposals", EventsEventSlugProposalsPost);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);

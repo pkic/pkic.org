@@ -125,8 +125,8 @@ describe("membership application form definition", () => {
     expect(plan.map((row) => row.detail).join("\n")).toMatch(/SEARCH forms USING (?:COVERING )?INDEX/i);
   });
 
-  it("removes the singleton definition from legacy admin form discovery and mutation routes", async () => {
-    const list = await call(adminToken, "/api/v1/admin/forms?limit=50&offset=0");
+  it("removes the singleton definition from generic form discovery and mutation routes", async () => {
+    const list = await call(adminToken, "/api/v1/forms?limit=50&offset=0");
     expect(list.status).toBe(200);
     const listBody = (await list.json()) as { forms: Array<{ key: string }>; page: { total: number } };
     expect(listBody.forms.map((form) => form.key)).not.toContain("membership-application");
@@ -137,16 +137,13 @@ describe("membership application form definition", () => {
     expect(listBody.page.total).toBe(total);
 
     for (const [path, init] of [
-      ["/api/v1/admin/forms/membership-application", {}],
+      ["/api/v1/forms/membership-application", {}],
+      ["/api/v1/forms/membership-application", { method: "PATCH", body: JSON.stringify({ title: "Legacy change" }) }],
+      ["/api/v1/forms/membership-application", { method: "DELETE" }],
+      ["/api/v1/forms/membership-application/placements", {}],
+      ["/api/v1/forms/membership-application/placements", { method: "POST", body: JSON.stringify({}) }],
       [
-        "/api/v1/admin/forms/membership-application",
-        { method: "PATCH", body: JSON.stringify({ title: "Legacy change" }) },
-      ],
-      ["/api/v1/admin/forms/membership-application", { method: "DELETE" }],
-      ["/api/v1/admin/forms/membership-application/placements", {}],
-      ["/api/v1/admin/forms/membership-application/placements", { method: "POST", body: JSON.stringify({}) }],
-      [
-        "/api/v1/admin/forms/membership-application/placements/00000000-0000-4000-8000-000000000000",
+        "/api/v1/forms/membership-application/placements/00000000-0000-4000-8000-000000000000",
         { method: "PATCH", body: JSON.stringify({}) },
       ],
     ] satisfies Array<[string, RequestInit]>) {
@@ -157,7 +154,7 @@ describe("membership application form definition", () => {
       });
     }
 
-    const create = await call(adminToken, "/api/v1/admin/forms", {
+    const create = await call(adminToken, "/api/v1/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "membership-application",

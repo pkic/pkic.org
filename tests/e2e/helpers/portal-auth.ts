@@ -1,8 +1,18 @@
+import { createHash } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 
+function clientIpForIdentity(email: string): string {
+  const suffix = createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 8);
+  return `2001:db8::${suffix.slice(0, 4)}:${suffix.slice(4)}`;
+}
+
 /** Establishes a real portal session through the same mailbox capability used by users. */
 export async function signInToPortal(page: Page, email: string): Promise<void> {
+  // Model independent users arriving from independent clients. The complete
+  // serial suite otherwise funnels every sign-in through Wrangler's one local
+  // address and exhausts the production-equivalent per-IP limiter.
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": clientIpForIdentity(email) });
   await page.goto("/portal/");
   await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 10_000 });
   await page.locator("#portal-inp-email").fill(email);

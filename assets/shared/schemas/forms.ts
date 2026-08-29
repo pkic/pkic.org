@@ -243,8 +243,8 @@ export type FormPlacementsListQuery = z.infer<typeof formPlacementsListQuerySche
 
 export const eventAudienceSchema = z.enum(["attendee", "speaker"]);
 
-export const eventFormsQuerySchema = z.object({
-  purpose: eventFormsPurposeSchema.default("event_registration"),
+export const eventFormConfigurationParamsSchema = eventSlugParamsSchema.extend({
+  purpose: eventFormsPurposeSchema,
 });
 
 export const eventFormsResponseSchema = z.object({
@@ -277,13 +277,12 @@ export const eventTermsGetRouteSchema = {
 };
 
 export type EventFormsResponse = z.infer<typeof eventFormsResponseSchema>;
-export const eventFormsGetRouteSchema = {
+export const eventFormConfigurationGetRouteSchema = {
   tags: ["Events"],
-  summary: "Get an event form",
+  summary: "Get an event form configuration",
   description: "Returns one event form, its terms, session types, and configurable attendance options.",
   request: {
-    params: eventSlugParamsSchema,
-    query: eventFormsQuerySchema,
+    params: eventFormConfigurationParamsSchema,
   },
   responses: {
     "200": {

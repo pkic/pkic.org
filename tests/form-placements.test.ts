@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { adminFormCreateResponseSchema } from "../assets/shared/schemas/admin-forms";
+import { formCreateResponseSchema } from "../assets/shared/schemas/form-management";
 import { formPlacementCreateResponseSchema } from "../assets/shared/schemas/forms";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
@@ -39,7 +39,7 @@ async function insertEvent(slug: string): Promise<string> {
 }
 
 async function placeForm(formKey: string, eventId: string, audience: string) {
-  const response = await adminRequest(`/api/v1/admin/forms/${formKey}/placements`, {
+  const response = await adminRequest(`/api/v1/forms/${formKey}/placements`, {
     method: "POST",
     body: JSON.stringify({
       contextType: "event",
@@ -78,7 +78,7 @@ describe("reusable live-editable form placements", () => {
   it("reuses one live definition while keeping placement responses and statistics isolated in D1", async () => {
     const firstEventId = await insertEvent("placement-one");
     const secondEventId = await insertEvent("placement-two");
-    const createResponse = await adminRequest("/api/v1/admin/forms", {
+    const createResponse = await adminRequest("/api/v1/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "shared-survey",
@@ -98,12 +98,12 @@ describe("reusable live-editable form placements", () => {
       }),
     });
     expect(createResponse.status, await createResponse.clone().text()).toBe(201);
-    const created = adminFormCreateResponseSchema.parse(await createResponse.json());
+    const created = formCreateResponseSchema.parse(await createResponse.json());
     const firstPlacement = await placeForm("shared-survey", firstEventId, "group_member");
     let secondPlacement = await placeForm("shared-survey", secondEventId, "group_member");
 
     const placementsResponse = await adminRequest(
-      `/api/v1/admin/forms/shared-survey/placements?contextType=event&q=group&sort=created_at&limit=10`,
+      `/api/v1/forms/shared-survey/placements?contextType=event&q=group&sort=created_at&limit=10`,
     );
     expect(placementsResponse.status).toBe(200);
     const placements = (await placementsResponse.json()) as {
@@ -115,7 +115,7 @@ describe("reusable live-editable form placements", () => {
       expect.arrayContaining([firstPlacement.id, secondPlacement.id]),
     );
 
-    const placementPatch = await adminRequest(`/api/v1/admin/forms/shared-survey/placements/${secondPlacement.id}`, {
+    const placementPatch = await adminRequest(`/api/v1/forms/shared-survey/placements/${secondPlacement.id}`, {
       method: "PATCH",
       body: JSON.stringify({ audience: "reviewer" }),
     });
@@ -133,14 +133,28 @@ describe("reusable live-editable form placements", () => {
     await submit(firstDefinition!, { topic: "Alpha", notes: "Archive this field" });
     await submit(secondDefinition!, { topic: "Beta", notes: "Second response set" });
 
-    const detailResponse = await adminRequest("/api/v1/admin/forms/shared-survey");
+    const detailResponse = await adminRequest("/api/v1/forms/shared-survey");
     const detail = (await detailResponse.json()) as {
       fields: Array<{ id: string; key: string }>;
     };
     const topicId = detail.fields.find((field) => field.key === "topic")?.id;
     expect(topicId).toBeTruthy();
 
-    const patchResponse = await adminRequest("/api/v1/admin/forms/shared-survey", {
+    const legacyUnplacedSubmissionId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO form_submissions
+           (id, form_id, placement_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+         VALUES (?, ?, NULL, NULL, 'survey', NULL, 'submitted', datetime('now'))`,
+      ).bind(legacyUnplacedSubmissionId, created.formId),
+      env.DB.prepare(
+        `INSERT INTO form_submission_answers
+           (id, submission_id, field_id, field_key, data_json, created_at)
+         VALUES (?, ?, ?, 'topic', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), legacyUnplacedSubmissionId, topicId, JSON.stringify("Legacy")),
+    ]);
+
+    const patchResponse = await adminRequest("/api/v1/forms/shared-survey", {
       method: "PATCH",
       body: JSON.stringify({
         fields: [
@@ -186,13 +200,11 @@ describe("reusable live-editable form placements", () => {
     );
     expect(updated.fields.find((field) => field.key === "notes")?.archivedAt).toBeTruthy();
 
-    for (const [placement, expected] of [
-      [firstPlacement, "Alpha"],
-      [secondPlacement, "Beta"],
+    for (const [eventSlug, expected] of [
+      ["placement-one", "Alpha"],
+      ["placement-two", "Beta"],
     ] as const) {
-      const listResponse = await adminRequest(
-        `/api/v1/admin/forms/shared-survey/submissions?placementId=${placement.id}`,
-      );
+      const listResponse = await adminRequest(`/api/v1/events/${eventSlug}/forms/shared-survey/submissions`);
       expect(listResponse.status).toBe(200);
       const list = (await listResponse.json()) as {
         page: { total: number };
@@ -202,9 +214,7 @@ describe("reusable live-editable form placements", () => {
       expect(list.submissions[0]?.answers.subject).toBe(expected);
       expect(list.submissions[0]?.answers.topic).toBeUndefined();
 
-      const statsResponse = await adminRequest(
-        `/api/v1/admin/forms/shared-survey/submissions/stats?placementId=${placement.id}`,
-      );
+      const statsResponse = await adminRequest(`/api/v1/events/${eventSlug}/forms/shared-survey/submissions/stats`);
       const stats = (await statsResponse.json()) as {
         total: number;
         stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
@@ -230,13 +240,13 @@ describe("reusable live-editable form placements", () => {
       .all<{ detail: string }>();
     expect(plan.results.map((row) => row.detail).join("\n")).toContain("idx_form_submissions_placement_status");
 
-    const deactivateResponse = await adminRequest(`/api/v1/admin/forms/shared-survey/placements/${firstPlacement.id}`, {
+    const deactivateResponse = await adminRequest(`/api/v1/forms/shared-survey/placements/${firstPlacement.id}`, {
       method: "PATCH",
       body: JSON.stringify({ active: false }),
     });
     expect(deactivateResponse.status).toBe(200);
     const historicalResponse = await adminRequest(
-      `/api/v1/admin/forms/shared-survey/submissions?placementId=${firstPlacement.id}`,
+      `/api/v1/events/placement-one/forms/shared-survey/submissions?placementId=${firstPlacement.id}`,
     );
     expect(historicalResponse.status).toBe(200);
     expect(((await historicalResponse.json()) as { page: { total: number } }).page.total).toBe(1);
@@ -244,7 +254,7 @@ describe("reusable live-editable form placements", () => {
 
   it("atomically rejects a submission validated against a stale form definition", async () => {
     const eventId = await insertEvent("stale-form");
-    await adminRequest("/api/v1/admin/forms", {
+    await adminRequest("/api/v1/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "stale-survey",
@@ -274,7 +284,7 @@ describe("reusable live-editable form placements", () => {
 
   it("atomically rejects a response when its placement changes before commit", async () => {
     const eventId = await insertEvent("stale-placement");
-    await adminRequest("/api/v1/admin/forms", {
+    await adminRequest("/api/v1/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "placement-guard-survey",

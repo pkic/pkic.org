@@ -165,6 +165,38 @@ export async function getManagedFormWithFields(
   return { form, fields: await loadFormFieldRows(db, form.id, true) };
 }
 
+/** Resolve one form through its event ownership or an unowned event placement. */
+export async function requireManagedEventForm(
+  db: DatabaseLike,
+  eventId: string,
+  formKey: string,
+  options: { ownedOnly?: boolean } = {},
+): Promise<ManagedFormWithFields> {
+  const aggregate = await getManagedFormWithFields(db, formKey);
+  if (!aggregate) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
+  const related = await first<{ found: number }>(
+    db,
+    `SELECT 1 AS found
+       FROM forms form
+      WHERE form.id = ?
+        AND (
+          (form.scope_type = 'event' AND form.scope_ref = ?)
+          OR (? = 0 AND EXISTS (
+            SELECT 1
+              FROM form_placements placement
+             WHERE placement.form_id = form.id
+               AND placement.owner_group_id IS NULL
+               AND placement.context_type = 'event'
+               AND placement.context_ref = ?
+          ))
+        )
+      LIMIT 1`,
+    [aggregate.form.id, eventId, options.ownedOnly ? 1 : 0, eventId],
+  );
+  if (!related) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found for this event`);
+  return aggregate;
+}
+
 type EventPlacementOwnershipPolicy = "legacy" | "portal_owner";
 
 type PlacedEventFormRow = FormRow & {

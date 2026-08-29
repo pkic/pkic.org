@@ -226,10 +226,12 @@ export async function removeManagedForm(
   db: DatabaseLike,
   actorId: string,
   form: ManagedFormIdentity,
+  options: ManagedFormMutationOptions = {},
 ): Promise<ManagedFormRemovalAction> {
   const now = nowIso();
   try {
     await db.batch([
+      ...(options.authorizationGuards ?? []),
       prepareFormMutationGuard(db, form.id, form.updated_at, now),
       prepareFormDeletionGuard(db, form.id),
       db
@@ -241,7 +243,18 @@ export async function removeManagedForm(
       db.prepare("DELETE FROM form_placements WHERE form_id = ?").bind(form.id),
       db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
       db.prepare("DELETE FROM forms WHERE id = ?").bind(form.id),
-      prepareAuditLog(db, "admin", actorId, "form_deleted", "form", form.id, { key: form.key }, now),
+      prepareAuditLog(
+        db,
+        "admin",
+        actorId,
+        options.auditAction ?? "form_deleted",
+        "form",
+        form.id,
+        { key: form.key },
+        now,
+        null,
+        options.auditScope,
+      ),
     ]);
     return "deleted";
   } catch (error) {
@@ -250,10 +263,22 @@ export async function removeManagedForm(
 
     try {
       await db.batch([
+        ...(options.authorizationGuards ?? []),
         prepareFormMutationGuard(db, form.id, form.updated_at, now),
         db.prepare("UPDATE forms SET status = 'archived' WHERE id = ?").bind(form.id),
         db.prepare("UPDATE form_placements SET active = 0, updated_at = ? WHERE form_id = ?").bind(now, form.id),
-        prepareAuditLog(db, "admin", actorId, "form_archived", "form", form.id, { key: form.key }, now),
+        prepareAuditLog(
+          db,
+          "admin",
+          actorId,
+          options.auditAction ?? "form_archived",
+          "form",
+          form.id,
+          { key: form.key },
+          now,
+          null,
+          options.auditScope,
+        ),
       ]);
     } catch (error) {
       if (isFormMutationConflict(error)) throw formChangedError();

@@ -31,10 +31,6 @@ import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Public endpoint handlers ──────────────────────────────────────────────────
 import { onRequestGet as eventTermsGet } from "../functions/api/v1/events/[eventSlug]/terms";
-import {
-  onRequestGet as eventFormsGet,
-  onRequest as eventFormsRequest,
-} from "../functions/api/v1/events/[eventSlug]/forms";
 import { onRequest as geolocationCountryRequest } from "../functions/api/v1/geolocation/country";
 import { geolocationCountryResponseSchema } from "../assets/shared/schemas/geolocation";
 
@@ -175,10 +171,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/events/:slug/registrations",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations`)),
     ],
-    [
-      "GET /api/v1/admin/events/:slug/forms",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/forms`)),
-    ],
+    ["GET /api/v1/events/:slug/forms", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/forms`))],
     ["GET /api/v1/users/:id", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}`))],
     ["POST /api/v1/email/outbox/process", () => callApp(anonPost("https://app.test/api/v1/email/outbox/process"))],
     [
@@ -213,15 +206,12 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
           }),
         ),
     ],
-    ["GET /api/v1/admin/forms/:formKey", () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}`))],
-    ["PATCH /api/v1/admin/forms/:formKey", () => callApp(anonPatch(`https://app.test/api/v1/admin/forms/${formKey}`))],
+    ["GET /api/v1/forms/:formKey", () => callApp(anonGet(`https://app.test/api/v1/forms/${formKey}`))],
+    ["PATCH /api/v1/forms/:formKey", () => callApp(anonPatch(`https://app.test/api/v1/forms/${formKey}`))],
+    ["DELETE /api/v1/forms/:formKey", () => callApp(anonDelete(`https://app.test/api/v1/forms/${formKey}`))],
     [
-      "DELETE /api/v1/admin/forms/:formKey",
-      () => callApp(anonDelete(`https://app.test/api/v1/admin/forms/${formKey}`)),
-    ],
-    [
-      "GET /api/v1/admin/forms/:formKey/submissions",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/forms/${formKey}/submissions`)),
+      "GET /api/v1/forms/:formKey/submissions",
+      () => callApp(anonGet(`https://app.test/api/v1/forms/${formKey}/submissions`)),
     ],
     [
       "PATCH /api/v1/users/:userId (global role)",
@@ -252,10 +242,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/events/:slug/days",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/days`)),
     ],
-    [
-      "POST /api/v1/admin/events/:slug/forms",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/forms`)),
-    ],
+    ["POST /api/v1/events/:slug/forms", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/forms`))],
     [
       "PATCH /api/v1/admin/events/:slug/settings",
       () => callApp(anonPatch(`https://app.test/api/v1/admin/events/${eventSlug}/settings`)),
@@ -621,15 +608,6 @@ describe("HTTP method enforcement", () => {
     );
     expect(response.status).not.toBe(200);
   });
-
-  it("rejects POST to GET-only /api/v1/events/:slug/forms → 405", async () => {
-    const response = await eventFormsRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/events/pqc-2026/forms", { method: "POST" }), {
-        eventSlug: "pqc-2026",
-      }),
-    );
-    expect(response.status).toBe(405);
-  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -697,9 +675,9 @@ describe("public endpoints — accessible without credentials", () => {
     expect(response.status).toBe(403);
   });
 
-  it("GET /api/v1/events/:slug/forms returns 200 without Authorization header", async () => {
-    const response = await eventFormsGet(
-      createContext(appEnv, new Request("https://app.test/api/v1/events/pqc-2026/forms"), { eventSlug: "pqc-2026" }),
+  it("GET /api/v1/events/:slug/form-configurations/:purpose returns 200 without Authorization header", async () => {
+    const response = await callApp(
+      new Request("https://app.test/api/v1/events/pqc-2026/form-configurations/event_registration"),
     );
     expect(response.status).toBe(200);
   });

@@ -16,6 +16,7 @@ export const ADMIN_DONATION_PROMOTERS_REDIRECT_TARGET = "/portal/#/system/donati
 export const ADMIN_SPONSORSHIPS_REDIRECT_TARGET = "/portal/#/system/sponsorships";
 export const ADMIN_OPERATIONS_REDIRECT_TARGET = "/portal/#/system/operations";
 export const ADMIN_USERS_REDIRECT_TARGET = "/portal/#/system/users";
+export const ADMIN_FORMS_REDIRECT_TARGET = "/portal/#/forms";
 
 export function legacyAdminRedirectTarget(path: string): string | null {
   const pathname = path.split("?", 1)[0];
@@ -32,6 +33,7 @@ export function legacyAdminRedirectTarget(path: string): string | null {
   }
   if (pathname === "/membership/settings") return ADMIN_MEMBERSHIP_SETTINGS_REDIRECT_TARGET;
   if (pathname === "/email/templates") return ADMIN_EMAIL_TEMPLATES_REDIRECT_TARGET;
+  if (pathname === "/forms" || pathname.startsWith("/forms/")) return ADMIN_FORMS_REDIRECT_TARGET;
   if (pathname === "/email" || pathname === "/email/outbox") return ADMIN_OPERATIONS_REDIRECT_TARGET;
   if (pathname === "/duework") return ADMIN_OPERATIONS_REDIRECT_TARGET;
   if (pathname === "/donations") return ADMIN_DONATIONS_REDIRECT_TARGET;

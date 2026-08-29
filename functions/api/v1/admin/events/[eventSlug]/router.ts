@@ -6,7 +6,6 @@ import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { AdminEventDaysGet } from "./days";
-import { AdminEventFormsCreate, onRequestGet as AdminEventsEventSlugFormsGet_l } from "./forms";
 import { AdminEventsEventSlugGet } from "./index";
 import { AdminEventTeamList, AdminEventTeamPermissionCreate } from "./permissions";
 import { AdminEventPromotersGet } from "./promoters";
@@ -71,8 +70,6 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 app.use("*", requireEventManagementAccess);
 
 openapi.get("/days", AdminEventDaysGet);
-openapi.get("/forms", AdminEventsEventSlugFormsGet_l);
-openapi.post("/forms", AdminEventFormsCreate);
 openapi.get("/", AdminEventsEventSlugGet);
 openapi.get("/permissions", AdminEventTeamList);
 openapi.post("/permissions", AdminEventTeamPermissionCreate);

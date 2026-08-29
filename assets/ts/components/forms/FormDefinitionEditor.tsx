@@ -394,6 +394,7 @@ export function FormDefinitionEditor({
                 required
                 placeholder="field_key"
                 title="Field key (lowercase, letters, digits, underscores)"
+                aria-label="Field key (lowercase, letters, digits, underscores)"
                 onInput={(e) => updateField(index, { key: (e.target as HTMLInputElement).value })}
               />
               <input
@@ -401,6 +402,7 @@ export function FormDefinitionEditor({
                 value={field.label}
                 required
                 placeholder="Field label"
+                aria-label="Field label"
                 onInput={(e) => updateField(index, { label: (e.target as HTMLInputElement).value })}
               />
               <select

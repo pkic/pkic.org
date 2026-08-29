@@ -8,6 +8,7 @@ export {
   getGlobalFormByKey,
   getFormDefinitionByPlacement,
   getManagedFormWithFields,
+  requireManagedEventForm,
   mapManagedFormFields,
   parseFormFieldOptionSource,
   resolveFormFieldOptionCatalogs,
@@ -40,15 +41,16 @@ export {
   type ValidationContext,
 } from "./validation";
 
-export { listAdminForms, type AdminFormSummaryRow } from "./list";
+export { listForms, type FormSummaryRow } from "./list";
 
 export { createManagedForm, prepareManagedForm, removeManagedForm, updateManagedForm } from "./management";
 export type { ManagedFormRemovalAction } from "./management";
 export {
-  prepareLegacyAdminFormPlacementTargetGuard,
-  requireLegacyAdminFormMutationBoundary,
-} from "./legacy-admin-boundary";
-
+  prepareManagedFormPlacementTargetGuard,
+  requireGlobalFormPlacementTargetBoundary,
+  requireManagedFormMutationBoundary,
+  requireManagedFormPlacementTargetBoundary,
+} from "./management-boundary";
 export {
   createManagedFormPlacement,
   findActiveFormPlacement,

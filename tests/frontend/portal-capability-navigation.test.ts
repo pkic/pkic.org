@@ -85,6 +85,30 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/management");
   });
 
+  it("exposes Forms only to global form readers", () => {
+    const reader = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "forms:read", contextType: null, contextId: null }],
+    });
+    const writerOnly = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "forms:write", contextType: null, contextId: null }],
+    });
+    const contextualReader = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "forms:read", contextType: "group", contextId: "group-1" }],
+    });
+
+    expect(portalNavigationItems(reader)).toContainEqual({ path: "/forms", section: "forms", label: "Forms" });
+    expect(portalCapacityFallbackPath(reader, "/forms/member-feedback")).toBeNull();
+    expect(portalNavigationItems(writerOnly)).not.toContainEqual(expect.objectContaining({ path: "/forms" }));
+    expect(portalCapacityFallbackPath(writerOnly, "/forms")).toBe("/management");
+    expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/forms" }));
+  });
+
   it("exposes Donations to global readers or synchronizers", () => {
     const reader = portalSessionFixture({
       staff: true,

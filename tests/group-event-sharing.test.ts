@@ -969,7 +969,9 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
-    expect((await callApi(env, `/api/v1/events/${fixture.eventSlug}/forms`)).status).toBe(200);
+    expect(
+      (await callApi(env, `/api/v1/events/${fixture.eventSlug}/form-configurations/event_registration`)).status,
+    ).toBe(200);
 
     const revokedGrantDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(

@@ -6,9 +6,9 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
-import { buildAdminFormsPageQuery } from "../functions/_lib/services/forms/list";
+import { buildFormsPageQuery } from "../functions/_lib/services/forms/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
-import { adminFormCreateResponseSchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
+import { formCreateResponseSchema, formsListQuerySchema } from "../assets/shared/schemas/form-management";
 import { formDefinitionCreateSchema } from "../assets/shared/schemas/forms";
 import {
   FORM_FIELD_TYPES,
@@ -156,7 +156,7 @@ async function insertForm(opts: {
   return { formId };
 }
 
-describe("admin forms endpoints", () => {
+describe("canonical Forms resource endpoints", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -170,10 +170,10 @@ describe("admin forms endpoints", () => {
           title: "Canonical form",
         }).success,
       ).toBe(true);
-      expect(adminFormsListQuerySchema.safeParse({ purpose }).success).toBe(true);
+      expect(formsListQuerySchema.safeParse({ purpose }).success).toBe(true);
     }
     for (const status of FORM_STATUSES) {
-      expect(adminFormsListQuerySchema.safeParse({ status }).success).toBe(true);
+      expect(formsListQuerySchema.safeParse({ status }).success).toBe(true);
     }
     for (const fieldType of FORM_FIELD_TYPES) {
       expect(
@@ -188,7 +188,7 @@ describe("admin forms endpoints", () => {
     expect(formDefinitionCreateSchema.safeParse({ key: "invalid", purpose: "future", title: "Invalid" }).success).toBe(
       false,
     );
-    expect(adminFormsListQuerySchema.safeParse({ status: "deleted" }).success).toBe(false);
+    expect(formsListQuerySchema.safeParse({ status: "deleted" }).success).toBe(false);
   });
 
   it("lists event-scoped and global forms through the router", async () => {
@@ -293,7 +293,7 @@ describe("admin forms endpoints", () => {
       )
       .run();
 
-    const response = await callAdmin("/api/v1/admin/events/pqc-2026/forms");
+    const response = await callAdmin("/api/v1/events/pqc-2026/forms");
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -314,7 +314,7 @@ describe("admin forms endpoints", () => {
     expect(payload.forms.find((form) => form.key === "pqc-proposal-double-count-form")?.submission_count).toBe(1);
 
     const filteredResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/forms?purpose=feedback&q=global&sort=-title&limit=10",
+      "/api/v1/events/pqc-2026/forms?purpose=feedback&q=global&sort=-title&limit=10",
     );
     expect(filteredResponse.status).toBe(200);
     const filtered = (await filteredResponse.json()) as { forms: Array<{ key: string }>; page: { total: number } };
@@ -330,13 +330,11 @@ describe("admin forms endpoints", () => {
       title: "Inactive feedback",
       fields: [],
     });
-    const inactiveResponse = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/forms?purpose=feedback&status=inactive&limit=10",
-    );
+    const inactiveResponse = await callAdmin("/api/v1/events/pqc-2026/forms?purpose=feedback&status=inactive&limit=10");
     const inactive = (await inactiveResponse.json()) as { forms: Array<{ key: string; status: string }> };
     expect(inactive.forms).toEqual([expect.objectContaining({ key: "inactive-feedback-form", status: "inactive" })]);
 
-    const catalogueQuery = buildAdminFormsPageQuery({
+    const catalogueQuery = buildFormsPageQuery({
       eventId,
       includeGlobal: true,
       q: "form",
@@ -360,7 +358,7 @@ describe("admin forms endpoints", () => {
     expect(countDetails).not.toMatch(/(?:^|\n)SCAN (?:ff|fs|fs2|r|sp)(?:$|\s)/);
   });
 
-  it("lists and creates global forms through the admin forms root", async () => {
+  it("lists and creates only global forms through the forms resource", async () => {
     const { eventId } = await setupAdmin();
 
     await insertForm({
@@ -372,7 +370,7 @@ describe("admin forms endpoints", () => {
       fields: [],
     });
 
-    const createResponse = await callAdmin("/api/v1/admin/forms", {
+    const createResponse = await callAdmin("/api/v1/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "community-survey",
@@ -393,12 +391,12 @@ describe("admin forms endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const created = adminFormCreateResponseSchema.parse(await createResponse.json());
+    const created = formCreateResponseSchema.parse(await createResponse.json());
     expect(created.key).toBe("community-survey");
     expect(created.success).toBe(true);
     expect(created.formId).toBeTruthy();
 
-    const rootResponse = await callAdmin("/api/v1/admin/forms");
+    const rootResponse = await callAdmin("/api/v1/forms");
     expect(rootResponse.status).toBe(200);
     const rootPayload = (await rootResponse.json()) as {
       forms: Array<{
@@ -412,11 +410,10 @@ describe("admin forms endpoints", () => {
     };
     const form = rootPayload.forms.find((entry) => entry.key === "community-survey");
     expect(form).toMatchObject({ scope_type: "global", scope_ref: null, field_count: 1 });
-    const eventForm = rootPayload.forms.find((entry) => entry.key === "event-linked-survey");
-    expect(eventForm).toMatchObject({ event_slug: "pqc-2026", event_name: "PQC Conference 2026" });
+    expect(rootPayload.forms.find((entry) => entry.key === "event-linked-survey")).toBeUndefined();
   });
 
-  it("keeps group-owned community form mutations in the group context while preserving admin reads", async () => {
+  it("keeps group-owned community forms entirely in the group context", async () => {
     const { eventId } = await setupAdmin();
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
     const created = await createManagedForm(
@@ -436,24 +433,22 @@ describe("admin forms endpoints", () => {
       },
     );
 
-    const readResponse = await callAdmin("/api/v1/admin/forms/group-owned-survey");
-    expect(readResponse.status).toBe(200);
-    const readPayload = (await readResponse.json()) as { form: { key: string } };
-    expect(readPayload.form.key).toBe("group-owned-survey");
+    const readResponse = await callAdmin("/api/v1/forms/group-owned-survey");
+    expect(readResponse.status).toBe(404);
 
-    const patchResponse = await callAdmin("/api/v1/admin/forms/group-owned-survey", {
+    const patchResponse = await callAdmin("/api/v1/forms/group-owned-survey", {
       method: "PATCH",
       body: JSON.stringify({ title: "Should be group-managed" }),
     });
-    expect(patchResponse.status).toBe(403);
+    expect(patchResponse.status).toBe(404);
     await expect(patchResponse.json()).resolves.toMatchObject({
-      error: { code: "GROUP_FORM_MANAGEMENT_REQUIRED" },
+      error: { code: "FORM_NOT_FOUND" },
     });
 
-    const deleteResponse = await callAdmin("/api/v1/admin/forms/group-owned-survey", { method: "DELETE" });
-    expect(deleteResponse.status).toBe(403);
+    const deleteResponse = await callAdmin("/api/v1/forms/group-owned-survey", { method: "DELETE" });
+    expect(deleteResponse.status).toBe(404);
     await expect(deleteResponse.json()).resolves.toMatchObject({
-      error: { code: "GROUP_FORM_MANAGEMENT_REQUIRED" },
+      error: { code: "FORM_NOT_FOUND" },
     });
 
     expect(created.id).toBeTruthy();
@@ -524,11 +519,11 @@ describe("admin forms endpoints", () => {
   it("creates and reads a form, including submissions and answers", async () => {
     await setupAdmin();
 
-    const createResponse = await callAdmin("/api/v1/admin/events/pqc-2026/forms", {
+    const createResponse = await callAdmin("/api/v1/events/pqc-2026/forms", {
       method: "POST",
       body: JSON.stringify({
         key: "event-workshop-form",
-        purpose: "event_registration",
+        purpose: "survey",
         title: "Workshop registration",
         description: "Collect attendee preferences",
         status: "active",
@@ -553,22 +548,24 @@ describe("admin forms endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const created = adminFormCreateResponseSchema.parse(await createResponse.json());
+    const created = formCreateResponseSchema.parse(await createResponse.json());
     expect(created.key).toBe("event-workshop-form");
 
     const [detailRow] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", [
       "event-workshop-form",
     ]);
     await env.DB.prepare(
-      `INSERT INTO form_submissions (id, form_id, status, submitted_at)
-       VALUES (?, ?, 'submitted', ?), (?, ?, 'submitted', ?)`,
+      `INSERT INTO form_submissions (id, form_id, placement_id, status, submitted_at)
+       VALUES (?, ?, ?, 'submitted', ?), (?, ?, ?, 'submitted', ?)`,
     )
       .bind(
         crypto.randomUUID(),
         detailRow.id,
+        created.placementId,
         nowIso(),
         crypto.randomUUID(),
         detailRow.id,
+        created.placementId,
         new Date(Date.now() - 1000).toISOString(),
       )
       .run();
@@ -616,7 +613,7 @@ describe("admin forms endpoints", () => {
       )
       .run();
 
-    const detailResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form");
+    const detailResponse = await callAdmin("/api/v1/events/pqc-2026/forms/event-workshop-form");
     expect(detailResponse.status).toBe(200);
     const detailPayload = (await detailResponse.json()) as {
       form: { key: string; title: string };
@@ -625,7 +622,9 @@ describe("admin forms endpoints", () => {
     expect(detailPayload.form.key).toBe("event-workshop-form");
     expect(detailPayload.fields.map((field) => field.key)).toEqual(["company", "tracks"]);
 
-    const submissionsResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions?limit=1");
+    const submissionsResponse = await callAdmin(
+      "/api/v1/events/pqc-2026/forms/event-workshop-form/submissions?limit=1",
+    );
     expect(submissionsResponse.status).toBe(200);
     const submissionsPayload = (await submissionsResponse.json()) as {
       page: { total: number; hasMore: boolean };
@@ -636,7 +635,7 @@ describe("admin forms endpoints", () => {
     expect(submissionsPayload.submissions[0]?.answers.company).toBe("Example Org");
     expect(submissionsPayload.submissions[0]?.answers.tracks).toEqual(["PKI", "PQC"]);
 
-    const statsOnlyResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions/stats");
+    const statsOnlyResponse = await callAdmin("/api/v1/events/pqc-2026/forms/event-workshop-form/submissions/stats");
     expect(statsOnlyResponse.status).toBe(200);
     const statsOnlyPayload = (await statsOnlyResponse.json()) as {
       total: number;
@@ -727,9 +726,7 @@ describe("admin forms endpoints", () => {
       )
       .run();
 
-    const registrationResponse = await callAdmin(
-      "/api/v1/admin/forms/linked-registration-form/submissions?eventSlug=pqc-2026",
-    );
+    const registrationResponse = await callAdmin("/api/v1/events/pqc-2026/forms/linked-registration-form/submissions");
     expect(registrationResponse.status).toBe(200);
     const registrationPayload = (await registrationResponse.json()) as {
       page: { total: number };
@@ -747,7 +744,7 @@ describe("admin forms endpoints", () => {
     );
 
     const filteredRegistrationResponse = await callAdmin(
-      "/api/v1/admin/forms/linked-registration-form/submissions?eventSlug=pqc-2026&attendanceType=virtual",
+      "/api/v1/events/pqc-2026/forms/linked-registration-form/submissions?attendanceType=virtual",
     );
     expect(filteredRegistrationResponse.status).toBe(200);
     const filteredRegistrationPayload = (await filteredRegistrationResponse.json()) as {
@@ -757,7 +754,7 @@ describe("admin forms endpoints", () => {
     expect(filteredRegistrationPayload.page.total).toBe(1);
     expect(filteredRegistrationPayload.submissions[0]?.contextRef).toBe(registrationId);
     const statsOnlyResponse = await callAdmin(
-      "/api/v1/admin/forms/linked-registration-form/submissions/stats?eventSlug=pqc-2026&attendanceType=virtual",
+      "/api/v1/events/pqc-2026/forms/linked-registration-form/submissions/stats?attendanceType=virtual",
     );
     expect(statsOnlyResponse.status).toBe(200);
     const statsOnlyPayload = (await statsOnlyResponse.json()) as {
@@ -769,7 +766,7 @@ describe("admin forms endpoints", () => {
       { label: "No peanuts", count: 1, percent: 100, weight: 1 },
     ]);
 
-    const proposalResponse = await callAdmin("/api/v1/admin/forms/linked-proposal-form/submissions?eventSlug=pqc-2026");
+    const proposalResponse = await callAdmin("/api/v1/events/pqc-2026/forms/linked-proposal-form/submissions");
     expect(proposalResponse.status).toBe(200);
     const proposalPayload = (await proposalResponse.json()) as {
       page: { total: number };
@@ -782,7 +779,7 @@ describe("admin forms endpoints", () => {
       answers: { audience: "Operators" },
     });
 
-    const registrationFieldPatch = await callAdmin("/api/v1/admin/forms/linked-registration-form", {
+    const registrationFieldPatch = await callAdmin("/api/v1/events/pqc-2026/forms/linked-registration-form", {
       method: "PATCH",
       body: JSON.stringify({
         fields: [
@@ -803,7 +800,7 @@ describe("admin forms endpoints", () => {
     };
     expect(registrationFieldPayload.fields.find((field) => field.key === "food")?.archivedAt).toBeTruthy();
 
-    const proposalFieldPatch = await callAdmin("/api/v1/admin/forms/linked-proposal-form", {
+    const proposalFieldPatch = await callAdmin("/api/v1/events/pqc-2026/forms/linked-proposal-form", {
       method: "PATCH",
       body: JSON.stringify({ fields: [] }),
     });
@@ -813,7 +810,7 @@ describe("admin forms endpoints", () => {
     };
     expect(proposalFieldPayload.fields.find((field) => field.key === "audience")?.archivedAt).toBeTruthy();
 
-    const deleteRegistrationForm = await callAdmin("/api/v1/admin/forms/linked-registration-form", {
+    const deleteRegistrationForm = await callAdmin("/api/v1/events/pqc-2026/forms/linked-registration-form", {
       method: "DELETE",
     });
     expect(deleteRegistrationForm.status).toBe(200);
@@ -847,7 +844,7 @@ describe("admin forms endpoints", () => {
       },
     });
 
-    const patchResponse = await callAdmin("/api/v1/admin/forms/mutable-form", {
+    const patchResponse = await callAdmin("/api/v1/events/pqc-2026/forms/mutable-form", {
       method: "PATCH",
       body: JSON.stringify({
         title: "Updated form",
@@ -881,7 +878,7 @@ describe("admin forms endpoints", () => {
     expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "old_field", "topics"]);
     expect(patchPayload.fields.find((field) => field.key === "old_field")?.archivedAt).toBeTruthy();
 
-    const deleteResponse = await callAdmin("/api/v1/admin/forms/mutable-form", { method: "DELETE" });
+    const deleteResponse = await callAdmin("/api/v1/events/pqc-2026/forms/mutable-form", { method: "DELETE" });
     expect(deleteResponse.status).toBe(200);
     const deletePayload = (await deleteResponse.json()) as { action: string; message?: string };
     expect(deletePayload.action).toBe("archived");
@@ -917,7 +914,7 @@ describe("admin forms endpoints", () => {
       ],
     });
 
-    const getResponse = await callAdmin("/api/v1/admin/forms/catalog-form");
+    const getResponse = await callAdmin("/api/v1/events/pqc-2026/forms/catalog-form");
     expect(getResponse.status).toBe(200);
     const getPayload = (await getResponse.json()) as {
       fields: Array<{ key: string; optionSource?: string | null; options: unknown[] | null }>;
@@ -928,7 +925,7 @@ describe("admin forms endpoints", () => {
       options: null,
     });
 
-    const patchResponse = await callAdmin("/api/v1/admin/forms/catalog-form", {
+    const patchResponse = await callAdmin("/api/v1/events/pqc-2026/forms/catalog-form", {
       method: "PATCH",
       body: JSON.stringify({
         fields: [
@@ -976,7 +973,7 @@ describe("admin forms endpoints", () => {
     });
     await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(groupId).run();
 
-    const response = await callAdmin("/api/v1/admin/forms/catalog-stats-form/submissions/stats?eventSlug=pqc-2026");
+    const response = await callAdmin("/api/v1/events/pqc-2026/forms/catalog-stats-form/submissions/stats");
     expect(response.status, await response.clone().text()).toBe(200);
     const payload = (await response.json()) as {
       stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
@@ -997,7 +994,7 @@ describe("admin forms endpoints", () => {
       fields: [],
     });
 
-    const deleteResponse = await callAdmin("/api/v1/admin/forms/empty-form", { method: "DELETE" });
+    const deleteResponse = await callAdmin("/api/v1/forms/empty-form", { method: "DELETE" });
     expect(deleteResponse.status).toBe(200);
     const deletePayload = (await deleteResponse.json()) as { action: string };
     expect(deletePayload.action).toBe("deleted");
@@ -1006,7 +1003,7 @@ describe("admin forms endpoints", () => {
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'form' AND action = 'form_deleted'"),
     ).toHaveLength(1);
 
-    const missingResponse = await callAdmin("/api/v1/admin/forms/does-not-exist");
+    const missingResponse = await callAdmin("/api/v1/forms/does-not-exist");
     expect(missingResponse.status).toBe(404);
     const missingPayload = (await missingResponse.json()) as { error?: { code?: string } };
     expect(missingPayload.error?.code).toBe("FORM_NOT_FOUND");

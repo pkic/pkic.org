@@ -39,6 +39,7 @@ const DELEGATED_MODULES = new Map<string, string>([
 const RETIRED_MODULES = new Set([
   "donations",
   "email-templates",
+  "forms",
   "leadership-positions",
   "membership-settings",
   "stats",
@@ -93,7 +94,7 @@ export function adminAuthorizationForRequest(path: string, method: string): Admi
       : readOrWrite(normalizedMethod, "users:read", "users:write");
     return { kind: "permission", permission };
   }
-  if (module === "email" || module === "forms") {
+  if (module === "email") {
     return {
       kind: "permission",
       permission: readOrWrite(normalizedMethod, "admin:read", "admin:write"),

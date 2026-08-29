@@ -1286,7 +1286,7 @@ describe("group event management routes", () => {
     ).rejects.toMatchObject({ code: "EVENT_FLOW_FORM_CHANGED" });
   });
 
-  it("rejects legacy administrator placement creation and retargeting for portal event flows", async () => {
+  it("rejects global placement creation and retargeting for portal event flows", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);
     const adminToken = await createAdminSession(
@@ -1304,7 +1304,7 @@ describe("group event management routes", () => {
       .bind(formId, formKey)
       .run();
 
-    const createToPortal = await request(adminToken, `/api/v1/admin/forms/${formKey}/placements`, {
+    const createToPortal = await request(adminToken, `/api/v1/forms/${formKey}/placements`, {
       method: "POST",
       body: JSON.stringify({
         contextType: "event",
@@ -1324,7 +1324,7 @@ describe("group event management routes", () => {
     )
       .bind(placementId, formId, fixture.ownerGroupId)
       .run();
-    const retargetToPortal = await request(adminToken, `/api/v1/admin/forms/${formKey}/placements/${placementId}`, {
+    const retargetToPortal = await request(adminToken, `/api/v1/forms/${formKey}/placements/${placementId}`, {
       method: "PATCH",
       body: JSON.stringify({ contextType: "event", contextRef: created.id, audience: "attendee" }),
     });

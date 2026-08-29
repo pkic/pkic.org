@@ -150,7 +150,7 @@ describe("event frontend routes and hydration contracts", () => {
     await seedEventAndAdmin(env.DB);
 
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/form-configurations/event_registration"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -205,7 +205,7 @@ describe("event frontend routes and hydration contracts", () => {
     ]);
 
     const registrationResponse = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/form-configurations/event_registration"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -214,7 +214,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(registrationPayload.form?.key).toBe(registrationLinkedKey);
 
     const proposalResponse = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=proposal_submission"),
+      new Request("https://app.test/api/v1/events/pqc-2026/form-configurations/proposal_submission"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -243,7 +243,7 @@ describe("event frontend routes and hydration contracts", () => {
     ]);
 
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/form-configurations/event_registration"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );

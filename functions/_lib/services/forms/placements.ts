@@ -300,9 +300,11 @@ export async function listFormPlacements(
   db: DatabaseLike,
   formId: string,
   query: FormPlacementsListQuery,
+  options: { unownedOnly?: boolean } = {},
 ): Promise<{ placements: FormPlacement[]; total: number }> {
   const conditions = ["form_id = ?"];
   const bindings: unknown[] = [formId];
+  if (options.unownedOnly) conditions.push("owner_group_id IS NULL");
   if (query.ownerGroupId) {
     conditions.push("owner_group_id = ?");
     bindings.push(query.ownerGroupId);

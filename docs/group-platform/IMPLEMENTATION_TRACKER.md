@@ -1390,6 +1390,29 @@ Status: In progress
       focused real Worker/D1 browser journey updates a user through the portal,
       verifies persistence and the legacy bookmark redirect, and observes no
       legacy Users or Members request.
+      Reusable form-definition management now uses the canonical Forms
+      resource instead of an interface namespace. Global definitions are
+      listed, created, edited, archived, placed, and analyzed under
+      `/api/v1/forms`; event-owned definitions and response sets use
+      `/api/v1/events/:eventSlug/forms`; group-owned definitions remain under
+      their owning group routes. Anonymous event flows use the distinct
+      `/api/v1/events/:eventSlug/form-configurations/:purpose` projection, so
+      public form hydration cannot be confused with a staff catalogue. One
+      neutral schema and service family owns definition, placement,
+      submission, statistics, search, allowlisted sorting, counting, and
+      pagination behavior. Top-level Forms routes expose only global
+      definitions, event routes expose only definitions owned by or explicitly
+      placed in that event, and group-owned definitions never leak through the
+      global API. Global and event mutations repeat live user-backed
+      `forms:write` or contextual `events:write` authorization in the same D1
+      batch as the write and audit record. The former admin Forms components,
+      handlers, route mounts, and admin-prefixed contracts are removed; the
+      old bookmark redirects to the portal without retaining an API alias.
+      Mounted ownership, permission, revocation-race, placement, submission,
+      statistics, public-contract, OpenAPI, frontend, and route-removal tests
+      cover the cutover. A real Worker/D1 browser journey creates and updates a
+      global form through canonical requests and observes no admin Forms API
+      request.
       Other global management destinations remain, so this item is deliberately
       still open.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
@@ -1572,8 +1595,8 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the unified human
-      authentication cutover with 2,267 backend tests (one skipped), 333
+      Current evidence: the complete gate passes after the canonical Forms
+      cutover with 2,275 backend tests (one skipped), 339
       frontend tests, and 80 tooling tests. Type checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1617,7 +1640,7 @@ Status: In progress
       follows the legacy bookmark redirect, and proves that no removed admin
       endpoint is requested. The proposal-moderation browser journey now uses
       an exact action-bearing row locator so the expanded detail row cannot be
-      mistaken for its parent proposal row. The complete 51-test Playwright
+      mistaken for its parent proposal row. The complete 52-test Playwright
       gate now passes against one freshly seeded Worker/D1 environment. That
       run also exposed four event-management specs sharing one mailbox against
       the production-equivalent three-request email rate limit; each spec now
@@ -1632,8 +1655,8 @@ Status: In progress
       is requested. Stripe remains mocked and SendGrid remains intercepted.
 - [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: all 51 browser tests pass in one uninterrupted
-      2.7-minute run against freshly seeded local Worker, D1, R2, and
+      Current evidence: all 52 browser tests pass in one uninterrupted
+      2.5-minute run against freshly seeded local Worker, D1, R2, and
       intercepted SendGrid environments. This checkpoint includes the unified
       user sign-in path, staff/member/dual-capacity personas, group management,
       public event flows, and every permission-derived global destination. The
@@ -1642,7 +1665,10 @@ Status: In progress
       delayed managed-group auto-selection can no longer override navigation to
       another portal section. The mailing-list journey also waits for the
       requested group and its server-backed table before editing, then asserts
-      the canonical create response. Browser, Worker, and Wrangler temporary
+      the canonical create response. Each independently seeded sign-in identity
+      uses a stable TEST-NET client address, so the serial local runner does not
+      collapse unrelated users into one per-IP rate-limit bucket while retaining
+      the production-equivalent limiter. Browser, Worker, and Wrangler temporary
       state for this checkpoint was kept on `/Volumes/ScanDisk`.
 - [x] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
@@ -1708,9 +1734,9 @@ Status: In progress
       committed range. The audit also confirms that implementation is not yet
       complete. The shared resource evaluator covers the canonical group form,
       event, vote, and mailing-list paths, but legacy global/admin domain
-      endpoints remain. The admin shell still exposes Events and Forms, and
-      the admin router still mounts those domains plus proposal compatibility
-      routes. Ownerless/global event actions and the
+      endpoints remain. The admin shell still exposes Events, and the admin
+      router still mounts the event and proposal compatibility routes.
+      Ownerless/global event actions and the
       remaining proposal adapter therefore still require deliberate
       portal/domain cutovers or explicit retirement.
       Temporary redirects, compatibility API removal, and final shell removal
@@ -1773,8 +1799,12 @@ The final PR description must include, at minimum:
 - deactivate and reactivate the membership-application definition, confirm
   public collection closes and reopens coherently, and confirm archived
   questions remain historical after later edits;
-- verify the legacy Admin Forms catalogue omits `membership-application` and
-  its direct and placement mutation URLs reject the domain-owned form;
+- verify `/api/v1/admin/forms` and its nested paths return 404, while
+  `membership-application` remains available only through the membership
+  application definition API;
+- create, edit, archive, and reuse a global form through `/portal/#/forms`,
+  confirm event and group definitions remain visible only in their owning
+  contexts, and confirm the browser makes no admin Forms request;
 - list and search email templates with `email-templates:read`, then confirm a
   read-only staff user can inspect content and history but cannot preview,
   create, save, or activate a version;
