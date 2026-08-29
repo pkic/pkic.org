@@ -87,14 +87,14 @@ async function seedDecisionWorkflow(): Promise<SeededDecisionWorkflow> {
 }
 
 async function saveReview(proposalId: string, token: string, score: number): Promise<Response> {
-  return callAdmin(`/api/v1/admin/proposals/${proposalId}/reviews`, token, "POST", {
+  return callAdmin(`/api/v1/proposals/${proposalId}/reviews`, token, "POST", {
     recommendation: "accept",
     score,
   });
 }
 
 async function finalize(proposalId: string, token: string, finalStatus: "accepted" | "rejected" | "needs-work") {
-  return callAdmin(`/api/v1/admin/proposals/${proposalId}/finalize`, token, "POST", {
+  return callAdmin(`/api/v1/proposals/${proposalId}/decisions`, token, "POST", {
     finalStatus,
     decisionNote: finalStatus === "needs-work" ? "Please revise the proposal." : undefined,
   });
@@ -203,7 +203,7 @@ describe("proposal decision review rounds", () => {
     ]);
 
     const emptyRound = proposalReviewsListResponseSchema.parse(
-      await (await callAdmin(`/api/v1/admin/proposals/${seeded.proposalId}/reviews`, seeded.adminToken)).json(),
+      await (await callAdmin(`/api/v1/proposals/${seeded.proposalId}/reviews`, seeded.adminToken)).json(),
     );
     expect(emptyRound.summary.totalReviews).toBe(0);
     expect(emptyRound.reviews).toEqual([]);

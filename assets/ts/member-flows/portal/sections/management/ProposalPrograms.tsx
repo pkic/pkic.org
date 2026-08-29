@@ -30,7 +30,7 @@ export function ProposalPrograms() {
           independent, and this does not grant access to other group resources.
         </p>
         <ApiDataTable
-          endpoint="/api/v1/me/proposal-programs"
+          endpoint="/api/v1/proposals/programs"
           responseSchema={proposalProgramsListResponseSchema}
           resolve={(response) => response.programs}
           resolvePage={(response) => response.page}

@@ -74,7 +74,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/open-manage`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/access-links`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -82,7 +82,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/reviews**`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/reviews**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -120,7 +120,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/comments**`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/comments**`, async (route) => {
     const offset = Number(new URL(route.request().url()).searchParams.get("offset") ?? 0);
     const comments =
       offset === 0
@@ -160,7 +160,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/audit-log**`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/audit-log**`, async (route) => {
     const url = new URL(route.request().url());
     const offset = Number(url.searchParams.get("offset") ?? 0);
     auditOffsets.push(offset);
@@ -187,7 +187,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/speakers`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/speakers`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -239,7 +239,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/presentation/versions**`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/presentations**`, async (route) => {
     if (route.request().method() === "POST") {
       const headers = route.request().headers();
       adminUpload = {
@@ -265,7 +265,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}`, async (route) => {
     if (route.request().method() === "PATCH") {
       const body = route.request().postDataJSON() as { abstract?: string; title?: string };
       expect(body.title).toBeUndefined();
@@ -402,7 +402,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/cancel`, async (route) => {
+  await page.route(`**/api/v1/proposals/${proposalId}/cancellations`, async (route) => {
     const body = route.request().postDataJSON() as { comment: string };
     expect(body.comment).toBe("The speaker is unavailable for the scheduled session.");
     proposalStatus = "canceled";

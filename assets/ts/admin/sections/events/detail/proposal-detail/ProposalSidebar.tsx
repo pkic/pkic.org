@@ -6,6 +6,7 @@ import type { ProposalAccess, ProposalReview } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
 import type { PageInfo } from "../../../../../../shared/schemas/pagination";
 import type { ProposalDetailRecord, ProposalInternalComment } from "./model";
+import { proposalResourcePath } from "./proposal-api";
 
 export function ProposalSidebar({
   proposal,
@@ -51,13 +52,13 @@ export function ProposalSidebar({
   onFlag: (action: "spam" | "duplicate" | "delete") => Promise<void>;
 }) {
   async function remindAll(kind: "profile" | "presentation") {
-    const path = kind === "profile" ? "remind-speakers" : "remind-presentation";
     try {
       const response = await api(
-        `/api/v1/admin/proposals/${proposalId}/${path}`,
+        proposalResourcePath(proposalId, "speakers/reminders"),
         proposalSpeakerRemindersResponseSchema,
         {
           method: "POST",
+          body: JSON.stringify({ kind }),
         },
       );
       toast(

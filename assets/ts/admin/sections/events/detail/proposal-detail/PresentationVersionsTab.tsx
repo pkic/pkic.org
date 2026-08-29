@@ -5,6 +5,7 @@ import { api, apiCommand } from "../../../../api";
 import { presentationVersionResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
 import { fmt, toast } from "../../../../ui";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
+import { proposalResourcePath } from "./proposal-api";
 
 function reviewStatusLabel(status: PresentationVersionReview["status"]): string {
   return { approved: "Approved", rejected: "Rejected", needs_revision: "Needs revision" }[status] ?? status;
@@ -46,14 +47,14 @@ export function PresentationVersionsTab({
   const [uploading, setUploading] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleAdminUpload(event: Event) {
+  async function handlePresentationUpload(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     input.value = "";
     setUploading(true);
     try {
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      await apiCommand(proposalResourcePath(proposalId, "presentations"), {
         method: "POST",
         ...presentationUploadRequest(file),
       });
@@ -70,7 +71,7 @@ export function PresentationVersionsTab({
     setSavingReview(true);
     try {
       await api(
-        `/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`,
+        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}/reviews`),
         presentationVersionResponseSchema,
         {
           method: "POST",
@@ -92,7 +93,7 @@ export function PresentationVersionsTab({
     if (!confirm("Delete this presentation version? This cannot be undone.")) return;
     setDeletingId(versionId);
     try {
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}`, {
+      await apiCommand(proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}`), {
         method: "DELETE",
       });
       toast("Version deleted", "success");
@@ -120,7 +121,7 @@ export function PresentationVersionsTab({
         class="d-none"
         accept=".pdf,.pptx,.ppt,.odp,.pptm"
         disabled={uploading}
-        onChange={handleAdminUpload}
+        onChange={handlePresentationUpload}
       />
     </div>
   );
@@ -170,7 +171,7 @@ export function PresentationVersionsTab({
             )}
             <div class="d-flex gap-2 flex-wrap">
               <a
-                href={`/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}/download`}
+                href={proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}/content`)}
                 class="btn btn-sm btn-outline-secondary"
                 download
               >

@@ -120,8 +120,8 @@ afterEach(() => {
 describe("scoped audit-log server pagination", () => {
   it("pages proposal audit entries with the shared limit/offset pager", async () => {
     await assertPagedAuditLog(
-      <AuditLogSection proposalId="proposal-1" />,
-      "/api/v1/admin/proposals/proposal-1/audit-log",
+      <AuditLogSection proposalId="proposal-1" enabled />,
+      "/api/v1/proposals/proposal-1/audit-log",
       "proposal_edited",
       "Proposal updated",
       "proposal_decision_recorded",
@@ -129,10 +129,10 @@ describe("scoped audit-log server pagination", () => {
     );
   });
 
-  it("pages the group-scoped proposal audit endpoint through the shared audit UI", async () => {
+  it("pages the canonical proposal audit endpoint through the shared audit UI", async () => {
     await assertPagedAuditLog(
-      <ProposalAuditLog endpoint="/api/v1/groups/group-1/events/event-1/proposals/proposal-1/audit-log" />,
-      "/api/v1/groups/group-1/events/event-1/proposals/proposal-1/audit-log",
+      <ProposalAuditLog endpoint="/api/v1/proposals/proposal-1/audit-log" />,
+      "/api/v1/proposals/proposal-1/audit-log",
       "proposal_decision_recorded",
       "Decision recorded",
       "proposal_review_upserted",

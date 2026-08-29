@@ -7,6 +7,8 @@ import { proposalSpeakersResponseSchema } from "../../../../../../shared/schemas
 import { presentationVersionsResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
 import type { ProposalReview } from "../../../../../../shared/schemas/proposal-reviews";
 import type { PresentationVersion } from "./model";
+import type { ProposalAccess } from "../../../../types";
+import { proposalResourcePath } from "./proposal-api";
 
 function recoverSubresource<T>(label: string, fallback: T): (error: unknown) => T {
   return (error) => {
@@ -17,9 +19,15 @@ function recoverSubresource<T>(label: string, fallback: T): (error: unknown) => 
 }
 
 /** Admin adapter for shared review/comment data plus admin-only speaker and presentation resources. */
-export function useProposalSubresources(proposalId: string, reloadProposal: () => void) {
-  const proposalBase = `/api/v1/admin/proposals/${proposalId}`;
-  const reviewComments = useProposalReviewComments(proposalBase, reloadProposal);
+export function useProposalSubresources(
+  proposalId: string,
+  reloadProposal: () => void,
+  access: ProposalAccess | null | undefined,
+) {
+  const proposalBase = proposalResourcePath(proposalId);
+  const canReadPrivateResources = access?.canRead === true;
+  const canReviewPrivateResources = access?.canReview === true;
+  const reviewComments = useProposalReviewComments(proposalBase, reloadProposal, canReviewPrivateResources);
   const [speakers, setSpeakers] = useState<ProposalSpeaker[]>([]);
   const [versions, setVersions] = useState<PresentationVersion[]>([]);
   const [versionPage, setVersionPage] = useState<{
@@ -32,13 +40,20 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
   const [loadingAdditional, setLoadingAdditional] = useState(true);
 
   const reloadAdditional = useCallback(async () => {
+    if (!canReadPrivateResources) {
+      setSpeakers([]);
+      setVersions([]);
+      setVersionPage(null);
+      setLoadingAdditional(false);
+      return;
+    }
     setLoadingAdditional(true);
     try {
       const [speakerData, presentationData] = await Promise.all([
-        api(`${proposalBase}/speakers`, proposalSpeakersResponseSchema).catch(
+        api(proposalResourcePath(proposalId, "speakers"), proposalSpeakersResponseSchema).catch(
           recoverSubresource("speakers", { speakers: [] }),
         ),
-        api(`${proposalBase}/presentation/versions?limit=25`, presentationVersionsResponseSchema).catch(
+        api(`${proposalResourcePath(proposalId, "presentations")}?limit=25`, presentationVersionsResponseSchema).catch(
           recoverSubresource("presentation versions", {
             versions: [],
             page: { limit: 25, offset: 0, total: 0, hasMore: false },
@@ -51,7 +66,7 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     } finally {
       setLoadingAdditional(false);
     }
-  }, [proposalBase]);
+  }, [canReadPrivateResources, proposalId]);
 
   useEffect(() => {
     void reloadAdditional();
@@ -97,7 +112,7 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     setLoadingMoreVersions(true);
     try {
       const next = await api(
-        `${proposalBase}/presentation/versions?limit=${versionPage.limit}&offset=${versions.length}`,
+        `${proposalResourcePath(proposalId, "presentations")}?limit=${versionPage.limit}&offset=${versions.length}`,
         presentationVersionsResponseSchema,
       );
       setVersions((previous) => [...previous, ...next.versions]);

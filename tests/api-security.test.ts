@@ -329,24 +329,24 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}/audit`)),
     ],
     [
-      "POST /api/v1/admin/proposals/:proposalId/finalize",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`)),
+      "POST /api/v1/proposals/:proposalId/decisions",
+      () => callApp(anonPost(`https://app.test/api/v1/proposals/${proposalId}/decisions`)),
     ],
     [
-      "GET /api/v1/admin/proposals/:proposalId/reviews",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`)),
+      "GET /api/v1/proposals/:proposalId/reviews",
+      () => callApp(anonGet(`https://app.test/api/v1/proposals/${proposalId}/reviews`)),
     ],
     [
-      "POST /api/v1/admin/proposals/:proposalId/reviews",
-      () => callApp(anonPost(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`)),
+      "POST /api/v1/proposals/:proposalId/reviews",
+      () => callApp(anonPost(`https://app.test/api/v1/proposals/${proposalId}/reviews`)),
     ],
     [
-      "PATCH /api/v1/admin/proposals/:proposalId/reviews/:reviewId",
-      () => callApp(anonPatch(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews/${reviewId}`)),
+      "PATCH /api/v1/proposals/:proposalId/reviews/:reviewId",
+      () => callApp(anonPatch(`https://app.test/api/v1/proposals/${proposalId}/reviews/${reviewId}`)),
     ],
     [
-      "GET /api/v1/admin/proposals/:proposalId/speakers",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
+      "GET /api/v1/proposals/:proposalId/speakers",
+      () => callApp(anonGet(`https://app.test/api/v1/proposals/${proposalId}/speakers`)),
     ],
     // ── permission, role, and user-role endpoints ───────────
     ["GET /api/v1/permissions/grants", () => callApp(anonGet("https://app.test/api/v1/permissions/grants"))],

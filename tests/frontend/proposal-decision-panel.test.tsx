@@ -100,7 +100,7 @@ describe("proposal decision panel", () => {
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
         requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
-        if (url.endsWith("/finalize-preview")) {
+        if (url.endsWith("/decisions/previews")) {
           return new Response(
             JSON.stringify({
               success: true,
@@ -167,9 +167,10 @@ describe("proposal decision panel", () => {
 
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
-      url: "/api/v1/admin/proposals/proposal-1/finalize-preview",
+      url: "/api/v1/proposals/proposal-1/decisions/previews",
       method: "POST",
     });
+    expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
     expect(container.textContent).toContain("Email preview");
     const recordButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(recordButton.disabled).toBe(true);
@@ -187,9 +188,10 @@ describe("proposal decision panel", () => {
 
     expect(requests).toHaveLength(2);
     expect(requests[1]).toMatchObject({
-      url: "/api/v1/admin/proposals/proposal-1/finalize",
+      url: "/api/v1/proposals/proposal-1/decisions",
       method: "POST",
     });
+    expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
     vi.unstubAllGlobals();
   });
 });

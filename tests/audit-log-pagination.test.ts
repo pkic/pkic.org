@@ -53,19 +53,19 @@ describe("proposal audit-log pagination (P6M-FT-01)", () => {
     await insertAuditLogRows("proposal", proposalId, 5);
 
     const staffToken = await createAdminSession(env.DB, adminUserId, "ft01-token");
-    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log?limit=2&offset=0`, staffToken);
+    const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log?limit=2&offset=0`, staffToken);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { auditLog: unknown[]; page: { total: number; hasMore: boolean } };
     expect(body.auditLog).toHaveLength(2);
     expect(body.page.total).toBe(5);
     expect(body.page.hasMore).toBe(true);
 
-    const lastPage = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log?limit=2&offset=4`, staffToken);
+    const lastPage = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log?limit=2&offset=4`, staffToken);
     const lastBody = (await lastPage.json()) as { auditLog: unknown[]; page: { hasMore: boolean } };
     expect(lastBody.auditLog).toHaveLength(1);
     expect(lastBody.page.hasMore).toBe(false);
 
-    const invalid = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log?limit=0`, staffToken);
+    const invalid = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log?limit=0`, staffToken);
     expect(invalid.status).toBe(400);
   });
 });

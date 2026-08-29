@@ -14,7 +14,7 @@ async function callProposalReview(
   init?: RequestInit,
 ): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews${suffix}`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/reviews${suffix}`, {
       ...init,
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init?.headers },
     }),
@@ -551,7 +551,7 @@ describe("proposal review and finalize", () => {
     });
 
     const belowQuorum = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/decisions`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${admin1Token}` },
         body: JSON.stringify({ finalStatus: "accepted" }),
@@ -570,7 +570,7 @@ describe("proposal review and finalize", () => {
     });
 
     const finalizeResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/decisions`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${admin1Token}` },
         body: JSON.stringify({ finalStatus: "accepted" }),

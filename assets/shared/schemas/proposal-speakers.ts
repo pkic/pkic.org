@@ -49,6 +49,9 @@ export const proposalSpeakerReminderResponseSchema = successResponseSchema;
 export const proposalSpeakerRemindersResponseSchema = successResponseSchema.extend({
   queued: z.number().int().nonnegative(),
 });
+export const proposalSpeakerReminderRequestSchema = z.object({
+  kind: z.enum(["profile", "presentation"]),
+});
 
 export type ProposalSpeakerPatch = z.infer<typeof proposalSpeakerPatchSchema>;
 export type ProposalSpeaker = z.infer<typeof proposalSpeakerSchema>;

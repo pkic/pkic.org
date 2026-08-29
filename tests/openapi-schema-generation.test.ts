@@ -14,6 +14,11 @@ describe("OpenAPI schema generation", () => {
 
     expect(spec.paths["/api/v1/events/{eventSlug}/proposals"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/proposals"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/proposals"].get).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/proposals/{proposalId}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/programs"].get).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/{proposalId}/speakers"].post).toBeDefined();
+    expect(spec.paths["/api/v1/me/proposal-programs"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/proposals"]).toBeUndefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-email"].get).toBeDefined();
@@ -49,8 +54,10 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/sponsorship/inquiries"].post).toBeDefined();
   });
 
-  it("mounts admin mutation contracts through their owning routers", () => {
+  it("mounts management contracts through their owning resource routers", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
+
+    expect(Object.keys(spec.paths).some((path) => path.startsWith("/api/v1/admin"))).toBe(false);
 
     expect(spec.paths["/api/v1/events/imports"].post).toBeDefined();
     // The ownerless admin event collection and its Hugo sync route are retired.
@@ -252,9 +259,9 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/geo"]).toBeUndefined();
   });
 
-  it("includes required scopes on decorated admin operations", () => {
+  it("includes required scopes on decorated proposal operations", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
-    const operation = spec.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post;
+    const operation = spec.paths["/api/v1/proposals/{proposalId}/reviews"].post;
 
     expect(operation.security).toEqual([{ BearerAuth: ["proposals:score"] }]);
     expect(operation[AUTH_EXTENSION]).toEqual({
@@ -268,7 +275,7 @@ describe("OpenAPI schema generation", () => {
 
   it("documents accepted-abstract editing as alternative least-privilege scopes", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
-    const operation = spec.paths["/api/v1/admin/proposals/{proposalId}"].patch;
+    const operation = spec.paths["/api/v1/proposals/{proposalId}"].patch;
     const alternatives = [["proposals:manage"], ["proposals:edit_accepted_abstract"]];
 
     expect(operation.security).toEqual(alternatives.map((scopes) => ({ BearerAuth: scopes })));

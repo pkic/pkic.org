@@ -84,7 +84,7 @@ describe("proposal speaker capacity reconciliation", () => {
     });
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
@@ -194,7 +194,7 @@ describe("proposal speaker capacity reconciliation", () => {
     });
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ role: "panelist" }),
@@ -559,7 +559,7 @@ describe("proposal speaker capacity reconciliation", () => {
     expect(proposerResponse.status).toBe(409);
     await expect(proposerResponse.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });
     const adminResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",

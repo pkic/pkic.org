@@ -15,7 +15,7 @@ function decisionActor(id: string) {
 
 async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+    new Request(`https://app.test/api/v1/proposals/${proposalId}/reviews`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
@@ -213,7 +213,7 @@ describe("proposal finalize workflows", () => {
     const adminToken = await createAdminSession(env.DB, adminUserId, "finalize-test-token");
     await addReviews(eventId, proposalId, adminUserId);
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const response = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "rejected",
       decisionNote: "Not a fit for this event.",
     });
@@ -253,7 +253,7 @@ describe("proposal finalize workflows", () => {
     ).run();
 
     try {
-      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      const response = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
         finalStatus: "accepted",
         presentationDeadline: "2027-03-01T00:00:00.000Z",
       });
@@ -287,7 +287,7 @@ describe("proposal finalize workflows", () => {
     const adminToken = await createAdminSession(env.DB, adminUserId, "finalize-accept-token");
     await addReviews(eventId, proposalId, adminUserId);
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const response = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "accepted",
     });
 
@@ -314,7 +314,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-spam-service-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "spam" });
     expect(response.status).toBe(200);
     expect(proposalFlagResponseSchema.parse(await response.json())).toEqual({ success: true, action: "spam" });
 
@@ -329,7 +329,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-duplicate-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "duplicate" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "duplicate" });
     expect(response.status).toBe(200);
 
     const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
@@ -343,7 +343,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-service-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "delete" });
     expect(response.status).toBe(200);
 
     const [row] = await queryAll<{ status: string; deleted_at: string | null }>(
@@ -366,7 +366,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-list-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "delete" });
     expect(response.status).toBe(200);
 
     const remaining = await queryAll<{ id: string }>(
@@ -382,7 +382,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-spam-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "spam" });
 
     expect(response.status).toBe(200);
 
@@ -404,7 +404,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "delete" });
 
     expect(response.status).toBe(200);
 
@@ -436,7 +436,7 @@ describe("proposal spam/duplicate/delete", () => {
          END`,
     ).run();
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "delete" });
     expect(response.status).toBe(500);
 
     const [proposal] = await queryAll<{ status: string; deleted_at: string | null }>(
@@ -463,7 +463,7 @@ describe("proposal spam/duplicate/delete", () => {
          END`,
     ).run();
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "spam" });
     expect(response.status).toBe(409);
     await expect(
       queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'proposal_flagged'", [proposalId]),
@@ -503,13 +503,13 @@ describe("proposal HTTP error responses (full router stack)", () => {
     await addReviews(eventId, proposalId, adminUserId);
 
     // First finalize — must succeed
-    const first = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const first = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "rejected",
     });
     expect(first.status).toBe(200);
 
     // Second finalize — must return JSON 409, not a 500 or a crash
-    const second = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const second = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "accepted",
     });
     expect(second.status).toBe(409);
@@ -523,7 +523,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const adminToken = await createAdminSession(env.DB, adminUserId, "threshold-token");
 
     // Default config requires 2 reviews; seed none so threshold is not met
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const response = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "accepted",
     });
     expect(response.status).toBe(409);
@@ -536,7 +536,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { proposalId } = await seedProposalWithSpeaker(eventId);
     const apiKey = "proposal-finalize-api-key";
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/decisions`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ finalStatus: "accepted" }),
@@ -557,11 +557,11 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "invalid-decision-policy-token");
 
-    const missingNote = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const missingNote = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "needs-work",
     });
     expect(missingNote.status).toBe(400);
-    const ignoredDeadline = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+    const ignoredDeadline = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "rejected",
       presentationDeadline: "2027-03-01T00:00:00.000Z",
     });
@@ -575,12 +575,12 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "moderated-decision-token");
-    expect((await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" })).status).toBe(
+    expect((await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "spam" })).status).toBe(
       200,
     );
 
-    for (const path of ["finalize-preview", "finalize"]) {
-      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/${path}`, adminToken, {
+    for (const path of ["decisions/previews", "decisions"]) {
+      const response = await callApp(`/api/v1/proposals/${proposalId}/${path}`, adminToken, {
         finalStatus: "rejected",
       });
       expect(response.status).toBe(409);
@@ -609,7 +609,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     });
 
     // Flag on a finalized proposal — must return JSON 409
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "spam" });
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
@@ -620,7 +620,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-invalid-action-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "archive" });
+    const response = await callApp(`/api/v1/proposals/${proposalId}/moderations`, adminToken, { action: "archive" });
     expect(response.status).toBe(400);
   });
 
@@ -629,13 +629,9 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "unknown-proposal-token");
 
-    const response = await callApp(
-      `/api/v1/admin/proposals/00000000-0000-0000-0000-000000000000/finalize`,
-      adminToken,
-      {
-        finalStatus: "rejected",
-      },
-    );
+    const response = await callApp(`/api/v1/proposals/00000000-0000-0000-0000-000000000000/decisions`, adminToken, {
+      finalStatus: "rejected",
+    });
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("PROPOSAL_NOT_FOUND");
@@ -648,7 +644,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "preview-no-templates-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, adminToken, {
+    const response = await callApp(`/api/v1/proposals/${proposalId}/decisions/previews`, adminToken, {
       finalStatus: "accepted",
     });
     expect(response.status).toBe(200);
@@ -668,7 +664,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const adminToken = await createAdminSession(env.DB, adminUserId, "preview-full-templates-token");
     await seedWorkflowEmailTemplates(env.DB, adminUserId);
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, adminToken, {
+    const response = await callApp(`/api/v1/proposals/${proposalId}/decisions/previews`, adminToken, {
       finalStatus: "accepted",
     });
 
@@ -708,7 +704,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     });
     await activateTemplateVersion(env.DB, { templateKey: "proposal_decision", version: v.version });
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, adminToken, {
+    const response = await callApp(`/api/v1/proposals/${proposalId}/decisions/previews`, adminToken, {
       finalStatus: "rejected",
     });
     expect(response.status).toBe(200);
@@ -813,7 +809,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     await assignUnrelatedStaffRole(staffId);
     const staffToken = await createAdminSession(env.DB, staffId, "no-access-audit-token");
 
-    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(403);
   });
 
@@ -824,7 +820,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     await assignProposalReadOnlyRole(staffId, eventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "read-only-audit-token");
 
-    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(403);
   });
 
@@ -835,7 +831,9 @@ describe("proposal subtree access gate (full router stack)", () => {
     await assignUnrelatedStaffRole(staffId);
     const staffToken = await createAdminSession(env.DB, staffId, "no-access-remind-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/remind-speakers`, staffToken, {});
+    const response = await callApp(`/api/v1/proposals/${proposalId}/speakers/reminders`, staffToken, {
+      kind: "profile",
+    });
     expect(response.status).toBe(403);
   });
 
@@ -844,7 +842,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     await assignUnrelatedStaffRole(staffId);
     const staffToken = await createAdminSession(env.DB, staffId, "no-access-detail-token");
 
-    const response = await callAppGet(`/api/v1/admin/proposals/does-not-exist/audit-log`, staffToken);
+    const response = await callAppGet(`/api/v1/proposals/does-not-exist/audit-log`, staffToken);
     expect(response.status).toBe(404);
   });
 
@@ -868,7 +866,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     await assignEventModerator(staffId, eventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "moderator-token");
 
-    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       auditLog: [
@@ -888,7 +886,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     const moderatorToken = await createAdminSession(env.DB, moderatorId, "moderator-decision-token");
 
     for (const endpoint of ["finalize-preview", "finalize"]) {
-      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/${endpoint}`, moderatorToken, {
+      const response = await callApp(`/api/v1/proposals/${proposalId}/${endpoint}`, moderatorToken, {
         finalStatus: "accepted",
       });
       expect(response.status).toBe(403);
@@ -906,7 +904,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     await assignEventModerator(staffId, otherEventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "other-event-moderator-token");
 
-    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(403);
   });
 });

@@ -4,6 +4,7 @@ import { ProposalDecisionPanel as SharedProposalDecisionPanel } from "../../../.
 import { api } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import type { ProposalDetailRecord } from "./model";
+import { proposalResourcePath } from "./proposal-api";
 
 /** Admin transport adapter for the shared proposal final-decision workflow. */
 export function ProposalDecisionPanel({
@@ -28,24 +29,16 @@ export function ProposalDecisionPanel({
       minReviewsRequired={minReviewsRequired}
       loading={loading}
       onPreview={(input) =>
-        api(
-          `/api/v1/admin/proposals/${encodeURIComponent(proposalId)}/finalize-preview`,
-          proposalDecisionPreviewResponseSchema,
-          {
-            method: "POST",
-            body: JSON.stringify(input),
-          },
-        )
+        api(proposalResourcePath(proposalId, "decisions/previews"), proposalDecisionPreviewResponseSchema, {
+          method: "POST",
+          body: JSON.stringify(input),
+        })
       }
       onFinalize={async (input) => {
-        await api(
-          `/api/v1/admin/proposals/${encodeURIComponent(proposalId)}/finalize`,
-          finalizeProposalResponseSchema,
-          {
-            method: "POST",
-            body: JSON.stringify(input),
-          },
-        );
+        await api(proposalResourcePath(proposalId, "decisions"), finalizeProposalResponseSchema, {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
       }}
       onFinalized={onSaved}
       formatDate={fmt}

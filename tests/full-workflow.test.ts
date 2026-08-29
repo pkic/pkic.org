@@ -247,7 +247,7 @@ describe("full workflow", () => {
       const createdProposal = (await proposalResponse.json()) as ProposalPayload;
 
       const reviewOneResponse = await callMountedApp(
-        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
+        new Request(`https://app.test/api/v1/proposals/${createdProposal.proposalId}/reviews`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -263,7 +263,7 @@ describe("full workflow", () => {
       expect(reviewOneResponse.status).toBe(200);
 
       const reviewTwoResponse = await callMountedApp(
-        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
+        new Request(`https://app.test/api/v1/proposals/${createdProposal.proposalId}/reviews`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -279,7 +279,7 @@ describe("full workflow", () => {
       expect(reviewTwoResponse.status).toBe(200);
 
       const finalizeResponse = await callMountedApp(
-        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/finalize`, {
+        new Request(`https://app.test/api/v1/proposals/${createdProposal.proposalId}/decisions`, {
           method: "POST",
           headers: {
             "content-type": "application/json",

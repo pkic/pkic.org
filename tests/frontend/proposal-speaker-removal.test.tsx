@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import type { ProposalManageResponse } from "../../assets/shared/schemas/proposal-management";
@@ -8,7 +8,7 @@ import {
   buildReplacementProposerOptions,
   SpeakerCard,
 } from "../../assets/ts/admin/sections/events/detail/proposal-detail/SpeakerCard";
-import { adminProposalSpeakerAssetPath } from "../../assets/ts/admin/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
+import { proposalSpeakerAssetPath } from "../../assets/ts/admin/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalManageSpeakerCard } from "../../assets/ts/event-flows/proposal-manage-page";
 
 let container: HTMLElement | null = null;
@@ -18,7 +18,14 @@ afterEach(() => {
   void act(() => render(null, container!));
   container.remove();
   container = null;
+  vi.unstubAllGlobals();
 });
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
 
 function managedSpeaker(
   overrides: Partial<ProposalManageResponse["speakers"][number]> = {},
@@ -43,7 +50,7 @@ function managedSpeaker(
   };
 }
 
-function adminSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
+function proposalSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
   return {
     userId: "speaker-1",
     role: "co_speaker",
@@ -79,18 +86,18 @@ function mount(node: Parameters<typeof render>[0]): HTMLElement {
 
 describe("proposal speaker removal UI", () => {
   it("keeps admin headshot operations scoped to the proposal speaker", () => {
-    expect(adminProposalSpeakerAssetPath("proposal/1", "user/1", "headshot")).toBe(
-      "/api/v1/admin/proposals/proposal%2F1/speakers/user%2F1/headshot",
+    expect(proposalSpeakerAssetPath("proposal/1", "user/1", "headshot")).toBe(
+      "/api/v1/proposals/proposal%2F1/speakers/user%2F1/headshot",
     );
-    expect(adminProposalSpeakerAssetPath("proposal-1", "user-1", "gravatar")).toBe(
-      "/api/v1/admin/proposals/proposal-1/speakers/user-1/gravatar",
+    expect(proposalSpeakerAssetPath("proposal-1", "user-1", "gravatar")).toBe(
+      "/api/v1/proposals/proposal-1/speakers/user-1/headshot",
     );
   });
 
   it("shows proposal reviewers the headshot without mutation controls", () => {
     const root = mount(
       <SpeakerCard
-        speaker={adminSpeaker({ headshotUrl: "/api/v1/admin/proposals/proposal-1/speakers/speaker-1/headshot" })}
+        speaker={proposalSpeaker({ headshotUrl: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot" })}
         proposalId="proposal-1"
         canEdit={false}
         isCurrentProposer={false}
@@ -101,11 +108,57 @@ describe("proposal speaker removal UI", () => {
     );
 
     expect(root.querySelector<HTMLImageElement>('img[alt="Casey Speaker"]')?.src).toContain(
-      "/api/v1/admin/proposals/proposal-1/speakers/speaker-1/headshot",
+      "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
     );
     expect(root.textContent).not.toContain("Upload headshot");
     expect(root.textContent).not.toContain("Fetch from Gravatar");
     expect(root.textContent).not.toContain("Remove headshot");
+  });
+
+  it("uses canonical speaker reminder and headshot resources with natural JSON bodies", async () => {
+    const requests: Array<{ url: string; method: string; body: string | null }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
+        return Response.json({ success: true, headshotUrl: "https://example.test/headshot.jpg" });
+      }),
+    );
+
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker()}
+        proposalId="proposal-1"
+        canEdit
+        canFinalize
+        decisionStatus="accepted"
+        requiresPresentation
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+
+    await act(() =>
+      (root.querySelector('button[title="Send profile completion reminder"]') as HTMLButtonElement).click(),
+    );
+    await settle();
+    expect(requests[0]).toMatchObject({
+      url: "/api/v1/proposals/proposal-1/speakers/speaker-1/reminders",
+      method: "POST",
+      body: JSON.stringify({ kind: "profile" }),
+    });
+
+    await act(() => (root.querySelector('button[type="button"].adm-headshot-btn') as HTMLButtonElement).click());
+    await settle();
+    expect(requests[1]).toMatchObject({
+      url: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
+      method: "POST",
+      body: JSON.stringify({ source: "gravatar" }),
+    });
+    expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
   });
 
   it("lets a proposer remove only non-proposer speakers", () => {
@@ -159,11 +212,11 @@ describe("proposal speaker removal UI", () => {
 
   it("offers admin proposer transfer only to invited or confirmed speakers", () => {
     const speakers = [
-      adminSpeaker({ userId: "proposer-1", role: "proposer" }),
-      adminSpeaker({ userId: "invited-1", status: "invited", firstName: "Invited" }),
-      adminSpeaker({ userId: "confirmed-1", status: "confirmed", firstName: "Confirmed" }),
-      adminSpeaker({ userId: "declined-1", status: "declined", firstName: "Declined" }),
-      adminSpeaker({ userId: "pending-1", status: "pending", firstName: "Pending" }),
+      proposalSpeaker({ userId: "proposer-1", role: "proposer" }),
+      proposalSpeaker({ userId: "invited-1", status: "invited", firstName: "Invited" }),
+      proposalSpeaker({ userId: "confirmed-1", status: "confirmed", firstName: "Confirmed" }),
+      proposalSpeaker({ userId: "declined-1", status: "declined", firstName: "Declined" }),
+      proposalSpeaker({ userId: "pending-1", status: "pending", firstName: "Pending" }),
     ];
 
     expect(buildReplacementProposerOptions(speakers, "proposer-1").map((option) => option.userId)).toEqual([
@@ -190,7 +243,7 @@ describe("proposal speaker removal UI", () => {
   it("surfaces final-speaker guidance instead of an admin removal action", () => {
     const root = mount(
       <SpeakerCard
-        speaker={adminSpeaker({ userId: "proposer-1", role: "proposer" })}
+        speaker={proposalSpeaker({ userId: "proposer-1", role: "proposer" })}
         proposalId="proposal-1"
         canEdit
         canFinalize
