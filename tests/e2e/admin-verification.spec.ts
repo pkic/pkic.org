@@ -431,6 +431,26 @@ test.describe("Admin browser-verification pass", () => {
     expect(legacyRequests).toEqual([]);
   });
 
+  test("event promoters: load the permission-scoped event resource without an admin API request", async ({ page }) => {
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname === `/api/v1/admin/events/${EVENT_SLUG}/promoters`) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
+
+    const loaded = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/promoters` &&
+        response.request().method() === "GET",
+    );
+    await page.goto(`/admin/#/events/${EVENT_SLUG}/promoters`);
+    expect((await loaded).status()).toBe(200);
+    await expect(page.getByText(/Active Promoters|No promoter activity yet/).first()).toBeVisible({ timeout: 15_000 });
+    expect(legacyRequests).toEqual([]);
+  });
+
   test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];

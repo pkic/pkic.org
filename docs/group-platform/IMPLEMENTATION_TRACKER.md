@@ -1105,6 +1105,17 @@ Status: In progress
       OpenAPI, frontend, and real-browser regressions cover canonical requests,
       permission loss, target races, route removal, and absence of the legacy
       admin permissions API.
+      Event promotion activity now uses the canonical
+      `/api/v1/events/:eventSlug/promoters` resource with a neutral camelCase
+      schema. Promoter and referral-code search, per-view sorting, pagination,
+      and aggregate summaries remain bounded D1 projections. The route
+      requires exact live, user-backed `events:read`; public event visibility
+      does not expose promoter identities or referral codes, and the frontend
+      hides the tab without that capability. Mounted, OpenAPI, frontend,
+      route-retirement, and real Worker/D1 browser regressions cover the
+      resource; the former
+      `/api/v1/admin/events/:eventSlug/promoters` handler is removed rather
+      than retained as an alias.
       Program-committee proposal management now uses the same selected-group
       event context. Neutral shared contracts and components serve the portal
       and the temporary admin adapter for detail, reviews, comments, accepted
@@ -1628,8 +1639,8 @@ Status: In progress
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes after the canonical event
-      visibility, resource, and team-role cutovers with 2,281 backend tests (one
-      skipped), 342 frontend tests, and 80 tooling tests. Type checks, ESLint,
+      visibility, resource, team-role, and promoter cutovers with 2,282 backend
+      tests (one skipped), 343 frontend tests, and 80 tooling tests. Type checks, ESLint,
       SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.

@@ -14,7 +14,7 @@ import { Pager } from "../../../../components/Pager";
 import {
   eventPromotersListResponseSchema,
   type EventPromoter as PromoterEntry,
-} from "../../../../../shared/schemas/admin-event-promoters";
+} from "../../../../../shared/schemas/event-promoters";
 import { promoterRankCardClass, promoterRankTier } from "../../../../shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../../../hooks/useOffsetPager";
 
@@ -31,16 +31,16 @@ function impactColor(score: number): string {
 }
 
 function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
-  const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email || "Unknown promoter";
-  const subtitle = [p.job_title, p.organization].filter(Boolean).join(" · ");
-  const conversion = p.invite_conversion_rate ?? 0;
-  const initials = [p.first_name?.[0], p.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+  const name = [p.firstName, p.lastName].filter(Boolean).join(" ") || p.email || "Unknown promoter";
+  const subtitle = [p.jobTitle, p.organization].filter(Boolean).join(" · ");
+  const conversion = p.inviteConversionRate ?? 0;
+  const initials = [p.firstName?.[0], p.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
 
   return (
     <div class={`adm-promoter-card ${promoterRankCardClass(rank)}`}>
       <div class="adm-promoter-avatar-wrap">
-        {p.headshot_url ? (
-          <img class="adm-promoter-avatar" src={p.headshot_url ?? undefined} alt={name} />
+        {p.headshotUrl ? (
+          <img class="adm-promoter-avatar" src={p.headshotUrl ?? undefined} alt={name} />
         ) : (
           <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
         )}
@@ -59,16 +59,16 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
       </div>
 
       <div class="adm-promoter-stats">
-        {p.invites_sent > 0 && (
+        {p.invitesSent > 0 && (
           <div class="adm-promoter-group">
             <div class="adm-promoter-group-label">Invites</div>
             <div class="d-flex gap-3">
               <div class="adm-promoter-stat">
-                <div class="val">{p.invites_sent}</div>
+                <div class="val">{p.invitesSent}</div>
                 <div class="lbl">Sent</div>
               </div>
               <div class="adm-promoter-stat">
-                <div class="val text-success">{p.invites_accepted}</div>
+                <div class="val text-success">{p.invitesAccepted}</div>
                 <div class="lbl">Accepted</div>
               </div>
               <div class="adm-promoter-stat">
@@ -85,16 +85,16 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
           </div>
         )}
 
-        {p.referral_clicks > 0 && (
+        {p.referralClicks > 0 && (
           <div class="adm-promoter-group">
             <div class="adm-promoter-group-label">Referrals</div>
             <div class="d-flex gap-3">
               <div class="adm-promoter-stat">
-                <div class="val">{p.referral_clicks}</div>
+                <div class="val">{p.referralClicks}</div>
                 <div class="lbl">Clicks</div>
               </div>
               <div class="adm-promoter-stat">
-                <div class="val text-success">{p.referral_conversions}</div>
+                <div class="val text-success">{p.referralConversions}</div>
                 <div class="lbl">Registered</div>
               </div>
             </div>
@@ -103,14 +103,14 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
       </div>
 
       <div class="adm-promoter-stat adm-promoter-impact">
-        <div class={`val fw-semibold ${impactColor(p.impact_score)}`}>{p.impact_score.toFixed(0)}</div>
+        <div class={`val fw-semibold ${impactColor(p.impactScore)}`}>{p.impactScore.toFixed(0)}</div>
         <div class="lbl">Impact</div>
       </div>
 
-      {(p.invites_declined > 0 || p.invites_expired > 0) && (
+      {(p.invitesDeclined > 0 || p.invitesExpired > 0) && (
         <div class="d-flex gap-1 flex-shrink-0">
-          {p.invites_declined > 0 && <Badge status="declined" label={`${p.invites_declined} declined`} />}
-          {p.invites_expired > 0 && <Badge status="expired" label={`${p.invites_expired} expired`} />}
+          {p.invitesDeclined > 0 && <Badge status="declined" label={`${p.invitesDeclined} declined`} />}
+          {p.invitesExpired > 0 && <Badge status="expired" label={`${p.invitesExpired} expired`} />}
         </div>
       )}
     </div>
@@ -122,7 +122,7 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
   const tab = subTab === "codes" ? "codes" : "promoters";
   const pager = useOffsetPager();
   const { offset, pageSize } = pager;
-  const endpoint = `/api/v1/admin/events/${slug}/promoters`;
+  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/promoters`;
   const sort = tab === "promoters" ? "-impact" : "-conversions";
   const resetKey = buildCollectionResetKey(endpoint, { view: tab, sort });
   const requestOffset = useCollectionOffset(resetKey, offset, pager.resetPage);
@@ -191,7 +191,7 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
         ) : (
           <div class="d-flex flex-column gap-2 mt-2">
             {promoters.map((p, i) => (
-              <PromoterCard key={p.user_id} p={p} rank={page.offset + i + 1} />
+              <PromoterCard key={p.userId} p={p} rank={page.offset + i + 1} />
             ))}
           </div>
         ))}
@@ -202,7 +202,7 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
             { header: "Code", cell: (c) => <span class="adm-referral-code">{c.code}</span> },
             {
               header: "Owner",
-              cell: (c) => [c.owner_first_name, c.owner_last_name].filter(Boolean).join(" ") || c.owner_email || "—",
+              cell: (c) => [c.ownerFirstName, c.ownerLastName].filter(Boolean).join(" ") || c.ownerEmail || "—",
             },
             { header: { label: "Clicks", className: "text-end" }, cell: (c) => c.clicks, className: "mono text-end" },
             {
@@ -212,7 +212,7 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
             },
             {
               header: "Created",
-              cell: (c) => (c.created_at ? c.created_at.substring(0, 10) : "—"),
+              cell: (c) => c.createdAt.substring(0, 10),
               className: "mono small",
             },
           ]}

@@ -16,20 +16,24 @@ import { currentEvent } from "../../../state";
 
 type EventDetailTab = "registrations" | "proposals" | "promoters" | "stats" | "settings";
 
-const TABS: Array<{ key: EventDetailTab; label: string }> = [
+const TABS: Array<{ key: EventDetailTab; label: string; capability?: "read" }> = [
   { key: "registrations", label: "Registrations" },
   { key: "proposals", label: "Proposals" },
-  { key: "promoters", label: "Promoters" },
+  { key: "promoters", label: "Promoters", capability: "read" },
   { key: "stats", label: "Stats" },
   { key: "settings", label: "Settings" },
 ];
+
+export function eventDetailTabsForCapabilities(capabilities: EventDetail["capabilities"]) {
+  return TABS.filter(({ capability }) => !capability || capabilities.includes(capability));
+}
 
 export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; tab?: string; subTab?: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [, navigate] = useHashLocation();
-  const tab: EventDetailTab = TABS.find((t) => t.key === tabProp)?.key ?? "registrations";
+  const requestedTab = TABS.find((candidate) => candidate.key === tabProp)?.key;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +62,8 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
   if (!event) return null;
+  const visibleTabs = eventDetailTabsForCapabilities(event.capabilities);
+  const tab = visibleTabs.find(({ key }) => key === requestedTab)?.key ?? visibleTabs[0]?.key ?? "registrations";
 
   return (
     <div>
@@ -78,7 +84,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
 
       {/* Tabs */}
       <Tabs
-        items={TABS}
+        items={visibleTabs}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/${key}`)}
         className="mb-3 flex-wrap"

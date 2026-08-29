@@ -6,6 +6,7 @@ import type { EventDetail } from "../../assets/ts/admin/types";
 import { GeneralTab } from "../../assets/ts/admin/sections/events/detail/settings/GeneralTab";
 import { Settings } from "../../assets/ts/admin/sections/events/detail/Settings";
 import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
+import { eventDetailTabsForCapabilities } from "../../assets/ts/admin/sections/events/detail/EventDetail";
 
 const mounted: HTMLElement[] = [];
 
@@ -134,5 +135,10 @@ describe("admin event general settings", () => {
     expect(container.textContent).not.toContain("+ Add tier");
     expect(container.textContent).not.toContain("Remove");
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Save")).toBe(false);
+  });
+
+  it("does not expose promoter activity without event read capability", () => {
+    expect(eventDetailTabsForCapabilities([]).map(({ key }) => key)).not.toContain("promoters");
+    expect(eventDetailTabsForCapabilities(["read"]).map(({ key }) => key)).toContain("promoters");
   });
 });

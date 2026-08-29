@@ -5,7 +5,6 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
-import { AdminEventPromotersGet } from "./promoters";
 import { AdminEventPresentationsDownloadGet } from "./presentations/download";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { AdminEventRegistrationsGet } from "./registrations";
@@ -31,7 +30,7 @@ function isSelfGatedEventPath(path: string, eventSlug: string): boolean {
 /**
  * Context-aware gate for the /admin/events/:eventSlug/**
  * management surface (registrations, waitlist, settings, emails,
- * days, forms, terms, promoters, stats) — requires events:read (GET) or
+ * days, forms, terms, stats) — requires events:read (GET) or
  * events:write (writes), globally or scoped to this event. Global admins
  * pass unconditionally via requirePermission's role='admin' bypass, so
  * existing behavior under the single-tier admin model is unchanged; this
@@ -63,7 +62,6 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 
 app.use("*", requireEventManagementAccess);
 
-openapi.get("/promoters", AdminEventPromotersGet);
 openapi.get("/presentations/download", AdminEventPresentationsDownloadGet);
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 openapi.get("/registrations", AdminEventRegistrationsGet);

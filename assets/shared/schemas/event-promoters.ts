@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, pageInfoSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
 
@@ -32,38 +33,38 @@ export const eventPromotersListQuerySchema = listQuerySchema(EVENT_PROMOTION_SOR
 export type EventPromotersListQuery = z.infer<typeof eventPromotersListQuerySchema>;
 
 export const eventPromoterSchema = z.object({
-  user_id: z.string(),
-  email: z.string().nullable(),
-  first_name: z.string().nullable(),
-  last_name: z.string().nullable(),
+  userId: databaseIdSchema,
+  email: z.email().nullable(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
   organization: z.string().nullable(),
-  job_title: z.string().nullable(),
-  headshot_url: httpOrSameOriginUrlSchema.nullable(),
-  invites_sent: z.number().int().nonnegative(),
-  invites_accepted: z.number().int().nonnegative(),
-  invites_declined: z.number().int().nonnegative(),
-  invites_expired: z.number().int().nonnegative(),
-  invite_conversion_rate: z.number().nullable(),
-  last_invite_at: z.string().nullable(),
-  referral_codes_issued: z.number().int().nonnegative(),
-  referral_clicks: z.number().int().nonnegative(),
-  referral_conversions: z.number().int().nonnegative(),
-  impact_score: z.number().int().nonnegative(),
+  jobTitle: z.string().nullable(),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
+  invitesSent: z.number().int().nonnegative(),
+  invitesAccepted: z.number().int().nonnegative(),
+  invitesDeclined: z.number().int().nonnegative(),
+  invitesExpired: z.number().int().nonnegative(),
+  inviteConversionRate: z.number().nullable(),
+  lastInviteAt: z.iso.datetime().nullable(),
+  referralCodesIssued: z.number().int().nonnegative(),
+  referralClicks: z.number().int().nonnegative(),
+  referralConversions: z.number().int().nonnegative(),
+  impactScore: z.number().int().nonnegative(),
 });
 export type EventPromoter = z.infer<typeof eventPromoterSchema>;
 
 export const eventReferralCodeSchema = z.object({
   code: z.string(),
-  owner_type: z.string(),
-  owner_id: z.string(),
-  effective_user_id: z.string().nullable(),
-  owner_email: z.string().nullable(),
-  owner_first_name: z.string().nullable(),
-  owner_last_name: z.string().nullable(),
-  channel_hint: z.string().nullable(),
+  ownerType: z.string(),
+  ownerId: databaseIdSchema,
+  effectiveUserId: databaseIdSchema.nullable(),
+  ownerEmail: z.email().nullable(),
+  ownerFirstName: z.string().nullable(),
+  ownerLastName: z.string().nullable(),
+  channelHint: z.string().nullable(),
   clicks: z.number().int().nonnegative(),
   conversions: z.number().int().nonnegative(),
-  created_at: z.string(),
+  createdAt: z.iso.datetime(),
 });
 export type EventReferralCode = z.infer<typeof eventReferralCodeSchema>;
 
@@ -86,19 +87,3 @@ export const eventPromotersListResponseSchema = z.object({
   summary: eventPromoterSummarySchema,
 });
 export type EventPromotersListResponse = z.infer<typeof eventPromotersListResponseSchema>;
-
-export const eventPromotersListRouteSchema = {
-  tags: ["Admin events"],
-  summary: "List event promoters or referral codes (admin)",
-  description: "Database-ranked and paginated event promotion activity with aggregate summary metrics.",
-  request: {
-    params: z.object({ eventSlug: z.string().trim().min(1).max(200) }),
-    query: eventPromotersListQuerySchema,
-  },
-  responses: {
-    "200": {
-      description: "Promotion activity page.",
-      content: { "application/json": { schema: eventPromotersListResponseSchema } },
-    },
-  },
-};

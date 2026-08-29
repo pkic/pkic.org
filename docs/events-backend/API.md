@@ -19,6 +19,7 @@ Base path: `/api/v1`
 - `GET /events/:eventSlug/roles`
 - `POST /events/:eventSlug/roles`
 - `DELETE /events/:eventSlug/roles/:roleAssignmentId`
+- `GET /events/:eventSlug/promoters`
 - Lists and details apply the live event audience in D1. Anonymous and member
   responses contain only audience-safe fields; exact `events:read` permission
   enables the management detail projection.
@@ -27,6 +28,9 @@ Base path: `/api/v1`
 - Event team assignments are role resources, not generic permission records.
   Listing and mutations require the exact live, user-backed event-scoped
   `events:manage` permission; writes recheck that authority in the D1 batch.
+- Event promotion activity and referral codes require the exact live,
+  user-backed event-scoped `events:read` permission. Search, sorting,
+  pagination, and aggregate summaries execute in D1.
 
 ## Remaining legacy event integration
 

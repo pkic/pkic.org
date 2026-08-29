@@ -18,6 +18,7 @@ import {
   eventTeamRoleCreateSchema,
   eventTeamRolesResponseSchema,
 } from "./event-team";
+import { eventPromotersListQuerySchema, eventPromotersListResponseSchema } from "./event-promoters";
 
 export const eventDetailRouteSchema = {
   tags: ["Events"],
@@ -170,4 +171,24 @@ export const eventTeamRoleDeleteRouteSchema = {
     "409": jsonErrorResponse("The role assignment or authorization changed."),
   },
   "x-pkic-auth": { required: true, scopes: ["events:manage"] },
+};
+
+export const eventPromotersListRouteSchema = {
+  tags: ["Events"],
+  summary: "List event promoters or referral codes",
+  description: "Searches, sorts, and paginates promotion activity for one event in D1.",
+  request: {
+    params: eventSlugParamsSchema,
+    query: eventPromotersListQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Promotion activity page.",
+      content: { "application/json": { schema: eventPromotersListResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Event read permission is required."),
+    "404": jsonErrorResponse("Event not found."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:read"] },
 };

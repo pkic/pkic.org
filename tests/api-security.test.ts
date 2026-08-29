@@ -251,8 +251,8 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonDelete(`https://app.test/api/v1/events/${eventSlug}/roles/${permId}`)),
     ],
     [
-      "GET /api/v1/admin/events/:slug/promoters",
-      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/promoters`)),
+      "GET /api/v1/events/:slug/promoters",
+      () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/promoters`)),
     ],
     [
       "GET /api/v1/admin/events/:slug/proposals",

@@ -41,7 +41,7 @@ import { sponsorPortalAttendeesListQuerySchema } from "../assets/shared/schemas/
 import { publicVotesListQuerySchema } from "../assets/shared/schemas/votes";
 import { adminEventProposalsQuerySchema } from "../assets/shared/schemas/admin-events";
 import { emailOutboxQuerySchema as adminEmailOutboxQuerySchema } from "../assets/shared/schemas/email-outbox";
-import { eventPromotersListQuerySchema } from "../assets/shared/schemas/admin-event-promoters";
+import { eventPromotersListQuerySchema } from "../assets/shared/schemas/event-promoters";
 import { membersListQuerySchema } from "../assets/shared/schemas/members-directory";
 import { applicationDocumentsListQuerySchema } from "../assets/shared/schemas/application-documents";
 

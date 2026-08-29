@@ -5,7 +5,7 @@ import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/admin-event-promoters";
+import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/event-promoters";
 import {
   donationPromotersListResponseSchema,
   donationsListResponseSchema,
@@ -400,23 +400,23 @@ describe("canonical offset pagination", () => {
             view: "promoters",
             promoters: [
               {
-                user_id: "user-1",
+                userId: "00000000-0000-4000-8000-000000000001",
                 email: "ada@example.test",
-                first_name: "Ada",
-                last_name: "Lovelace",
+                firstName: "Ada",
+                lastName: "Lovelace",
                 organization: null,
-                job_title: null,
-                headshot_url: null,
-                invites_sent: 1,
-                invites_accepted: 1,
-                invites_declined: 0,
-                invites_expired: 0,
-                invite_conversion_rate: 100,
-                last_invite_at: null,
-                referral_codes_issued: 0,
-                referral_clicks: 0,
-                referral_conversions: 0,
-                impact_score: 1,
+                jobTitle: null,
+                headshotUrl: null,
+                invitesSent: 1,
+                invitesAccepted: 1,
+                invitesDeclined: 0,
+                invitesExpired: 0,
+                inviteConversionRate: 100,
+                lastInviteAt: null,
+                referralCodesIssued: 0,
+                referralClicks: 0,
+                referralConversions: 0,
+                impactScore: 1,
               },
             ],
             referralCodes: [],
@@ -447,7 +447,7 @@ describe("canonical offset pagination", () => {
     await settle();
     void act(() => nextButton(eventPromoters).click());
     await settle();
-    expect(requests.at(-1)?.pathname).toBe("/api/v1/admin/events/summit/promoters");
+    expect(requests.at(-1)?.pathname).toBe("/api/v1/events/summit/promoters");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("50");
 
     requests.length = 0;
