@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { groupLabelSchema, groupReferenceParamsSchema } from "./groups";
 import { jsonErrorResponse, utcInstantSchema } from "./api-common";
+import { requiresSession } from "./route-contract";
 
 /** The population represented by the membership counts. */
 export const GROUP_STATS_SCOPES = ["current", "historical"] as const;
@@ -49,6 +50,7 @@ export const groupStatsResponseSchema = z.object({
 export type GroupStatsResponse = z.infer<typeof groupStatsResponseSchema>;
 
 export const groupStatsRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Statistics"],
   summary: "Read statistics for one managed group",
   description:

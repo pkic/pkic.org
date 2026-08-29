@@ -19,6 +19,7 @@ import { groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { formGroupGrantSchemas } from "./resource-grants";
+import { requiresSession } from "./route-contract";
 
 export const GROUP_FORMS_SORT_COLUMNS = ["title", "purpose", "audience", "opens_at", "created_at"] as const;
 
@@ -108,6 +109,7 @@ export const groupFormPlacementUpdateSchema = formPlacementPolicyUpdateSchema;
 export type GroupFormPlacementUpdateInput = z.infer<typeof groupFormPlacementUpdateSchema>;
 
 export const groupFormsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List forms available through a group",
   description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -123,6 +125,7 @@ export const groupFormsListRouteSchema = {
 };
 
 export const groupFormCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create a group survey or feedback form",
   description:
@@ -143,6 +146,7 @@ export const groupFormCreateRouteSchema = {
 };
 
 export const groupFormDefinitionRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get one group form definition",
   request: { params: groupFormParamsSchema },
@@ -157,6 +161,7 @@ export const groupFormDefinitionRouteSchema = {
 };
 
 export const groupFormSubmissionCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Submit a group survey or feedback form",
   request: {
@@ -176,6 +181,7 @@ export const groupFormSubmissionCreateRouteSchema = {
 };
 
 export const groupFormSubmissionsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List responses for one group form placement",
   description: "Filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -191,6 +197,7 @@ export const groupFormSubmissionsListRouteSchema = {
 };
 
 export const groupFormSubmissionStatsRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get response statistics for one group form placement",
   description: "Exact aggregates are calculated in D1 over the same filtered response population as the list.",
@@ -206,6 +213,7 @@ export const groupFormSubmissionStatsRouteSchema = {
 };
 
 export const groupFormPlacementUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update one group form placement",
   description: "Updates placement policy without permitting resource ownership transfer.",
@@ -225,6 +233,7 @@ export const groupFormPlacementUpdateRouteSchema = {
 };
 
 export const groupFormDefinitionUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update an owned group form definition",
   description:

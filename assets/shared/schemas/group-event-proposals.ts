@@ -1,6 +1,7 @@
 import { jsonErrorResponse, eventIdSchema } from "./api-common";
 import { eventProposalsListQuerySchema, eventProposalsResponseSchema } from "./event-proposals";
 import { groupReferenceParamsSchema } from "./groups";
+import { requiresSession } from "./route-contract";
 
 const groupEventProposalListErrors = {
   "401": jsonErrorResponse("An authenticated user is required."),
@@ -9,6 +10,7 @@ const groupEventProposalListErrors = {
 };
 
 export const groupEventProposalsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List proposals for one group-owned event",
   description:

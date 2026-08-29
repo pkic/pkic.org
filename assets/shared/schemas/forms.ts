@@ -14,6 +14,7 @@ export {
   eventSummarySchema,
   requiredTermSchema,
 } from "./event-read-models";
+import { publicOperation } from "./route-contract";
 export type { EventDayReadModel, EventSummary, RequiredTerm } from "./event-read-models";
 
 export const FORM_PURPOSES = [
@@ -264,6 +265,7 @@ export const eventTermsResponseSchema = z.object({
 });
 
 export const eventTermsGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Events"],
   summary: "Get event terms",
   description: "Returns the required terms and conditions for a given event.",
@@ -278,6 +280,7 @@ export const eventTermsGetRouteSchema = {
 
 export type EventFormsResponse = z.infer<typeof eventFormsResponseSchema>;
 export const eventFormPlacementGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Events"],
   summary: "Get an event form placement",
   description: "Returns the form placed for one event purpose with its terms, session types, and attendance options.",

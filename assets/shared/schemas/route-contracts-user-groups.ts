@@ -1,6 +1,8 @@
 import { selfGroupsListQuerySchema, selfGroupsListResponseSchema } from "./group-participation";
+import { requiresSession } from "./route-contract";
 
 export const selfGroupsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Users", "Groups"],
   summary: "List groups available to the current user",
   description:

@@ -14,8 +14,10 @@ import {
 } from "./event-invite-bulk";
 import { eventInvitesListResponseSchema } from "./event-invites";
 import { jsonErrorResponse } from "./api-common";
+import { requiresSession } from "./route-contract";
 
 export const groupEventSpeakerInvitesListRouteSchema = {
+  ...requiresSession(),
   ...groupEventInvitesListRouteSchema,
   summary: "List speaker invitations for a proposal program",
   description: "Returns a bounded, speaker-only invitation page after event-scoped proposal-management authorization.",
@@ -29,12 +31,14 @@ export const groupEventSpeakerInvitesListRouteSchema = {
 };
 
 export const groupEventSpeakerInviteResendRouteSchema = {
+  ...requiresSession(),
   ...groupEventInviteResendRouteSchema,
   summary: "Resend a speaker invitation",
   description: "Re-queues a speaker invitation that remains available through the selected group proposal program.",
 };
 
 export const groupEventSpeakerInviteRevokeRouteSchema = {
+  ...requiresSession(),
   ...groupEventInviteRevokeRouteSchema,
   summary: "Revoke a speaker invitation",
   description: "Revokes a pending speaker invitation through the selected group proposal program.",

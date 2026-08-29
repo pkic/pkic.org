@@ -8,6 +8,7 @@ import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, type PaginationDefaults } from "./pagination";
 import { membershipCategorySelectionSchema } from "./membership-categories";
 import { groupIdSchema } from "./groups";
+import { publicOperation } from "./route-contract";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
@@ -193,6 +194,7 @@ export const publicVotesListQuerySchema = votesListQuerySchemaWithDefaults({ lim
 export type PublicVotesListQuery = z.infer<typeof publicVotesListQuerySchema>;
 
 export const publicVotesListRouteSchema = {
+  ...publicOperation(),
   tags: ["Votes"],
   summary: "List public votes",
   description:
@@ -209,6 +211,7 @@ export const publicVotesListRouteSchema = {
 export const voteSlugParamsSchema = z.object({ slug: z.string().trim().min(1).max(300) });
 
 export const publicVoteGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Votes"],
   summary: "Get public vote detail",
   description: "Private vote existence and member ballot state are never exposed by this public projection.",
@@ -223,6 +226,7 @@ export const publicVoteGetRouteSchema = {
 };
 
 export const publicVotesFeedRouteSchema = {
+  ...publicOperation(),
   tags: ["Votes"],
   summary: "RSS feed of public votes",
   responses: {

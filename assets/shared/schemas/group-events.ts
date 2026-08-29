@@ -53,6 +53,7 @@ import {
   eventRegistrationDayAttendanceChangeSchema,
   eventRegistrationDayAttendanceResponseSchema,
 } from "./event-registration-detail";
+import { requiresSession } from "./route-contract";
 
 export const GROUP_EVENTS_SORT_COLUMNS = ["name", "starts_at", "next_occurrence_at", "created_at"] as const;
 
@@ -82,6 +83,7 @@ export const groupEventsListResponseSchema = paginatedResponseSchema("events", g
 export const groupEventDetailResponseSchema = z.object({ event: groupEventSchema });
 
 export const groupEventProfilesRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List active event profiles available to a group manager",
   description:
@@ -158,6 +160,7 @@ export const groupEventSettingsUpdateSchema = eventSettingsSchema
 export type GroupEventSettingsUpdateInput = z.infer<typeof groupEventSettingsUpdateSchema>;
 
 export const groupEventsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List events available through a group",
   description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
@@ -173,6 +176,7 @@ export const groupEventsListRouteSchema = {
 };
 
 export const groupEventDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get one event available through a group",
   request: { params: groupEventParamsSchema },
@@ -186,6 +190,7 @@ export const groupEventDetailRouteSchema = {
 };
 
 export const groupEventRegistrationConfigRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get registration configuration for a group event",
   description:
@@ -203,6 +208,7 @@ export const groupEventRegistrationConfigRouteSchema = {
 };
 
 export const groupEventTermsGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get terms for a managed group event",
   request: { params: groupEventParamsSchema },
@@ -219,6 +225,7 @@ export const groupEventTermsGetRouteSchema = {
 };
 
 export const groupEventTermsReplaceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Replace terms for a managed group event",
   description: "Replaces all audience term sets in one guarded D1 batch with an optimistic event revision.",
@@ -238,6 +245,7 @@ export const groupEventTermsReplaceRouteSchema = {
 };
 
 export const groupEventDaysGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get attendance days for a managed group event",
   description: "Attendance counts are aggregated in D1 and returned with the event revision.",
@@ -255,6 +263,7 @@ export const groupEventDaysGetRouteSchema = {
 };
 
 export const groupEventDaysReplaceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Replace attendance days for a managed group event",
   description: "Updates matching days in place and removes only unused omitted days in one guarded D1 batch.",
@@ -274,6 +283,7 @@ export const groupEventDaysReplaceRouteSchema = {
 };
 
 export const groupEventRegistrationSettingsGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get registration settings for a managed group event",
   description:
@@ -292,6 +302,7 @@ export const groupEventRegistrationSettingsGetRouteSchema = {
 };
 
 export const groupEventRegistrationSettingsPutRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update registration settings for a managed group event",
   description: "Atomically updates the canonical registration policy for a managed group event.",
@@ -316,6 +327,7 @@ export const groupEventRegistrationSettingsPutRouteSchema = {
 };
 
 export const groupEventCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create a group-owned event",
   description: "Creates a portal-managed event owned by the selected group.",
@@ -335,6 +347,7 @@ export const groupEventCreateRouteSchema = {
 };
 
 export const groupEventSettingsUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update a group event's settings",
   description: "Updates one group-owned or explicitly managed event with an optimistic revision check.",
@@ -357,6 +370,7 @@ const groupEventAttendeeInvitesListQuerySchema = eventInvitesListQuerySchema.omi
 export type GroupEventAttendeeInvitesListQuery = z.infer<typeof groupEventAttendeeInvitesListQuerySchema>;
 
 export const groupEventInvitesListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Event invites"],
   summary: "List attendee invitations for a managed group event",
   description: "Returns a bounded, attendee-only invitation projection with server-side search and pagination.",
@@ -373,6 +387,7 @@ export const groupEventInvitesListRouteSchema = {
 };
 
 export const groupEventInviteResendRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Event invites"],
   summary: "Resend an attendee invitation",
   description: "Re-queues an existing attendee invitation that has not been accepted or revoked.",
@@ -393,6 +408,7 @@ export const groupEventInviteResendRouteSchema = {
 };
 
 export const groupEventInviteRevokeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Event invites"],
   summary: "Revoke an attendee invitation",
   description: "Revokes a pending attendee invitation before it is accepted.",
@@ -411,6 +427,7 @@ export const groupEventInviteRevokeRouteSchema = {
 
 /** Reuses canonical list controls with an attendance-manager-only projection. */
 export const groupEventRegistrationsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List group event attendees",
   description: "Filtering, search, sorting, statistics, and pagination are executed in D1.",
@@ -427,6 +444,7 @@ export const groupEventRegistrationsListRouteSchema = {
 };
 
 export const groupEventRegistrationDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get one group event attendee for attendance management",
   description: "Returns only the identity and day attendance/waitlist fields needed by a group attendance manager.",
@@ -443,6 +461,7 @@ export const groupEventRegistrationDetailRouteSchema = {
 };
 
 export const groupEventRegistrationDayAttendancePatchRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update one group event attendee's day attendance",
   description: "Updates selected event days while preserving the day-level waitlist as the source of truth.",
@@ -463,6 +482,7 @@ export const groupEventRegistrationDayAttendancePatchRouteSchema = {
 };
 
 export const groupEventRegistrationAdmitRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Admit selected days for a group event attendee",
   description: "Admits selected waitlisted days without creating a registration-wide waitlisted state.",
@@ -483,6 +503,7 @@ export const groupEventRegistrationAdmitRouteSchema = {
 };
 
 export const groupEventRegistrationCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Register the authenticated user for a group event",
   description:

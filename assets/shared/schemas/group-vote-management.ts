@@ -11,8 +11,10 @@ import {
   voteUpdateInputSchema,
   voteVisibilityUpdateInputSchema,
 } from "./vote-management";
+import { requiresSession } from "./route-contract";
 
 export const groupVoteCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Management"],
   summary: "Create a vote owned by the selected group",
   request: {
@@ -27,6 +29,7 @@ export const groupVoteCreateRouteSchema = {
 };
 
 export const groupVoteUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Management"],
   summary: "Update a vote through the selected group",
   request: {
@@ -41,6 +44,7 @@ export const groupVoteUpdateRouteSchema = {
 };
 
 export const groupVoteVisibilityUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Management"],
   summary: "Update vote visibility through the selected group",
   request: {
@@ -58,6 +62,7 @@ export const groupVoteVisibilityUpdateRouteSchema = {
 };
 
 export const groupVoteBallotsAuditRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Management"],
   summary: "List identifiable ballots through the selected group",
   description: "This management-only audit surface may be used before or after voting closes.",
@@ -72,6 +77,7 @@ export const groupVoteBallotsAuditRouteSchema = {
 };
 
 export const groupVoteLifecycleTransitionRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Management"],
   summary: "Apply an explicit lifecycle transition through the selected group",
   description:

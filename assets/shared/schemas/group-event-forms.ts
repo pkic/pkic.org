@@ -10,6 +10,7 @@ import { eventConfigurationRevisionSchema } from "./event-configuration";
 import { groupEventParamsSchema } from "./group-events";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { requiresSession } from "./route-contract";
 
 /** One exact, group-managed reusable form placed in an event flow. */
 export const groupEventFormSchema = z.object({
@@ -56,6 +57,7 @@ export const groupEventAvailableFormSchema = z.object({
 export const groupEventFormsResponseSchema = paginatedResponseSchema("forms", groupEventAvailableFormSchema);
 
 export const groupEventFormGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get one exact form placement for a managed group event",
   description:
@@ -74,6 +76,7 @@ export const groupEventFormGetRouteSchema = {
 };
 
 export const groupEventFormPutRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Select or clear one exact form placement for a managed group event",
   description:
@@ -95,6 +98,7 @@ export const groupEventFormPutRouteSchema = {
 };
 
 export const groupEventFormCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create and select one exact form for a managed group event",
   description: "Creates a reusable group-owned form and its exact event-flow placement in one guarded D1 command.",
@@ -115,6 +119,7 @@ export const groupEventFormCreateRouteSchema = {
 };
 
 export const groupEventFormsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List reusable forms available to a managed group event flow",
   description: "Search, sorting, counting, and pagination execute in D1 over active group-owned form definitions.",

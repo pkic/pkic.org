@@ -12,6 +12,7 @@ import {
   voteProposalFieldsSchema,
   voteProposalStatusSchema,
 } from "./votes";
+import { requiresSession } from "./route-contract";
 
 export const GROUP_VOTE_PROPOSAL_CAPABILITIES = [
   "view",
@@ -49,6 +50,7 @@ export const groupVoteProposalRejectSchema = voteProposalRejectSchema;
 export const groupVoteProposalRejectResponseSchema = z.object({ proposal: groupVoteProposalSchema });
 
 export const groupVoteProposalsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "List vote proposals through the selected group",
   description:
@@ -65,6 +67,7 @@ export const groupVoteProposalsListRouteSchema = {
 };
 
 export const groupVoteProposalCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Propose a vote for the selected group",
   request: {
@@ -83,6 +86,7 @@ export const groupVoteProposalCreateRouteSchema = {
 };
 
 export const groupVoteProposalDetailRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Get one vote proposal through the selected group",
   request: { params: groupVoteProposalParamsSchema },
@@ -96,6 +100,7 @@ export const groupVoteProposalDetailRouteSchema = {
 };
 
 export const groupVoteProposalWithdrawRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Withdraw my proposal through the selected group",
   request: { params: groupVoteProposalParamsSchema },
@@ -111,6 +116,7 @@ export const groupVoteProposalWithdrawRouteSchema = {
 };
 
 export const groupVoteProposalEndorseRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Endorse a proposal through the selected group",
   request: { params: groupVoteProposalParamsSchema },
@@ -126,6 +132,7 @@ export const groupVoteProposalEndorseRouteSchema = {
 };
 
 export const groupVoteProposalEndorsementWithdrawRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Withdraw my endorsement through the selected group",
   request: { params: groupVoteProposalParamsSchema },
@@ -140,6 +147,7 @@ export const groupVoteProposalEndorsementWithdrawRouteSchema = {
 };
 
 export const groupVoteProposalApproveRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Approve and convert a proposal through the selected group",
   request: { params: groupVoteProposalParamsSchema },
@@ -156,6 +164,7 @@ export const groupVoteProposalApproveRouteSchema = {
 };
 
 export const groupVoteProposalRejectRouteSchema = {
+  ...requiresSession(),
   tags: ["Group Vote Proposals"],
   summary: "Reject a proposal through the selected group",
   request: {

@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { groupLabelSchema, groupLeadershipRoleIdSchema } from "./groups";
 import { publicOrganizationPersonSchema } from "./public-person";
+import { publicOperation } from "./route-contract";
 
 export const publicGroupLeadershipAssignmentSchema = z.object({
   roleId: groupLeadershipRoleIdSchema,
@@ -21,6 +22,7 @@ export type GroupDirectoryResponse = z.infer<typeof groupDirectoryResponseSchema
 export const groupDirectoryParamsSchema = z.object({ groupId: z.string().trim().min(1).max(200) });
 
 export const groupDirectoryRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
   summary: "Get a public group directory",
   description: "Returns public metadata and configured public leadership for any active, publicly visible group type.",

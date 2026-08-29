@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
+import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/router";
 
 /**
@@ -15,19 +15,25 @@ import { openapi } from "../functions/router";
  * pins the size of the undeclared set. It must only ever shrink: adding a
  * route without `x-pkic-auth` fails here, and annotating one requires lowering
  * the budget, so the debt is visible and cannot grow back.
+ *
+ * What counts as declared is the presence of the declaration, not the presence
+ * of a `security` requirement in the output. An operation verified to be
+ * deliberately public declares `required: false`, which correctly emits no
+ * security requirement — counting emitted `security` instead would file that
+ * verified route alongside the ones nobody has examined.
  */
-const UNDECLARED_BUDGET = 263;
+const UNDECLARED_BUDGET = 180;
 
 function operationsWithoutSecurity(): string[] {
-  const spec = decorateOpenApiSpec(openapi.schema) as {
-    paths?: Record<string, Record<string, { security?: unknown } | undefined>>;
+  const spec = openapi.schema as {
+    paths?: Record<string, Record<string, Record<string, unknown> | undefined>>;
   };
   const undeclared: string[] = [];
   for (const [path, item] of Object.entries(spec.paths ?? {})) {
     for (const method of ["get", "post", "put", "patch", "delete"] as const) {
       const operation = item?.[method];
       if (!operation) continue;
-      if (!operation.security) undeclared.push(`${method.toUpperCase()} ${path}`);
+      if (operation[AUTH_EXTENSION] === undefined) undeclared.push(`${method.toUpperCase()} ${path}`);
     }
   }
   return undeclared.sort();

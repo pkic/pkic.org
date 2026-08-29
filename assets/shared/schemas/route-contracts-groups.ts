@@ -28,8 +28,10 @@ import {
   groupsListResponseSchema,
 } from "./groups";
 import { databaseIdSchema } from "./identifiers";
+import { publicOperation, requiresSession } from "./route-contract";
 
 export const groupTypesListRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
   summary: "List configured group types",
   request: { query: groupTypesListQuerySchema },
@@ -42,6 +44,7 @@ export const groupTypesListRouteSchema = {
 };
 
 export const groupCreationCapabilitiesRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Resolve whether the current identity may create a top-level group",
   responses: {
@@ -53,6 +56,7 @@ export const groupCreationCapabilitiesRouteSchema = {
 };
 
 export const groupsListRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
   summary: "List groups visible to the caller",
   description:
@@ -68,6 +72,7 @@ export const groupsListRouteSchema = {
 };
 
 export const groupGetRouteSchema = {
+  ...publicOperation(),
   tags: ["Groups"],
   summary: "Get one group",
   request: { params: groupReferenceParamsSchema, query: groupGetQuerySchema },
@@ -80,6 +85,7 @@ export const groupGetRouteSchema = {
 };
 
 export const groupPortalContextRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Resolve one selected-group portal context",
   description:
@@ -96,6 +102,7 @@ export const groupPortalContextRouteSchema = {
 };
 
 export const groupCreateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Create a group",
   request: { body: { required: true, content: { "application/json": { schema: groupCreateSchema } } } },
@@ -107,6 +114,7 @@ export const groupCreateRouteSchema = {
 };
 
 export const groupUpdateRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Update a group",
   description: "Send expectedRevision from the group response to reject an edit based on stale state.",
@@ -122,6 +130,7 @@ export const groupUpdateRouteSchema = {
 };
 
 export const groupMembershipsListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List group membership capacities",
   description: "One row is one user participating for one Member; a user may appear more than once.",
@@ -136,6 +145,7 @@ export const groupMembershipsListRouteSchema = {
 };
 
 export const groupJoinRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Join a group",
   description: "all_eligible requires explicit confirmation; selected requires a non-empty Member subset.",
@@ -154,6 +164,7 @@ export const groupJoinRouteSchema = {
 };
 
 export const groupLeaveRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Leave selected capacities or the whole group",
   request: {
@@ -170,6 +181,7 @@ export const groupLeaveRouteSchema = {
 };
 
 export const groupAutomaticEnrollmentPreferenceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Opt out of or re-enter automatic enrollment",
   request: {
@@ -187,6 +199,7 @@ export const groupAutomaticEnrollmentPreferenceRouteSchema = {
 
 export const groupMemberManageParamsSchema = groupReferenceParamsSchema.extend({ userId: databaseIdSchema });
 export const groupMemberAddRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Add group membership capacities for another user",
   request: {
@@ -204,6 +217,7 @@ export const groupMemberAddRouteSchema = {
 };
 
 export const groupMembershipEndRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "End one group membership capacity",
   request: { params: groupMembershipParamsSchema },
@@ -218,6 +232,7 @@ export const groupMembershipEndRouteSchema = {
 };
 
 export const groupLeadershipListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "List effective local and inherited group leadership",
   request: { params: groupReferenceParamsSchema },
@@ -230,6 +245,7 @@ export const groupLeadershipListRouteSchema = {
 };
 
 export const groupLeadershipAssignRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Assign local group leadership",
   request: {
@@ -243,6 +259,7 @@ export const groupLeadershipAssignRouteSchema = {
 };
 
 export const groupCategoryRulesReplaceRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Replace category eligibility and automatic-enrollment rules",
   description: "Send expectedRevision from the group response to reject a replacement based on stale state.",
@@ -261,6 +278,7 @@ export const groupCategoryRulesReplaceRouteSchema = {
 };
 
 export const groupCategoryRulesGetRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Get category eligibility and automatic-enrollment rules",
   request: { params: groupReferenceParamsSchema },
@@ -278,6 +296,7 @@ export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.
   userRoleId: databaseIdSchema,
 });
 export const groupLeadershipRevokeRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups"],
   summary: "Revoke a local leadership assignment",
   request: { params: groupLeadershipAssignmentParamsSchema },
@@ -288,6 +307,7 @@ export const groupLeadershipRevokeRouteSchema = {
 };
 
 export const groupAuditLogListRouteSchema = {
+  ...requiresSession(),
   tags: ["Groups", "Audit log"],
   summary: "List audit entries scoped to one group",
   description: "Exact filters, search, sorting, counting, and pagination are executed in D1.",
