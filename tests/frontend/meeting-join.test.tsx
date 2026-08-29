@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { App } from "../../assets/ts/member-flows/meeting-join/App";
 import { MeetingJoinForm } from "../../assets/ts/member-flows/meeting-join/MeetingJoinForm";
 import {
   consumeMeetingGuestInvitationFragment,
@@ -15,6 +16,7 @@ afterEach(() => {
     void act(() => render(null, container));
     container.remove();
   }
+  vi.unstubAllGlobals();
 });
 
 describe("secure meeting join browser flow", () => {
@@ -83,5 +85,68 @@ describe("secure meeting join browser flow", () => {
     expect(button.disabled).toBe(false);
     void act(() => button.click());
     expect(onJoin).toHaveBeenCalledWith(["90000000-0000-4000-8000-000000000001"]);
+  });
+
+  it("creates and completes a nested invitation verification before using the canonical join resource", async () => {
+    const occurrenceId = "80000000-0000-4000-8000-000000000001";
+    const verificationId = "81000000-0000-4000-8000-000000000001";
+    const jsonResponse = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ verificationId, expiresAt: "2026-09-01T12:10:00.000Z" }, 202))
+      .mockResolvedValueOnce(jsonResponse({ occurrenceId, expiresAt: "2026-09-01T15:00:00.000Z" }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          occurrence: {
+            id: occurrenceId,
+            seriesId: "60000000-0000-4000-8000-000000000001",
+            eventName: "Canonical meeting entry",
+            startsAt: "2026-09-01T13:00:00.000Z",
+            endsAt: "2026-09-01T14:00:00.000Z",
+            location: "Online",
+          },
+          name: "Verified Guest",
+          affiliation: "External Organization",
+          terms: [],
+          landingRevision: "a".repeat(64),
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(async () => {
+      render(<App invitation={{ token: "pkc1_invitation", occurrenceId }} />, container);
+    });
+    await vi.waitFor(() => expect(container.textContent).toContain("Verify your invitation"));
+
+    const code = container.querySelector<HTMLInputElement>("#meeting-guest-code")!;
+    code.value = "ABCDEFGH";
+    await act(async () => {
+      code.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    await vi.waitFor(() => expect(container.textContent).toContain("Canonical meeting entry"));
+
+    const collection = `/api/v1/meetings/occurrences/${occurrenceId}/invitations/verifications`;
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      collection,
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ token: "pkc1_invitation" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${collection}/${verificationId}`,
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ code: "ABCDEFGH" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `/api/v1/meetings/occurrences/${occurrenceId}/join`,
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });

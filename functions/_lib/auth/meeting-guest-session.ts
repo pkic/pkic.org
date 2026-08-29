@@ -20,12 +20,7 @@ import {
   serializeSessionCookie,
   sessionExpiresAtToExp,
 } from "./session-engine";
-import {
-  MEETING_GUEST_CHALLENGE_COOKIE_NAME,
-  MEETING_GUEST_CHALLENGE_COOKIE_PATH,
-  MEETING_GUEST_SESSION_COOKIE_NAME,
-  MEETING_GUEST_SESSION_COOKIE_PATH,
-} from "./session-cookies";
+import { MEETING_GUEST_CHALLENGE_COOKIE_NAME, MEETING_GUEST_SESSION_COOKIE_NAME } from "./session-cookies";
 
 const MEETING_GUEST_SESSION_TOKEN_TYPE = "meeting-guest-session";
 
@@ -92,29 +87,50 @@ export function getMeetingGuestChallengeCookieSecret(request: Request): string |
   return getSessionCookieToken(request, MEETING_GUEST_CHALLENGE_COOKIE_NAME);
 }
 
-export function serializeMeetingGuestChallengeCookie(browserSecret: string, request: Request): string {
+function meetingOccurrenceCookiePath(occurrenceId: string): string {
+  return `/api/v1/meetings/occurrences/${encodeURIComponent(occurrenceId)}`;
+}
+
+function meetingVerificationCookiePath(occurrenceId: string): string {
+  return `${meetingOccurrenceCookiePath(occurrenceId)}/invitations/verifications`;
+}
+
+export function serializeMeetingGuestChallengeCookie(
+  browserSecret: string,
+  occurrenceId: string,
+  request: Request,
+): string {
   return serializeSessionCookie(
     MEETING_GUEST_CHALLENGE_COOKIE_NAME,
-    MEETING_GUEST_CHALLENGE_COOKIE_PATH,
+    meetingVerificationCookiePath(occurrenceId),
     browserSecret,
     request,
   );
 }
 
-export function serializeExpiredMeetingGuestChallengeCookie(request: Request): string {
+export function serializeExpiredMeetingGuestChallengeCookie(occurrenceId: string, request: Request): string {
   return serializeExpiredSessionCookie(
     MEETING_GUEST_CHALLENGE_COOKIE_NAME,
-    MEETING_GUEST_CHALLENGE_COOKIE_PATH,
+    meetingVerificationCookiePath(occurrenceId),
     request,
   );
 }
 
-export function serializeMeetingGuestSessionCookie(token: string, request: Request): string {
-  return serializeSessionCookie(MEETING_GUEST_SESSION_COOKIE_NAME, MEETING_GUEST_SESSION_COOKIE_PATH, token, request);
+export function serializeMeetingGuestSessionCookie(token: string, occurrenceId: string, request: Request): string {
+  return serializeSessionCookie(
+    MEETING_GUEST_SESSION_COOKIE_NAME,
+    meetingOccurrenceCookiePath(occurrenceId),
+    token,
+    request,
+  );
 }
 
-export function serializeExpiredMeetingGuestSessionCookie(request: Request): string {
-  return serializeExpiredSessionCookie(MEETING_GUEST_SESSION_COOKIE_NAME, MEETING_GUEST_SESSION_COOKIE_PATH, request);
+export function serializeExpiredMeetingGuestSessionCookie(occurrenceId: string, request: Request): string {
+  return serializeExpiredSessionCookie(
+    MEETING_GUEST_SESSION_COOKIE_NAME,
+    meetingOccurrenceCookiePath(occurrenceId),
+    request,
+  );
 }
 
 export async function requireMeetingGuestFromRequest(
@@ -124,6 +140,15 @@ export async function requireMeetingGuestFromRequest(
 ): Promise<MeetingGuestSession> {
   const token = getBearerToken(request) ?? getMeetingGuestSessionCookieToken(request);
   if (!token) throw new AppError(401, "AUTH_REQUIRED", "Missing meeting guest session token");
+  return requireMeetingGuestSessionToken(db, token, env);
+}
+
+/** Resolve an explicitly selected guest token without competing user-session transport precedence. */
+export async function requireMeetingGuestSessionToken(
+  db: DatabaseLike,
+  token: string,
+  env?: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<MeetingGuestSession> {
   if (!env?.INTERNAL_SIGNING_SECRET) {
     throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
   }

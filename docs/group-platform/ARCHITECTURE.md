@@ -327,10 +327,9 @@ Canonical group routes use the following shape:
     /api/v1/groups/:groupId/stats
     /api/v1/groups/:groupId/audit-log
     /api/v1/audit-log
-    /api/v1/me/meetings/occurrences/:occurrenceId/join
-    /api/v1/meeting-guests/invitations/bootstrap
-    /api/v1/meeting-guests/invitations/verify
-    /api/v1/meeting-guests/meetings/occurrences/:occurrenceId/join
+    /api/v1/meetings/occurrences/:occurrenceId/invitations/verifications
+    /api/v1/meetings/occurrences/:occurrenceId/invitations/verifications/:verificationId
+    /api/v1/meetings/occurrences/:occurrenceId/join
 
 Routes validate canonical shared contracts, resolve one authorization context,
 call one focused use case, and serialize the shared response. SQL, transitions,

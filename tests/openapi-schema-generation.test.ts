@@ -165,6 +165,16 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/groups/{groupId}/votes/{voteId}/ballots"].post).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/vote-proposals"].get).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/vote-proposals"].post).toBeDefined();
+    expect(spec.paths["/api/v1/meetings/occurrences/{occurrenceId}/join"].get).toBeDefined();
+    expect(spec.paths["/api/v1/meetings/occurrences/{occurrenceId}/join"].post).toBeDefined();
+    expect(spec.paths["/api/v1/meetings/occurrences/{occurrenceId}/invitations/verifications"].post).toBeDefined();
+    expect(
+      spec.paths["/api/v1/meetings/occurrences/{occurrenceId}/invitations/verifications/{verificationId}"].patch,
+    ).toBeDefined();
+    expect(spec.paths["/api/v1/me/meetings/occurrences/{occurrenceId}/join"]).toBeUndefined();
+    expect(spec.paths["/api/v1/meeting-guests/invitations/bootstrap"]).toBeUndefined();
+    expect(spec.paths["/api/v1/meeting-guests/invitations/verify"]).toBeUndefined();
+    expect(spec.paths["/api/v1/meeting-guests/meetings/occurrences/{occurrenceId}/join"]).toBeUndefined();
     expect(spec.paths["/api/v1/donations"].get[AUTH_EXTENSION]).toMatchObject({
       required: true,
       scopes: ["donations:read"],
