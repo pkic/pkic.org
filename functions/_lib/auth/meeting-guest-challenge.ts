@@ -64,8 +64,8 @@ export async function verifyMeetingGuestInvitationCapability(
   return toMeetingGuest(snapshot);
 }
 
-/** Public bootstrap intentionally does not reveal whether a guest capability expired or was revoked. */
-export async function verifyMeetingGuestInvitationForBootstrap(
+/** Public verification creation intentionally hides whether a capability expired or was revoked. */
+export async function verifyMeetingGuestInvitationForChallengeCreation(
   db: DatabaseLike,
   token: string,
   env?: Pick<Env, "INTERNAL_SIGNING_SECRET">,
@@ -172,7 +172,7 @@ function assertUsableMeetingGuestChallenge(challenge: MeetingGuestChallengeRow |
 
 export async function issueMeetingGuestSession(
   db: DatabaseLike,
-  payload: { challengeId: string; authorizationHash: string; sessionTtlHours: number },
+  payload: { challengeId: string; occurrenceId: string; authorizationHash: string; sessionTtlHours: number },
 ): Promise<{
   guest: MeetingGuest;
   sessionId: string;
@@ -189,8 +189,8 @@ export async function issueMeetingGuestSession(
             challenge.invitation_version AS challenge_invitation_version
        ${EFFECTIVE_MEETING_GUEST_FROM}
        JOIN meeting_guest_browser_challenges challenge ON challenge.guest_id = guest.id
-      WHERE challenge.id = ? AND challenge.authorization_hash = ?`,
-      [payload.challengeId, payload.authorizationHash],
+      WHERE challenge.id = ? AND challenge.occurrence_id = ? AND challenge.authorization_hash = ?`,
+      [payload.challengeId, payload.occurrenceId, payload.authorizationHash],
     ),
   );
   const createdAt = nowIso();
@@ -222,8 +222,8 @@ export async function issueMeetingGuestSession(
                 challenge.invitation_version AS challenge_invitation_version
            ${EFFECTIVE_MEETING_GUEST_FROM}
            JOIN meeting_guest_browser_challenges challenge ON challenge.guest_id = guest.id
-          WHERE challenge.id = ? AND challenge.authorization_hash = ?`,
-        [payload.challengeId, payload.authorizationHash],
+          WHERE challenge.id = ? AND challenge.occurrence_id = ? AND challenge.authorization_hash = ?`,
+        [payload.challengeId, payload.occurrenceId, payload.authorizationHash],
       );
       assertUsableMeetingGuestChallenge(current);
       throw new AppError(409, "MEETING_GUEST_CHALLENGE_USED", "Meeting guest verification was already used");

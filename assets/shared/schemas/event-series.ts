@@ -306,22 +306,20 @@ export const meetingJoinResponseSchema = z.object({
   redirectUrl: httpsCapabilityUrlSchema,
 });
 
-export const meetingGuestInvitationBootstrapSchema = z.object({
+export const meetingInvitationVerificationCreateSchema = z.object({
   token: tokenSchema,
-  occurrenceId: databaseIdSchema,
 });
-export const meetingGuestInvitationBootstrapResponseSchema = z.object({
-  challengeId: databaseIdSchema,
+export const meetingInvitationVerificationCreateResponseSchema = z.object({
+  verificationId: databaseIdSchema,
   expiresAt: utcInstantSchema,
 });
-export const meetingGuestInvitationVerifySchema = z.object({
-  challengeId: databaseIdSchema,
+export const meetingInvitationVerificationUpdateSchema = z.object({
   code: z
     .string()
     .trim()
     .regex(/^[A-HJ-NP-Z2-9]{8}$/),
 });
-export const meetingGuestInvitationVerifyResponseSchema = z.object({
+export const meetingInvitationVerificationUpdateResponseSchema = z.object({
   occurrenceId: databaseIdSchema,
   expiresAt: utcInstantSchema,
 });
@@ -361,6 +359,9 @@ export const groupMeetingSeriesParamsSchema = z.object({ groupId: groupReference
 export const eventSeriesParamsSchema = groupMeetingSeriesParamsSchema.extend({ seriesId: databaseIdSchema });
 export const eventOccurrenceParamsSchema = eventSeriesParamsSchema.extend({ occurrenceId: databaseIdSchema });
 export const meetingJoinOccurrenceParamsSchema = z.object({ occurrenceId: databaseIdSchema });
+export const meetingInvitationVerificationParamsSchema = meetingJoinOccurrenceParamsSchema.extend({
+  verificationId: databaseIdSchema,
+});
 export const eventGuestParamsSchema = eventOccurrenceParamsSchema.extend({ guestId: databaseIdSchema });
 export const eventAttendanceParamsSchema = eventOccurrenceParamsSchema.extend({ confirmationId: databaseIdSchema });
 
@@ -541,16 +542,17 @@ export const meetingJoinConfirmRouteSchema = {
   },
 };
 
-export const meetingGuestInvitationBootstrapRouteSchema = {
+export const meetingInvitationVerificationCreateRouteSchema = {
   tags: ["Meetings"],
   summary: "Start browser-bound verification for an invited meeting guest",
   request: {
-    body: { required: true, content: { "application/json": { schema: meetingGuestInvitationBootstrapSchema } } },
+    params: meetingJoinOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingInvitationVerificationCreateSchema } } },
   },
   responses: {
     "202": {
       description: "A one-time verification code was sent to the invited address.",
-      content: { "application/json": { schema: meetingGuestInvitationBootstrapResponseSchema } },
+      content: { "application/json": { schema: meetingInvitationVerificationCreateResponseSchema } },
     },
     "404": jsonErrorResponse("The invitation is invalid, expired, or no longer eligible."),
     "429": jsonErrorResponse("A verification code was requested too recently."),
@@ -558,16 +560,17 @@ export const meetingGuestInvitationBootstrapRouteSchema = {
   },
 };
 
-export const meetingGuestInvitationVerifyRouteSchema = {
+export const meetingInvitationVerificationUpdateRouteSchema = {
   tags: ["Meetings"],
   summary: "Exchange a mailbox code and browser challenge for a guest session",
   request: {
-    body: { required: true, content: { "application/json": { schema: meetingGuestInvitationVerifySchema } } },
+    params: meetingInvitationVerificationParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingInvitationVerificationUpdateSchema } } },
   },
   responses: {
     "200": {
       description: "Guest session established.",
-      content: { "application/json": { schema: meetingGuestInvitationVerifyResponseSchema } },
+      content: { "application/json": { schema: meetingInvitationVerificationUpdateResponseSchema } },
     },
     "401": jsonErrorResponse("The code or browser challenge is invalid."),
     "429": jsonErrorResponse("Too many verification attempts were made from this client."),

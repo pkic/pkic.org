@@ -346,14 +346,18 @@ Status: In progress
 - [x] Bind member entry to the authenticated portal identity and guest entry to
       a separately verified guest session rather than treating a bearer URL as
       sufficient identity proof.
-      Current evidence: member entry is mounted under `/api/v1/me` and derives
-      the identity and exact live session server-side. Guest JWTs are a distinct
-      token type backed by a one-time browser/mailbox challenge, current
-      invitation generation, exact D1 session, and occurrence scope. The
-      mounted guest landing and confirmation endpoints reject a valid guest
-      session for another occurrence. Public bootstrap and verification routes
-      establish that session only after the browser-held secret and separately
-      delivered mailbox code match.
+      Current evidence: one canonical
+      `/api/v1/meetings/occurrences/:occurrenceId/join` resource resolves the
+      authenticated user's live member capacity first and falls back to a
+      separately verified guest session only when no eligible member capacity
+      exists. Guest JWTs are a distinct token type backed by a one-time
+      browser/mailbox challenge, current invitation generation, exact D1
+      session, and occurrence scope. POST creates an occurrence-owned
+      `/invitations/verifications` resource and PATCH consumes its separately
+      delivered mailbox code. Challenge and session cookies are scoped to the
+      exact occurrence routes, and a verification created for one occurrence
+      cannot mint a session for another. The former `/api/v1/me/meetings` and
+      `/api/v1/meeting-guests` actor namespaces are removed.
 - [x] Deliver rotatable guest invitations through the durable outbox and move
       the capability out of the request path before any landing data is read.
       Evidence: guest eligibility, audit, invitation rotation, access
@@ -363,11 +367,12 @@ Status: In progress
       instead of minting current authority from a stale message.
 - [x] Cover link scanners, forwarding, expiry, revocation, guest identity,
       membership loss, terms changes, repeated joins, and attendance counts.
-      Evidence so far: meeting-entry-security.test.ts and
-      meeting-guest-invitations.test.ts pass 25 focused tests
-      covering exact member and guest sessions, browser/code binding, challenge
-      replay, occurrence scope, expiry/revocation and policy races, identity
-      tampering, membership loss, terms changes, repeated joins, encrypted
+      Evidence so far: the focused meeting, OpenAPI, and cache-policy regression
+      set passes 58 tests covering exact member and guest sessions,
+      browser/code binding, challenge replay, occurrence scope,
+      expiry/revocation and policy races, identity precedence and tampering,
+      membership loss, terms changes, repeated joins, retired-route absence,
+      encrypted
       HTTPS-only destinations, and the separation of join confirmation from
       verified attendance. The shared D1 guard rechecks the exact session,
       occurrence, canonical eligibility, current guest policy, and current-term
@@ -797,8 +802,9 @@ Status: In progress
       use the same group-context event-resource policy as ordinary event
       discovery. The bearer-only `/api/v1/meetings/join/:token` endpoints and
       manager-issued access-token route were removed. Member and verified-guest
-      landing/confirmation, guest bootstrap, and mailbox-challenge verification
-      endpoints are mounted at their identity-scoped API boundaries.
+      landing/confirmation share the occurrence-owned `/meetings` resource;
+      mailbox verification is a nested invitation-verification resource rather
+      than an actor- or UI-scoped endpoint.
 - [x] Keep routes thin and SQL-free.
 - [x] Add one generic `/api/v1/me/groups` self-participation read model.
       Evidence: the shared contract composes the canonical group list filters,
@@ -1684,8 +1690,8 @@ Status: In progress
       authorization uses the same live evidence in request preflight and the
       protected D1 batch. Voting races are tracked separately below.
 - [x] Run meeting-entry, terms, guest, and attendance security tests.
-      Current evidence: 26 focused meeting-entry and event-sharing tests cover
-      exact member-session binding,
+      Current evidence: 58 focused meeting-entry, guest-invitation, OpenAPI, and
+      cache-policy tests cover exact member-session binding,
       browser/mailbox guest verification primitives, challenge replay,
       occurrence scope, terms reuse and replacement, membership loss, expiry,
       guest-policy changes, revocation races, HTTPS-only destinations, audit
