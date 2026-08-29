@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import type { ProposalManageResponse } from "../../assets/shared/schemas/proposal-management";
-import type { ProposalSpeaker } from "../../assets/ts/admin/types";
+import type { ProposalSpeaker } from "../../assets/ts/member-flows/portal/sections/events/types";
 import {
   buildReplacementProposerOptions,
   SpeakerCard,
-} from "../../assets/ts/admin/sections/events/detail/proposal-detail/SpeakerCard";
-import { proposalSpeakerAssetPath } from "../../assets/ts/admin/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
+} from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
+import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalManageSpeakerCard } from "../../assets/ts/event-flows/proposal-manage-page";
 
 let container: HTMLElement | null = null;

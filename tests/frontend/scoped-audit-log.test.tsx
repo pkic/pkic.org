@@ -4,9 +4,9 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuditLogEntry } from "../../assets/shared/schemas/audit-log";
-import { AuditLogSection } from "../../assets/ts/admin/sections/events/detail/proposal-detail/AuditLogSection";
+import { AuditLogSection } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/AuditLogSection";
 import { ProposalAuditLog } from "../../assets/ts/components/proposals/ProposalAuditLog";
-import { RegistrationAuditLogSection } from "../../assets/ts/admin/sections/events/detail/registration-detail/RegistrationPanels";
+import { RegistrationAuditLogSection } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationPanels";
 
 const mounted: HTMLElement[] = [];
 

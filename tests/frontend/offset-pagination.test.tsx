@@ -11,12 +11,12 @@ import {
   donationsListResponseSchema,
 } from "../../assets/shared/schemas/donation-management";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
-import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
+import { ApiDataTable } from "../../assets/ts/components/ApiDataTable";
 import { ApplicationDocumentsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDocumentsCard";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
 import { DueWorkTable } from "../../assets/ts/member-flows/portal/sections/system-operations/DueWorkTable";
-import { Promoters } from "../../assets/ts/admin/sections/events/detail/Promoters";
+import { Promoters } from "../../assets/ts/member-flows/portal/sections/events/detail/Promoters";
 import { Pager } from "../../assets/ts/components/Pager";
 import { useApiPage } from "../../assets/ts/hooks/useApiPage";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
