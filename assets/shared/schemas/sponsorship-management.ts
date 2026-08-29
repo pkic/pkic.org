@@ -16,6 +16,7 @@ import {
 import { addDuplicateStringIssues } from "./refinements";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { logoUploadResponseSchema } from "./images";
+import { requiresPermissions } from "./route-contract";
 
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);
@@ -154,6 +155,7 @@ export const sponsorshipCompaniesListResponseSchema = paginatedResponseSchema("c
 export type SponsorshipCompaniesListResponse = z.infer<typeof sponsorshipCompaniesListResponseSchema>;
 
 export const sponsorshipCompaniesListRouteSchema = {
+  ...requiresPermissions("sponsorships:read"),
   tags: ["Sponsorships"],
   summary: "List sponsorship companies (staff sales pipeline, grouped)",
   description:
@@ -195,6 +197,7 @@ export const sponsorshipCreateSchema = z
   });
 
 export const sponsorshipCreateRouteSchema = {
+  ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Create a sponsorship record (staff-initiated)",
   description:
@@ -213,6 +216,7 @@ export const sponsorshipCreateRouteSchema = {
 // ── Get ──────────────────────────────────────────────────────────────────
 
 export const sponsorshipGetRouteSchema = {
+  ...requiresPermissions("sponsorships:read"),
   tags: ["Sponsorships"],
   summary: "Get a sponsorship's detail",
   request: { params: sponsorshipIdParamsSchema },
@@ -228,6 +232,7 @@ export const sponsorshipGetRouteSchema = {
 // ── Logo (non-member sponsors only) ─────────────────────────────────────
 
 export const sponsorshipLogoPutRouteSchema = {
+  ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Upload or replace a non-member sponsor's logo",
   description:
@@ -252,6 +257,7 @@ export const sponsorshipLogoPutRouteSchema = {
 };
 
 export const sponsorshipLogoDeleteRouteSchema = {
+  ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Remove a non-member sponsor's logo",
   request: { params: sponsorshipIdParamsSchema },
@@ -269,6 +275,7 @@ export const sponsorshipLogoDeleteRouteSchema = {
 export const sponsorshipUpdateSchema = sponsorshipEditableFieldsSchema;
 
 export const sponsorshipUpdateRouteSchema = {
+  ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Update a sponsorship's fields",
   description: "Tier, assigned staff, renewal date, notes. Use PATCH .../:id/stage to advance the pipeline.",
@@ -294,6 +301,7 @@ export const sponsorshipStageUpdateSchema = z.object({
 });
 
 export const sponsorshipStageUpdateRouteSchema = {
+  ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Advance a sponsorship's pipeline stage",
   description:
@@ -316,6 +324,7 @@ export const sponsorshipStageUpdateRouteSchema = {
 // ── Events (audit trail) ────────────────────────────────────────────────
 
 export const sponsorshipEventsRouteSchema = {
+  ...requiresPermissions("sponsorships:read"),
   tags: ["Sponsorships"],
   summary: "Paginated pipeline audit trail for a sponsorship",
   request: { params: sponsorshipIdParamsSchema, query: sponsorshipEventsListQuerySchema },
@@ -351,6 +360,7 @@ export const eventSponsorTiersResponseSchema = z.object({
 });
 
 export const eventSponsorTiersGetRouteSchema = {
+  ...requiresPermissions("events:read"),
   tags: ["Sponsorships"],
   summary: "View per-event sponsor attendee-data-access config",
   request: { params: eventSlugParamsSchema },
@@ -365,6 +375,7 @@ export const eventSponsorTiersGetRouteSchema = {
 };
 
 export const eventSponsorTiersPutRouteSchema = {
+  ...requiresPermissions("events:write"),
   tags: ["Sponsorships"],
   summary: "Replace per-event sponsor attendee-data-access config",
   request: {
@@ -421,6 +432,7 @@ export const sponsorshipTierConfigUpdateSchema = z.object({
 });
 
 export const sponsorshipTierConfigUpdateRouteSchema = {
+  ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Update a sponsorship tier's price/currency/active state",
   request: {

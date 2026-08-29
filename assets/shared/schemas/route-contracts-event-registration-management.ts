@@ -7,6 +7,7 @@ import { databaseIdSchema } from "./identifiers";
 import { registrationBadgePatchSchema, registrationBadgeResponseSchema } from "./participant-roles";
 import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } from "./registration";
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
+import { requiresPermissions } from "./route-contract";
 
 const eventRegistrationParamsSchema = eventSlugParamsSchema.extend({ registrationId: databaseIdSchema });
 
@@ -37,6 +38,7 @@ export const eventRegistrationPromotionsResponseSchema = successResponseSchema.e
 });
 
 export const eventRegistrationsListRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "List event registrations",
   request: { params: eventSlugParamsSchema, query: eventRegistrationsQuerySchema },
@@ -52,6 +54,7 @@ export const eventRegistrationsListRouteSchema = {
 };
 
 export const eventRegistrationDetailRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Get an event registration",
   request: { params: eventRegistrationParamsSchema },
@@ -67,6 +70,7 @@ export const eventRegistrationDetailRouteSchema = {
 };
 
 export const eventRegistrationPatchRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Update an event registration",
   request: {
@@ -86,6 +90,7 @@ export const eventRegistrationPatchRouteSchema = {
 };
 
 export const eventRegistrationAdmissionsCreateRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Create an event-registration admission",
   request: {
@@ -105,6 +110,7 @@ export const eventRegistrationAdmissionsCreateRouteSchema = {
 };
 
 export const eventRegistrationAuditRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "List an event registration's audit history",
   request: { params: eventRegistrationParamsSchema, query: scopedAuditLogListQuerySchema },
@@ -120,6 +126,7 @@ export const eventRegistrationAuditRouteSchema = {
 };
 
 export const eventRegistrationBadgeGetRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Get an event registration's badge configuration",
   request: { params: eventRegistrationParamsSchema },
@@ -135,6 +142,7 @@ export const eventRegistrationBadgeGetRouteSchema = {
 };
 
 export const eventRegistrationBadgePatchRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Update an event registration's badge role",
   request: {
@@ -154,6 +162,7 @@ export const eventRegistrationBadgePatchRouteSchema = {
 };
 
 export const eventRegistrationBadgeCreateRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Regenerate an event registration's badge",
   request: { params: eventRegistrationParamsSchema },
@@ -170,6 +179,7 @@ export const eventRegistrationBadgeCreateRouteSchema = {
 };
 
 export const eventRegistrationAccessCreateRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Create temporary registration management access",
   request: { params: eventRegistrationParamsSchema },
@@ -187,6 +197,7 @@ export const eventRegistrationAccessCreateRouteSchema = {
 };
 
 export const eventRegistrationNotificationsCreateRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Create an event-registration notification",
   request: {
@@ -209,6 +220,7 @@ export const eventRegistrationNotificationsCreateRouteSchema = {
 };
 
 export const eventRegistrationPromotionsCreateRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Create event waitlist promotion offers",
   request: { params: eventSlugParamsSchema },
@@ -225,6 +237,7 @@ export const eventRegistrationPromotionsCreateRouteSchema = {
 };
 
 export const eventRegistrationExportRouteSchema = {
+  ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],
   summary: "Export event registrations",
   request: { params: eventSlugParamsSchema },

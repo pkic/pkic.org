@@ -18,6 +18,7 @@ import {
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { speakerReminderPreferenceResponseSchema, speakerReminderPreferenceSchema } from "./speaker-reminders";
 import { speakerParticipationResponseSchema, speakerSelfServiceReadResponseSchema } from "./speaker-self-service";
+import { publicOperation } from "./route-contract";
 
 const genericAcceptedResponse = jsonResponse(
   "Request accepted. The response is intentionally generic to prevent account enumeration.",
@@ -25,6 +26,7 @@ const genericAcceptedResponse = jsonResponse(
 );
 
 export const eventProposalCreateRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Submit an event proposal",
   description:
@@ -41,6 +43,7 @@ export const eventProposalCreateRouteSchema = {
 };
 
 export const proposalResendSpeakerManageLinkRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Resend speaker management link",
   description:
@@ -57,6 +60,7 @@ export const proposalResendSpeakerManageLinkRouteSchema = {
 };
 
 export const proposalResendManageLinkRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Resend proposer management link",
   description: "Sends fresh management links when the email matches one or more active proposals for this event.",
@@ -72,6 +76,7 @@ export const proposalResendManageLinkRouteSchema = {
 };
 
 export const inviteResendLinkRouteSchema = {
+  ...publicOperation(),
   tags: ["Invites"],
   summary: "Resend pending invitation links",
   description: "Sends fresh links for active pending invitations matching the supplied email address.",
@@ -86,6 +91,7 @@ export const inviteResendLinkRouteSchema = {
 };
 
 export const proposalManageReadRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Read a proposal through its management capability",
   request: { params: proposalManageTokenParamsSchema },
@@ -97,6 +103,7 @@ export const proposalManageReadRouteSchema = {
 };
 
 export const proposalManageUpdateRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Update or withdraw a proposal through its management capability",
   request: {
@@ -113,6 +120,7 @@ export const proposalManageUpdateRouteSchema = {
 };
 
 export const proposerManagedSpeakerDeleteRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Remove a speaker through proposal management",
   description:
@@ -130,6 +138,7 @@ export const proposerManagedSpeakerDeleteRouteSchema = {
 };
 
 export const proposerManagedSpeakerReminderRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals", "Reminders"],
   summary: "Remind a proposal speaker through proposal management",
   description: "Queues a profile reminder for a confirmed speaker using the proposer management capability.",
@@ -147,6 +156,7 @@ export const proposerManagedSpeakerReminderRouteSchema = {
 };
 
 export const proposerManagedSpeakerPatchRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals", "Speakers"],
   summary: "Update a proposal speaker through proposal management",
   description: "Updates a speaker profile and role using the proposer management capability.",
@@ -165,6 +175,7 @@ export const proposerManagedSpeakerPatchRouteSchema = {
 };
 
 export const proposalSpeakerReminderPreferenceRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals", "Reminders"],
   summary: "Update presentation reminder preference",
   request: {
@@ -179,6 +190,7 @@ export const proposalSpeakerReminderPreferenceRouteSchema = {
 };
 
 export const proposalSpeakerSelfServiceReadRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Read speaker self-service state",
   request: { params: proposalManageTokenParamsSchema },
@@ -190,6 +202,7 @@ export const proposalSpeakerSelfServiceReadRouteSchema = {
 };
 
 export const proposalSpeakerParticipationRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Confirm or decline speaker participation",
   request: {
@@ -206,6 +219,7 @@ export const proposalSpeakerParticipationRouteSchema = {
 };
 
 export const proposalSpeakerProfileUpdateRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals"],
   summary: "Update speaker self-service profile",
   request: {
