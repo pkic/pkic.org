@@ -232,7 +232,7 @@ test.describe("Admin browser-verification pass", () => {
     // min_endorsers_for_ballot policy to be enabled. Configure the group,
     // not the retired workflow-settings endpoint.
     const settingsStatus = await page.evaluate(async (groupId) => {
-      const current = await fetch(`/api/v1/groups/${groupId}?manageable=true`, {
+      const current = await fetch(`/api/v1/groups/${groupId}`, {
         credentials: "same-origin",
       });
       if (!current.ok) return current.status;

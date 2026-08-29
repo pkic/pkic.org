@@ -53,7 +53,7 @@ export function GroupMemberAddForm({ groupId, onAdded }: { groupId: string; onAd
             value={user}
             onChange={setUser}
             disabled={saving}
-            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/user-catalog`}
+            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/users`}
           />
         </div>
         <div class="col-lg-2">

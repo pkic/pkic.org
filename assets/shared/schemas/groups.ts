@@ -82,14 +82,54 @@ export const groupSchema = z.object({
 });
 export type Group = z.infer<typeof groupSchema>;
 
-export const GROUP_PORTAL_CAPABILITIES = ["view", "participate", "manage"] as const;
-export const groupPortalCapabilitySchema = z.enum(GROUP_PORTAL_CAPABILITIES);
-export type GroupPortalCapability = z.infer<typeof groupPortalCapabilitySchema>;
-export const groupPortalContextResponseSchema = z.object({
-  group: groupSchema,
-  capabilities: z.array(groupPortalCapabilitySchema),
+/** Data-minimized group detail safe for an unauthenticated public response. */
+export const publicGroupSchema = z.object({
+  ...groupLabelSchema.shape,
+  parentGroup: groupLabelSchema.nullable(),
+  description: z.string().nullable(),
+  links: linksSchema,
+  visibility: groupVisibilitySchema,
+  publicLeadership: z.boolean(),
 });
-export type GroupPortalContextResponse = z.infer<typeof groupPortalContextResponseSchema>;
+export type PublicGroup = z.infer<typeof publicGroupSchema>;
+
+/** Group presentation data available to an authenticated viewer with live view access. */
+export const authenticatedGroupSchema = publicGroupSchema.extend({
+  active: z.boolean(),
+  membershipCapacityCount: z.number().int().min(0),
+  participantCount: z.number().int().min(0),
+  childCount: z.number().int().min(0),
+});
+export type AuthenticatedGroup = z.infer<typeof authenticatedGroupSchema>;
+
+/** Policy and optimistic-concurrency fields exposed only to effective group managers. */
+export const groupManagementConfigurationSchema = groupSchema.pick({
+  governanceInheritanceMode: true,
+  eligibilityMode: true,
+  automaticEnrollmentMode: true,
+  allowAutomaticOptOut: true,
+  minEndorsersForBallot: true,
+  revision: true,
+});
+export type GroupManagementConfiguration = z.infer<typeof groupManagementConfigurationSchema>;
+export const groupSettingsDetailSchema = authenticatedGroupSchema.extend(groupManagementConfigurationSchema.shape);
+export type GroupSettingsDetail = z.infer<typeof groupSettingsDetailSchema>;
+
+export const GROUP_CAPABILITIES = ["view", "participate", "manage"] as const;
+export const groupCapabilitySchema = z.enum(GROUP_CAPABILITIES);
+export type GroupCapability = z.infer<typeof groupCapabilitySchema>;
+export const authenticatedGroupDetailResponseSchema = z.object({
+  group: authenticatedGroupSchema,
+  capabilities: z.array(groupCapabilitySchema),
+  configuration: groupManagementConfigurationSchema.optional(),
+});
+export type AuthenticatedGroupDetailResponse = z.infer<typeof authenticatedGroupDetailResponseSchema>;
+export const publicGroupDetailResponseSchema = z.object({ group: publicGroupSchema });
+export const groupDetailResponseSchema = z.union([
+  authenticatedGroupDetailResponseSchema,
+  publicGroupDetailResponseSchema,
+]);
+export type GroupDetailResponse = z.infer<typeof groupDetailResponseSchema>;
 
 const groupPolicyInputShape = {
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema.optional(),
@@ -238,7 +278,6 @@ export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend(
 });
 export type GroupsListQuery = z.infer<typeof groupsListQuerySchema>;
 export const groupsListResponseSchema = paginatedResponseSchema("groups", groupSchema);
-export const groupGetQuerySchema = groupsListQuerySchema.pick({ manageable: true });
 
 export const GROUP_MEMBERSHIP_SORT_COLUMNS = [
   "user_name",

@@ -174,7 +174,7 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
 }
 
 async function assertGroupCapabilities(page: Page, groupId: string, expected: string[]): Promise<void> {
-  const response = await page.request.get(`/api/v1/groups/${groupId}/context`);
+  const response = await page.request.get(`/api/v1/groups/${groupId}`);
   const body = (await response.json()) as JsonRecord;
   expect(response.status(), JSON.stringify(body)).toBe(200);
   expect(body.capabilities).toEqual(expected);
@@ -193,8 +193,8 @@ function groupNavigation(page: Page, groupName: string) {
 async function anonymousDenied(browser: Browser, groupId: string): Promise<void> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  const response = await page.request.get(`/api/v1/groups/${groupId}/context`);
-  expect(response.status()).toBe(401);
+  const response = await page.request.get(`/api/v1/groups/${groupId}`);
+  expect(response.status()).toBe(404);
   await page.goto(`/portal/#/groups/${groupId}/overview`);
   await expect(page.locator("#portal-inp-email")).toBeVisible();
   await context.close();

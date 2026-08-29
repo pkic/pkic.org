@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "../assets/shared/schemas/user-catalog";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, updateGroup } from "../functions/_lib/services/groups";
-import { buildUserCatalogPageQuery, listGroupUserCatalog } from "../functions/_lib/services/user-catalog";
+import { buildUserCatalogPageQuery, listGroupUsers } from "../functions/_lib/services/user-catalog";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
@@ -67,13 +67,9 @@ describe("group user catalog", () => {
 
     const managerToken = await createAdminSession(env.DB, manager.id, `manager-${crypto.randomUUID()}`);
     const outsiderToken = await createAdminSession(env.DB, outsider.id, `outsider-${crypto.randomUUID()}`);
-    const response = await callApi(
-      env,
-      `/api/v1/groups/${group.slug}/user-catalog?q=catalog-alias&sort=email&limit=1`,
-      {
-        headers: { authorization: `Bearer ${managerToken}` },
-      },
-    );
+    const response = await callApi(env, `/api/v1/groups/${group.slug}/users?q=catalog-alias&sort=email&limit=1`, {
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
     expect(response.status, await response.clone().text()).toBe(200);
     const payload = userCatalogListResponseSchema.parse(await response.json());
     expect(payload.users).toEqual([
@@ -96,37 +92,44 @@ describe("group user catalog", () => {
 
     expect(
       (
-        await callApi(env, `/api/v1/groups/${group.id}/user-catalog?q=catalog`, {
+        await callApi(env, `/api/v1/groups/${group.id}/users?q=catalog`, {
           headers: { authorization: `Bearer ${outsiderToken}` },
         })
       ).status,
     ).toBe(403);
-    expect((await callApi(env, `/api/v1/groups/${group.id}/user-catalog?q=catalog`)).status).toBe(401);
+    expect((await callApi(env, `/api/v1/groups/${group.id}/users?q=catalog`)).status).toBe(401);
     expect(
       (
-        await callApi(env, `/api/v1/groups/${group.id}/user-catalog?sort=role`, {
+        await callApi(env, `/api/v1/groups/${group.id}/users?sort=role`, {
           headers: { authorization: `Bearer ${managerToken}` },
         })
       ).status,
     ).toBe(400);
     expect(
       (
-        await callApi(env, `/api/v1/groups/${group.id}/user-catalog?limit=9&q=catalog`, {
+        await callApi(env, `/api/v1/groups/${group.id}/users?limit=9&q=catalog`, {
           headers: { authorization: `Bearer ${managerToken}` },
         })
       ).status,
     ).toBe(400);
     expect(
       (
-        await callApi(env, `/api/v1/groups/${group.id}/user-catalog`, {
+        await callApi(env, `/api/v1/groups/${group.id}/users`, {
           headers: { authorization: `Bearer ${managerToken}` },
         })
       ).status,
     ).toBe(400);
-    const inactiveResponse = await callApi(env, `/api/v1/groups/${group.id}/user-catalog?q=catalog-inactive`, {
+    const inactiveResponse = await callApi(env, `/api/v1/groups/${group.id}/users?q=catalog-inactive`, {
       headers: { authorization: `Bearer ${managerToken}` },
     });
     expect(((await inactiveResponse.json()) as { users: unknown[] }).users).toEqual([]);
+    expect(
+      (
+        await callApi(env, `/api/v1/groups/${group.id}/user-catalog?q=catalog`, {
+          headers: { authorization: `Bearer ${managerToken}` },
+        })
+      ).status,
+    ).toBe(404);
   });
 
   it("honors inherited leadership and fails closed when that authority is revoked before the page batch", async () => {
@@ -150,7 +153,7 @@ describe("group user catalog", () => {
     await grantLeadership(localOnlyChild.id, root.id);
     await updateGroup(env.DB, root, localOnlyChild.id, { governanceInheritanceMode: "local_only" });
 
-    const inherited = await listGroupUserCatalog(
+    const inherited = await listGroupUsers(
       env.DB,
       leader,
       child.id,
@@ -158,16 +161,11 @@ describe("group user catalog", () => {
     );
     expect(inherited.users.some((user) => user.id === leader.id)).toBe(true);
     await expect(
-      listGroupUserCatalog(
-        env.DB,
-        leader,
-        localOnlyChild.id,
-        userCatalogListQuerySchema.parse({ q: "catalog-parent" }),
-      ),
+      listGroupUsers(env.DB, leader, localOnlyChild.id, userCatalogListQuerySchema.parse({ q: "catalog-parent" })),
     ).rejects.toMatchObject({ status: 403, code: "GROUP_MANAGEMENT_REQUIRED" });
 
     await expect(
-      listGroupUserCatalog(
+      listGroupUsers(
         mutateBeforeNextBatch(env.DB, () =>
           env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleId).run(),
         ),

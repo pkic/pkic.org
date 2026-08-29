@@ -5,7 +5,6 @@ import {
   groupCategoryRulesReplaceSchema,
   groupCategoryRulesResponseSchema,
   groupCreationCapabilitiesResponseSchema,
-  groupGetQuerySchema,
   groupAutomaticEnrollmentPreferenceResponseSchema,
   groupAutomaticEnrollmentPreferenceSchema,
   groupCreateSchema,
@@ -18,7 +17,7 @@ import {
   groupMembershipParamsSchema,
   groupMembershipsListQuerySchema,
   groupMembershipsListResponseSchema,
-  groupPortalContextResponseSchema,
+  groupDetailResponseSchema,
   groupReferenceParamsSchema,
   groupResponseSchema,
   groupTypesListQuerySchema,
@@ -74,30 +73,16 @@ export const groupsListRouteSchema = {
 export const groupGetRouteSchema = {
   ...publicOperation(),
   tags: ["Groups"],
-  summary: "Get one group",
-  request: { params: groupReferenceParamsSchema, query: groupGetQuerySchema },
-  responses: {
-    "200": { description: "Group detail.", content: { "application/json": { schema: groupResponseSchema } } },
-    "401": jsonErrorResponse("An authenticated management identity is required for a manageable lookup."),
-    "403": jsonErrorResponse("The caller lacks effective management permission."),
-    "404": jsonErrorResponse("Group not found or not visible."),
-  },
-};
-
-export const groupPortalContextRouteSchema = {
-  ...requiresSession(),
-  tags: ["Groups"],
-  summary: "Resolve one selected-group portal context",
+  summary: "Get one group with caller-appropriate detail",
   description:
-    "Returns live view, participation, and management capabilities for the authenticated portal identity. The browser derives selected-group navigation from this projection.",
+    "Public callers receive a data-minimized group projection. Authenticated callers receive the visible group and their live view, participation, and management capabilities.",
   request: { params: groupReferenceParamsSchema },
   responses: {
     "200": {
-      description: "Selected group and the caller's effective portal capabilities.",
-      content: { "application/json": { schema: groupPortalContextResponseSchema } },
+      description: "Group detail scoped to the caller.",
+      content: { "application/json": { schema: groupDetailResponseSchema } },
     },
-    "401": jsonErrorResponse("Portal authentication is required."),
-    "404": jsonErrorResponse("Group not found or unavailable to this identity."),
+    "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
 

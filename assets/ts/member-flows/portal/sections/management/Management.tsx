@@ -2,9 +2,11 @@ import { useCallback } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import {
-  groupPortalContextResponseSchema,
+  authenticatedGroupDetailResponseSchema,
+  type AuthenticatedGroup,
   type Group,
-  type GroupPortalCapability,
+  type GroupCapability,
+  type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
@@ -37,7 +39,7 @@ export function managementRouteOwnsHash(groupId: string | undefined, hash: strin
   return path === groupPath || path.startsWith(`${groupPath}/`);
 }
 
-function GroupContextHeader({ group }: { group: Group }) {
+function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
     <div class="portal-management-context card border-0 shadow-sm">
       <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
@@ -88,14 +90,16 @@ export function Management({
   const detail = useData(
     () =>
       groupId
-        ? getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/context`, groupPortalContextResponseSchema)
+        ? getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema)
         : Promise.resolve(null),
     [groupId],
   );
   const group = detail.data?.group;
-  const capabilities = detail.data?.capabilities ?? ([] as GroupPortalCapability[]);
+  const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");
+  const settingsGroup: GroupSettingsDetail | null =
+    group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
 
   return (
     <div class="d-flex flex-column gap-3">
@@ -144,9 +148,9 @@ export function Management({
               </div>
             </div>
           )}
-          {view === "settings" && canManage && (
+          {view === "settings" && canManage && settingsGroup && (
             <div class="d-flex flex-column gap-3">
-              <GroupSettingsForm group={group} onUpdated={detail.reload} />
+              <GroupSettingsForm group={settingsGroup} onUpdated={detail.reload} />
               <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
             </div>
           )}

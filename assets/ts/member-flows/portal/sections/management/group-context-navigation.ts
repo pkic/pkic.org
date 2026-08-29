@@ -1,4 +1,4 @@
-import type { GroupPortalCapability } from "../../../../../shared/schemas/groups";
+import type { GroupCapability } from "../../../../../shared/schemas/groups";
 
 export const GROUP_CONTEXT_VIEWS = [
   { key: "overview", label: "Overview", capabilities: ["view"] },
@@ -15,12 +15,12 @@ export const GROUP_CONTEXT_VIEWS = [
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
-  capabilities: readonly GroupPortalCapability[];
+  capabilities: readonly GroupCapability[];
 }>;
 
 export type GroupContextView = (typeof GROUP_CONTEXT_VIEWS)[number]["key"];
 
-export function groupContextNavigation(capabilities: readonly GroupPortalCapability[]) {
+export function groupContextNavigation(capabilities: readonly GroupCapability[]) {
   const effective = new Set(capabilities);
   return GROUP_CONTEXT_VIEWS.filter((item) => item.capabilities.some((capability) => effective.has(capability)));
 }

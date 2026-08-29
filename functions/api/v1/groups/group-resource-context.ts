@@ -1,13 +1,13 @@
-import type { Group, GroupPortalCapability } from "../../../../assets/shared/schemas/groups";
+import type { Group, GroupCapability } from "../../../../assets/shared/schemas/groups";
 import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
 import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../../../_lib/types";
 import { AppError } from "../../../_lib/errors";
-import { getPortalGroupContext } from "../../../_lib/services/groups";
+import { getAuthenticatedGroupContext } from "../../../_lib/services/groups";
 import type { GroupResourceViewer } from "../../../_lib/services/resource-grants";
 
 export interface GroupResourceContext {
   group: Group;
-  capabilities: GroupPortalCapability[];
+  capabilities: GroupCapability[];
   viewer: GroupResourceViewer;
   member?: AuthMember;
 }
@@ -36,7 +36,7 @@ export async function requireGroupResourceContext(
   if (resolved.kind === "public") {
     throw new AppError(401, "AUTH_REQUIRED", "An authenticated portal identity is required");
   }
-  const context = await getPortalGroupContext(
+  const context = await getAuthenticatedGroupContext(
     db,
     {
       userId: resolved.userId,

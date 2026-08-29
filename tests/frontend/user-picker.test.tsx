@@ -97,11 +97,11 @@ describe("UserPicker request ordering", () => {
   it("uses an explicit scoped catalog while retaining the canonical user source as the default", async () => {
     vi.useFakeTimers();
     vi.mocked(getJson).mockResolvedValue({ users: [] });
-    const scoped = await mountPicker("/api/v1/groups/group%2Fone/user-catalog");
+    const scoped = await mountPicker("/api/v1/groups/group%2Fone/users");
     expect(scoped.input.autocomplete).toBe("off");
     await search(scoped.input, "Ada Lovelace");
     const scopedUrl = new URL(String(vi.mocked(getJson).mock.calls[0][0]), "https://app.test");
-    expect(scopedUrl.pathname).toBe("/api/v1/groups/group%2Fone/user-catalog");
+    expect(scopedUrl.pathname).toBe("/api/v1/groups/group%2Fone/users");
     expect(Object.fromEntries(scopedUrl.searchParams)).toEqual({
       limit: "8",
       offset: "0",

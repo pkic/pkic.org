@@ -55,7 +55,7 @@ export async function listUserCatalog(db: DatabaseLike, query: UserCatalogListQu
   return serializeUserCatalogPage(query, rows, total);
 }
 
-export async function listGroupUserCatalog(
+export async function listGroupUsers(
   db: DatabaseLike,
   actor: AuthAdmin,
   groupIdOrSlug: string,

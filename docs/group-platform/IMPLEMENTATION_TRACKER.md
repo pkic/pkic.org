@@ -824,7 +824,7 @@ Status: In progress
 - [x] Add mounted Hono/Chanfana tests for validation and middleware.
       Evidence: the canonical group context, creation, configuration,
       category-rule, membership, leadership, event, meeting, form, vote,
-      mailing-list, statistics, audit, user-catalog, and resource-grant routes
+      mailing-list, statistics, audit, group-user search, and resource-grant routes
       are exercised through the mounted router. The tests cover schema
       rejection, authentication, capability middleware, stale revisions, and
       authorization changes between request preflight and the D1 batch rather
@@ -871,17 +871,23 @@ Status: In progress
       frontend regressions. A complete Codex Security diff review covered all
       21 changed production files; its four findings were fixed in the same
       round and retained as regressions.
-- [x] Add selected-group context and capability-derived navigation.
-      Evidence: `/api/v1/groups/:groupId/context` resolves one portal identity
-      and returns its live `view`, `participate`, and `manage` capabilities from
+- [x] Add auth-aware group detail and capability-derived navigation.
+      Evidence: canonical `GET /api/v1/groups/:groupId` returns a data-minimized
+      projection to public callers and adds the authenticated identity's live
+      `view`, `participate`, and `manage` capabilities from
       canonical membership and inherited-governance services. The shared portal
       route filters its sections from that response: participants receive
       collaboration views without settings or governance controls, while a
       staff-only manager can use the same selected-group route without gaining
-      participation. The legacy selected-management URL redirects to the
+      participation. Policy and revision configuration is omitted unless the
+      identity has the effective `manage` capability. The legacy
+      selected-management URL redirects to the
       canonical group URL. Mounted tests cover an inherited leader, participant,
       and unauthorized outsider; focused frontend tests cover read-only,
-      participant, manager, and staff-only navigation.
+      participant, manager, and staff-only navigation. The retired technical
+      `/context` route is absent. Group-authorized user selection uses the
+      natural `/api/v1/groups/:groupId/users` collection, and the retired
+      `/user-catalog` route is absent.
 - [x] Reuse views across working group, task force, board, executive council,
       and coordination-group labels.
       Evidence: selected-group routing and capability filtering use only the

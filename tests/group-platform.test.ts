@@ -4,8 +4,9 @@ import {
   groupMembershipsListQuerySchema,
   groupCategoryRulesResponseSchema,
   groupJoinSchema,
-  groupPortalContextResponseSchema,
+  authenticatedGroupDetailResponseSchema,
   groupsListResponseSchema,
+  publicGroupDetailResponseSchema,
 } from "../assets/shared/schemas/groups";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
@@ -956,6 +957,30 @@ describe("group leadership inheritance", () => {
 });
 
 describe("group route contracts", () => {
+  it("returns a data-minimized public detail without authenticated capabilities", async () => {
+    const globalAdmin = await insertActor("public-detail-admin@example.test", "admin");
+    const group = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Public Detail Group",
+      visibility: "public",
+      eligibilityMode: "managed",
+      automaticEnrollmentMode: "category",
+      minEndorsersForBallot: 7,
+    });
+
+    const response = await callApi(env as Env, `/api/v1/groups/${group.id}`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const raw = await response.json();
+    const payload = publicGroupDetailResponseSchema.parse(raw);
+    expect(payload.group).toMatchObject({ id: group.id, name: "Public Detail Group", visibility: "public" });
+    expect(raw).not.toHaveProperty("capabilities");
+    expect(raw).not.toHaveProperty("group.eligibilityMode");
+    expect(raw).not.toHaveProperty("group.automaticEnrollmentMode");
+    expect(raw).not.toHaveProperty("group.minEndorsersForBallot");
+    expect(raw).not.toHaveProperty("group.revision");
+    expect(raw).not.toHaveProperty("group.participantCount");
+  });
+
   it("requires management authentication and returns only effectively manageable groups", async () => {
     const globalAdmin = await insertActor("manageable-route-admin@example.test", "admin");
     const parent = await createGroup(env.DB, globalAdmin, { typeKey: "working_group", name: "Route Parent" });
@@ -983,15 +1008,21 @@ describe("group route contracts", () => {
     expect(firstPage.groups.map((group) => group.id)).toEqual([child.id]);
     expect(firstPage.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
 
-    const managedDetail = await callApi(env as Env, `/api/v1/groups/${child.id}?manageable=true`, {
+    const managedDetail = await callApi(env as Env, `/api/v1/groups/${child.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(managedDetail.status).toBe(200);
+    const managedPayload = authenticatedGroupDetailResponseSchema.parse(await managedDetail.json());
+    expect(managedPayload.capabilities).toContain("manage");
+    expect(managedPayload.configuration).toBeDefined();
 
-    const unrelated = await callApi(env as Env, `/api/v1/groups/${unrelatedGroup.id}?manageable=true`, {
+    const unrelated = await callApi(env as Env, `/api/v1/groups/${unrelatedGroup.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    expect(unrelated.status).toBe(403);
+    expect(unrelated.status).toBe(200);
+    const unrelatedPayload = authenticatedGroupDetailResponseSchema.parse(await unrelated.json());
+    expect(unrelatedPayload.capabilities).not.toContain("manage");
+    expect(unrelatedPayload.configuration).toBeUndefined();
   });
 
   it("projects selected-group navigation capabilities from live participation and governance", async () => {
@@ -1011,11 +1042,11 @@ describe("group route contracts", () => {
     await grantGroupLeadership(parent.id, parentLeader.id);
 
     const leaderToken = await createAdminSession(env.DB, parentLeader.id, "context-route-leader-token");
-    const leaderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+    const leaderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}`, {
       headers: { authorization: `Bearer ${leaderToken}` },
     });
     expect(leaderResponse.status, await leaderResponse.clone().text()).toBe(200);
-    expect(groupPortalContextResponseSchema.parse(await leaderResponse.json()).capabilities).toEqual([
+    expect(authenticatedGroupDetailResponseSchema.parse(await leaderResponse.json()).capabilities).toEqual([
       "view",
       "manage",
     ]);
@@ -1042,14 +1073,13 @@ describe("group route contracts", () => {
       allowManaged: false,
     });
     const participantToken = await createMemberSession(env.DB, participantUserId, "context-route-participant-token");
-    const participantResponse = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+    const participantResponse = await callApi(env as Env, `/api/v1/groups/${child.id}`, {
       headers: { authorization: `Bearer ${participantToken}` },
     });
     expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
-    expect(groupPortalContextResponseSchema.parse(await participantResponse.json()).capabilities).toEqual([
-      "view",
-      "participate",
-    ]);
+    const participantPayload = authenticatedGroupDetailResponseSchema.parse(await participantResponse.json());
+    expect(participantPayload.capabilities).toEqual(["view", "participate"]);
+    expect(participantPayload.configuration).toBeUndefined();
 
     const outsiderUserId = await insertUser(env.DB, "context-route-outsider@example.test");
     const outsiderMemberId = await seedOrganizationAggregate(
@@ -1059,10 +1089,15 @@ describe("group route contracts", () => {
     );
     await addRepresentative(env.DB, outsiderMemberId, outsiderUserId);
     const outsiderToken = await createMemberSession(env.DB, outsiderUserId, "context-route-outsider-token");
-    const outsiderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+    const outsiderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}`, {
       headers: { authorization: `Bearer ${outsiderToken}` },
     });
     expect(outsiderResponse.status).toBe(404);
+
+    const retiredContext = await callApi(env as Env, `/api/v1/groups/${child.id}/context`, {
+      headers: { authorization: `Bearer ${leaderToken}` },
+    });
+    expect(retiredContext.status).toBe(404);
   });
 
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {

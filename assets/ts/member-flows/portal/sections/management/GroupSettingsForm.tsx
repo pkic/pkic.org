@@ -6,7 +6,7 @@ import {
   GROUP_VISIBILITIES,
   groupResponseSchema,
   groupUpdateSchema,
-  type Group,
+  type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
@@ -16,17 +16,17 @@ interface GroupSettingsDraft {
   name: string;
   description: string;
   links: string[];
-  visibility: Group["visibility"];
-  governanceInheritanceMode: Group["governanceInheritanceMode"];
-  eligibilityMode: Group["eligibilityMode"];
-  automaticEnrollmentMode: Group["automaticEnrollmentMode"];
+  visibility: GroupSettingsDetail["visibility"];
+  governanceInheritanceMode: GroupSettingsDetail["governanceInheritanceMode"];
+  eligibilityMode: GroupSettingsDetail["eligibilityMode"];
+  automaticEnrollmentMode: GroupSettingsDetail["automaticEnrollmentMode"];
   allowAutomaticOptOut: boolean;
   publicLeadership: boolean;
   minEndorsersForBallot: number;
   active: boolean;
 }
 
-function draftFromGroup(group: Group): GroupSettingsDraft {
+function draftFromGroup(group: GroupSettingsDetail): GroupSettingsDraft {
   return {
     name: group.name,
     description: group.description ?? "",
@@ -46,7 +46,13 @@ function optionLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 }
 
-export function GroupSettingsForm({ group, onUpdated }: { group: Group; onUpdated: () => Promise<void> }) {
+export function GroupSettingsForm({
+  group,
+  onUpdated,
+}: {
+  group: GroupSettingsDetail;
+  onUpdated: () => Promise<void>;
+}) {
   const [draft, setDraft] = useState(() => draftFromGroup(group));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +150,7 @@ export function GroupSettingsForm({ group, onUpdated }: { group: Group; onUpdate
               value={draft.visibility}
               disabled={saving}
               onChange={(event) =>
-                setField("visibility", (event.target as HTMLSelectElement).value as Group["visibility"])
+                setField("visibility", (event.target as HTMLSelectElement).value as GroupSettingsDetail["visibility"])
               }
             >
               {GROUP_VISIBILITIES.map((value) => (
@@ -166,7 +172,7 @@ export function GroupSettingsForm({ group, onUpdated }: { group: Group; onUpdate
               onChange={(event) =>
                 setField(
                   "governanceInheritanceMode",
-                  (event.target as HTMLSelectElement).value as Group["governanceInheritanceMode"],
+                  (event.target as HTMLSelectElement).value as GroupSettingsDetail["governanceInheritanceMode"],
                 )
               }
             >
@@ -187,7 +193,10 @@ export function GroupSettingsForm({ group, onUpdated }: { group: Group; onUpdate
               value={draft.eligibilityMode}
               disabled={saving}
               onChange={(event) =>
-                setField("eligibilityMode", (event.target as HTMLSelectElement).value as Group["eligibilityMode"])
+                setField(
+                  "eligibilityMode",
+                  (event.target as HTMLSelectElement).value as GroupSettingsDetail["eligibilityMode"],
+                )
               }
             >
               {GROUP_ELIGIBILITY_MODES.map((value) => (
@@ -207,7 +216,8 @@ export function GroupSettingsForm({ group, onUpdated }: { group: Group; onUpdate
               value={draft.automaticEnrollmentMode}
               disabled={saving}
               onChange={(event) => {
-                const value = (event.target as HTMLSelectElement).value as Group["automaticEnrollmentMode"];
+                const value = (event.target as HTMLSelectElement)
+                  .value as GroupSettingsDetail["automaticEnrollmentMode"];
                 setDraft((current) => ({
                   ...current,
                   automaticEnrollmentMode: value,

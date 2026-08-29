@@ -69,7 +69,7 @@ export function GroupLeadershipAssignmentForm({
             value={user}
             onChange={setUser}
             disabled={saving}
-            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/user-catalog`}
+            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/users`}
           />
         </div>
         <div class="col-lg-3">

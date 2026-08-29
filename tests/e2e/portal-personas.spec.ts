@@ -164,7 +164,7 @@ async function installPersona(page: Page, persona: Persona): Promise<void> {
       await json(route, profileFor(persona));
       return;
     }
-    if (url.pathname === `/api/v1/groups/${GROUP_ID}/context`) {
+    if (url.pathname === `/api/v1/groups/${GROUP_ID}`) {
       await json(route, { group, capabilities: persona.capabilities });
       return;
     }
