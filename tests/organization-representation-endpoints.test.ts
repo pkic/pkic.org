@@ -71,9 +71,8 @@ describe("organization representation API", () => {
       `/api/v1/organizations/${organizationId}/representatives/${targetUserId}`,
       token,
       "DELETE",
-      { reason: "No longer represents the organization" },
     );
-    expect(blocked.status).toBe(200);
+    expect(blocked.status, JSON.stringify(await blocked.clone().json())).toBe(200);
 
     const restore = await jsonRequest(
       `/api/v1/organizations/${organizationId}/representatives/${targetUserId}/restore`,

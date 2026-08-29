@@ -6,6 +6,7 @@ import {
   SENDGRID_WEBHOOK_MAX_BYTES,
   STRIPE_WEBHOOK_MAX_BYTES,
   readBoundedBody,
+  readBoundedJsonBody,
 } from "../functions/_lib/http-body";
 import type { Env } from "../functions/_lib/types";
 import { OPENAPI_JSON_MAX_BYTES } from "../functions/_lib/openapi/route";
@@ -79,6 +80,17 @@ describe("webhook request body limits", () => {
       status: 413,
       code: "REQUEST_BODY_TOO_LARGE",
     });
+  });
+
+  it("accepts a zero-byte stream only when the JSON body is optional", async () => {
+    await expect(
+      readBoundedJsonBody(new Request("https://pkic.org/test", { method: "DELETE", body: new Uint8Array() }), 10, {
+        allowEmpty: true,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      readBoundedJsonBody(new Request("https://pkic.org/test", { method: "DELETE", body: new Uint8Array() }), 10),
+    ).rejects.toMatchObject({ status: 400, code: "INVALID_JSON" });
   });
 
   it("rejects oversized SendGrid webhook bodies before signature work", async () => {

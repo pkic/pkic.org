@@ -64,8 +64,12 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
       ) {
         // This cache is the sole downstream body source, so consume the
         // original stream once. Cloning would tee the body and retain an
-        // unused branch in memory for every JSON mutation request.
-        unvalidatedData.body = await readBoundedJsonBody(request as unknown as Request, JSON_REQUEST_MAX_BYTES);
+        // unused branch in memory for every JSON mutation request. Network
+        // requests may expose a zero-byte stream rather than `body === null`,
+        // so optionality is decided after the bounded read.
+        unvalidatedData.body = await readBoundedJsonBody(request as unknown as Request, JSON_REQUEST_MAX_BYTES, {
+          allowEmpty: schema.request.body.required === false,
+        });
       }
 
       // Chanfana's validator consumes this cache. Priming it here gives us a

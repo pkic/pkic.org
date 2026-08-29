@@ -48,7 +48,11 @@ export async function readBoundedTextBody(request: Request, maxBytes: number): P
 }
 
 /** Parse JSON only after the shared streaming byte limit has been enforced. */
-export async function readBoundedJsonBody(request: Request, maxBytes: number): Promise<unknown> {
+export async function readBoundedJsonBody(
+  request: Request,
+  maxBytes: number,
+  options: { allowEmpty?: boolean } = {},
+): Promise<unknown> {
   let text: string;
   try {
     text = await readBoundedTextBody(request, maxBytes);
@@ -56,6 +60,7 @@ export async function readBoundedJsonBody(request: Request, maxBytes: number): P
     if (error instanceof AppError) throw error;
     throw new AppError(400, "INVALID_JSON", "Request body must be valid JSON");
   }
+  if (options.allowEmpty && text.length === 0) return undefined;
   try {
     return JSON.parse(text);
   } catch {

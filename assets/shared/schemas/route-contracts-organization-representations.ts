@@ -82,7 +82,7 @@ export const organizationRepresentativeBlockRouteSchema = {
   summary: "Remove and block an organization representative",
   request: {
     params: organizationRepresentativeParamsSchema,
-    body: { required: true, content: { "application/json": { schema: representativeRemoveSchema } } },
+    body: { required: false, content: { "application/json": { schema: representativeRemoveSchema } } },
   },
   responses: {
     "200": {
