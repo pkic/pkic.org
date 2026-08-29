@@ -254,8 +254,7 @@ export async function buildRegistrationUpdate(
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
   let newStatus = isCancelled ? "registered" : registration.status;
   // Profile and attendance edits must not double as email verification. The
-  // confirmation capability is the only self-service transition out of this
-  // state; explicit admin status changes use forceRegistrationStatus instead.
+  // confirmation capability is the only transition out of this state.
   if (registration.status !== "pending_email_confirmation") {
     if (hasPerDayAttendanceContext || capacityExemptReason) {
       newStatus = "registered";

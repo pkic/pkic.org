@@ -219,22 +219,24 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"]).toBeUndefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/attendees/bulk"].post).toBeDefined();
     expect(spec.paths["/api/v1/groups/{groupId}/events/{eventId}/invites/speakers/bulk"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/waitlist/promote"].post).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].get).toBeDefined();
-    expect(
-      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].patch,
-    ).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/exports"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/promotions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/badge"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/badge"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/badge"].post).toBeDefined();
     expect(
       spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"],
     ).toBeUndefined();
-    expect(
-      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/open-manage"].post,
-    ).toBeDefined();
-    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/admit"].post).toBeDefined();
-    expect(
-      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/resend-confirmation"].post,
-    ).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/access"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/admissions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/audit"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/{registrationId}/notifications"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/waitlist/promote"]).toBeUndefined();
   });
 
   it("documents the geolocation country response through its shared response schema", () => {

@@ -27,5 +27,5 @@ export const registrationBadgeResponseSchema = z.object({
   admin_override: registrationBadgeRoleSchema.nullable(),
   auto_detected: registrationBadgeRoleSchema,
   effective_role: registrationBadgeRoleSchema,
-  available_roles: z.array(registrationBadgeRoleSchema).optional(),
+  available_roles: z.array(registrationBadgeRoleSchema),
 });

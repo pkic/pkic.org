@@ -17,7 +17,13 @@ import {
   eventRegistrationsListResponseSchema,
   type EventRegistrationsListResponse,
 } from "../../../../../shared/schemas/event-registrations";
-import { adminWaitlistPromotionResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { eventRegistrationPromotionsResponseSchema } from "../../../../../shared/schemas/route-contracts-event-registration-management";
+import {
+  eventRegistrationExportsPath,
+  eventRegistrationPromotionsPath,
+  eventRegistrationsPath,
+  eventRegistrationViewPath,
+} from "./registration-paths";
 
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
   "attendance-changed": "any",
@@ -57,7 +63,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
   async function runWaitlistPromotions() {
     try {
-      await api(`/api/v1/admin/events/${slug}/waitlist/promote`, adminWaitlistPromotionResponseSchema, {
+      await api(eventRegistrationPromotionsPath(slug), eventRegistrationPromotionsResponseSchema, {
         method: "POST",
         body: "{}",
       });
@@ -69,7 +75,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
   }
 
   function downloadCsv() {
-    window.location.href = `/api/v1/admin/events/${slug}/registrations/export`;
+    window.location.href = eventRegistrationExportsPath(slug);
   }
 
   const pendingConfirmation = stats?.byStatus?.pending_email_confirmation ?? 0;
@@ -232,7 +238,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         </div>
       )}
       <ApiDataTable
-        endpoint={`/api/v1/admin/events/${slug}/registrations`}
+        endpoint={eventRegistrationsPath(slug)}
         responseSchema={eventRegistrationsListResponseSchema}
         resolve={(data) => data.registrations}
         resolvePage={(data) => data.page}
@@ -312,7 +318,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         empty={attendanceChangeFilter ? "No attendees match this attendance change" : "No registrations yet"}
         rowKey={(r) => r.id}
         rowClass={() => "adm-reg-row"}
-        onRowClick={(r) => navigate(`/events/${slug}/registration/${r.id}`)}
+        onRowClick={(r) => navigate(eventRegistrationViewPath(slug, r.id))}
       />
     </div>
   );
@@ -320,9 +326,9 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
 // ─── Registrations compositor ─────────────────────────────────────────────────
 
-export function Registrations({ slug, subTab, canWrite }: { slug: string; subTab?: string; canWrite: boolean }) {
+export function Registrations({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "responses" || (canWrite && subTab === "email") ? subTab : "overview";
+  const tab = subTab === "responses" || subTab === "email" ? subTab : "overview";
 
   return (
     <div>
@@ -330,7 +336,7 @@ export function Registrations({ slug, subTab, canWrite }: { slug: string; subTab
         items={[
           { key: "overview", label: "Overview" },
           { key: "responses", label: "Responses" },
-          ...(canWrite ? [{ key: "email", label: "Email" }] : []),
+          { key: "email", label: "Email" },
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/registrations/${key === "overview" ? "" : key}`)}

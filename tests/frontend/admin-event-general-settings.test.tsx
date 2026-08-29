@@ -139,11 +139,16 @@ describe("admin event general settings", () => {
 
   it("does not expose event read projections without event read capability", () => {
     const withoutRead = eventDetailTabsForCapabilities([]).map(({ key }) => key);
+    expect(withoutRead).not.toContain("registrations");
     expect(withoutRead).not.toContain("promoters");
     expect(withoutRead).not.toContain("stats");
 
     const withRead = eventDetailTabsForCapabilities(["read"]).map(({ key }) => key);
+    expect(withRead).not.toContain("registrations");
     expect(withRead).toContain("promoters");
     expect(withRead).toContain("stats");
+
+    const withManage = eventDetailTabsForCapabilities(["manage"]).map(({ key }) => key);
+    expect(withManage).toContain("registrations");
   });
 });

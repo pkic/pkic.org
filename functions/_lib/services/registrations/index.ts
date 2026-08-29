@@ -11,7 +11,6 @@ export {
   updateRegistrationByIdWithNotification,
   updateRegistrationByIdWithEmailChange,
 } from "./update";
-export { forceRegistrationStatus } from "./force-status";
 export { changeRegistrationEmail, finalizeEmailChange } from "./change-email";
 export { admitRegistration } from "./admission";
 export {

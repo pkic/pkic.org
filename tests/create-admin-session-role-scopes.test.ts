@@ -60,7 +60,7 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
 
     // The admin event subresources remain legacy-scope-gated; a real
     // role='admin' user passes through requirePermission's role bypass.
-    const response = await callAppGet("/api/v1/admin/events/pqc-2026/registrations", token);
+    const response = await callAppGet("/api/v1/events/pqc-2026/registrations", token);
     expect(response.status).toBe(200);
   });
 
@@ -73,7 +73,7 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
     // Same legacy-scope-gated path — a role='user' actor with no events:read
     // grant must be denied, proving the token's scopes claim reflects the
     // real DB role rather than always granting full AUTH_SCOPES.
-    const response = await callAppGet("/api/v1/admin/events/pqc-2026/registrations", token);
+    const response = await callAppGet("/api/v1/events/pqc-2026/registrations", token);
     expect(response.status).toBe(403);
   });
 });

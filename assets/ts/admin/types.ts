@@ -16,7 +16,7 @@ import type {
 } from "../../shared/schemas/event-registrations";
 import type { EventInviteSummary as CanonicalInviteRecord } from "../../shared/schemas/event-invites";
 import { eventDaysResponseSchema } from "../../shared/schemas/event-configuration";
-import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
+import type { registrationBadgeResponseSchema } from "../../shared/schemas/participant-roles";
 import type { EventProposalSummary as CanonicalAdminEventProposalSummary } from "../../shared/schemas/event-proposals";
 import type { ProposalAccess as CanonicalProposalAccess } from "../../shared/schemas/event-proposals";
 import type { ProposalSpeaker as CanonicalAdminProposalSpeaker } from "../../shared/schemas/proposal-speakers";
@@ -47,7 +47,7 @@ export interface AdminRegistrationDay {
   label: string | null;
 }
 
-export type BadgeRoleInfo = z.infer<typeof badgeRoleInfoSchema>;
+export type BadgeRoleInfo = z.infer<typeof registrationBadgeResponseSchema>;
 
 export type AdminFormSubmission = CanonicalFormSubmission;
 

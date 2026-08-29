@@ -6,7 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 
-describe("admin registration CSV export", () => {
+describe("event registration CSV export", () => {
   let eventId: string;
   let adminToken: string;
 
@@ -42,7 +42,7 @@ describe("admin registration CSV export", () => {
   }
 
   async function exportCsv(overrides: Partial<Env> = {}): Promise<Response> {
-    const request = new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/export", {
+    const request = new Request("https://app.test/api/v1/events/pqc-2026/registrations/exports", {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     return app.fetch(request, { ...(env as unknown as Env), ...overrides }, {

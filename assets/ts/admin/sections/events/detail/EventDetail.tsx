@@ -16,12 +16,12 @@ import { currentEvent } from "../../../state";
 
 type EventDetailTab = "registrations" | "proposals" | "promoters" | "stats" | "settings";
 
-const TABS: Array<{ key: EventDetailTab; label: string; capability?: "read" }> = [
-  { key: "registrations", label: "Registrations" },
-  { key: "proposals", label: "Proposals" },
+const TABS: Array<{ key: EventDetailTab; label: string; capability?: "read" | "write" | "manage" }> = [
+  { key: "registrations", label: "Registrations", capability: "manage" },
+  { key: "proposals", label: "Proposals", capability: "read" },
   { key: "promoters", label: "Promoters", capability: "read" },
   { key: "stats", label: "Analytics", capability: "read" },
-  { key: "settings", label: "Settings" },
+  { key: "settings", label: "Settings", capability: "write" },
 ];
 
 export function eventDetailTabsForCapabilities(capabilities: EventDetail["capabilities"]) {
@@ -91,9 +91,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
       />
 
       {/* Tab content */}
-      {tab === "registrations" && (
-        <Registrations slug={slug} subTab={subTab} canWrite={event.capabilities.includes("write")} />
-      )}
+      {tab === "registrations" && <Registrations slug={slug} subTab={subTab} />}
       {tab === "proposals" && <Proposals slug={slug} subTab={subTab} canWrite={event.capabilities.includes("write")} />}
       {tab === "promoters" && <Promoters slug={slug} subTab={subTab} />}
       {tab === "stats" && <EventStats slug={slug} />}

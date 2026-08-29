@@ -143,7 +143,7 @@ describe("scoped audit-log server pagination", () => {
   it("pages registration audit entries with the shared limit/offset pager", async () => {
     await assertPagedAuditLog(
       <RegistrationAuditLogSection slug="event-2026" regId="registration-1" />,
-      "/api/v1/admin/events/event-2026/registrations/registration-1/audit-log",
+      "/api/v1/events/event-2026/registrations/registration-1/audit",
       "registration_created",
       "registration_created",
       "registration_updated",

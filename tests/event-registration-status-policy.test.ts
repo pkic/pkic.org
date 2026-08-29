@@ -6,30 +6,22 @@ import {
   eventRegistrationsQuerySchema,
 } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationDayAttendanceChangeSchema } from "../assets/shared/schemas/event-registration-detail";
-import {
-  ADMIN_REGISTRATION_FORCE_STATUSES,
-  adminRegistrationUpdateSchema,
-} from "../assets/shared/schemas/route-contracts-admin-registrations";
+import { eventRegistrationManagementUpdateSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
 
-describe("admin registration status policy", () => {
-  it("uses the same statuses for listing and forced updates", () => {
-    expect(ADMIN_REGISTRATION_FORCE_STATUSES).toBe(EVENT_REGISTRATION_STATUSES);
-
+describe("event registration status policy", () => {
+  it("keeps lifecycle statuses available for filtering without exposing a generic force-status mutation", () => {
     for (const status of EVENT_REGISTRATION_STATUSES) {
       expect(eventRegistrationStatusSchema.parse(status)).toBe(status);
       expect(eventRegistrationsQuerySchema.parse({ status }).status).toBe(status);
-      expect(adminRegistrationUpdateSchema.parse({ action: "force_status", status })).toEqual({
-        action: "force_status",
-        status,
-      });
+      expect(eventRegistrationManagementUpdateSchema.safeParse({ action: "force_status", status }).success).toBe(false);
     }
   });
 
   it("does not conflate day-level waitlisting with registration status", () => {
     expect(eventRegistrationStatusSchema.safeParse("waitlisted").success).toBe(false);
-    expect(adminRegistrationUpdateSchema.safeParse({ action: "force_status", status: "waitlisted" }).success).toBe(
-      false,
-    );
+    expect(
+      eventRegistrationManagementUpdateSchema.safeParse({ action: "force_status", status: "waitlisted" }).success,
+    ).toBe(false);
     expect(
       eventEmailCampaignPreviewInputSchema.safeParse({
         subjectOverride: "Waitlist update",

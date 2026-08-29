@@ -39,10 +39,10 @@ describe("admin route authorization policy", () => {
     });
   });
 
-  it("leaves contextual modules to their resource-resolving router boundary", () => {
+  it("lets the retired event module reach its missing route and return 404", () => {
     expect(adminAuthorizationForRequest("/api/v1/admin/events/my-event/registrations", "GET")).toEqual({
       kind: "delegated",
-      boundary: "event router",
+      boundary: "retired admin API tombstone",
     });
   });
 

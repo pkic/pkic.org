@@ -13,7 +13,7 @@ async function callAdmin(path: string, token: string): Promise<Response> {
   );
 }
 
-describe("admin registration list generic form contract", () => {
+describe("event registration list generic form contract", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -68,10 +68,7 @@ describe("admin registration list generic form contract", () => {
     });
     await env.DB.batch(statements);
 
-    const response = await callAdmin(
-      "/api/v1/admin/events/pqc-2026/registrations?limit=1&offset=0&sort=display_name",
-      token,
-    );
+    const response = await callAdmin("/api/v1/events/pqc-2026/registrations?limit=1&offset=0&sort=display_name", token);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       registrations: Array<{ custom_answers_json: string | null; dietary_restrictions?: unknown }>;

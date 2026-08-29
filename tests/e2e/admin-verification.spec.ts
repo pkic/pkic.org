@@ -471,6 +471,30 @@ test.describe("Admin browser-verification pass", () => {
     expect(legacyRequests).toEqual([]);
   });
 
+  test("event registrations: load the canonical management resource without an admin API request", async ({ page }) => {
+    const legacyRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith(`/api/v1/admin/events/${EVENT_SLUG}/registrations`)) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+      if (pathname.startsWith(`/api/v1/admin/events/${EVENT_SLUG}/waitlist`)) {
+        legacyRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
+
+    const loaded = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/registrations` &&
+        response.request().method() === "GET",
+    );
+    await page.goto(`/admin/#/events/${EVENT_SLUG}/registrations`);
+    expect((await loaded).status()).toBe(200);
+    await expect(page.getByRole("button", { name: "Run waitlist promotions" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Download CSV" })).toBeVisible();
+    expect(legacyRequests).toEqual([]);
+  });
+
   test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];
