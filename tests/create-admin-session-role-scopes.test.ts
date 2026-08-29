@@ -65,9 +65,8 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
   });
 
   it("does NOT grant legacy AUTH_SCOPES for a non-admin-role staff user", async () => {
-    // The gate resolves the event before checking permission, so the event
-    // must exist for this to prove a 403 rather than a 404.
-    await seedEventAndAdmin(env.DB);
+    // insertNonAdminStaffUser seeds the event; the gate resolves it before
+    // checking permission, so this proves a 403 rather than a 404.
     const staffId = await insertNonAdminStaffUser("p4r01-staff@wf.test");
     const token = await createAdminSession(env.DB, staffId, "p4r01-staff-token");
 

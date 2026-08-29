@@ -228,7 +228,16 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonPost(`https://app.test/api/v1/users/${userId}/gravatar`)),
     ],
     ["* /api/v1/users/:userId/headshot", () => callApp(anonGet(`https://app.test/api/v1/users/${userId}/headshot`))],
-    ["POST /api/v1/events/imports", () => callApp(anonPost("https://app.test/api/v1/events/imports"))],
+    [
+      "POST /api/v1/events/imports",
+      () =>
+        callApp(
+          anonPostBody("https://app.test/api/v1/events/imports", {
+            source: "hugo",
+            event: { slug: "anon-import", name: "Anon import", timezone: "UTC", visibility: "invitation_only" },
+          }),
+        ),
+    ],
     ["GET /api/v1/events/:slug/days", () => callApp(anonGet(`https://app.test/api/v1/events/${eventSlug}/days`))],
     ["POST /api/v1/events/:slug/forms", () => callApp(anonPost(`https://app.test/api/v1/events/${eventSlug}/forms`))],
     [
