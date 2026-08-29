@@ -1497,8 +1497,10 @@ Status: In progress
       admin-prefixed schema/service aliases are removed; old bookmarks return 404. Mounted permission, API-key denial,
       revocation-race, revision-race, contract, query-plan, profile-contact,
       and frontend tests cover the cutover. A focused real Worker/D1 browser
-      journey creates an organization, adds a representative, verifies the
-      retired admin URL returns 404, and observes no legacy organization request.
+      journey creates an organization, adds a representative, then signs in as
+      its primary contact to block and explicitly restore that representative.
+      It also verifies the retired admin URL returns 404 and observes no legacy
+      organization request.
       User and membership-capacity management now also appears under the
       portal's System navigation while retaining domain APIs:
       `/api/v1/users` owns account records, email aliases, headshots, access
@@ -2069,11 +2071,11 @@ The final PR description must include, at minimum:
   only with their exact permissions;
 - create an organization with multiple representatives, job titles, flexible
   profile links, and a membership category; then edit its profile and contacts,
-  add and remove a representative, and confirm stale revisions and permission
-  revocation cannot leave partial state or audit records;
+  add, block, and explicitly restore a representative, and confirm stale
+  revisions and permission revocation cannot leave partial state or audit records;
 - confirm a primary or secondary organization contact can manage allowed
-  representative visibility/removal from My Profile without gaining the
-  global organization directory or staff-only direct-email provisioning;
+  representative visibility, blocking, and restoration from My Profile without
+  gaining the global organization directory or staff-only direct-email provisioning;
 - verify `/api/v1/admin/organizations` and nested paths return 404 and the old
   Organizations bookmark also returns 404;
 - inspect Users with separate `users:read`, `users:write`, `access:grant`,

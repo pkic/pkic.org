@@ -7,6 +7,7 @@ import {
   organizationDetailResponseSchema,
   organizationsListResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
+import { organizationRepresentativesListResponseSchema } from "../../assets/shared/schemas/organization-representation";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
 
@@ -15,6 +16,8 @@ vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/system/or
 const mounted: HTMLElement[] = [];
 const organizationId = "00000000-0000-4000-8000-000000000010";
 const userId = "00000000-0000-4000-8000-000000000011";
+const representativeId = "00000000-0000-4000-8000-000000000012";
+const membershipId = "00000000-0000-4000-8000-000000000013";
 
 function mount(node: ComponentChildren): HTMLElement {
   const container = document.createElement("div");
@@ -28,6 +31,15 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+async function waitForElement<T extends Element>(find: () => T | null): Promise<T> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const element = find();
+    if (element) return element;
+    await settle();
+  }
+  throw new Error("Expected element was not rendered.");
 }
 
 function detail() {
@@ -57,8 +69,8 @@ function detail() {
       secondaryContactUserId: null,
       representatives: [
         {
-          representativeId: "00000000-0000-4000-8000-000000000012",
-          membershipId: "00000000-0000-4000-8000-000000000013",
+          representativeId,
+          membershipId,
           userId,
           name: "Ada Lovelace",
           email: "ada@example.test",
@@ -72,6 +84,31 @@ function detail() {
         },
       ],
     },
+  });
+}
+
+function representativePage() {
+  return organizationRepresentativesListResponseSchema.parse({
+    representatives: [
+      {
+        id: representativeId,
+        memberId: membershipId,
+        organizationId,
+        organizationName: "Example Organization",
+        userId,
+        userName: "Ada Lovelace",
+        email: "ada@example.test",
+        source: "staff",
+        showOnOrganizationProfile: true,
+        joinedAt: "2026-01-01T00:00:00.000Z",
+        leftAt: null,
+        blockedAt: null,
+        blockedByUserId: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    page: { limit: 25, offset: 0, total: 1, hasMore: false },
   });
 }
 
@@ -130,12 +167,19 @@ describe("portal System Organizations", () => {
   });
 
   it("shows organization mutations only for their exact permissions", async () => {
-    const fetchMock = vi.fn(async () => json(detail()));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      return json(url.pathname.endsWith("/representatives") ? representativePage() : detail());
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const readOnly = mount(
       <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageRepresentatives={false} />,
     );
+    await settle();
     await settle();
     expect(readOnly.textContent).not.toContain("Edit");
     expect(readOnly.textContent).not.toContain("Add representative");
@@ -144,11 +188,13 @@ describe("portal System Organizations", () => {
     const writer = mount(
       <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />,
     );
-    await settle();
+    await waitForElement(
+      () => [...writer.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Block") ?? null,
+    );
     expect(writer.textContent).toContain("Edit");
     expect(writer.textContent).toContain("Contacts");
     expect(writer.textContent).toContain("Add representative");
-    expect(writer.textContent).toContain("Remove");
+    expect(writer.textContent).toContain("Block");
   });
 
   it("submits the canonical representative command and accepts its mutation receipt", async () => {
@@ -171,6 +217,7 @@ describe("portal System Organizations", () => {
         if (method === "POST") {
           return json({ success: true, representativeId: "00000000-0000-4000-8000-000000000099" });
         }
+        if (url.pathname.endsWith("/representatives")) return json(representativePage());
         return json(detail());
       }),
     );
