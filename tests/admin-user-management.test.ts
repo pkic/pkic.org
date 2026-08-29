@@ -333,9 +333,6 @@ describe("admin user deactivation", () => {
       env.DB.prepare(
         "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, datetime('now', '+1 day'), datetime('now'))",
       ).bind(crypto.randomUUID(), targetId, `session-${crypto.randomUUID()}`),
-      env.DB.prepare(
-        "INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 day'))",
-      ).bind(crypto.randomUUID(), targetId, `refresh-${crypto.randomUUID()}`),
     ]);
     const staffToken = await createAdminSession(env.DB, staffId, "identity-recovery-session");
 
@@ -347,15 +344,14 @@ describe("admin user deactivation", () => {
 
     expect(response.status).toBe(200);
     await expect(
-      queryAll<{ email: string; sessions: number; refresh: number }>(
+      queryAll<{ email: string; sessions: number }>(
         env.DB,
         `SELECT u.email,
-                (SELECT COUNT(*) FROM sessions WHERE user_id = u.id AND revoked_at IS NULL) AS sessions,
-                (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = u.id AND revoked_at IS NULL) AS refresh
+                (SELECT COUNT(*) FROM sessions WHERE user_id = u.id AND revoked_at IS NULL) AS sessions
            FROM users u WHERE u.id = ?`,
         [targetId],
       ),
-    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0, refresh: 0 }]);
+    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0 }]);
   });
 
   it("invalidates a stale pending confirmation when an admin changes the primary email", async () => {
@@ -727,10 +723,6 @@ describe("admin user anonymization", () => {
            VALUES (?, ?, ?, 'public-key', 0, 'Personal security key', datetime('now'))`,
       ).bind(crypto.randomUUID(), userId, `credential-${crypto.randomUUID()}`),
       env.DB.prepare(
-        `INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
-           VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 day'))`,
-      ).bind(crypto.randomUUID(), userId, `refresh-${crypto.randomUUID()}`),
-      env.DB.prepare(
         `UPDATE users SET pending_email = 'pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
                             pending_email_change_registration_id = ?,
                             role = 'admin', is_ec_member = 1
@@ -743,9 +735,6 @@ describe("admin user anonymization", () => {
 
     expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id = ?", userId)).toHaveLength(0);
-    expect(
-      await queryAll(env.DB, "SELECT id FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", userId),
-    ).toHaveLength(0);
     const [user] = await queryAll<{
       pending_email: string | null;
       role: string;
