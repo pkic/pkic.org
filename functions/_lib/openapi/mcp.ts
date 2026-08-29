@@ -29,16 +29,12 @@ function isAdminPath(path: string): boolean {
   return path.startsWith("/api/v1/admin/");
 }
 
-function isInternalPath(path: string): boolean {
-  return path.startsWith("/api/v1/internal/");
-}
-
 function isMcpDefaultReadablePath(path: string): boolean {
   return isAdminPath(path);
 }
 
 function isBearerAuthPath(path: string): boolean {
-  return isMcpDefaultReadablePath(path) || isInternalPath(path);
+  return isMcpDefaultReadablePath(path);
 }
 
 function inferredAuthSchemeForOperation(): AuthSecurityScheme {
@@ -89,10 +85,6 @@ function withRequiredScopesDescription(
 export function inferredScopesForOperation(path: string, method: string): AuthScope[] {
   if (!isBearerAuthPath(path)) {
     return [];
-  }
-
-  if (isInternalPath(path)) {
-    return ["admin:read"];
   }
 
   if (path.includes("/proposal") || path.includes("/proposals")) {

@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { InternalCalendarRsvpPost } from "./rsvp";
+import { CalendarRsvpPost } from "./rsvp";
 
 const app = new Hono();
 export const openapi = fromHono(app);
 
-openapi.post("/rsvp", InternalCalendarRsvpPost);
+openapi.post("/rsvp", CalendarRsvpPost);
 
 export default openapi;

@@ -88,7 +88,7 @@ describe("API route boundary completeness", () => {
     expect(registrations).toEqual([...RAW_ROUTE_ALLOWLIST].sort());
   });
 
-  it("limits manual JSON parsing to explicit auth-first and internal boundaries", () => {
+  it("limits manual JSON parsing to explicit auth-first and signed-integration boundaries", () => {
     const violations = sources
       .filter((details) => !MANUAL_JSON_ALLOWLIST.has(details.relativePath))
       .flatMap(manualJsonParsing);

@@ -146,6 +146,10 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/internal/jobs/run"]).toBeUndefined();
     expect(spec.paths["/api/v1/internal/reminders/run"]).toBeUndefined();
     expect(spec.paths["/api/v1/internal/retention/run"]).toBeUndefined();
+    expect(spec.paths["/api/v1/internal/calendar/rsvp"]).toBeUndefined();
+    expect(spec.paths["/api/v1/calendar/rsvp"].post).toBeDefined();
+    expect(spec.paths["/api/v1/calendar/rsvp"].post[AUTH_EXTENSION]).toBeUndefined();
+    expect(spec.paths["/api/v1/calendar/rsvp"].post.security).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/admin/votes/{id}/visibility"]).toBeUndefined();

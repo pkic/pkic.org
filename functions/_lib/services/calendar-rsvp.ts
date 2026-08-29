@@ -1,14 +1,14 @@
 import type { z } from "zod";
 import {
   calendarRsvpEventInputSchema,
-  internalCalendarRsvpIngestSchema,
+  calendarRsvpIngestSchema,
   type CalendarRsvpEventInput,
 } from "../../../assets/shared/schemas/calendar-rsvp";
 import { run } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 
-type InternalRsvpInput = z.infer<typeof internalCalendarRsvpIngestSchema>;
+type CalendarRsvpInput = z.infer<typeof calendarRsvpIngestSchema>;
 
 const REGISTRATION_ID_PREFIX = /^([a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})(?:$|[-@])/i;
 const DAY_DATE_SUFFIX = /^(\d{4}-\d{2}-\d{2})(?:@|$)/;
@@ -58,7 +58,7 @@ export function parseCalendarRsvp(calendarIcs: string, fallbackEmail?: string): 
 }
 
 /** Converts either supported transport shape into the canonical RSVP event input. */
-export function normalizeInternalCalendarRsvp(input: InternalRsvpInput): CalendarRsvpEventInput {
+export function normalizeCalendarRsvp(input: CalendarRsvpInput): CalendarRsvpEventInput {
   let parsed;
   if ("calendarIcs" in input) {
     const calendar = parseCalendarRsvp(input.calendarIcs, input.fromEmail);
