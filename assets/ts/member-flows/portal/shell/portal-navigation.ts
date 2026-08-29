@@ -31,6 +31,12 @@ const FORMS_NAV_ITEM: PortalNavItem = {
   label: "Forms",
 };
 
+const EVENTS_NAV_ITEM: PortalNavItem = {
+  path: "/events",
+  section: "events",
+  label: "Events",
+};
+
 const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   {
     path: "/system/analytics",
@@ -136,6 +142,17 @@ export function portalHasAnyGlobalPermission(session: PortalSession | null, perm
   return permissions.some((permission) => portalHasGlobalPermission(session, permission));
 }
 
+/**
+ * Contextual event roles must make their own event workspace discoverable.
+ * The API remains authoritative for the rows and fields the identity may see.
+ */
+export function portalHasPermissionAtAnyScope(session: PortalSession | null, permission: string): boolean {
+  const staff = session?.staff;
+  if (!staff) return false;
+  if (staff.role === "admin") return true;
+  return staff.grants.some((grant) => grant.permission === permission);
+}
+
 export function portalSystemNavigationItems(session: PortalSession | null): PortalNavItem[] {
   return SYSTEM_NAV_ITEMS.filter((item) =>
     item.permissions
@@ -155,6 +172,7 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
   return [
     ...(session?.member ? MEMBER_NAV_ITEMS : []),
     ...(session?.staff ? [MANAGEMENT_NAV_ITEM] : []),
+    ...(portalHasPermissionAtAnyScope(session, "events:read") ? [EVENTS_NAV_ITEM] : []),
     ...(portalHasGlobalPermission(session, "forms:read") ? [FORMS_NAV_ITEM] : []),
     ...(systemHome ? [{ ...systemHome, label: "System" }] : []),
     ...(session?.member || session?.staff ? [ACCOUNT_NAV_ITEM] : []),
@@ -175,12 +193,14 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
     location === MANAGEMENT_NAV_ITEM.path || location.startsWith(`${MANAGEMENT_NAV_ITEM.path}/`);
   const isSystemRoute = location === "/system" || location.startsWith("/system/");
   const isSelectedGroupRoute = location.startsWith("/groups/");
+  const isEventsRoute = location === "/events" || location.startsWith("/events/");
   const isFormsRoute = location === "/forms" || location.startsWith("/forms/");
   if (
     !CAPACITY_ROUTE_PATHS.has(location) &&
     !isManagementRoute &&
     !isSystemRoute &&
     !isSelectedGroupRoute &&
+    !isEventsRoute &&
     !isFormsRoute
   ) {
     return null;
@@ -189,6 +209,7 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
   if (isManagementRoute && session?.staff) return null;
   if (isSystemRoute && portalHasSystemManagement(session)) return null;
   if (isSelectedGroupRoute && (session?.member || session?.staff)) return null;
+  if (isEventsRoute && portalHasPermissionAtAnyScope(session, "events:read")) return null;
   if (isFormsRoute && portalHasGlobalPermission(session, "forms:read")) return null;
   return portalDefaultPath(session);
 }

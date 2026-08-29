@@ -5,6 +5,7 @@ import {
   portalCapacityFallbackPath,
   portalDefaultPath,
   portalHasGlobalPermission,
+  portalHasPermissionAtAnyScope,
   portalHasSystemManagement,
   portalNavigationItems,
   portalSystemNavigationItems,
@@ -107,6 +108,32 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(writerOnly)).not.toContainEqual(expect.objectContaining({ path: "/forms" }));
     expect(portalCapacityFallbackPath(writerOnly, "/forms")).toBe("/management");
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/forms" }));
+  });
+
+  it("exposes Events to global and event-scoped readers, but not unrelated staff", () => {
+    const globalReader = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "events:read", contextType: null, contextId: null }],
+    });
+    const eventReader = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "events:read", contextType: "event", contextId: "event-1" }],
+    });
+    const proposalOnly = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "proposals:read", contextType: "event", contextId: "event-1" }],
+    });
+
+    expect(portalHasPermissionAtAnyScope(globalReader, "events:read")).toBe(true);
+    expect(portalHasPermissionAtAnyScope(eventReader, "events:read")).toBe(true);
+    expect(portalNavigationItems(globalReader)).toContainEqual({ path: "/events", section: "events", label: "Events" });
+    expect(portalNavigationItems(eventReader)).toContainEqual({ path: "/events", section: "events", label: "Events" });
+    expect(portalCapacityFallbackPath(eventReader, "/events/event-1/settings")).toBeNull();
+    expect(portalNavigationItems(proposalOnly)).not.toContainEqual(expect.objectContaining({ path: "/events" }));
+    expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBe("/management");
   });
 
   it("exposes Donations to global readers or synchronizers", () => {

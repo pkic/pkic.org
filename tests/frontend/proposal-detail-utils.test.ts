@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildProposalAnswerRows } from "../../assets/ts/admin/sections/events/detail/proposal-detail-utils";
-import type { AdminFormDetailField } from "../../assets/ts/admin/types";
+import { buildProposalAnswerRows } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail-utils";
+import type { FormDetailField } from "../../assets/ts/member-flows/portal/sections/events/types";
 
-const formFields: AdminFormDetailField[] = [
+const formFields: FormDetailField[] = [
   {
     id: "field-audience",
     key: "audience",

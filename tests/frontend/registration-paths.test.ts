@@ -7,7 +7,7 @@ import {
   eventRegistrationsPath,
   eventRegistrationsViewPath,
   eventRegistrationViewPath,
-} from "../../assets/ts/admin/sections/events/detail/registration-paths";
+} from "../../assets/ts/member-flows/portal/sections/events/detail/registration-paths";
 
 describe("event registration resource paths", () => {
   it("builds one canonical encoded resource hierarchy", () => {

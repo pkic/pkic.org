@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { ProposalDecisionPanel } from "../../assets/ts/admin/sections/events/detail/proposal-detail/ProposalDecisionPanel";
-import type { ProposalDetailRecord } from "../../assets/ts/admin/sections/events/detail/proposal-detail/model";
+import { ProposalDecisionPanel } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalDecisionPanel";
+import type { ProposalDetailRecord } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/model";
 
 const proposal: ProposalDetailRecord = {
   id: "proposal-1",
