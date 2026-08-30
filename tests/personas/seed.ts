@@ -26,6 +26,11 @@ export interface SeededPersona {
    * check the authorization is re-evaluated rather than trusted from preflight.
    */
   grantIds: Map<string, string>;
+  /**
+   * The row id of each role assignment, for the same reason as `grantIds`: a
+   * test that revokes a role mid-request needs to name the row.
+   */
+  roleAssignmentIds: Map<string, string>;
 }
 
 export interface SeedPersonaOptions {
@@ -75,7 +80,16 @@ export async function seedPersona(
   if (!definition) throw new Error(`Unknown persona: ${keys.join(", ")}`);
   key = keys.join("+");
   if (key === "anonymous") {
-    return { key, definition, userId: "", email: "", capacities: [], token: null, grantIds: new Map() };
+    return {
+      key,
+      definition,
+      userId: "",
+      email: "",
+      capacities: [],
+      token: null,
+      grantIds: new Map(),
+      roleAssignmentIds: new Map(),
+    };
   }
 
   // Every instance is a distinct person at a distinct organization. Deriving
@@ -93,6 +107,7 @@ export async function seedPersona(
     capacities.push({ organizationId, memberId });
   }
 
+  const roleAssignmentIds = new Map<string, string>();
   for (const role of definition.roles) {
     const contextId =
       role.context === "group"
@@ -108,13 +123,15 @@ export async function seedPersona(
     if (role.context !== "global" && !contextId) {
       throw new Error(`Persona ${key} needs a ${role.context} context for ${role.roleId}`);
     }
+    const roleAssignmentId = crypto.randomUUID();
+    roleAssignmentIds.set(role.roleId, roleAssignmentId);
     await db
       .prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       )
       .bind(
-        crypto.randomUUID(),
+        roleAssignmentId,
         userId,
         role.roleId,
         // A global role carries no context at all: the schema's context
@@ -159,7 +176,7 @@ export async function seedPersona(
     ? await createAdminSession(db, userId, `persona-${key}-${crypto.randomUUID()}`)
     : await createMemberSession(db, userId, `persona-${key}-${crypto.randomUUID()}`);
 
-  return { key, definition, userId, email, capacities, token, grantIds };
+  return { key, definition, userId, email, capacities, token, grantIds, roleAssignmentIds };
 }
 
 /** Convenience for suites that only need the request header. */
