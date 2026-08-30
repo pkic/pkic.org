@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import {
+  SYSTEM_ROLE_IDS,
   permissionTargetsListResponseSchema,
   rolesListResponseSchema,
   type PermissionTarget,
@@ -11,7 +12,10 @@ import type { ServerCatalog } from "../../../../shared/server-catalog";
 export const roleCatalog: ServerCatalog<Role, z.infer<typeof rolesListResponseSchema>> = {
   endpoint: "/api/v1/roles",
   responseSchema: rolesListResponseSchema,
-  resolveItems: (response) => response.roles,
+  resolveItems: (response) =>
+    response.roles.filter(
+      (role) => role.id !== SYSTEM_ROLE_IDS.groupLead && role.id !== SYSTEM_ROLE_IDS.groupDeputyLead,
+    ),
   resolvePage: (response) => response.page,
   itemKey: (item) => item.id,
   itemLabel: (item) => item.name,

@@ -28,7 +28,17 @@ beforeEach(() => {
   document.body.append(container);
   profile.value = myProfileSchema.parse({
     userId,
+    emailId: null,
     email: "contact@example.test",
+    emailAddresses: [
+      {
+        id: null,
+        email: "contact@example.test",
+        primary: true,
+        verifiedAt: null,
+        verificationMethod: null,
+      },
+    ],
     firstName: "Contact",
     lastName: "Person",
     preferredName: null,

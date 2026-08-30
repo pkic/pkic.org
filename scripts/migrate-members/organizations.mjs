@@ -15,6 +15,7 @@ import {
   buildOrganizationDomainStatements,
   buildOrganizationMemberAggregateStatements,
   buildOrganizationRepresentativeStatement,
+  buildLinksJson,
   buildRepresentativeRoleGrantStatement,
   buildConsortiumSponsorshipStatements,
   buildEventSponsorshipStatements,
@@ -133,18 +134,25 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
       }
     }
 
+    const linksJson = buildLinksJson(links, onInvalidLink);
     const normalizedEmail = upsertMemberUser(ctx, {
       email,
       firstName,
       lastName,
-      jobTitle: rep.role ?? null,
-      biography: rep.description ?? null,
-      links,
+      jobTitle: null,
+      biography: null,
+      links: [],
       headshotR2Key: repHeadshotR2Key,
       sourceFile: filename,
       sourceName: rep.name,
     });
-    ctx.statements.push(buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, true));
+    ctx.statements.push(
+      buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, true, {
+        jobTitle: rep.role ?? null,
+        biography: rep.description ?? null,
+        linksJson,
+      }),
+    );
     contactEmails.push(normalizedEmail);
   }
 

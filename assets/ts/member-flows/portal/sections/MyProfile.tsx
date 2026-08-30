@@ -33,6 +33,7 @@ export function MyProfile() {
     firstName: current?.firstName ?? "",
     lastName: current?.lastName ?? "",
     preferredName: current?.preferredName ?? "",
+    emailId: current?.emailId ?? "",
     jobTitle: current?.jobTitle ?? "",
     biography: current?.biography ?? "",
     linksText: linksToText(current?.links ?? []),
@@ -57,6 +58,9 @@ export function MyProfile() {
         biography: form.biography.trim(),
         links: textToLinks(form.linksText),
       };
+      if (current!.organizationId) {
+        input.emailId = form.emailId || null;
+      }
       if (current!.canEditOrganizationName) {
         input.organizationName = form.organizationName.trim();
       }
@@ -149,6 +153,27 @@ export function MyProfile() {
                     required
                   />
                 </div>
+                {current.organizationId && (
+                  <div class="col-sm-6">
+                    <label class="form-label fw-semibold small" for="portal-representation-email">
+                      Email for this organization
+                    </label>
+                    <select
+                      class="form-select"
+                      id="portal-representation-email"
+                      value={form.emailId}
+                      onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
+                    >
+                      {current.emailAddresses.map((address) => (
+                        <option value={address.id ?? ""} key={address.id ?? "primary"}>
+                          {address.email}
+                          {address.primary ? " (primary)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <div class="form-text">Used for your profile and actions in this organization capacity.</div>
+                  </div>
+                )}
                 <div class="col-sm-6">
                   <label class="form-label fw-semibold small">Last name</label>
                   <input
@@ -168,8 +193,11 @@ export function MyProfile() {
                   />
                 </div>
                 <div class="col-sm-6">
-                  <label class="form-label fw-semibold small">Job title</label>
+                  <label class="form-label fw-semibold small" for="portal-profile-job-title">
+                    Job title
+                  </label>
                   <input
+                    id="portal-profile-job-title"
                     class="form-control"
                     value={form.jobTitle}
                     onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
@@ -188,8 +216,11 @@ export function MyProfile() {
                   </div>
                 )}
                 <div class="col-12">
-                  <label class="form-label fw-semibold small">Biography</label>
+                  <label class="form-label fw-semibold small" for="portal-profile-biography">
+                    Biography
+                  </label>
                   <textarea
+                    id="portal-profile-biography"
                     class="form-control"
                     rows={5}
                     value={form.biography}
@@ -197,8 +228,11 @@ export function MyProfile() {
                   />
                 </div>
                 <div class="col-12">
-                  <label class="form-label fw-semibold small">Social / profile links</label>
+                  <label class="form-label fw-semibold small" for="portal-profile-links">
+                    Social / profile links
+                  </label>
                   <textarea
+                    id="portal-profile-links"
                     class="form-control"
                     rows={3}
                     placeholder="One URL per line"
@@ -220,7 +254,7 @@ export function MyProfile() {
         <div class="card border-0 shadow-sm mt-3">
           <div class="card-body">
             <dl class="row mb-0 small">
-              <dt class="col-sm-4">Email</dt>
+              <dt class="col-sm-4">Email in this capacity</dt>
               <dd class="col-sm-8">{current.email}</dd>
               <dt class="col-sm-4">Membership category</dt>
               <dd class="col-sm-8">{current.membershipCategory}</dd>

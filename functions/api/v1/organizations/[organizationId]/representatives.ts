@@ -53,6 +53,7 @@ export const OrganizationRepresentativeAssociate = openApiRoute(
           email: data.body.email,
           name: data.body.name,
           jobTitle: data.body.jobTitle,
+          biography: data.body.biography,
           links: data.body.links,
           showOnOrganizationProfile: data.body.showOnOrganizationProfile,
         });
@@ -73,6 +74,10 @@ export const OrganizationRepresentativeAssociate = openApiRoute(
       representativeId = await associateOrganizationRepresentative(mutationDb, actor, {
         memberId,
         userId: data.body.userId,
+        emailId: data.body.emailId,
+        jobTitle: data.body.jobTitle,
+        biography: data.body.biography,
+        links: data.body.links,
         showOnOrganizationProfile: data.body.showOnOrganizationProfile,
       });
     }

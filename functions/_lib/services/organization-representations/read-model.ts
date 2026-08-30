@@ -10,6 +10,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
+import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 
 interface RepresentativeReadRow {
   id: string;
@@ -20,6 +21,10 @@ interface RepresentativeReadRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  email_id: string | null;
+  job_title: string | null;
+  biography: string | null;
+  links_json: string | null;
   headshot_r2_key: string | null;
   source: OrganizationRepresentative["source"];
   show_on_org_profile: number;
@@ -33,7 +38,7 @@ interface RepresentativeReadRow {
 
 const SORT_EXPRESSIONS = {
   user_name: "LOWER(COALESCE(user.last_name, '') || ' ' || COALESCE(user.first_name, ''))",
-  email: "LOWER(user.email)",
+  email: "LOWER(COALESCE(selected_email.email, user.email))",
   organization_name: "LOWER(organization.name)",
   joined_at: "representative.joined_at",
   updated_at: "representative.updated_at",
@@ -47,7 +52,11 @@ function mapRepresentative(row: RepresentativeReadRow): OrganizationRepresentati
     organizationName: row.organization_name,
     userId: row.user_id,
     userName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
+    emailId: row.email_id,
     email: row.email,
+    jobTitle: row.job_title,
+    biography: row.biography,
+    links: parseLinksJson(row.links_json),
     headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
     source: row.source,
     showOnOrganizationProfile: row.show_on_org_profile === 1,
@@ -68,7 +77,13 @@ export async function listOrganizationRepresentatives(
   const conditions = ["organization.id = ?"];
   const bindings: unknown[] = [organizationId];
   const search = query.q
-    ? buildD1TextSearchFilter(query.q, ["user.email", "user.first_name", "user.last_name", "organization.name"])
+    ? buildD1TextSearchFilter(query.q, [
+        "COALESCE(selected_email.email, user.email)",
+        "user.first_name",
+        "user.last_name",
+        "organization.name",
+        "representative.job_title",
+      ])
     : null;
   if (search) {
     conditions.push(search.sql);
@@ -96,12 +111,16 @@ export async function listOrganizationRepresentatives(
     JOIN members member ON member.id = representative.member_id
     JOIN organizations organization ON organization.id = member.organization_id
     JOIN users user ON user.id = representative.user_id
+    LEFT JOIN user_emails selected_email ON selected_email.id = representative.email_id
    WHERE ${conditions.join(" AND ")}`;
   const { rows, total } = await queryPage<RepresentativeReadRow>(db, {
     source: {
       selectSql: `SELECT representative.id, representative.member_id,
         organization.id AS organization_id, organization.name AS organization_name,
-        representative.user_id, user.first_name, user.last_name, user.email, user.headshot_r2_key,
+        representative.user_id, user.first_name, user.last_name,
+        COALESCE(selected_email.email, user.email) AS email,
+        representative.email_id, representative.job_title, representative.biography, representative.links_json,
+        user.headshot_r2_key,
         representative.source, representative.show_on_org_profile,
         representative.joined_at, representative.left_at, representative.blocked_at,
         representative.blocked_by_user_id, representative.created_at, representative.updated_at`,

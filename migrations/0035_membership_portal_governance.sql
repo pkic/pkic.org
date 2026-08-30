@@ -2172,6 +2172,13 @@ CREATE TABLE organization_representatives (
   member_id           TEXT NOT NULL,
   -- FK to members.id — the organization's aggregate row
   user_id             TEXT NOT NULL,
+  -- NULL selects the user's primary address. A non-NULL value selects one
+  -- verified address from user_emails; the trigger below proves ownership.
+  -- The address itself is never copied into this relationship row.
+  email_id             TEXT,
+  job_title            TEXT,
+  biography            TEXT,
+  links_json           TEXT,
   source              TEXT NOT NULL,
   -- allowed: verified_domain | organization_contact | staff | migration
   show_on_org_profile INTEGER NOT NULL DEFAULT 1 CHECK (show_on_org_profile IN (0, 1)),
@@ -2189,6 +2196,7 @@ CREATE TABLE organization_representatives (
   -- specific member before granting a representative role against it
   FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(email_id) REFERENCES user_emails(id),
   FOREIGN KEY(blocked_by_user_id) REFERENCES users(id)
 );
 
@@ -2196,6 +2204,35 @@ CREATE INDEX idx_organization_representatives_member_active
   ON organization_representatives(member_id, left_at, joined_at);
 CREATE INDEX idx_organization_representatives_user_active
   ON organization_representatives(user_id, left_at, joined_at);
+CREATE INDEX idx_organization_representatives_email
+  ON organization_representatives(email_id)
+  WHERE email_id IS NOT NULL;
+
+CREATE TRIGGER trg_organization_representatives_email_insert
+BEFORE INSERT ON organization_representatives
+WHEN NEW.email_id IS NOT NULL
+ AND NOT EXISTS (
+   SELECT 1 FROM user_emails address
+    WHERE address.id = NEW.email_id
+      AND address.user_id = NEW.user_id
+      AND address.verified_at IS NOT NULL
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'REPRESENTATIVE_EMAIL_INVALID');
+END;
+
+CREATE TRIGGER trg_organization_representatives_email_update
+BEFORE UPDATE OF user_id, email_id ON organization_representatives
+WHEN NEW.email_id IS NOT NULL
+ AND NOT EXISTS (
+   SELECT 1 FROM user_emails address
+    WHERE address.id = NEW.email_id
+      AND address.user_id = NEW.user_id
+      AND address.verified_at IS NOT NULL
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'REPRESENTATIVE_EMAIL_INVALID');
+END;
 
 CREATE TRIGGER trg_organization_representatives_require_org_member_insert
 BEFORE INSERT ON organization_representatives
@@ -2291,8 +2328,10 @@ BEGIN
   UPDATE user_roles
   SET revoked_at = COALESCE(NEW.left_at, NEW.blocked_at)
   WHERE user_id = NEW.user_id
-    AND context_type = 'organization'
-    AND context_id = NEW.member_id
+    AND (
+      (context_type = 'organization' AND context_id = NEW.member_id)
+      OR member_id = NEW.member_id
+    )
     AND revoked_at IS NULL;
 END;
 
@@ -2376,6 +2415,24 @@ BEGIN
   SELECT RAISE(ABORT, 'group membership identity is immutable');
 END;
 
+-- Group leadership is authority exercised through one explicit participating
+-- Member capacity. Leaving that exact group capacity immediately ends every
+-- local leadership assignment held through it; the historical role row stays
+-- attributable to both the person and the represented Member.
+CREATE TRIGGER trg_group_memberships_end_leadership
+AFTER UPDATE OF left_at ON group_memberships
+WHEN OLD.left_at IS NULL AND NEW.left_at IS NOT NULL
+BEGIN
+  UPDATE user_roles
+     SET revoked_at = NEW.left_at
+   WHERE user_id = NEW.user_id
+     AND member_id = NEW.member_id
+     AND context_type = 'group'
+     AND context_id = NEW.group_id
+     AND role_id IN ('role-group_lead', 'role-group_deputy_lead')
+     AND revoked_at IS NULL;
+END;
+
 -- Section: Fine-Grained Access Control
 --
 -- Adds the roles/user_roles/permission_grants model from,
@@ -2432,6 +2489,9 @@ CREATE TABLE user_roles (
   context_type       TEXT,
   -- allowed: 'event' | 'group' | 'organization' | NULL (global)
   context_id         TEXT,
+  -- Required for group leadership and forbidden for unrelated role types.
+  -- It records the one Member capacity on whose behalf the role is held.
+  member_id          TEXT,
   granted_by_user_id TEXT,
   expires_at         TEXT,
   revoked_at         TEXT,
@@ -2445,12 +2505,15 @@ CREATE TABLE user_roles (
   created_at         TEXT NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(role_id) REFERENCES roles(id),
+  FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(granted_by_user_id) REFERENCES users(id)
 );
 
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
 CREATE INDEX idx_user_roles_context ON user_roles(context_type, context_id);
 CREATE INDEX idx_user_roles_role ON user_roles(role_id);
+CREATE INDEX idx_user_roles_member ON user_roles(member_id)
+  WHERE member_id IS NOT NULL;
 CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
   ON user_roles(context_type, context_id, role_id)
   WHERE revoked_at IS NULL AND single_holder_per_context = 1;
@@ -2470,12 +2533,31 @@ WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
   OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_id))
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
+  OR (
+    NEW.revoked_at IS NULL
+    AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead')
+    AND (
+      NEW.context_type <> 'group'
+      OR NEW.member_id IS NULL
+      OR NOT EXISTS (
+        SELECT 1 FROM group_memberships membership
+         WHERE membership.group_id = NEW.context_id
+           AND membership.user_id = NEW.user_id
+           AND membership.member_id = NEW.member_id
+           AND membership.left_at IS NULL
+      )
+    )
+  )
+  OR (
+    NEW.member_id IS NOT NULL
+    AND NOT (NEW.context_type = 'group' AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead'))
+  )
 BEGIN
   SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
 END;
 
 CREATE TRIGGER validate_user_role_context_update
-BEFORE UPDATE OF context_type, context_id ON user_roles
+BEFORE UPDATE OF user_id, role_id, context_type, context_id, member_id, revoked_at ON user_roles
 FOR EACH ROW
 WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
@@ -2483,6 +2565,25 @@ WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
   OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_id))
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
+  OR (
+    NEW.revoked_at IS NULL
+    AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead')
+    AND (
+      NEW.context_type <> 'group'
+      OR NEW.member_id IS NULL
+      OR NOT EXISTS (
+        SELECT 1 FROM group_memberships membership
+         WHERE membership.group_id = NEW.context_id
+           AND membership.user_id = NEW.user_id
+           AND membership.member_id = NEW.member_id
+           AND membership.left_at IS NULL
+      )
+    )
+  )
+  OR (
+    NEW.member_id IS NOT NULL
+    AND NOT (NEW.context_type = 'group' AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead'))
+  )
 BEGIN
   SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
 END;
@@ -2529,7 +2630,7 @@ END;
 -- Preserve the active-grant uniqueness that the legacy event_permissions
 -- table enforced and extend it to every non-singleton role assignment.
 CREATE UNIQUE INDEX uq_user_roles_active_user_role_context
-  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id)
+  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id, COALESCE(member_id, ''))
   WHERE revoked_at IS NULL AND single_holder_per_context = 0;
 
 CREATE TABLE permission_grants (

@@ -219,6 +219,14 @@ export async function assignUserRole(
   );
   if (!role) throw new AppError(404, "ROLE_NOT_FOUND", "Role not found");
 
+  if (input.roleId === SYSTEM_ROLE_IDS.groupLead || input.roleId === SYSTEM_ROLE_IDS.groupDeputyLead) {
+    throw new AppError(
+      422,
+      "GROUP_LEADERSHIP_REQUIRES_MEMBER_CAPACITY",
+      "Assign group leadership through the group's Leadership resource with an explicit Member capacity",
+    );
+  }
+
   const contextType = input.contextType ?? null;
   const contextId = input.contextId ?? null;
   const context = contextType && contextId ? { type: contextType, id: contextId } : undefined;

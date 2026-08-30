@@ -57,7 +57,11 @@ interface GrantRow {
  * same lookup gives real-time (not eventually-consistent, ≤15-minute)
  * revocation at no extra request-path cost.
  */
-export async function computeGrantsForUser(db: DatabaseLike, userId: string): Promise<PermissionGrant[]> {
+export async function computeGrantsForUser(
+  db: DatabaseLike,
+  userId: string,
+  activeMemberId: string | null = null,
+): Promise<PermissionGrant[]> {
   const rows = await all<GrantRow>(
     db,
     `SELECT rp.permission AS permission, ur.context_type AS context_type, ur.context_id AS context_id
@@ -66,13 +70,27 @@ export async function computeGrantsForUser(db: DatabaseLike, userId: string): Pr
      WHERE ur.user_id = ?
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       AND (
+         ur.member_id IS NULL
+         OR (
+           ur.member_id = ?
+           AND ur.context_type = 'group'
+           AND EXISTS (
+             SELECT 1 FROM group_memberships gm
+              WHERE gm.group_id = ur.context_id
+                AND gm.user_id = ur.user_id
+                AND gm.member_id = ur.member_id
+                AND gm.left_at IS NULL
+           )
+         )
+       )
      UNION ALL
      SELECT pg.permission AS permission, pg.context_type AS context_type, pg.context_id AS context_id
      FROM permission_grants pg
      WHERE pg.user_id = ?
        AND pg.revoked_at IS NULL
        AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [userId, userId],
+    [userId, activeMemberId, userId],
   );
 
   return rows.map((row) => ({
@@ -187,6 +205,20 @@ export function permissionsAuthorizationEvidence(
                        AND role.revoked_at IS NULL
                        AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                        AND (
+                         role.member_id IS NULL
+                         OR (
+                           role.member_id = ?
+                           AND role.context_type = 'group'
+                           AND EXISTS (
+                             SELECT 1 FROM group_memberships membership
+                              WHERE membership.group_id = role.context_id
+                                AND membership.user_id = role.user_id
+                                AND membership.member_id = role.member_id
+                                AND membership.left_at IS NULL
+                           )
+                         )
+                       )
+                       AND (
                          (role.context_type IS NULL AND role.context_id IS NULL)
                          OR (requirement.context_type IS NOT NULL
                              AND role.context_type = requirement.context_type
@@ -219,6 +251,7 @@ export function permissionsAuthorizationEvidence(
         })),
       ),
       actor.id,
+      actor.memberId ?? null,
     ],
   };
 }

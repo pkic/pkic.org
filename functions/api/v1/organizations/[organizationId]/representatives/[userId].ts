@@ -46,6 +46,10 @@ export const OrganizationRepresentativeUpdate = openApiRoute(
     const representativeId = await updateOrganizationRepresentativeProfile(db, actor, {
       memberId,
       userId: data.params.userId,
+      emailId: data.body.emailId,
+      jobTitle: data.body.jobTitle,
+      biography: data.body.biography,
+      links: data.body.links,
       showOnOrganizationProfile: data.body.showOnOrganizationProfile,
     });
     return json({ success: true as const, representativeId });

@@ -20,6 +20,10 @@ export interface OrganizationRepresentative {
   id: string;
   memberId: string;
   userId: string;
+  emailId: string | null;
+  jobTitle: string | null;
+  biography: string | null;
+  linksJson: string | null;
   source: OrganizationRepresentationSource;
   showOnOrgProfile: boolean;
   joinedAt: string;
@@ -32,6 +36,10 @@ interface RepresentativeRow {
   id: string;
   member_id: string;
   user_id: string;
+  email_id: string | null;
+  job_title: string | null;
+  biography: string | null;
+  links_json: string | null;
   source: OrganizationRepresentationSource;
   show_on_org_profile: number;
   joined_at: string;
@@ -41,13 +49,17 @@ interface RepresentativeRow {
 }
 
 const REPRESENTATIVE_COLUMNS =
-  "id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, blocked_at, blocked_by_user_id";
+  "id, member_id, user_id, email_id, job_title, biography, links_json, source, show_on_org_profile, joined_at, left_at, blocked_at, blocked_by_user_id";
 
 function toRepresentative(row: RepresentativeRow): OrganizationRepresentative {
   return {
     id: row.id,
     memberId: row.member_id,
     userId: row.user_id,
+    emailId: row.email_id,
+    jobTitle: row.job_title,
+    biography: row.biography,
+    linksJson: row.links_json,
     source: row.source,
     showOnOrgProfile: row.show_on_org_profile === 1,
     joinedAt: row.joined_at,
@@ -69,6 +81,10 @@ export async function buildAddRepresentativeStatement(
     memberId: string;
     userId: string;
     source: OrganizationRepresentationSource;
+    emailId?: string | null;
+    jobTitle?: string | null;
+    biography?: string | null;
+    linksJson?: string | null;
     showOnOrgProfile?: boolean;
     now?: string;
     condition?: AuthorizationEvidence;
@@ -99,12 +115,25 @@ export async function buildAddRepresentativeStatement(
       statement: db
         .prepare(
           `UPDATE organization_representatives
-              SET source = ?, show_on_org_profile = ?, joined_at = ?, left_at = NULL,
+              SET source = ?,
+                  email_id = CASE WHEN ? = 1 THEN ? ELSE email_id END,
+                  job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
+                  biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
+                  links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
+                  show_on_org_profile = ?, joined_at = ?, left_at = NULL,
                   blocked_at = NULL, blocked_by_user_id = NULL, updated_at = ?
             WHERE id = ? AND left_at IS NOT NULL AND blocked_at IS NULL${conditionSql}`,
         )
         .bind(
           input.source,
+          input.emailId !== undefined ? 1 : 0,
+          input.emailId ?? null,
+          input.jobTitle !== undefined ? 1 : 0,
+          input.jobTitle ?? null,
+          input.biography !== undefined ? 1 : 0,
+          input.biography ?? null,
+          input.linksJson !== undefined ? 1 : 0,
+          input.linksJson ?? null,
           input.showOnOrgProfile === false ? 0 : 1,
           now,
           now,
@@ -118,6 +147,10 @@ export async function buildAddRepresentativeStatement(
     representativeId,
     input.memberId,
     input.userId,
+    input.emailId ?? null,
+    input.jobTitle ?? null,
+    input.biography ?? null,
+    input.linksJson ?? null,
     input.source,
     input.showOnOrgProfile === false ? 0 : 1,
     now,
@@ -128,8 +161,9 @@ export async function buildAddRepresentativeStatement(
     ? db
         .prepare(
           `INSERT INTO organization_representatives
-             (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-           SELECT ?, ?, ?, ?, ?, ?, NULL, ?, ?
+             (id, member_id, user_id, email_id, job_title, biography, links_json,
+              source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?
             WHERE EXISTS (${input.condition.sql})
               AND NOT EXISTS (
                 SELECT 1 FROM organization_representatives existing
@@ -140,8 +174,9 @@ export async function buildAddRepresentativeStatement(
     : db
         .prepare(
           `INSERT INTO organization_representatives
-             (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+             (id, member_id, user_id, email_id, job_title, biography, links_json,
+              source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
         )
         .bind(...values);
   return { representativeId, statement };

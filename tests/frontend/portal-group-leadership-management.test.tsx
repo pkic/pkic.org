@@ -14,6 +14,7 @@ vi.mock("wouter/use-hash-location", () => ({
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ROLE_ID = "30000000-0000-4000-8000-000000000001";
+const MEMBER_ID = "20000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
@@ -56,41 +57,43 @@ function confirmDialogButton(label: string): HTMLButtonElement {
   return button;
 }
 
-async function pickUser(container: HTMLElement, email: string): Promise<void> {
-  const input = container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
+async function pickCapacity(container: HTMLElement, email: string): Promise<void> {
+  const input = container.querySelector<HTMLInputElement>(
+    'input[placeholder="Search name, email, organization, or category…"]',
+  )!;
   input.value = email;
   void act(() => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 275)));
-  const option = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
-    button.textContent?.includes(email),
-  );
-  expect(option).toBeDefined();
-  void act(() => option!.click());
+  const search = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === "Search",
+  )!;
+  await act(async () => search.click());
+  await settle();
+  const select = container.querySelector<HTMLSelectElement>('select[aria-label="Participation capacity"]')!;
+  select.value = MEMBER_ID;
+  void act(() => {
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
-function usersPage(id: string, email: string) {
+function membershipsPage(userId: string, email: string) {
   return {
-    users: [
+    memberships: [
       {
-        id,
+        id: MEMBER_ID,
+        groupId: GROUP_ID,
+        userId,
+        memberId: MEMBER_ID,
+        memberType: "organization",
+        userName: "Selected Person",
         email,
-        first_name: "Selected",
-        last_name: "Person",
-        organization_name: "Example Member",
-        role: "user",
-        active: 1,
-        created_at: "2026-08-01T00:00:00.000Z",
-        member_id: null,
-        member_category: null,
-        member_status: null,
-        member_organization_id: null,
-        member_organization_name: null,
-        links: [],
-        membership: null,
-        type: "contact_only",
-        eventParticipationCount: 0,
+        organizationName: "Example Member",
+        membershipCategory: "A",
+        source: "staff",
+        createdByUserId: null,
+        joinedAt: "2026-08-01T00:00:00.000Z",
+        leftAt: null,
       },
     ],
     page: { limit: 8, offset: 0, total: 1, hasMore: false },
@@ -124,6 +127,10 @@ describe("portal group leadership management", () => {
         {
           userRoleId: USER_ROLE_ID,
           userId: "40000000-0000-4000-8000-000000000001",
+          memberId: MEMBER_ID,
+          memberType: "organization",
+          organizationName: "Local Member Organization",
+          jobTitle: "Standards lead",
           userName: "Local Leader",
           email: "local@example.test",
           roleId: "role-group_lead",
@@ -140,6 +147,10 @@ describe("portal group leadership management", () => {
         {
           userRoleId: "30000000-0000-4000-8000-000000000002",
           userId: "40000000-0000-4000-8000-000000000002",
+          memberId: "20000000-0000-4000-8000-000000000002",
+          memberType: "organization",
+          organizationName: "Parent Member Organization",
+          jobTitle: "Policy lead",
           userName: "Parent Deputy",
           email: "parent@example.test",
           roleId: "role-group_deputy_lead",
@@ -212,19 +223,20 @@ describe("portal group leadership management", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ url, method, body });
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`) return json(usersPage(userId, "leader@example.test"));
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/memberships`)
+          return json(membershipsPage(userId, "leader@example.test"));
         return json(leadership);
       }),
     );
     const container = mount(<GroupLeadership groupId={GROUP_ID} />);
     await settle();
 
-    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
+    expect(container.querySelector('input[placeholder="Search name, email, organization, or category…"]')).toBeNull();
     const addLeadership = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent === "Add leadership",
     )!;
     await act(async () => addLeadership.click());
-    await pickUser(container, "leader@example.test");
+    await pickCapacity(container, "leader@example.test");
 
     const role = container.querySelector<HTMLSelectElement>("#managed-group-leadership-role")!;
     role.value = "role-group_deputy_lead";
@@ -247,10 +259,11 @@ describe("portal group leadership management", () => {
     );
     expect(request?.body).toMatchObject({
       userId,
+      memberId: MEMBER_ID,
       roleId: "role-group_deputy_lead",
     });
     expect((request?.body as { expiresAt: string }).expiresAt).toBe(new Date("2026-10-01T12:30").toISOString());
-    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
+    expect(container.querySelector('input[placeholder="Search name, email, organization, or category…"]')).toBeNull();
   });
 
   it("keeps a rejected leadership assignment visible and does not report success", async () => {
@@ -262,7 +275,8 @@ describe("portal group leadership management", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
-        if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`) return json(usersPage(userId, "leader@example.test"));
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/memberships`)
+          return json(membershipsPage(userId, "leader@example.test"));
         if ((init.method ?? "GET") === "POST") {
           return new Response(
             JSON.stringify({ error: { code: "GROUP_AUTHORIZATION_CHANGED", message: "Management access changed." } }),
@@ -274,7 +288,7 @@ describe("portal group leadership management", () => {
     );
     const onAssigned = vi.fn(async () => {});
     const container = mount(<GroupLeadershipAssignmentForm groupId={GROUP_ID} onAssigned={onAssigned} />);
-    await pickUser(container, "leader@example.test");
+    await pickCapacity(container, "leader@example.test");
 
     const add = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent === "Add",
@@ -285,8 +299,9 @@ describe("portal group leadership management", () => {
     expect(container.textContent).toContain("Management access changed.");
     expect(container.textContent).not.toContain("Leadership assignment added.");
     expect(onAssigned).not.toHaveBeenCalled();
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')?.value).toBe(
-      "leader@example.test",
-    );
+    expect(
+      container.querySelector<HTMLInputElement>('input[placeholder="Search name, email, organization, or category…"]')
+        ?.value,
+    ).toBe("leader@example.test");
   });
 });

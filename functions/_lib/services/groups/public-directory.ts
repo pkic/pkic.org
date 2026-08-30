@@ -3,7 +3,6 @@ import type { GroupLeadershipRoleId } from "../group-leadership-query";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { deterministicRepresentativeJoinSql } from "../membership/representative-lookup";
 import { toPublicRoleProfile, type PublicRoleProfileRow } from "../membership/public-role-profile";
 import { EFFECTIVE_GROUP_LINEAGE_CTE } from "./governance";
 import { getVisibleGroup } from "./read-model";
@@ -41,11 +40,13 @@ export async function getPublicGroupDirectory(db: DatabaseLike, idOrSlug: string
       ? all<PublicLeadershipRow>(
           db,
           `${EFFECTIVE_GROUP_LINEAGE_CTE}
-           SELECT ur.role_id, u.first_name, u.last_name, u.job_title,
+           SELECT ur.role_id, u.first_name, u.last_name,
+                  CASE WHEN represented_member.organization_id IS NULL THEN u.job_title ELSE rep.job_title END AS job_title,
                   o.id AS org_id, o.name AS org_name,
                   o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-                  COALESCE(rep.id, individual_member.id) AS member_id,
-                  u.headshot_r2_key, u.links_json,
+                  COALESCE(rep.id, represented_member.id) AS member_id,
+                  u.headshot_r2_key,
+                  CASE WHEN represented_member.organization_id IS NULL THEN u.links_json ELSE rep.links_json END AS links_json,
                   source_group.id AS source_group_id,
                   source_group.slug AS source_group_slug,
                   source_group.name AS source_group_name,
@@ -64,11 +65,20 @@ export async function getPublicGroupDirectory(db: DatabaseLike, idOrSlug: string
               AND ur.revoked_at IS NULL
               AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
              JOIN users u ON u.id = ur.user_id AND u.active = 1
-          ${deterministicRepresentativeJoinSql("u.id")}
-             LEFT JOIN members represented_member ON represented_member.id = rep.member_id
-             LEFT JOIN members individual_member
-               ON individual_member.user_id = u.id AND individual_member.status = 'active'
+             JOIN group_memberships membership
+               ON membership.group_id = source_group.id
+              AND membership.user_id = ur.user_id
+              AND membership.member_id = ur.member_id
+              AND membership.left_at IS NULL
+             JOIN members represented_member ON represented_member.id = membership.member_id
+              AND represented_member.status = 'active'
+             LEFT JOIN organization_representatives rep
+               ON rep.member_id = represented_member.id
+              AND rep.user_id = ur.user_id
+              AND rep.left_at IS NULL
+              AND rep.blocked_at IS NULL
              LEFT JOIN organizations o ON o.id = represented_member.organization_id
+            WHERE represented_member.organization_id IS NULL OR rep.id IS NOT NULL
             ORDER BY lineage.depth,
                      CASE ur.role_id WHEN 'role-group_lead' THEN 0 ELSE 1 END,
                      LOWER(COALESCE(u.last_name, '')),

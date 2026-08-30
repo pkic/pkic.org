@@ -20,13 +20,31 @@ const primaryUserId = "00000000-0000-4000-8000-000000000012";
 const coworkerUserId = "00000000-0000-4000-8000-000000000013";
 const memberId = "00000000-0000-4000-8000-000000000014";
 const blockedUserId = "00000000-0000-4000-8000-000000000015";
+const alternateEmailId = "00000000-0000-4000-8000-000000000016";
 
 let container: HTMLDivElement;
 
 function currentProfile(isOrgContact: boolean) {
   return myProfileSchema.parse({
     userId: contactUserId,
+    emailId: null,
     email: "contact@example.test",
+    emailAddresses: [
+      {
+        id: null,
+        email: "contact@example.test",
+        primary: true,
+        verifiedAt: "2026-01-01T00:00:00.000Z",
+        verificationMethod: "magic_link",
+      },
+      {
+        id: alternateEmailId,
+        email: "contact@example.org",
+        primary: false,
+        verifiedAt: "2026-01-02T00:00:00.000Z",
+        verificationMethod: "magic_link",
+      },
+    ],
     firstName: "Contact",
     lastName: "Person",
     preferredName: null,
@@ -104,6 +122,10 @@ function representativePage() {
     blockedByUserId: blocked ? contactUserId : null,
     createdAt: now,
     updatedAt: now,
+    emailId: null,
+    jobTitle: null,
+    biography: null,
+    links: [],
   });
   return organizationRepresentativesListResponseSchema.parse({
     representatives: [
@@ -181,6 +203,74 @@ afterEach(() => {
 });
 
 describe("portal organization-contact representative controls", () => {
+  it("updates the selected verified email and profile only for the active organization capacity", async () => {
+    const requests: Array<{ method: string; body: unknown }> = [];
+    const initial = currentProfile(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : undefined;
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : request!.url,
+          location.origin,
+        );
+        const method = init?.method ?? request?.method ?? "GET";
+        if (method === "GET" && url.pathname.endsWith("/representatives")) return json(representativePage());
+        if (method === "PATCH" && url.pathname === "/api/v1/users/current") {
+          const body = JSON.parse(String(init?.body));
+          requests.push({ method, body });
+          return json({
+            ...initial,
+            emailId: alternateEmailId,
+            email: "contact@example.org",
+            jobTitle: body.jobTitle,
+          });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+    profile.value = initial;
+    void act(() => render(<MyProfile />, container));
+    await settle();
+
+    const emailSelect = container.querySelector<HTMLSelectElement>("#portal-representation-email")!;
+    expect([...emailSelect.options].map((option) => option.textContent)).toEqual([
+      "contact@example.test (primary)",
+      "contact@example.org",
+    ]);
+    emailSelect.value = alternateEmailId;
+    void act(() => {
+      emailSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const jobTitle = [...container.querySelectorAll<HTMLInputElement>("input")].find(
+      (input) => input.value === "Officer",
+    )!;
+    jobTitle.value = "Organization-specific officer";
+    void act(() => {
+      jobTitle.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const form = emailSelect.closest("form")!;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    expect(requests).toEqual([
+      {
+        method: "PATCH",
+        body: expect.objectContaining({
+          emailId: alternateEmailId,
+          jobTitle: "Organization-specific officer",
+        }),
+      },
+    ]);
+    expect(profile.value).toMatchObject({
+      emailId: alternateEmailId,
+      email: "contact@example.org",
+      jobTitle: "Organization-specific officer",
+    });
+  });
+
   it("does not expose contact actions to an ordinary representative", () => {
     profile.value = currentProfile(false);
     void act(() => render(<MyProfile />, container));

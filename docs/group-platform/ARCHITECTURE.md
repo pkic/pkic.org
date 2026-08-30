@@ -133,6 +133,15 @@ All active representatives have equal ordinary participation and contribution
 rights. Primary and secondary contacts additionally manage the organization and
 its representative list.
 
+One user may represent several Members through the same authenticated session.
+The selected Member capacity is an untrusted session hint that every request
+revalidates against live representation state. Organization-specific email,
+job title, biography, and links come from that exact representation; the email
+references a verified user-owned address rather than copying it. Group
+leadership is assigned to an exact active `(group, user, Member)` participation
+row. Selecting another represented Member does not inherit that leadership,
+and ending the participation or representation revokes the assignment.
+
 ## Conditional enrollment
 
 Eligibility, automatic enrollment, and opt-out are independent policies:

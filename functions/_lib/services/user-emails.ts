@@ -1,8 +1,7 @@
 /**
- * Secondary email addresses on a user account -- staff-managed alias
- * only, does not affect login (magic-link/passkey auth continue to
- * resolve strictly off `users.normalized_email`). These aliases let staff
- * associate roster email variations without mutating or merging identities.
+ * Secondary email addresses on a user account. A verified address is an
+ * alternate sign-in identity for the same canonical user; an unverified
+ * address only reserves the namespace and supports staff reconciliation.
  */
 import {
   USER_EMAILS_SORT_COLUMNS,

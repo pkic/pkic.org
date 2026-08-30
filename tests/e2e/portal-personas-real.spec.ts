@@ -55,7 +55,8 @@ async function jsonResponse(
 }
 
 async function createMember(page: Page): Promise<{ email: string; userId: string; memberId: string }> {
-  const email = `e2e-persona-${Date.now()}@persona.example.test`;
+  const identity = crypto.randomUUID();
+  const email = `e2e-persona-${identity}@persona-${identity}.example.test`;
   const startSince = await capturedEmailCount();
   const start = await jsonResponse(page.request, "POST", "/api/v1/members/join/start", {
     email,
@@ -76,7 +77,7 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
     applicantEmail: email,
     applicantName: "E2E Persona Member",
     membershipCategory: "A",
-    organizationName: "Persona Test Organization",
+    organizationName: `Persona Test Organization ${identity}`,
     joinToken: stringProperty(verified, "joinToken"),
     answers: {
       reason: "Real Worker/D1 portal persona coverage",
@@ -143,7 +144,7 @@ async function createGroup(
   return recordProperty(body, "group");
 }
 
-/** Create a real staff identity, then detach its membership before assigning a scoped group role. */
+/** Create a real staff identity, then detach its membership before granting scoped group permissions. */
 async function createStaffOnly(page: Page, groupIds: string[], stamp: string): Promise<string> {
   const email = `e2e-staff-${stamp}@persona.example.test`;
   const created = await jsonResponse(page.request, "POST", "/api/v1/members", {
@@ -164,11 +165,14 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
   // access, rather than pretending the global admin is a staff persona.
   await jsonResponse(page.request, "DELETE", `/api/v1/members/capacities/${membershipId}`);
   for (const groupId of groupIds) {
-    await jsonResponse(page.request, "POST", `/api/v1/users/${userId}/roles`, {
-      roleId: "role-group_lead",
-      contextType: "group",
-      contextId: groupId,
-    });
+    for (const permission of ["groups:read", "groups:write"]) {
+      await jsonResponse(page.request, "POST", "/api/v1/permissions/grants", {
+        userId,
+        permission,
+        contextType: "group",
+        contextId: groupId,
+      });
+    }
   }
   return email;
 }
@@ -223,6 +227,17 @@ test("real Worker/D1 sessions resolve member, inherited, local-only, staff, and 
     `e2e-persona-local-${stamp}`,
     stringProperty(parent, "id"),
   );
+  const localLeader = await createMember(adminPage);
+  for (const groupId of [stringProperty(parent, "id"), stringProperty(localOnlyChild, "id")]) {
+    await jsonResponse(adminPage.request, "POST", `/api/v1/groups/${groupId}/memberships/${localLeader.userId}`, {
+      capacitySelection: { mode: "selected", memberIds: [localLeader.memberId] },
+    });
+  }
+  await jsonResponse(adminPage.request, "POST", `/api/v1/groups/${stringProperty(localOnlyChild, "id")}/leadership`, {
+    userId: localLeader.userId,
+    memberId: localLeader.memberId,
+    roleId: "role-group_lead",
+  });
   const scopedStaffEmail = await createStaffOnly(
     adminPage,
     [stringProperty(parent, "id"), stringProperty(localOnlyChild, "id")],
@@ -244,6 +259,7 @@ test("real Worker/D1 sessions resolve member, inherited, local-only, staff, and 
   }
   await jsonResponse(adminPage.request, "POST", `/api/v1/groups/${stringProperty(parent, "id")}/leadership`, {
     userId: member.userId,
+    memberId: member.memberId,
     roleId: "role-group_lead",
   });
 
@@ -269,7 +285,7 @@ test("real Worker/D1 sessions resolve member, inherited, local-only, staff, and 
   await expect(localOnlyNavigation.getByRole("link", { name: "Settings" })).toHaveCount(0);
 
   // A distinct staff identity, with no membership capacity, can enter the
-  // portal through its scoped group-lead role.
+  // portal through explicit contextual group permissions.
   const staffContext = await browser.newContext();
   const staffPage = await staffContext.newPage();
   await signInToPortal(staffPage, scopedStaffEmail);

@@ -186,7 +186,7 @@ describe("Post-approval onboarding", () => {
     expect(await queryAll(env.DB, "SELECT id FROM members WHERE id = ?", body.memberId)).toHaveLength(1);
   });
 
-  it("carries job_title/linkedin from the application's answers into the provisioned user (Fix 5b)", async () => {
+  it("carries job_title/linkedin from the application's answers into the provisioned representation", async () => {
     const { id } = await createEcReviewApplication(
       {},
       {
@@ -204,9 +204,17 @@ describe("Post-approval onboarding", () => {
       "SELECT job_title, links_json FROM users WHERE id = ?",
       body.userId,
     );
-    expect(userRows[0].job_title).toBe("Chief Cryptography Officer");
-    expect(userRows[0].links_json).toBeTruthy();
-    const links = JSON.parse(userRows[0].links_json as string) as string[];
+    expect(userRows).toEqual([{ job_title: null, links_json: null }]);
+    const representations = await queryAll<{ job_title: string | null; links_json: string | null }>(
+      env.DB,
+      `SELECT job_title, links_json
+         FROM organization_representatives
+        WHERE user_id = ? AND left_at IS NULL`,
+      body.userId,
+    );
+    expect(representations[0].job_title).toBe("Chief Cryptography Officer");
+    expect(representations[0].links_json).toBeTruthy();
+    const links = JSON.parse(representations[0].links_json as string) as string[];
     expect(links).toEqual(["https://linkedin.com/in/newmember"]);
   });
 

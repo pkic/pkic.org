@@ -9,7 +9,7 @@
 import type { PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
-import { first } from "../db/queries";
+import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
@@ -39,6 +39,7 @@ import { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH } from "./session-co
 import {
   assertEmailAuthCapabilityEmail,
   commitEmailAuthRedemption,
+  emailAuthCapabilityMatchesEmail,
   queueEmailAuthCapability,
   verifyEmailAuthCapabilityToken,
 } from "./email-auth-capabilities";
@@ -157,6 +158,7 @@ async function toStaff(
   staff: EligibleStaffUser,
   sessionId: string,
   expiresAt: string,
+  memberId: string | null,
   state?: string | null,
 ): Promise<UserBackedAuthAdmin> {
   return createUserBackedAuthAdmin({
@@ -164,7 +166,8 @@ async function toStaff(
     email: staff.email,
     role: staff.role,
     scopes: staff.role === "admin" ? [...AUTH_SCOPES] : [],
-    grants: await computeGrantsForUser(db, staff.id),
+    grants: await computeGrantsForUser(db, staff.id, memberId),
+    memberId,
     sessionId,
     expiresAt,
     ...(state ? { state } : {}),
@@ -176,6 +179,71 @@ async function findActiveIdentity(
   userId: string,
 ): Promise<{ id: string; email: string; normalized_email: string } | null> {
   return first(db, "SELECT id, email, normalized_email FROM users WHERE id = ? AND active = 1", [userId]);
+}
+
+interface SignInIdentity {
+  id: string;
+  email: string;
+  normalized_email: string;
+  sign_in_email: string;
+  normalized_sign_in_email: string;
+  sign_in_email_id: string | null;
+}
+
+async function findActiveIdentityBySignInEmail(db: DatabaseLike, email: string): Promise<SignInIdentity | null> {
+  return first<SignInIdentity>(
+    db,
+    `SELECT u.id, u.email, u.normalized_email,
+            u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email,
+            NULL AS sign_in_email_id
+       FROM users u
+      WHERE u.normalized_email = ? AND u.active = 1
+     UNION ALL
+     SELECT u.id, u.email, u.normalized_email,
+            ue.email AS sign_in_email, ue.normalized_email AS normalized_sign_in_email,
+            ue.id AS sign_in_email_id
+       FROM user_emails ue
+       JOIN users u ON u.id = ue.user_id AND u.active = 1
+      WHERE ue.normalized_email = ? AND ue.verified_at IS NOT NULL
+      LIMIT 1`,
+    [normalizeEmail(email), normalizeEmail(email)],
+  );
+}
+
+async function findCapabilitySignInIdentity(
+  db: DatabaseLike,
+  subjectId: string,
+  signingSecret: string,
+  capability: Parameters<typeof emailAuthCapabilityMatchesEmail>[0]["capability"],
+): Promise<SignInIdentity | null> {
+  const addresses = await all<SignInIdentity>(
+    db,
+    `SELECT u.id, u.email, u.normalized_email,
+            u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email,
+            NULL AS sign_in_email_id
+       FROM users u
+      WHERE u.id = ? AND u.active = 1
+     UNION ALL
+     SELECT u.id, u.email, u.normalized_email,
+            ue.email AS sign_in_email, ue.normalized_email AS normalized_sign_in_email,
+            ue.id AS sign_in_email_id
+       FROM user_emails ue
+       JOIN users u ON u.id = ue.user_id AND u.active = 1
+      WHERE u.id = ? AND ue.verified_at IS NOT NULL`,
+    [subjectId, subjectId],
+  );
+  for (const address of addresses) {
+    if (
+      await emailAuthCapabilityMatchesEmail({
+        signingSecret,
+        capability,
+        currentEmail: address.sign_in_email,
+      })
+    ) {
+      return address;
+    }
+  }
+  return null;
 }
 
 /** Resolve identity and capacities from one session row and live D1 state. */
@@ -216,7 +284,9 @@ export async function resolveUserSessionFromRequest(
     throw new AppError(403, "AUTH_FORBIDDEN", "This account has no active portal capacity");
   }
   const staffActor =
-    staff && staffActive ? await toStaff(db, staff, row.id, elevatedStaffExpiry, verified.claims.state) : null;
+    staff && staffActive
+      ? await toStaff(db, staff, row.id, elevatedStaffExpiry, member?.memberId ?? null, verified.claims.state)
+      : null;
   return {
     identity: { id: identity.id, email: identity.email },
     sessionId: row.id,
@@ -304,11 +374,7 @@ export async function queueUserSignInCapability(payload: {
   identity: { id: string; email: string };
   capacities: Array<"staff" | "member" | "sponsor">;
 } | null> {
-  const identity = await first<{ id: string; email: string }>(
-    payload.db,
-    "SELECT id, email FROM users WHERE normalized_email = ? AND active = 1",
-    [normalizeEmail(payload.email)],
-  );
+  const identity = await findActiveIdentityBySignInEmail(payload.db, payload.email);
   if (!identity) return null;
   const [staff, member, sponsors] = await Promise.all([
     findEligibleStaffUserById(payload.db, identity.id),
@@ -320,14 +386,14 @@ export async function queueUserSignInCapability(payload: {
     signingSecret: payload.signingSecret,
     purpose: "user_sign_in",
     subjectId: identity.id,
-    email: identity.email,
+    email: identity.sign_in_email,
     ttlSeconds: payload.ttlMinutes * 60,
     ipHash: payload.ipHash,
     userAgentHash: payload.userAgentHash,
   });
   return {
     queuedToken: capability.queuedToken,
-    identity,
+    identity: { id: identity.id, email: identity.email },
     capacities: [
       ...(staff ? ["staff" as const] : []),
       ...(member ? ["member" as const] : []),
@@ -353,8 +419,18 @@ export async function redeemUserSignInCapability(
     ipHash: payload.ipHash,
     userAgentHash: payload.userAgentHash,
   });
-  const identity = await findActiveIdentity(db, capability.subjectId);
-  if (!identity) throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has portal access");
+  const signInIdentity = await findCapabilitySignInIdentity(
+    db,
+    capability.subjectId,
+    payload.signingSecret,
+    capability,
+  );
+  if (!signInIdentity) throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid magic link token");
+  const identity = {
+    id: signInIdentity.id,
+    email: signInIdentity.email,
+    normalized_email: signInIdentity.normalized_email,
+  };
   const [staff, member, sponsors] = await Promise.all([
     findEligibleStaffUserById(db, capability.subjectId),
     findEligibleMemberById(db, capability.subjectId),
@@ -366,15 +442,15 @@ export async function redeemUserSignInCapability(
   await assertEmailAuthCapabilityEmail({
     signingSecret: payload.signingSecret,
     capability,
-    currentEmail: identity.email,
+    currentEmail: signInIdentity.sign_in_email,
   });
   const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
   const authorizationEvidence = [
-    ...(staff ? [staffSignInAuthorizationEvidence(identity.id, normalizeEmail(identity.email))] : []),
-    ...(member ? [memberSignInAuthorizationEvidence(identity.id, normalizeEmail(identity.email))] : []),
+    ...(staff ? [staffSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)] : []),
+    ...(member ? [memberSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)] : []),
     ...(sponsors.length > 0
-      ? [sponsorUserSignInAuthorizationEvidence(identity.id, normalizeEmail(identity.email))]
+      ? [sponsorUserSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)]
       : []),
   ];
   await commitEmailAuthRedemption(db, {
@@ -396,15 +472,19 @@ export async function redeemUserSignInCapability(
     createdAt: verifiedAt,
     authorizationEvidence,
     statements: [
-      prepareVerifyPrimaryEmailStatement(db, {
-        userId: identity.id,
-        normalizedEmail: normalizeEmail(identity.email),
-        method: "magic_link",
-        verifiedAt,
-      }),
+      ...(signInIdentity.sign_in_email_id === null
+        ? [
+            prepareVerifyPrimaryEmailStatement(db, {
+              userId: identity.id,
+              normalizedEmail: signInIdentity.normalized_sign_in_email,
+              method: "magic_link",
+              verifiedAt,
+            }),
+          ]
+        : []),
       ...(await prepareVerifiedDomainAssociationStatements(db, {
         userId: identity.id,
-        normalizedEmail: normalizeEmail(identity.email),
+        normalizedEmail: signInIdentity.normalized_sign_in_email,
         at: verifiedAt,
       })),
       prepared.statement,
@@ -415,7 +495,9 @@ export async function redeemUserSignInCapability(
     identity,
     sessionId: prepared.sessionId,
     expiresAt: prepared.expiresAt,
-    ...(staff && staffExpiry ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry) } : {}),
+    ...(staff && staffExpiry
+      ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry, member?.memberId ?? null) }
+      : {}),
     ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
     sponsors,
   };
@@ -498,7 +580,9 @@ export async function redeemSponsorSignInCapability(
     identity: { id: preparedUser.user.id, email: preparedUser.user.email },
     sessionId: prepared.sessionId,
     expiresAt: prepared.expiresAt,
-    ...(staff && staffExpiry ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry) } : {}),
+    ...(staff && staffExpiry
+      ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry, member?.memberId ?? null) }
+      : {}),
     ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
     sponsors,
   };

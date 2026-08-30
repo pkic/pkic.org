@@ -16,8 +16,11 @@ import { getMemberApplicationById } from "./membership/applications/queries";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
 import type { MyApplicationsListQuery } from "../../../assets/shared/schemas/me";
-import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { publicUserHeadshotPath } from "./user-headshot";
+import { memberSessionAuthorizationEvidence } from "../auth/identity-capacities";
+import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
+import type { EmailVerificationMethod } from "./email-verification";
 
 export interface MyOrganizationRepresentative {
   userId: string;
@@ -30,7 +33,15 @@ export interface MyOrganizationRepresentative {
 
 export interface MyProfile {
   userId: string;
+  emailId: string | null;
   email: string;
+  emailAddresses: Array<{
+    id: string | null;
+    email: string;
+    primary: boolean;
+    verifiedAt: string | null;
+    verificationMethod: EmailVerificationMethod | null;
+  }>;
   firstName: string | null;
   lastName: string | null;
   preferredName: string | null;
@@ -58,6 +69,7 @@ export interface MyProfile {
 }
 
 interface MyProfileRow {
+  email_id: string | null;
   email: string;
   first_name: string | null;
   last_name: string | null;
@@ -93,13 +105,16 @@ function representativeDisplayName(row: OrganizationRepresentativeRow): string |
 function toProfile(
   row: MyProfileRow,
   member: AuthMember,
+  emailAddresses: MyProfile["emailAddresses"],
   organizationRepresentatives: MyOrganizationRepresentative[] | null,
   isOrgContact: boolean,
 ): MyProfile {
   const isIndividual = row.organization_id === null;
   return {
     userId: member.userId,
+    emailId: row.email_id,
     email: row.email,
+    emailAddresses,
     firstName: row.first_name,
     lastName: row.last_name,
     preferredName: row.preferred_name,
@@ -124,7 +139,12 @@ function toProfile(
 export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promise<MyProfile> {
   const row = await first<MyProfileRow>(
     db,
-    `SELECT u.email, u.first_name, u.last_name, u.preferred_name, u.job_title, u.biography, u.links_json,
+    `SELECT r.email_id,
+            CASE WHEN m.organization_id IS NULL THEN u.email ELSE COALESCE(selected_email.email, u.email) END AS email,
+            u.first_name, u.last_name, u.preferred_name,
+            CASE WHEN m.organization_id IS NULL THEN u.job_title ELSE r.job_title END AS job_title,
+            CASE WHEN m.organization_id IS NULL THEN u.biography ELSE r.biography END AS biography,
+            CASE WHEN m.organization_id IS NULL THEN u.links_json ELSE r.links_json END AS links_json,
             u.organization_name, u.headshot_r2_key, mca.category_code, m.organization_id,
             COALESCE(r.show_on_org_profile, 1) AS show_on_org_profile,
             m.member_since, m.created_at AS member_created_at, o.name AS org_name
@@ -133,6 +153,7 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
      JOIN member_category_assignments mca ON mca.member_id = m.id
      LEFT JOIN organizations o ON o.id = m.organization_id
      LEFT JOIN organization_representatives r ON r.member_id = m.id AND r.user_id = u.id AND r.left_at IS NULL
+     LEFT JOIN user_emails selected_email ON selected_email.id = r.email_id
      WHERE u.id = ?`,
     [member.memberId, member.userId],
   );
@@ -140,16 +161,45 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     throw new AppError(404, "NOT_FOUND", "Profile not found");
   }
 
+  const emailAddresses = await all<{
+    id: string | null;
+    email: string;
+    is_primary: number;
+    verified_at: string | null;
+    verification_method: EmailVerificationMethod | null;
+  }>(
+    db,
+    `SELECT NULL AS id, email, 1 AS is_primary, email_verified_at AS verified_at,
+            email_verification_method AS verification_method
+       FROM users WHERE id = ?
+     UNION ALL
+     SELECT id, email, 0 AS is_primary, verified_at, verification_method
+       FROM user_emails
+      WHERE user_id = ? AND verified_at IS NOT NULL
+      ORDER BY 3 DESC, email ASC`,
+    [member.userId, member.userId],
+  ).then((addresses) =>
+    addresses.map((address) => ({
+      id: address.id,
+      email: address.email,
+      primary: address.is_primary === 1,
+      verifiedAt: address.verified_at,
+      verificationMethod: address.verification_method,
+    })),
+  );
+
   let organizationRepresentatives: MyOrganizationRepresentative[] | null = null;
   let isOrgContact = false;
   if (row.organization_id) {
     const [repRows, holders] = await Promise.all([
       all<OrganizationRepresentativeRow>(
         db,
-        `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name, u.email,
+        `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name,
+                COALESCE(selected_email.email, u.email) AS email,
                 r.show_on_org_profile
          FROM organization_representatives r
          JOIN users u ON u.id = r.user_id
+         LEFT JOIN user_emails selected_email ON selected_email.id = r.email_id
          WHERE r.member_id = ? AND r.left_at IS NULL
          ORDER BY u.first_name, u.last_name`,
         [member.memberId],
@@ -167,13 +217,14 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     isOrgContact = member.userId === holders.primaryContactUserId || member.userId === holders.secondaryContactUserId;
   }
 
-  return toProfile(row, member, organizationRepresentatives, isOrgContact);
+  return toProfile(row, member, emailAddresses, organizationRepresentatives, isOrgContact);
 }
 
 export interface MyProfileUpdateInput {
   firstName?: string;
   lastName?: string;
   preferredName?: string;
+  emailId?: string | null;
   jobTitle?: string;
   biography?: string;
   links?: string[];
@@ -192,16 +243,21 @@ export async function updateMyProfile(
     throw new AppError(422, "NO_ORGANIZATION", "This preference only applies to organization representatives");
   }
 
+  if (input.emailId !== undefined && !member.organizationId) {
+    throw new AppError(422, "NO_ORGANIZATION", "A contextual email only applies to an organization representation");
+  }
+
   const statements = [
+    prepareAuthorizationGuard(db, memberSessionAuthorizationEvidence(member)),
     db
       .prepare(
         `UPDATE users
          SET first_name = COALESCE(?, first_name),
              last_name = COALESCE(?, last_name),
              preferred_name = COALESCE(?, preferred_name),
-             job_title = COALESCE(?, job_title),
-             biography = COALESCE(?, biography),
-             links_json = COALESCE(?, links_json),
+             job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
+             biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
+             links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
              organization_name = COALESCE(?, organization_name),
              updated_at = ?
          WHERE id = ?`,
@@ -210,32 +266,71 @@ export async function updateMyProfile(
         input.firstName ?? null,
         input.lastName ?? null,
         input.preferredName ?? null,
+        member.organizationId === null && input.jobTitle !== undefined ? 1 : 0,
         input.jobTitle ?? null,
+        member.organizationId === null && input.biography !== undefined ? 1 : 0,
         input.biography ?? null,
+        member.organizationId === null && input.links !== undefined ? 1 : 0,
         input.links !== undefined ? serializeLinks(input.links) : null,
         member.organizationId === null ? (input.organizationName ?? null) : null,
         now,
         member.userId,
       ),
   ];
-  if (input.showOnOrgProfile !== undefined) {
+  if (member.organizationId) {
     statements.push(
       db
         .prepare(
           `UPDATE organization_representatives
-              SET show_on_org_profile = ?, updated_at = ?
-            WHERE member_id = ? AND user_id = ? AND left_at IS NULL`,
+              SET email_id = CASE WHEN ? = 1 THEN ? ELSE email_id END,
+                  job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
+                  biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
+                  links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
+                  show_on_org_profile = CASE WHEN ? = 1 THEN ? ELSE show_on_org_profile END,
+                  updated_at = ?
+            WHERE member_id = ? AND user_id = ? AND left_at IS NULL AND blocked_at IS NULL`,
         )
-        .bind(input.showOnOrgProfile ? 1 : 0, now, member.memberId, member.userId),
+        .bind(
+          input.emailId !== undefined ? 1 : 0,
+          input.emailId ?? null,
+          input.jobTitle !== undefined ? 1 : 0,
+          input.jobTitle ?? null,
+          input.biography !== undefined ? 1 : 0,
+          input.biography ?? null,
+          input.links !== undefined ? 1 : 0,
+          input.links !== undefined ? serializeLinks(input.links) : null,
+          input.showOnOrgProfile !== undefined ? 1 : 0,
+          input.showOnOrgProfile ? 1 : 0,
+          now,
+          member.memberId,
+          member.userId,
+        ),
     );
   }
   statements.push(
-    prepareAuditLog(db, "member", member.userId, "user_profile_updated", "user", member.userId, {
+    prepareAuditLogAfterOneChange(db, "member", member.userId, "user_profile_updated", "user", member.userId, {
       fields: Object.keys(input).sort(),
       memberId: member.memberId,
     }),
   );
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "MEMBERSHIP_CONTEXT_CHANGED",
+        "The active membership changed before the profile was saved",
+      );
+    }
+    if (error instanceof Error && error.message.includes("REPRESENTATIVE_EMAIL_INVALID")) {
+      throw new AppError(422, "REPRESENTATIVE_EMAIL_INVALID", "Select a verified email address owned by this account");
+    }
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "PROFILE_CHANGED", "The profile changed before it was saved");
+    }
+    throw error;
+  }
 
   return getMyProfile(db, member);
 }

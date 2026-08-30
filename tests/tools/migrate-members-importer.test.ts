@@ -190,9 +190,22 @@ memberType: H5
     );
     expect(categoryAssignments.map((r) => r.category_code)).toEqual(["A", "H5"]);
 
-    const representatives = queryD1(persistTo, `SELECT show_on_org_profile FROM organization_representatives`);
+    const representatives = queryD1(
+      persistTo,
+      `SELECT show_on_org_profile, job_title, biography, links_json FROM organization_representatives`,
+    );
     expect(representatives).toHaveLength(1);
-    expect(representatives[0]).toMatchObject({ show_on_org_profile: 1 });
+    expect(representatives[0]).toMatchObject({
+      show_on_org_profile: 1,
+      job_title: "CEO",
+      biography: null,
+      links_json: JSON.stringify(["https://linkedin.com/in/alice-anderson"]),
+    });
+    const importedUserProfile = queryD1(
+      persistTo,
+      "SELECT job_title, biography, links_json FROM users WHERE email = 'alice@acme.example'",
+    );
+    expect(importedUserProfile).toEqual([{ job_title: null, biography: null, links_json: null }]);
 
     const primaryContactGrants = queryD1(
       persistTo,

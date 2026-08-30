@@ -141,8 +141,10 @@ interface RepresentativeRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  email_id: string | null;
   headshot_r2_key: string | null;
   job_title: string | null;
+  biography: string | null;
   links_json: string | null;
   show_on_org_profile: number;
   created_at: string;
@@ -174,13 +176,14 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
 async function fetchRepresentatives(db: DatabaseLike, organizationId: string): Promise<RepresentativeRow[]> {
   return all<RepresentativeRow>(
     db,
-    `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name, u.email,
-            u.headshot_r2_key, u.job_title,
-            u.links_json,
+    `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name,
+            COALESCE(selected_email.email, u.email) AS email, r.email_id,
+            u.headshot_r2_key, r.job_title, r.biography, r.links_json,
             r.show_on_org_profile, r.created_at
      FROM organization_representatives r
      JOIN members m ON m.id = r.member_id
      JOIN users u ON u.id = r.user_id
+     LEFT JOIN user_emails selected_email ON selected_email.id = r.email_id
      WHERE m.organization_id = ? AND r.left_at IS NULL
      ORDER BY r.created_at ASC`,
     [organizationId],
@@ -212,9 +215,11 @@ async function toOrgDetail(
       membershipId: memberId,
       userId: r.user_id,
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
+      emailId: r.email_id,
       email: r.email,
       headshotUrl: publicUserHeadshotPath(r.headshot_r2_key),
       jobTitle: r.job_title,
+      biography: r.biography,
       links: parseLinksJson(r.links_json),
       status: "active",
       showOnOrgProfile: r.show_on_org_profile === 1,

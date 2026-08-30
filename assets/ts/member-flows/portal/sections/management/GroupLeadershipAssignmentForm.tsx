@@ -3,12 +3,36 @@ import {
   GROUP_LEADERSHIP_ROLE_IDS,
   groupLeadershipAssignSchema,
   groupLeadershipListResponseSchema,
+  groupMembershipsListResponseSchema,
   type GroupLeadershipAssignment,
+  type GroupMembership,
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
+import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { ApiClientError, postJson } from "../../../../shared/api-client";
+import type { ServerCatalog } from "../../../../shared/server-catalog";
 import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
+
+function capacityLabel(membership: GroupMembership): string {
+  const capacity =
+    membership.memberType === "organization"
+      ? (membership.organizationName ?? "Organization")
+      : `Individual membership${membership.membershipCategory ? ` (${membership.membershipCategory})` : ""}`;
+  return `${membership.userName} — ${capacity}`;
+}
+
+function leadershipCapacityCatalog(groupId: string): ServerCatalog<GroupMembership, unknown> {
+  return {
+    endpoint: `/api/v1/groups/${encodeURIComponent(groupId)}/memberships`,
+    params: { active: "true" },
+    sort: "user_name",
+    responseSchema: groupMembershipsListResponseSchema,
+    resolveItems: (response) => groupMembershipsListResponseSchema.parse(response).memberships,
+    resolvePage: (response) => groupMembershipsListResponseSchema.parse(response).page,
+    itemKey: (membership) => membership.id,
+    itemLabel: capacityLabel,
+  };
+}
 
 export function GroupLeadershipAssignmentForm({
   groupId,
@@ -19,7 +43,7 @@ export function GroupLeadershipAssignmentForm({
   onAssigned: () => Promise<void>;
   onCancel?: () => void;
 }) {
-  const [user, setUser] = useState<PickedUser | null>(null);
+  const [membership, setMembership] = useState<GroupMembership | null>(null);
   const [roleId, setRoleId] = useState<GroupLeadershipAssignment["roleId"]>("role-group_lead");
   const [expiresAt, setExpiresAt] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,13 +52,14 @@ export function GroupLeadershipAssignmentForm({
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
-    if (!user) return;
+    if (!membership) return;
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
       const input = groupLeadershipAssignSchema.parse({
-        userId: user.id,
+        userId: membership.userId,
+        memberId: membership.memberId,
         roleId,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       });
@@ -43,7 +68,7 @@ export function GroupLeadershipAssignmentForm({
         input,
         groupLeadershipListResponseSchema,
       );
-      setUser(null);
+      setMembership(null);
       setExpiresAt("");
       await onAssigned();
       setSaved(true);
@@ -73,12 +98,15 @@ export function GroupLeadershipAssignmentForm({
       {saved && <div class="alert alert-success mb-0">Leadership assignment added.</div>}
       <div class="row g-2 align-items-end">
         <div class="col-lg-5">
-          <label class="form-label small fw-semibold">User</label>
-          <UserPicker
-            value={user}
-            onChange={setUser}
+          <ServerSearchSelect
+            catalog={leadershipCapacityCatalog(groupId)}
+            label="Participation capacity"
+            value={membership?.id ?? null}
+            selectedLabel={membership ? capacityLabel(membership) : undefined}
+            placeholder="Select a person and Member capacity…"
+            searchPlaceholder="Search name, email, organization, or category…"
+            onChange={setMembership}
             disabled={saving}
-            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/users`}
           />
         </div>
         <div class="col-lg-3">
@@ -115,7 +143,7 @@ export function GroupLeadershipAssignmentForm({
           />
         </div>
         <div class="col-lg-1">
-          <button class="btn btn-sm btn-success w-100" type="submit" disabled={saving || !user}>
+          <button class="btn btn-sm btn-success w-100" type="submit" disabled={saving || !membership}>
             {saving ? "Adding…" : "Add"}
           </button>
         </div>

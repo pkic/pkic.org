@@ -30,6 +30,7 @@ import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { membershipApplicationsListResponseSchema } from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -454,11 +455,16 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
   it("a group lead is denied consortium-wide membership:write (403)", async () => {
     const { id } = await createApplication();
     const staffId = await insertUser("wg-chair-only@example.test");
-    await assignRole(staffId, "role-group_lead", adminId, {
-      type: "group",
-      id: "20000000-0000-4000-8000-000000000003",
+    const leadership = await grantGroupLeadershipCapacity(env.DB, "20000000-0000-4000-8000-000000000003", staffId, {
+      grantedByUserId: adminId,
     });
-    const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
+    const staffToken = await createAdminSession(
+      env.DB,
+      staffId,
+      "staff-wg-chair-token",
+      undefined,
+      leadership.memberId,
+    );
 
     const response = await call(staffToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",

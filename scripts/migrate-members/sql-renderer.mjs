@@ -155,15 +155,33 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
  * One durable `organization_representatives` row for each (org, user) pair.
  * INSERT OR IGNORE keeps the migration importer idempotent without changing
  * an existing association's source or lifecycle state.
+ * @param {string} normalizedOrgName
+ * @param {string} normalizedEmail
+ * @param {boolean} showOnOrgProfile
+ * @param {{ jobTitle?: string | null, biography?: string | null, linksJson?: string | null }} [profile]
  */
-export function buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, showOnOrgProfile) {
+export function buildOrganizationRepresentativeStatement(
+  normalizedOrgName,
+  normalizedEmail,
+  showOnOrgProfile,
+  { jobTitle = null, biography = null, linksJson = null } = {},
+) {
   return `
-INSERT OR IGNORE INTO organization_representatives (id, member_id, user_id, source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, m.id, u.id, 'migration', ${showOnOrgProfile ? 1 : 0}, datetime('now'), NULL, datetime('now'), datetime('now')
+INSERT INTO organization_representatives
+  (id, member_id, user_id, email_id, job_title, biography, links_json,
+   source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, m.id, u.id, NULL,
+       ${toSqlNullableText(jobTitle)}, ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
+       'migration', ${showOnOrgProfile ? 1 : 0}, datetime('now'), NULL, datetime('now'), datetime('now')
 FROM members m
 JOIN organizations o ON o.id = m.organization_id
 JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
-WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
+WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
+ON CONFLICT(member_id, user_id) DO UPDATE SET
+  job_title = COALESCE(organization_representatives.job_title, excluded.job_title),
+  biography = COALESCE(organization_representatives.biography, excluded.biography),
+  links_json = COALESCE(organization_representatives.links_json, excluded.links_json),
+  updated_at = datetime('now');
 `;
 }
 

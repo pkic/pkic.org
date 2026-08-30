@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { groupDirectoryResponseSchema } from "../assets/shared/schemas/group-directory";
 import { callApi } from "./helpers/app";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { resetDb } from "./helpers/reset-db";
 
 async function insertGroup(options: {
@@ -46,18 +47,14 @@ async function insertLeader(
 ) {
   const userId = crypto.randomUUID();
   const [firstName, ...rest] = name.split(" ");
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users
-         (id, email, normalized_email, first_name, last_name, job_title, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null, jobTitle),
-    env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, created_at)
-       VALUES (?, ?, ?, 'group', ?, datetime('now'))`,
-    ).bind(crypto.randomUUID(), userId, roleId, groupId),
-  ]);
+  await env.DB.prepare(
+    `INSERT INTO users
+       (id, email, normalized_email, first_name, last_name, job_title, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null, jobTitle)
+    .run();
+  await grantGroupLeadershipCapacity(env.DB, groupId, userId, { roleId });
   return userId;
 }
 

@@ -71,6 +71,7 @@ export interface ProvisionRepresentativeInput {
   name: string;
   email: string;
   jobTitle?: string | null;
+  biography?: string | null;
   links?: string[] | null;
 }
 
@@ -172,15 +173,24 @@ async function resolveProvisioningGroups(
   return eligible.map(({ id, slug, name }) => ({ id, slug, name }));
 }
 
-async function buildRepresentativeUserStatement(db: DatabaseLike, rep: ProvisionRepresentativeInput) {
+async function buildRepresentativeUserStatement(
+  db: DatabaseLike,
+  rep: ProvisionRepresentativeInput,
+  includePersonalProfile: boolean,
+) {
   const { firstName, lastName } = splitPersonName(rep.name);
   return buildFindOrCreateUserStatement(db, {
     email: rep.email,
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
-    jobTitle: rep.jobTitle ?? undefined,
-    linksJson: rep.links && rep.links.length > 0 ? serializeLinks(rep.links) : null,
-    allowProfileUpdate: true,
+    ...(includePersonalProfile
+      ? {
+          jobTitle: rep.jobTitle ?? undefined,
+          biography: rep.biography ?? undefined,
+          linksJson: rep.links && rep.links.length > 0 ? serializeLinks(rep.links) : null,
+          allowProfileUpdate: true,
+        }
+      : {}),
   });
 }
 
@@ -221,7 +231,7 @@ async function buildProvisionIndividualMemberships(
       }
     }
 
-    const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep);
+    const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep, true);
     if (userStatement) statements.push(userStatement);
 
     const { memberId, statements: memberStatements } = buildCreateIndividualMemberStatements(
@@ -433,12 +443,15 @@ async function buildProvisionOrganizationTiedMemberships(
   const pending: { rep: ProvisionRepresentativeInput; user: UserRecord; representativeId: string }[] = [];
 
   for (const rep of input.representatives) {
-    const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep);
+    const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep, false);
     if (userStatement) statements.push(userStatement);
 
     const { representativeId, statement: repStatement } = await buildAddRepresentativeStatement(db, {
       memberId: aggregateId,
       userId: user.id,
+      jobTitle: rep.jobTitle ?? null,
+      biography: rep.biography ?? null,
+      linksJson: rep.links ? serializeLinks(rep.links) : null,
       source: input.representationSource,
       now,
     });

@@ -111,6 +111,7 @@ async function createFixture(): Promise<Fixture> {
     id: leaderPersona.userId,
     email: leaderPersona.email,
     role: "user",
+    memberId: leaderPersona.capacities[0]!.memberId,
   };
   return {
     admin,

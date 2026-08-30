@@ -14,6 +14,9 @@ import { submitMembershipApplication, uniqueSuffix } from "./helpers/membership"
 
 interface Profile {
   organizationName: string | null;
+  jobTitle: string | null;
+  biography: string | null;
+  links: string[];
   activeMemberships: Array<{ memberId: string; organizationName: string | null }>;
 }
 
@@ -106,21 +109,71 @@ test("a person representing two organizations can switch between both contexts",
   );
   expect(target, "a second distinct context must exist to switch to").toBeTruthy();
 
-  const switched = await page.evaluate(async (memberId) => {
-    const response = await fetch("/api/v1/users/current/memberships/active", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ memberId }),
-    });
-    return { status: response.status, body: await response.json() };
-  }, target!.memberId);
-  expect(switched.status, JSON.stringify(switched.body)).toBe(200);
+  await page.goto("/portal/#/profile");
+  await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Security lead in the first capacity");
+  await page
+    .getByRole("textbox", { name: "Biography", exact: true })
+    .fill("Biography written only for the first represented organization.");
+  await page
+    .getByRole("textbox", { name: "Social / profile links", exact: true })
+    .fill("https://example.test/first-capacity");
+  await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
+    ),
+    page.getByRole("button", { name: "Save changes" }).click(),
+  ]);
+
+  const targetCapacity = page.getByRole("listitem").filter({ hasText: target!.organizationName! });
+  const switched = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/users/current/memberships/active") && response.request().method() === "PUT",
+  );
+  await targetCapacity.getByRole("button", { name: "Switch" }).click();
+  expect((await switched).status()).toBe(200);
+  await expect(page.getByRole("textbox", { name: "Job title", exact: true })).toHaveValue("Delegate");
 
   const after = await readProfile(page);
   expect(after.organizationName).toBe(target!.organizationName);
   // Switching context must not cost the other capacity.
   expect(after.activeMemberships.map((m) => m.organizationName)).toEqual(expect.arrayContaining(names));
+
+  await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Program chair in the second capacity");
+  await page
+    .getByRole("textbox", { name: "Biography", exact: true })
+    .fill("A different biography for the second represented organization.");
+  await page
+    .getByRole("textbox", { name: "Social / profile links", exact: true })
+    .fill("https://example.test/second-capacity");
+  await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
+    ),
+    page.getByRole("button", { name: "Save changes" }).click(),
+  ]);
+  expect(await readProfile(page)).toMatchObject({
+    jobTitle: "Program chair in the second capacity",
+    biography: "A different biography for the second represented organization.",
+    links: ["https://example.test/second-capacity"],
+  });
+
+  const firstCapacity = page.getByRole("listitem").filter({ hasText: profile.organizationName! });
+  const switchedBack = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/users/current/memberships/active") && response.request().method() === "PUT",
+  );
+  await firstCapacity.getByRole("button", { name: "Switch" }).click();
+  expect((await switchedBack).status()).toBe(200);
+  await expect(page.getByRole("textbox", { name: "Job title", exact: true })).toHaveValue(
+    "Security lead in the first capacity",
+  );
+  await expect(page.getByRole("textbox", { name: "Biography", exact: true })).toHaveValue(
+    "Biography written only for the first represented organization.",
+  );
+  await expect(page.getByRole("textbox", { name: "Social / profile links", exact: true })).toHaveValue(
+    "https://example.test/first-capacity",
+  );
 });
 
 test("a membership the caller does not hold cannot be selected", async ({ page }) => {

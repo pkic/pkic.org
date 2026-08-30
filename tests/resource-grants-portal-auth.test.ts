@@ -4,6 +4,7 @@ import { groupsListResponseSchema } from "../assets/shared/schemas/groups";
 import { createGroup, updateGroup } from "../functions/_lib/services/groups";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { resetDb } from "./helpers/reset-db";
 import {
   addResourceGrantGroupLeader,
@@ -31,15 +32,15 @@ describe("resource grant portal authorization", () => {
   it("allows only effective local or inherited group leaders to share resources and discover managed targets", async () => {
     const fixture = await createResourceGrantFixture();
     const catalogLeader = await addResourceGrantGroupLeader(fixture.owner.id, "resource-catalog-leader");
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), catalogLeader.id, fixture.grantee.id)
-      .run();
+    await grantGroupLeadershipCapacity(env.DB, fixture.grantee.id, catalogLeader.id);
     const request = authenticatedRequest(
-      await createAdminSession(env.DB, catalogLeader.id, `resource-local-${crypto.randomUUID()}`),
+      await createAdminSession(
+        env.DB,
+        catalogLeader.id,
+        `resource-local-${crypto.randomUUID()}`,
+        undefined,
+        catalogLeader.memberId,
+      ),
     );
 
     const catalog = await request("/api/v1/groups?manageable=true&active=true&sort=name&limit=100");

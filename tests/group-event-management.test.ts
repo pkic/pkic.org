@@ -69,12 +69,14 @@ async function createFixture(): Promise<Fixture> {
     id: ownerLeaderPersona.userId,
     email: ownerLeaderPersona.email,
     role: "user",
+    memberId: ownerLeaderPersona.capacities[0]!.memberId,
   };
   const granteeLeader: UserBackedAuthAdmin = {
     identityType: "user",
     id: granteeLeaderPersona.userId,
     email: granteeLeaderPersona.email,
     role: "user",
+    memberId: granteeLeaderPersona.capacities[0]!.memberId,
   };
   return {
     administrator,
@@ -520,7 +522,7 @@ describe("group event management routes", () => {
     ).toEqual({ count: 0 });
   });
 
-  it("does not expose list or detail data after management access is revoked before the read", async () => {
+  it("retains participant visibility but removes management after leadership is revoked before the read", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);
     const viewer = { userId: fixture.ownerLeader.id, admin: fixture.ownerLeader };
@@ -536,23 +538,29 @@ describe("group event management routes", () => {
       fixture.ownerGroupId,
       query,
     );
-    expect(list).toEqual({ events: [], total: 0 });
+    expect(list.total).toBe(1);
+    expect(list.events[0]).toMatchObject({
+      id: created.id,
+      capabilities: ["view", "attend"],
+    });
 
     await env.DB.prepare("UPDATE user_roles SET revoked_at = NULL WHERE user_id = ?")
       .bind(fixture.ownerLeader.id)
       .run();
-    await expect(
-      getGroupEvent(
-        mutateBeforeNextStatement(env.DB, async () => {
-          await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
-            .bind(fixture.ownerLeader.id)
-            .run();
-        }),
-        viewer,
-        fixture.ownerGroupId,
-        created.id,
-      ),
-    ).rejects.toMatchObject({ code: "EVENT_NOT_FOUND" });
+    const detail = await getGroupEvent(
+      mutateBeforeNextStatement(env.DB, async () => {
+        await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
+          .bind(fixture.ownerLeader.id)
+          .run();
+      }),
+      viewer,
+      fixture.ownerGroupId,
+      created.id,
+    );
+    expect(detail.event).toMatchObject({
+      id: created.id,
+      capabilities: ["view", "attend"],
+    });
   });
 
   it("rejects meeting profiles from standalone event creation", async () => {
