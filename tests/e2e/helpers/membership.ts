@@ -137,3 +137,69 @@ export async function transitionStageInUi(
   await card.getByRole("button", { name: "Transition" }).click();
   expect((await response).status(), `transition to ${toStage}`).toBe(200);
 }
+
+/**
+ * Takes one applicant all the way to an approved member, returning the
+ * identifiers later journeys need.
+ *
+ * The caller must already hold a staff session with membership write and
+ * approve permissions: the stage moves and the approval are staff actions, and
+ * routing them through the API here keeps the journey that *uses* the member
+ * focused on its own subject rather than re-testing the review workflow, which
+ * `membership-application-stages.spec.ts` covers through the UI.
+ */
+export async function approveMemberThroughReview(
+  page: Page,
+  options: { email: string; name: string; organizationName?: string; category?: string },
+): Promise<{ email: string; userId: string; applicationId: string }> {
+  const application = await submitMembershipApplication(page, {
+    email: options.email,
+    name: options.name,
+    category: options.category ?? "F",
+    ...(options.organizationName ? { organizationName: options.organizationName } : {}),
+  });
+
+  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
+    const status = await page.evaluate(
+      async ({ applicationId, toStage }) => {
+        const response = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ toStage }),
+        });
+        return response.status;
+      },
+      { applicationId: application.applicationId, toStage },
+    );
+    expect(status, `stage transition to ${toStage}`).toBe(200);
+  }
+
+  const approved = await page.evaluate(async (applicationId) => {
+    const response = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    return { status: response.status, body: (await response.json()) as { userId: string } };
+  }, application.applicationId);
+  expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+
+  return { email: options.email, userId: approved.body.userId, applicationId: application.applicationId };
+}
+
+/** The membership contexts the signed-in person may currently act through. */
+export async function readActiveMemberships(
+  page: Page,
+): Promise<Array<{ memberId: string; organizationName: string | null }>> {
+  const result = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users/current", { credentials: "same-origin" });
+    return {
+      status: response.status,
+      body: (await response.json()) as {
+        activeMemberships: Array<{ memberId: string; organizationName: string | null }>;
+      },
+    };
+  });
+  expect(result.status, JSON.stringify(result.body)).toBe(200);
+  return result.body.activeMemberships;
+}
