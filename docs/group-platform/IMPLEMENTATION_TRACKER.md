@@ -35,7 +35,7 @@ not intent.
 
 ## 1. Canonical schema and contracts
 
-Status: In progress
+Status: Complete
 
 - [x] Replace unreleased working_groups with generic group_types and groups.
 - [x] Replace unreleased working_group_members with group_memberships.
@@ -56,9 +56,7 @@ Status: In progress
       for the completed form, invitation, speaker, registration, and event
       configuration slices have been removed rather than retained as aliases;
       the duplicate admin registration-detail schema module is also removed.
-      Remaining admin event and proposal HTTP consumers are tracked explicitly
-      under the open interface/API-retirement work and are not treated as
-      compatibility contracts. Internal
+      No admin event or proposal HTTP consumer remains. Internal
       command services now use the generalized audit-change guard classifier
       directly; its one-row compatibility alias, the redundant form-answer
       schema name, and an unused admin vote-candidate alias are removed. Tests
@@ -95,7 +93,7 @@ Status: In progress
 
 ## 2. Group membership and governance
 
-Status: In progress
+Status: Complete
 
 - [x] Implement group creation and update with parent-cycle prevention.
 - [x] Implement explicit join using all eligible organizations by default.
@@ -200,7 +198,7 @@ Status: Complete
 
 ## 5. Events, meetings, guests, and attendance
 
-Status: In progress
+Status: Complete
 
 - [x] Add controlled event profiles and per-event settings.
       Evidence: active labels and descriptions come from the D1 profile catalog,
@@ -456,7 +454,7 @@ Status: Complete
 
 ## 8. Resource ownership and sharing
 
-Status: In progress
+Status: Complete
 
 - [x] Add one owner group to every in-scope group-owned resource.
 - [x] Define one shared grant transport contract and evaluator.
@@ -474,7 +472,7 @@ Status: In progress
 - [x] Prevent owner transfer through an ordinary share mutation.
 - [x] Cover grant escalation, revoked grants, inherited leadership, local-only
       governance, and orphan prevention.
-- [ ] Apply the shared evaluator to every form, event, vote, and mailing-list
+- [x] Apply the shared evaluator to every form, event, vote, and mailing-list
       read and mutation path as those canonical group APIs replace legacy
       domain endpoints.
   - [x] Apply `attend` to meeting entry in the Worker read and atomic D1 guard.
@@ -673,12 +671,14 @@ Status: In progress
           resources carrying an effective `manage` grant, and both grant and
           selected-group leadership are rechecked in the protected D1 batch.
           Revocation-before-read and revocation-before-write regressions pass.
-          The parent remains open until the remaining specialized policy paths
-          and legacy domain adapters disappear with their portal cutovers.
+          Every canonical group form, event, vote, and mailing-list path now
+          uses the shared live resource-context evaluator or its guarded
+          command facade. No legacy admin, portal, or system API adapter remains,
+          and the mounted route-boundary regression prevents one from returning.
 
 ## 9. Group-scoped REST API
 
-Status: In progress
+Status: Complete
 
 - [x] Add canonical /api/v1/groups routes.
 - [x] Add nested members and leadership routes.
@@ -764,8 +764,8 @@ Status: In progress
       use the exact owning group/event/proposal tuple. Reads and writes enforce
       their distinct event-scoped permissions, while every write rechecks live
       authority and tuple ownership in the same D1 batch. Neutral contracts and
-      reusable proposal/speaker components serve the portal and temporary admin
-      adapters. Presentation upload/download remains speaker-capability scoped,
+      reusable proposal/speaker components serve both canonical event and group
+      contexts. Presentation upload/download remains speaker-capability scoped,
       requires a confirmed speaker on an accepted proposal, and no longer
       returns private R2 storage keys through public presentation contracts.
 - [x] Add canonical group co-speaker invitation/capability management.
@@ -934,8 +934,9 @@ Status: In progress
       page locally. Per-resource capabilities continue to come from the nested
       API responses rather than frontend policy duplication.
       The unreleased duplicate group-leadership panel has been removed from
-      the admin application; dated Board and Executive Council positions remain
-      there because they are global records rather than group governance.
+      the retired admin application. Dated Board and Executive Council positions
+      remain global records rather than group governance and are managed through
+      the portal's permission-derived Leadership destination.
       Group vote discovery now uses that same controller and renders effective
       per-resource capabilities. Its detail view reuses the existing ballot and
       result components while the nested API binds participation to the
@@ -1023,15 +1024,14 @@ Status: In progress
       Event managers now configure attendee, speaker, and presentation terms
       plus optional per-day attendance choices in that selected-group event
       context. One neutral event-configuration schema is shared by the API,
-      services, portal, and remaining read-only admin consumers. Every
+      services, selected-group portal, and canonical event consumers. Every
       replacement rechecks exact event management and standalone-event status
       in the same D1 batch, advances the event revision with compare-and-set,
       records a group-scoped audit entry, and rolls child writes back on a stale
       revision or authorization race. Attendance counts remain D1-aggregated;
       the production query has an indexed no-scan plan. The duplicate admin
       Terms and Days editors, the admin Terms route, and the admin day mutation
-      route are removed. A read-only admin day projection remains temporarily
-      for registration and form views that have not yet moved. The complete
+      route and the final read-only admin day projection are removed. The complete
       repository gate passes 2,020 backend tests (one skipped), 234 frontend
       tests, and 80 tool tests, including the real Worker/D1 browser journey for
       configuring terms and attendance days and then continuing to edit the
@@ -1059,9 +1059,9 @@ Status: In progress
       the same revision-checked D1 batch protects policy, placement, terms, and
       group-scoped audit writes from stale updates and authorization races.
       Group-owned form definitions are reusable without creating an implicit
-      group-wide placement. The remaining admin view is read-only for these
-      portal-owned registration settings while proposal-form management and
-      event reporting remain available. A real Worker/D1 browser journey now
+      group-wide placement. Proposal-form management and event reporting remain
+      available through their canonical event and selected-group resources. A
+      real Worker/D1 browser journey now
       creates the event, terms, optional registration policy, exact form and
       custom field, and attendance days entirely through the portal, then
       verifies the persisted setup. A focused Codex Security review reproduced
@@ -1084,8 +1084,10 @@ Status: In progress
       consent outside the group boundary while reusing the shared server-side
       search, sorting, pagination, and statistics reducer. The duplicate admin
       day-attendance panel, service adapter, route, and contract are removed;
-      the separate admin-only VIP admission remains until that higher-risk action
-      has a deliberate portal design. Focused backend regressions pass 145 tests,
+      reasoned VIP admission remains available through the canonical event API,
+      but selected-group portal parity remains the one open management item
+      below because it is a distinct higher-risk override. Focused backend
+      regressions pass 145 tests,
       the focused component suite passes 2 tests, and a real Worker/D1 Playwright
       journey changes one attendee from accepted to waitlisted and back through
       group routes without any admin API request. All static, build, frontend
@@ -1198,8 +1200,8 @@ Status: In progress
       authorization, revocation-race, bounded-query, OpenAPI, frontend, legacy
       404, and real Worker/D1 browser regressions cover the cutover.
       Program-committee proposal management now uses the same selected-group
-      event context. Neutral shared contracts and components serve the portal
-      and the temporary admin adapter for detail, reviews, comments, accepted
+      event context. Neutral shared contracts and components serve both
+      canonical event and group contexts for detail, reviews, comments, accepted
       abstract corrections, accepted-proposal cancellation, decision preview,
       finalization, and proposal-scoped audit history. The group routes bind the
       exact owning group, event, and proposal and enforce distinct event-scoped
@@ -1217,10 +1219,10 @@ Status: In progress
       fallback. The complete repository gate now passes 2,137 backend tests
       (one skipped), 259 frontend tests, and 80 tool tests, with zero duplicated
       changed-code blocks.
-      This parent item remains open for the other management areas and final
-      admin-shell retirement below, not for event registration or proposal
-      decision management.
-- [ ] Move remaining global management views into the portal.
+      The only remaining part of this parent item is selected-group parity for
+      the existing reasoned VIP admission override; every other named group
+      management area and the admin-shell retirement are complete.
+- [x] Move remaining global management views into the portal.
       Current evidence: the global audit log is the first permission-derived
       portal destination. Its schema, service, and API moved rather than being
       copied to a System API namespace: the canonical domain endpoint is
@@ -1436,9 +1438,9 @@ Status: In progress
       Event-specific sponsor attendee-data entitlements use the canonical
       `/api/v1/events/:eventSlug/sponsors/tiers` resource path with exact
       event-scoped `events:read` and `events:write` permissions, API-key
-      denial, and a same-batch revocation guard. Its current editor remains in
-      the still-unmigrated event screen pending that broader UI cutover; it is
-      not a second sponsorship pipeline or the global pricing catalog.
+      denial, and a same-batch revocation guard. Its editor remains correctly
+      scoped to the portal's event workspace; it is not a second sponsorship
+      pipeline or the global pricing catalog.
       Email delivery and scheduled operational work now share one
       permission-derived Operations destination in the portal while retaining
       natural domain APIs: `/api/v1/email` owns the durable outbox and reminder
@@ -1581,9 +1583,9 @@ Status: In progress
       statistics, public-contract, OpenAPI, frontend, and route-removal tests
       cover the cutover. A real Worker/D1 browser journey creates and updates a
       global form through canonical requests and observes no admin Forms API
-      request.
-      Other global management destinations remain, so this item is deliberately
-      still open.
+      request. Together with the permission-derived destinations above, this
+      completes the global management migration; no admin shell or admin API
+      implementation remains.
 - [x] Replace hardcoded admin links in email, OAuth, and due-work paths.
       Evidence: one typed management-link adapter owns the semantic destinations
       used by MCP OAuth, membership due work, organization content review,
@@ -1638,7 +1640,7 @@ Status: In progress
 
 ## 11. Quality, security, and performance
 
-Status: In progress
+Status: Complete
 
 - [x] Run focused tests during every implementation round.
 - [x] Run SQL projection lint and architecture lint after backend boundaries move.
