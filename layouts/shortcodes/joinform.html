@@ -1,12 +1,11 @@
 <div data-member-application data-module="member-flows/join-form" class="join-flow">
   <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
 
-  <section data-join-start>
-    <h2>Join the PKI Consortium</h2>
+  <div data-join-start>
     <p class="lead">First, tell us whether an organization is connected to your participation.</p>
     <form data-join-start-form class="row g-3 my-2 needs-validation" novalidate>
       <fieldset class="col-12">
-        <legend class="form-label">Are you employed by, or do you own, an organization?</legend>
+        <legend class="form-label fs-6 fw-semibold">Are you employed by, or do you own, an organization?</legend>
         <p id="joinApplicantKindHelp" class="form-text mb-3">
           If an organization has separately authorized you to act on its behalf, choose Yes even if you are not its
           employee or owner.
@@ -52,18 +51,28 @@
           are not acting for an organization.
         </div>
 
-        <label for="joinEmail" class="form-label" data-join-email-label>Work or organization email address</label>
+        <div data-join-individual-categories class="mb-3" hidden>
+          <p class="form-label fw-semibold mb-2">Eligible individual categories</p>
+          <div data-join-individual-category-list class="form-text" aria-live="polite">
+            Loading eligible categories…
+          </div>
+        </div>
+
+        <label for="joinEmail" class="form-label" data-join-email-label
+          >Your official work or organization email address</label
+        >
         <input
           type="email"
           class="form-control"
           id="joinEmail"
           name="email"
           autocomplete="email"
-          aria-describedby="joinEmailHelp"
+          placeholder="you@organization.example"
+          aria-describedby="joinEmailHelp joinEmailError"
           required
           disabled
         />
-        <div data-field-error="email" class="invalid-feedback d-block"></div>
+        <div id="joinEmailError" data-field-error="email" class="invalid-feedback d-block" aria-live="polite"></div>
         <div id="joinEmailHelp" class="form-text" data-join-email-help>
           We will send a short-lived verification link before showing the appropriate next step.
         </div>
@@ -71,7 +80,7 @@
         <button type="submit" class="btn btn-success mt-3">Continue</button>
       </div>
     </form>
-  </section>
+  </div>
 
   <section data-join-verification-pending hidden tabindex="-1">
     <h2>Check your email</h2>
@@ -101,7 +110,6 @@
 
   <form data-join-application-form class="row g-3 my-2 needs-validation" novalidate hidden>
     <div class="col-12">
-      <h2>Membership application</h2>
       <p class="form-text mb-0">
         Continuing with verified email address <strong data-verified-application-email></strong>.
       </p>

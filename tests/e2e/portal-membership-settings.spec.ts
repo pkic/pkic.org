@@ -141,7 +141,7 @@ test("publishes membership application form edits to the public join flow", asyn
     const sinceVerification = await capturedEmailCount();
     await page.goto("/join/");
     await page.getByLabel("Yes — I am employed by or own an organization").check();
-    await page.getByLabel("Work or organization email address").fill(email);
+    await page.getByLabel("Your official work or organization email address").fill(email);
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
 
@@ -150,7 +150,7 @@ test("publishes membership application form edits to the public join flow", asyn
     });
     await page.goto(extractEmailUrl(verification, "#verify="));
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Membership application", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
     await expect(page.getByLabel(changedLabel, { exact: true })).toBeVisible();
     expect(legacyAdminFormRequests).toEqual([]);
   } finally {
