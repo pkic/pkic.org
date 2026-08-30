@@ -167,4 +167,30 @@ describe("organization representation API", () => {
       ).all(),
     ).toMatchObject({ results: [] });
   });
+
+  it("surfaces each representative's headshot the same way the self-profile does, and null when none is set", async () => {
+    const organizationId = await insertOrganization(env.DB, "Headshot Projection Org");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const photographedUserId = await insertUser(env.DB, "photographed@headshot-projection.example");
+    const bareUserId = await insertUser(env.DB, "bare@headshot-projection.example");
+    await addRepresentative(env.DB, memberId, photographedUserId);
+    await addRepresentative(env.DB, memberId, bareUserId);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?")
+      .bind(`headshots/${photographedUserId}/portrait.webp`, photographedUserId)
+      .run();
+
+    const staffUserId = await insertUser(env.DB, "staff@headshot-projection.example");
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffUserId).run();
+    const staffToken = await createAdminSession(env.DB, staffUserId, "headshot-projection-staff-token");
+    const listed = await jsonRequest(`/api/v1/organizations/${organizationId}/representatives`, staffToken, "GET");
+    expect(listed.status).toBe(200);
+    const listBody = (await listed.json()) as {
+      representatives: Array<{ userId: string; headshotUrl: string | null }>;
+    };
+
+    const photographed = listBody.representatives.find((r) => r.userId === photographedUserId);
+    const bare = listBody.representatives.find((r) => r.userId === bareUserId);
+    expect(photographed?.headshotUrl).toBe(`/api/v1/users/${photographedUserId}/headshots/portrait.webp`);
+    expect(bare?.headshotUrl).toBeNull();
+  });
 });
