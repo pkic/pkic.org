@@ -176,6 +176,10 @@ export type PublicVotesListResponse = z.infer<typeof publicVotesListResponseSche
 export const publicVoteGetResponseSchema = z.object({ vote: publicVoteSchema });
 export type PublicVoteGetResponse = z.infer<typeof publicVoteGetResponseSchema>;
 
+/** `GET /api/v1/users/current/votes` — the self-participation projection over `memberVoteSchema`. */
+export const currentUserVotesListResponseSchema = paginatedResponseSchema("votes", memberVoteSchema);
+export type CurrentUserVotesListResponse = z.infer<typeof currentUserVotesListResponseSchema>;
+
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
 /**

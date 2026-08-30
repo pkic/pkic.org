@@ -4,6 +4,7 @@ export * from "./guests";
 export * from "./guest-verification";
 export * from "./ics";
 export * from "./management";
+export * from "./member-read-model";
 export * from "./occurrences";
 export * from "./provider-url";
 export * from "./providers";
