@@ -186,6 +186,21 @@ $portal-sidebar-width: 240px;
   white-space: nowrap;
 }
 
+.portal-sidebar-group-context {
+  display: block;
+  font-size: 0.6875rem;
+  color: #6c757d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-sidebar-subgroups {
+  list-style: none;
+  margin: 0;
+  padding-left: 0.75rem;
+}
+
 .portal-sidebar-group-more {
   color: #6c757d;
   font-style: italic;

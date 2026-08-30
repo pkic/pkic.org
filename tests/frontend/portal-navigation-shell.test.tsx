@@ -207,6 +207,54 @@ describe("portal navigation shell", () => {
     expect(items).toEqual(["Account settings", "Sign out"]);
   });
 
+  it("nests subgroups beneath their listed parent and names an absent parent as context", async () => {
+    const parent = group("10000000-0000-4000-8000-000000000001", "Post-Quantum Cryptography");
+    const child = {
+      ...group("10000000-0000-4000-8000-000000000002", "Hybrid Certificates"),
+      parentGroup: {
+        id: parent.id as string,
+        slug: parent.slug as string,
+        name: parent.name as string,
+        type: parent.type,
+      },
+    };
+    const orphan = {
+      ...group("10000000-0000-4000-8000-000000000003", "Task Force X"),
+      parentGroup: {
+        id: "10000000-0000-4000-8000-000000000099",
+        slug: "unlisted-parent",
+        name: "Unlisted Parent",
+        type: parent.type,
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname === "/api/v1/groups") {
+        return json({ groups: [parent, child, orphan], page: { limit: 12, offset: 0, total: 3, hasMore: false } });
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    mountNavigation(portalSessionFixture({ staff: true }));
+    await settle();
+    await settle();
+
+    const groupsList = container.querySelector(".portal-sidebar-groups")!;
+    const nested = groupsList.querySelector(".portal-sidebar-subgroups")!;
+    expect(nested).toBeTruthy();
+    // The child renders inside its parent's list item, not as a sibling.
+    expect(nested.closest("li")?.querySelector("a")?.textContent).toBe("Post-Quantum Cryptography");
+    expect(nested.querySelector("a")?.textContent).toBe("Hybrid Certificates");
+    // The orphaned child stays top-level and names its unlisted parent.
+    const orphanLink = [...groupsList.querySelectorAll("a")].find((a) => a.textContent?.includes("Task Force X"))!;
+    expect(orphanLink.querySelector(".portal-sidebar-group-context")?.textContent).toBe("Unlisted Parent");
+    expect(orphanLink.closest(".portal-sidebar-subgroups")).toBeNull();
+  });
+
   it("lists represented organizations in the account menu with workspace deep links", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(
