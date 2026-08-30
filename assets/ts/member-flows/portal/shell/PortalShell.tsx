@@ -102,7 +102,11 @@ export function PortalShell() {
     "";
   return (
     <Router hook={useHashLocation}>
-      <PortalNavigationShell session={session} displayName={displayName}>
+      <PortalNavigationShell
+        session={session}
+        displayName={displayName}
+        headshotUrl={profile.value?.headshotUrl ?? null}
+      >
         <Suspense fallback={<Spinner />}>
           <Switch>
             {hasEventWorkspace && (

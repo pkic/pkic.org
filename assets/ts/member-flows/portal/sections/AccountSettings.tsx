@@ -1,11 +1,11 @@
-/** Member account email, shared passkey management, and notifications. */
+/** Member account email, access summary, shared passkey management, and notifications. */
 import { useEffect, useState } from "preact/hooks";
 import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
-import type { NotificationPreferences } from "../types";
+import type { NotificationPreferences, PortalSession } from "../types";
 import { toast } from "../ui";
 import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
 
@@ -79,6 +79,77 @@ function NotificationPreferencesCard() {
   );
 }
 
+function grantScopeLabel(grant: { contextType: string | null; contextId: string | null }): string {
+  if (grant.contextType === null) return "global";
+  return grant.contextId ? `${grant.contextType} ${grant.contextId}` : grant.contextType;
+}
+
+/**
+ * The identity's roles and permissions live here, not in the navigation:
+ * the menu navigates, while this view explains what the account may do.
+ */
+function AccessSummaryCard({ session }: { session: PortalSession }) {
+  const memberships = session.member ? (profile.value?.activeMemberships ?? []) : [];
+  const staff = session.staff;
+
+  return (
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">Your access</div>
+      <div class="card-body d-flex flex-column gap-3">
+        {memberships.length > 0 && (
+          <div>
+            <h6 class="small fw-semibold text-muted text-uppercase">Member capacities</h6>
+            <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+              {memberships.map((membership) => (
+                <li key={membership.memberId} class="small">
+                  {membership.organizationName ?? "Individual membership"}
+                  <span class="badge text-bg-light ms-2">Category {membership.membershipCategory}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {staff && (
+          <div>
+            <h6 class="small fw-semibold text-muted text-uppercase">Staff access</h6>
+            {staff.role === "admin" ? (
+              <p class="small mb-0">Administrator — this account holds every administrative permission.</p>
+            ) : staff.grants.length === 0 ? (
+              <p class="small mb-0">No individual permissions are granted to this account.</p>
+            ) : (
+              <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+                {staff.grants.map((grant) => (
+                  <li key={`${grant.permission}:${grant.contextType ?? ""}:${grant.contextId ?? ""}`} class="small">
+                    <code>{grant.permission}</code>
+                    <span class="text-muted ms-2">{grantScopeLabel(grant)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {session.sponsors.length > 0 && (
+          <div>
+            <h6 class="small fw-semibold text-muted text-uppercase">Sponsor access</h6>
+            <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+              {session.sponsors.map((sponsor) => (
+                <li key={`${sponsor.sponsorId}:${sponsor.eventId}`} class="small">
+                  {sponsor.eventName ?? sponsor.eventSlug}
+                  <span class="badge text-bg-light ms-2">{sponsor.tier}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p class="text-muted small mb-0">
+          Group participation and leadership are managed per group; open a group from the sidebar to see what you can do
+          there.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function AccountSettings() {
   const session = portalSession.value;
   const hasMemberCapacity = Boolean(session?.member);
@@ -98,6 +169,7 @@ export function AccountSettings() {
         </div>
       </div>
 
+      {session && <AccessSummaryCard session={session} />}
       <PasskeySettings toastTargetId="portal-toast-area" />
       {hasMemberCapacity && <NotificationPreferencesCard />}
     </div>

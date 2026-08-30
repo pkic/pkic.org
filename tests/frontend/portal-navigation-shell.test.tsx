@@ -83,10 +83,10 @@ async function settle(): Promise<void> {
   });
 }
 
-function mountNavigation(session = portalSessionFixture({ staff: true })): void {
+function mountNavigation(session = portalSessionFixture({ staff: true }), headshotUrl: string | null = null): void {
   void act(() =>
     render(
-      <PortalNavigationShell session={session} displayName="Portal Tester">
+      <PortalNavigationShell session={session} displayName="Portal Tester" headshotUrl={headshotUrl}>
         <p>Page content</p>
       </PortalNavigationShell>,
       container,
@@ -132,7 +132,7 @@ describe("portal navigation shell", () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  it("lists the identity's groups under the Groups entry with their roles", async () => {
+  it("lists the identity's groups under the Groups entry without authority annotations", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(
         typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
@@ -164,8 +164,11 @@ describe("portal navigation shell", () => {
       if (url.pathname === "/api/v1/groups") {
         expect(url.searchParams.get("manageable")).toBe("true");
         return json({
-          groups: [group("10000000-0000-4000-8000-000000000002", "Coordination")],
-          page: { limit: 12, offset: 0, total: 1, hasMore: false },
+          groups: [
+            group("10000000-0000-4000-8000-000000000001", "Architecture"),
+            group("10000000-0000-4000-8000-000000000002", "Coordination"),
+          ],
+          page: { limit: 12, offset: 0, total: 2, hasMore: false },
         });
       }
       throw new Error(`Unexpected request: ${url.pathname}`);
@@ -179,10 +182,9 @@ describe("portal navigation shell", () => {
     const groupsList = container.querySelector(".portal-sidebar-groups")!;
     expect(groupsList).toBeTruthy();
     const entries = [...groupsList.querySelectorAll("a")].map((link) => link.textContent);
-    expect(entries.some((text) => text?.includes("Architecture"))).toBe(true);
-    expect(entries.some((text) => text?.includes("Coordination"))).toBe(true);
-    const roles = [...groupsList.querySelectorAll(".portal-sidebar-group-role")].map((el) => el.textContent);
-    expect(roles).toContain("manages");
+    expect(entries).toEqual(["Architecture", "Coordination"]);
+    // The menu navigates; role and permission details belong to the account view.
+    expect(groupsList.querySelector(".portal-sidebar-group-role")).toBeNull();
   });
 
   it("keeps account settings in the user menu, not the sidebar items", async () => {
@@ -193,12 +195,22 @@ describe("portal navigation shell", () => {
       "Account Settings",
     );
     const userButton = container.querySelector<HTMLButtonElement>(".portal-sidebar-user")!;
-    expect(userButton.textContent).toBe("Portal Tester");
+    expect(userButton.querySelector(".portal-user-name")?.textContent).toBe("Portal Tester");
+    expect(userButton.querySelector(".portal-user-avatar")?.textContent).toBe("PT");
     expect(userButton.getAttribute("aria-haspopup")).toBe("menu");
 
     void act(() => userButton.click());
     await settle();
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
     expect(items).toEqual(["Account settings", "Sign out"]);
+  });
+
+  it("shows the headshot in the user button when one is available", async () => {
+    mountNavigation(portalSessionFixture({ staff: true, member: true }), "/images/headshots/tester.jpg");
+    await settle();
+
+    const avatar = container.querySelector(".portal-user-avatar img");
+    expect(avatar?.getAttribute("src")).toBe("/images/headshots/tester.jpg");
+    expect(avatar?.getAttribute("alt")).toBe("");
   });
 });

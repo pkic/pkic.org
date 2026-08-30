@@ -238,12 +238,11 @@ test.describe("selected-group portal personas", () => {
       "Leadership",
     ]);
     // The chair reaches group management through the group-centered sidebar:
-    // the "Groups" entry, and this specific group listed under "Your groups"
-    // with its manage capability shown.
+    // the "Groups" entry, and this specific group listed under "Your groups".
+    // The list shows names only; authority is expressed by the workspace tabs.
     await expect(page.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
     const sidebarGroups = page.locator(".portal-sidebar-groups");
     await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
-    await expect(sidebarGroups.getByText("member · manages")).toBeVisible();
   });
 
   test("inherited manager gets the same resource surface through the selected group", async ({ page }) => {
@@ -264,11 +263,10 @@ test.describe("selected-group portal personas", () => {
     await expect(sectionLinks(page)).toContainText(["Settings", "Members", "Leadership"]);
     await expect(page.getByRole("link", { name: "My Profile" })).toHaveCount(0);
     // Reaches group management the same way any manager does: the "Groups"
-    // sidebar entry and this group listed as manage-only under "Your groups".
+    // sidebar entry and this group listed under "Your groups".
     await expect(page.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
     const sidebarGroups = page.locator(".portal-sidebar-groups");
     await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
-    await expect(sidebarGroups.getByText("manages", { exact: true })).toBeVisible();
   });
 
   test("unauthorized identity stays on login and cannot render a selected group", async ({ page }) => {

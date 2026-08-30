@@ -26,6 +26,42 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }
 
+function memberProfile(): NonNullable<typeof profile.value> {
+  return {
+    userId: "00000000-0000-4000-8000-000000000001",
+    email: "person@example.test",
+    firstName: "Portal",
+    lastName: "Tester",
+    preferredName: null,
+    jobTitle: null,
+    biography: null,
+    links: [],
+    membershipCategory: "A",
+    organizationId: "00000000-0000-4000-8000-000000000010",
+    organizationName: "Example Org",
+    memberSince: "2026-08-01",
+    showOnOrgProfile: false,
+    headshotUrl: null,
+    canEditOrganizationName: false,
+    isOrgContact: false,
+    organizationRepresentatives: null,
+    activeMemberships: [
+      {
+        memberId: "00000000-0000-4000-8000-000000000002",
+        organizationId: "00000000-0000-4000-8000-000000000010",
+        organizationName: "Example Org",
+        membershipCategory: "A",
+      },
+      {
+        memberId: "00000000-0000-4000-8000-000000000003",
+        organizationId: null,
+        organizationName: null,
+        membershipCategory: "H5",
+      },
+    ],
+  };
+}
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
@@ -95,5 +131,97 @@ describe("portal account settings capacity cutover", () => {
 
     expect(container.textContent).toContain("Notification preferences");
     expect(requests).toEqual(["/api/v1/users/current/notifications/preferences"]);
+  });
+
+  it("summarizes administrator access without listing individual grants", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("Unexpected request");
+      }),
+    );
+    portalSession.value = portalSessionFixture({ staff: true });
+
+    mount(<AccountSettings />);
+    await settle();
+
+    expect(container.textContent).toContain("Your access");
+    expect(container.textContent).toContain("Administrator — this account holds every administrative permission.");
+  });
+
+  it("lists granular staff grants with their scopes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("Unexpected request");
+      }),
+    );
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [
+        { permission: "audit:read", contextType: null, contextId: null },
+        { permission: "events:read", contextType: "event", contextId: "event-1" },
+      ],
+    });
+
+    mount(<AccountSettings />);
+    await settle();
+
+    expect(container.textContent).toContain("audit:read");
+    expect(container.textContent).toContain("global");
+    expect(container.textContent).toContain("events:read");
+    expect(container.textContent).toContain("event event-1");
+  });
+
+  it("lists every member capacity, including organization-less ones", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/users/current/notifications/preferences") {
+          return jsonResponse({
+            workingGroupUpdates: true,
+            voteReminders: true,
+            generalAnnouncements: true,
+            wgChairMembershipDigest: false,
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+    portalSession.value = portalSessionFixture({ member: true });
+    profile.value = memberProfile();
+
+    mount(<AccountSettings />);
+    await settle();
+
+    expect(container.textContent).toContain("Member capacities");
+    expect(container.textContent).toContain("Example Org");
+    expect(container.textContent).toContain("Category A");
+    expect(container.textContent).toContain("Individual membership");
+    expect(container.textContent).toContain("Category H5");
+  });
+
+  it("reports a notification-preference load failure instead of hiding it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { code: "SERVER_ERROR", message: "Preferences unavailable" } }), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    portalSession.value = portalSessionFixture({ member: true });
+
+    mount(<AccountSettings />);
+    await settle();
+
+    expect(container.textContent).toContain("Preferences unavailable");
   });
 });

@@ -14,10 +14,22 @@ import { SidebarGroups } from "./SidebarGroups";
 interface PortalNavigationShellProps {
   children: ComponentChildren;
   displayName: string;
+  headshotUrl: string | null;
   session: PortalSession | null;
 }
 
-export function PortalNavigationShell({ children, displayName, session }: PortalNavigationShellProps) {
+/** First letters of the first two name words; falls back to the first character. */
+export function portalAvatarInitials(displayName: string): string {
+  const words = displayName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
+export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
   const [location, navigate] = useHashLocation();
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -99,7 +111,14 @@ export function PortalNavigationShell({ children, displayName, session }: Portal
           <Menu
             label="Account menu"
             buttonClass="portal-sidebar-user"
-            buttonContent={displayName || "Account"}
+            buttonContent={
+              <>
+                <span class="portal-user-avatar" aria-hidden="true">
+                  {headshotUrl ? <img src={headshotUrl} alt="" /> : portalAvatarInitials(displayName)}
+                </span>
+                <span class="portal-user-name">{displayName || "Account"}</span>
+              </>
+            }
             actions={[
               ...(portalSectionEnabled(session, "account")
                 ? [

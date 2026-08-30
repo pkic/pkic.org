@@ -3,6 +3,10 @@
  * each linking straight into that group's workspace. Joined groups come from
  * the member self-participation projection; managed groups come from the
  * staff manageable-group catalog. Both are server-bounded queries.
+ *
+ * The list deliberately shows names only: the menu navigates, it does not
+ * explain authority. What an identity may do in a group is expressed by the
+ * workspace itself, and the identity's roles live in the account view.
  */
 import { signal } from "@preact/signals";
 import { Link } from "wouter";
@@ -27,27 +31,17 @@ export function refreshPortalSidebarGroups(): void {
 export interface SidebarGroupEntry {
   id: string;
   name: string;
-  isMember: boolean;
-  canManage: boolean;
 }
 
 /** Joined groups first in their server order, then manage-only groups. */
 export function mergeSidebarGroups(joined: readonly SelfGroup[], manageable: readonly Group[]): SidebarGroupEntry[] {
   const entries = new Map<string, SidebarGroupEntry>();
   for (const group of joined) {
-    entries.set(group.id, {
-      id: group.id,
-      name: group.name,
-      isMember: group.memberships.length > 0,
-      canManage: false,
-    });
+    entries.set(group.id, { id: group.id, name: group.name });
   }
   for (const group of manageable) {
-    const existing = entries.get(group.id);
-    if (existing) {
-      existing.canManage = true;
-    } else {
-      entries.set(group.id, { id: group.id, name: group.name, isMember: false, canManage: true });
+    if (!entries.has(group.id)) {
+      entries.set(group.id, { id: group.id, name: group.name });
     }
   }
   return [...entries.values()];
@@ -95,9 +89,6 @@ export function SidebarGroups({ session, onNavigate }: { session: PortalSession 
           <li key={entry.id}>
             <Link href={path} class={`portal-sidebar-group${active ? " active" : ""}`} onClick={onNavigate}>
               <span class="portal-sidebar-group-name">{entry.name}</span>
-              {entry.canManage && (
-                <span class="portal-sidebar-group-role">{entry.isMember ? "member · manages" : "manages"}</span>
-              )}
             </Link>
           </li>
         );
