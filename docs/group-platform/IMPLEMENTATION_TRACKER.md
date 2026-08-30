@@ -2038,6 +2038,47 @@ Status: In progress (2026-08-30)
       each represented organization from the avatar menu at
       `/portal/#/organizations/:organizationId`, and retire the acting-capacity
       "My Organization" special case.
+- [ ] Root-level surfaces are projections, canonical homes are groups: the
+      portal /events (and any root meeting surface) becomes a cross-group
+      overview — upcoming events from the audience feed with the viewer's
+      own registration state, linking to public pages and into the owning
+      group's event workspace for management — while the group event
+      workspace absorbs the global-only tabs (promoters, analytics, team,
+      sponsor tiers, full settings editor). The /events/:slug management
+      workspace then retires behind an owner-group redirect. Verify that
+      event-scoped grant holders without group membership reach the group
+      event routes through the resource-grant evaluator before retiring the
+      global management surface. This resolves the audit's duplicated-
+      surface cluster toward the group context and aligns portal placement
+      with the API's ownership model.
+- [ ] Execute the portal UX audit (2026-08-30; ~249 findings across 78
+      files, catalogued per house rule with file:line) in four waves:
+      Wave 1 landed 2026-08-30: shared `ConfirmDialog` (promise-based,
+      consequence list, typed confirmation for irreversible operations —
+      user anonymization requires retyping the email, retention redaction
+      requires typing REDACT), `RowActions` (status + ⋯ menu cell), and
+      `EmptyState`/labeled `Spinner` primitives exist with tests; every
+      portal `window.confirm` call and inline destructive row button is
+      converted except the events detail surfaces (Team revoke, proposal
+      cancel-accepted) and `assets/ts/shared/headshot/controller.ts`, which
+      is shared with public event-flows pages that do not mount
+      `ConfirmDialogHost` (TODO comment in place; mount a host per
+      event-flow root or keep native confirm there). A signed-in visual
+      walkthrough of the seeded portal validated the dialogs live and its
+      findings (legacy `main h5` uppercase leak — fixed with a portal-scope
+      reset; menu focus scrolling the document — fixed with preventScroll;
+      row-menu popups clipped by the table overflow wrapper — fixed with
+      fixed-position popups; layout/empty-dashboard/machine-vocabulary
+      items) are recorded in the audit artifact's walkthrough section.
+      Remaining waves:
+      (1 residue) events-surface confirms after the projection slice;
+      (2) EmptyState + labeled Spinner + DetailsSummary
+      close the blank/raw-payload states through the shared table and error
+      components; (3) routed Tabs and query-param ApiDataTable state make
+      tabs, filters, sorts, and pages shareable URLs; (4) PersonCell +
+      EntityLink close the dead-end and faceless-people findings, including
+      audit-log actors and entity references. Duplicated surfaces (§10)
+      collapse onto the group-context implementations as each is touched.
 - [ ] Close the request-contract blind spot: `lint:api-contracts` verifies
       response schemas but request bodies leave the client unparsed, so a
       frontend can emit a contract-violating request with every gate green
