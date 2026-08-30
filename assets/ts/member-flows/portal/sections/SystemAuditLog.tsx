@@ -2,7 +2,9 @@ import { useState } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { DetailsSummary } from "../../../components/DetailsSummary";
+import { EntityLink } from "../../../components/EntityLink";
 import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
+import { portalEntityHref } from "../entity-links";
 
 interface AuditFilters {
   entityType: string;
@@ -42,6 +44,7 @@ export function SystemAuditLog() {
 
   return (
     <ApiDataTable
+      urlState="audit"
       endpoint="/api/v1/audit-log"
       responseSchema={auditLogListResponseSchema}
       resolve={(data) => data.entries}
@@ -99,12 +102,16 @@ export function SystemAuditLog() {
             <>
               {entry.actor_type === "system" ? (
                 <span class="text-muted">System</span>
-              ) : entry.actor_display ? (
-                entry.actor_display
-              ) : entry.actor_id ? (
-                <span class="text-muted small mono">{entry.actor_id}</span>
               ) : (
-                <span class="text-muted">{entry.actor_type}</span>
+                <EntityLink href={entry.actor_id ? portalEntityHref(entry.actor_type, entry.actor_id) : null}>
+                  {entry.actor_display ? (
+                    entry.actor_display
+                  ) : entry.actor_id ? (
+                    <span class="text-muted small mono">{entry.actor_id}</span>
+                  ) : (
+                    <span class="text-muted">{entry.actor_type}</span>
+                  )}
+                </EntityLink>
               )}
               <div class="text-muted small">{entry.actor_type}</div>
             </>
@@ -123,7 +130,16 @@ export function SystemAuditLog() {
           className: "small text-muted",
           sort: { asc: "entity_type", desc: "-entity_type" },
         },
-        { header: "Entity ID", cell: (entry) => entry.entity_id ?? "—", className: "mono small text-muted" },
+        {
+          header: "Entity ID",
+          cell: (entry) =>
+            entry.entity_id ? (
+              <EntityLink href={portalEntityHref(entry.entity_type, entry.entity_id)}>{entry.entity_id}</EntityLink>
+            ) : (
+              "—"
+            ),
+          className: "mono small text-muted",
+        },
         {
           header: "Details",
           cell: (entry) => <DetailsSummary value={entry.details} />,
