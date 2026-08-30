@@ -424,6 +424,14 @@ $portal-sidebar-width: 240px;
   margin-bottom: 1.25rem;
 }
 
+// A workspace names itself by its subject (the group), not a generic label;
+// the public heading scale squashes h4 inside main, so size it explicitly.
+.portal-context-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #212529;
+}
+
 .portal-management-picker {
   max-width: 640px;
 }

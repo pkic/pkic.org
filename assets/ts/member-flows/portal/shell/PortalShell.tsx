@@ -76,10 +76,10 @@ function LazyEventWorkspace(props: EventWorkspaceProps) {
   );
 }
 
-function SectionWrapper({ title, children }: { title: string; children: ComponentChildren }) {
+function SectionWrapper({ title, children }: { title?: string; children: ComponentChildren }) {
   return (
     <div class="portal-section">
-      <h4 class="portal-section-title">{title}</h4>
+      {title && <h4 class="portal-section-title">{title}</h4>}
       {children}
     </div>
   );
@@ -225,7 +225,7 @@ export function PortalShell() {
               <Route
                 path="/groups/:groupId/events/:eventId/:eventTab?"
                 component={({ params }: { params: { groupId: string; eventId: string; eventTab?: string } }) => (
-                  <SectionWrapper title="Group">
+                  <SectionWrapper>
                     <GroupWorkspace
                       groupId={params.groupId}
                       view="events"
@@ -454,7 +454,7 @@ export function PortalShell() {
               <Route
                 path="/groups/:groupId/:view/:resourceId"
                 component={({ params }: { params: { groupId: string; view: string; resourceId: string } }) => (
-                  <SectionWrapper title="Group">
+                  <SectionWrapper>
                     <GroupWorkspace groupId={params.groupId} view={params.view} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
@@ -464,7 +464,7 @@ export function PortalShell() {
               <Route
                 path="/groups/:groupId/:view?"
                 component={({ params }: { params: { groupId: string; view?: string } }) => (
-                  <SectionWrapper title="Group">
+                  <SectionWrapper>
                     <GroupWorkspace groupId={params.groupId} view={params.view} />
                   </SectionWrapper>
                 )}

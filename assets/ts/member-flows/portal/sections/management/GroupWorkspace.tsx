@@ -37,6 +37,7 @@ const GroupMailingLists = lazy(() =>
   import("./GroupMailingLists").then((module) => ({ default: module.GroupMailingLists })),
 );
 const GroupVotes = lazy(() => import("./GroupVotes").then((module) => ({ default: module.GroupVotes })));
+const GroupOverview = lazy(() => import("./GroupOverview").then((module) => ({ default: module.GroupOverview })));
 const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => ({ default: module.GroupStatistics })));
 
 const OVERVIEW_VIEW = "overview";
@@ -47,7 +48,7 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
       <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
         <div>
           <div class="d-flex flex-wrap align-items-center gap-2">
-            <h5 class="mb-0">{group.name}</h5>
+            <h4 class="portal-context-title mb-0">{group.name}</h4>
             <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
             {!group.active && <span class="badge text-bg-warning">Inactive</span>}
           </div>
@@ -148,12 +149,7 @@ export function GroupWorkspace({
                 {!canParticipate && Boolean(portalSession.value?.member) && (
                   <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
                 )}
-                <div class="card border-0 shadow-sm">
-                  <div class="card-header bg-white fw-semibold">About this group</div>
-                  <div class="card-body">
-                    <p class="mb-0">{group.description || "No group description has been provided."}</p>
-                  </div>
-                </div>
+                <GroupOverview groupId={group.id} description={group.description} />
                 {canParticipate && (
                   <p class="text-muted small mb-0">
                     You participate in this group. <Link href="/groups">Manage your participation</Link>
