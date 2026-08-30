@@ -20,7 +20,7 @@
 
 import { build } from "vite";
 import { resolve, relative, dirname } from "node:path";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
@@ -29,12 +29,26 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const outDir = resolve(root, "static", "js", "built");
 const dataDir = resolve(root, "data");
+const publicBuiltDir = resolve(root, "public", "js", "built");
 
 const entries = {
   loader: resolve(root, "assets/ts/loader.ts"),
 };
 
 const isDev = process.argv.includes("--dev");
+
+// Hugo copies static/js/built/ into public/js/built/ on every build, but it
+// never deletes files that exist in the destination and not the source —
+// so chunks left behind by a previous build (renamed/removed components,
+// stale content hashes) accumulate in public/ forever. Vite's own
+// `emptyOutDir` only clears static/js/built/, not Hugo's copy of it.
+// Clearing public/js/built/ before this build runs (and therefore before
+// Hugo's next copy) guarantees Hugo repopulates it as an exact mirror of
+// the fresh static/js/built/ output instead of layering on top of stale
+// files. This runs unconditionally: it's a no-op on first run (directory
+// doesn't exist yet) and production builds already get an equivalent
+// clean via Hugo's `--cleanDestinationDir`.
+rmSync(publicBuiltDir, { recursive: true, force: true });
 
 /** @type {import('vite').UserConfig} */
 const config = {
@@ -70,6 +84,26 @@ const config = {
       output: {
         entryFileNames: isDev ? "[name].js" : "[name].[hash].js",
         chunkFileNames: isDev ? "chunks/[name].js" : "chunks/[name].[hash].js",
+        // Rolldown's automatic chunking groups zod (and the runtime helpers
+        // it pulls in) into a shared chunk whenever two or more modules
+        // import it, then names that chunk after whichever constituent
+        // module happens to sort first — e.g. "urls" after
+        // assets/shared/schemas/urls.ts. Naming the group explicitly keeps
+        // the output deterministic and self-documenting instead of leaving
+        // it to that naming accident.
+        //
+        // `codeSplitting` is the current rolldown API (this project's Vite
+        // 8 bundles rolldown ~1.2, see node_modules/vite/package.json); the
+        // Rollup-compatible `manualChunks`/`advancedChunks` options are
+        // deprecated aliases for it as of rolldown 1.2.
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor",
+              test: /node_modules[\\/]zod[\\/]/,
+            },
+          ],
+        },
       },
     },
     target: "es2022",

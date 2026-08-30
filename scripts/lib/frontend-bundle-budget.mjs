@@ -5,6 +5,12 @@ export const FRONTEND_BUNDLE_BUDGETS = Object.freeze({
   chunk: Object.freeze({ rawBytes: 200 * 1024, gzipBytes: 45 * 1024 }),
 });
 
+// Compiled size of assets/scss/main.scss (public/scss/main.css after a Hugo
+// build). This ceiling locks in the current status quo (~591 KiB raw /
+// ~80 KiB gzip as of 2026-08) with a little headroom; it will be reduced
+// once the Bootstrap migration trims the compiled stylesheet.
+export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 640 * 1024, gzipBytes: 88 * 1024 });
+
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;
 }
@@ -38,6 +44,27 @@ export function assertFrontendBundleBudget(chunks, budgets = FRONTEND_BUNDLE_BUD
   const result = inspectFrontendBundleChunks(chunks, budgets);
   if (result.violations.length > 0) {
     throw new Error(`Frontend bundle budget exceeded:\n${result.violations.map((line) => `- ${line}`).join("\n")}`);
+  }
+  return result;
+}
+
+export function inspectCssBudget(code, budget = FRONTEND_CSS_BUDGET) {
+  const rawBytes = Buffer.byteLength(code);
+  const gzipBytes = gzipSync(code).byteLength;
+  const violations = [];
+  if (rawBytes > budget.rawBytes) {
+    violations.push(`raw ${kilobytes(rawBytes)} > ${kilobytes(budget.rawBytes)}`);
+  }
+  if (gzipBytes > budget.gzipBytes) {
+    violations.push(`gzip ${kilobytes(gzipBytes)} > ${kilobytes(budget.gzipBytes)}`);
+  }
+  return { rawBytes, gzipBytes, violations };
+}
+
+export function assertCssBudget(code, budget = FRONTEND_CSS_BUDGET) {
+  const result = inspectCssBudget(code, budget);
+  if (result.violations.length > 0) {
+    throw new Error(`CSS budget exceeded:\n${result.violations.map((line) => `- ${line}`).join("\n")}`);
   }
   return result;
 }
