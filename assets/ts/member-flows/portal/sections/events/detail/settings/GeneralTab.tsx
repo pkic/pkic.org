@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { api } from "../../../../api";
+import { patchJson } from "../../../../../../shared/api-client";
 import { eventManagementDetailResponseSchema } from "../../../../../../../shared/schemas/event-management";
 import {
   EVENT_VISIBILITIES,
@@ -90,13 +90,10 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
           inviteLimitAttendee: inviteLimit,
         };
         if (retentionDays.trim()) body.userRetentionDays = parseInt(retentionDays.trim(), 10) || undefined;
-        const response = await api(
+        const response = await patchJson(
           `/api/v1/events/${encodeURIComponent(event.slug)}/settings`,
+          body,
           eventManagementDetailResponseSchema,
-          {
-            method: "PATCH",
-            body: JSON.stringify(body),
-          },
         );
         onUpdated(response.event);
         setStatus("✓ Saved");

@@ -1,7 +1,7 @@
 import { proposalDecisionPreviewResponseSchema } from "../../../../../../../shared/schemas/proposal-decisions";
 import { finalizeProposalResponseSchema } from "../../../../../../../shared/schemas/proposal-management";
 import { ProposalDecisionPanel as SharedProposalDecisionPanel } from "../../../../../../components/proposals/ProposalDecisionPanel";
-import { api } from "../../../../api";
+import { postJson } from "../../../../../../shared/api-client";
 import { fmt, toast } from "../../../../ui";
 import type { ProposalDetailRecord } from "./model";
 import { proposalResourcePath } from "./proposal-api";
@@ -29,16 +29,10 @@ export function ProposalDecisionPanel({
       minReviewsRequired={minReviewsRequired}
       loading={loading}
       onPreview={(input) =>
-        api(proposalResourcePath(proposalId, "decisions/previews"), proposalDecisionPreviewResponseSchema, {
-          method: "POST",
-          body: JSON.stringify(input),
-        })
+        postJson(proposalResourcePath(proposalId, "decisions/previews"), input, proposalDecisionPreviewResponseSchema)
       }
       onFinalize={async (input) => {
-        await api(proposalResourcePath(proposalId, "decisions"), finalizeProposalResponseSchema, {
-          method: "POST",
-          body: JSON.stringify(input),
-        });
+        await postJson(proposalResourcePath(proposalId, "decisions"), input, finalizeProposalResponseSchema);
       }}
       onFinalized={onSaved}
       formatDate={fmt}

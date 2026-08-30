@@ -3,7 +3,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../../components/Badge";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { api } from "../../../api";
+import { getJson, postJson } from "../../../../../shared/api-client";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../../components/forms/FormResponseViews";
@@ -39,7 +39,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   const [regenerating, setRegenerating] = useState(false);
 
   const { data, loading, error, reload } = useData<EventRegistrationDetailResponse>(
-    async () => api(eventRegistrationPath(slug, regId), eventRegistrationDetailResponseSchema),
+    async () => getJson(eventRegistrationPath(slug, regId), eventRegistrationDetailResponseSchema),
     [slug, regId],
   );
 
@@ -49,13 +49,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleResend() {
     setResendStatus("Sending…");
     try {
-      await api(
+      await postJson(
         eventRegistrationResourcePath(slug, regId, "notifications"),
+        { type: "confirmation" },
         eventRegistrationNotificationResponseSchema,
-        {
-          method: "POST",
-          body: JSON.stringify({ type: "confirmation" }),
-        },
       );
       toast("Confirmation email queued", "success");
       setResendStatus("✓ Queued");
@@ -69,10 +66,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleOpenManage() {
     setOpeningManage(true);
     try {
-      const { manageUrl } = await api(
+      const { manageUrl } = await postJson(
         eventRegistrationResourcePath(slug, regId, "access"),
+        {},
         eventRegistrationAccessResponseSchema,
-        { method: "POST", body: "{}" },
       );
       window.open(manageUrl, "_blank", "noopener");
     } catch (e) {
@@ -85,10 +82,11 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleRegenerateBadge() {
     setRegenerating(true);
     try {
-      await api(eventRegistrationResourcePath(slug, regId, "badge"), eventRegistrationBadgeRegenerationResponseSchema, {
-        method: "POST",
-        body: "{}",
-      });
+      await postJson(
+        eventRegistrationResourcePath(slug, regId, "badge"),
+        {},
+        eventRegistrationBadgeRegenerationResponseSchema,
+      );
       toast("Badge regeneration queued", "success");
     } catch (e) {
       toast((e as Error).message, "error");

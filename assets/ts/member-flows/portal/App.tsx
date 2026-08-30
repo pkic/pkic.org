@@ -75,7 +75,11 @@ export function App() {
       if (userToken) {
         try {
           const session = await verifyMagicLink(userToken);
-          history.replaceState({}, "", `/portal/#${portalDefaultPath(session)}`);
+          // Session establishment may have restored a recorded return path;
+          // only replace the hash when it still carries the verify token.
+          if (portalHashPath(window.location.hash) === "/verify") {
+            history.replaceState({}, "", `/portal/#${portalDefaultPath(session)}`);
+          }
         } catch (err) {
           if (!cancelled) {
             setVerifyError(

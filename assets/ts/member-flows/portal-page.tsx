@@ -10,6 +10,9 @@
  */
 import { render } from "preact";
 import { App } from "./portal/App";
+import { installPortalApiInterceptors } from "./portal/state";
+
+installPortalApiInterceptors();
 
 const mount = document.getElementById("portal-app");
 if (mount) render(<App />, mount);

@@ -1,8 +1,9 @@
 import { useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../../../../components/Spinner";
 import { presentationUploadRequest } from "../../../../../../../shared/presentation-upload";
-import { api, apiCommand } from "../../../../api";
+import { deleteJson, postJson, requestJson } from "../../../../../../shared/api-client";
 import { presentationVersionResponseSchema } from "../../../../../../../shared/schemas/presentation-versions";
+import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../../../ui";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
 import { proposalResourcePath } from "./proposal-api";
@@ -56,7 +57,7 @@ export function PresentationVersionsTab({
     input.value = "";
     setUploading(true);
     try {
-      await apiCommand(proposalResourcePath(proposalId, "presentations"), {
+      await requestJson(proposalResourcePath(proposalId, "presentations"), successResponseSchema, {
         method: "POST",
         ...presentationUploadRequest(file),
       });
@@ -72,13 +73,10 @@ export function PresentationVersionsTab({
   async function handleReview(versionId: string) {
     setSavingReview(true);
     try {
-      await api(
+      await postJson(
         proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}/reviews`),
+        { status: reviewStatus, note: reviewNote.trim() || null },
         presentationVersionResponseSchema,
-        {
-          method: "POST",
-          body: JSON.stringify({ status: reviewStatus, note: reviewNote.trim() || null }),
-        },
       );
       toast("Review saved", "success");
       setReviewingId(null);
@@ -95,9 +93,10 @@ export function PresentationVersionsTab({
     if (!confirm("Delete this presentation version? This cannot be undone.")) return;
     setDeletingId(versionId);
     try {
-      await apiCommand(proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}`), {
-        method: "DELETE",
-      });
+      await deleteJson(
+        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}`),
+        successResponseSchema,
+      );
       toast("Version deleted", "success");
       onReload();
     } catch (caught) {
