@@ -10,6 +10,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 
 const workerEnv = env as unknown as Env;
 
@@ -117,22 +118,11 @@ describe("canonical email-outbox commands", () => {
   });
 
   it("rolls back command audit and delivery when live permissions are revoked before the first batch", async () => {
-    const userId = crypto.randomUUID();
-    const grantIds = [crypto.randomUUID(), crypto.randomUUID()];
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'email-operator@example.test', 'email-operator@example.test', 'user', 1, datetime('now'), datetime('now'))`,
-      ).bind(userId),
-      env.DB.prepare(
-        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-         VALUES (?, ?, 'email:read', ?, datetime('now'))`,
-      ).bind(grantIds[0], userId, adminId),
-      env.DB.prepare(
-        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-         VALUES (?, ?, 'email:manage', ?, datetime('now'))`,
-      ).bind(grantIds[1], userId, adminId),
-    ]);
+    // An email operator holds read and manage together, as the outbox screen
+    // issues them; the revocation below takes only manage away.
+    const operator = await seedPersona(env.DB, "emailOperator");
+    const userId = operator.userId;
+    const grantIds = [operator.grantIds.get("email:read")!, operator.grantIds.get("email:manage")!];
     await queue("revoked@example.test");
     const actor = createUserBackedAuthAdmin({
       id: userId,
@@ -161,27 +151,14 @@ describe("canonical email-outbox commands", () => {
   });
 
   it("rolls back reset and delivery when live permissions are revoked before the first batch", async () => {
-    const userId = crypto.randomUUID();
-    const grantIds = [crypto.randomUUID(), crypto.randomUUID()];
+    const operator = await seedPersona(env.DB, "emailOperator");
+    const userId = operator.userId;
+    const grantIds = [operator.grantIds.get("email:read")!, operator.grantIds.get("email:manage")!];
     const failedId = await queue("reset-revoked@example.test");
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'reset-operator@example.test', 'reset-operator@example.test', 'user', 1, datetime('now'), datetime('now'))`,
-      ).bind(userId),
-      env.DB.prepare(
-        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-         VALUES (?, ?, 'email:read', ?, datetime('now'))`,
-      ).bind(grantIds[0], userId, adminId),
-      env.DB.prepare(
-        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-         VALUES (?, ?, 'email:manage', ?, datetime('now'))`,
-      ).bind(grantIds[1], userId, adminId),
-      env.DB.prepare("UPDATE email_outbox SET status = 'failed' WHERE id = ?").bind(failedId),
-    ]);
+    await env.DB.prepare("UPDATE email_outbox SET status = 'failed' WHERE id = ?").bind(failedId).run();
     const actor = createUserBackedAuthAdmin({
       id: userId,
-      email: "reset-operator@example.test",
+      email: operator.email,
       role: "user",
       grants: [
         { permission: "email:read", contextType: null, contextId: null },
