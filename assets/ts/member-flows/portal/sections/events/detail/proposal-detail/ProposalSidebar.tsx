@@ -72,24 +72,24 @@ export function ProposalSidebar({
 
   return (
     <div class="col-lg-4">
-      <div class="card mb-3">
-        <div class="card-header">
-          <h6 class="mb-0">Operator Actions</h6>
-        </div>
-        <div class="card-body d-grid gap-2">
-          <button class="btn btn-primary" onClick={() => void onOpenManage()}>
-            Open Proposer Manage Page ↗
-          </button>
-          <a class="btn btn-outline-secondary" href={`mailto:${proposal.proposer_email}`}>
-            Email Proposer
-          </a>
-          <button
-            class="btn btn-outline-secondary"
-            onClick={() => void navigator.clipboard.writeText(proposal.proposer_email)}
-          >
-            Copy Proposer Email
-          </button>
-          {access.canFinalize && (
+      {access.canFinalize && (
+        <div class="card mb-3">
+          <div class="card-header">
+            <h6 class="mb-0">Operator Actions</h6>
+          </div>
+          <div class="card-body d-grid gap-2">
+            <button class="btn btn-primary" onClick={() => void onOpenManage()}>
+              Open Proposer Manage Page ↗
+            </button>
+            <a class="btn btn-outline-secondary" href={`mailto:${proposal.proposer_email}`}>
+              Email Proposer
+            </a>
+            <button
+              class="btn btn-outline-secondary"
+              onClick={() => void navigator.clipboard.writeText(proposal.proposer_email)}
+            >
+              Copy Proposer Email
+            </button>
             <>
               <hr class="my-1" />
               <button class="btn btn-outline-secondary btn-sm" onClick={() => void remindAll("profile")}>
@@ -101,31 +101,31 @@ export function ProposalSidebar({
                 </button>
               )}
             </>
-          )}
-          {access.canFinalize && !proposal.decision_status && (
-            <>
-              <hr class="my-1" />
-              <button
-                class="btn btn-outline-warning btn-sm"
-                onClick={() => void onFlag("spam")}
-                disabled={proposal.status === "spam"}
-              >
-                {proposal.status === "spam" ? "Marked as Spam" : "Mark as Spam"}
-              </button>
-              <button
-                class="btn btn-outline-warning btn-sm"
-                onClick={() => void onFlag("duplicate")}
-                disabled={proposal.status === "duplicate"}
-              >
-                {proposal.status === "duplicate" ? "Marked as Duplicate" : "Mark as Duplicate"}
-              </button>
-              <button class="btn btn-outline-danger btn-sm" onClick={() => void onFlag("delete")}>
-                Delete Proposal
-              </button>
-            </>
-          )}
+            {!proposal.decision_status && (
+              <>
+                <hr class="my-1" />
+                <button
+                  class="btn btn-outline-warning btn-sm"
+                  onClick={() => void onFlag("spam")}
+                  disabled={proposal.status === "spam"}
+                >
+                  {proposal.status === "spam" ? "Marked as Spam" : "Mark as Spam"}
+                </button>
+                <button
+                  class="btn btn-outline-warning btn-sm"
+                  onClick={() => void onFlag("duplicate")}
+                  disabled={proposal.status === "duplicate"}
+                >
+                  {proposal.status === "duplicate" ? "Marked as Duplicate" : "Mark as Duplicate"}
+                </button>
+                <button class="btn btn-outline-danger btn-sm" onClick={() => void onFlag("delete")}>
+                  Delete Proposal
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div class="card">
         <div class="card-header">

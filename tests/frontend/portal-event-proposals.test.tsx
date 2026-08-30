@@ -79,8 +79,28 @@ function speaker(userId: string, role: "proposer" | "speaker" = "speaker") {
 }
 
 type RequestRecord = { url: string; method: string };
+type DetailAccess = typeof access | (() => typeof access);
 
-function stubFetch(calls: RequestRecord[], detailAccess = access): void {
+const presentationVersion = {
+  id: "50000000-0000-4000-8000-000000000001",
+  proposalId: PROPOSAL_ID,
+  versionNumber: 1,
+  fileName: "presentation.pdf",
+  fileSize: 1024,
+  mimeType: "application/pdf",
+  uploadedByUserId: "40000000-0000-4000-8000-000000000001",
+  uploadedAt: "2026-08-02T00:00:00.000Z",
+  isCurrent: true,
+  deletedAt: null,
+  latestReview: null,
+};
+
+function stubFetch(
+  calls: RequestRecord[],
+  detailAccess: DetailAccess = access,
+  presentationVersions: (typeof presentationVersion)[] = [],
+): void {
+  const currentAccess = () => (typeof detailAccess === "function" ? detailAccess() : detailAccess);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -92,7 +112,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
             {
               group: { id: GROUP_ID, slug: "working-group", name: "Working Group" },
               event: { id: EVENT_ID, slug: "event", name: "Program Event", startsAt: null },
-              access: detailAccess,
+              access: currentAccess(),
             },
           ],
           page: { limit: 25, offset: 0, total: 1, hasMore: false },
@@ -101,7 +121,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
       if (url.startsWith(`/api/v1/events/${EVENT_SLUG}/proposals?`)) {
         return json({
           event: { id: EVENT_ID, slug: "event", name: "Program Event" },
-          access: detailAccess,
+          access: currentAccess(),
           proposals: [proposal()],
           stats: {
             byStatus: { submitted: 1 },
@@ -121,7 +141,7 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
             timezone: "UTC",
           },
           proposal: { ...proposal(), details: null, canceled_at: null, cancellation_comment: null },
-          access: detailAccess,
+          access: currentAccess(),
           form: null,
           minReviewsRequired: 2,
           sessionTypes: [{ label: "talk", requiresPresentation: true }],
@@ -183,7 +203,10 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
         return json({ comments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
       }
       if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/presentations`)) {
-        return json({ versions: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        return json({
+          versions: presentationVersions,
+          page: { limit: 25, offset: 0, total: presentationVersions.length, hasMore: false },
+        });
       }
       return json({ error: { code: "UNEXPECTED", message: url } }, 500);
     }),
@@ -208,7 +231,7 @@ afterEach(() => {
 describe("group event proposal portal", () => {
   it("uses the same canonical detail implementation from the event route", async () => {
     const calls: RequestRecord[] = [];
-    stubFetch(calls);
+    stubFetch(calls, access, [presentationVersion]);
     container = document.createElement("div");
     document.body.append(container);
     await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
@@ -224,6 +247,34 @@ describe("group event proposal portal", () => {
       ),
     ).toBe(false);
     expect(container.textContent).not.toContain("Edit");
+    expect(container.textContent).not.toContain("Operator Actions");
+    expect(container.textContent).not.toContain("Open Proposer Manage Page");
+    expect(calls.filter(({ url }) => url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`)).toHaveLength(0);
+    const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("Speakers"),
+    );
+    await act(async () => speakersTab?.click());
+    await settle();
+    expect(calls.filter(({ url }) => url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`)).toHaveLength(1);
+
+    const presentationTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("Presentation"),
+    );
+    await act(async () => presentationTab?.click());
+    await settle();
+    expect(container.textContent).toContain("presentation.pdf");
+    expect(container.textContent).toContain("Download");
+    expect(container.textContent).not.toContain("Upload on behalf of speaker");
+    expect(
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some(
+        (button) => button.textContent?.trim() === "Review",
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some(
+        (button) => button.textContent?.trim() === "Delete",
+      ),
+    ).toBe(false);
   });
 
   it("does not fetch private reviews or comments for a read-only program identity", async () => {
@@ -288,7 +339,8 @@ describe("group event proposal portal", () => {
     await settle();
 
     expect(container.textContent).toContain("Speakers");
-    expect(calls.some(({ url }) => url.endsWith(`/proposals/${PROPOSAL_ID}/speakers`))).toBe(true);
+    expect(container.textContent).toContain("Operator Actions");
+    expect(container.textContent).toContain("Open Proposer Manage Page");
     expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
 
     const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>

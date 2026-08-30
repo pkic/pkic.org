@@ -385,6 +385,7 @@ export function ProposalDetailPage({
               loading={loadingSub}
               hasMore={versionPage?.hasMore ?? false}
               loadingMore={loadingMoreVersions}
+              canManage={access.canFinalize}
               onLoadMore={() => void handleLoadMoreVersions()}
               onReload={() => void loadSubData()}
             />

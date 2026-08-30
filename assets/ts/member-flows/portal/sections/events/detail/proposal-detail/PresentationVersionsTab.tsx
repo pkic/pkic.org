@@ -28,6 +28,7 @@ export function PresentationVersionsTab({
   loading,
   hasMore,
   loadingMore,
+  canManage,
   onLoadMore,
   onReload,
 }: {
@@ -36,6 +37,7 @@ export function PresentationVersionsTab({
   loading: boolean;
   hasMore: boolean;
   loadingMore: boolean;
+  canManage: boolean;
   onLoadMore: () => void;
   onReload: () => void;
 }) {
@@ -131,14 +133,14 @@ export function PresentationVersionsTab({
     return (
       <div class="d-flex flex-column gap-2">
         <p class="text-muted fst-italic mb-0">No presentation uploaded yet.</p>
-        {uploadButton}
+        {canManage && uploadButton}
       </div>
     );
   }
 
   return (
     <div>
-      <div class="mb-3">{uploadButton}</div>
+      {canManage && <div class="mb-3">{uploadButton}</div>}
       {versions.map((version) => (
         <div
           key={version.id}
@@ -177,26 +179,30 @@ export function PresentationVersionsTab({
               >
                 ↓ Download
               </a>
-              <button
-                class="btn btn-sm btn-outline-primary"
-                onClick={() => {
-                  setReviewingId(reviewingId === version.id ? null : version.id);
-                  setReviewNote("");
-                  setReviewStatus("approved");
-                }}
-              >
-                Review
-              </button>
-              <button
-                class="btn btn-sm btn-outline-danger"
-                disabled={deletingId === version.id}
-                onClick={() => void handleDelete(version.id)}
-              >
-                {deletingId === version.id ? "Deleting…" : "Delete"}
-              </button>
+              {canManage && (
+                <>
+                  <button
+                    class="btn btn-sm btn-outline-primary"
+                    onClick={() => {
+                      setReviewingId(reviewingId === version.id ? null : version.id);
+                      setReviewNote("");
+                      setReviewStatus("approved");
+                    }}
+                  >
+                    Review
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-danger"
+                    disabled={deletingId === version.id}
+                    onClick={() => void handleDelete(version.id)}
+                  >
+                    {deletingId === version.id ? "Deleting…" : "Delete"}
+                  </button>
+                </>
+              )}
             </div>
 
-            {reviewingId === version.id && (
+            {canManage && reviewingId === version.id && (
               <div class="mt-3 border-top pt-3">
                 <div class="mb-2">
                   <select
