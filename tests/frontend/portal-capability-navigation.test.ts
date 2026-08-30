@@ -137,8 +137,9 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(globalReader)).toContainEqual({ path: "/events", section: "events", label: "Events" });
     expect(portalNavigationItems(eventReader)).toContainEqual({ path: "/events", section: "events", label: "Events" });
     expect(portalCapacityFallbackPath(eventReader, "/events/event-1/settings")).toBeNull();
-    expect(portalNavigationItems(proposalOnly)).not.toContainEqual(expect.objectContaining({ path: "/events" }));
-    expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBe("/home");
+    // Proposal reviewers reach their programs through the Events domain.
+    expect(portalNavigationItems(proposalOnly)).toContainEqual({ path: "/events", section: "events", label: "Events" });
+    expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBeNull();
   });
 
   it("exposes Donations to global readers or synchronizers", () => {
@@ -445,7 +446,11 @@ describe("portal capability-derived navigation", () => {
     const session = portalSessionFixture({ member: true });
     const labels = portalNavigationItems(session).map((item) => item.label);
     expect(labels[0]).toBe("Home");
-    expect(labels).toContain("My Profile");
+    // Identity destinations live in the avatar menu, not the sidebar.
+    expect(labels).not.toContain("My Profile");
+    expect(labels).not.toContain("My Application");
+    expect(portalSectionEnabled(session, "profile")).toBe(true);
+    expect(portalSectionEnabled(session, "participation")).toBe(true);
     expect(labels).toContain("Groups");
     // Organizations are reached through the avatar menu and dashboard; the
     // sidebar entry is the permission-gated directory.
@@ -467,10 +472,11 @@ describe("portal capability-derived navigation", () => {
   });
 
   it("shows both navigation capacities to one dual-capacity identity", () => {
-    const labels = portalNavigationItems(portalSessionFixture({ staff: true, member: true })).map((item) => item.label);
-    expect(labels).toContain("My Profile");
+    const session = portalSessionFixture({ staff: true, member: true });
+    const labels = portalNavigationItems(session).map((item) => item.label);
     expect(labels).toContain("Groups");
     expect(labels).not.toContain("Management");
+    expect(portalSectionEnabled(session, "profile")).toBe(true);
   });
 
   it("keeps shared selected-group routes after member-capacity loss", () => {

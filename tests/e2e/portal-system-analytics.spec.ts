@@ -23,20 +23,16 @@ test("permitted staff use focused platform analytics through the System portal",
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics\/registrations$/);
   await expect(page.getByText("Registrations — Weekly (last 12 weeks)", { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Donations", exact: true }).last().click();
-  await expect(page).toHaveURL(/\/portal\/#\/system\/analytics\/donations$/);
-  await expect(page.getByText("Total Gross (USD)", { exact: true })).toBeVisible();
+  // Donation analytics now live under Donations → Stats, not here — the
+  // System Analytics tab strip only offers Overview and Registrations.
+  await expect(page.getByRole("navigation", { name: "System analytics" }).getByText("Donations")).toHaveCount(0);
 
   await page.goto("/portal/#/system/analytics");
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics$/);
   await expect(page.getByRole("heading", { name: "System Analytics" })).toBeVisible();
 
   expect(analyticsRequests).toEqual(
-    expect.arrayContaining([
-      "/api/v1/analytics/summary",
-      "/api/v1/analytics/registrations",
-      "/api/v1/analytics/donations",
-    ]),
+    expect.arrayContaining(["/api/v1/analytics/summary", "/api/v1/analytics/registrations"]),
   );
   expect(retiredSystemRequests).toEqual([]);
   expect(legacyRequests).toEqual([]);

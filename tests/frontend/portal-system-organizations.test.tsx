@@ -182,7 +182,8 @@ describe("portal System Organizations", () => {
     await settle();
     await settle();
     expect(readOnly.textContent).not.toContain("Edit");
-    expect(readOnly.textContent).not.toContain("Add representative");
+    expect(readOnly.textContent).not.toContain("Add new person");
+    expect(readOnly.textContent).not.toContain("Link existing user");
     expect(readOnly.textContent).not.toContain("Remove");
 
     const writer = mount(
@@ -193,7 +194,8 @@ describe("portal System Organizations", () => {
     );
     expect(writer.textContent).toContain("Edit");
     expect(writer.textContent).toContain("Contacts");
-    expect(writer.textContent).toContain("Add representative");
+    expect(writer.textContent).toContain("Add new person");
+    expect(writer.textContent).toContain("Link existing user");
     expect(writer.textContent).toContain("Block");
   });
 
@@ -227,7 +229,7 @@ describe("portal System Organizations", () => {
     );
     await settle();
     const addButton = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Add representative",
+      (button) => button.textContent?.trim() === "Add new person",
     );
     expect(addButton).toBeTruthy();
     await act(async () => addButton?.click());

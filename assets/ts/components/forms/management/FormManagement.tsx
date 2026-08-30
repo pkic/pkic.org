@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   formCreateResponseSchema,
   formDeleteResponseSchema,
@@ -21,7 +21,7 @@ import {
   eventRegistrationStatusLabel,
 } from "../../../../shared/schemas/event-registrations";
 import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-client";
-import { ApiDataTable, type ApiTableActions } from "../../ApiDataTable";
+import { ApiDataTable } from "../../ApiDataTable";
 import { ErrorAlert } from "../../ErrorAlert";
 import { Spinner } from "../../Spinner";
 import { Tabs } from "../../Tabs";
@@ -233,46 +233,58 @@ export function FormManagementDetail({
   );
 }
 
+/** Distinct create-form view: replaces the forms list rather than layering above it. */
+export function FormManagementCreate({
+  onCreated,
+  onCancel,
+  notify,
+}: {
+  onCreated: (formKey: string) => void;
+  onCancel: () => void;
+  notify?: (message: string, kind: "success" | "error") => void;
+}) {
+  return (
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+          ← All forms
+        </button>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">New form</h6>
+        </div>
+        <div class="card-body">
+          <FormDefinitionManagementEditor
+            mode="create"
+            detail={null}
+            createEndpoint="/api/v1/forms"
+            onSaved={onCreated}
+            onCancel={onCancel}
+            notify={notify}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FormManagementList({
   canWrite,
   onOpenForm,
-  notify,
+  onCreateNew,
 }: {
   canWrite: boolean;
   onOpenForm: (formKey: string) => void;
-  notify?: (message: string, kind: "success" | "error") => void;
+  onCreateNew?: () => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const actions = useRef<ApiTableActions | null>(null);
-
   return (
     <div>
-      {canWrite && (
+      {canWrite && onCreateNew && (
         <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
+          <button type="button" class="btn btn-sm btn-success" onClick={onCreateNew}>
             New form
           </button>
-        </div>
-      )}
-      {creating && (
-        <div class="card mb-3">
-          <div class="card-header">
-            <h6 class="mb-0">New form</h6>
-          </div>
-          <div class="card-body">
-            <FormDefinitionManagementEditor
-              mode="create"
-              detail={null}
-              createEndpoint="/api/v1/forms"
-              onSaved={(key) => {
-                setCreating(false);
-                void actions.current?.reload();
-                onOpenForm(key);
-              }}
-              onCancel={() => setCreating(false)}
-              notify={notify}
-            />
-          </div>
         </div>
       )}
       <ApiDataTable
@@ -284,7 +296,6 @@ export function FormManagementList({
         initialPageSize={25}
         initialSort="title"
         searchPlaceholder="Search forms…"
-        actionsRef={actions}
         columns={[
           { header: "Key", cell: (form: FormSummary) => <span class="mono small">{form.key}</span> },
           {

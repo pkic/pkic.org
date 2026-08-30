@@ -3,6 +3,9 @@ import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
 
 const EventList = lazy(() => import("./EventList").then((module) => ({ default: module.EventList })));
+const ProposalPrograms = lazy(() =>
+  import("../management/ProposalPrograms").then((module) => ({ default: module.ProposalPrograms })),
+);
 const EventDetailView = lazy(() =>
   import("./detail/EventDetail").then((module) => ({ default: module.EventDetailView })),
 );
@@ -33,7 +36,12 @@ export function EventWorkspace(props: EventWorkspaceProps) {
   let title: string;
   if (props.view === "list") {
     title = "Events";
-    content = <EventList />;
+    content = (
+      <div class="d-flex flex-column gap-3">
+        <EventList />
+        <ProposalPrograms />
+      </div>
+    );
   } else if (props.view === "proposal") {
     title = "Proposal";
     content = <ProposalDetailPage slug={props.slug} proposalId={props.resourceId} />;

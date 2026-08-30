@@ -220,11 +220,21 @@ function Contacts({ organization, onSaved }: { organization: OrganizationDetail;
                 onChange={(event) => void update(field, (event.target as HTMLSelectElement).value)}
               >
                 <option value="">None</option>
-                {organization.representatives.map((representative) => (
-                  <option key={representative.userId} value={representative.userId}>
-                    {representative.name} ({representative.email})
-                  </option>
-                ))}
+                {organization.representatives
+                  // One person cannot hold both contact roles; the service
+                  // enforces it, the select simply hides the collision.
+                  .filter(
+                    (representative) =>
+                      representative.userId !==
+                      organization[
+                        field === "primaryContactUserId" ? "secondaryContactUserId" : "primaryContactUserId"
+                      ],
+                  )
+                  .map((representative) => (
+                    <option key={representative.userId} value={representative.userId}>
+                      {representative.name} ({representative.email})
+                    </option>
+                  ))}
               </select>
             </div>
           ))}

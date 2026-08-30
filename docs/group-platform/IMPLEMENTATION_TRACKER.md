@@ -2038,6 +2038,34 @@ Status: In progress (2026-08-30)
       each represented organization from the avatar menu at
       `/portal/#/organizations/:organizationId`, and retire the acting-capacity
       "My Organization" special case.
+- [ ] Close the request-contract blind spot: `lint:api-contracts` verifies
+      response schemas but request bodies leave the client unparsed, so a
+      frontend can emit a contract-violating request with every gate green
+      (caught 2026-08-30 when the representative link form sent
+      `kind: "user"` instead of `kind: "existing_user"`). Add a
+      request-parsing client helper (body validated through the shared
+      request schema before send), migrate mutating call sites, and extend
+      the contract lint to require it; until then, mock-based frontend tests
+      parse captured bodies through the shared schemas (rule added to
+      tests/AGENTS.md).
+- [ ] Add an index for `session_proposals.proposer_user_id` in the
+      consolidated branch migration: the new `/users/current/proposals`
+      submitter branch currently scans the table (flagged by its
+      explain-plan check; the speaker branch uses the existing unique
+      index).
+- [ ] Per-representation profiles: a person representing several
+      organizations has one global user profile today (job title, links,
+      email); decide which fields become per-representation overrides on
+      `organization_representatives` (job title is the clear candidate;
+      contact email possibly; bio probably stays global) and surface them in
+      the organization workspace and public profiles.
+- [ ] Retire or repurpose the dormant `users.role` value `guest`: only
+      `admin` has behavior (full-access short-circuit); `user` is the
+      default; `guest` has zero behavioral references. Either it becomes the
+      role of identity-first auto-provisioned participants or it leaves the
+      vocabulary. Move role editing out of the users table's inline dropdown
+      into the user detail access panel with confirmation — changing
+      admin-ness is a high-impact act, not a row-level toggle.
 - [ ] Identity-first participation: participation flows (event registration,
       proposals, guest invitations, donations) auto-provision a user record
       for the participant; sign-in eligibility becomes "a user record

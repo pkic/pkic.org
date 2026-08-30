@@ -27,6 +27,9 @@ const MyOrganization = lazy(() =>
 );
 const Groups = lazy(() => import("../sections/Groups").then((module) => ({ default: module.Groups })));
 const Home = lazy(() => import("../sections/Home").then((module) => ({ default: module.Home })));
+const Participation = lazy(() =>
+  import("../sections/Participation").then((module) => ({ default: module.Participation })),
+);
 const MyApplications = lazy(() =>
   import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
 );
@@ -39,9 +42,6 @@ const SystemManagement = lazy(() =>
 );
 const GroupWorkspace = lazy(() =>
   import("../sections/management/GroupWorkspace").then((module) => ({ default: module.GroupWorkspace })),
-);
-const GroupEventProposals = lazy(() =>
-  import("../sections/management/GroupEventProposals").then((module) => ({ default: module.GroupEventProposals })),
 );
 const DonationDetailPage = lazy(() =>
   import("../sections/system-donations/DonationDetailPage").then((module) => ({ default: module.DonationDetailPage })),
@@ -221,12 +221,17 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasAdminCapacity && (
+            {hasGroupsAccess && (
               <Route
-                path="/groups/:groupId/events/:eventId/proposals"
-                component={({ params }: { params: { groupId: string; eventId: string } }) => (
-                  <SectionWrapper title="Proposal Program">
-                    <GroupEventProposals groupId={params.groupId} eventId={params.eventId} />
+                path="/groups/:groupId/events/:eventId/:eventTab?"
+                component={({ params }: { params: { groupId: string; eventId: string; eventTab?: string } }) => (
+                  <SectionWrapper title="Group">
+                    <GroupWorkspace
+                      groupId={params.groupId}
+                      view="events"
+                      resourceId={params.eventId}
+                      resourceTab={params.eventTab}
+                    />
                   </SectionWrapper>
                 )}
               />
@@ -492,6 +497,16 @@ export function PortalShell() {
                 component={() => (
                   <SectionWrapper title="My Application">
                     <MyApplications />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {portalSectionEnabled(session, "participation") && (
+              <Route
+                path="/participation"
+                component={() => (
+                  <SectionWrapper title="My participation">
+                    <Participation />
                   </SectionWrapper>
                 )}
               />

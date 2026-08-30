@@ -33,6 +33,7 @@ function group(overrides: Partial<SelfGroup> = {}): SelfGroup {
     active: true,
     revision: 0,
     membershipCapacityCount: 0,
+    representedMemberCount: 0,
     participantCount: 0,
     childCount: 0,
     createdAt: "2026-08-01T00:00:00.000Z",

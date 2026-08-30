@@ -31,25 +31,24 @@ unproved rather than assumed.
 | Known sponsorship tier submits and renders both messages                                   | `tests/e2e/sponsor-application.spec.ts`           |
 | Organization contact adds, blocks, and explicitly restores a representative                | `tests/e2e/portal-system-organizations.spec.ts`   |
 
-
 ## Member self-service journeys
 
 Real flows a member performs for themselves, added after a review found the
 first pass tested a checklist rather than the product.
 
-| Journey | Spec |
-| --- | --- |
-| One person representing two organizations gets a separate ballot for each, and voting one does not mark the other | `tests/e2e/vote-participation.spec.ts` |
-| Changing your mind replaces your ballot instead of adding one | `tests/e2e/vote-participation.spec.ts` |
-| An election is decided from the candidate list, and a motion answer is refused for it | `tests/e2e/vote-participation.spec.ts` |
-| The ballot box is shut before the window opens and after it closes | `tests/e2e/vote-participation.spec.ts` |
-| A member outside the eligible categories is told so and cannot cast | `tests/e2e/vote-participation.spec.ts` |
-| A proposer adds, updates, and removes a co-speaker while the proposal is open | `tests/e2e/proposal-self-service-states.spec.ts` |
-| Title and abstract are editable while open | `tests/e2e/proposal-self-service-states.spec.ts` |
-| Acceptance freezes the abstract but keeps the speaker roster editable | `tests/e2e/proposal-self-service-states.spec.ts` |
-| A rejected proposal closes both the content and the roster | `tests/e2e/proposal-self-service-states.spec.ts` |
-| An organization contact adds a colleague, and can block and restore that access from their own profile | `tests/e2e/member-colleague-self-service.spec.ts` |
-| A member joins an open working group, sets a mailing-list preference, and leaves again | `tests/e2e/member-colleague-self-service.spec.ts` |
+| Journey                                                                                                           | Spec                                              |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| One person representing two organizations gets a separate ballot for each, and voting one does not mark the other | `tests/e2e/vote-participation.spec.ts`            |
+| Changing your mind replaces your ballot instead of adding one                                                     | `tests/e2e/vote-participation.spec.ts`            |
+| An election is decided from the candidate list, and a motion answer is refused for it                             | `tests/e2e/vote-participation.spec.ts`            |
+| The ballot box is shut before the window opens and after it closes                                                | `tests/e2e/vote-participation.spec.ts`            |
+| A member outside the eligible categories is told so and cannot cast                                               | `tests/e2e/vote-participation.spec.ts`            |
+| A proposer adds, updates, and removes a co-speaker while the proposal is open                                     | `tests/e2e/proposal-self-service-states.spec.ts`  |
+| Title and abstract are editable while open                                                                        | `tests/e2e/proposal-self-service-states.spec.ts`  |
+| Acceptance freezes the abstract but keeps the speaker roster editable                                             | `tests/e2e/proposal-self-service-states.spec.ts`  |
+| A rejected proposal closes both the content and the roster                                                        | `tests/e2e/proposal-self-service-states.spec.ts`  |
+| An organization contact adds a colleague, and can block and restore that access from their own profile            | `tests/e2e/member-colleague-self-service.spec.ts` |
+| A member joins an open working group, sets a mailing-list preference, and leaves again                            | `tests/e2e/member-colleague-self-service.spec.ts` |
 
 ## Already proved by a browser journey
 

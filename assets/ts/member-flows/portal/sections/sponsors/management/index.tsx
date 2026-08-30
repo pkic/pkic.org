@@ -37,7 +37,6 @@ import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
 import { CompanyDetailPanel } from "./CompanyDetailPanel";
 import { useCompanySponsorships } from "./useCompanySponsorships";
 import { SponsorshipDetail } from "./SponsorshipDetail";
-import { SponsorshipTierConfig } from "./SponsorshipTierConfig";
 
 export {
   companyDetailParams,
@@ -162,7 +161,6 @@ export function Sponsorships({
 
   return (
     <div>
-      <SponsorshipTierConfig canWrite={canWrite} />
       <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
         <div class="d-flex gap-2">
           <select

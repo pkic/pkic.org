@@ -7,8 +7,21 @@ import {
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
+import { Link } from "wouter";
 import { deleteJson, patchJson, postJson } from "../../../shared/api-client";
+import { portalHasGlobalPermission } from "../shell/portal-navigation";
+import { portalSession } from "../state";
 import { toast } from "../ui";
+
+/** The person's name links into user administration when the viewer may see it. */
+function RepresentativeName({ userId, name }: { userId: string; name: string }) {
+  if (!portalHasGlobalPermission(portalSession.value, "users:read")) return <strong>{name}</strong>;
+  return (
+    <Link href={`/users/${encodeURIComponent(userId)}`} class="fw-bold">
+      {name}
+    </Link>
+  );
+}
 
 export interface ActiveOrganizationRepresentative {
   userId: string;
@@ -49,7 +62,7 @@ function activeColumns(): Column<ActiveOrganizationRepresentative>[] {
       header: "Name",
       cell: (representative) => (
         <>
-          <strong>{representative.name ?? representative.email}</strong>
+          <RepresentativeName userId={representative.userId} name={representative.name ?? representative.email} />
           <div class="mono text-muted small">{representative.email}</div>
           {representative.jobTitle && <div class="small text-muted">{representative.jobTitle}</div>}
         </>
@@ -181,7 +194,7 @@ export function OrganizationRepresentativeDirectory({
             const active = activeByUserId.get(representative.userId);
             return (
               <>
-                <strong>{representative.userName}</strong>
+                <RepresentativeName userId={representative.userId} name={representative.userName} />
                 <div class="mono text-muted small">{representative.email}</div>
                 {active?.jobTitle && <div class="small text-muted">{active.jobTitle}</div>}
               </>
