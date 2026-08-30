@@ -12,7 +12,7 @@ import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
-import { buildReplacementProposerOptions, SpeakerCard } from "./proposal-detail/SpeakerCard";
+import { buildReplacementProposerOptions, proposalSpeakerEndpoints, SpeakerCard } from "./proposal-detail/SpeakerCard";
 import {
   isProposalDecidableStatus,
   proposalFlagResponseSchema,
@@ -25,10 +25,23 @@ import { proposalAccessLinkResponseSchema } from "../../../../../../shared/schem
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
 import { proposalResourcePath } from "./proposal-detail/proposal-api";
+import { ProposalSpeakersPanel } from "../../../../../components/proposals/ProposalSpeakersPanel";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposalId: string }) {
+export function ProposalDetailPage({
+  slug,
+  proposalId,
+  contextLabel,
+  onBack,
+  enableSpeakerInvites = false,
+}: {
+  slug: string;
+  proposalId: string;
+  contextLabel?: string | null;
+  onBack?: () => void;
+  enableSpeakerInvites?: boolean;
+}) {
   const [, navigate] = useHashLocation();
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
@@ -111,7 +124,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const tabItems = [
     { key: "submission", label: "Submission" },
     { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
-    { key: "reviews", label: `Reviews (${loadingSub ? "…" : reviewCount})` },
+    ...(access.canReview ? [{ key: "reviews", label: `Reviews (${loadingSub ? "…" : reviewCount})` }] : []),
     ...(canManagePresentation
       ? [
           {
@@ -120,7 +133,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           },
         ]
       : []),
-    { key: "audit-log", label: "Audit Log" },
+    ...(access.canReview ? [{ key: "audit-log", label: "Audit Log" }] : []),
     ...((access.canFinalize && (proposalDecidable || proposal.decision_status)) ||
     (access.canCancelAcceptedProposal && proposal.status === "accepted") ||
     proposal.status === "canceled"
@@ -191,9 +204,13 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     <div>
       {/* ── Header ── */}
       <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/events/${slug}/proposals`)}>
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}
+        >
           ← Back
         </button>
+        {contextLabel && <span class="text-muted small">{contextLabel}</span>}
         <h5 class="mb-0 me-1">{proposal.title}</h5>
         <Badge status={proposal.status} />
         {proposal.decision_status && <Badge status={proposal.decision_status} />}
@@ -315,7 +332,20 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           {/* ── Speakers tab ── */}
           {activeTab === "speakers" && (
             <div>
-              {loadingSub ? (
+              {enableSpeakerInvites ? (
+                <ProposalSpeakersPanel
+                  endpoint={proposalResourcePath(proposalId)}
+                  proposalId={proposalId}
+                  access={access}
+                  proposal={proposal}
+                  sessionTypes={sessionTypes}
+                  onReload={reload}
+                  notify={toast}
+                  endpoints={proposalSpeakerEndpoints()}
+                  inviteEndpoint={proposalResourcePath(proposalId, "speakers")}
+                  inviteWindow={data.event}
+                />
+              ) : loadingSub ? (
                 <Spinner />
               ) : speakers.length === 0 ? (
                 <p class="text-muted fst-italic">No speakers assigned yet.</p>

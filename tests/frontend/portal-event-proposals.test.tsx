@@ -2,10 +2,10 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  GroupEventProposals,
-  portalSpeakerAssetPath,
-} from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
+import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage";
+import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -182,6 +182,9 @@ function stubFetch(calls: RequestRecord[], detailAccess = access): void {
       if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/comments`)) {
         return json({ comments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
       }
+      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/presentations`)) {
+        return json({ versions: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+      }
       return json({ error: { code: "UNEXPECTED", message: url } }, 500);
     }),
   );
@@ -203,6 +206,26 @@ afterEach(() => {
 });
 
 describe("group event proposal portal", () => {
+  it("uses the same canonical detail implementation from the event route", async () => {
+    const calls: RequestRecord[] = [];
+    stubFetch(calls);
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
+    await settle();
+    await settle();
+
+    expect(container.textContent).toContain("Read-only proposal");
+    expect(calls.some(({ url }) => url === `/api/v1/proposals/${PROPOSAL_ID}`)).toBe(true);
+    expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) =>
+        button.textContent?.includes("Reviews"),
+      ),
+    ).toBe(false);
+    expect(container.textContent).not.toContain("Edit");
+  });
+
   it("does not fetch private reviews or comments for a read-only program identity", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls);
@@ -219,7 +242,7 @@ describe("group event proposal portal", () => {
     await settle();
 
     expect(container.textContent).toContain("Read-only proposal");
-    expect(container.textContent).not.toContain("Reviews");
+    expect(container.textContent).not.toContain("Internal Comments");
     expect(calls.some(({ url }) => url.includes("/reviews"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/comments"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(false);
@@ -240,7 +263,13 @@ describe("group event proposal portal", () => {
     await settle();
 
     expect(container.textContent).toContain("Reviews");
-    expect(container.textContent).toContain("Audit log");
+    const auditTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("Audit Log"),
+    );
+    expect(auditTab).not.toBeNull();
+    await act(async () => auditTab?.click());
+    await settle();
+    expect(container.textContent).toContain("Audit Log");
     expect(container.textContent).not.toContain("Final decision");
     expect(calls.some(({ url }) => url.includes("/decisions"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(true);
@@ -261,6 +290,12 @@ describe("group event proposal portal", () => {
     expect(container.textContent).toContain("Speakers");
     expect(calls.some(({ url }) => url.endsWith(`/proposals/${PROPOSAL_ID}/speakers`))).toBe(true);
     expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
+
+    const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("Speakers"),
+    );
+    await act(async () => speakersTab?.click());
+    await settle();
 
     const edit = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("Edit profile"),
@@ -300,9 +335,7 @@ describe("group event proposal portal", () => {
     await act(async () => gravatar?.click());
     await settle();
     expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/headshot"))).toBe(true);
-    expect(portalSpeakerAssetPath(`/api/v1/proposals/${PROPOSAL_ID}`, "speaker-1", "headshot")).toContain(
-      "/speakers/speaker-1/headshot",
-    );
+    expect(proposalSpeakerAssetPath(PROPOSAL_ID, "speaker-1", "headshot")).toContain("/speakers/speaker-1/headshot");
 
     const remove = container.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]");
     const replacement = container.querySelector<HTMLSelectElement>("[data-replacement-proposer]");
