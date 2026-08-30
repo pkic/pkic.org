@@ -1,29 +1,33 @@
 import { useEffect, useState } from "preact/hooks";
 
 /**
- * Preset recurrence shapes the backend expansion (ICAL.Recur, driven by
+ * Recurrence shapes the backend expansion (ICAL.Recur, driven by
  * `functions/_lib/services/event-series/recurrence.ts`) understands as plain
  * RFC 5545 RRULE strings. The shared `recurrenceRuleSchema` only requires a
  * `FREQ=DAILY|WEEKLY|MONTHLY|YEARLY` token; everything else is whatever
- * ical.js's `Recur.fromString` accepts, so these presets are convenience
- * shortcuts onto that grammar, not a separate backend vocabulary.
+ * ical.js's `Recur.fromString` accepts.
+ *
+ * Instead of a fixed preset list, the editor composes a shape (weekly,
+ * monthly by date, monthly by ordinal weekday) with a free interval, so
+ * "every 3 weeks" and "every other month" are first-class. An ad-hoc series
+ * is a real shape too: `FREQ=DAILY;COUNT=1` expands to exactly one
+ * occurrence at the series start, which keeps the stored rule non-null
+ * without any schema change.
  */
-export const RECURRENCE_PRESET_KEYS = [
-  "weekly",
-  "every_two_weeks",
-  "monthly_by_day",
-  "monthly_by_ordinal_weekday",
-] as const;
-export type RecurrencePresetKey = (typeof RECURRENCE_PRESET_KEYS)[number];
+export const RECURRENCE_MODES = ["none", "weekly", "monthly_by_day", "monthly_by_ordinal_weekday"] as const;
+export type RecurrenceMode = (typeof RECURRENCE_MODES)[number];
 
-export const RECURRENCE_PRESET_LABELS: Record<RecurrencePresetKey, string> = {
+export const RECURRENCE_MODE_LABELS: Record<RecurrenceMode, string> = {
+  none: "Does not repeat",
   weekly: "Weekly",
-  every_two_weeks: "Every two weeks",
   monthly_by_day: "Monthly, same date",
-  monthly_by_ordinal_weekday: "Monthly, on an ordinal weekday",
+  monthly_by_ordinal_weekday: "Monthly, on a weekday",
 };
 
 export const ADVANCED_RECURRENCE_MODE = "__advanced__";
+
+/** The one-occurrence rule an ad-hoc series stores; satisfies the NOT NULL column and RFC 5545 alike. */
+export const SINGLE_OCCURRENCE_RULE = "FREQ=DAILY;COUNT=1";
 
 export const RECURRENCE_WEEKDAYS = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 export type RecurrenceWeekday = (typeof RECURRENCE_WEEKDAYS)[number];
@@ -49,15 +53,18 @@ const ORDINAL_LABELS: Record<RecurrenceOrdinal, string> = {
 
 const JS_WEEKDAY_TO_RRULE: RecurrenceWeekday[] = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 
+export const MAX_RECURRENCE_INTERVAL = 26;
+
 export interface MonthlyOrdinalWeekday {
   ordinal: RecurrenceOrdinal;
   weekday: RecurrenceWeekday;
 }
 
-export interface MatchedRecurrencePreset {
-  preset: RecurrencePresetKey;
-  ordinalWeekday?: MonthlyOrdinalWeekday;
-}
+export type RecurrenceShape =
+  | { mode: "none" }
+  | { mode: "weekly"; interval: number }
+  | { mode: "monthly_by_day"; interval: number }
+  | { mode: "monthly_by_ordinal_weekday"; interval: number; ordinalWeekday: MonthlyOrdinalWeekday };
 
 function parseRuleParts(rule: string): Record<string, string> {
   const parts: Record<string, string> = {};
@@ -72,50 +79,61 @@ function parseRuleParts(rule: string): Record<string, string> {
 
 const BYDAY_PATTERN = /^(-?[1-4])(MO|TU|WE|TH|FR|SA|SU)$/;
 
-/** Builds the canonical RRULE string for one preset. Pure and side-effect free for testing. */
-export function buildRecurrenceRule(preset: RecurrencePresetKey, ordinalWeekday?: MonthlyOrdinalWeekday): string {
-  switch (preset) {
+/** Builds the canonical RRULE string for one shape. Pure and side-effect free for testing. */
+export function buildRecurrenceRule(shape: RecurrenceShape): string {
+  switch (shape.mode) {
+    case "none":
+      return SINGLE_OCCURRENCE_RULE;
     case "weekly":
-      return "FREQ=WEEKLY;INTERVAL=1";
-    case "every_two_weeks":
-      return "FREQ=WEEKLY;INTERVAL=2";
+      return `FREQ=WEEKLY;INTERVAL=${shape.interval}`;
     case "monthly_by_day":
-      return "FREQ=MONTHLY;INTERVAL=1";
+      return `FREQ=MONTHLY;INTERVAL=${shape.interval}`;
     case "monthly_by_ordinal_weekday": {
-      const { ordinal, weekday } = ordinalWeekday ?? { ordinal: 1, weekday: "MO" };
-      return `FREQ=MONTHLY;INTERVAL=1;BYDAY=${ordinal}${weekday}`;
+      const { ordinal, weekday } = shape.ordinalWeekday;
+      return `FREQ=MONTHLY;INTERVAL=${shape.interval};BYDAY=${ordinal}${weekday}`;
     }
   }
 }
 
+function isValidInterval(interval: number): boolean {
+  return Number.isInteger(interval) && interval >= 1 && interval <= MAX_RECURRENCE_INTERVAL;
+}
+
 /**
- * Matches an RRULE string against the known presets. Returns `null` when the
- * rule is valid but does not correspond to any preset shape, so the caller
- * falls back to advanced (raw-string) mode.
+ * Matches an RRULE string against the composable shapes. Returns `null` when
+ * the rule is valid but expresses something the structured controls cannot
+ * (arbitrary BYDAY lists, UNTIL bounds, yearly rules…), so the caller falls
+ * back to advanced (raw-string) mode.
  */
-export function matchRecurrencePreset(rule: string): MatchedRecurrencePreset | null {
+export function matchRecurrenceShape(rule: string): RecurrenceShape | null {
   const parts = parseRuleParts(rule);
   const keys = new Set(Object.keys(parts));
   const freq = parts.FREQ;
   const interval = parts.INTERVAL !== undefined ? Number(parts.INTERVAL) : 1;
-  if (!freq || !Number.isFinite(interval)) return null;
+  if (!freq) return null;
+
+  if (freq === "DAILY" && parts.COUNT === "1") {
+    const onlyFreqCountInterval = [...keys].every((key) => key === "FREQ" || key === "COUNT" || key === "INTERVAL");
+    if (onlyFreqCountInterval && (parts.INTERVAL === undefined || interval === 1)) return { mode: "none" };
+    return null;
+  }
+  if (!isValidInterval(interval)) return null;
 
   const onlyFreqAndInterval = [...keys].every((key) => key === "FREQ" || key === "INTERVAL");
 
   if (freq === "WEEKLY" && onlyFreqAndInterval) {
-    if (interval === 1) return { preset: "weekly" };
-    if (interval === 2) return { preset: "every_two_weeks" };
-    return null;
+    return { mode: "weekly", interval };
   }
 
-  if (freq === "MONTHLY" && interval === 1) {
-    if (onlyFreqAndInterval) return { preset: "monthly_by_day" };
+  if (freq === "MONTHLY") {
+    if (onlyFreqAndInterval) return { mode: "monthly_by_day", interval };
     const onlyFreqIntervalByday = [...keys].every((key) => key === "FREQ" || key === "INTERVAL" || key === "BYDAY");
     if (onlyFreqIntervalByday && parts.BYDAY) {
       const match = BYDAY_PATTERN.exec(parts.BYDAY);
       if (match) {
         return {
-          preset: "monthly_by_ordinal_weekday",
+          mode: "monthly_by_ordinal_weekday",
+          interval,
           ordinalWeekday: { ordinal: Number(match[1]) as RecurrenceOrdinal, weekday: match[2] as RecurrenceWeekday },
         };
       }
@@ -125,7 +143,28 @@ export function matchRecurrencePreset(rule: string): MatchedRecurrencePreset | n
   return null;
 }
 
-/** Derives a sensible default ordinal/weekday pair from a reference date, for the ordinal-weekday preset. */
+/** Human summary of a shape, e.g. "Repeats every 3 weeks" — words for 1 and 2, numerals beyond. */
+export function describeRecurrenceShape(shape: RecurrenceShape): string {
+  const every = (interval: number, unit: string): string => {
+    if (interval === 1) return `every ${unit}`;
+    if (interval === 2) return `every other ${unit}`;
+    return `every ${interval} ${unit}s`;
+  };
+  switch (shape.mode) {
+    case "none":
+      return "One meeting only — does not repeat.";
+    case "weekly":
+      return `Repeats ${every(shape.interval, "week")}.`;
+    case "monthly_by_day":
+      return `Repeats ${every(shape.interval, "month")} on the same date.`;
+    case "monthly_by_ordinal_weekday": {
+      const { ordinal, weekday } = shape.ordinalWeekday;
+      return `Repeats ${every(shape.interval, "month")} on the ${ORDINAL_LABELS[ordinal].toLowerCase()} ${WEEKDAY_LABELS[weekday]}.`;
+    }
+  }
+}
+
+/** Derives a sensible default ordinal/weekday pair from a reference date, for the ordinal-weekday shape. */
 export function ordinalWeekdayFromDate(date: Date): MonthlyOrdinalWeekday {
   const weekday = JS_WEEKDAY_TO_RRULE[date.getDay()];
   const dayOfMonth = date.getDate();
@@ -144,12 +183,14 @@ function coerceDate(value: string | Date | undefined): Date {
 }
 
 /**
- * Preset-first recurrence-rule editor. Common shapes are chosen from a
- * select and written as an RFC 5545 RRULE string; an "Advanced" option
- * reveals the raw string for anything else. Round-trips: loading an existing
- * rule that matches a preset shows that preset, otherwise it opens directly
- * in advanced mode. The value handed to `onChange` is always the plain RRULE
- * string — the contract never changes shape.
+ * Composable recurrence editor. A shape select (does not repeat, weekly,
+ * monthly by date, monthly by weekday) pairs with a free "every N" interval,
+ * so ad-hoc meetings, every-3-weeks, and every-other-month schedules are all
+ * structured choices; a "Custom rule" option reveals the raw RFC 5545 string
+ * for anything else. Round-trips: loading an existing rule that matches a
+ * shape shows that shape, otherwise it opens directly in custom mode. The
+ * value handed to `onChange` is always the plain RRULE string — the contract
+ * never changes shape.
  */
 export function RecurrenceEditor({
   id,
@@ -166,38 +207,62 @@ export function RecurrenceEditor({
   required?: boolean;
   referenceDate?: string | Date;
 }) {
-  const initialMatch = matchRecurrencePreset(value);
-  const [mode, setMode] = useState<RecurrencePresetKey | typeof ADVANCED_RECURRENCE_MODE>(
-    initialMatch?.preset ?? ADVANCED_RECURRENCE_MODE,
+  const initialShape = matchRecurrenceShape(value);
+  const [mode, setMode] = useState<RecurrenceMode | typeof ADVANCED_RECURRENCE_MODE>(
+    initialShape?.mode ?? ADVANCED_RECURRENCE_MODE,
   );
+  const [interval, setInterval] = useState(initialShape && initialShape.mode !== "none" ? initialShape.interval : 1);
   const [ordinalWeekday, setOrdinalWeekday] = useState<MonthlyOrdinalWeekday>(
-    initialMatch?.ordinalWeekday ?? ordinalWeekdayFromDate(coerceDate(referenceDate)),
+    initialShape?.mode === "monthly_by_ordinal_weekday"
+      ? initialShape.ordinalWeekday
+      : ordinalWeekdayFromDate(coerceDate(referenceDate)),
   );
   const [advancedValue, setAdvancedValue] = useState(value);
 
   useEffect(() => {
-    const matched = matchRecurrencePreset(value);
-    setMode(matched?.preset ?? ADVANCED_RECURRENCE_MODE);
-    if (matched?.ordinalWeekday) setOrdinalWeekday(matched.ordinalWeekday);
+    const matched = matchRecurrenceShape(value);
+    setMode(matched?.mode ?? ADVANCED_RECURRENCE_MODE);
+    if (matched && matched.mode !== "none") setInterval(matched.interval);
+    if (matched?.mode === "monthly_by_ordinal_weekday") setOrdinalWeekday(matched.ordinalWeekday);
     setAdvancedValue(value);
     // Only re-derive local editor state when the caller's value changes out
     // from under us (e.g. a different series loaded); onChange calls below
     // feed the same normalized string back in, so this does not loop.
   }, [value]);
 
-  function selectMode(next: RecurrencePresetKey | typeof ADVANCED_RECURRENCE_MODE): void {
+  function shapeFor(
+    nextMode: RecurrenceMode,
+    nextInterval: number,
+    nextOrdinalWeekday: MonthlyOrdinalWeekday,
+  ): RecurrenceShape {
+    if (nextMode === "none") return { mode: "none" };
+    if (nextMode === "monthly_by_ordinal_weekday") {
+      return { mode: nextMode, interval: nextInterval, ordinalWeekday: nextOrdinalWeekday };
+    }
+    return { mode: nextMode, interval: nextInterval };
+  }
+
+  function selectMode(next: RecurrenceMode | typeof ADVANCED_RECURRENCE_MODE): void {
     setMode(next);
     if (next === ADVANCED_RECURRENCE_MODE) {
       onChange(advancedValue || value);
       return;
     }
-    onChange(buildRecurrenceRule(next, next === "monthly_by_ordinal_weekday" ? ordinalWeekday : undefined));
+    onChange(buildRecurrenceRule(shapeFor(next, interval, ordinalWeekday)));
+  }
+
+  function updateInterval(raw: string): void {
+    const next = Number(raw);
+    if (!isValidInterval(next) || mode === ADVANCED_RECURRENCE_MODE || mode === "none") return;
+    setInterval(next);
+    onChange(buildRecurrenceRule(shapeFor(mode, next, ordinalWeekday)));
   }
 
   function updateOrdinalWeekday(patch: Partial<MonthlyOrdinalWeekday>): void {
     const next = { ...ordinalWeekday, ...patch };
     setOrdinalWeekday(next);
-    onChange(buildRecurrenceRule("monthly_by_ordinal_weekday", next));
+    if (mode !== "monthly_by_ordinal_weekday") return;
+    onChange(buildRecurrenceRule({ mode, interval, ordinalWeekday: next }));
   }
 
   function updateAdvanced(next: string): void {
@@ -206,11 +271,13 @@ export function RecurrenceEditor({
   }
 
   const helpId = `${id}-help`;
+  const intervalUnit = mode === "weekly" ? "week(s)" : "month(s)";
+  const currentShape = mode === ADVANCED_RECURRENCE_MODE ? null : shapeFor(mode, interval, ordinalWeekday);
 
   return (
     <div>
       <label class="form-label small fw-semibold" for={id}>
-        Recurrence rule
+        Repeats
       </label>
       <select
         id={id}
@@ -218,52 +285,74 @@ export function RecurrenceEditor({
         value={mode}
         disabled={disabled}
         onChange={(event) =>
-          selectMode((event.target as HTMLSelectElement).value as RecurrencePresetKey | typeof ADVANCED_RECURRENCE_MODE)
+          selectMode((event.target as HTMLSelectElement).value as RecurrenceMode | typeof ADVANCED_RECURRENCE_MODE)
         }
       >
-        {RECURRENCE_PRESET_KEYS.map((preset) => (
-          <option key={preset} value={preset}>
-            {RECURRENCE_PRESET_LABELS[preset]}
+        {RECURRENCE_MODES.map((candidate) => (
+          <option key={candidate} value={candidate}>
+            {RECURRENCE_MODE_LABELS[candidate]}
           </option>
         ))}
-        <option value={ADVANCED_RECURRENCE_MODE}>Custom (advanced)</option>
+        <option value={ADVANCED_RECURRENCE_MODE}>Custom rule</option>
       </select>
-      {mode === "monthly_by_ordinal_weekday" && (
-        <div class="d-flex gap-2 mt-2">
-          <select
-            id={`${id}-ordinal`}
-            aria-label="Ordinal week of the month"
-            class="form-select form-select-sm"
-            value={ordinalWeekday.ordinal}
+      {mode !== ADVANCED_RECURRENCE_MODE && mode !== "none" && (
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+          <label class="form-label small mb-0" for={`${id}-interval`}>
+            Every
+          </label>
+          <input
+            id={`${id}-interval`}
+            type="number"
+            class="form-control form-control-sm"
+            style="width: 5rem"
+            min={1}
+            max={MAX_RECURRENCE_INTERVAL}
+            value={interval}
             disabled={disabled}
-            onChange={(event) =>
-              updateOrdinalWeekday({ ordinal: Number((event.target as HTMLSelectElement).value) as RecurrenceOrdinal })
-            }
-          >
-            {RECURRENCE_ORDINALS.map((ordinal) => (
-              <option key={ordinal} value={ordinal}>
-                {ORDINAL_LABELS[ordinal]}
-              </option>
-            ))}
-          </select>
-          <select
-            id={`${id}-weekday`}
-            aria-label="Weekday"
-            class="form-select form-select-sm"
-            value={ordinalWeekday.weekday}
-            disabled={disabled}
-            onChange={(event) =>
-              updateOrdinalWeekday({ weekday: (event.target as HTMLSelectElement).value as RecurrenceWeekday })
-            }
-          >
-            {RECURRENCE_WEEKDAYS.map((weekday) => (
-              <option key={weekday} value={weekday}>
-                {WEEKDAY_LABELS[weekday]}
-              </option>
-            ))}
-          </select>
+            onInput={(event) => updateInterval((event.target as HTMLInputElement).value)}
+          />
+          <span class="small text-muted">{intervalUnit}</span>
+          {mode === "monthly_by_ordinal_weekday" && (
+            <>
+              <select
+                id={`${id}-ordinal`}
+                aria-label="Ordinal week of the month"
+                class="form-select form-select-sm w-auto"
+                value={ordinalWeekday.ordinal}
+                disabled={disabled}
+                onChange={(event) =>
+                  updateOrdinalWeekday({
+                    ordinal: Number((event.target as HTMLSelectElement).value) as RecurrenceOrdinal,
+                  })
+                }
+              >
+                {RECURRENCE_ORDINALS.map((ordinal) => (
+                  <option key={ordinal} value={ordinal}>
+                    {ORDINAL_LABELS[ordinal]}
+                  </option>
+                ))}
+              </select>
+              <select
+                id={`${id}-weekday`}
+                aria-label="Weekday"
+                class="form-select form-select-sm w-auto"
+                value={ordinalWeekday.weekday}
+                disabled={disabled}
+                onChange={(event) =>
+                  updateOrdinalWeekday({ weekday: (event.target as HTMLSelectElement).value as RecurrenceWeekday })
+                }
+              >
+                {RECURRENCE_WEEKDAYS.map((weekday) => (
+                  <option key={weekday} value={weekday}>
+                    {WEEKDAY_LABELS[weekday]}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       )}
+      {currentShape && <p class="form-text mb-0">{describeRecurrenceShape(currentShape)}</p>}
       {mode === ADVANCED_RECURRENCE_MODE && (
         <>
           <input
@@ -276,7 +365,7 @@ export function RecurrenceEditor({
             onInput={(event) => updateAdvanced((event.target as HTMLInputElement).value)}
           />
           <div id={helpId} class="form-text">
-            RFC 5545 recurrence rule. Presets are suggestions; other valid recurring schedules are supported.
+            RFC 5545 recurrence rule, for schedules the structured choices cannot express.
           </div>
         </>
       )}

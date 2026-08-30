@@ -5,11 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { recurrenceRuleSchema } from "../../assets/shared/schemas/event-series";
 import {
   ADVANCED_RECURRENCE_MODE,
-  RECURRENCE_PRESET_KEYS,
+  MAX_RECURRENCE_INTERVAL,
   RecurrenceEditor,
+  SINGLE_OCCURRENCE_RULE,
   buildRecurrenceRule,
-  matchRecurrencePreset,
+  describeRecurrenceShape,
+  matchRecurrenceShape,
   ordinalWeekdayFromDate,
+  type RecurrenceShape,
 } from "../../assets/ts/components/RecurrenceEditor";
 
 const mounted: HTMLElement[] = [];
@@ -29,51 +32,68 @@ afterEach(() => {
   }
 });
 
-describe("recurrence preset <-> RRULE round trip", () => {
-  it("builds a rule the shared recurrenceRuleSchema accepts for every preset", () => {
-    for (const preset of RECURRENCE_PRESET_KEYS) {
-      const rule = buildRecurrenceRule(preset, { ordinal: 2, weekday: "TU" });
-      expect(() => recurrenceRuleSchema.parse(rule)).not.toThrow();
+describe("recurrence shape <-> RRULE round trip", () => {
+  it("builds a rule the shared recurrenceRuleSchema accepts for every shape", () => {
+    const shapes: RecurrenceShape[] = [
+      { mode: "none" },
+      { mode: "weekly", interval: 1 },
+      { mode: "weekly", interval: 3 },
+      { mode: "monthly_by_day", interval: 2 },
+      { mode: "monthly_by_ordinal_weekday", interval: 1, ordinalWeekday: { ordinal: 2, weekday: "TU" } },
+    ];
+    for (const shape of shapes) {
+      const rule = buildRecurrenceRule(shape);
+      expect(recurrenceRuleSchema.safeParse(rule).success).toBe(true);
     }
   });
 
-  it("preset -> string -> preset recovers the same preset (weekly, every two weeks, monthly by day)", () => {
-    expect(matchRecurrencePreset(buildRecurrenceRule("weekly"))).toEqual({ preset: "weekly" });
-    expect(matchRecurrencePreset(buildRecurrenceRule("every_two_weeks"))).toEqual({ preset: "every_two_weeks" });
-    expect(matchRecurrencePreset(buildRecurrenceRule("monthly_by_day"))).toEqual({ preset: "monthly_by_day" });
+  it("an ad-hoc series is a one-occurrence rule that round-trips to the none shape", () => {
+    expect(buildRecurrenceRule({ mode: "none" })).toBe(SINGLE_OCCURRENCE_RULE);
+    expect(matchRecurrenceShape(SINGLE_OCCURRENCE_RULE)).toEqual({ mode: "none" });
   });
 
-  it("preset -> string -> preset recovers the ordinal and weekday for monthly-by-ordinal-weekday", () => {
-    const rule = buildRecurrenceRule("monthly_by_ordinal_weekday", { ordinal: 2, weekday: "TU" });
-    expect(rule).toBe("FREQ=MONTHLY;INTERVAL=1;BYDAY=2TU");
-    expect(matchRecurrencePreset(rule)).toEqual({
-      preset: "monthly_by_ordinal_weekday",
-      ordinalWeekday: { ordinal: 2, weekday: "TU" },
-    });
-  });
-
-  it("recognizes the last-weekday-of-the-month ordinal", () => {
-    const rule = buildRecurrenceRule("monthly_by_ordinal_weekday", { ordinal: -1, weekday: "FR" });
-    expect(matchRecurrencePreset(rule)).toEqual({
-      preset: "monthly_by_ordinal_weekday",
+  it("free intervals round-trip: every 3 weeks and every other month are structured shapes", () => {
+    expect(matchRecurrenceShape("FREQ=WEEKLY;INTERVAL=3")).toEqual({ mode: "weekly", interval: 3 });
+    expect(matchRecurrenceShape("FREQ=MONTHLY;INTERVAL=2")).toEqual({ mode: "monthly_by_day", interval: 2 });
+    expect(matchRecurrenceShape("FREQ=MONTHLY;INTERVAL=2;BYDAY=-1FR")).toEqual({
+      mode: "monthly_by_ordinal_weekday",
+      interval: 2,
       ordinalWeekday: { ordinal: -1, weekday: "FR" },
     });
   });
 
   it("matches a hand-authored string that omits the default INTERVAL=1", () => {
-    expect(matchRecurrencePreset("FREQ=WEEKLY")).toEqual({ preset: "weekly" });
-    expect(matchRecurrencePreset("FREQ=MONTHLY;BYDAY=1MO")).toEqual({
-      preset: "monthly_by_ordinal_weekday",
+    expect(matchRecurrenceShape("FREQ=WEEKLY")).toEqual({ mode: "weekly", interval: 1 });
+    expect(matchRecurrenceShape("FREQ=MONTHLY;BYDAY=1MO")).toEqual({
+      mode: "monthly_by_ordinal_weekday",
+      interval: 1,
       ordinalWeekday: { ordinal: 1, weekday: "MO" },
     });
   });
 
-  it("a rule an author typed by hand that does not match any preset falls back to advanced (null match)", () => {
-    expect(matchRecurrencePreset("FREQ=DAILY;INTERVAL=3")).toBeNull();
-    expect(matchRecurrencePreset("FREQ=WEEKLY;INTERVAL=3")).toBeNull();
-    expect(matchRecurrencePreset("FREQ=MONTHLY;INTERVAL=2")).toBeNull();
-    expect(matchRecurrencePreset("FREQ=YEARLY")).toBeNull();
-    expect(matchRecurrencePreset("FREQ=MONTHLY;BYMONTHDAY=15")).toBeNull();
+  it("a rule the structured controls cannot express falls back to custom (null match)", () => {
+    expect(matchRecurrenceShape("FREQ=DAILY;INTERVAL=3")).toBeNull();
+    expect(matchRecurrenceShape("FREQ=DAILY;COUNT=2")).toBeNull();
+    expect(matchRecurrenceShape("FREQ=YEARLY")).toBeNull();
+    expect(matchRecurrenceShape("FREQ=MONTHLY;BYMONTHDAY=15")).toBeNull();
+    expect(matchRecurrenceShape(`FREQ=WEEKLY;INTERVAL=${MAX_RECURRENCE_INTERVAL + 1}`)).toBeNull();
+  });
+
+  it("describes shapes in plain words", () => {
+    expect(describeRecurrenceShape({ mode: "none" })).toBe("One meeting only — does not repeat.");
+    expect(describeRecurrenceShape({ mode: "weekly", interval: 1 })).toBe("Repeats every week.");
+    expect(describeRecurrenceShape({ mode: "weekly", interval: 2 })).toBe("Repeats every other week.");
+    expect(describeRecurrenceShape({ mode: "weekly", interval: 3 })).toBe("Repeats every 3 weeks.");
+    expect(describeRecurrenceShape({ mode: "monthly_by_day", interval: 2 })).toBe(
+      "Repeats every other month on the same date.",
+    );
+    expect(
+      describeRecurrenceShape({
+        mode: "monthly_by_ordinal_weekday",
+        interval: 1,
+        ordinalWeekday: { ordinal: -1, weekday: "FR" },
+      }),
+    ).toBe("Repeats every month on the last Friday.");
   });
 
   it("derives a plausible ordinal/weekday default from a reference date", () => {
@@ -85,18 +105,68 @@ describe("recurrence preset <-> RRULE round trip", () => {
 });
 
 describe("RecurrenceEditor component", () => {
-  it("opens in preset mode and shows the matching preset for a known rule", () => {
+  it("shows the matching shape and interval for a known rule", () => {
     const onChange = vi.fn();
     const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=2" onChange={onChange} />,
+      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=3" onChange={onChange} />,
     );
     const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
-    expect(select.tagName).toBe("SELECT");
-    expect(select.value).toBe("every_two_weeks");
+    expect(select.value).toBe("weekly");
+    expect(container.querySelector<HTMLInputElement>("#series-recurrence-interval")?.value).toBe("3");
+    expect(container.textContent).toContain("Repeats every 3 weeks.");
     expect(container.querySelector("#series-recurrence-advanced")).toBeNull();
   });
 
-  it("opens directly in advanced mode for a rule that matches no preset", () => {
+  it("shows an ad-hoc single-occurrence rule as Does not repeat with no interval control", () => {
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value={SINGLE_OCCURRENCE_RULE} onChange={vi.fn()} />,
+    );
+    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    expect(select.value).toBe("none");
+    expect(container.querySelector("#series-recurrence-interval")).toBeNull();
+    expect(container.textContent).toContain("One meeting only — does not repeat.");
+  });
+
+  it("choosing Does not repeat writes the one-occurrence rule via onChange", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
+    );
+    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    select.value = "none";
+    void act(() => {
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(SINGLE_OCCURRENCE_RULE);
+  });
+
+  it("changing the interval writes the widened rule via onChange", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;INTERVAL=1" onChange={onChange} />,
+    );
+    const interval = container.querySelector<HTMLInputElement>("#series-recurrence-interval")!;
+    interval.value = "2";
+    void act(() => {
+      interval.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith("FREQ=MONTHLY;INTERVAL=2");
+  });
+
+  it("ignores an out-of-range interval instead of emitting an invalid rule", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
+    );
+    const interval = container.querySelector<HTMLInputElement>("#series-recurrence-interval")!;
+    interval.value = "0";
+    void act(() => {
+      interval.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("opens directly in custom mode for a rule that matches no shape", () => {
     const onChange = vi.fn();
     const container = mount(
       <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={onChange} />,
@@ -108,20 +178,7 @@ describe("RecurrenceEditor component", () => {
     expect(container.textContent).toContain("RFC 5545 recurrence rule");
   });
 
-  it("choosing a preset writes the canonical RRULE string via onChange", () => {
-    const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
-    select.value = "monthly_by_day";
-    void act(() => {
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(onChange).toHaveBeenCalledWith("FREQ=MONTHLY;INTERVAL=1");
-  });
-
-  it("switching to the monthly ordinal-weekday preset exposes ordinal and weekday controls", () => {
+  it("switching to the monthly ordinal-weekday shape exposes ordinal and weekday controls", () => {
     const onChange = vi.fn();
     const container = mount(
       <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
@@ -147,7 +204,7 @@ describe("RecurrenceEditor component", () => {
     expect(onChange).toHaveBeenLastCalledWith("FREQ=MONTHLY;INTERVAL=1;BYDAY=-1FR");
   });
 
-  it("editing the raw string in advanced mode passes it straight through", () => {
+  it("editing the raw string in custom mode passes it straight through", () => {
     const onChange = vi.fn();
     const container = mount(
       <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={onChange} />,
@@ -160,10 +217,11 @@ describe("RecurrenceEditor component", () => {
     expect(onChange).toHaveBeenCalledWith("FREQ=MONTHLY;BYMONTHDAY=1,15");
   });
 
-  it("disables the preset select when disabled is set", () => {
+  it("disables the controls when disabled is set", () => {
     const container = mount(
       <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={vi.fn()} disabled />,
     );
     expect(container.querySelector<HTMLSelectElement>("#series-recurrence")?.disabled).toBe(true);
+    expect(container.querySelector<HTMLInputElement>("#series-recurrence-interval")?.disabled).toBe(true);
   });
 });
