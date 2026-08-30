@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupVoteDetail } from "../../assets/shared/schemas/group-votes";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
 import { GroupVoteManagementControls } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
 import { GroupVoteProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
@@ -84,6 +85,14 @@ async function settle(): Promise<void> {
 function setValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   element.value = value;
   element.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function confirmDialogButton(label: string): HTMLButtonElement {
+  const dialog = document.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing confirm dialog button: ${label}`);
+  return button;
 }
 
 afterEach(() => {
@@ -214,10 +223,6 @@ describe("selected-group vote management", () => {
     const requests: Array<{ path: string; method: string }> = [];
     const managedProposal = proposal(["view", "approve", "reject"]);
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const url = new URL(
@@ -237,7 +242,15 @@ describe("selected-group vote management", () => {
     );
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />, container));
+    await act(() =>
+      render(
+        <>
+          <ConfirmDialogHost />
+          <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />
+        </>,
+        container,
+      ),
+    );
     await settle();
     await act(() =>
       (
@@ -257,11 +270,65 @@ describe("selected-group vote management", () => {
         ) as HTMLButtonElement
       ).click(),
     );
+    await act(() => confirmDialogButton("Approve and create vote").click());
     await settle();
 
     expect(requests).toContainEqual({
       path: `/api/v1/groups/${GROUP_ID}/vote-proposals/${PROPOSAL_ID}/approve`,
       method: "POST",
     });
+  });
+
+  it("does not withdraw a proposal when the confirmation is cancelled", async () => {
+    const requests: Array<{ path: string; method: string }> = [];
+    const managedProposal = proposal(["view", "withdraw"]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        requests.push({ path: url.pathname, method });
+        if (url.pathname.endsWith(`/${PROPOSAL_ID}`))
+          return Response.json({ proposal: managedProposal, endorserUserIds: [] });
+        return Response.json({
+          proposals: [managedProposal],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(
+        <>
+          <ConfirmDialogHost />
+          <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />
+        </>,
+        container,
+      ),
+    );
+    await settle();
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Details",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+    await act(() =>
+      (
+        Array.from(container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Withdraw proposal",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await act(() => confirmDialogButton("Cancel").click());
+    await settle();
+
+    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
   });
 });

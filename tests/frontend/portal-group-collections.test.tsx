@@ -2,11 +2,13 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/management/GroupAuditLog";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
+import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
 
 const navigate = vi.fn();
 
@@ -105,7 +107,8 @@ describe("portal selected-group collections", () => {
     );
     const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
     await settle();
-    expect(container.textContent).toContain("No mailing lists are managed by this group.");
+    expect(container.textContent).toContain("No mailing lists yet");
+    expect(container.textContent).toContain("Add mailing list");
   });
 
   it("renders manager collection errors", async () => {
@@ -138,10 +141,6 @@ describe("portal selected-group collections", () => {
     } as const;
     const page = { limit: 50, offset: 0, total: 1, hasMore: false };
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const url = new URL(
@@ -162,7 +161,12 @@ describe("portal selected-group collections", () => {
       }),
     );
 
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    const container = mount(
+      <>
+        <GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />
+        <ConfirmDialogHost />
+      </>,
+    );
     await settle();
     const button = (label: string) =>
       Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === label);
@@ -179,17 +183,27 @@ describe("portal selected-group collections", () => {
     email.dispatchEvent(new Event("input", { bubbles: true }));
     textInputs[0].value = "Consultation list";
     textInputs[0].dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[1].value = "members";
-    textInputs[1].dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[2].value = "moderated";
-    textInputs[2].dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[3].value = "A, H1";
-    textInputs[3].dispatchEvent(new Event("input", { bubbles: true }));
     const selects = createForm.querySelectorAll<HTMLSelectElement>("select");
     selects[0].value = "consultation";
     selects[0].dispatchEvent(new Event("change", { bubbles: true }));
     selects[1].value = "eligible_categories";
     selects[1].dispatchEvent(new Event("change", { bubbles: true }));
+    selects[2].value = "members";
+    selects[2].dispatchEvent(new Event("change", { bubbles: true }));
+    selects[3].value = "moderated";
+    selects[3].dispatchEvent(new Event("change", { bubbles: true }));
+    const categoryA = createForm.querySelector<HTMLInputElement>("#group-mailing-list-create-auto-sync-categories-A")!;
+    categoryA.checked = true;
+    await act(async () => {
+      categoryA.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const categoryH1 = createForm.querySelector<HTMLInputElement>(
+      "#group-mailing-list-create-auto-sync-categories-H1",
+    )!;
+    categoryH1.checked = true;
+    await act(async () => {
+      categoryH1.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await settle();
     await act(async () => {
       createForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -197,17 +211,20 @@ describe("portal selected-group collections", () => {
     await settle();
     await settle();
 
-    expect(requests.find(({ method }) => method === "POST")).toMatchObject({
+    const created = requests.find(({ method }) => method === "POST");
+    expect(created).toMatchObject({
       url: expect.objectContaining({ pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists` }),
-      body: {
-        email: "consultation@lists.example.test",
-        label: "Consultation list",
-        purpose: "consultation",
-        subscriptionDefault: "eligible_categories",
-        autoSyncCategories: ["A", "H1"],
-      },
     });
-    expect(requests.find(({ method }) => method === "POST")?.body).not.toHaveProperty("groupId");
+    expect(groupMailingListCreateSchema.parse(created?.body)).toMatchObject({
+      email: "consultation@lists.example.test",
+      label: "Consultation list",
+      purpose: "consultation",
+      subscriptionDefault: "eligible_categories",
+      postingPolicy: "members",
+      moderationPolicy: "moderated",
+      autoSyncCategories: ["A", "H1"],
+    });
+    expect(created?.body).not.toHaveProperty("groupId");
 
     expect(button("Manage")).not.toBeUndefined();
     await act(async () => {
@@ -223,9 +240,25 @@ describe("portal selected-group collections", () => {
     expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
 
     await settle();
-    expect(button("Archive")).not.toBeUndefined();
+    const rowMenu = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+    expect(rowMenu).not.toBeNull();
     await act(async () => {
-      button("Archive")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      rowMenu?.click();
+    });
+    const archiveItem = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+      (candidate) => candidate.textContent?.trim() === "Archive",
+    );
+    expect(archiveItem).not.toBeUndefined();
+    await act(async () => {
+      archiveItem?.click();
+    });
+    await settle();
+    const archiveDialog = container.querySelector('[role="alertdialog"]');
+    expect(archiveDialog).not.toBeNull();
+    await act(async () => {
+      Array.from(archiveDialog?.querySelectorAll("button") ?? [])
+        .find((candidate) => candidate.textContent === "Archive mailing list")
+        ?.click();
     });
     await settle();
     expect(requests.some(({ method }) => method === "DELETE")).toBe(true);

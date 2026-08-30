@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventAttendeeInviteSummary, EventInviteSummary } from "../../assets/shared/schemas/event-invites";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
@@ -118,6 +119,29 @@ async function waitForElement<T extends Element>(find: () => T | null): Promise<
   throw new Error("Expected element was not rendered.");
 }
 
+async function openRowMenu(container: HTMLElement, ariaLabel: string): Promise<void> {
+  const trigger = await waitForElement(() =>
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`),
+  );
+  await act(() => trigger.click());
+}
+
+function menuItem(container: HTMLElement, label: string): HTMLButtonElement | null {
+  return (
+    [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === label,
+    ) ?? null
+  );
+}
+
+function confirmDialogButton(label: string): HTMLButtonElement {
+  const dialog = document.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing confirm dialog button: ${label}`);
+  return button;
+}
+
 function urlOf(input: RequestInfo | URL): URL {
   return new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.origin);
 }
@@ -153,12 +177,13 @@ describe("portal event invitations", () => {
         throw new Error(`Unexpected request: ${method} ${url.pathname}`);
       }),
     );
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
 
-    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} />
+      </>,
+    );
     await settle();
     const listPath = `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites`;
     expect(requests[0]).toMatchObject({ method: "GET", url: expect.objectContaining({ pathname: listPath }) });
@@ -188,10 +213,8 @@ describe("portal event invitations", () => {
     expect(requests.at(-1)?.url.searchParams.get("limit")).toBe("50");
     expect(requests.at(-1)?.url.searchParams.get("offset")).toBe("0");
 
-    const resend = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Resend invitation to Ada Lovelace"]',
-    )!;
-    await act(async () => resend.click());
+    await openRowMenu(container, "Actions for Ada Lovelace");
+    await act(async () => menuItem(container, "Resend invitation")!.click());
     await settle();
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -205,10 +228,9 @@ describe("portal event invitations", () => {
     expect(resendRequest?.body).toBe("{}");
     expect(container.textContent).toContain("Invitation resent to Ada Lovelace.");
 
-    const revoke = await waitForElement(() =>
-      container.querySelector<HTMLButtonElement>('button[aria-label="Revoke invitation for Ada Lovelace"]'),
-    );
-    await act(async () => revoke.click());
+    await openRowMenu(container, "Actions for Ada Lovelace");
+    await act(async () => menuItem(container, "Revoke invitation")!.click());
+    await act(async () => confirmDialogButton("Revoke invitation").click());
     await settle();
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -234,12 +256,10 @@ describe("portal event invitations", () => {
 
     const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
     await settle();
-    expect(container.querySelector('button[aria-label="Revoke invitation for Ada Lovelace"]')).toBeNull();
+    await openRowMenu(container, "Actions for Ada Lovelace");
+    expect(menuItem(container, "Revoke invitation")).toBeNull();
 
-    const resendButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Resend invitation to Ada Lovelace"]',
-    )!;
-    await act(async () => resendButton.click());
+    await act(async () => menuItem(container, "Resend invitation")!.click());
     await settle();
     expect(resend).toBe(true);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Invitation is no longer pending.");
