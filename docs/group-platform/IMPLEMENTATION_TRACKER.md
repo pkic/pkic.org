@@ -2070,6 +2070,17 @@ Status: In progress (2026-08-30)
       row-menu popups clipped by the table overflow wrapper — fixed with
       fixed-position popups; layout/empty-dashboard/machine-vocabulary
       items) are recorded in the audit artifact's walkthrough section.
+      Follow-up feedback landed 2026-08-30: the recurrence editor now
+      composes a shape with a free interval (every N weeks/months, N <= 26)
+      instead of fixed presets, and supports ad-hoc single meetings through
+      "Does not repeat", stored as the RFC 5545 sentinel `FREQ=DAILY;COUNT=1`
+      so the `event_series.recurrence_rule NOT NULL` column and the
+      ICAL.Recur expansion stay untouched (expands to exactly one occurrence;
+      covered in tests/event-series-platform.test.ts). The group workspace
+      now titles itself by the group's name (generic "Group" heading
+      removed), orders tabs by user priority (people and activity before
+      administration), and its Overview surfaces upcoming events and open
+      votes as links into their owning tabs.
       Remaining waves:
       (1 residue) events-surface confirms after the projection slice;
       (2) EmptyState + labeled Spinner + DetailsSummary
