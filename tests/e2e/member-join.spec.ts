@@ -96,7 +96,7 @@ test("verifies an organization email before submitting the D1-backed membership 
   expect(
     await firstAgreement.evaluate((input) => {
       const container = input.closest<HTMLElement>(".membership-legal-card-scroll");
-      return Boolean(container && input.offsetTop > container.clientHeight);
+      return Boolean(container && (input as HTMLElement).offsetTop > container.clientHeight);
     }),
   ).toBe(true);
   await firstAgreement.scrollIntoViewIfNeeded();
