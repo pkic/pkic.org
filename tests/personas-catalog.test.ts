@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import { PERMISSIONS } from "../assets/shared/schemas/permissions";
-import { PERSONAS, PERSONA_KEYS } from "./personas/catalog";
+import { ALL_PERSONAS, ALL_PERSONA_KEYS, PERSONAS, PERSONA_KEYS } from "./personas/catalog";
 import { personaRequest, seedPersona } from "./personas/seed";
 import { TEST_GROUPS } from "./helpers/voting";
 import { seedEventAndAdmin } from "./helpers/context";
@@ -23,10 +23,46 @@ describe("persona catalog", () => {
   it("names only roles the product actually defines", async () => {
     const seeded = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles");
     const known = new Set(seeded.map((row) => row.id));
-    const unknown = PERSONA_KEYS.flatMap((key) => PERSONAS[key].roles.map((role) => role.roleId)).filter(
+    const unknown = ALL_PERSONA_KEYS.flatMap((key) => ALL_PERSONAS[key].roles.map((role) => role.roleId)).filter(
       (roleId) => !known.has(roleId),
     );
     expect([...new Set(unknown)]).toEqual([]);
+  });
+
+  it("covers every role the product defines", async () => {
+    const seeded = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles");
+    const represented = new Set<string>(
+      ALL_PERSONA_KEYS.flatMap((key) => ALL_PERSONAS[key].roles.map((role) => role.roleId)),
+    );
+    // A role nobody plays is a role nothing tests.
+    const unplayed = seeded.map((row) => row.id).filter((roleId) => !represented.has(roleId));
+    expect(unplayed).toEqual([]);
+  });
+
+  it("gives every permission a holder whose authority stops there", async () => {
+    // An administrator holds everything, so it can only ever demonstrate that
+    // a permission works — never that lacking it is refused. Every capability
+    // therefore needs a narrower holder too, or the system cannot be swept
+    // for authorization boundaries.
+    const bundles = await queryAll<{ role_id: string; permission: string }>(
+      env.DB,
+      "SELECT role_id, permission FROM role_permissions",
+    );
+    const byRole = new Map<string, string[]>();
+    for (const row of bundles) byRole.set(row.role_id, [...(byRole.get(row.role_id) ?? []), row.permission]);
+
+    const narrowlyHeld = new Set<string>();
+    for (const key of ALL_PERSONA_KEYS) {
+      const persona = ALL_PERSONAS[key];
+      if (persona.roles.some((role) => role.roleId === "role-admin")) continue;
+      for (const grant of persona.grants) narrowlyHeld.add(grant);
+      for (const role of persona.roles) {
+        for (const permission of byRole.get(role.roleId) ?? []) narrowlyHeld.add(permission);
+      }
+    }
+
+    const uncovered = PERMISSIONS.filter((permission) => !narrowlyHeld.has(permission));
+    expect(uncovered).toEqual([]);
   });
 
   it("grants only permissions that exist", () => {
@@ -79,11 +115,11 @@ describe("seeded personas hold the authority the catalog claims", () => {
 
   it("seeds every persona without error", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    for (const key of PERSONA_KEYS) {
+    for (const key of ALL_PERSONA_KEYS) {
       const seeded = await seedPersona(env.DB, key, { groupId: TEST_GROUPS.pqc, eventId });
       expect({ key, capacities: seeded.capacities.length }).toEqual({
         key,
-        capacities: PERSONAS[key].organizationCount,
+        capacities: ALL_PERSONAS[key].organizationCount,
       });
       expect(Boolean(seeded.token)).toBe(key !== "anonymous");
     }

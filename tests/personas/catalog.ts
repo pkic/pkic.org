@@ -197,6 +197,66 @@ export const PERSONAS = {
     mayVote: false,
   }),
 
+  groupsReader: persona({
+    key: "groupsReader",
+    description: "Staff who may read group configuration but change nothing",
+    membershipCategory: null,
+    organizationCount: 0,
+    roles: [],
+    grants: ["groups:read"],
+    mayVote: false,
+  }),
+
+  eventModerator: persona({
+    key: "eventModerator",
+    description: "Event-scoped proposal review without the power to finalize",
+    membershipCategory: null,
+    organizationCount: 0,
+    roles: [{ roleId: "role-event_moderator", context: "event" }],
+    grants: [],
+    mayVote: false,
+  }),
+
+  eventVolunteer: persona({
+    key: "eventVolunteer",
+    description: "An event helper with no permissions, kept to prove that",
+    membershipCategory: null,
+    organizationCount: 0,
+    roles: [{ roleId: "role-event_volunteer", context: "event" }],
+    grants: [],
+    mayVote: false,
+  }),
+
+  organizationSecondaryContact: persona({
+    key: "organizationSecondaryContact",
+    description: "An organization's secondary contact",
+    membershipCategory: "A",
+    organizationCount: 1,
+    roles: [{ roleId: "role-secondary_contact", context: "organization" }],
+    grants: [],
+    mayVote: true,
+  }),
+
+  legacyMember: persona({
+    key: "legacyMember",
+    description: "The legacy authenticated-member classification",
+    membershipCategory: "A",
+    organizationCount: 1,
+    roles: [{ roleId: "role-member", context: "global" }],
+    grants: [],
+    mayVote: true,
+  }),
+
+  legacyInterestedParty: persona({
+    key: "legacyInterestedParty",
+    description: "The legacy interested-party classification",
+    membershipCategory: "H8",
+    organizationCount: 1,
+    roles: [{ roleId: "role-interested_parties", context: "global" }],
+    grants: [],
+    mayVote: false,
+  }),
+
   administrator: persona({
     key: "administrator",
     description: "Full platform access",
@@ -210,3 +270,99 @@ export const PERSONAS = {
 
 export type PersonaKey = keyof typeof PERSONAS;
 export const PERSONA_KEYS = Object.keys(PERSONAS) as PersonaKey[];
+
+/**
+ * Narrowly scoped staff identities, one per capability the system exposes.
+ *
+ * Testing an authorization boundary needs two people: someone who holds the
+ * permission and someone who does not. An administrator holds everything, so
+ * it can only ever demonstrate the first half. These profiles supply the
+ * second — for every permission there is somebody whose authority stops
+ * exactly there, which is what makes a system-wide permission sweep possible
+ * rather than a per-suite improvisation.
+ *
+ * Permissions are grouped as the product grants them: a screen that reads and
+ * writes one domain issues both, and a genuinely separate capability
+ * (anonymisation, revocation) gets its own profile because it is separately
+ * revocable.
+ */
+const CAPABILITY_PROFILES = {
+  analyticsReader: { description: "Reads platform analytics", grants: ["analytics:read"] },
+  auditReader: { description: "Reads the audit trail", grants: ["audit:read"] },
+  retentionOperator: {
+    description: "Runs data retention, which also requires the power to anonymise",
+    grants: ["retention:read", "retention:run", "users:anonymize"],
+  },
+  schedulerOperator: {
+    description: "Inspects and runs scheduled jobs",
+    grants: ["scheduler:read", "scheduler:manage"],
+  },
+  emailOperator: { description: "Reads and manages the outbound email outbox", grants: ["email:read", "email:manage"] },
+  emailTemplateEditor: {
+    description: "Authors and activates email templates",
+    grants: ["email-templates:read", "email-templates:write"],
+  },
+  donationsOperator: { description: "Reads and synchronises donations", grants: ["donations:read", "donations:sync"] },
+  organizationManager: {
+    description: "Maintains organizations and their representatives",
+    grants: ["organizations:read", "organizations:write"],
+  },
+  organizationContentReviewer: {
+    description: "Reviews organization-submitted content",
+    grants: ["organizations:content-review"],
+  },
+  sponsorshipManager: {
+    description: "Runs the sponsorship pipeline",
+    grants: ["sponsorships:read", "sponsorships:write"],
+  },
+  formsEditor: { description: "Authors reusable forms", grants: ["forms:read", "forms:write"] },
+  userAdministrator: { description: "Reads and edits user records", grants: ["users:read", "users:write"] },
+  accessGranter: { description: "Grants access, but cannot take it away", grants: ["access:grant"] },
+  accessRevoker: { description: "Revokes access, but cannot hand it out", grants: ["access:revoke"] },
+  proposalReviewer: { description: "Reads and scores proposals", grants: ["proposals:read", "proposals:score"] },
+  proposalManager: { description: "Decides proposals", grants: ["proposals:manage"] },
+  acceptedProposalEditor: {
+    description: "Corrects and cancels accepted proposals, a deliberately separate authority",
+    grants: ["proposals:edit_accepted_abstract", "proposals:cancel_accepted"],
+  },
+  agendaEditor: { description: "Builds the event agenda", grants: ["agenda:read", "agenda:write"] },
+  eventReader: { description: "Reads event configuration", grants: ["events:read"] },
+  eventEditor: { description: "Edits event configuration", grants: ["events:write"] },
+  eventManager: { description: "Full event management, including registrations", grants: ["events:manage"] },
+  membershipWriter: {
+    description: "Moves applications but cannot approve one",
+    grants: ["membership:read", "membership:write"],
+  },
+  membershipApprover: {
+    description: "Approves membership applications",
+    grants: ["membership:read", "membership:write", "membership:approve"],
+  },
+  groupsEditor: { description: "Edits group configuration", grants: ["groups:read", "groups:write"] },
+  voteOrganizer: {
+    description: "Creates and manages votes without leading a group",
+    grants: ["votes:create", "votes:manage"],
+  },
+  platformOperator: {
+    description: "The residual admin pair used by routes with no named module yet",
+    grants: ["admin:read", "admin:write"],
+  },
+} as const satisfies Record<string, { description: string; grants: readonly Permission[] }>;
+
+export const CAPABILITY_PERSONAS: Record<string, PersonaDefinition> = Object.fromEntries(
+  Object.entries(CAPABILITY_PROFILES).map(([key, profile]) => [
+    key,
+    {
+      key,
+      description: profile.description,
+      membershipCategory: null,
+      organizationCount: 0,
+      roles: [],
+      grants: [...profile.grants],
+      mayVote: false,
+    },
+  ]),
+);
+
+/** Every persona: the people with roles, and the narrow capability profiles. */
+export const ALL_PERSONAS: Record<string, PersonaDefinition> = { ...PERSONAS, ...CAPABILITY_PERSONAS };
+export const ALL_PERSONA_KEYS = Object.keys(ALL_PERSONAS);

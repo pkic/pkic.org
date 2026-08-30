@@ -3,7 +3,7 @@ import { createAdminSession, createMemberSession } from "../helpers/auth";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "../helpers/membership";
 import { joinGroup } from "../../functions/_lib/services/groups";
 import type { DatabaseLike } from "../../functions/_lib/types";
-import { PERSONAS, type PersonaDefinition, type PersonaKey } from "./catalog";
+import { ALL_PERSONAS, type PersonaDefinition } from "./catalog";
 
 /**
  * Brings a persona into existence in D1 for the mounted Worker suites.
@@ -13,7 +13,7 @@ import { PERSONAS, type PersonaDefinition, type PersonaKey } from "./catalog";
  * a test-only shortcut.
  */
 export interface SeededPersona {
-  key: PersonaKey;
+  key: string;
   definition: PersonaDefinition;
   userId: string;
   email: string;
@@ -34,20 +34,25 @@ export interface SeedPersonaOptions {
 
 export async function seedPersona(
   db: DatabaseLike,
-  key: PersonaKey,
+  key: string,
   options: SeedPersonaOptions = {},
 ): Promise<SeededPersona> {
-  const definition = PERSONAS[key];
+  const definition = ALL_PERSONAS[key];
+  if (!definition) throw new Error(`Unknown persona: ${key}`);
   if (key === "anonymous") {
     return { key, definition, userId: "", email: "", capacities: [], token: null };
   }
 
-  const email = `${key.toLowerCase()}-${crypto.randomUUID().slice(0, 8)}@persona.test`;
+  // Every instance is a distinct person at a distinct organization. Deriving
+  // the organization name from the persona description alone collides on
+  // `organizations.normalized_name` the moment a test needs two chairs.
+  const instance = crypto.randomUUID().slice(0, 8);
+  const email = `${key.toLowerCase()}-${instance}@persona.test`;
   const userId = await insertUser(db, email);
 
   const capacities: SeededPersona["capacities"] = [];
   for (let index = 0; index < definition.organizationCount; index += 1) {
-    const organizationId = await insertOrganization(db, `${definition.description} ${index + 1}`);
+    const organizationId = await insertOrganization(db, `${definition.description} ${index + 1} ${instance}`);
     const memberId = await seedOrganizationAggregate(db, organizationId, definition.membershipCategory ?? "A");
     await addRepresentative(db, memberId, userId);
     capacities.push({ organizationId, memberId });
