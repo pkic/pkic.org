@@ -24,10 +24,12 @@ async function openVerifiedApplicationForm(
 ): Promise<void> {
   const since = await capturedEmailCount();
   await page.goto("/join/");
-  await page.getByLabel("Work or organization email address").fill(email);
   if (options.unaffiliated) {
-    await page.getByRole("button", { name: "I am not employed by or representing an organization" }).click();
-    await page.getByLabel(/I confirm that I am not employed/).check();
+    await page.getByLabel("No — I am not employed by and do not own an organization").check();
+    await page.getByLabel("Personal email address").fill(email);
+  } else {
+    await page.getByLabel("Yes — I am employed by or own an organization").check();
+    await page.getByLabel("Work or organization email address").fill(email);
   }
   await page.getByRole("button", { name: "Continue" }).click();
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });

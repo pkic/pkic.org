@@ -30,6 +30,7 @@ const API_BASE = "/api/v1";
 
 type JoinApplicationContext = Extract<z.infer<typeof memberJoinVerifyResponseSchema>, { status: "application_ready" }>;
 type MembershipCategory = MemberApplicationFormResponse["categories"][number];
+type JoinApplicantKind = JoinApplicationContext["applicantKind"];
 
 // ── Pure/testable helpers ──────────────────────────────────────────────────
 
@@ -81,6 +82,28 @@ export function filterCategoriesForApplicantKind(
   return categories.filter((category) => category.isIndividual === (applicantKind === "individual"));
 }
 
+/** Keeps the organization and individual join-start states mutually exclusive. */
+export function applyJoinApplicantKindUI(form: HTMLFormElement, applicantKind: JoinApplicantKind | null): void {
+  const details = form.querySelector<HTMLElement>("[data-join-path-details]");
+  const organizationPolicy = form.querySelector<HTMLElement>("[data-join-organization-policy]");
+  const individualPolicy = form.querySelector<HTMLElement>("[data-join-individual-policy]");
+  const email = form.querySelector<HTMLInputElement>("#joinEmail");
+  const emailLabel = form.querySelector<HTMLElement>("[data-join-email-label]");
+  const emailHelp = form.querySelector<HTMLElement>("[data-join-email-help]");
+  if (!details || !organizationPolicy || !individualPolicy || !email || !emailLabel || !emailHelp) return;
+
+  const selected = applicantKind !== null;
+  const individual = applicantKind === "individual";
+  details.hidden = !selected;
+  organizationPolicy.hidden = applicantKind !== "organization";
+  individualPolicy.hidden = !individual;
+  email.disabled = !selected;
+  emailLabel.textContent = individual ? "Personal email address" : "Work or organization email address";
+  emailHelp.textContent = individual
+    ? "We will verify this address before showing the eligible individual categories."
+    : "We will verify this address before showing the appropriate organization path.";
+}
+
 export function renderMembershipCategories(container: HTMLElement, categories: MembershipCategory[]): void {
   container.replaceChildren(
     ...categories.map((category) => {
@@ -119,6 +142,12 @@ function readSelectedCategory(form: HTMLFormElement): string {
   return form.querySelector<HTMLInputElement>('input[name="category"]:checked')?.value ?? "";
 }
 
+function readJoinApplicantKind(form: HTMLFormElement): JoinApplicantKind | null {
+  const value = form.querySelector<HTMLInputElement>('input[name="applicantKind"]:checked')?.value;
+  if (value === "organization" || value === "individual") return value;
+  return null;
+}
+
 function showSuccessPanel(
   root: HTMLElement,
   form: HTMLFormElement,
@@ -155,7 +184,6 @@ async function main(): Promise<void> {
   const pendingSection = root.querySelector<HTMLElement>("[data-join-verification-pending]");
   const accessSection = root.querySelector<HTMLElement>("[data-join-organization-access]");
   const supportSection = root.querySelector<HTMLElement>("[data-join-support-required]");
-  const attestation = root.querySelector<HTMLElement>("[data-unaffiliated-attestation]");
   const pendingEmail = root.querySelector<HTMLElement>("[data-join-pending-email]");
   const verifiedEmail = root.querySelector<HTMLElement>("[data-verified-application-email]");
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
@@ -204,14 +232,27 @@ async function main(): Promise<void> {
 
   installLiveValidation(startForm, statusEl);
   installLiveValidation(applicationForm, statusEl);
+  // A visitor can answer while the deferred bundle is still loading. Reconcile
+  // that already-checked state instead of relying only on a later change event.
+  applyJoinApplicantKindUI(startForm, readJoinApplicantKind(startForm));
+
+  startForm.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.name !== "applicantKind") return;
+    const applicantKind = target.value === "individual" ? "individual" : "organization";
+    const email = startForm.querySelector<HTMLInputElement>("#joinEmail");
+    if (email) email.value = "";
+    applyJoinApplicantKindUI(startForm, applicantKind);
+    email?.focus();
+  });
 
   startForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     startForm.classList.add("was-validated");
     if (!validateBeforeSubmit(startForm, statusEl)) return;
     const email = readField(startForm, "email");
-    const unaffiliatedAttestation =
-      startForm.querySelector<HTMLInputElement>("#unaffiliatedAttestation")?.checked ?? false;
+    const applicantKind = readJoinApplicantKind(startForm);
+    const unaffiliatedAttestation = applicantKind === "individual";
 
     await withLoadingButton(findSubmitButton(startForm), async () => {
       try {
@@ -221,13 +262,12 @@ async function main(): Promise<void> {
           memberJoinStartResponseSchema,
         );
         if (result.status === "unaffiliated_attestation_required") {
-          if (attestation) attestation.hidden = false;
           setStatus(
             statusEl,
-            "Confirm that you are unaffiliated before continuing with a personal email address.",
+            "This appears to be a personal or free email address. Because you selected Yes, use your organization email address. If that answer was incorrect, choose No.",
             true,
           );
-          startForm.querySelector<HTMLInputElement>("#unaffiliatedAttestation")?.focus();
+          startForm.querySelector<HTMLInputElement>("#joinEmail")?.focus();
           return;
         }
         if (pendingEmail) pendingEmail.textContent = email;
@@ -241,12 +281,6 @@ async function main(): Promise<void> {
   root.querySelector<HTMLButtonElement>("[data-edit-join-email]")?.addEventListener("click", () => {
     showSection(startSection);
     startForm.querySelector<HTMLInputElement>("#joinEmail")?.focus();
-  });
-
-  root.querySelector<HTMLButtonElement>("[data-show-unaffiliated]")?.addEventListener("click", (event) => {
-    if (attestation) attestation.hidden = false;
-    (event.currentTarget as HTMLButtonElement).hidden = true;
-    startForm.querySelector<HTMLInputElement>("#unaffiliatedAttestation")?.focus();
   });
 
   applicationForm.addEventListener("change", (event) => {

@@ -1,12 +1,36 @@
 import { expect, test } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
+test("requires a factual organization answer and updates the email path", async ({ page }) => {
+  await page.goto("/join/");
+
+  const organizationChoice = page.getByLabel("Yes — I am employed by or own an organization");
+  const individualChoice = page.getByLabel("No — I am not employed by and do not own an organization");
+  await expect(organizationChoice).toBeVisible();
+  await expect(individualChoice).toBeVisible();
+  await expect(page.getByLabel("Work or organization email address")).toBeHidden();
+
+  await organizationChoice.check();
+  const organizationEmail = page.getByLabel("Work or organization email address");
+  await expect(organizationEmail).toBeVisible();
+  await expect(page.getByText(/You must participate on behalf of that organization/)).toBeVisible();
+  await organizationEmail.fill("person@example.test");
+
+  await individualChoice.check();
+  const personalEmail = page.getByLabel("Personal email address");
+  await expect(personalEmail).toBeVisible();
+  await expect(personalEmail).toHaveValue("");
+  await expect(page.getByText(/Individual participation is limited to eligible categories/)).toBeVisible();
+  await expect(page.getByText(/You must participate on behalf of that organization/)).toBeHidden();
+});
+
 test("verifies an organization email before submitting the D1-backed membership form", async ({ page }) => {
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `membership-${unique}@organization-${unique}.test`;
   const sinceVerification = await capturedEmailCount();
 
   await page.goto("/join/");
+  await page.getByLabel("Yes — I am employed by or own an organization").check();
   await page.getByLabel("Work or organization email address").fill(email);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
@@ -49,9 +73,8 @@ test("keeps the individual path an explicit policy exception for an institutiona
   const since = await capturedEmailCount();
 
   await page.goto("/join/");
-  await page.getByLabel("Work or organization email address").fill(email);
-  await page.getByRole("button", { name: "I am not employed by or representing an organization" }).click();
-  await page.getByLabel(/I confirm that I am not employed/).check();
+  await page.getByLabel("No — I am not employed by and do not own an organization").check();
+  await page.getByLabel("Personal email address").fill(email);
   await page.getByRole("button", { name: "Continue" }).click();
 
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });

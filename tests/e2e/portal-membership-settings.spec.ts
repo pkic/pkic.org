@@ -140,6 +140,7 @@ test("publishes membership application form edits to the public join flow", asyn
     const email = `membership-form-${Date.now()}@organization-e2e.test`;
     const sinceVerification = await capturedEmailCount();
     await page.goto("/join/");
+    await page.getByLabel("Yes — I am employed by or own an organization").check();
     await page.getByLabel("Work or organization email address").fill(email);
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();

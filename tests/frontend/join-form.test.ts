@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  applyJoinApplicantKindUI,
   buildApplicationPayload,
   applyCategoryUI,
   filterCategoriesForApplicantKind,
@@ -61,6 +62,21 @@ function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormEle
   return form;
 }
 
+function buildJoinStartForm(): HTMLFormElement {
+  const form = document.createElement("form");
+  form.innerHTML = `
+    <div data-join-path-details hidden>
+      <div data-join-organization-policy hidden></div>
+      <div data-join-individual-policy hidden></div>
+      <label data-join-email-label for="joinEmail"></label>
+      <input id="joinEmail" name="email" disabled />
+      <div data-join-email-help></div>
+    </div>
+  `;
+  document.body.append(form);
+  return form;
+}
+
 describe("join-form helpers", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -109,5 +125,30 @@ describe("join-form helpers", () => {
     expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
     expect(container.textContent).toContain("Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
+  });
+
+  it("renders mutually exclusive organization and individual start states", () => {
+    const form = buildJoinStartForm();
+    const details = form.querySelector<HTMLElement>("[data-join-path-details]")!;
+    const organizationPolicy = form.querySelector<HTMLElement>("[data-join-organization-policy]")!;
+    const individualPolicy = form.querySelector<HTMLElement>("[data-join-individual-policy]")!;
+    const email = form.querySelector<HTMLInputElement>("#joinEmail")!;
+    const label = form.querySelector<HTMLElement>("[data-join-email-label]")!;
+
+    applyJoinApplicantKindUI(form, null);
+    expect(details.hidden).toBe(true);
+    expect(email.disabled).toBe(true);
+
+    applyJoinApplicantKindUI(form, "organization");
+    expect(details.hidden).toBe(false);
+    expect(organizationPolicy.hidden).toBe(false);
+    expect(individualPolicy.hidden).toBe(true);
+    expect(email.disabled).toBe(false);
+    expect(label.textContent).toBe("Work or organization email address");
+
+    applyJoinApplicantKindUI(form, "individual");
+    expect(organizationPolicy.hidden).toBe(true);
+    expect(individualPolicy.hidden).toBe(false);
+    expect(label.textContent).toBe("Personal email address");
   });
 });
