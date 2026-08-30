@@ -36,6 +36,14 @@ test("requires a factual organization answer and updates the email path", async 
     page.getByText(/Personal or free email addresses such as Gmail are not accepted for organization participation/),
   ).toBeVisible();
 
+  // Moving away from the field must not let generic email-format validation
+  // clear the organization-domain policy error before submission.
+  await page.getByRole("button", { name: "Continue" }).focus();
+  await expect(organizationEmail).toHaveAttribute("aria-invalid", "true");
+  await expect(
+    page.getByText(/Personal or free email addresses such as Gmail are not accepted for organization participation/),
+  ).toBeVisible();
+
   await organizationEmail.fill("person@example.test");
   await expect(organizationEmail).not.toHaveAttribute("aria-invalid", "true");
 
@@ -72,13 +80,29 @@ test("verifies an organization email before submitting the D1-backed membership 
 
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
   await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
+  await expect(page.locator("[data-verified-application-kind]")).toHaveText("Organization application");
+  await expect(page.locator("[data-join-application-form] input[type='email']")).toHaveCount(0);
   await expect(page.getByLabel(/H6/)).toHaveCount(0);
   await page.getByLabel(/F —/).check();
   await page.getByLabel("First name").fill("Morgan");
   await page.getByLabel("Last name").fill("Member");
   await page.getByLabel("Organization name").fill(`E2E Organization ${unique}`);
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
-  for (const agreement of await page.locator('[data-custom-fields] input[type="checkbox"][required]').all()) {
+
+  const legalFields = page.locator("[data-membership-legal-field]");
+  await expect(legalFields).toHaveCount(4);
+  const firstDocument = page.locator(".membership-legal-card-scroll").first();
+  const firstAgreement = firstDocument.locator("[data-membership-legal-input]");
+  expect(
+    await firstAgreement.evaluate((input) => {
+      const container = input.closest<HTMLElement>(".membership-legal-card-scroll");
+      return Boolean(container && input.offsetTop > container.clientHeight);
+    }),
+  ).toBe(true);
+  await firstAgreement.scrollIntoViewIfNeeded();
+  expect(await firstDocument.evaluate((container) => container.scrollTop)).toBeGreaterThan(0);
+
+  for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();
   }
 

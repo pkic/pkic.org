@@ -6,6 +6,7 @@ import {
   applyJoinEmailPolicy,
   buildApplicationPayload,
   applyCategoryUI,
+  configureMembershipLegalFields,
   filterCategoriesForApplicantKind,
   renderMembershipCategorySummary,
   renderMembershipCategories,
@@ -13,6 +14,7 @@ import {
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
 
 type Category = MemberApplicationFormResponse["categories"][number];
+type FormField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
 
 const organizationContext = {
   status: "application_ready" as const,
@@ -49,6 +51,22 @@ const categories: Category[] = [
     updatedAt: "2026-08-27T00:00:00.000Z",
   },
 ];
+
+function formField(key: string, fieldType: FormField["fieldType"] = "boolean"): FormField {
+  return {
+    id: crypto.randomUUID(),
+    key,
+    label: `Configured ${key}`,
+    fieldType,
+    required: true,
+    options: null,
+    optionSource: null,
+    validation: fieldType === "boolean" ? { requireTrue: true } : null,
+    sortOrder: 1,
+    updatedAt: "2026-08-30T00:00:00.000Z",
+    archivedAt: null,
+  };
+}
 
 function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormElement {
   const form = document.createElement("form");
@@ -130,6 +148,36 @@ describe("join-form helpers", () => {
     expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
     expect(container.textContent).toContain("Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
+  });
+
+  it("binds configured agreement fields to canonical document controls without generic duplicates", () => {
+    const form = document.createElement("form");
+    form.innerHTML = `
+      <div data-membership-legal-agreements hidden>
+        <section data-membership-legal-field="agrees_bylaws">
+          <input type="checkbox" name="custom.agrees_bylaws" data-membership-legal-input />
+          <label data-membership-legal-label></label>
+        </section>
+        <section data-membership-legal-field="agrees_ipr_policy">
+          <input type="checkbox" name="custom.agrees_ipr_policy" data-membership-legal-input />
+          <label data-membership-legal-label></label>
+        </section>
+      </div>
+    `;
+    const genericFields = configureMembershipLegalFields(form, [
+      formField("reason", "textarea"),
+      formField("agrees_bylaws"),
+    ]);
+
+    expect(genericFields.map(({ key }) => key)).toEqual(["reason"]);
+    expect(form.querySelector<HTMLElement>("[data-membership-legal-agreements]")?.hidden).toBe(false);
+    const bylaws = form.querySelector<HTMLElement>('[data-membership-legal-field="agrees_bylaws"]')!;
+    expect(bylaws.hidden).toBe(false);
+    expect(bylaws.querySelector<HTMLInputElement>("input")?.required).toBe(true);
+    expect(bylaws.querySelector("label")?.textContent).toBe("Configured agrees_bylaws");
+    const missingIpr = form.querySelector<HTMLElement>('[data-membership-legal-field="agrees_ipr_policy"]')!;
+    expect(missingIpr.hidden).toBe(true);
+    expect(missingIpr.querySelector<HTMLInputElement>("input")?.disabled).toBe(true);
   });
 
   it("renders an informational summary of eligible individual categories", () => {

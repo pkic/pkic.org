@@ -110,8 +110,21 @@
 
   <form data-join-application-form class="row g-3 my-2 needs-validation" novalidate hidden>
     <div class="col-12">
+      <div class="membership-verified-context">
+        <p class="mb-1">
+          <strong data-verified-application-kind></strong> using verified email address
+          <strong data-verified-application-email></strong>.
+        </p>
+        <p class="small mb-0">
+          Your verified email address and application path are fixed for this application. Start again if either is
+          incorrect.
+        </p>
+      </div>
+    </div>
+
+    <div class="col-12">
       <p class="form-text mb-0">
-        Continuing with verified email address <strong data-verified-application-email></strong>.
+        Only eligibility categories permitted for this verified application path are available below.
       </p>
     </div>
 
@@ -146,6 +159,39 @@
 
     <div class="col-12" data-custom-fields>
       <p class="form-text">Loading additional questions…</p>
+    </div>
+
+    <div class="col-12 membership-legal-agreements" data-membership-legal-agreements hidden>
+      <div>
+        <h3 class="h6 mb-1">Review and accept the membership terms</h3>
+        <p class="form-text mb-0">
+          Read each document in the scrollable panel. The agreement control is located at the bottom of each document.
+        </p>
+      </div>
+
+      {{- with .Site.GetPage "/bylaws" -}} {{ partial "forms/legal-document-agreement.html" (dict "page" . "fieldKey"
+      "agrees_bylaws") }} {{- end -}} {{- with .Site.GetPage "/code-of-conduct" -}} {{ partial
+      "forms/legal-document-agreement.html" (dict "page" . "fieldKey" "agrees_code_of_conduct") }} {{- end -}} {{- with
+      .Site.GetPage "/ipr" -}} {{ partial "forms/legal-document-agreement.html" (dict "page" . "fieldKey"
+      "agrees_ipr_policy") }} {{- end -}}
+
+      <div class="membership-legal-authority" data-membership-legal-field="warranted_authority">
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="custom-warranted-authority"
+            name="custom.warranted_authority"
+            data-membership-legal-input
+            required
+          />
+          <label class="form-check-label fw-semibold" for="custom-warranted-authority" data-membership-legal-label>
+            I represent and warrant that I have the necessary authority to submit this membership application and to be
+            legally bound by these terms.
+          </label>
+          <div class="invalid-feedback d-block" data-field-error="warranted_authority"></div>
+        </div>
+      </div>
     </div>
 
     <div class="col-12">

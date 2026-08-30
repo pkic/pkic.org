@@ -1,0 +1,33 @@
+{{- $page := .page -}} {{- $fieldKey := .fieldKey -}}
+<section class="membership-legal-card" data-membership-legal-field="{{ $fieldKey }}">
+  <header class="membership-legal-card-header">
+    <p class="mb-0">
+      Review the
+      <a href="{{ $page.RelPermalink }}" target="_blank" rel="noopener noreferrer">{{ $page.Title }}</a>, scroll to the
+      bottom, and confirm your agreement.
+    </p>
+  </header>
+  <div class="membership-legal-card-scroll" tabindex="0" aria-label="{{ $page.Title }} document and agreement">
+    <article class="membership-legal-document">
+      {{- range $page.Pages }}
+      <h3>{{ .Title }}</h3>
+      {{ .Content }} {{- end }} {{ $page.Content }}
+    </article>
+    <div class="membership-legal-acceptance">
+      <div class="form-check">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="custom-{{ $fieldKey }}"
+          name="custom.{{ $fieldKey }}"
+          data-membership-legal-input
+          required
+        />
+        <label class="form-check-label fw-semibold" for="custom-{{ $fieldKey }}" data-membership-legal-label
+          >I agree to the membership terms in this document</label
+        >
+        <div class="invalid-feedback d-block" data-field-error="{{ $fieldKey }}"></div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -92,7 +92,7 @@ test("an organization applicant submits in a category other than the default", a
   await page.getByLabel("Last name").fill("Applicant");
   await page.getByLabel("Organization name").fill(`Category ${chosen} Organization ${suffix}`);
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
-  for (const agreement of await page.locator('[data-custom-fields] input[type="checkbox"][required]').all()) {
+  for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();
   }
 

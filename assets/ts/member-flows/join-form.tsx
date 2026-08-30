@@ -32,6 +32,7 @@ const API_BASE = "/api/v1";
 type JoinApplicationContext = Extract<z.infer<typeof memberJoinVerifyResponseSchema>, { status: "application_ready" }>;
 type MembershipCategory = MemberApplicationFormResponse["categories"][number];
 type JoinApplicantKind = JoinApplicationContext["applicantKind"];
+type MembershipApplicationField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
 
 export const ORGANIZATION_EMAIL_POLICY_MESSAGE =
   "Use your official work or organization email address. Personal or free email addresses such as Gmail are not accepted for organization participation.";
@@ -108,6 +109,39 @@ export function renderMembershipCategorySummary(container: HTMLElement, categori
     list.append(item);
   }
   container.replaceChildren(list);
+}
+
+/**
+ * Binds D1 form-field policy to the server-rendered canonical legal documents
+ * and removes those fields from the generic custom-question renderer.
+ */
+export function configureMembershipLegalFields(
+  form: HTMLFormElement,
+  fields: MembershipApplicationField[],
+): MembershipApplicationField[] {
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  const configuredKeys = new Set<string>();
+  const entries = form.querySelectorAll<HTMLElement>("[data-membership-legal-field]");
+
+  for (const entry of Array.from(entries)) {
+    const key = entry.dataset.membershipLegalField;
+    const field = key ? fieldsByKey.get(key) : undefined;
+    const input = entry.querySelector<HTMLInputElement>("[data-membership-legal-input]");
+    const label = entry.querySelector<HTMLElement>("[data-membership-legal-label]");
+    const configured = Boolean(key && field?.fieldType === "boolean" && input && label);
+    entry.hidden = !configured;
+    if (input) input.disabled = !configured;
+    if (!configured || !key || !field || !input || !label) continue;
+
+    input.required = field.required;
+    label.textContent = field.label;
+    configuredKeys.add(key);
+  }
+
+  const agreements = form.querySelector<HTMLElement>("[data-membership-legal-agreements]");
+  if (agreements) agreements.hidden = configuredKeys.size === 0;
+
+  return fields.filter((field) => !configuredKeys.has(field.key));
 }
 
 function clearOrganizationEmailPolicyError(form: HTMLFormElement, email: HTMLInputElement): void {
@@ -252,6 +286,7 @@ async function main(): Promise<void> {
   const supportSection = root.querySelector<HTMLElement>("[data-join-support-required]");
   const pendingEmail = root.querySelector<HTMLElement>("[data-join-pending-email]");
   const verifiedEmail = root.querySelector<HTMLElement>("[data-verified-application-email]");
+  const verifiedKind = root.querySelector<HTMLElement>("[data-verified-application-kind]");
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
   const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
   const individualCategoryList = root.querySelector<HTMLElement>("[data-join-individual-category-list]");
@@ -306,8 +341,14 @@ async function main(): Promise<void> {
         return;
       }
       renderMembershipCategories(categoryContainer, categories);
-      if (customFieldsContainer) renderCustomFields(customFieldsContainer, definition.form?.fields ?? []);
+      const fields = definition.form?.fields ?? [];
+      const genericFields = configureMembershipLegalFields(applicationForm, fields);
+      if (customFieldsContainer) renderCustomFields(customFieldsContainer, genericFields);
       if (verifiedEmail) verifiedEmail.textContent = context.applicantEmail;
+      if (verifiedKind) {
+        verifiedKind.textContent =
+          context.applicantKind === "individual" ? "Individual application" : "Organization application";
+      }
       applyCategoryUI(applicationForm, categories[0]);
       showSection(applicationForm);
       const firstControl = applicationForm.querySelector<HTMLElement>('input[name="category"]');
