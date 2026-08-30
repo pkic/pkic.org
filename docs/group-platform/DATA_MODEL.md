@@ -192,6 +192,11 @@ in the session-creation transaction; removing or unverifying it invalidates an
 outstanding sign-in capability. Profile and relationship tables store only the
 address id, never another copy of the email string.
 
+When a selected secondary address is removed, every representation that used
+it falls back atomically to the canonical primary address. The foreign key also
+uses `ON DELETE SET NULL` so internal cleanup paths cannot leave a dangling
+representation reference.
+
 ### organization_representatives
 
 The existing table remains the authoritative relationship and is finalized as
@@ -231,6 +236,12 @@ Closing a representative relationship atomically:
 - inserts any required notification into the outbox.
 
 Past actions remain attributed to the original user and Member.
+
+Membership applications retain `applicant_email` only as the historical
+delivery address. Applicant access is bound to `applicant_user_id` before
+approval and to the resulting `member_id` when approval creates the Member
+capacity. Reassignment or reuse of an email address therefore cannot transfer
+application history to another user or represented organization.
 
 Names and the headshot describe the person and remain on users. Job title,
 biography, links, and the selected verified address describe the role in one

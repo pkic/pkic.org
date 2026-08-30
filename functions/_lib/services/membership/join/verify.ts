@@ -21,12 +21,13 @@ async function issueApplicationContinuation(
   signingSecret: string,
   payload: Awaited<ReturnType<typeof verifyMemberJoinVerificationToken>>,
   ttlSeconds: number,
+  applicantUserId: string | null,
 ): Promise<MemberJoinVerifyResponse> {
   return {
     status: "application_ready",
     applicantEmail: payload.email,
     applicantKind: payload.applicantKind,
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, payload, ttlSeconds),
+    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...payload, applicantUserId }, ttlSeconds),
   };
 }
 
@@ -46,10 +47,13 @@ export async function verifyMemberJoin(
   const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
   const domain = emailDomainOf(capability.email);
   const owner = await findUserEmailOwner(db, capability.email);
-  // Secondary aliases are deliberately not login identities. Even after the
-  // mailbox is proved, binding an admin-added alias to its existing account
-  // would let the mailbox holder inherit that account's unrelated capacity.
-  if (owner?.kind === "secondary" || owner?.kind === "pending") return { status: "support_required" };
+  // A previously verified alias is an authentication identity for the same
+  // canonical user. An unverified admin-added alias is only a reservation:
+  // this join link must not turn a potentially mistaken association into
+  // access to that user's unrelated capacities.
+  if (owner?.kind === "pending" || (owner?.kind === "secondary" && owner.verified !== 1)) {
+    return { status: "support_required" };
+  }
   const claimedMember = await first<ClaimedMemberRow>(
     db,
     `SELECT member.id AS member_id
@@ -74,7 +78,12 @@ export async function verifyMemberJoin(
         if (activeRepresentation) return { status: "support_required" };
       }
     }
-    return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds);
+    return issueApplicationContinuation(
+      input.signingSecret,
+      capability,
+      input.applicationTtlSeconds,
+      owner?.userId ?? null,
+    );
   }
 
   const preparedUser = await buildFindOrCreateUserStatement(db, { email: capability.email });

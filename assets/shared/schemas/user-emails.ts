@@ -30,7 +30,8 @@ export const userEmailsListResponseSchema = paginatedResponseSchema("emails", us
 export const userEmailsListRouteSchema = {
   tags: ["Users"],
   summary: "List a user's secondary email addresses",
-  description: "Staff-managed alias only -- does not affect login. See user_emails table.",
+  description:
+    "Staff-managed aliases. A verified alias can authenticate the same canonical user and can be selected by an organization representation.",
   "x-pkic-auth": { required: true, scopes: ["users:read"] },
   request: { params: userIdEmailsParamsSchema, query: userEmailsListQuerySchema },
   responses: {

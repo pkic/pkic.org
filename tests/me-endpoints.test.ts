@@ -14,7 +14,11 @@ import { seedOrganizationAggregate, addRepresentative } from "./helpers/membersh
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { myApplicationsListResponseSchema, myProfileSchema } from "../assets/shared/schemas/me";
-import { guardMemberSessionMutationDatabase, requireMemberFromRequest } from "../functions/_lib/auth/member";
+import {
+  findEligibleMemberById,
+  guardMemberSessionMutationDatabase,
+  requireMemberFromRequest,
+} from "../functions/_lib/auth/member";
 import { updateMyProfile } from "../functions/_lib/services/member-self-service";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 
@@ -168,10 +172,14 @@ describe("Current-user and application self-service", () => {
     ).resolves.toHaveLength(0);
   });
 
-  it("GET /api/v1/users/current/applications lists applications matching my email", async () => {
+  it("GET /api/v1/users/current/applications lists applications bound to my identity and selected capacity", async () => {
     const userId = await insertActiveMember("applicant-history@example.test", "F");
+    const member = await findEligibleMemberById(env.DB, userId);
+    if (!member) throw new Error("Expected active member");
     const token = await createMemberSession(env.DB, userId, "applicant-history-token");
     await seedMemberApplication({
+      applicantUserId: userId,
+      memberId: member.memberId,
       applicantEmail: "applicant-history@example.test",
       applicantName: "Applicant",
       organizationName: "Org",
@@ -180,6 +188,7 @@ describe("Current-user and application self-service", () => {
       stage: "approved",
     });
     await seedMemberApplication({
+      applicantUserId: userId,
       applicantEmail: "applicant-history@example.test",
       applicantName: "Applicant",
       organizationName: "Other Org",
@@ -207,8 +216,10 @@ describe("Current-user and application self-service", () => {
     expect(invalid.status).toBe(400);
   });
 
-  it("GET /api/v1/users/current/applications/:id returns applicant-facing detail scoped to my own email", async () => {
+  it("GET /api/v1/users/current/applications/:id returns applicant-facing detail scoped to my Member capacity", async () => {
     const userId = await insertActiveMember("applicant-detail@example.test", "F");
+    const member = await findEligibleMemberById(env.DB, userId);
+    if (!member) throw new Error("Expected active member");
     const token = await createMemberSession(env.DB, userId, "applicant-detail-token");
     const staffUserId = crypto.randomUUID();
     await env.DB.prepare(
@@ -218,6 +229,8 @@ describe("Current-user and application self-service", () => {
       .bind(staffUserId)
       .run();
     const applicationId = await seedMemberApplication({
+      applicantUserId: userId,
+      memberId: member.memberId,
       applicantEmail: "applicant-detail@example.test",
       applicantName: "Applicant Detail",
       organizationName: "Org",
@@ -263,6 +276,23 @@ describe("Current-user and application self-service", () => {
     const otherToken = await createMemberSession(env.DB, otherUserId, "not-the-applicant-token");
     const deniedResponse = await call(otherToken, `/api/v1/users/current/applications/${applicationId}`);
     expect(deniedResponse.status).toBe(404);
+  });
+
+  it("uses bounded identity and Member indexes for current-user application history", async () => {
+    const result = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN
+       SELECT id, stage, membership_category, created_at
+         FROM member_applications
+        WHERE member_id = ? OR (member_id IS NULL AND applicant_user_id = ?)
+        ORDER BY created_at DESC, id ASC
+        LIMIT 25`,
+    )
+      .bind(crypto.randomUUID(), crypto.randomUUID())
+      .all<{ detail: string }>();
+    const plan = result.results.map((row) => row.detail).join("\n");
+    expect(plan).toContain("idx_member_applications_member_created");
+    expect(plan).toContain("idx_member_applications_applicant_user");
+    expect(plan).not.toMatch(/SCAN member_applications/i);
   });
 
   it("GET/PATCH /api/v1/users/current/notifications/preferences defaults to all-true and persists partial updates", async () => {

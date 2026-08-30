@@ -15,6 +15,7 @@ import { findEligibleMemberById, switchActiveMembership } from "../functions/_li
 import { getMyProfile } from "../functions/_lib/services/member-self-service";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { seedMemberApplication } from "./helpers/member-applications";
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
@@ -113,6 +114,8 @@ describe("member auth — multi-organization membership context", () => {
 
     const tokenA = await createMemberSession(env.DB, userId, "multi-org-a", undefined, memberAId);
     const tokenB = await createMemberSession(env.DB, userId, "multi-org-b", undefined, memberBId);
+    expect((await findEligibleMemberById(env.DB, userId, memberAId))?.email).toBe("person@alpha.example");
+    expect((await findEligibleMemberById(env.DB, userId, memberBId))?.email).toBe("person@beta.example");
     const profileA = await (await call(tokenA, "/api/v1/users/current")).json<any>();
     const profileB = await (await call(tokenB, "/api/v1/users/current")).json<any>();
     expect(profileA).toMatchObject({
@@ -164,6 +167,62 @@ describe("member auth — multi-organization membership context", () => {
         [userId],
       ),
     ).toEqual([{ job_title: null, biography: null, links_json: null }]);
+  });
+
+  it("binds approved application history to the selected Member capacity, not an email string", async () => {
+    const userId = await insertUser(env.DB, "capacity-applications@example.test");
+    const orgAId = await insertOrganization(env.DB, "Application Org A");
+    const orgBId = await insertOrganization(env.DB, "Application Org B");
+    const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
+    const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
+    await addRepresentative(env.DB, memberAId, userId);
+    await addRepresentative(env.DB, memberBId, userId);
+    const applicationAId = await seedMemberApplication({
+      memberId: memberAId,
+      applicantUserId: userId,
+      applicantEmail: "formerly-shared@example.test",
+      organizationName: "Application Org A",
+      organizationDomain: "application-a.example",
+      membershipCategory: "A",
+      stage: "approved",
+    });
+    const applicationBId = await seedMemberApplication({
+      memberId: memberBId,
+      applicantUserId: userId,
+      applicantEmail: "formerly-shared@example.test",
+      organizationName: "Application Org B",
+      organizationDomain: "application-b.example",
+      membershipCategory: "B",
+      stage: "approved",
+    });
+    const tokenA = await createMemberSession(env.DB, userId, "application-capacity-a", undefined, memberAId);
+    const tokenB = await createMemberSession(env.DB, userId, "application-capacity-b", undefined, memberBId);
+    const reassignedUserId = await insertUser(env.DB, "formerly-shared@example.test");
+    const reassignedOrgId = await insertOrganization(env.DB, "Reassigned Email Organization");
+    const reassignedMemberId = await seedOrganizationAggregate(env.DB, reassignedOrgId, "F");
+    await addRepresentative(env.DB, reassignedMemberId, reassignedUserId);
+    const reassignedToken = await createMemberSession(
+      env.DB,
+      reassignedUserId,
+      "application-reassigned-email",
+      undefined,
+      reassignedMemberId,
+    );
+
+    const listA = await (await call(tokenA, "/api/v1/users/current/applications")).json<any>();
+    const listB = await (await call(tokenB, "/api/v1/users/current/applications")).json<any>();
+    expect(listA.applications.map((application: { id: string }) => application.id)).toEqual([applicationAId]);
+    expect(listB.applications.map((application: { id: string }) => application.id)).toEqual([applicationBId]);
+    expect((await call(tokenA, `/api/v1/users/current/applications/${applicationBId}`)).status).toBe(404);
+    expect((await call(tokenB, `/api/v1/users/current/applications/${applicationAId}`)).status).toBe(404);
+    expect(
+      (
+        (await (await call(reassignedToken, "/api/v1/users/current/applications")).json()) as {
+          applications: unknown[];
+        }
+      ).applications,
+    ).toEqual([]);
+    expect((await call(reassignedToken, `/api/v1/users/current/applications/${applicationAId}`)).status).toBe(404);
   });
 
   it("switchActiveMembership authorizes against the caller's own live memberships, not the client's say-so", async () => {

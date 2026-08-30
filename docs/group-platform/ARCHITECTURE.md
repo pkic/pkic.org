@@ -141,6 +141,10 @@ references a verified user-owned address rather than copying it. Group
 leadership is assigned to an exact active `(group, user, Member)` participation
 row. Selecting another represented Member does not inherit that leadership,
 and ending the participation or representation revokes the assignment.
+Removing a selected alias falls every affected representation back to the
+user's primary address in the same transaction. Membership application access
+uses canonical user and resulting Member identifiers rather than matching the
+historical applicant email.
 
 ## Conditional enrollment
 

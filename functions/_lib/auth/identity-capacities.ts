@@ -92,12 +92,18 @@ export const MEMBER_ELIGIBLE_USER_SELECT = `
 
   UNION ALL
 
-  SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
+  SELECT u.id, COALESCE(selected_email.email, u.email) AS email,
+         COALESCE(selected_email.normalized_email, u.normalized_email) AS normalized_email,
+         u.active, u.is_ec_member,
          m.id AS member_id, m.organization_id, o.name AS organization_name,
          mca.category_code AS membership_category,
          '1_' || r.joined_at AS sort_key
   FROM users u
   JOIN organization_representatives r ON r.user_id = u.id AND r.left_at IS NULL
+  LEFT JOIN user_emails selected_email
+    ON selected_email.id = r.email_id
+   AND selected_email.user_id = u.id
+   AND selected_email.verified_at IS NOT NULL
   JOIN members m ON m.id = r.member_id AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
   JOIN organizations o ON o.id = m.organization_id

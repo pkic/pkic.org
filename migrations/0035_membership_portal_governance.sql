@@ -1054,6 +1054,12 @@ CREATE INDEX idx_referral_conversions_code_created
 
 CREATE TABLE member_applications (
   id                   TEXT NOT NULL PRIMARY KEY,
+  -- Set from the server-authored verified-email continuation when the
+  -- applicant already has an account, or during approval for a new account.
+  applicant_user_id    TEXT,
+  -- Bound atomically when approval provisions the resulting Member capacity.
+  -- Applicant email remains the historical delivery address, never identity.
+  member_id            TEXT,
   applicant_email      TEXT NOT NULL,
   applicant_name       TEXT NOT NULL,
   organization_name    TEXT,
@@ -1091,10 +1097,18 @@ CREATE TABLE member_applications (
   updated_at           TEXT NOT NULL,
   FOREIGN KEY(form_submission_id) REFERENCES form_submissions(id),
   FOREIGN KEY(assigned_to_user_id) REFERENCES users(id),
+  FOREIGN KEY(applicant_user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(membership_category) REFERENCES membership_categories(code)
 );
 
 CREATE INDEX idx_member_applications_email ON member_applications(applicant_email);
+CREATE INDEX idx_member_applications_applicant_user
+  ON member_applications(applicant_user_id, created_at DESC, id ASC)
+  WHERE applicant_user_id IS NOT NULL;
+CREATE INDEX idx_member_applications_member_created
+  ON member_applications(member_id, created_at DESC, id ASC)
+  WHERE member_id IS NOT NULL;
 CREATE UNIQUE INDEX uq_member_applications_join_capability
   ON member_applications(join_capability_id)
   WHERE join_capability_id IS NOT NULL;
@@ -2196,7 +2210,7 @@ CREATE TABLE organization_representatives (
   -- specific member before granting a representative role against it
   FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(email_id) REFERENCES user_emails(id),
+  FOREIGN KEY(email_id) REFERENCES user_emails(id) ON DELETE SET NULL,
   FOREIGN KEY(blocked_by_user_id) REFERENCES users(id)
 );
 

@@ -149,8 +149,14 @@ describe("Post-approval onboarding", () => {
     );
     expect(categoryRows[0].category_code).toBe("F");
 
-    const appRows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
+    const appRows = await queryAll<{ stage: string; applicant_user_id: string | null; member_id: string | null }>(
+      env.DB,
+      "SELECT stage, applicant_user_id, member_id FROM member_applications WHERE id = ?",
+      id,
+    );
     expect(appRows[0].stage).toBe("approved");
+    expect(appRows[0].applicant_user_id).toBe(body.userId);
+    expect(appRows[0].member_id).toBe(body.memberId);
   });
 
   it("preserves explicit staff approval as an override when an EC decline already exists", async () => {

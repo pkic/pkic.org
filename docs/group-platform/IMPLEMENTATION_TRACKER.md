@@ -2186,13 +2186,17 @@ Status: In progress (2026-08-30)
       representation-scoped. `organization_representatives` now owns the
       selected verified `user_emails` identity, job title, biography, and links;
       individual Members retain the global user profile. Verified aliases sign
-      into the same user and are rechecked in the redemption batch. Group lead
-      and deputy assignments require an exact active `(group, user, Member)`
-      participation capacity, are filtered by the session-selected Member, and
-      are revoked when that participation or representation ends. Current-user,
-      organization management, public directory/leadership, digest, importer,
-      frontend, authorization-race, and multi-organization regressions cover the
-      boundary.
+      into the same user and are rechecked in the redemption batch; removing a
+      selected alias atomically falls affected representations back to the
+      primary address. Membership-application history binds to the canonical
+      user before approval and the resulting Member afterward, never to a
+      reusable email string. Group lead and deputy assignments require an exact
+      active `(group, user, Member)` participation capacity, are filtered by the
+      session-selected Member, and are revoked when that participation or
+      representation ends. Current-user, organization management, public
+      directory/leadership, digest, importer, frontend, authorization-race,
+      application-ownership, alias-lifecycle, and multi-organization regressions
+      cover the boundary.
 - [ ] Retire or repurpose the dormant `users.role` value `guest`: only
       `admin` has behavior (full-access short-circuit); `user` is the
       default; `guest` has zero behavioral references. Either it becomes the

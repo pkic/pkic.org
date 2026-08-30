@@ -238,6 +238,7 @@ export interface EligibleMembership {
 
 export interface AuthMember {
   userId: string;
+  /** Verified communication address selected for this exact member capacity. */
   email: string;
   memberId: string;
   organizationId: string | null;
