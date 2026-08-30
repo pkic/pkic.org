@@ -2081,6 +2081,22 @@ Status: In progress (2026-08-30)
       removed), orders tabs by user priority (people and activity before
       administration), and its Overview surfaces upcoming events and open
       votes as links into their owning tabs.
+      Live-reported navigation defects fixed 2026-08-30: the group surface
+      collapsed onto ONE route (`/groups/:groupId/*` parsed inside the shell)
+      so moving between views, event sub-tabs, and groups changes props on
+      the same mounted GroupWorkspace instead of unmounting across three
+      route patterns (which blanked the screen with no spinner on
+      cross-pattern moves such as browser Back into an event). Switching
+      groups now treats the previous group's retained data as absent —
+      "Loading group…" renders immediately instead of the stale workspace,
+      whose still-mounted tab bar previously linked BACK into the group
+      being left (fast click on Events after a sidebar switch landed in the
+      old group's events). Tab hrefs now derive from the route's groupId,
+      never fetched data. Regression tests:
+      tests/frontend/portal-group-switching.test.tsx. The duplicated
+      workspace screenshot could not be reproduced against a production
+      build (scripted browser walkthrough + jsdom harness) and is attributed
+      to vite dev HMR remounting after hot edits.
       Remaining waves:
       (1 residue) events-surface confirms after the projection slice;
       (2) EmptyState + labeled Spinner + DetailsSummary

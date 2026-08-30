@@ -221,21 +221,6 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasGroupsAccess && (
-              <Route
-                path="/groups/:groupId/events/:eventId/:eventTab?"
-                component={({ params }: { params: { groupId: string; eventId: string; eventTab?: string } }) => (
-                  <SectionWrapper>
-                    <GroupWorkspace
-                      groupId={params.groupId}
-                      view="events"
-                      resourceId={params.eventId}
-                      resourceTab={params.eventTab}
-                    />
-                  </SectionWrapper>
-                )}
-              />
-            )}
             {hasOrganizationsAccess && (
               <Route
                 path="/organizations/:organizationId"
@@ -451,23 +436,27 @@ export function PortalShell() {
               />
             )}
             {hasGroupsAccess && (
+              // One route for the whole group surface: every view, resource,
+              // and event sub-tab under a group renders the SAME mounted
+              // GroupWorkspace, so moving between views, resources, and
+              // groups only changes props — no unmount/remount blank flash,
+              // no redundant refetch of the group context.
               <Route
-                path="/groups/:groupId/:view/:resourceId"
-                component={({ params }: { params: { groupId: string; view: string; resourceId: string } }) => (
-                  <SectionWrapper>
-                    <GroupWorkspace groupId={params.groupId} view={params.view} resourceId={params.resourceId} />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasGroupsAccess && (
-              <Route
-                path="/groups/:groupId/:view?"
-                component={({ params }: { params: { groupId: string; view?: string } }) => (
-                  <SectionWrapper>
-                    <GroupWorkspace groupId={params.groupId} view={params.view} />
-                  </SectionWrapper>
-                )}
+                path="/groups/:groupId/*?"
+                component={({ params }: { params: { groupId: string; "*"?: string } }) => {
+                  const segments = (params["*"] ?? "").split("/").filter(Boolean).map(decodeURIComponent);
+                  const [view, resourceId, resourceTab] = segments;
+                  return (
+                    <SectionWrapper>
+                      <GroupWorkspace
+                        groupId={params.groupId}
+                        view={view}
+                        resourceId={resourceId}
+                        resourceTab={resourceTab}
+                      />
+                    </SectionWrapper>
+                  );
+                }}
               />
             )}
             {hasGroupsAccess && (

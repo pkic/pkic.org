@@ -117,7 +117,10 @@ export function GroupWorkspace({
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
     [groupId],
   );
-  const group = detail.data?.group;
+  // While a different group loads, useData still holds the previous group's
+  // data; rendering it would leave the old workspace on screen with no
+  // feedback. Treat it as absent so the switch shows a spinner immediately.
+  const group = detail.data?.group.id === groupId ? detail.data.group : undefined;
   const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");
@@ -127,16 +130,19 @@ export function GroupWorkspace({
 
   return (
     <div class="d-flex flex-column gap-3">
-      {detail.loading && <Spinner />}
+      {detail.loading && !group && <Spinner label="Loading group…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {group && (
         <>
           <GroupContextHeader group={group} />
+          {/* Tab targets derive from the route's groupId, never from fetched
+              data: while another group's data is in flight, links must not
+              point back into the group being left. */}
           <nav class="nav nav-tabs" aria-label={`${group.name} sections`}>
             {views.map((item) => (
               <Link
                 key={item.key}
-                href={`/groups/${encodeURIComponent(group.id)}/${item.key}`}
+                href={`/groups/${encodeURIComponent(groupId)}/${item.key}`}
                 class={`nav-link${view === item.key ? " active" : ""}`}
               >
                 {item.label}
