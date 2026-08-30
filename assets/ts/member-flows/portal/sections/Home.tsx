@@ -102,7 +102,7 @@ function AttentionPanel() {
         <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
           {openBallots.map((vote) => (
             <li key={`vote-${vote.id}`} class="small">
-              <Link href={votePath(vote)}>Cast your ballot: {vote.title}</Link>
+              <Link href={votePath(vote)}>Vote on: {vote.title}</Link>
               <span class="text-muted ms-2">closes {fmt(vote.closesAt)}</span>
             </li>
           ))}
@@ -212,9 +212,9 @@ function VotesPanel() {
               <Link href={votePath(vote)}>{vote.title}</Link>
               <span class="text-muted ms-2">closes {fmt(vote.closesAt)}</span>
               {vote.hasCastBallot ? (
-                <Badge status="completed" label="Ballot cast" />
+                <Badge status="completed" label="Voted" />
               ) : vote.canCastBallot ? (
-                <Badge status="pending" label="Awaiting your ballot" />
+                <Badge status="pending" label="Not voted yet" />
               ) : null}
             </li>
           ))}

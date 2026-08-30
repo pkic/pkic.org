@@ -2038,6 +2038,23 @@ Status: In progress (2026-08-30)
       each represented organization from the avatar menu at
       `/portal/#/organizations/:organizationId`, and retire the acting-capacity
       "My Organization" special case.
+- [ ] Identity-first participation: participation flows (event registration,
+      proposals, guest invitations, donations) auto-provision a user record
+      for the participant; sign-in eligibility becomes "a user record
+      exists", with no stored credential by default — the enumeration-safe
+      magic link to the verified address activates a session, and passkeys
+      stay optional. A capacity-less guest session sees only its own
+      participation records and the account view; capability links remain
+      the no-account fallback and never become sessions. New
+      participation-record feeds under `/api/v1/users/current` gate on the
+      authenticated user, not member capacity, so guests inherit them, and
+      the guest dashboard carries the become-a-member invitation.
+- [ ] Participation records: a "My participation" view reached from the
+      avatar menu over self feeds (applications, donations, registrations,
+      proposals as a read-only projection with resend-capability-link
+      actions, ballot history); the sidebar drops the always-visible My
+      Application entry while the Home dashboard keeps surfacing active
+      items.
 - [ ] Sign-in dashboard ("your consortium this week"): self-scoped
       participation feeds for votes, upcoming meetings, and open forms under
       `/api/v1/users/current/...`, composed with groups, events, applications,
