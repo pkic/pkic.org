@@ -43,12 +43,16 @@ export async function seedPersona(
     return { key, definition, userId: "", email: "", capacities: [], token: null };
   }
 
-  const email = `${key.toLowerCase()}-${crypto.randomUUID().slice(0, 8)}@persona.test`;
+  // Every instance is a distinct person at a distinct organization. Deriving
+  // the organization name from the persona description alone collides on
+  // `organizations.normalized_name` the moment a test needs two chairs.
+  const instance = crypto.randomUUID().slice(0, 8);
+  const email = `${key.toLowerCase()}-${instance}@persona.test`;
   const userId = await insertUser(db, email);
 
   const capacities: SeededPersona["capacities"] = [];
   for (let index = 0; index < definition.organizationCount; index += 1) {
-    const organizationId = await insertOrganization(db, `${definition.description} ${index + 1}`);
+    const organizationId = await insertOrganization(db, `${definition.description} ${index + 1} ${instance}`);
     const memberId = await seedOrganizationAggregate(db, organizationId, definition.membershipCategory ?? "A");
     await addRepresentative(db, memberId, userId);
     capacities.push({ organizationId, memberId });
