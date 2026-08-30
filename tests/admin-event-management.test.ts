@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -74,28 +75,24 @@ async function eventUpdatedAt(slug = "pqc-2026"): Promise<string> {
   return row.updated_at;
 }
 
+/**
+ * An event organizer: full management of one event and nothing beyond it,
+ * which is the realistic identity for these journeys rather than a platform
+ * administrator who could do them regardless.
+ */
 async function createScopedEventManager(eventId: string) {
-  const email = `event-manager-${crypto.randomUUID()}@example.test`;
-  const userId = await insertUser(env.DB, email);
-  const roleAssignmentId = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-       VALUES (?, ?, 'role-event_organizer', 'event', ?, ?, datetime('now'))`,
-  )
-    .bind(roleAssignmentId, userId, eventId, userId)
-    .run();
-
+  const organizer = await seedPersona(env.DB, "eventOrganizer", { eventId });
   return {
-    email,
-    userId,
+    email: organizer.email,
+    userId: organizer.userId,
     actor: createUserBackedAuthAdmin({
-      id: userId,
-      email,
+      id: organizer.userId,
+      email: organizer.email,
       role: "user",
       scopes: [],
       grants: [{ permission: "events:manage", contextType: "event", contextId: eventId }],
     }),
-    roleAssignmentId,
+    roleAssignmentId: organizer.roleAssignmentIds.get("role-event_organizer")!,
   };
 }
 
