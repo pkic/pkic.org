@@ -12,10 +12,13 @@ export function GroupForms({
   groupId,
   canManage,
   initialPlacementId,
+  initialPlacementTab,
 }: {
   groupId: string;
   canManage: boolean;
   initialPlacementId?: string;
+  /** The URL-addressed tab segment for `initialPlacementId`'s detail view. */
+  initialPlacementTab?: string;
 }) {
   const [, navigate] = useHashLocation();
   const [showCreate, setShowCreate] = useState(false);
@@ -123,6 +126,7 @@ export function GroupForms({
               <GroupFormDetail
                 groupId={groupId}
                 placementId={row.placement.id}
+                initialTab={initialPlacementTab}
                 onChanged={() => tableActions.current?.reload()}
               />
             ) : null

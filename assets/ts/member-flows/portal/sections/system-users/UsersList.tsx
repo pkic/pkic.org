@@ -68,6 +68,7 @@ export function UsersList({
 
   return (
     <ApiDataTable
+      urlState="users"
       endpoint="/api/v1/users"
       responseSchema={usersListResponseSchema}
       resolve={(data) => data.users}

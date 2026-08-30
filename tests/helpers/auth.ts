@@ -15,6 +15,7 @@ export async function createAdminSession(
   adminUserId: string,
   rawToken: string,
   signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+  memberId?: string | null,
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -34,6 +35,7 @@ export async function createAdminSession(
     sub: adminUserId,
     sid: sessionId,
     exp: Math.floor(new Date(expiresAt).getTime() / 1000),
+    memberId,
   });
 }
 

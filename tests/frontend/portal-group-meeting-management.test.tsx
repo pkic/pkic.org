@@ -3,9 +3,24 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventOccurrence, GroupEventSeries } from "../../assets/shared/schemas/event-series";
+import { GroupMeetingSeriesDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetingSeriesDetail";
 import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
+
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
+
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -32,7 +47,38 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  navigate.mockReset();
 });
+
+function baseSeries(overrides: Partial<GroupEventSeries> = {}): GroupEventSeries {
+  return {
+    id: "60000000-0000-4000-8000-000000000005",
+    eventId: "70000000-0000-4000-8000-000000000005",
+    ownerGroupId: GROUP_ID,
+    eventName: "Architecture call",
+    eventSlug: "architecture-call",
+    profileKey: "meeting",
+    registrationPolicy: "no_registration",
+    visibility: "group_members",
+    memberEligibility: "owner_group",
+    guestPolicy: "occurrence_invitation",
+    startsAt: "2026-09-01T15:00:00.000Z",
+    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
+    timezone: "Europe/Amsterdam",
+    durationMinutes: 60,
+    location: "Online",
+    providerType: null,
+    providerConfigured: false,
+    active: true,
+    inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
+    nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    capabilities: ["view", "manage"],
+    occurrenceCount: 0,
+    ...overrides,
+  };
+}
 
 describe("portal group meeting management", () => {
   it("sends a true series patch and keeps materialized schedule fields locked", async () => {
@@ -327,5 +373,60 @@ describe("portal group meeting management", () => {
       expiresAt: "2026-09-01T13:00:00.000Z",
       seriesWide: true,
     });
+  });
+
+  it("opens the tab given by an initial resourceTab", async () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const container = mount(
+      <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
+    );
+
+    const settingsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent === "Series settings",
+    );
+    expect(settingsTab?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("Save series");
+  });
+
+  it("falls back to the default tab for an unrecognized or unavailable resourceTab", async () => {
+    const series = baseSeries({ capabilities: ["view"] });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const container = mount(
+      <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
+    );
+
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1);
+    const occurrencesTab = container.querySelector('[role="tab"]');
+    expect(occurrencesTab?.getAttribute("aria-selected")).toBe("true");
+    expect(occurrencesTab?.textContent).toBe("Occurrences");
+  });
+
+  it("navigates to the canonical series tab URL when a tab is clicked", async () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+
+    const settingsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent === "Series settings",
+    )!;
+    expect(settingsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${series.id}/settings`);
+
+    await act(async () => {
+      settingsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${series.id}/settings`);
   });
 });

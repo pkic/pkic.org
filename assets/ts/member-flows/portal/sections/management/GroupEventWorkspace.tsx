@@ -86,9 +86,13 @@ export function GroupEventWorkspace({
   const showUnavailable = isKnownTab && !isVisibleTab;
   const activeTabLabel = EVENT_WORKSPACE_TABS.find((item) => item.key === activeTab)?.label ?? activeTab;
 
-  function goToTab(nextTab: string): void {
+  function tabPath(nextTab: string): string {
     const base = `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`;
-    navigate(nextTab === GROUP_EVENT_OVERVIEW_TAB ? base : `${base}/${nextTab}`);
+    return nextTab === GROUP_EVENT_OVERVIEW_TAB ? base : `${base}/${nextTab}`;
+  }
+
+  function goToTab(nextTab: string): void {
+    navigate(tabPath(nextTab));
   }
 
   return (
@@ -109,7 +113,13 @@ export function GroupEventWorkspace({
         </p>
       </div>
 
-      <Tabs items={visibleTabs} active={activeTab} onChange={goToTab} idPrefix={`group-event-${event.id}`} />
+      <Tabs
+        items={visibleTabs}
+        active={activeTab}
+        onChange={goToTab}
+        hrefFor={tabPath}
+        idPrefix={`group-event-${event.id}`}
+      />
 
       {showUnavailable ? (
         <ErrorAlert error="This event section is not available to your current identity." />

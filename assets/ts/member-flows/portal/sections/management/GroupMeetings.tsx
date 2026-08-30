@@ -121,10 +121,13 @@ export function GroupMeetings({
   groupId,
   canManage,
   initialSeriesId,
+  initialSeriesTab,
 }: {
   groupId: string;
   canManage: boolean;
   initialSeriesId?: string;
+  /** The URL-addressed tab segment for `initialSeriesId`'s detail view. */
+  initialSeriesTab?: string;
 }) {
   const listActions = useRef<ApiTableActions | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -145,6 +148,7 @@ export function GroupMeetings({
           groupId={groupId}
           actionsRef={listActions}
           initialSeriesId={initialSeriesId}
+          initialSeriesTab={initialSeriesTab}
           createAction={canManage ? { label: "New series", onSelect: () => setShowCreate(true) } : undefined}
         />
       </div>

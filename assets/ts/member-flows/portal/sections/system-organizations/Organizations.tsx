@@ -95,6 +95,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
       )}
 
       <ApiDataTable
+        urlState="organizations"
         endpoint="/api/v1/organizations"
         responseSchema={organizationsListResponseSchema}
         resolve={(data) => data.organizations}

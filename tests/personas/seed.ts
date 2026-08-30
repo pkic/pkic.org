@@ -4,6 +4,7 @@ import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggr
 import { joinGroup } from "../../functions/_lib/services/groups";
 import type { DatabaseLike } from "../../functions/_lib/types";
 import { ALL_PERSONAS, type PersonaDefinition } from "./catalog";
+import { first } from "../../functions/_lib/db/queries";
 
 /**
  * Brings a persona into existence in D1 for the mounted Worker suites.
@@ -70,6 +71,22 @@ function composed(keys: string[]): PersonaDefinition {
     : PersonaDefinition;
 }
 
+async function joinGroupLineage(db: DatabaseLike, groupId: string, userId: string, memberIds: string[]): Promise<void> {
+  const group = await first<{ parent_group_id: string | null }>(db, "SELECT parent_group_id FROM groups WHERE id = ?", [
+    groupId,
+  ]);
+  if (group?.parent_group_id) {
+    await joinGroupLineage(db, group.parent_group_id, userId, memberIds);
+  }
+  await joinGroup(db, groupId, {
+    actorUserId: userId,
+    targetUserId: userId,
+    selection: { mode: "selected", memberIds },
+    source: "self_service",
+    allowManaged: false,
+  });
+}
+
 export async function seedPersona(
   db: DatabaseLike,
   key: string | string[],
@@ -107,6 +124,18 @@ export async function seedPersona(
     capacities.push({ organizationId, memberId });
   }
 
+  const groupLeadershipRole = definition.roles.some(
+    (role) => role.context === "group" && ["role-group_lead", "role-group_deputy_lead"].includes(role.roleId),
+  );
+  if (options.groupId && (options.joinGroupWithCapacities || groupLeadershipRole) && capacities.length > 0) {
+    await joinGroupLineage(
+      db,
+      options.groupId,
+      userId,
+      capacities.map((capacity) => capacity.memberId),
+    );
+  }
+
   const roleAssignmentIds = new Map<string, string>();
   for (const role of definition.roles) {
     const contextId =
@@ -127,12 +156,16 @@ export async function seedPersona(
     roleAssignmentIds.set(role.roleId, roleAssignmentId);
     await db
       .prepare(
-        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+        `INSERT INTO user_roles
+           (id, user_id, member_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       )
       .bind(
         roleAssignmentId,
         userId,
+        role.context === "group" && ["role-group_lead", "role-group_deputy_lead"].includes(role.roleId)
+          ? capacities[0]?.memberId
+          : null,
         role.roleId,
         // A global role carries no context at all: the schema's context
         // vocabulary is event/group/organization, and a NULL type with a
@@ -157,24 +190,20 @@ export async function seedPersona(
     grantIds.set(permission, grantId);
   }
 
-  if (options.groupId && options.joinGroupWithCapacities && capacities.length > 0) {
-    await joinGroup(db, options.groupId, {
-      actorUserId: userId,
-      targetUserId: userId,
-      selection: { mode: "selected", memberIds: capacities.map((capacity) => capacity.memberId) },
-      source: "self_service",
-      allowManaged: false,
-    });
-  }
-
   // A persona with any staff authority needs a staff session; a pure member
   // needs a member session. Issuing the wrong one would let a test pass for
   // an identity shape the product never produces.
   const hasStaffAuthority =
     definition.roles.some((role) => role.roleId !== "role-primary_contact") || definition.grants.length > 0;
   const token = hasStaffAuthority
-    ? await createAdminSession(db, userId, `persona-${key}-${crypto.randomUUID()}`)
-    : await createMemberSession(db, userId, `persona-${key}-${crypto.randomUUID()}`);
+    ? await createAdminSession(db, userId, `persona-${key}-${crypto.randomUUID()}`, undefined, capacities[0]?.memberId)
+    : await createMemberSession(
+        db,
+        userId,
+        `persona-${key}-${crypto.randomUUID()}`,
+        undefined,
+        capacities[0]?.memberId,
+      );
 
   return { key, definition, userId, email, capacities, token, grantIds, roleAssignmentIds };
 }

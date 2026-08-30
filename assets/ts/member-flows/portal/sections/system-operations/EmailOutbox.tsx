@@ -154,6 +154,7 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         {!canManage && <span class="badge text-bg-light border text-dark">Read only</span>}
       </div>
       <ApiDataTable
+        urlState="outbox"
         endpoint="/api/v1/email/outbox"
         responseSchema={emailOutboxResponseSchema}
         resolve={(data) => data.outbox}

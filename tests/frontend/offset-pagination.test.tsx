@@ -23,6 +23,14 @@ import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const mounted: HTMLElement[] = [];
 
 function mount(node: ComponentChildren): HTMLElement {

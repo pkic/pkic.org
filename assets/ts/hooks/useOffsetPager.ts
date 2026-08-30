@@ -9,10 +9,10 @@ export interface OffsetPageInfo {
 }
 
 /** Canonical state controller for offset-paginated API collections. */
-export function useOffsetPager(initialPageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT) {
+export function useOffsetPager(initialPageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT, initialOffset = 0) {
   const normalizedInitialPageSize =
     Number.isInteger(initialPageSize) && initialPageSize > 0 ? initialPageSize : ADMIN_LIST_PAGE_SIZE_DEFAULT;
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset] = useState(Number.isInteger(initialOffset) && initialOffset > 0 ? initialOffset : 0);
   const [pageSize, setPageSize] = useState(normalizedInitialPageSize);
   const page = pageSize > 0 ? Math.floor(offset / pageSize) + 1 : 1;
 

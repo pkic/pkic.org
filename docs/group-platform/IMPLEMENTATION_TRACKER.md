@@ -2138,7 +2138,27 @@ Status: In progress (2026-08-30)
       key/value rendering (deep payloads keep a collapsed raw view), and
       the roles table summarizes large permission sets instead of flooding
       chips.
-      Remaining waves:
+      Waves 3 and 4 landed 2026-08-30, completing the four-wave audit
+      execution. Wave 3: `Tabs` renders real links via `hrefFor` (event
+      workspace, event detail/settings/proposals/promoters, donations), the
+      group form and meeting-series detail tabs became URL segments through
+      the existing `resourceTab` route parsing, and `ApiDataTable` gained
+      `urlState` — search, sort, offset, and page size mirror into
+      namespaced query parameters on thirteen primary lists (users, groups,
+      organizations, events, donations, templates, sponsorships, forms,
+      applications, roles, grants, audit, outbox), initialized from the URL
+      on mount and cleaned up on unmount so links are shareable and the
+      back button restores list state (verified live in a browser
+      walkthrough). Wave 4: `PersonCell` (landed earlier with the users
+      directory) plus `EntityLink` with the permission-aware
+      `portalEntityHref` resolver — audit-log actors and entities now link
+      to their canonical routes when the viewer may reach them and degrade
+      to plain text otherwise. Still local by design: proposal detail
+      sub-tabs, occurrence detail tabs, and the communications/campaign
+      editors (no route homes yet; queued with the events projection
+      consolidation).
+      All four waves are complete. Residuals folded into the events
+      projection consolidation:
       (1 residue) events-surface confirms after the projection slice;
       (2) EmptyState + labeled Spinner + DetailsSummary
       close the blank/raw-payload states through the shared table and error

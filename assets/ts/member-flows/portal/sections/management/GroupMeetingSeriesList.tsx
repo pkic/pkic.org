@@ -12,11 +12,14 @@ export function GroupMeetingSeriesList({
   groupId,
   actionsRef,
   initialSeriesId,
+  initialSeriesTab,
   createAction,
 }: {
   groupId: string;
   actionsRef?: MutableRef<ApiTableActions | null>;
   initialSeriesId?: string;
+  /** The URL-addressed tab segment for `initialSeriesId`'s detail view. */
+  initialSeriesTab?: string;
   createAction?: { label: string; onSelect: () => void; disabled?: boolean };
 }) {
   const [, navigate] = useHashLocation();
@@ -109,6 +112,7 @@ export function GroupMeetingSeriesList({
           <GroupMeetingSeriesDetail
             groupId={groupId}
             series={series}
+            initialTab={initialSeriesTab}
             onChanged={() => effectiveActions.current?.reload()}
           />
         ) : null

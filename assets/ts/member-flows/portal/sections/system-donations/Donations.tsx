@@ -320,11 +320,13 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
         onChange={(k) =>
           navigate(k === "list" ? "/donations" : k === "promoters" ? "/donations/promoters" : "/donations/stats")
         }
+        hrefFor={(k) => (k === "list" ? "/donations" : k === "promoters" ? "/donations/promoters" : "/donations/stats")}
       />
 
       {tab === "list" && (
         <>
           <ApiDataTable
+            urlState="donations"
             endpoint="/api/v1/donations"
             responseSchema={donationsListResponseSchema}
             resolve={(d) => d.donations}

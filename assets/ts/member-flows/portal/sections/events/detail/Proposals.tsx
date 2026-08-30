@@ -53,6 +53,7 @@ export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: s
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/proposals/${key === "proposals" ? "" : key}`)}
+        hrefFor={(key) => `/events/${slug}/proposals/${key === "proposals" ? "" : key}`}
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="proposal_submission" />}

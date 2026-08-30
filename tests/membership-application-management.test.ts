@@ -15,6 +15,8 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
+import { onlyPersona } from "./personas/catalog";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
@@ -27,7 +29,6 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { membershipApplicationsListResponseSchema } from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
-import type { Permission } from "../assets/shared/schemas/permissions";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -68,16 +69,6 @@ async function assignRole(
      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
   )
     .bind(crypto.randomUUID(), userId, roleId, context?.type ?? null, context?.id ?? null, grantedBy)
-    .run();
-}
-
-async function grantGlobalPermission(userId: string, permission: Permission, grantedBy: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO permission_grants
-       (id, user_id, permission, granted_by_user_id, created_at)
-     VALUES (?, ?, ?, ?, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, permission, grantedBy)
     .run();
 }
 
@@ -598,17 +589,12 @@ describe("GET /api/v1/members/applications?sort=... (Fix 4 — sortable columns)
   });
 
   it("keeps read, write, and approval capabilities independently enforceable", async () => {
-    const readUserId = await insertUser("application-reader@example.test");
-    await grantGlobalPermission(readUserId, "membership:read", adminId);
-    const readToken = await createAdminSession(env.DB, readUserId, "application-reader-token");
-
-    const writeUserId = await insertUser("application-writer@example.test");
-    await grantGlobalPermission(writeUserId, "membership:write", adminId);
-    const writeToken = await createAdminSession(env.DB, writeUserId, "application-writer-token");
-
-    const approveUserId = await insertUser("application-approver@example.test");
-    await grantGlobalPermission(approveUserId, "membership:approve", adminId);
-    const approveToken = await createAdminSession(env.DB, approveUserId, "application-approver-token");
+    // Three identities, each holding exactly one of the three membership
+    // capabilities. Independence is only demonstrable by someone whose
+    // authority stops at one of them.
+    const readToken = (await seedPersona(env.DB, onlyPersona("membership:read"))).token!;
+    const writeToken = (await seedPersona(env.DB, onlyPersona("membership:write"))).token!;
+    const approveToken = (await seedPersona(env.DB, onlyPersona("membership:approve"))).token!;
 
     const applicationId = crypto.randomUUID();
     expect((await call(readToken, "/api/v1/members/applications")).status).toBe(200);

@@ -291,6 +291,7 @@ export function FormManagementList({
   return (
     <div>
       <ApiDataTable
+        urlState="forms"
         endpoint="/api/v1/forms"
         responseSchema={formsListResponseSchema}
         resolve={(response) => response.forms}

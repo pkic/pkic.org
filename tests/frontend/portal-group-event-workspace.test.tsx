@@ -12,6 +12,14 @@ vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "architecture-workshop";
 const mounted: HTMLElement[] = [];
@@ -34,15 +42,15 @@ async function settle(): Promise<void> {
   });
 }
 
-function tabButtons(container: HTMLElement): HTMLButtonElement[] {
-  return Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="tab"]'));
+function tabButtons(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]'));
 }
 
 function tabLabels(container: HTMLElement): string[] {
   return tabButtons(container).map((button) => button.textContent?.trim() ?? "");
 }
 
-function tab(container: HTMLElement, label: string): HTMLButtonElement | undefined {
+function tab(container: HTMLElement, label: string): HTMLElement | undefined {
   return tabButtons(container).find((button) => button.textContent?.trim() === label);
 }
 
@@ -171,6 +179,10 @@ describe("group event workspace", () => {
     );
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
     await settle();
+
+    expect(tab(container, "Registrations")?.getAttribute("href")).toBe(
+      `#/groups/${GROUP_ID}/events/${EVENT_ID}/registrations`,
+    );
 
     await act(async () => {
       tab(container, "Registrations")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

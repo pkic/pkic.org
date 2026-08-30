@@ -16,6 +16,14 @@ vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
 
@@ -527,8 +535,8 @@ describe("portal selected-group collections", () => {
     expect(container.textContent).not.toContain("Manage meeting series");
 
     const tab = (label: string) =>
-      Array.from(container.querySelectorAll('button[role="tab"]')).find(
-        (button) => button.textContent?.trim() === label,
+      Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+        (item) => item.textContent?.trim() === label,
       );
 
     // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
