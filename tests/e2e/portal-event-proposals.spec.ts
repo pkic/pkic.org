@@ -99,7 +99,15 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await expect(row).toBeVisible();
   await row.click();
   await expect(page.getByText("Canonical portal proposal journey", { exact: true })).toBeVisible();
-  await expect(page.getByText("Audit log", { exact: true })).toBeVisible();
+  const auditResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname === `/api/v1/proposals/${proposalId}/audit-log`,
+  );
+  await page.getByRole("tab", { name: "Audit Log", exact: true }).click();
+  expect((await auditResponse).status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Audit Log", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Speakers", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   await expect(page.getByLabel("Proposal speakers").getByText("Portal Proposer", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit profile" }).click();

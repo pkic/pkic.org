@@ -1774,9 +1774,9 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the proposal and
-      proposal-speaker capability-resource cutover with 2,389 passing backend
-      tests (one skipped), 337 frontend tests, and 88 tooling tests. Type
+      Current evidence: the complete gate passes on the exact architecture and
+      browser-evidence state with 2,391 passing backend tests (one skipped),
+      339 frontend tests, and 88 tooling tests. Type
       checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1789,8 +1789,7 @@ Status: In progress
       now applies shared output, expansion, cumulative-work, depth, and subject
       budgets across body, partial, loop, layout, campaign-custom-text, preview,
       and outbox paths. Focused regressions prove abusive expansion fails closed
-      before delivery and is terminal rather than retried. The final
-      architecture state must pass the same complete gate again before handoff.
+      before delivery and is terminal rather than retried.
 - [x] Run focused Playwright flows while iterating.
       Current evidence: the route-mocked six-persona suite remains a fast portal
       shell contract. Backend governance is now covered separately by a passing
@@ -1840,19 +1839,22 @@ Status: In progress
       scheduled-job registry, pauses and resumes one job through the canonical
       PATCH resource, and proves the removed pause and resume action routes are
       not requested.
-- [ ] Run the complete pnpm run test:e2e gate because navigation and portal
+- [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: an earlier uninterrupted 52-test checkpoint passed
-      against freshly seeded local Worker, D1, R2, and intercepted SendGrid
-      environments. The current expanded 79-test run completed 78 tests and
-      exposed one real narrow-screen backdrop geometry defect: the drawer
-      covered the center point Playwright selected for the backdrop. The
-      backdrop now occupies only the visible area beside the 240px drawer, and
-      the complete mobile-navigation file passes 4/4 after the correction. All
-      affected proposal submission, speaker invitation, confirmation, profile,
-      headshot, presentation, decline, and resend journeys passed in the broad
-      run. A new uninterrupted current 79-test run remains required before
-      final handoff; the combined evidence is not represented as 79/79.
+      Evidence: the complete 79-test Playwright gate passes uninterrupted in
+      15.9 minutes against freshly seeded local Worker, D1, R2, mocked Stripe,
+      and intercepted SendGrid environments. The first exact-state run passed
+      78/79 and exposed one stale selected-group proposal test that still
+      expected the former always-rendered Audit Log and Speakers sections. The
+      shared proposal detail now intentionally lazy-loads those resources
+      behind accessible tabs. The journey now activates each tab, waits for the
+      canonical audit response, and continues to assert that no retired admin
+      API is requested; it passes both focused and within the uninterrupted
+      79/79 rerun. The gate covers public flows, portal authentication,
+      membership and organization policy, selected-group management, every
+      permission-derived global destination, sponsor access, narrow and
+      keyboard navigation, role/persona boundaries, invitations, proposals,
+      registrations, meetings, votes, and checkout behavior.
 - [x] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Evidence: the identity phase covers real-browser desktop and 390x844
