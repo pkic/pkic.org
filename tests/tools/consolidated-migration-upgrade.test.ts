@@ -167,6 +167,22 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
        NULL, '2025-01-03'),
       ('invite-blank', 'event-future', '   ', 'attendee', 'token-blank', 'sent',
        NULL, '2025-01-02'),
+      ('invite-invalid-missing-at', 'event-future', 'not-an-email', 'attendee', 'token-invalid-missing-at', 'sent',
+       NULL, '2025-01-02'),
+      ('invite-invalid-multiple-at', 'event-future', 'foo@@example.test', 'attendee', 'token-invalid-multiple-at', 'sent',
+       NULL, '2025-01-02'),
+      ('invite-invalid-missing-domain', 'event-future', 'foo@', 'attendee', 'token-invalid-missing-domain', 'sent',
+       NULL, '2025-01-02'),
+      ('invite-invalid-whitespace', 'event-future', 'bad address@example.test', 'attendee', 'token-invalid-whitespace', 'sent',
+       NULL, '2025-01-02'),
+      ('invite-created-order-old', 'event-future', 'created-order@example.test', 'attendee', 'token-created-order-old', 'sent',
+       NULL, '2025-01-02T08:00:00.000Z'),
+      ('invite-created-order-new', 'event-future', 'created-order@example.test', 'attendee', 'token-created-order-new', 'sent',
+       NULL, '2025-01-02 09:00:00+00:00'),
+      ('invite-created-malformed', 'event-future', 'created-validity@example.test', 'attendee', 'token-created-malformed', 'sent',
+       NULL, 'not-a-date'),
+      ('invite-created-canonical', 'event-future', 'created-validity@example.test', 'attendee', 'token-created-canonical', 'sent',
+       NULL, '2025-01-02T09:00:00.000Z'),
       ('invite-bad-event', 'event-malformed', 'bad-event@example.test', 'attendee', 'token-bad-event', 'sent',
        NULL, '2025-01-02'),
       ('invite-reversed-event', 'event-reversed', 'reversed-event@example.test', 'attendee',
@@ -535,6 +551,30 @@ describe("consolidated pending migration upgrade", () => {
       { id: "invite-bad-event", invitee_email: "bad-event@example.test", status: "expired", expires_at: null },
       { id: "invite-blank", invitee_email: "", status: "expired", expires_at: "2099-02-01T09:00:00.000Z" },
       {
+        id: "invite-created-canonical",
+        invitee_email: "created-validity@example.test",
+        status: "sent",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-created-malformed",
+        invitee_email: "created-validity@example.test",
+        status: "revoked",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-created-order-new",
+        invitee_email: "created-order@example.test",
+        status: "sent",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-created-order-old",
+        invitee_email: "created-order@example.test",
+        status: "revoked",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
         id: "invite-early",
         invitee_email: "early@example.test",
         status: "expired",
@@ -562,6 +602,30 @@ describe("consolidated pending migration upgrade", () => {
         id: "invite-future-tie-z",
         invitee_email: "tie@example.test",
         status: "sent",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-invalid-missing-at",
+        invitee_email: "not-an-email",
+        status: "expired",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-invalid-missing-domain",
+        invitee_email: "foo@",
+        status: "expired",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-invalid-multiple-at",
+        invitee_email: "foo@@example.test",
+        status: "expired",
+        expires_at: "2099-02-01T09:00:00.000Z",
+      },
+      {
+        id: "invite-invalid-whitespace",
+        invitee_email: "bad address@example.test",
+        status: "expired",
         expires_at: "2099-02-01T09:00:00.000Z",
       },
       {
@@ -599,6 +663,13 @@ describe("consolidated pending migration upgrade", () => {
               AND (
                 invite.invitee_email = ''
                 OR invite.invitee_email <> lower(trim(invite.invitee_email))
+                OR instr(invite.invitee_email, '@') < 2
+                OR instr(invite.invitee_email, '@') = length(invite.invitee_email)
+                OR length(invite.invitee_email) - length(replace(invite.invitee_email, '@', '')) <> 1
+                OR instr(invite.invitee_email, ' ') > 0
+                OR instr(invite.invitee_email, char(9)) > 0
+                OR instr(invite.invitee_email, char(10)) > 0
+                OR instr(invite.invitee_email, char(13)) > 0
                 OR invite.expires_at IS NULL
                 OR strftime('%Y-%m-%dT%H:%M:%fZ', invite.expires_at) IS NULL
                 OR invite.expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', invite.expires_at)
@@ -613,6 +684,19 @@ describe("consolidated pending migration upgrade", () => {
         )
         .all(),
     ).toEqual([]);
+    expect(
+      db
+        .prepare(
+          `SELECT id, created_at
+             FROM invites
+            WHERE id IN ('invite-created-order-old', 'invite-created-order-new')
+            ORDER BY id`,
+        )
+        .all(),
+    ).toEqual([
+      { id: "invite-created-order-new", created_at: "2025-01-02T09:00:00.000Z" },
+      { id: "invite-created-order-old", created_at: "2025-01-02T08:00:00.000Z" },
+    ]);
     expect(
       db
         .prepare(
