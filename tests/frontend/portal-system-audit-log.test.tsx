@@ -62,7 +62,9 @@ describe("portal system audit log", () => {
 
     expect(container.textContent).toContain("Audit Manager");
     expect(container.textContent).toContain("system_setting_updated");
-    expect(container.textContent).toContain('"field": "label"');
+    expect(container.textContent).toContain("Field");
+    expect(container.textContent).toContain("label");
+    expect(container.querySelector("pre")).toBeNull();
     expect(requests).toHaveLength(1);
     expect(requests[0]?.pathname).toBe("/api/v1/audit-log");
     expect(requests[0]?.searchParams.get("limit")).toBe("50");

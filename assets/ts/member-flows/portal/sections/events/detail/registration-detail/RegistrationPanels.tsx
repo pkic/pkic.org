@@ -5,6 +5,7 @@ import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../types";
 import { useData } from "../../../../../../hooks/useData";
 import { AuditLogTable } from "../../../../../../components/AuditLogTable";
+import { DetailsSummary } from "../../../../../../components/DetailsSummary";
 import { registrationBadgeResponseSchema } from "../../../../../../../shared/schemas/participant-roles";
 import { eventRegistrationManagementUpdateResponseSchema } from "../../../../../../../shared/schemas/route-contracts-event-registration-management";
 import { eventRegistrationPath, eventRegistrationResourcePath } from "../registration-paths";
@@ -96,11 +97,7 @@ export function RegistrationAuditLogSection({ slug, regId }: { slug: string; reg
     <AuditLogTable
       endpoint={eventRegistrationResourcePath(slug, regId, "audit")}
       actionCell={(entry) => <code class="small">{entry.action}</code>}
-      detailsCell={(entry) =>
-        entry.details ? (
-          <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre>
-        ) : null
-      }
+      detailsCell={(entry) => <DetailsSummary value={entry.details} />}
     />
   );
 }

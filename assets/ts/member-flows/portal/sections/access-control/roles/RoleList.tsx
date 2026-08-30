@@ -8,6 +8,32 @@ import { successResponseSchema } from "../../../../../../shared/schemas/api-comm
 import { toast } from "../../../ui";
 import { rolesListResponseSchema, type Role } from "../../../../../../shared/schemas/access-control";
 
+const MAX_VISIBLE_PERMISSION_CHIPS = 4;
+const PERMISSION_COUNT_ONLY_THRESHOLD = 8;
+
+/**
+ * A role's permission list can run to dozens of entries (the admin role especially). Show a few
+ * chips inline and collapse the rest into a count — the full list stays on the role detail view.
+ */
+function PermissionsSummaryCell({ permissions }: { permissions: string[] }) {
+  if (permissions.length === 0) return <span class="text-muted small">None</span>;
+  if (permissions.length > PERMISSION_COUNT_ONLY_THRESHOLD) {
+    return <span class="text-muted small">{permissions.length} permissions</span>;
+  }
+  const visible = permissions.slice(0, MAX_VISIBLE_PERMISSION_CHIPS);
+  const remaining = permissions.length - visible.length;
+  return (
+    <div class="d-flex flex-wrap align-items-center gap-1">
+      {visible.map((p) => (
+        <span key={p} class="badge text-bg-light border small mono">
+          {p}
+        </span>
+      ))}
+      {remaining > 0 && <span class="text-muted small">+{remaining} more</span>}
+    </div>
+  );
+}
+
 /** List-first roles view: creation and detail both live behind an explicit action, not open by default. */
 export function RoleList({
   canGrant,
@@ -70,19 +96,7 @@ export function RoleList({
           },
           {
             header: "Permissions",
-            cell: (r) => (
-              <div class="d-flex flex-wrap gap-1">
-                {r.permissions.length === 0 ? (
-                  <span class="text-muted small">None</span>
-                ) : (
-                  r.permissions.map((p) => (
-                    <span key={p} class="badge text-bg-light border small mono">
-                      {p}
-                    </span>
-                  ))
-                )}
-              </div>
-            ),
+            cell: (r) => <PermissionsSummaryCell permissions={r.permissions} />,
           },
           {
             header: "",

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
+import { DetailsSummary } from "../../../components/DetailsSummary";
 import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
 
 interface AuditFilters {
@@ -125,10 +126,7 @@ export function SystemAuditLog() {
         { header: "Entity ID", cell: (entry) => entry.entity_id ?? "—", className: "mono small text-muted" },
         {
           header: "Details",
-          cell: (entry) =>
-            entry.details ? (
-              <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre>
-            ) : null,
+          cell: (entry) => <DetailsSummary value={entry.details} />,
         },
       ]}
       empty="No entries match the current filters."

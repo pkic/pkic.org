@@ -9,6 +9,7 @@ import { RoleList } from "../../assets/ts/member-flows/portal/sections/access-co
 import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
+import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
 
 const navigate = vi.fn();
 
@@ -194,6 +195,48 @@ describe("portal system access control", () => {
       expect(container.textContent).not.toContain("New role");
       expect(container.textContent).not.toContain("Delete");
       expect(container.textContent).toContain("custom_reviewer");
+    });
+
+    it("summarizes a long permission list instead of flooding the row with chips", async () => {
+      const fewPermissions = {
+        ...ROLE,
+        id: "role-few",
+        name: "few_perms",
+        permissions: ["events:read", "events:write"],
+      };
+      const someOverflow = {
+        ...ROLE,
+        id: "role-some",
+        name: "some_perms",
+        permissions: ["events:read", "events:write", "events:manage", "groups:read", "groups:write", "forms:read"],
+      };
+      const admin = { ...ROLE, id: "role-admin", name: "admin", permissions: [...PERMISSIONS] };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          json({
+            roles: [fewPermissions, someOverflow, admin],
+            page: { limit: 50, offset: 0, total: 3, hasMore: false },
+          }),
+        ),
+      );
+      const container = mount(<RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={vi.fn()} />);
+      await settle();
+
+      // Four or fewer permissions: every chip shows, no overflow text.
+      expect(container.textContent).toContain("events:read");
+      expect(container.textContent).toContain("events:write");
+      expect(container.textContent).not.toContain("+0 more");
+
+      // Between the chip cap and the count-only threshold: the first four chips plus a "+N more".
+      expect(container.textContent).toContain("events:manage");
+      expect(container.textContent).toContain("groups:read");
+      expect(container.textContent).not.toContain("forms:read");
+      expect(container.textContent).toContain("+2 more");
+
+      // Past the count-only threshold: no chips at all, just a count.
+      expect(container.textContent).toContain(`${PERMISSIONS.length} permissions`);
+      expect(container.textContent).not.toContain("admin:read");
     });
 
     it("submits a new role through the shared roleCreateSchema-shaped body and navigates to its detail", async () => {
