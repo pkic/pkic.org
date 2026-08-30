@@ -841,9 +841,7 @@ If you have any issues uploading or need to request an extension, please [contac
 
 <div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>
 
-If the button above does not work, copy and paste the following URL into your browser:
-
-<p style="margin:0;overflow-wrap:anywhere;word-break:break-all;"><a href="{{magicLinkUrl}}" style="color:#198754;text-decoration:underline;overflow-wrap:anywhere;word-break:break-all;">{{magicLinkUrl}}</a></p>
+If the button above does not work, [use this sign-in link]({{magicLinkUrl}}).
 `,
   },
 

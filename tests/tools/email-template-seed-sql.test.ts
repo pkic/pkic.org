@@ -72,7 +72,9 @@ describe("buildTemplateSqlStatements", () => {
     expect(rendered.html).toContain('src="https://pkic.org/img/logo-white.png"');
     expect(rendered.html).toContain('href="http://localhost:8788/portal/#/verify?token=secret"');
     expect(rendered.html).toContain("background:#0d1b2a");
-    expect(rendered.html).toContain("word-break:break-all");
+    expect(rendered.html).toContain(">use this sign-in link</a>");
+    expect(rendered.html).not.toContain(">http://localhost:8788/portal/#/verify?token=secret</a>");
+    expect(rendered.text).toContain("use this sign-in link <http://localhost:8788/portal/#/verify?token=secret>");
     expect(rendered.html).not.toContain("http://localhost:8788/img/logo-white.png");
   });
 
