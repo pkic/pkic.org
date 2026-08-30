@@ -150,7 +150,10 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
               cell: (list) => list.purpose.replaceAll("_", " "),
               sort: { asc: "purpose", desc: "-purpose" },
             },
-            { header: "Status", cell: (list) => (list.active ? "Active" : "Archived") },
+            {
+              header: "Status",
+              cell: (list) => (list.active ? <span class="text-muted">—</span> : "Archived"),
+            },
             {
               header: "",
               className: "text-end",

@@ -25,6 +25,7 @@ import { useState, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
+import { EmptyState } from "../../../../../components/EmptyState";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../../../../../shared/schemas/sponsorship-management";
 import {
   SPONSOR_TYPES,
@@ -211,7 +212,17 @@ export function Sponsorships({
           params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
           rowKey={(c) => c.key}
           onRowClick={selectCompany}
-          empty="No sponsorships match these filters."
+          empty={
+            canWrite ? (
+              <EmptyState
+                title="No sponsorships found"
+                body="Create a sponsorship, or adjust the filters above."
+                action={{ label: "Create sponsorship", onSelect: () => setShowCreate(true) }}
+              />
+            ) : (
+              "No sponsorships match these filters."
+            )
+          }
         />
       )}
 

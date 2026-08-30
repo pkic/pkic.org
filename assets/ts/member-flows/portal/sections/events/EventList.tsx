@@ -86,7 +86,7 @@ export function EventList() {
             ),
           },
         ]}
-        empty="No events found"
+        empty="No events have been created yet. Events are created from within their owning group."
         rowKey={(e) => e.slug}
       />
     </div>

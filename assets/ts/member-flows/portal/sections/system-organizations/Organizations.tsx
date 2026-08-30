@@ -1,6 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { EmptyState } from "../../../../components/EmptyState";
 import type { Column } from "../../../../components/Table";
 import {
   organizationsListResponseSchema,
@@ -16,10 +17,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
 
   if (!canRead) {
     return canCreate ? (
-      <section aria-labelledby="system-organizations-heading">
-        <h5 id="system-organizations-heading" class="mb-3">
-          Organizations
-        </h5>
+      <section>
         <OrganizationCreateForm onCreated={() => setShowCreate(false)} onCancel={() => setShowCreate(false)} />
       </section>
     ) : null;
@@ -85,11 +83,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
   ];
 
   return (
-    <section aria-labelledby="system-organizations-heading">
-      <h5 id="system-organizations-heading" class="mb-3">
-        Organizations
-      </h5>
-
+    <section>
       {showCreate && canCreate && (
         <OrganizationCreateForm
           onCreated={() => {
@@ -110,7 +104,17 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         searchPlaceholder="organization name"
         createAction={canCreate ? { label: "Add organization", onSelect: () => setShowCreate(true) } : undefined}
         columns={columns}
-        empty="No organizations found"
+        empty={
+          canCreate ? (
+            <EmptyState
+              title="No organizations yet"
+              body="Add an organization to get started."
+              action={{ label: "Add organization", onSelect: () => setShowCreate(true) }}
+            />
+          ) : (
+            "No organizations found"
+          )
+        }
         rowKey={(organization) => organization.id}
         rowClass={() => "adm-user-row"}
         onRowClick={(organization) => navigate(`/organizations/${encodeURIComponent(organization.id)}`)}

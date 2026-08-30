@@ -115,7 +115,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
         ]}
-        empty="No applications found"
+        empty="No membership applications have been submitted yet"
         rowKey={(a) => a.id}
         onRowClick={(a) => onViewApplication(a.id)}
       />

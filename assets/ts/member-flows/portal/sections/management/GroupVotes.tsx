@@ -2,6 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -46,7 +47,6 @@ export function GroupVotes({
 
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Votes</div>
       <div class="card-body">
         <ul class="nav nav-tabs mb-3">
           <li class="nav-item">
@@ -127,11 +127,21 @@ export function GroupVotes({
                   ),
                 },
               ]}
-              empty="No votes are available through this group."
+              empty={
+                canManage ? (
+                  <EmptyState
+                    title="No votes yet"
+                    body="Create a vote to get started."
+                    action={{ label: "Create vote", onSelect: () => setShowCreate(true) }}
+                  />
+                ) : (
+                  "No votes are available through this group."
+                )
+              }
               rowKey={(vote) => vote.id}
               detailRow={(vote) => {
                 if (selectedVoteId !== vote.id) return null;
-                if (detail.loading) return <Spinner />;
+                if (detail.loading) return <Spinner label="Loading vote…" />;
                 if (detail.error) return <ErrorAlert error={detail.error} />;
                 if (detail.data?.vote.id !== vote.id) return null;
                 return (

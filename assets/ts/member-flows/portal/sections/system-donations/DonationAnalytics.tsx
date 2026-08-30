@@ -60,7 +60,7 @@ const periodColumns: Column<LabeledDonationPeriod>[] = [
 export function DonationAnalytics() {
   const state = useData(() => getJson("/api/v1/analytics/donations", donationAnalyticsResponseSchema), []);
 
-  if (state.loading) return <Spinner />;
+  if (state.loading) return <Spinner label="Loading donation analytics…" />;
   if (state.error) return <ErrorAlert error={state.error} />;
   if (!state.data) return null;
 
@@ -135,7 +135,7 @@ export function DonationAnalytics() {
               },
             ]}
             data={donations.byCurrency}
-            empty="No donations"
+            empty="No donations recorded yet"
           />
         </div>
       </div>
@@ -157,7 +157,7 @@ function PeriodCard({ title, chart, rows }: { title: string; chart: string; rows
       <div class="card-body">
         <h6 class="text-uppercase small fw-bold text-muted mb-3">{title}</h6>
         {chart && <div dangerouslySetInnerHTML={{ __html: chart }} />}
-        <DataTable columns={periodColumns} data={rows} empty="No data" />
+        <DataTable columns={periodColumns} data={rows} empty="No donations recorded for this period" />
       </div>
     </div>
   );

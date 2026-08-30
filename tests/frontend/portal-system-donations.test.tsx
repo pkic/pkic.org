@@ -159,7 +159,7 @@ describe("portal system donations", () => {
     expect(requests.some((url) => url.pathname.startsWith("/api/v1/admin/donations"))).toBe(false);
     expect(container.textContent).not.toContain("Sync all");
     expect(container.textContent).not.toContain("Sync pending");
-    expect(container.textContent).toContain("No donations found");
+    expect(container.textContent).toContain("No donations recorded yet");
   });
 
   it("uses canonical system endpoints for promoter and detail views", async () => {

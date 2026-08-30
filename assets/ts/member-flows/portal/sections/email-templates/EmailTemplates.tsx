@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { EmptyState } from "../../../../components/EmptyState";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
@@ -320,7 +321,17 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
           ),
         },
       ]}
-      empty="No templates"
+      empty={
+        canWrite ? (
+          <EmptyState
+            title="No templates yet"
+            body="Create a template to get started."
+            action={{ label: "New template", onSelect: () => setView("create") }}
+          />
+        ) : (
+          "No templates"
+        )
+      }
       rowKey={(t) => t.template_key}
     />
   );

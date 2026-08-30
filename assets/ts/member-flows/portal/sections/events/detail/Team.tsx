@@ -1,5 +1,6 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
+import { EmptyState } from "../../../../../components/EmptyState";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
@@ -181,7 +182,13 @@ export function Team({ slug }: { slug: string }) {
             ),
           },
         ]}
-        empty="No team members"
+        empty={
+          <EmptyState
+            title="No team members yet"
+            body="Add a team member to get started."
+            action={{ label: "Add team member", onSelect: () => setShowAddForm(true) }}
+          />
+        }
         rowKey={(role) => role.id}
       />
     </div>

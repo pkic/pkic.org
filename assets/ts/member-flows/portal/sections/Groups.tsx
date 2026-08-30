@@ -5,7 +5,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema } from "../../../../shared/schemas/group-participation";
 import { ApiDataTable } from "../../../components/ApiDataTable";
-import { Badge } from "../../../components/Badge";
+import { EmptyState } from "../../../components/EmptyState";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
 import { Spinner } from "../../../components/Spinner";
@@ -90,7 +90,7 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
             {
               header: "Status",
               cell: (group: Group) =>
-                group.active ? <Badge status="active" label="Active" /> : <Badge status="inactive" label="Inactive" />,
+                group.active ? <span class="text-muted">—</span> : <span class="badge text-bg-warning">Inactive</span>,
             },
             {
               header: "",
@@ -98,7 +98,17 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
               cell: () => <span class="btn btn-sm btn-outline-secondary">Open</span>,
             },
           ]}
-          empty="No groups are visible to your identity."
+          empty={
+            onCreate ? (
+              <EmptyState
+                title="No groups yet"
+                body="Create a group to get started."
+                action={{ label: "New group", onSelect: onCreate }}
+              />
+            ) : (
+              "No groups are visible to your identity."
+            )
+          }
           rowKey={(group: Group) => group.id}
           onRowClick={(group: Group) => navigate(`/groups/${encodeURIComponent(group.id)}/overview`)}
         />

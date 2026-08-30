@@ -10,6 +10,7 @@ import type { EventInviteWindow } from "../../../../../shared/schemas/event-invi
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { RowActions } from "../../../../components/RowActions";
 import { deleteJson, postJson } from "../../../../shared/api-client";
@@ -223,7 +224,13 @@ export function MeetingGuests({
               ),
           },
         ]}
-        empty="No guests are eligible for this occurrence."
+        empty={
+          <EmptyState
+            title="No guests yet"
+            body="Add a guest to get started."
+            action={{ label: "Add guest", onSelect: () => setShowAddForm(true) }}
+          />
+        }
         rowKey={(guest) => guest.id}
       />
     </div>

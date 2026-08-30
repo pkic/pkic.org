@@ -166,7 +166,7 @@ describe("portal group management resources", () => {
     const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
 
-    expect(container.textContent).toContain("No matching meeting series");
+    expect(container.textContent).toContain("No meeting series yet");
     expect(container.querySelector("#managed-group-meeting-create-name")).toBeNull();
     const newSeries = [...container.querySelectorAll("button")].find((button) => button.textContent === "New series")!;
     await act(async () => newSeries.click());

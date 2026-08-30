@@ -130,7 +130,6 @@ export function GroupMeetings({
   const [showCreate, setShowCreate] = useState(false);
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Meetings</div>
       <div class="card-body d-flex flex-column gap-3">
         {canManage && showCreate && (
           <CreateMeetingSeries

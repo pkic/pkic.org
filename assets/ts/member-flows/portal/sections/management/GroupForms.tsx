@@ -3,6 +3,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { EmptyState } from "../../../../components/EmptyState";
 import { GroupFormDetail } from "./GroupFormDetail";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { ResourceCapabilities } from "./ResourceCapabilities";
@@ -32,7 +33,6 @@ export function GroupForms({
 
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Forms</div>
       <div class="card-body">
         {showCreate && (
           <div class="card mb-3">
@@ -106,7 +106,17 @@ export function GroupForms({
               ),
             },
           ]}
-          empty="No forms are available through this group."
+          empty={
+            canManage ? (
+              <EmptyState
+                title="No forms yet"
+                body="Create a form to get started."
+                action={{ label: "New form", onSelect: () => setShowCreate(true) }}
+              />
+            ) : (
+              "No forms are available through this group."
+            )
+          }
           rowKey={(row) => row.placement.id}
           detailRow={(row) =>
             selectedPlacementId === row.placement.id ? (

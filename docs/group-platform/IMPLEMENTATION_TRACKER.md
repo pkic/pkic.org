@@ -2123,6 +2123,21 @@ Status: In progress (2026-08-30)
       The portal page also stopped inheriting public-site chrome (member
       logo wall, edit-on-GitHub) and the login card breathes on mobile;
       passkeys correctly hide on non-secure origins such as LAN http.
+      List-hygiene and people-first pass landed 2026-08-30: single-page
+      lists show a quiet item count instead of pager chrome; constant
+      "Active" badge columns went quiet (state renders only when it
+      deviates); duplicate section/card headings removed portal-wide; the
+      remaining dead-end empty strings became actionable EmptyStates wired
+      to each list's create action. New `PersonCell` renders people
+      face-first (headshot/initials, name leading, email as the second
+      line) and the Users list adopted it — the monospace email column,
+      red lowercase role badges, and the inline role dropdown are gone;
+      administrator grant/revoke now lives in the row menu behind
+      consequence-stating confirmations. New `DetailsSummary` replaced the
+      three raw JSON.stringify audit-detail blocks with humanized
+      key/value rendering (deep payloads keep a collapsed raw view), and
+      the roles table summarizes large permission sets instead of flooding
+      chips.
       Remaining waves:
       (1 residue) events-surface confirms after the projection slice;
       (2) EmptyState + labeled Spinner + DetailsSummary

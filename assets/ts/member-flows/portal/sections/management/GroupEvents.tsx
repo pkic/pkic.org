@@ -6,6 +6,7 @@ import {
 } from "../../../../../shared/schemas/group-events";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -53,7 +54,7 @@ export function GroupEvents({
   if (selectedEventId) {
     return (
       <div class="d-flex flex-column gap-3">
-        {detail.loading && <Spinner />}
+        {detail.loading && <Spinner label="Loading event…" />}
         {detail.error && <ErrorAlert error={detail.error} />}
         {!detail.loading && !detail.error && detail.data?.event.id === selectedEventId && (
           <GroupEventWorkspace
@@ -69,7 +70,6 @@ export function GroupEvents({
 
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Events</div>
       <div class="card-body">
         {showCreate && (
           <div class="card mb-3">
@@ -129,7 +129,17 @@ export function GroupEvents({
               ),
             },
           ]}
-          empty="No events are available through this group."
+          empty={
+            canManage ? (
+              <EmptyState
+                title="No events yet"
+                body="Create an event to get started."
+                action={{ label: "Create event", onSelect: () => setShowCreate(true) }}
+              />
+            ) : (
+              "No events are available through this group."
+            )
+          }
           rowKey={(event) => event.id}
         />
       </div>

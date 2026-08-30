@@ -14,10 +14,7 @@ export function Users({ userId, permissions }: { userId?: string; permissions: U
   }
 
   return (
-    <section aria-labelledby="system-users-heading">
-      <h5 id="system-users-heading" class="mb-3">
-        Users
-      </h5>
+    <section>
       <UsersList
         canWrite={permissions.canWrite}
         canGrantAccess={permissions.canGrantAccess}

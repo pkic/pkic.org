@@ -3,6 +3,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { EmptyState } from "../../../../components/EmptyState";
 import { fmt } from "../../ui";
 import { GroupMeetingSeriesDetail } from "./GroupMeetingSeriesDetail";
 import { ResourceCapabilities } from "./ResourceCapabilities";
@@ -63,7 +64,8 @@ export function GroupMeetingSeriesList({
         },
         {
           header: "Status",
-          cell: (series) => <Badge status={series.active ? "active" : "inactive"} />,
+          cell: (series) =>
+            series.active ? <span class="text-muted">—</span> : <span class="badge text-bg-warning">Inactive</span>,
         },
         { header: "Access", cell: (series) => <ResourceCapabilities capabilities={series.capabilities} /> },
         {
@@ -90,7 +92,17 @@ export function GroupMeetingSeriesList({
           ),
         },
       ]}
-      empty="No matching meeting series."
+      empty={
+        createAction ? (
+          <EmptyState
+            title="No meeting series yet"
+            body="Create a meeting series to get started."
+            action={createAction}
+          />
+        ) : (
+          "No matching meeting series."
+        )
+      }
       rowKey={(series) => series.id}
       detailRow={(series) =>
         selectedSeriesId === series.id ? (

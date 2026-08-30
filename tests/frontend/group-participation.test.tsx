@@ -299,3 +299,48 @@ describe("generic group participation card", () => {
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 });
+
+describe("staff groups collection", () => {
+  it("stays quiet for an active group and only badges the inactive one", async () => {
+    portalSession.value = portalSessionFixture({ staff: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              groups: [
+                group({
+                  id: "10000000-0000-4000-8000-000000000010",
+                  name: "Architecture Group",
+                  active: true,
+                }),
+                group({
+                  id: "10000000-0000-4000-8000-000000000011",
+                  name: "Retired Group",
+                  active: false,
+                }),
+              ],
+              page: { limit: 25, offset: 0, total: 2, hasMore: false },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<Groups />, container));
+    await settle();
+
+    const rows = [...container.querySelectorAll("tbody tr")];
+    const activeRow = rows.find((row) => row.textContent?.includes("Architecture Group"));
+    const inactiveRow = rows.find((row) => row.textContent?.includes("Retired Group"));
+    if (!activeRow || !inactiveRow) throw new Error("missing expected group rows");
+
+    expect(activeRow.querySelector(".badge")).toBeNull();
+    expect(activeRow.textContent).not.toContain("Active");
+    expect(inactiveRow.querySelector(".badge")?.textContent).toBe("Inactive");
+  });
+});

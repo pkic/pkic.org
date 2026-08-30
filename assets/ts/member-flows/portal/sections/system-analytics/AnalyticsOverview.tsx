@@ -11,7 +11,7 @@ import { analyticsSummaryResponseSchema } from "../../../../../shared/schemas/an
 export function AnalyticsOverview() {
   const state = useData(() => getJson("/api/v1/analytics/summary", analyticsSummaryResponseSchema), []);
 
-  if (state.loading) return <Spinner />;
+  if (state.loading) return <Spinner label="Loading analytics…" />;
   if (state.error) return <ErrorAlert error={state.error} />;
   if (!state.data) return null;
 
@@ -85,7 +85,7 @@ export function AnalyticsOverview() {
                   },
                 ]}
                 data={state.data.topEvents}
-                empty="No events"
+                empty="No event registration activity yet"
                 rowKey={(event) => event.slug}
               />
             </div>

@@ -8,6 +8,7 @@ import {
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
+import { EmptyState } from "../../../components/EmptyState";
 import { type MenuAction } from "../../../components/Menu";
 import { RowActions } from "../../../components/RowActions";
 import { confirmAction } from "../../../components/ConfirmDialog";
@@ -92,7 +93,6 @@ function activeColumns(): Column<ActiveOrganizationRepresentative>[] {
         </div>
       ),
     },
-    { header: "Status", cell: () => <span>Active</span> },
     { header: "Contact role", cell: (representative) => <ContactRole representative={representative} /> },
   ];
 }
@@ -135,7 +135,7 @@ export function OrganizationRepresentativeDirectory({
       <DataTable
         columns={activeColumns()}
         data={activeRepresentatives}
-        empty="No representatives"
+        empty="No representatives yet"
         rowKey={(representative) => representative.userId}
         onRowClick={onRowNavigate ? (representative) => onRowNavigate(representative.userId) : undefined}
       />
@@ -301,7 +301,17 @@ export function OrganizationRepresentativeDirectory({
           },
         },
       ]}
-      empty="No representatives"
+      empty={
+        createAction ? (
+          <EmptyState
+            title="No representatives yet"
+            body="Add a representative to get started."
+            action={createAction}
+          />
+        ) : (
+          "No representatives"
+        )
+      }
       rowKey={(representative) => representative.id}
     />
   );

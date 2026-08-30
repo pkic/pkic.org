@@ -44,6 +44,16 @@ export function Pager({
   onPageSizeChange,
 }: PagerProps) {
   if (rowCount === 0 && !hasMore && offset === 0) return null;
+  // A list that fits on the smallest page has nothing to paginate — but the
+  // total is still worth stating. Keep the count, drop the page buttons and
+  // page-size select.
+  if (page <= 1 && !hasMore && total <= Math.min(...PAGE_SIZE_OPTIONS)) {
+    return (
+      <div class="d-flex justify-content-center mt-3 adm-pager">
+        <span class="text-muted small adm-pager-range">{total === 1 ? "1 item" : `${total} items`}</span>
+      </div>
+    );
+  }
   const max = total > 0 ? Math.ceil(total / pageSize) : page + (hasMore ? 1 : 0);
 
   return (

@@ -137,7 +137,7 @@ function PromotersTab() {
           ↺ Refresh
         </button>
       </div>
-      {listing.loading && <Spinner />}
+      {listing.loading && <Spinner label="Loading donations…" />}
       {!listing.loading && listing.error && <ErrorAlert error={listing.error} />}
       {!listing.loading &&
         !listing.error &&
@@ -371,7 +371,7 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
               </>
             )}
             columns={columns}
-            empty="No donations found"
+            empty="No donations recorded yet"
             className="align-middle"
             rowKey={(d) => d.id}
             onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
