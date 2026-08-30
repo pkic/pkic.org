@@ -44,6 +44,8 @@ unproved rather than assumed.
   `tests/e2e/portal-system-access-control.spec.ts`.
 - Analytics tabs load only their focused endpoint —
   `tests/e2e/portal-system-analytics.spec.ts`.
+- Scheduled-job registry and canonical pause/resume state mutation —
+  `tests/e2e/portal-system-operations.spec.ts`.
 - External meeting guest: separate mailbox code, wrong browser, replay —
   `tests/e2e/meeting-guest.spec.ts`.
 - Registration, invitation acceptance, confirmation, manage updates, decline,

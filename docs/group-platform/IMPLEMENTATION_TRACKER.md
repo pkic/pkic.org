@@ -1441,15 +1441,20 @@ Status: In progress
       not a second sponsorship pipeline or the global pricing catalog.
       Email delivery and scheduled operational work now share one
       permission-derived Operations destination in the portal while retaining
-      domain APIs: `/api/v1/email` owns the durable outbox and
-      `/api/v1/operations` owns due-work previews, reminders, retention, and
-      named membership batches. Reads require the live global `email:read` or
-      `operations:read` permission. Outbox processing additionally requires
-      `email:manage`; operational commands require `operations:run`, and
-      retention, consultation, and EC-review commands retain their exact
-      `users:anonymize`, `membership:write`, or `membership:approve`
-      permissions. The portal renders each action only when all required
-      permissions are present. Every manual command requires a user-backed
+      natural domain APIs: `/api/v1/email` owns the durable outbox and reminder
+      runs, `/api/v1/retention` owns retention previews and runs,
+      `/api/v1/membership/batches` owns named membership batches, and
+      `/api/v1/scheduler/jobs` owns the bounded scheduled-job registry and
+      manual runs. Reads require the matching live global `email:read`,
+      `retention:read`, or `scheduler:read` permission. Outbox processing
+      additionally requires `email:manage`; scheduler state changes and manual
+      runs require `scheduler:manage`, and every job run also retains its exact
+      domain permissions, including `users:anonymize`, `membership:write`, or
+      `membership:approve` where applicable. The portal renders each action
+      only from server-derived capabilities. The scheduled-job UI is loaded as
+      a separate lazy chunk and uses one natural
+      `PATCH /api/v1/scheduler/jobs/:jobKey` state resource instead of pause and
+      resume action routes. Every manual command requires a user-backed
       staff session, rejects API keys and contextual grants, attributes intent
       and completion to the actor, and rechecks all required permissions in
       each D1 mutation batch. Outbox processing is bounded to 500 due rows or
@@ -1769,10 +1774,9 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the canonical sponsor
-      resource and unified portal-authentication cutover with 2,311 passing
-      backend tests (one additional skipped), 348 frontend tests, and 84
-      tooling tests. Type checks,
+      Current evidence: the complete gate passes after the scheduled-job portal
+      management cutover with 2,369 passing backend tests (one additional
+      skipped), 337 frontend tests, and 87 tooling tests. Type checks,
       ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1831,7 +1835,11 @@ Status: In progress
       A focused real Worker/D1 donation journey signs in through the portal,
       reads the canonical donation list, detail, and promoter views, confirms
       the retired admin URL returns 404, and asserts that no removed admin
-      donation API is requested. Stripe remains mocked and SendGrid remains intercepted.
+      donation API is requested. Stripe remains mocked and SendGrid remains
+      intercepted. The focused System Operations journey now also loads the
+      scheduled-job registry, pauses and resumes one job through the canonical
+      PATCH resource, and proves the removed pause and resume action routes are
+      not requested.
 - [x] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
       Current evidence: all 52 browser tests pass in one uninterrupted
@@ -2052,16 +2060,19 @@ The final PR description must include, at minimum:
   `pkic_session` is set, verify `/api/v1/auth/session` lists every active
   sponsor capacity for that identity, and confirm changing the contact email,
   tier entitlement, or sponsorship stage removes access immediately;
-- inspect Operations with separate `email:read` and `operations:read` staff
-  users, confirming each sees only its readable tab and no command controls;
+- inspect Operations with separate `email:read`, `retention:read`, and
+  `scheduler:read` staff users, confirming each sees only its readable tab and
+  no command controls;
 - add `email:manage` and confirm the outbox exposes only bounded processing and
   explicit selected-row reset, then verify a selected failed-row reset neither
   resets nor sends an unrelated due message;
-- add `operations:run` and confirm reminder and chair-digest actions appear,
-  while retention, consultation, and EC-review remain hidden until
-  `users:anonymize`, `membership:write`, or `membership:approve` is also held;
-- revoke an operation permission between request authorization and its first D1
-  batch and confirm the command, its audit row, and queued work roll back;
+- add `scheduler:manage` and each selected job's required domain permissions,
+  confirm its Run now control appears, and verify jobs missing any required
+  permission remain non-runnable; pause and resume one job through the canonical
+  scheduled-job state resource;
+- revoke a scheduler or job-domain permission between request authorization and
+  its first D1 batch and confirm the state update or lease claim and its audit
+  row roll back;
 - verify `/api/v1/admin/email/outbox`, `/api/v1/admin/due-work`, and the retired
   internal email/job/reminder/retention routes return 404, while the old Email
   and Due Work bookmarks also return 404;
