@@ -28,6 +28,7 @@ import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 
 interface Fixture {
   administrator: UserBackedAuthAdmin;
@@ -46,16 +47,6 @@ async function userActor(label: string, role = "user"): Promise<UserBackedAuthAd
   return { identityType: "user", id, email, role };
 }
 
-async function assignGroupLead(userId: string, groupId: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, groupId)
-    .run();
-}
-
 async function createFixture(): Promise<Fixture> {
   const administrator = await userActor("group-event-administrator", "admin");
   const [ownerGroup, granteeGroup] = await Promise.all(
@@ -68,12 +59,23 @@ async function createFixture(): Promise<Fixture> {
       }),
     ),
   );
-  const ownerLeader = await userActor("group-event-owner-leader");
-  const granteeLeader = await userActor("group-event-grantee-leader");
-  await Promise.all([
-    assignGroupLead(ownerLeader.id, ownerGroup.id),
-    assignGroupLead(granteeLeader.id, granteeGroup.id),
-  ]);
+  // Two chairs, one per group. The assertions turn on what a chair may do in
+  // their own group and may not do in the other, so both have to be real
+  // chairs rather than administrators who could reach either.
+  const ownerLeaderPersona = await seedPersona(env.DB, "groupLead", { groupId: ownerGroup.id });
+  const granteeLeaderPersona = await seedPersona(env.DB, "groupLead", { groupId: granteeGroup.id });
+  const ownerLeader: UserBackedAuthAdmin = {
+    identityType: "user",
+    id: ownerLeaderPersona.userId,
+    email: ownerLeaderPersona.email,
+    role: "user",
+  };
+  const granteeLeader: UserBackedAuthAdmin = {
+    identityType: "user",
+    id: granteeLeaderPersona.userId,
+    email: granteeLeaderPersona.email,
+    role: "user",
+  };
   return {
     administrator,
     ownerGroupId: ownerGroup.id,

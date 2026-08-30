@@ -21,11 +21,12 @@ import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
-import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { mutateAfterNextStatement, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 
 interface Fixture {
   admin: UserBackedAuthAdmin;
@@ -102,14 +103,15 @@ async function createFixture(): Promise<Fixture> {
     source: "self_service",
     allowManaged: false,
   });
-  const leader = await userActor("group-form-leader");
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), leader.id, grantee.id)
-    .run();
+  // The grantee group's chair: the sharing assertions turn on what a real
+  // chair may reach through a grant, not on what an administrator can do.
+  const leaderPersona = await seedPersona(env.DB, "groupLead", { groupId: grantee.id });
+  const leader: UserBackedAuthAdmin = {
+    identityType: "user",
+    id: leaderPersona.userId,
+    email: leaderPersona.email,
+    role: "user",
+  };
   return {
     admin,
     owner,
@@ -118,7 +120,7 @@ async function createFixture(): Promise<Fixture> {
     memberId: member.userId,
     memberToken: await createMemberSession(env.DB, member.userId, `group-form-member-${crypto.randomUUID()}`),
     leader,
-    leaderToken: await createAdminSession(env.DB, leader.id, `group-form-leader-${crypto.randomUUID()}`),
+    leaderToken: leaderPersona.token!,
     placementId: await createPlacedForm(admin, owner.id),
   };
 }
@@ -169,15 +171,10 @@ describe("group form sharing", () => {
 
   it("lets effective group leadership create and edit an owned form without accepting owner overrides", async () => {
     const fixture = await createFixture();
-    const leader = await userActor("owner-form-leader");
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, fixture.owner.id)
-      .run();
-    const token = await createAdminSession(env.DB, leader.id, `owner-form-leader-${crypto.randomUUID()}`);
+    // The owning group's own chair, whose authority comes from leading it
+    // rather than from any grant.
+    const leader = await seedPersona(env.DB, "groupLead", { groupId: fixture.owner.id });
+    const token = leader.token!;
     const key = `owned-survey-${crypto.randomUUID()}`;
     const created = await authenticatedRequest(token, `/api/v1/groups/${fixture.owner.id}/forms`, {
       method: "POST",
