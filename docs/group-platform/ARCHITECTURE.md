@@ -399,12 +399,19 @@ programs) lives on the Groups page for identities with those capabilities.
 Account settings are reached through the user menu rather than a sidebar item,
 and authenticated members and staff land on `/portal/#/groups` by default.
 
-Global system-management destinations use the same portal identity but require
-an exact global permission independently of group capacity. The global audit
-log is available at `/portal/#/system/audit-log` only with `audit:read`; System
-is an interface grouping surfaced as the single permission-gated
-"Administration" sidebar entry, while the canonical domain API is
-`/api/v1/audit-log`. It recomputes live staff grants and performs search, exact
+Global destinations use the same portal identity but require an exact global
+permission independently of group capacity. Administrative domains are
+navigated domain-first, never through an admin grouping: Users
+(`/portal/#/users`, `users:read`), Organizations (`/portal/#/organizations`,
+`organizations:read` or `membership:write`), Membership applications
+(`/portal/#/membership/applications`, `membership:read`), and Donations
+(`/portal/#/donations`, `donations:read` or `donations:sync`) are sidebar
+entries that exist only when the identity holds the matching global
+permission. What remains under `/portal/#/system/...` is the platform
+residue — configuration and operations with no member-facing counterpart —
+surfaced as one permission-gated "Settings" entry. The global audit log is
+available at `/portal/#/system/audit-log` only with `audit:read`; System is an
+interface grouping, while the canonical domain API is `/api/v1/audit-log`. It recomputes live staff grants and performs search, exact
 filters, sorting, counting, and pagination in D1. Entity and actor filters are
 open strings rather than a duplicated frontend catalog, so adding a new audited
 resource or actor does not require a portal change. The former admin component,

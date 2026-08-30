@@ -52,13 +52,11 @@ export function MembershipApplications({
         categories={categories}
         canWrite={canWrite}
         canApprove={canApprove}
-        onBack={() => navigate("/system/membership-applications")}
+        onBack={() => navigate("/membership/applications")}
       />
     );
   }
   return (
-    <ApplicationsList
-      onViewApplication={(id) => navigate(`/system/membership-applications/${encodeURIComponent(id)}`)}
-    />
+    <ApplicationsList onViewApplication={(id) => navigate(`/membership/applications/${encodeURIComponent(id)}`)} />
   );
 }

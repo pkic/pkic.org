@@ -2013,11 +2013,35 @@ Status: In progress (2026-08-30)
 - [x] Close the bundle blind spots: a named `vendor` chunk (Rolldown
       `codeSplitting.groups`), a CSS budget gate wired into `pnpm check`, and
       dev artifacts in `public/js/built` cleaned before every build.
-- [ ] Update the Playwright suites to the new navigation and re-run the
+- [x] Update the Playwright suites to the new navigation and re-run the
       affected projects; refresh the persona and system specs that asserted
       the retired Management and System entries.
-- [ ] Extend group event, meeting, and form detail views to the URL-addressed
+- [x] Extend group event, meeting, and form detail views to the URL-addressed
       resource pattern already used by votes.
+- [x] Show role and permission context in the account view instead of the
+      navigation: the sidebar group list carries names only, the user button
+      is an avatar (member headshot with initials fallback), and the account
+      view summarizes member capacities, staff permissions with scopes, and
+      sponsor capacities.
+- [x] Dissolve the administrative grouping into domain-first navigation:
+      Users, Organizations, Membership applications, and Donations are
+      permission-gated sidebar domains at `/users`, `/organizations`,
+      `/membership/applications`, and `/donations`; superseded
+      `/portal/#/system/...` URLs redirect; the residual grouping is the
+      "Settings" entry (analytics, membership settings, content reviews,
+      audit log, email templates, operations, access control, leadership
+      positions). The membership-application notification link emits the
+      canonical domain URL.
+- [ ] Organization workspaces for representatives: authorize organization
+      self-service by active representation instead of the acting session
+      capacity, add the `/api/v1/users/current/organizations` feed, reach
+      each represented organization from the avatar menu at
+      `/portal/#/organizations/:organizationId`, and retire the acting-capacity
+      "My Organization" special case.
+- [ ] Sign-in dashboard ("your consortium this week"): self-scoped
+      participation feeds for votes, upcoming meetings, and open forms under
+      `/api/v1/users/current/...`, composed with groups, events, applications,
+      and pending organization reviews into the default landing view.
 
 ## Manual test checklist
 

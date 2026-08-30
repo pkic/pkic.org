@@ -13,6 +13,7 @@ import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,
   portalDefaultPath,
+  portalHasAnyGlobalPermission,
   portalHasGlobalPermission,
   portalSectionEnabled,
 } from "./portal-navigation";
@@ -25,6 +26,7 @@ const MyOrganization = lazy(() =>
   import("../sections/MyOrganization").then((module) => ({ default: module.MyOrganization })),
 );
 const Groups = lazy(() => import("../sections/Groups").then((module) => ({ default: module.Groups })));
+const Home = lazy(() => import("../sections/Home").then((module) => ({ default: module.Home })));
 const MyApplications = lazy(() =>
   import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
 );
@@ -43,6 +45,24 @@ const GroupEventProposals = lazy(() =>
 );
 const DonationDetailPage = lazy(() =>
   import("../sections/system-donations/DonationDetailPage").then((module) => ({ default: module.DonationDetailPage })),
+);
+const Donations = lazy(() =>
+  import("../sections/system-donations/Donations").then((module) => ({ default: module.Donations })),
+);
+const Users = lazy(() => import("../sections/system-users/Users").then((module) => ({ default: module.Users })));
+const Organizations = lazy(() =>
+  import("../sections/system-organizations/Organizations").then((module) => ({ default: module.Organizations })),
+);
+const OrganizationDetail = lazy(() =>
+  import("../sections/system-organizations/OrganizationDetail").then((module) => ({
+    default: module.OrganizationDetail,
+  })),
+);
+const MembershipApplications = lazy(() =>
+  import("../sections/membership-applications").then((module) => ({ default: module.MembershipApplications })),
+);
+const RepresentedOrganizations = lazy(() =>
+  import("../sections/RepresentedOrganizations").then((module) => ({ default: module.RepresentedOrganizations })),
 );
 const SponsorWorkspace = lazy(() =>
   import("../sections/sponsors").then((module) => ({ default: module.SponsorWorkspace })),
@@ -90,6 +110,11 @@ export function PortalShell() {
   const hasSponsorWorkspace = portalSectionEnabled(session, "sponsors");
   const hasFormsAccess = portalSectionEnabled(session, "forms");
   const hasMemberCapacity = portalSectionEnabled(session, "profile");
+  const hasOrganizationsAccess = portalSectionEnabled(session, "organizations");
+  const hasOrganizationsDirectory = portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]);
+  const hasMembershipQueue = portalSectionEnabled(session, "membership");
+  const hasUsersDirectory = portalSectionEnabled(session, "users");
+  const hasDonationsAccess = portalSectionEnabled(session, "donations");
   const hasSystemManagement = portalSectionEnabled(session, "system");
   const hasAccountAccess = portalSectionEnabled(session, "account");
   const hasAdminCapacity = Boolean(session?.staff);
@@ -206,9 +231,82 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasSystemManagement && (
+            {hasOrganizationsAccess && (
               <Route
-                path="/system/donations/detail/:donationId"
+                path="/organizations/:organizationId"
+                component={({ params }: { params: { organizationId: string } }) =>
+                  hasOrganizationsDirectory ? (
+                    <SectionWrapper title="Organizations">
+                      <OrganizationDetail
+                        organizationId={params.organizationId}
+                        canRead={portalHasGlobalPermission(session, "organizations:read")}
+                        canWrite={portalHasGlobalPermission(session, "organizations:write")}
+                        canManageRepresentatives={portalHasGlobalPermission(session, "membership:write")}
+                      />
+                    </SectionWrapper>
+                  ) : (
+                    <SectionWrapper title="Organizations">
+                      <MyOrganization organizationId={params.organizationId} />
+                    </SectionWrapper>
+                  )
+                }
+              />
+            )}
+            {hasOrganizationsAccess && (
+              <Route
+                path="/organizations"
+                component={() =>
+                  hasOrganizationsDirectory ? (
+                    <SectionWrapper title="Organizations">
+                      <Organizations
+                        canRead={portalHasGlobalPermission(session, "organizations:read")}
+                        canCreate={portalHasGlobalPermission(session, "membership:write")}
+                      />
+                    </SectionWrapper>
+                  ) : (
+                    <SectionWrapper title="Organizations">
+                      <RepresentedOrganizations />
+                    </SectionWrapper>
+                  )
+                }
+              />
+            )}
+            {hasMembershipQueue && (
+              <Route
+                path="/membership/applications/:applicationId?"
+                component={({ params }: { params: { applicationId?: string } }) => (
+                  <SectionWrapper title="Membership">
+                    <MembershipApplications
+                      initialApplicationId={params.applicationId}
+                      canWrite={portalHasGlobalPermission(session, "membership:write")}
+                      canApprove={portalHasGlobalPermission(session, "membership:approve")}
+                    />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasUsersDirectory && (
+              <Route
+                path="/users/:userId?"
+                component={({ params }: { params: { userId?: string } }) => (
+                  <SectionWrapper title="Users">
+                    <Users
+                      userId={params.userId}
+                      permissions={{
+                        canRead: portalHasGlobalPermission(session, "users:read"),
+                        canWrite: portalHasGlobalPermission(session, "users:write"),
+                        canGrantAccess: portalHasGlobalPermission(session, "access:grant"),
+                        canAnonymize: portalHasGlobalPermission(session, "users:anonymize"),
+                        canManageMembership: portalHasGlobalPermission(session, "membership:write"),
+                      }}
+                    />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasDonationsAccess && (
+              <Route
+                path="/donations/detail/:donationId"
                 component={({ params }: { params: { donationId: string } }) => (
                   <SectionWrapper title="Donation">
                     <DonationDetailPage
@@ -220,11 +318,79 @@ export function PortalShell() {
                 )}
               />
             )}
+            {hasDonationsAccess && (
+              <Route
+                path="/donations/:subTab?"
+                component={({ params }: { params: { subTab?: string } }) => (
+                  <SectionWrapper title="Donations">
+                    <Donations
+                      subTab={params.subTab}
+                      canRead={portalHasGlobalPermission(session, "donations:read")}
+                      canSync={portalHasGlobalPermission(session, "donations:sync")}
+                    />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasUsersDirectory && (
+              <Route
+                path="/system/users/:resourceId?"
+                component={({ params }: { params: { resourceId?: string } }) => (
+                  <PortalRouteRedirect
+                    to={params.resourceId ? `/users/${encodeURIComponent(params.resourceId)}` : "/users"}
+                  />
+                )}
+              />
+            )}
+            {hasOrganizationsDirectory && (
+              <Route
+                path="/system/organizations/:resourceId?"
+                component={({ params }: { params: { resourceId?: string } }) => (
+                  <PortalRouteRedirect
+                    to={
+                      params.resourceId ? `/organizations/${encodeURIComponent(params.resourceId)}` : "/organizations"
+                    }
+                  />
+                )}
+              />
+            )}
+            {hasMembershipQueue && (
+              <Route
+                path="/system/membership-applications/:resourceId?"
+                component={({ params }: { params: { resourceId?: string } }) => (
+                  <PortalRouteRedirect
+                    to={
+                      params.resourceId
+                        ? `/membership/applications/${encodeURIComponent(params.resourceId)}`
+                        : "/membership/applications"
+                    }
+                  />
+                )}
+              />
+            )}
+            {hasDonationsAccess && (
+              <Route
+                path="/system/donations/detail/:donationId"
+                component={({ params }: { params: { donationId: string } }) => (
+                  <PortalRouteRedirect to={`/donations/detail/${encodeURIComponent(params.donationId)}`} />
+                )}
+              />
+            )}
+            {hasDonationsAccess && (
+              <Route
+                path="/system/donations/:resourceId?"
+                component={({ params }: { params: { resourceId?: string } }) => (
+                  <PortalRouteRedirect
+                    to={params.resourceId ? `/donations/${encodeURIComponent(params.resourceId)}` : "/donations"}
+                  />
+                )}
+              />
+            )}
             {hasSystemManagement && (
               <Route
                 path="/system/:view/:resourceId"
                 component={({ params }: { params: { view: string; resourceId: string } }) => (
-                  <SectionWrapper title="Administration">
+                  <SectionWrapper title="Settings">
                     <SystemManagement session={session} view={params.view} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
@@ -234,8 +400,18 @@ export function PortalShell() {
               <Route
                 path="/system/:view?"
                 component={({ params }: { params: { view?: string } }) => (
-                  <SectionWrapper title="Administration">
+                  <SectionWrapper title="Settings">
                     <SystemManagement session={session} view={params.view} />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {(hasMemberCapacity || hasAdminCapacity) && (
+              <Route
+                path="/home"
+                component={() => (
+                  <SectionWrapper title="Home">
+                    <Home />
                   </SectionWrapper>
                 )}
               />
@@ -294,11 +470,16 @@ export function PortalShell() {
             {hasMemberCapacity && (
               <Route
                 path="/organization"
-                component={() => (
-                  <SectionWrapper title="My Organization">
-                    <MyOrganization />
-                  </SectionWrapper>
-                )}
+                component={() => {
+                  const actingOrganizationId = profile.value?.organizationId;
+                  return actingOrganizationId ? (
+                    <PortalRouteRedirect to={`/organizations/${encodeURIComponent(actingOrganizationId)}`} />
+                  ) : (
+                    <SectionWrapper title="Organizations">
+                      <MyOrganization />
+                    </SectionWrapper>
+                  );
+                }}
               />
             )}
             {hasGroupsAccess &&

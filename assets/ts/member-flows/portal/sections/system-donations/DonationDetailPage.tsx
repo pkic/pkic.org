@@ -95,7 +95,7 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
 
   return (
     <div>
-      <button class="btn btn-sm btn-outline-secondary mb-3" onClick={() => navigate("/system/donations")}>
+      <button class="btn btn-sm btn-outline-secondary mb-3" onClick={() => navigate("/donations")}>
         ← Back to Donations
       </button>
 

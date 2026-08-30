@@ -9,7 +9,7 @@ describe("semantic management links", () => {
       "https://app.test/portal/#/system/organization-content-reviews",
     );
     expect(buildManagementLink(appBaseUrl, { kind: "membership-application", id: "application-1" })).toBe(
-      "https://app.test/portal/#/system/membership-applications/application-1",
+      "https://app.test/portal/#/membership/applications/application-1",
     );
     expect(buildManagementLink(appBaseUrl, { kind: "sponsorship-list" })).toBe("https://app.test/portal/#/sponsors");
     expect(buildManagementLink(appBaseUrl, { kind: "sponsorship", id: "sponsor/1" })).toBe(

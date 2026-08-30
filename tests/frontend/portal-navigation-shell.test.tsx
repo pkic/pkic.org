@@ -64,6 +64,7 @@ beforeEach(() => {
         location.origin,
       );
       if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/users/current/organizations") return json(emptyPage("organizations"));
       if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
       throw new Error(`Unexpected request: ${url.pathname}`);
     }),
@@ -171,6 +172,7 @@ describe("portal navigation shell", () => {
           page: { limit: 12, offset: 0, total: 2, hasMore: false },
         });
       }
+      if (url.pathname === "/api/v1/users/current/organizations") return json(emptyPage("organizations"));
       throw new Error(`Unexpected request: ${url.pathname}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -203,6 +205,45 @@ describe("portal navigation shell", () => {
     await settle();
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
     expect(items).toEqual(["Account settings", "Sign out"]);
+  });
+
+  it("lists represented organizations in the account menu with workspace deep links", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/users/current/organizations") {
+        return json({
+          organizations: [
+            {
+              organizationId: "50000000-0000-4000-8000-000000000001",
+              memberId: "30000000-0000-4000-8000-000000000001",
+              name: "Example Trust Services",
+              membershipCategory: "A",
+              isOrgContact: true,
+              isPrimaryContact: false,
+              hasPendingReview: false,
+            },
+          ],
+          page: { limit: 12, offset: 0, total: 1, hasMore: false },
+        });
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    mountNavigation(portalSessionFixture({ staff: true, member: true }));
+    await settle();
+    await settle();
+
+    const userButton = container.querySelector<HTMLButtonElement>(".portal-sidebar-user")!;
+    void act(() => userButton.click());
+    await settle();
+    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(items).toEqual(["Example Trust Services", "Account settings", "Sign out"]);
   });
 
   it("shows the headshot in the user button when one is available", async () => {

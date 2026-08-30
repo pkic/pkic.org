@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ navigate: vi.fn() }));
 
 vi.mock("wouter", () => ({
-  useLocation: () => ["/system/membership-applications", mocks.navigate],
+  useLocation: () => ["/membership/applications", mocks.navigate],
 }));
 
 vi.mock("../../assets/ts/shared/api-client", () => ({
@@ -57,7 +57,7 @@ describe("portal membership application routing", () => {
     expect(back).not.toBeNull();
     void act(() => back.click());
 
-    expect(mocks.navigate).toHaveBeenCalledWith("/system/membership-applications");
+    expect(mocks.navigate).toHaveBeenCalledWith("/membership/applications");
   });
 
   it("opens list rows at a stable portal detail URL", () => {
@@ -65,6 +65,6 @@ describe("portal membership application routing", () => {
 
     void act(() => (container.querySelector("button") as HTMLButtonElement).click());
 
-    expect(mocks.navigate).toHaveBeenCalledWith("/system/membership-applications/application-2");
+    expect(mocks.navigate).toHaveBeenCalledWith("/membership/applications/application-2");
   });
 });
