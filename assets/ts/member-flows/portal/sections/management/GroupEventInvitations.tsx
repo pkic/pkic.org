@@ -8,7 +8,10 @@ import {
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import type { MenuAction } from "../../../../components/Menu";
+import { RowActions } from "../../../../components/RowActions";
 import { postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
@@ -69,11 +72,17 @@ export function GroupEventInvitations({
   }, [event.id]);
 
   async function runAction(invite: InvitationRow, action: "resend" | "revoke"): Promise<void> {
-    if (
-      action === "revoke" &&
-      !window.confirm(`Revoke the invitation for ${inviteeLabel(invite)}? They will no longer be able to accept it.`)
-    ) {
-      return;
+    if (action === "revoke") {
+      const confirmed = await confirmAction({
+        title: `Revoke the invitation for ${inviteeLabel(invite)}?`,
+        body: "They will no longer be able to accept this invitation.",
+        consequences: [
+          "The invitation link stops working immediately",
+          "You can send a new invitation later if you change your mind",
+        ],
+        confirmLabel: "Revoke invitation",
+      });
+      if (!confirmed) return;
     }
 
     setBusyInviteId(invite.id);
@@ -201,32 +210,24 @@ export function GroupEventInvitations({
             className: "text-end",
             cell: (invite) => {
               const busy = busyInviteId === invite.id;
-              return (
-                <div class="d-flex justify-content-end gap-2">
-                  {invite.actions.resend && (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-secondary"
-                      disabled={busy}
-                      aria-label={`Resend invitation to ${inviteeLabel(invite)}`}
-                      onClick={() => void runAction(invite, "resend")}
-                    >
-                      Resend
-                    </button>
-                  )}
-                  {invite.actions.revoke && (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-danger"
-                      disabled={busy}
-                      aria-label={`Revoke invitation for ${inviteeLabel(invite)}`}
-                      onClick={() => void runAction(invite, "revoke")}
-                    >
-                      Revoke
-                    </button>
-                  )}
-                </div>
-              );
+              const actions: MenuAction[] = [];
+              if (invite.actions.resend) {
+                actions.push({
+                  key: "resend",
+                  label: "Resend invitation",
+                  onSelect: () => void runAction(invite, "resend"),
+                  disabled: busy,
+                });
+              }
+              if (invite.actions.revoke) {
+                actions.push({
+                  key: "revoke",
+                  label: "Revoke invitation",
+                  onSelect: () => void runAction(invite, "revoke"),
+                  disabled: busy,
+                });
+              }
+              return <RowActions label={`Actions for ${inviteeLabel(invite)}`} actions={actions} />;
             },
           },
         ]}

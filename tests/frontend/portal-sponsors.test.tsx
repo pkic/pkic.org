@@ -3,10 +3,14 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sponsorshipTierConfigResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
+import {
+  sponsorshipCompaniesListResponseSchema,
+  sponsorshipTierConfigResponseSchema,
+} from "../../assets/shared/schemas/sponsorship-management";
 import { managedSponsorTiersResponseSchema } from "../../assets/shared/schemas/sponsors";
 import { SponsorshipTierConfig } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipTierConfig";
 import { Sponsorships } from "../../assets/ts/member-flows/portal/sections/sponsors/management";
+import { SponsorWorkspace } from "../../assets/ts/member-flows/portal/sections/sponsors";
 
 const mounted: HTMLElement[] = [];
 
@@ -117,5 +121,80 @@ describe("portal sponsor management", () => {
     const patch = requests.find((request) => request.method === "PATCH");
     expect(patch?.url.pathname).toBe("/api/v1/sponsors/tiers/00000000-0000-4000-8000-000000000001");
     expect(JSON.parse(patch?.body ?? "{}")).toMatchObject({ amountCents: 75000, currency: "usd", active: true });
+  });
+});
+
+describe("portal sponsor workspace tabs", () => {
+  function companiesResponse(): Response {
+    return new Response(
+      JSON.stringify(
+        sponsorshipCompaniesListResponseSchema.parse({
+          companies: [],
+          page: { limit: 25, offset: 0, total: 0, hasMore: false },
+        }),
+      ),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  function tiersResponse(): Response {
+    return new Response(JSON.stringify(managedSponsorTiersResponseSchema.parse({ tiers, visibility: "all" })), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("keeps tier pricing out of the sponsors list and moves it to a Settings tab", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return url.pathname === "/api/v1/sponsors/tiers" ? tiersResponse() : companiesResponse();
+      }),
+    );
+
+    const container = mount(
+      <SponsorWorkspace sponsors={[]} canRead canWrite detailId={undefined} onSessionExpired={vi.fn()} />,
+    );
+    await settle();
+
+    expect(requests.some((url) => url.pathname === "/api/v1/sponsors/companies")).toBe(true);
+    expect(requests.some((url) => url.pathname === "/api/v1/sponsors/tiers")).toBe(false);
+    expect(container.textContent).not.toContain("Sponsorship tier pricing");
+
+    const settingsTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Settings",
+    );
+    expect(settingsTab).toBeTruthy();
+    await act(async () => {
+      settingsTab!.click();
+    });
+    await settle();
+
+    expect(requests.some((url) => url.pathname === "/api/v1/sponsors/tiers")).toBe(true);
+    expect(container.textContent).toContain("Sponsorship tier pricing");
+    expect(container.textContent).not.toContain("Sponsorships");
+  });
+
+  it("hides the Settings tab from a reader without the sponsorships write capability", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => companiesResponse()),
+    );
+
+    const container = mount(
+      <SponsorWorkspace sponsors={[]} canRead canWrite={false} detailId={undefined} onSessionExpired={vi.fn()} />,
+    );
+    await settle();
+
+    const tabButtons = Array.from(container.querySelectorAll('nav[aria-label="Sponsor workspace"] button')).map(
+      (button) => button.textContent,
+    );
+    expect(tabButtons).not.toContain("Settings");
   });
 });

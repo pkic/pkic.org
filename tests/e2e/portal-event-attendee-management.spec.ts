@@ -150,7 +150,8 @@ test("a selected-group manager changes one attendee day through portal routes", 
   const row = page.getByRole("row").filter({ hasText: event.name });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Details" }).click();
-  const detail = page.getByRole("region", { name: `${event.name} details` });
+  const detail = page.getByRole("region", { name: `${event.name} workspace` });
+  await detail.getByRole("tab", { name: "Registrations" }).click();
   await expect(detail.getByRole("heading", { name: "Attendees", exact: true })).toBeVisible();
 
   const attendeeRow = detail.getByRole("row").filter({ hasText: attendeeEmail });

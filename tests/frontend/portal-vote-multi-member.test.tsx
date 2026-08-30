@@ -18,6 +18,8 @@ function multiMemberVote(): MemberVote {
     ownerGroupName: "Policy Group",
     electorateMode: "per_member",
     thresholdType: "simple_majority",
+    questionFormId: null,
+    questionForm: null,
     quorumPercent: null,
     tieBreakMode: "none" as const,
     excludedMemberIds: null,

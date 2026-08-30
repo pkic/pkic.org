@@ -441,6 +441,43 @@ describe("admin event management endpoints", () => {
     });
   });
 
+  it("joins the owning group's name into the events management list, with a muted null for ownerless events", async () => {
+    await setupAdmin();
+    const groupId = "20000000-0000-4000-8000-000000000009";
+    await env.DB.prepare(
+      `INSERT INTO groups
+         (id, type_key, parent_group_id, name, slug, description, visibility,
+          governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
+          allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot,
+          active, revision, created_at, updated_at)
+       VALUES (?, 'working_group', NULL, 'Post-Quantum Cryptography', 'pqc-owner-group', NULL, 'participants',
+               'inherited', 'open', 'none', 1, 0, 0, 1, 0, datetime('now'), datetime('now'))`,
+    )
+      .bind(groupId)
+      .run();
+    await env.DB.prepare("UPDATE events SET owner_group_id = ?, source_mode = 'portal' WHERE slug = 'pqc-2026'")
+      .bind(groupId)
+      .run();
+
+    const listResponse = await callAdmin("/api/v1/events");
+    expect(listResponse.status).toBe(200);
+    const listPayload = (await listResponse.json()) as {
+      events: Array<{ slug: string; ownerGroupId: string | null; ownerGroupName: string | null }>;
+    };
+    const owned = listPayload.events.find((event) => event.slug === "pqc-2026");
+    expect(owned).toMatchObject({ ownerGroupId: groupId, ownerGroupName: "Post-Quantum Cryptography" });
+
+    const ownerless = await importEvent("pqc-ownerless", "PQC Ownerless");
+    expect(ownerless.status).toBe(200);
+    const afterImport = (await (await callAdmin("/api/v1/events")).json()) as {
+      events: Array<{ slug: string; ownerGroupId: string | null; ownerGroupName: string | null }>;
+    };
+    expect(afterImport.events.find((event) => event.slug === "pqc-ownerless")).toMatchObject({
+      ownerGroupId: null,
+      ownerGroupName: null,
+    });
+  });
+
   it("rejects duplicate configurable session types case-insensitively", async () => {
     await setupAdmin();
 

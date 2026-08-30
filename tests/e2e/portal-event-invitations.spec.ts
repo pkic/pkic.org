@@ -113,7 +113,8 @@ async function manageInvitation(
   await expect(eventRow).toBeVisible();
   await eventRow.getByRole("button", { name: "Details" }).click();
 
-  const detail = page.getByRole("region", { name: `${event.name} details` });
+  const detail = page.getByRole("region", { name: `${event.name} workspace` });
+  await detail.getByRole("tab", { name: "Invitations" }).click();
   const label = type === "attendee" ? "Attendee" : "Speaker";
   await expect(detail.getByRole("heading", { name: `${label} invitations` })).toBeVisible();
   const invitations = detail.getByRole("region", { name: `${label} invitations` });

@@ -11,6 +11,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { memberStatusSchema, membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
 import { groupLabelSchema } from "./groups";
+import { httpOrSameOriginUrlSchema } from "./urls";
 
 export const userRoleValueSchema = z.enum(["admin", "user", "guest"]);
 export type UserRoleValue = z.infer<typeof userRoleValueSchema>;
@@ -72,6 +73,7 @@ const userResponseBaseSchema = z.object({
   role: userRoleValueSchema,
   created_at: z.string(),
   links: linksSchema,
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 
 export const userListItemSchema = userResponseBaseSchema.extend({
@@ -105,7 +107,6 @@ export const userDetailSchema = userResponseBaseSchema.extend({
   biography: z.string().nullable(),
   active: z.boolean(),
   isEcMember: z.boolean(),
-  headshotUrl: z.string().nullable(),
   updated_at: z.string(),
   pii_redacted_at: z.string().nullable(),
   memberships: z.array(userMembershipDetailSchema),

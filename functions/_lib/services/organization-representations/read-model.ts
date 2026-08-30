@@ -9,6 +9,7 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import { publicUserHeadshotPath } from "../user-headshot";
 
 interface RepresentativeReadRow {
   id: string;
@@ -19,6 +20,7 @@ interface RepresentativeReadRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  headshot_r2_key: string | null;
   source: OrganizationRepresentative["source"];
   show_on_org_profile: number;
   joined_at: string;
@@ -46,6 +48,7 @@ function mapRepresentative(row: RepresentativeReadRow): OrganizationRepresentati
     userId: row.user_id,
     userName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     email: row.email,
+    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
     source: row.source,
     showOnOrganizationProfile: row.show_on_org_profile === 1,
     joinedAt: row.joined_at,
@@ -98,7 +101,7 @@ export async function listOrganizationRepresentatives(
     source: {
       selectSql: `SELECT representative.id, representative.member_id,
         organization.id AS organization_id, organization.name AS organization_name,
-        representative.user_id, user.first_name, user.last_name, user.email,
+        representative.user_id, user.first_name, user.last_name, user.email, user.headshot_r2_key,
         representative.source, representative.show_on_org_profile,
         representative.joined_at, representative.left_at, representative.blocked_at,
         representative.blocked_by_user_id, representative.created_at, representative.updated_at`,

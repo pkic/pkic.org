@@ -27,7 +27,7 @@ export function eventRegistrationPromotionsPath(eventSlug: string): string {
 }
 
 export function eventRegistrationViewPath(eventSlug: string, registrationId: string): string {
-  return `${eventRegistrationsViewPath(eventSlug)}/${segment(registrationId)}`;
+  return `${eventRegistrationsViewPath(eventSlug)}/detail/${segment(registrationId)}`;
 }
 
 export function eventRegistrationsViewPath(eventSlug: string): string {

@@ -10,6 +10,8 @@ import {
 } from "../../../../../shared/schemas/group-vote-proposals";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -45,9 +47,42 @@ function GroupVoteProposalDetail({
     }
   }
 
-  if (detail.loading) return <Spinner />;
+  if (detail.loading) return <Spinner label="Loading proposal details…" />;
   if (detail.error) return <ErrorAlert error={detail.error} />;
   const current = detail.data?.proposal ?? proposal;
+
+  async function withdraw(): Promise<void> {
+    if (
+      !(await confirmAction({
+        title: `Withdraw "${current.title}"?`,
+        body: "The proposal is removed from consideration and endorsers are notified.",
+        consequences: [
+          "Endorsements already collected are discarded",
+          "You can submit a new proposal later if you change your mind",
+        ],
+        confirmLabel: "Withdraw proposal",
+      }))
+    )
+      return;
+    await action(() => deleteJson(base, groupVoteProposalMutationResponseSchema));
+  }
+
+  async function approve(): Promise<void> {
+    if (
+      !(await confirmAction({
+        title: `Approve "${current.title}" and create a vote?`,
+        body: "This converts the proposal into a live vote that members can cast ballots in.",
+        consequences: [
+          "A new vote is created using this proposal's settings",
+          "The proposal can no longer be withdrawn or rejected",
+        ],
+        confirmLabel: "Approve and create vote",
+        tone: "primary",
+      }))
+    )
+      return;
+    await action(() => postJson(`${base}/approve`, {}, groupVoteProposalApproveResponseSchema));
+  }
 
   return (
     <div class="border rounded p-3">
@@ -80,28 +115,12 @@ function GroupVoteProposalDetail({
           </button>
         )}
         {current.capabilities.includes("withdraw") && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-danger"
-            disabled={busy}
-            onClick={() => {
-              if (confirm("Withdraw this proposal?"))
-                void action(() => deleteJson(base, groupVoteProposalMutationResponseSchema));
-            }}
-          >
+          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void withdraw()}>
             Withdraw proposal
           </button>
         )}
         {current.capabilities.includes("approve") && (
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            disabled={busy}
-            onClick={() => {
-              if (confirm("Approve this proposal and convert it to a vote?"))
-                void action(() => postJson(`${base}/approve`, {}, groupVoteProposalApproveResponseSchema));
-            }}
-          >
+          <button type="button" class="btn btn-sm btn-primary" disabled={busy} onClick={() => void approve()}>
             Approve and create vote
           </button>
         )}
@@ -211,7 +230,17 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
             ),
           },
         ]}
-        empty="No vote proposals are available through this group."
+        empty={
+          canParticipate ? (
+            <EmptyState
+              title="No vote proposals yet"
+              body="Propose a vote for this group to start collecting endorsements."
+              action={{ label: "Propose a vote", onSelect: () => setShowCreate(true) }}
+            />
+          ) : (
+            "No vote proposals are available through this group."
+          )
+        }
         rowKey={(proposal) => proposal.id}
         detailRow={(proposal) =>
           selectedProposal?.id === proposal.id ? (

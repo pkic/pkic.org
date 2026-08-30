@@ -45,11 +45,17 @@ function renderHead(
   );
 }
 
+// A plain-string empty message keeps the muted placeholder look; a rendered
+// empty state (e.g. <EmptyState/>) styles itself.
+function emptyCellClass(empty: ComponentChildren): string {
+  return typeof empty === "string" ? "text-center text-muted fst-italic py-3" : "p-0";
+}
+
 // ─── Children-based Table (for complex row rendering) ─────────────────────────
 
 interface TableProps {
   heads: HeadCell[];
-  empty?: string;
+  empty?: ComponentChildren;
   className?: string;
   children?: ComponentChildren;
 }
@@ -67,7 +73,7 @@ export function Table({ heads, empty = "No data", className, children }: TablePr
             children
           ) : (
             <tr>
-              <td colspan={heads.length} class="text-center text-muted fst-italic py-3">
+              <td colspan={heads.length} class={emptyCellClass(empty)}>
                 {empty}
               </td>
             </tr>
@@ -90,7 +96,7 @@ export interface Column<T> {
 export interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
-  empty?: string;
+  empty?: ComponentChildren;
   className?: string;
   rowKey?: (row: T, index: number) => string | number;
   rowClass?: (row: T, index: number) => string | undefined;
@@ -121,7 +127,7 @@ export function DataTable<T>({
         <tbody>
           {data.length === 0 ? (
             <tr>
-              <td colspan={columns.length} class="text-center text-muted fst-italic py-3">
+              <td colspan={columns.length} class={emptyCellClass(empty)}>
                 {empty}
               </td>
             </tr>

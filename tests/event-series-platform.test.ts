@@ -111,6 +111,37 @@ describe("group-owned event series", () => {
     ).toBe(0);
   });
 
+  it("materializes an ad-hoc single-occurrence series to exactly its start", async () => {
+    const admin = await insertAdmin();
+    const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
+      eventName: "Ad-hoc Alignment Call",
+      eventSlug: `ad-hoc-alignment-${crypto.randomUUID()}`,
+      profileKey: "meeting",
+      policy: {
+        registrationPolicy: "no_registration",
+        memberEligibility: "owner_group",
+        guestPolicy: "occurrence_invitation",
+      },
+      startsAt: "2026-10-06T08:00:00.000Z",
+      recurrenceRule: "FREQ=DAILY;COUNT=1",
+      timezone: "Europe/Amsterdam",
+      durationMinutes: 60,
+      location: "Online",
+      providerType: null,
+    });
+    const result = await materializeSeriesOccurrences(env.DB, admin, GROUP_ID, series.id, {
+      through: "2027-10-06T08:00:00.000Z",
+      maxOccurrences: 10,
+    });
+    expect(result).toMatchObject({ created: 1, existing: 0 });
+    const starts = await queryAll<{ starts_at: string }>(
+      env.DB,
+      "SELECT starts_at FROM event_occurrences WHERE series_id = ? ORDER BY starts_at",
+      [series.id],
+    );
+    expect(starts.map((row) => row.starts_at)).toEqual(["2026-10-06T08:00:00.000Z"]);
+  });
+
   it("materializes recurring local time across DST idempotently", async () => {
     const admin = await insertAdmin();
     const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {

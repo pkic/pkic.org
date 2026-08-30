@@ -131,6 +131,18 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
               </>
             }
             actions={[
+              ...(portalSectionEnabled(session, "profile")
+                ? [
+                    {
+                      key: "profile",
+                      label: "My profile",
+                      onSelect: () => {
+                        closeNavigation();
+                        navigate("/profile");
+                      },
+                    },
+                  ]
+                : []),
               ...(organizations.data?.organizations ?? []).map((organization) => ({
                 key: `organization-${organization.organizationId}`,
                 label: organization.name,
@@ -139,6 +151,18 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
                   navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`);
                 },
               })),
+              ...(portalSectionEnabled(session, "participation")
+                ? [
+                    {
+                      key: "participation",
+                      label: "My participation",
+                      onSelect: () => {
+                        closeNavigation();
+                        navigate("/participation");
+                      },
+                    },
+                  ]
+                : []),
               ...(portalSectionEnabled(session, "account")
                 ? [
                     {

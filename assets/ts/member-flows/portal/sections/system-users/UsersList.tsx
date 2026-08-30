@@ -2,6 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { normalizeProfileLinks } from "../../../../shared/widgets/profile-links";
 import { patchJson } from "../../../../shared/api-client";
+import { portalAvatarInitials } from "../../shell/PortalNavigationShell";
 import { fmt, toast } from "../../ui";
 import {
   userUpdateResponseSchema,
@@ -85,7 +86,17 @@ export function UsersList({
         },
         {
           header: "Name",
-          cell: (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || "—",
+          cell: (user) => {
+            const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+            return (
+              <div class="d-flex align-items-center gap-2">
+                <span class="portal-user-avatar portal-user-avatar--table" aria-hidden="true">
+                  {user.headshotUrl ? <img src={user.headshotUrl} alt="" /> : portalAvatarInitials(name)}
+                </span>
+                <span>{[user.first_name, user.last_name].filter(Boolean).join(" ") || "—"}</span>
+              </div>
+            );
+          },
           className: "fw-semibold",
           sort: { asc: "last_name", desc: "-last_name" },
         },

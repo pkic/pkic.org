@@ -59,6 +59,10 @@ type AuthenticationResponseInput = z.infer<typeof authenticationResponseSchema>;
 
 const PASSKEY_CREDENTIAL_COLUMNS =
   "id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at";
+const PASSKEY_USER_VERIFICATION_POLICY = {
+  preference: "required" as const,
+  required: true,
+};
 
 function requireEnvVar(value: string | undefined, name: string): string {
   if (!value) {
@@ -137,7 +141,10 @@ export async function beginPasskeyRegistration(
     userID: new TextEncoder().encode(actor.id),
     attestationType: "none",
     excludeCredentials: existing.map((row) => ({ id: row.credential_id })),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    authenticatorSelection: {
+      residentKey: "required",
+      userVerification: PASSKEY_USER_VERIFICATION_POLICY.preference,
+    },
   });
 
   const challengeToken = await issuePasskeyChallengeToken(signingSecret, "registration", options.challenge, actor.id);
@@ -168,6 +175,7 @@ export async function completePasskeyRegistration(
     expectedChallenge: claims.challenge,
     expectedOrigin: origin,
     expectedRPID: rpId,
+    requireUserVerification: PASSKEY_USER_VERIFICATION_POLICY.required,
   }).catch((err: unknown) => {
     throw new AppError(
       400,
@@ -305,7 +313,7 @@ export async function beginPasskeyAuthentication(
   // consolidated migration 0035), not from the WebAuthn `userHandle` field.
   const options = await generateAuthenticationOptions({
     rpID: rpId,
-    userVerification: "preferred",
+    userVerification: PASSKEY_USER_VERIFICATION_POLICY.preference,
   });
 
   const challengeToken = await issuePasskeyChallengeToken(signingSecret, "authentication", options.challenge);
@@ -354,6 +362,7 @@ export async function completePasskeyAuthentication(
     expectedOrigin: origin,
     expectedRPID: rpId,
     credential,
+    requireUserVerification: PASSKEY_USER_VERIFICATION_POLICY.required,
   }).catch((err: unknown) => {
     throw new AppError(
       400,

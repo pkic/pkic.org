@@ -55,6 +55,7 @@ describe("buildTemplateSqlStatements", () => {
 
   it("renders the seeded sign-in template for Outlook-safe local delivery", async () => {
     const signIn = DEFAULT_TEMPLATES.find((item) => item.key === "user_magic_link");
+    const magicLinkUrl = "http://localhost:8788/portal/#/verify?token=secret";
     expect(signIn).toBeDefined();
 
     const rendered = await renderEmail(
@@ -62,7 +63,7 @@ describe("buildTemplateSqlStatements", () => {
       {
         email: "admin@pkic.org",
         expiresInMinutes: 15,
-        magicLinkUrl: "http://localhost:8788/portal/#/verify?token=secret",
+        magicLinkUrl,
       },
       DEFAULT_LAYOUT_HTML,
       "markdown",
@@ -70,9 +71,11 @@ describe("buildTemplateSqlStatements", () => {
     );
 
     expect(rendered.html).toContain('src="https://pkic.org/img/logo-white.png"');
-    expect(rendered.html).toContain('href="http://localhost:8788/portal/#/verify?token=secret"');
+    expect(rendered.html.split(`href="${magicLinkUrl}"`)).toHaveLength(2);
     expect(rendered.html).toContain("background:#0d1b2a");
-    expect(rendered.html).toContain("word-break:break-all");
+    expect(rendered.html).not.toContain("use this sign-in link");
+    expect(rendered.text).toContain("Sign in to the portal");
+    expect(rendered.text.split(magicLinkUrl)).toHaveLength(2);
     expect(rendered.html).not.toContain("http://localhost:8788/img/logo-white.png");
   });
 
@@ -80,6 +83,8 @@ describe("buildTemplateSqlStatements", () => {
     const sql = buildTemplateSqlStatements({ adminEmail: " Admin@Example.test ", ifMissing: true }, [template]);
     expect(sql).toContain("WHERE NOT EXISTS");
     expect(sql).not.toContain("SET status = 'archived'");
+    expect(sql).toContain("AND created_by_user_id IS NULL");
+    expect(sql).toContain("AND checksum_sha256 = ''");
     expect(sql).toContain("'admin@example.test'");
     expect(sql).toContain("' Welcome {{name}} '");
   });
@@ -98,7 +103,7 @@ describe("buildTemplateSqlStatements", () => {
     expect(sql).toContain("strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
   });
 
-  it("seeds one idempotent baseline version for the complete canonical catalog", () => {
+  it("refreshes untouched migration placeholders and seeds one idempotent canonical baseline", () => {
     const db = new DatabaseSync(":memory:");
     db.exec(`
       CREATE TABLE users (
@@ -120,6 +125,16 @@ describe("buildTemplateSqlStatements", () => {
         UNIQUE(template_key, version)
       );
       INSERT INTO users (id, normalized_email) VALUES ('admin-id', 'admin@example.test');
+      INSERT INTO email_template_versions
+        (id, template_key, version, subject_template, body, content_type,
+         r2_object_key, checksum_sha256, status, created_by_user_id, created_at)
+      VALUES
+        ('migration-layout', 'email_layout', 1, NULL,
+         '<!doctype html><html><body>{{{body_html}}}</body></html>',
+         'html', NULL, '', 'active', NULL, '2025-01-01T00:00:00.000Z'),
+        ('migration-sign-in', 'user_magic_link', 1, 'Your PKI Consortium sign-in link',
+         'Use the secure link below to sign in.\n\n[Sign in]({{magicLinkUrl}})',
+         'markdown', NULL, '', 'active', NULL, '2025-01-01T00:00:00.000Z');
     `);
 
     const sql = buildTemplateSqlStatements({ adminEmail: "admin@example.test", ifMissing: true }, DEFAULT_TEMPLATES);
@@ -150,6 +165,12 @@ describe("buildTemplateSqlStatements", () => {
       ]),
     );
     expect(rows.some((row) => row.template_key === "admin_magic_link")).toBe(false);
+    expect(db.prepare("SELECT body FROM email_template_versions WHERE template_key = 'email_layout'").get()).toEqual({
+      body: DEFAULT_LAYOUT_HTML,
+    });
+    expect(db.prepare("SELECT body FROM email_template_versions WHERE template_key = 'user_magic_link'").get()).toEqual(
+      { body: DEFAULT_TEMPLATES.find((item) => item.key === "user_magic_link")!.content },
+    );
 
     db.close();
   });

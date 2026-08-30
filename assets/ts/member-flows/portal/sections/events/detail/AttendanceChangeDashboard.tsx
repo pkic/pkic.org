@@ -2,6 +2,7 @@ import { StatCard } from "../../../../../components/StatCard";
 import { attendanceTypeLabel } from "../attendance";
 import type { EventStatsResponse } from "../types";
 import { fmt } from "../../../ui";
+import { eventRegistrationViewPath } from "./registration-paths";
 
 export function AttendanceChangeDashboard({
   slug,
@@ -131,7 +132,7 @@ export function AttendanceChangeDashboard({
                   {changes.recent.map((row) => (
                     <tr key={`${row.registration_id}:${row.changed_at}:${row.from_type}:${row.to_type}`}>
                       <td>
-                        <a class="small fw-semibold" href={`#/events/${slug}/registrations/${row.registration_id}`}>
+                        <a class="small fw-semibold" href={`#${eventRegistrationViewPath(slug, row.registration_id)}`}>
                           {row.display_name ?? row.user_email ?? row.registration_id}
                         </a>
                         {row.display_name && row.user_email && <div class="small text-muted">{row.user_email}</div>}

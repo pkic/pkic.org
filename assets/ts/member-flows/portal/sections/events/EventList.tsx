@@ -39,6 +39,15 @@ export function EventList() {
             sort: { asc: "name", desc: "-name" },
           },
           {
+            header: "Group",
+            cell: (e) =>
+              e.ownerGroupId ? (
+                <a href={`#/groups/${encodeURIComponent(e.ownerGroupId)}`}>{e.ownerGroupName ?? e.ownerGroupId}</a>
+              ) : (
+                <span class="text-muted">—</span>
+              ),
+          },
+          {
             header: "Dates",
             cell: (e) => (e.startsAt ? e.startsAt.substring(0, 10) : "—"),
             className: "mono small text-nowrap",

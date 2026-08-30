@@ -43,6 +43,7 @@ function group(revision = 0) {
     active: true,
     revision,
     membershipCapacityCount: 4,
+    representedMemberCount: 3,
     participantCount: 3,
     childCount: 1,
     createdAt: "2026-08-01T00:00:00.000Z",
@@ -78,6 +79,7 @@ async function settle(): Promise<void> {
 // import resolves within the act() flushes above instead of stalling on a
 // cold vitest transform.
 beforeEach(async () => {
+  await import("../../assets/ts/member-flows/portal/sections/management/GroupOverview");
   await import("../../assets/ts/member-flows/portal/sections/management/GroupSettingsForm");
   await import("../../assets/ts/member-flows/portal/sections/management/GroupCategoryRulesEditor");
 });
@@ -147,7 +149,7 @@ describe("portal selected-group workspace", () => {
 
     expect(container.textContent).toContain("Architecture Committee");
     expect(container.textContent).toContain("Part of Parent Group");
-    expect(container.textContent).toContain("Membership capacities");
+    expect(container.textContent).toContain("Members represented");
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     // The group workspace is route-addressed; no manageable-group picker request is made.
     expect(requests.some(({ url }) => url.searchParams.get("manageable") === "true")).toBe(false);
@@ -189,6 +191,9 @@ describe("portal selected-group workspace", () => {
         if (url.pathname === `/api/v1/groups/${GROUP_ID}`) {
           return json({ group: group(), capabilities: ["view", "participate"] });
         }
+        const page = { limit: 3, offset: 0, total: 0, hasMore: false };
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/events`) return json({ events: [], page });
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/votes`) return json({ votes: [], page });
         throw new Error(`Unexpected request: ${url.pathname}`);
       }),
     );
@@ -197,7 +202,7 @@ describe("portal selected-group workspace", () => {
     await settle();
 
     const tabs = [...container.querySelectorAll("nav a")].map((link) => link.textContent);
-    expect(tabs).toEqual(["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
+    expect(tabs).toEqual(["Overview", "Events", "Meetings", "Votes", "Forms", "Mailing lists"]);
     expect(container.textContent).toContain("You participate in this group.");
     expect(container.textContent).not.toContain("Save group settings");
   });

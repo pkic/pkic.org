@@ -3,8 +3,12 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
-import { GroupEventDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupEventDetail";
 import { EventFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor";
+import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", vi.fn()],
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -330,10 +334,12 @@ describe("portal event form placement management", () => {
       proposalAccess: null,
       capabilities: ["view", "manage"],
     };
-    const manager = mount(<GroupEventDetail event={event} groupId={GROUP_ID} />);
+    const manager = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
     await settle();
     expect(manager.textContent).toContain("Proposal submission questions");
-    const reviewer = mount(<GroupEventDetail event={{ ...event, capabilities: ["view"] }} groupId={GROUP_ID} />);
+    const reviewer = mount(
+      <GroupEventWorkspace event={{ ...event, capabilities: ["view"] }} groupId={GROUP_ID} tab="settings" />,
+    );
     await settle();
     expect(reviewer.textContent).not.toContain("Proposal submission questions");
     expect(reviewer.textContent).not.toContain("Registration setup");

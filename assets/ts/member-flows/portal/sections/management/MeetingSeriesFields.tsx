@@ -13,6 +13,8 @@ import {
   type EventRegistrationPolicy,
   type EventVisibility,
 } from "../../../../../shared/schemas/event-series";
+import { RecurrenceEditor } from "../../../../components/RecurrenceEditor";
+import { TimeZoneSelect } from "../../../../components/TimeZoneSelect";
 
 export interface MeetingSeriesDraft {
   name: string;
@@ -110,39 +112,21 @@ export function MeetingSeriesFields({
         />
       </div>
       <div class="col-md-6">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-recurrence`}>
-          Recurrence rule
-        </label>
-        <input
+        <RecurrenceEditor
           id={`${idPrefix}-recurrence`}
-          class="form-control font-monospace"
           value={draft.recurrenceRule}
-          required
           disabled={disabled || scheduleLocked}
-          list={`${idPrefix}-recurrence-presets`}
-          aria-describedby={`${idPrefix}-recurrence-help`}
-          onInput={(event) => updateDraft(draft, onChange, "recurrenceRule", event.currentTarget.value)}
+          referenceDate={draft.startsAt}
+          onChange={(value) => updateDraft(draft, onChange, "recurrenceRule", value)}
         />
-        <datalist id={`${idPrefix}-recurrence-presets`}>
-          <option value="FREQ=WEEKLY;INTERVAL=1">Weekly</option>
-          <option value="FREQ=WEEKLY;INTERVAL=2">Every two weeks</option>
-          <option value="FREQ=MONTHLY;INTERVAL=1">Monthly</option>
-        </datalist>
-        <div id={`${idPrefix}-recurrence-help`} class="form-text">
-          RFC 5545 recurrence rule. Presets are suggestions; other valid recurring schedules are supported.
-        </div>
       </div>
       <div class="col-md-3">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-timezone`}>
-          Time zone
-        </label>
-        <input
+        <TimeZoneSelect
           id={`${idPrefix}-timezone`}
-          class="form-control"
+          label="Time zone"
           value={draft.timezone}
-          required
           disabled={disabled || scheduleLocked}
-          onInput={(event) => updateDraft(draft, onChange, "timezone", event.currentTarget.value)}
+          onChange={(value) => updateDraft(draft, onChange, "timezone", value)}
         />
       </div>
       <div class="col-md-3">

@@ -1,5 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { RowActions } from "../../../../components/RowActions";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { deleteJson, postJson } from "../../../../shared/api-client";
@@ -13,7 +15,7 @@ import { fmt, toast } from "../../ui";
 import { TargetPicker, type PickedTarget } from "./TargetPicker";
 import { roleCatalog } from "./catalogs";
 
-/** Staff management: assign built-in roles, override individual permissions. */
+/** People with assigned roles: permissioned users (often community members, not staff). */
 export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
   const [user, setUser] = useState<PickedUser | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -55,7 +57,12 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
 
   async function handleRevoke(assignment: UserRoleAssignment) {
     if (!user) return;
-    if (!confirm(`Revoke role "${assignment.roleName}"?`)) return;
+    const confirmed = await confirmAction({
+      title: `Revoke the "${assignment.roleName}" role from ${user.email}?`,
+      consequences: [`${user.email} loses the permissions this role grants`],
+      confirmLabel: "Revoke role",
+    });
+    if (!confirmed) return;
     try {
       await deleteJson(`/api/v1/users/${user.id}/roles/${assignment.id}`, successResponseSchema);
       toast("Role revoked", "success");
@@ -67,7 +74,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
 
   return (
     <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white fw-semibold">Staff management — assign roles</div>
+      <div class="card-header bg-white fw-semibold">People — assign roles</div>
       <div class="card-body">
         <div class="mb-3 portal-access-role-user-picker">
           <label class="form-label small fw-semibold">User</label>
@@ -166,9 +173,11 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                   header: "",
                   cell: (assignment) =>
                     canRevoke ? (
-                      <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(assignment)}>
-                        Revoke
-                      </button>
+                      <RowActions
+                        actions={[
+                          { key: "revoke", label: "Revoke role", onSelect: () => void handleRevoke(assignment) },
+                        ]}
+                      />
                     ) : null,
                 },
               ]}

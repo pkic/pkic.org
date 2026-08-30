@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ResourceSharingEditor } from "../../assets/ts/member-flows/portal/sections/management/ResourceSharingEditor";
 
 const OWNER_GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -18,12 +19,15 @@ function mount(kind: "event" | "formPlacement" | "vote" | "mailingList"): HTMLEl
   mounted.push(container);
   void act(() =>
     render(
-      <ResourceSharingEditor
-        kind={kind}
-        groupId={OWNER_GROUP_ID}
-        resourceId={kind === "event" ? "architecture-workshop" : "80000000-0000-4000-8000-000000000001"}
-        ownerGroupId={OWNER_GROUP_ID}
-      />,
+      <>
+        <ConfirmDialogHost />
+        <ResourceSharingEditor
+          kind={kind}
+          groupId={OWNER_GROUP_ID}
+          resourceId={kind === "event" ? "architecture-workshop" : "80000000-0000-4000-8000-000000000001"}
+          ownerGroupId={OWNER_GROUP_ID}
+        />
+      </>,
       container,
     ),
   );
@@ -34,6 +38,22 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+function menuItem(container: HTMLElement, label: string): HTMLButtonElement {
+  const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent === label,
+  );
+  if (!item) throw new Error(`missing menu item: ${label}`);
+  return item;
+}
+
+function confirmDialogButton(label: string): HTMLButtonElement {
+  const dialog = document.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing confirm dialog button: ${label}`);
+  return button;
 }
 
 const granteeGroup = {
@@ -81,10 +101,6 @@ describe("portal resource sharing editor", () => {
   ] as const)("uses the canonical %s grant contract", async (kind, resourcePath, selectedCapability) => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     let grantActive = false;
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -167,9 +183,11 @@ describe("portal resource sharing editor", () => {
     });
     expect(container.textContent).toContain("Working Group");
 
-    const revoke = [...container.querySelectorAll("button")].find((button) => button.textContent === "Revoke");
-    expect(revoke).toBeDefined();
-    await act(async () => revoke!.click());
+    const rowMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Working Group"]');
+    expect(rowMenu).toBeDefined();
+    await act(async () => rowMenu!.click());
+    await act(async () => menuItem(container, "Revoke").click());
+    await act(async () => confirmDialogButton("Revoke access").click());
     await settle();
     expect(requests.find(({ method }) => method === "DELETE")).toMatchObject({
       url: expect.objectContaining({ pathname: `${grantPath}/${GRANTEE_GROUP_ID}/${selectedCapability}` }),

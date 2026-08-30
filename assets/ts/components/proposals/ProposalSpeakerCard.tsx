@@ -5,6 +5,7 @@ import { proposalSpeakerPatchResponseSchema, type ProposalSpeaker } from "../../
 import { proposalSpeakerRemovalResponseSchema } from "../../../shared/schemas/proposal-management";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { Badge } from "../Badge";
+import { confirmAction } from "../ConfirmDialog";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { requestJson } from "../../shared/api-client";
@@ -133,12 +134,16 @@ export function ProposalSpeakerCard({
   }
 
   async function removeSpeaker() {
-    if (
-      !confirm(
-        `Remove ${name} from this proposal? The user profile and audit history will be kept.${isCurrentProposer ? " Proposal ownership will transfer to the selected replacement." : ""}`,
-      )
-    )
-      return;
+    const confirmed = await confirmAction({
+      title: `Remove ${name} from this proposal?`,
+      consequences: [
+        "The user profile and audit history are kept",
+        ...(isCurrentProposer ? ["Proposal ownership transfers to the selected replacement"] : []),
+      ],
+      confirmLabel: "Remove speaker",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setRemoving(true);
     try {
       await requestJson(speakerPath(), proposalSpeakerRemovalResponseSchema, {

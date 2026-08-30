@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
 import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage";
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
@@ -369,7 +370,15 @@ describe("group event proposal portal", () => {
     stubFetch(calls, { ...access, canReview: true, canFinalize: true, eventPermissions: ["proposals:manage"] });
     container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />, container!));
+    await act(() =>
+      render(
+        <>
+          <GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />
+          <ConfirmDialogHost />
+        </>,
+        container!,
+      ),
+    );
     await settle();
     await settle();
     await act(async () => container!.querySelector<HTMLTableRowElement>("tbody tr")?.click());
@@ -436,11 +445,15 @@ describe("group event proposal portal", () => {
         replacement.dispatchEvent(new Event("change", { bubbles: true }));
       });
     }
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
     await act(async () => remove?.click());
+    await settle();
+    const removeDialog = document.querySelector('[role="alertdialog"]');
+    expect(removeDialog).not.toBeNull();
+    await act(async () => {
+      Array.from(removeDialog?.querySelectorAll("button") ?? [])
+        .find((candidate) => candidate.textContent === "Remove speaker")
+        ?.click();
+    });
     await settle();
     expect(
       calls.some(({ url, method }) => method === "DELETE" && url.includes("/speakers/") && !url.endsWith("/speakers")),

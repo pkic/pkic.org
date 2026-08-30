@@ -27,6 +27,9 @@ const MyOrganization = lazy(() =>
 );
 const Groups = lazy(() => import("../sections/Groups").then((module) => ({ default: module.Groups })));
 const Home = lazy(() => import("../sections/Home").then((module) => ({ default: module.Home })));
+const Participation = lazy(() =>
+  import("../sections/Participation").then((module) => ({ default: module.Participation })),
+);
 const MyApplications = lazy(() =>
   import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
 );
@@ -39,9 +42,6 @@ const SystemManagement = lazy(() =>
 );
 const GroupWorkspace = lazy(() =>
   import("../sections/management/GroupWorkspace").then((module) => ({ default: module.GroupWorkspace })),
-);
-const GroupEventProposals = lazy(() =>
-  import("../sections/management/GroupEventProposals").then((module) => ({ default: module.GroupEventProposals })),
 );
 const DonationDetailPage = lazy(() =>
   import("../sections/system-donations/DonationDetailPage").then((module) => ({ default: module.DonationDetailPage })),
@@ -76,10 +76,10 @@ function LazyEventWorkspace(props: EventWorkspaceProps) {
   );
 }
 
-function SectionWrapper({ title, children }: { title: string; children: ComponentChildren }) {
+function SectionWrapper({ title, children }: { title?: string; children: ComponentChildren }) {
   return (
     <div class="portal-section">
-      <h4 class="portal-section-title">{title}</h4>
+      {title && <h4 class="portal-section-title">{title}</h4>}
       {children}
     </div>
   );
@@ -136,7 +136,7 @@ export function PortalShell() {
           <Switch>
             {hasEventWorkspace && (
               <Route
-                path="/events/:slug/registrations/:registrationId"
+                path="/events/:slug/registrations/detail/:registrationId"
                 component={({ params }: { params: { slug: string; registrationId: string } }) => (
                   <LazyEventWorkspace view="registration" slug={params.slug} resourceId={params.registrationId} />
                 )}
@@ -144,7 +144,7 @@ export function PortalShell() {
             )}
             {hasEventWorkspace && (
               <Route
-                path="/events/:slug/proposals/:proposalId"
+                path="/events/:slug/proposals/detail/:proposalId"
                 component={({ params }: { params: { slug: string; proposalId: string } }) => (
                   <LazyEventWorkspace view="proposal" slug={params.slug} resourceId={params.proposalId} />
                 )}
@@ -221,12 +221,17 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasAdminCapacity && (
+            {hasGroupsAccess && (
               <Route
-                path="/groups/:groupId/events/:eventId/proposals"
-                component={({ params }: { params: { groupId: string; eventId: string } }) => (
-                  <SectionWrapper title="Proposal Program">
-                    <GroupEventProposals groupId={params.groupId} eventId={params.eventId} />
+                path="/groups/:groupId/events/:eventId/:eventTab?"
+                component={({ params }: { params: { groupId: string; eventId: string; eventTab?: string } }) => (
+                  <SectionWrapper>
+                    <GroupWorkspace
+                      groupId={params.groupId}
+                      view="events"
+                      resourceId={params.eventId}
+                      resourceTab={params.eventTab}
+                    />
                   </SectionWrapper>
                 )}
               />
@@ -387,6 +392,25 @@ export function PortalShell() {
               />
             )}
             {hasSystemManagement && (
+              // A role detail needs a second path segment beyond the generic
+              // `/system/:view/:resourceId` shape below (view="access-control",
+              // resourceId="roles"), so this route composes the extra
+              // `:roleId` into a single `roles/:roleId` resourceId string
+              // instead of threading a third URL param through SystemManagement
+              // and every other `/system/:view/:resourceId` consumer. Must stay
+              // above the generic route: wouter's <Switch> renders the first
+              // match, and the generic route would otherwise win with
+              // resourceId="roles" and silently drop the role id.
+              <Route
+                path="/system/access-control/roles/:roleId"
+                component={({ params }: { params: { roleId: string } }) => (
+                  <SectionWrapper title="Settings">
+                    <SystemManagement session={session} view="access-control" resourceId={`roles/${params.roleId}`} />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasSystemManagement && (
               <Route
                 path="/system/:view/:resourceId"
                 component={({ params }: { params: { view: string; resourceId: string } }) => (
@@ -430,7 +454,7 @@ export function PortalShell() {
               <Route
                 path="/groups/:groupId/:view/:resourceId"
                 component={({ params }: { params: { groupId: string; view: string; resourceId: string } }) => (
-                  <SectionWrapper title="Group">
+                  <SectionWrapper>
                     <GroupWorkspace groupId={params.groupId} view={params.view} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
@@ -440,7 +464,7 @@ export function PortalShell() {
               <Route
                 path="/groups/:groupId/:view?"
                 component={({ params }: { params: { groupId: string; view?: string } }) => (
-                  <SectionWrapper title="Group">
+                  <SectionWrapper>
                     <GroupWorkspace groupId={params.groupId} view={params.view} />
                   </SectionWrapper>
                 )}
@@ -492,6 +516,16 @@ export function PortalShell() {
                 component={() => (
                   <SectionWrapper title="My Application">
                     <MyApplications />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {portalSectionEnabled(session, "participation") && (
+              <Route
+                path="/participation"
+                component={() => (
+                  <SectionWrapper title="My participation">
+                    <Participation />
                   </SectionWrapper>
                 )}
               />

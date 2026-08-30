@@ -42,6 +42,7 @@ function authenticatedGroupDetail(group: Group): AuthenticatedGroup {
     ...publicGroupDetail(group),
     active: group.active,
     membershipCapacityCount: group.membershipCapacityCount,
+    representedMemberCount: group.representedMemberCount,
     participantCount: group.participantCount,
     childCount: group.childCount,
   };

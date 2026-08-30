@@ -151,4 +151,60 @@ describe("admin event general settings", () => {
     const withManage = eventDetailTabsForCapabilities(["manage"]).map(({ key }) => key);
     expect(withManage).toContain("registrations");
   });
+
+  it("replaces the General tab with a series-managed notice for a meeting-series event", async () => {
+    const seriesEvent = {
+      ...portalEvent,
+      seriesId: "60000000-0000-4000-8000-000000000001",
+      ownerGroupId: "20000000-0000-4000-8000-000000000001",
+    };
+    const container = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} />);
+    await settle();
+
+    expect(container.textContent).not.toContain("Event Name");
+    expect(container.textContent).toContain("managed by a meeting series");
+    const link = container.querySelector<HTMLAnchorElement>("a");
+    expect(link?.getAttribute("href")).toBe(
+      "#/groups/20000000-0000-4000-8000-000000000001/meetings/60000000-0000-4000-8000-000000000001",
+    );
+  });
+
+  it("explains an undetermined owning group instead of linking nowhere", async () => {
+    const seriesEvent = {
+      ...portalEvent,
+      seriesId: "60000000-0000-4000-8000-000000000001",
+      ownerGroupId: null,
+    };
+    const container = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} />);
+    await settle();
+
+    expect(container.textContent).toContain("could not be determined");
+    expect(container.querySelector("a")).toBeNull();
+  });
+
+  it("keeps sponsor tiers and team working for a meeting-series event", async () => {
+    const seriesEvent = {
+      ...portalEvent,
+      seriesId: "60000000-0000-4000-8000-000000000001",
+      ownerGroupId: "20000000-0000-4000-8000-000000000001",
+      capabilities: ["read", "manage"] as EventDetail["capabilities"],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ tiers: [] })),
+    );
+    const tiers = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} subTab="sponsor-tiers" />);
+    await settle();
+    await settle();
+    expect(tiers.textContent).toContain("attendee-data access in the portal");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ roles: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } })),
+    );
+    const team = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} subTab="team" />);
+    await settle();
+    await settle();
+    expect(team.textContent).toContain("Add team member");
+  });
 });

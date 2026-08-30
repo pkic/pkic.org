@@ -4,11 +4,14 @@ import {
   eventOccurrenceGuestResponseSchema,
   eventOccurrenceGuestsListResponseSchema,
   type EventOccurrence,
+  type EventOccurrenceGuest,
 } from "../../../../../shared/schemas/event-series";
 import type { EventInviteWindow } from "../../../../../shared/schemas/event-invite-validity";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { RowActions } from "../../../../components/RowActions";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
@@ -65,10 +68,21 @@ export function MeetingGuests({
     }
   }
 
-  async function revoke(guestId: string): Promise<void> {
-    if (!window.confirm("Revoke this guest and all active meeting access links?")) return;
+  async function revoke(guest: EventOccurrenceGuest): Promise<void> {
+    if (
+      !(await confirmAction({
+        title: `Revoke guest access for ${guest.name}?`,
+        body: "This removes their eligibility for this occurrence and any active meeting access links.",
+        consequences: [
+          "Existing meeting access links for them stop working immediately",
+          "They can be invited again later if needed",
+        ],
+        confirmLabel: "Revoke guest access",
+      }))
+    )
+      return;
     try {
-      await deleteJson(`${endpoint}/${encodeURIComponent(guestId)}`, successResponseSchema);
+      await deleteJson(`${endpoint}/${encodeURIComponent(guest.id)}`, successResponseSchema);
       toast("Guest access revoked", "success");
       await actions.current?.reload();
     } catch (caught) {
@@ -194,9 +208,10 @@ export function MeetingGuests({
             className: "text-end",
             cell: (guest) =>
               !guest.active ? null : (
-                <button type="button" class="btn btn-sm btn-outline-danger" onClick={() => void revoke(guest.id)}>
-                  Revoke
-                </button>
+                <RowActions
+                  label={`Actions for ${guest.name}`}
+                  actions={[{ key: "revoke", label: "Revoke", onSelect: () => void revoke(guest) }]}
+                />
               ),
           },
         ]}

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 const PERMISSIONS_API = "/api/v1/permissions";
 const ROLES_API = "/api/v1/roles";
@@ -31,12 +32,19 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await signInToPortal(page, e2eAdminEmail("portal-access-control"));
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("link", { name: "Access Control" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/grants$/);
+
+  // Tabs are URL-addressed — switching to Roles navigates to its canonical URL.
   await page.getByRole("tab", { name: "Roles" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles$/);
+
+  // Creation lives behind an explicit action, list-first — no inline create form.
+  await expect(page.getByText("New role", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "New role" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles\/new$/);
 
   const roleName = `e2e_access_${Date.now()}`;
-  const createCard = page
-    .getByText("Create a custom role", { exact: true })
-    .locator("..", { has: page.locator("form") });
+  const createCard = page.getByText("New role", { exact: true }).locator("..", { has: page.locator("form") });
   await createCard.getByLabel("Name").fill(roleName);
   await createCard.getByLabel("Description").fill("Temporary browser-test role");
 
@@ -46,22 +54,53 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await createCard.getByRole("button", { name: "Create role" }).click();
   expect((await createResponse).status()).toBe(201);
 
+  // Creation navigates straight into the new role's URL-addressed detail.
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: roleName })).toBeVisible();
+
+  // The role's edit is reachable from its detail, guarded by the shared PATCH contract.
+  await page.getByRole("button", { name: "Edit" }).click();
+  const editForm = page.locator("form", { has: page.getByRole("button", { name: "Save changes" }) });
+  await editForm.getByLabel("Description").fill("Updated browser-test role");
+  const updateResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) && response.request().method() === "PATCH",
+  );
+  await editForm.getByRole("button", { name: "Save changes" }).click();
+  expect((await updateResponse).status()).toBe(200);
+  await expect(page.getByText("Updated browser-test role", { exact: true })).toBeVisible();
+
+  // Assignees are visible on the same detail view, reachable without a separate destination.
+  await expect(page.getByText("Assignees", { exact: true })).toBeVisible();
+  await expect(page.getByText("No one holds this role", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "← All roles" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles$/);
+
   const roleRow = page.getByRole("row").filter({ has: page.getByText(roleName, { exact: true }) });
   await expect(roleRow).toBeVisible();
-  page.once("dialog", (dialog) => void dialog.accept());
   const deleteResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) && response.request().method() === "DELETE",
   );
-  await roleRow.getByRole("button", { name: "Delete" }).click();
+  await roleRow.getByRole("button", { name: "Row actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete role" }).click();
+  await acceptConfirmDialog(page, "Delete role");
   expect((await deleteResponse).status()).toBe(200);
   await expect(roleRow).toHaveCount(0);
 
+  // The former "Staff" tab is now labeled People, without renaming the
+  // underlying user_roles-backed schema fields it reads and writes.
+  await page.getByRole("tab", { name: "People" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/people$/);
+  await expect(page.getByText("Staff management", { exact: true })).toHaveCount(0);
+
   await page.goto("/portal/#/system/access-control");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control$/);
+  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/grants$/);
   await expect(page.getByRole("link", { name: "Access Control" })).toBeVisible();
 
   expect(permissionRequests).toEqual(expect.arrayContaining([`GET ${PERMISSIONS_API}/grants`, `GET ${ROLES_API}`]));
+  expect(permissionRequests.some((request) => request.startsWith(`PATCH ${ROLES_API}/`))).toBe(true);
   expect(retiredSystemRequests).toEqual([]);
   expect(removedAdminRequests).toEqual([]);
 });

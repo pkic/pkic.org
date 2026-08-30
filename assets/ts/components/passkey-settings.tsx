@@ -10,7 +10,9 @@ import {
 import { successResponseSchema } from "../../shared/schemas/api-common";
 import { deleteJson, getJson, postJson } from "../shared/api-client";
 import { formatDateTime, showToast } from "../shared/ui";
+import { confirmAction } from "./ConfirmDialog";
 import { ErrorAlert } from "./ErrorAlert";
+import { RowActions } from "./RowActions";
 import { Spinner } from "./Spinner";
 
 export function PasskeySettings({
@@ -71,7 +73,14 @@ export function PasskeySettings({
   }
 
   async function handleRemove(passkey: PasskeySummary) {
-    if (!confirm(`Remove passkey "${passkey.deviceName ?? "Unnamed passkey"}"?`)) return;
+    const deviceName = passkey.deviceName ?? "Unnamed passkey";
+    const confirmed = await confirmAction({
+      title: `Remove passkey "${deviceName}"?`,
+      consequences: ["You'll need another passkey or magic link to sign in with this device"],
+      confirmLabel: "Remove passkey",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try {
       await deleteJson(`/api/v1/auth/passkeys/${passkey.id}`, successResponseSchema);
       showToast(toastTargetId, "Passkey removed", "success");
@@ -113,7 +122,7 @@ export function PasskeySettings({
         )}
 
         {passkeys === null ? (
-          <Spinner />
+          <Spinner label="Loading passkeys…" />
         ) : (
           <table class="table table-sm table-hover mb-0">
             <thead class={tableHeaderClass || undefined}>
@@ -139,14 +148,11 @@ export function PasskeySettings({
                       {passkey.lastUsedAt ? formatDateTime(passkey.lastUsedAt) : <span class="text-muted">Never</span>}
                     </td>
                     <td class="small mono">{formatDateTime(passkey.createdAt)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline-danger"
-                        onClick={() => void handleRemove(passkey)}
-                      >
-                        Remove
-                      </button>
+                    <td class="text-end">
+                      <RowActions
+                        label={`Actions for ${passkey.deviceName ?? "Unnamed passkey"}`}
+                        actions={[{ key: "remove", label: "Remove", onSelect: () => void handleRemove(passkey) }]}
+                      />
                     </td>
                   </tr>
                 ))

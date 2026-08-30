@@ -6,6 +6,7 @@ import { UserMembershipPanel } from "../../assets/ts/member-flows/portal/section
 import { UserMembershipCard } from "../../assets/ts/member-flows/portal/sections/system-users/UserMembershipCard";
 import type { UserDetail, UserMembership } from "../../assets/ts/member-flows/portal/sections/system-users/model";
 import type { MembershipCategory } from "../../assets/shared/schemas/membership-categories";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 
 const mounted: HTMLElement[] = [];
 
@@ -124,5 +125,54 @@ describe("UserMembershipPanel", () => {
       category.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(requests[0]?.pathname).toBe("/api/v1/members/capacities/member-individual");
+  });
+
+  it("only removes a membership through the confirm dialog when the removal is confirmed", async () => {
+    const requests: Array<{ method: string; pathname: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          "https://app.test",
+        );
+        requests.push({ method: init?.method ?? "GET", pathname: url.pathname });
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const org = membership("member-org", "Organization A", "A", "pqc", "PQC Working Group");
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() =>
+      render(
+        <>
+          <ConfirmDialogHost />
+          <UserMembershipCard membership={org} onChanged={async () => {}} canManage />
+        </>,
+        container,
+      ),
+    );
+
+    function dialogButton(label: string): HTMLButtonElement {
+      const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+      if (!button) throw new Error(`missing button: ${label}`);
+      return button;
+    }
+
+    void act(() => dialogButton("Remove membership").click());
+    expect(container.textContent).toContain("Remove the membership for Organization A?");
+    void act(() => dialogButton("Cancel").click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(requests).toHaveLength(0);
+
+    void act(() => dialogButton("Remove membership").click());
+    await act(() => dialogButton("Remove membership").click());
+    expect(requests[0]).toMatchObject({ method: "DELETE", pathname: "/api/v1/members/capacities/member-org" });
   });
 });

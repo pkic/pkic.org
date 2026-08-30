@@ -4,7 +4,11 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
-import { GroupEventDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupEventDetail";
+import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", vi.fn()],
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -142,7 +146,7 @@ describe("event email campaign UI", () => {
       proposalAccess: null,
       capabilities: ["view"],
     };
-    const container = mount(<GroupEventDetail event={event} groupId={GROUP_ID} />);
+    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="communications" />);
     expect(container.textContent).not.toContain("Email campaigns");
   });
 });

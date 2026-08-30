@@ -1,18 +1,16 @@
 import { Link } from "wouter";
 import { AnalyticsOverview } from "./AnalyticsOverview";
-import { DonationAnalytics } from "./DonationAnalytics";
 import { RegistrationAnalytics } from "./RegistrationAnalytics";
 
-type AnalyticsTab = "overview" | "registrations" | "donations";
+type AnalyticsTab = "overview" | "registrations";
 
 const TABS: Array<{ key: AnalyticsTab; label: string; path: string }> = [
   { key: "overview", label: "Overview", path: "/system/analytics" },
   { key: "registrations", label: "Registrations", path: "/system/analytics/registrations" },
-  { key: "donations", label: "Donations", path: "/system/analytics/donations" },
 ];
 
 export function SystemAnalytics({ initialTab }: { initialTab?: string }) {
-  const tab: AnalyticsTab = initialTab === "registrations" || initialTab === "donations" ? initialTab : "overview";
+  const tab: AnalyticsTab = initialTab === "registrations" ? initialTab : "overview";
 
   return (
     <section aria-labelledby="system-analytics-heading">
@@ -31,13 +29,7 @@ export function SystemAnalytics({ initialTab }: { initialTab?: string }) {
           </Link>
         ))}
       </nav>
-      {tab === "overview" ? (
-        <AnalyticsOverview />
-      ) : tab === "registrations" ? (
-        <RegistrationAnalytics />
-      ) : (
-        <DonationAnalytics />
-      )}
+      {tab === "overview" ? <AnalyticsOverview /> : <RegistrationAnalytics />}
     </section>
   );
 }

@@ -3,7 +3,9 @@ import {
   groupLeadershipListResponseSchema,
   type GroupLeadershipAssignment,
 } from "../../../../../shared/schemas/groups";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { RowActions } from "../../../../components/RowActions";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson } from "../../../../shared/api-client";
@@ -21,7 +23,15 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
 
   async function revoke(assignment: GroupLeadershipAssignment): Promise<void> {
     if (assignment.inherited) return;
-    if (!confirm(`Remove ${assignment.userName} as ${GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId].toLowerCase()}?`))
+    const roleLabel = GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId].toLowerCase();
+    if (
+      !(await confirmAction({
+        title: `Remove ${assignment.userName} as ${roleLabel}?`,
+        body: "This removes only this local assignment; leadership inherited from a parent group is not affected.",
+        consequences: [`${assignment.userName} immediately loses ${roleLabel} authority in this group`],
+        confirmLabel: "Remove from role",
+      }))
+    )
       return;
     setRevokingId(assignment.userRoleId);
     setMutationError(null);
@@ -40,7 +50,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
     }
   }
 
-  if (leadership.loading && !leadership.data) return <Spinner />;
+  if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
 
   return (
     <div class="card border-0 shadow-sm">
@@ -77,14 +87,17 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
                 </div>
               </div>
               {!assignment.inherited && (
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger"
-                  disabled={revokingId !== null}
-                  onClick={() => void revoke(assignment)}
-                >
-                  {revokingId === assignment.userRoleId ? "Removing…" : "Remove"}
-                </button>
+                <RowActions
+                  label={`Actions for ${assignment.userName}`}
+                  actions={[
+                    {
+                      key: "remove",
+                      label: revokingId === assignment.userRoleId ? "Removing…" : "Remove",
+                      onSelect: () => void revoke(assignment),
+                      disabled: revokingId !== null,
+                    },
+                  ]}
+                />
               )}
             </div>
           ))}

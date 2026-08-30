@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
 import { ApplicationsList } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000201";
 const NOW = "2026-08-27T12:00:00.000Z";
@@ -177,5 +178,65 @@ describe("portal membership-application management", () => {
     expect(page.textContent).toContain("Add internal note");
     expect(page.textContent).toContain("staff override");
     expect([...page.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Edit")).toBe(true);
+  });
+
+  it("only approves an application through the confirm dialog when the approval is confirmed", async () => {
+    const requests: Array<{ method: string; pathname: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        requests.push({ method, pathname: url.pathname });
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        if (url.pathname.endsWith("/approve") && method === "POST") {
+          return json({ success: true, memberId: "member-1" });
+        }
+        return json(detail);
+      }),
+    );
+
+    const page = mount(
+      <>
+        <ConfirmDialogHost />
+        <ApplicationDetailView
+          applicationId={APPLICATION_ID}
+          categories={categories}
+          canWrite
+          canApprove
+          onBack={vi.fn()}
+        />
+      </>,
+    );
+    await settle();
+
+    function dialogButton(label: string): HTMLButtonElement {
+      const button = [...page.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+      if (!button) throw new Error(`missing button: ${label}`);
+      return button;
+    }
+
+    await act(() => dialogButton("Approve & run onboarding").click());
+    expect(page.textContent).toContain("Approve Example Applicant's application and run onboarding?");
+
+    // Cancel: no approve request is sent.
+    await act(() => dialogButton("Cancel").click());
+    await settle();
+    expect(requests.some((r) => r.pathname.endsWith("/approve"))).toBe(false);
+
+    // Confirm: the dialog's own button runs the approval.
+    await act(() => dialogButton("Approve & run onboarding").click());
+    await act(() => dialogButton("Approve & run onboarding").click());
+    await settle();
+    const approveRequest = requests.find((r) => r.pathname.endsWith("/approve"));
+    expect(approveRequest).toMatchObject({
+      method: "POST",
+      pathname: `/api/v1/members/applications/${APPLICATION_ID}/approve`,
+    });
   });
 });

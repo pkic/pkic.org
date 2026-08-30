@@ -17,7 +17,9 @@ import {
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import type { Group } from "../../../../../shared/schemas/groups";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { RowActions } from "../../../../components/RowActions";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { postJson, deleteJson } from "../../../../shared/api-client";
 import { managedGroupCatalog } from "./catalog";
@@ -122,7 +124,16 @@ export function ResourceSharingEditor({
   }
 
   async function revokeGrant(grant: ResourceGrant): Promise<void> {
-    if (!window.confirm(`Revoke ${capabilityLabel(grant.capability)} access for ${grant.granteeGroup.name}?`)) return;
+    const capability = capabilityLabel(grant.capability);
+    if (
+      !(await confirmAction({
+        title: `Revoke ${capability} access for ${grant.granteeGroup.name}?`,
+        body: `This removes ${grant.granteeGroup.name}'s ability to ${capability} this ${resourceLabel}.`,
+        consequences: [`Members of ${grant.granteeGroup.name} immediately lose this access`],
+        confirmLabel: "Revoke access",
+      }))
+    )
+      return;
     setError(null);
     setSaved(false);
     try {
@@ -206,9 +217,10 @@ export function ResourceSharingEditor({
               header: "",
               className: "text-end",
               cell: (grant) => (
-                <button type="button" class="btn btn-sm btn-outline-danger" onClick={() => void revokeGrant(grant)}>
-                  Revoke
-                </button>
+                <RowActions
+                  label={`Actions for ${grant.granteeGroup.name}`}
+                  actions={[{ key: "revoke", label: "Revoke", onSelect: () => void revokeGrant(grant) }]}
+                />
               ),
             },
           ]}

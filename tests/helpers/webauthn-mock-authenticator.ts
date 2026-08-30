@@ -121,10 +121,10 @@ interface MockRegistrationResponse {
 
 export async function buildRegistrationResponse(
   authenticator: MockAuthenticator,
-  opts: { challenge: string; rpId: string; origin: string },
+  opts: { challenge: string; rpId: string; origin: string; userVerified?: boolean },
 ): Promise<MockRegistrationResponse> {
   const rpIdHash = await sha256(encodeUtf8(opts.rpId));
-  const flags = new Uint8Array([0x45]) as Bytes; // UP | UV | AT (attested credential data present)
+  const flags = new Uint8Array([opts.userVerified === false ? 0x41 : 0x45]) as Bytes; // UP | AT, optionally UV
   const authData = bytes(
     isoUint8Array.concat([
       rpIdHash,
@@ -179,10 +179,17 @@ interface MockAuthenticationResponse {
 
 export async function buildAuthenticationResponse(
   authenticator: MockAuthenticator,
-  opts: { challenge: string; rpId: string; origin: string; signCount: number; userHandle?: Bytes },
+  opts: {
+    challenge: string;
+    rpId: string;
+    origin: string;
+    signCount: number;
+    userHandle?: Bytes;
+    userVerified?: boolean;
+  },
 ): Promise<MockAuthenticationResponse> {
   const rpIdHash = await sha256(encodeUtf8(opts.rpId));
-  const flags = new Uint8Array([0x05]) as Bytes; // UP | UV, no attested credential data
+  const flags = new Uint8Array([opts.userVerified === false ? 0x01 : 0x05]) as Bytes; // UP, optionally UV
   const authenticatorData = bytes(isoUint8Array.concat([rpIdHash, flags, u32be(opts.signCount)]));
 
   const clientDataJSON = encodeUtf8(

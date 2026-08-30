@@ -4,12 +4,15 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { myProfileSchema } from "../../assets/shared/schemas/me";
 import { organizationRepresentativesListResponseSchema } from "../../assets/shared/schemas/organization-representation";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { MyProfile } from "../../assets/ts/member-flows/portal/sections/MyProfile";
 import { profile } from "../../assets/ts/member-flows/portal/state";
 
 vi.mock("../../assets/ts/member-flows/shared/headshot/AdminHeadshotManager", () => ({
   AdminHeadshotManager: () => <div>Headshot</div>,
 }));
+
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/profile", vi.fn()] }));
 
 const organizationId = "00000000-0000-4000-8000-000000000010";
 const contactUserId = "00000000-0000-4000-8000-000000000011";
@@ -92,6 +95,7 @@ function representativePage() {
     userId,
     userName,
     email,
+    headshotUrl: null,
     source: "organization_contact" as const,
     showOnOrganizationProfile,
     joinedAt: now,
@@ -192,10 +196,6 @@ describe("portal organization-contact representative controls", () => {
     const requests: Array<{ url: URL; method: string; body: unknown }> = [];
     let refreshed = currentProfile(true);
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = input instanceof Request ? input : undefined;
@@ -218,46 +218,63 @@ describe("portal organization-contact representative controls", () => {
       }),
     );
     profile.value = refreshed;
-    void act(() => render(<MyProfile />, container));
+    void act(() =>
+      render(
+        <>
+          <ConfirmDialogHost />
+          <MyProfile />
+        </>,
+        container,
+      ),
+    );
     await settle();
 
-    const visibility = await waitForElement(() =>
-      container.querySelector<HTMLInputElement>('[aria-label="Show Coworker Person on organization profile"]'),
-    );
-    expect(
-      Array.from(container.querySelectorAll("button")).filter((button) => button.textContent === "Block"),
-    ).toHaveLength(1);
+    expect(container.querySelectorAll('[aria-label="Actions for Coworker Person"]')).toHaveLength(1);
     expect(container.textContent).toContain("Blocked Person");
-    expect(container.textContent).toContain("Restore");
+    expect(container.textContent).toContain("Removed — blocked from re-adding");
 
-    await act(async () => {
-      visibility!.checked = true;
-      visibility!.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    async function openMenu(name: string): Promise<void> {
+      const trigger = await waitForElement(() =>
+        container.querySelector<HTMLButtonElement>(`[aria-label="Actions for ${name}"]:not(:disabled)`),
+      );
+      await act(async () => trigger!.click());
+    }
+
+    async function clickMenuItem(label: string): Promise<void> {
+      const item = await waitForElement(
+        () =>
+          Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+            (button) => button.textContent?.trim() === label,
+          ) ?? null,
+      );
+      await act(async () => item!.click());
+    }
+
+    async function acceptConfirmDialog(confirmLabel: string): Promise<void> {
+      const dialog = await waitForElement(() => container.querySelector('[role="alertdialog"]'));
+      const confirmButton = Array.from(dialog!.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent === confirmLabel,
+      );
+      if (!confirmButton) throw new Error(`missing confirm dialog button: ${confirmLabel}`);
+      await act(async () => confirmButton.click());
+    }
+
+    await openMenu("Coworker Person");
+    await clickMenuItem("Show on profile");
     await waitForCondition(
       () => requests.filter((request) => request.url.pathname === "/api/v1/users/current").length === 1,
     );
 
-    const block = await waitForElement(() =>
-      container.querySelector<HTMLButtonElement>(
-        '[aria-label="Block Coworker Person as representative"]:not(:disabled)',
-      ),
-    );
-    await act(async () => {
-      block!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await openMenu("Coworker Person");
+    await clickMenuItem("Remove from organization");
+    await acceptConfirmDialog("Remove from organization");
     await waitForCondition(
       () => requests.filter((request) => request.url.pathname === "/api/v1/users/current").length === 2,
     );
 
-    const restore = await waitForElement(() =>
-      container.querySelector<HTMLButtonElement>(
-        '[aria-label="Restore Blocked Person as representative"]:not(:disabled)',
-      ),
-    );
-    await act(async () => {
-      restore!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await openMenu("Blocked Person");
+    await clickMenuItem("Restore");
+    await acceptConfirmDialog("Restore representative");
     await waitForCondition(
       () => requests.filter((request) => request.url.pathname === "/api/v1/users/current").length === 3,
     );
@@ -288,6 +305,6 @@ describe("portal organization-contact representative controls", () => {
     );
     expect(requests.some((request) => request.url.pathname.startsWith("/api/v1/admin/organizations"))).toBe(false);
     expect(requests.filter((request) => request.url.pathname === "/api/v1/users/current")).toHaveLength(3);
-    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 });

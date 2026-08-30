@@ -34,6 +34,7 @@ describe("access-control role id response contracts", () => {
       isSystemRole: true,
       permissions: ["admin:read"],
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
     expect(result.success).toBe(true);
   });

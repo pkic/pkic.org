@@ -380,6 +380,23 @@ export async function getFormDefinitionByPlacement(
   return loadFormDefinition(db, placement ? { form: row, placement } : null, options);
 }
 
+/**
+ * One form by id, with no placement.
+ *
+ * A vote-owned consultation form is not placed on an event or an
+ * installation: the vote itself is the context. Everything else about it is an
+ * ordinary form, so it resolves through the same projection rather than a
+ * second one that would drift from it.
+ */
+export async function getActiveFormById(db: DatabaseLike, formId: string): Promise<ActiveFormDefinition | null> {
+  const row = await first<FormRow & { updated_at: string }>(
+    db,
+    `SELECT ${FORM_COLUMNS}, updated_at FROM forms WHERE id = ? AND status = 'active'`,
+    [formId],
+  );
+  return loadFormDefinition(db, row ? { form: row, placement: null } : null);
+}
+
 export async function getActiveFormByPurpose(
   db: DatabaseLike,
   eventId: string,

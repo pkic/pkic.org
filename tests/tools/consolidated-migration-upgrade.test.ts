@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const MIGRATIONS_DIR = path.join(ROOT, "migrations");
@@ -217,6 +218,8 @@ describe("consolidated pending migration upgrade", () => {
     expect(migrationSql).not.toMatch(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:members|organizations)\b/i);
     expect(migrationSql).not.toMatch(/ALTER\s+TABLE\s+(?:members|organizations)\s+RENAME\b/i);
     db.exec(migrationSql);
+    const userMagicLinkBaseline = DEFAULT_TEMPLATES.find((template) => template.key === "user_magic_link");
+    expect(userMagicLinkBaseline).toBeDefined();
 
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
@@ -239,15 +242,23 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db
         .prepare(
-          `SELECT template_key, status
+          `SELECT template_key, status, body
              FROM email_template_versions
             WHERE template_key IN ('admin_magic_link', 'user_magic_link')
             ORDER BY template_key`,
         )
         .all(),
     ).toEqual([
-      { template_key: "admin_magic_link", status: "archived" },
-      { template_key: "user_magic_link", status: "active" },
+      {
+        template_key: "admin_magic_link",
+        status: "archived",
+        body: expect.any(String),
+      },
+      {
+        template_key: "user_magic_link",
+        status: "active",
+        body: userMagicLinkBaseline!.content.trimEnd(),
+      },
     ]);
     expect(() =>
       db!.exec(

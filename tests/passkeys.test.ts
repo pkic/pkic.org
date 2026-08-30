@@ -79,7 +79,12 @@ async function addActiveIndividualMembership(userId: string): Promise<void> {
 }
 
 interface BeginResponse {
-  options: { challenge: string; rp?: { id?: string } };
+  options: {
+    challenge: string;
+    rp?: { id?: string };
+    authenticatorSelection?: { residentKey?: string; userVerification?: string };
+    userVerification?: string;
+  };
   challengeToken: string;
 }
 
@@ -135,6 +140,8 @@ describe("passkeys (WebAuthn)", () => {
     const body = (await response.json()) as BeginResponse;
     expect(body.options.challenge).toBeTruthy();
     expect(body.options.rp?.id).toBe(RP_ID);
+    expect(body.options.authenticatorSelection?.residentKey).toBe("required");
+    expect(body.options.authenticatorSelection?.userVerification).toBe("required");
     expect(body.challengeToken).toBeTruthy();
   });
 
@@ -256,7 +263,33 @@ describe("passkeys (WebAuthn)", () => {
   it("GET authenticate/begin returns a valid challenge, no auth required", async () => {
     const begin = await beginAuthentication();
     expect(begin.options.challenge).toBeTruthy();
+    expect(begin.options.userVerification).toBe("required");
     expect(begin.challengeToken).toBeTruthy();
+  });
+
+  it("rejects an assertion when the authenticator did not verify its user", async () => {
+    const { authenticator } = await registerPasskey("Security key");
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+      userVerified: false,
+    });
+
+    const response = await call("/api/v1/auth/passkeys/authenticate/complete", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "PASSKEY_CREDENTIAL_INVALID",
+        message: "User verification required, but user could not be verified",
+      },
+    });
   });
 
   it("POST authenticate/complete with a valid signed assertion creates a session; a replayed assertion (sign_count not incremented) -> 400", async () => {

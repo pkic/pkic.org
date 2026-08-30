@@ -31,6 +31,7 @@ export function parseArgs(argv, root) {
     dryRun: false,
     uploadLogos: true,
     logoBucket: null,
+    logoConcurrency: 4,
     outDir: path.join(root, "ignore"),
   };
 
@@ -55,6 +56,9 @@ export function parseArgs(argv, root) {
     else if (arg === "--logo-bucket" && next) {
       parsed.logoBucket = next;
       i += 1;
+    } else if (arg === "--logo-concurrency" && next) {
+      parsed.logoConcurrency = Number(next);
+      i += 1;
     } else if (arg === "--out" && next) {
       parsed.outDir = path.isAbsolute(next) ? next : path.join(root, next);
       i += 1;
@@ -67,6 +71,10 @@ export function parseArgs(argv, root) {
   }
   parsed.env = parsed.env ?? "local";
   parsed.logoBucket = parsed.logoBucket ?? LOGO_BUCKET_BY_ENV[parsed.env];
+  if (!Number.isInteger(parsed.logoConcurrency) || parsed.logoConcurrency < 1 || parsed.logoConcurrency > 16) {
+    console.error("--logo-concurrency must be an integer from 1 through 16.");
+    process.exit(1);
+  }
 
   return parsed;
 }

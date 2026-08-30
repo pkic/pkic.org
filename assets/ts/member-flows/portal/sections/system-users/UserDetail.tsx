@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { deleteJson, getJson, postJson, requestJson } from "../../../../shared/api-client";
 import { confirmHeadshotUsage } from "../../../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
@@ -87,8 +88,19 @@ export function UserDetail({
   }
 
   async function anonymize() {
-    if (!user || !confirm(`Anonymize ${user.email}? This permanently removes personal data and revokes access.`))
-      return;
+    if (!user) return;
+    const confirmed = await confirmAction({
+      title: `Anonymize ${user.email}?`,
+      body: "This is permanent and cannot be undone.",
+      consequences: [
+        "Their name, email, biography, links, and headshot are permanently erased",
+        "Their sign-in access is revoked immediately",
+        "Their membership and event history records are kept, but no longer identify them",
+      ],
+      confirmLabel: "Anonymize user",
+      typedConfirmation: user.email,
+    });
+    if (!confirmed) return;
     setAnonymizing(true);
     try {
       await postJson(`/api/v1/users/${encodeURIComponent(user.id)}/anonymize`, {}, userAnonymizeResponseSchema);
@@ -104,7 +116,7 @@ export function UserDetail({
   if (!permissions.canRead) {
     return <ErrorAlert error="You need Users read permission to open a user record." />;
   }
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading user…" />;
   if (error) return <ErrorAlert error={error} />;
   if (!user) return null;
 

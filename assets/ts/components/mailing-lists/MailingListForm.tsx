@@ -1,5 +1,23 @@
-import { MAILING_LIST_PURPOSES, MAILING_LIST_SUBSCRIPTION_DEFAULTS } from "../../../shared/schemas/mailing-lists";
+import {
+  MAILING_LIST_MODERATION_POLICIES,
+  MAILING_LIST_MODERATION_POLICY_LABELS,
+  MAILING_LIST_POSTING_POLICIES,
+  MAILING_LIST_POSTING_POLICY_LABELS,
+  MAILING_LIST_PURPOSES,
+  MAILING_LIST_SUBSCRIPTION_DEFAULTS,
+} from "../../../shared/schemas/mailing-lists";
+import { EnumSelect } from "../EnumSelect";
+import { MembershipCategoryPicker } from "../MembershipCategoryPicker";
 import type { MailingListDraft } from "./model";
+
+const POSTING_POLICY_OPTIONS = MAILING_LIST_POSTING_POLICIES.map((value) => ({
+  value,
+  label: MAILING_LIST_POSTING_POLICY_LABELS[value],
+}));
+const MODERATION_POLICY_OPTIONS = MAILING_LIST_MODERATION_POLICIES.map((value) => ({
+  value,
+  label: MAILING_LIST_MODERATION_POLICY_LABELS[value],
+}));
 
 export interface MailingListFormProps {
   draft: MailingListDraft;
@@ -83,39 +101,31 @@ export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: 
         </select>
       </div>
       <div class="col-sm-3">
-        <label class="form-label small" htmlFor={`${idPrefix}-posting-policy`}>
-          Posting policy
-        </label>
-        <input
+        <EnumSelect
           id={`${idPrefix}-posting-policy`}
-          class="form-control form-control-sm"
+          label="Posting policy"
           value={draft.postingPolicy}
+          options={POSTING_POLICY_OPTIONS}
           required
-          onInput={(event) => onChange({ postingPolicy: (event.target as HTMLInputElement).value })}
+          onChange={(value) => onChange({ postingPolicy: value })}
         />
       </div>
       <div class="col-sm-3">
-        <label class="form-label small" htmlFor={`${idPrefix}-moderation-policy`}>
-          Moderation policy
-        </label>
-        <input
+        <EnumSelect
           id={`${idPrefix}-moderation-policy`}
-          class="form-control form-control-sm"
+          label="Moderation policy"
           value={draft.moderationPolicy}
+          options={MODERATION_POLICY_OPTIONS}
           required
-          onInput={(event) => onChange({ moderationPolicy: (event.target as HTMLInputElement).value })}
+          onChange={(value) => onChange({ moderationPolicy: value })}
         />
       </div>
-      <div class="col-sm-3">
-        <label class="form-label small" htmlFor={`${idPrefix}-auto-sync-categories`}>
-          Auto-sync categories
-        </label>
-        <input
-          id={`${idPrefix}-auto-sync-categories`}
-          class="form-control form-control-sm"
-          placeholder="A,B,C (blank = all)"
-          value={draft.autoSyncCategories}
-          onInput={(event) => onChange({ autoSyncCategories: (event.target as HTMLInputElement).value })}
+      <div class="col-sm-6">
+        <MembershipCategoryPicker
+          idPrefix={`${idPrefix}-auto-sync-categories`}
+          label="Auto-sync categories"
+          selected={draft.autoSyncCategories}
+          onChange={(next) => onChange({ autoSyncCategories: next })}
         />
       </div>
       <div class="col-sm-3 d-flex align-items-end gap-3">

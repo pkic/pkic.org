@@ -1,6 +1,7 @@
 import type { MemberVote } from "../../types";
 import { isElectionResult, isMotionResult } from "./shared";
 import { BallotForm } from "./BallotForm";
+import { ConsultationResponseForm } from "./ConsultationForm";
 import { MotionResultView, ElectionResultView } from "./VoteResults";
 
 export function VoteDetails({
@@ -29,13 +30,23 @@ export function VoteDetails({
                   {ballot.hasCastBallot ? "Ballot recorded" : "Not yet voted"}
                 </span>
               </div>
-              <BallotForm
-                vote={vote}
-                memberId={ballot.memberId}
-                hasCastBallot={ballot.hasCastBallot}
-                endpoint={ballotEndpoint}
-                onCast={onChanged}
-              />
+              {vote.questionForm ? (
+                <ConsultationResponseForm
+                  form={vote.questionForm}
+                  memberId={ballot.memberId}
+                  hasResponded={ballot.hasCastBallot}
+                  endpoint={`${ballotEndpoint.replace(/\/ballots$/, "")}/responses`}
+                  onResponded={onChanged}
+                />
+              ) : (
+                <BallotForm
+                  vote={vote}
+                  memberId={ballot.memberId}
+                  hasCastBallot={ballot.hasCastBallot}
+                  endpoint={ballotEndpoint}
+                  onCast={onChanged}
+                />
+              )}
             </div>
           ))}
           {(vote.memberBallots ?? []).length === 0 && (
@@ -49,7 +60,16 @@ export function VoteDetails({
         (vote.canCastBallot ? (
           <div>
             {vote.hasCastBallot && <p class="text-muted small">You may update your ballot until voting closes.</p>}
-            <BallotForm vote={vote} hasCastBallot={vote.hasCastBallot} endpoint={ballotEndpoint} onCast={onChanged} />
+            {vote.questionForm ? (
+              <ConsultationResponseForm
+                form={vote.questionForm}
+                hasResponded={vote.hasCastBallot}
+                endpoint={`${ballotEndpoint.replace(/\/ballots$/, "")}/responses`}
+                onResponded={onChanged}
+              />
+            ) : (
+              <BallotForm vote={vote} hasCastBallot={vote.hasCastBallot} endpoint={ballotEndpoint} onCast={onChanged} />
+            )}
           </div>
         ) : (
           <p class="text-muted small mb-0">You are not eligible to vote through a participating group.</p>

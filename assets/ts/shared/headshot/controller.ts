@@ -74,6 +74,13 @@ export function wireHeadshotController(options: HeadshotControllerOptions): void
 
   deleteButton?.addEventListener("click", () => {
     if (!options.deleteHeadshot) return;
+    // TODO(confirm-dialog): host not mounted on this surface. This controller is
+    // shared by public, unauthenticated token pages (assets/ts/event-flows/*)
+    // that never render <ConfirmDialogHost/>, alongside portal pages that do.
+    // Swapping to confirmAction() here would leave the promise unresolved (and
+    // the delete permanently blocked) on every surface without the host, so the
+    // native dialog stays until every caller of wireHeadshotController is
+    // guaranteed to run inside a page that mounts the host.
     if (options.confirmDeleteMessage && !confirm(options.confirmDeleteMessage)) return;
     void removeHeadshot();
   });

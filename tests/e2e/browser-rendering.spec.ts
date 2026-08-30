@@ -1452,7 +1452,7 @@ test.describe("browser workflows", () => {
     await screenshot("05-presentation-uploaded");
 
     // ── 6. Admin views the Presentation tab and submits a review ──────────────
-    await page.goto(`/portal/#/events/pqc-conference-amsterdam-nl/proposals/${proposalId}`);
+    await page.goto(`/portal/#/events/pqc-conference-amsterdam-nl/proposals/detail/${proposalId}`);
     await expect(page.getByRole("heading", { name: /Operational Trust in a Post-Quantum Transition/i })).toBeVisible({
       timeout: 15_000,
     });

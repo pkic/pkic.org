@@ -2,6 +2,8 @@ import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { RowActions } from "../../../../components/RowActions";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
@@ -249,7 +251,12 @@ function PositionRow({
   }
 
   async function remove() {
-    if (!confirm(`Remove ${position.name} (${position.title})?`)) return;
+    const confirmed = await confirmAction({
+      title: `Remove ${position.name} (${position.title})?`,
+      consequences: [`${position.name} no longer appears in this list of leadership positions`],
+      confirmLabel: "Remove position",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await deleteJson(`${API_BASE}/${encodeURIComponent(position.id)}`, successResponseSchema);
@@ -323,15 +330,15 @@ function PositionRow({
       <span class="text-muted small">
         {fmtDate(position.startsAt)} – {position.endsAt ? fmtDate(position.endsAt) : "present"}
       </span>
-      {canGrant && (
-        <button class="btn btn-sm btn-outline-secondary" disabled={busy} onClick={startEdit}>
-          Edit
-        </button>
-      )}
-      {canRevoke && (
-        <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
-          Remove
-        </button>
+      {(canGrant || canRevoke) && (
+        <RowActions
+          actions={[
+            ...(canGrant ? [{ key: "edit", label: "Edit position", onSelect: startEdit, disabled: busy }] : []),
+            ...(canRevoke
+              ? [{ key: "remove", label: "Remove position", onSelect: () => void remove(), disabled: busy }]
+              : []),
+          ]}
+        />
       )}
     </div>
   );
@@ -378,7 +385,7 @@ export function LeadershipPositions({
         {loadError ? (
           <ErrorAlert error={loadError instanceof Error ? loadError : "Could not load leadership positions."} />
         ) : !currentPage.data || !pastPage.data ? (
-          <Spinner />
+          <Spinner label={`Loading ${label.toLowerCase()}…`} />
         ) : (
           <>
             <div class="d-flex flex-column gap-2">

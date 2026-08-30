@@ -500,6 +500,41 @@ test.describe("Portal management browser-verification pass", () => {
     expect(legacyRequests).toEqual([]);
   });
 
+  // Regression: `/events/:slug/proposals/:proposalId` used to sit ahead of
+  // `/events/:slug/:tab/:subTab` in the route Switch, so this sub-tab URL
+  // was captured as a proposal id and rendered "Proposal not found" instead
+  // of the Responses sub-tab. Detail URLs now live under a reserved
+  // `detail` segment (`/events/:slug/proposals/detail/:proposalId`).
+  test("event proposals: /proposals/responses renders the Responses sub-tab, not a proposal detail", async ({
+    page,
+  }) => {
+    const proposalDetailRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname === "/api/v1/proposals/responses") proposalDetailRequests.push(`${request.method()} ${pathname}`);
+    });
+
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/proposals/responses`);
+    await expect(page.getByRole("tab", { name: "Responses", exact: true })).toHaveAttribute("aria-selected", "true", {
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Proposal not found")).toHaveCount(0);
+    expect(proposalDetailRequests).toEqual([]);
+  });
+
+  // Same route-precedence regression for registrations: `/events/:slug/registrations/:registrationId`
+  // used to capture every Registrations sub-tab (responses, email, the
+  // attendance-change presets) as a registration id.
+  test("event registrations: /registrations/responses renders the Responses sub-tab, not a registration detail", async ({
+    page,
+  }) => {
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations/responses`);
+    await expect(page.getByRole("tab", { name: "Responses", exact: true })).toHaveAttribute("aria-selected", "true", {
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Registration not found")).toHaveCount(0);
+  });
+
   test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];

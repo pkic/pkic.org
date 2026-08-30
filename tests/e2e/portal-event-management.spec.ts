@@ -42,7 +42,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const row = page.getByRole("row").filter({ hasText: eventName });
   await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole("button", { name: "Details" }).click();
-  const detail = page.getByRole("region", { name: `${eventName} details` });
+  const detail = page.getByRole("region", { name: `${eventName} workspace` });
   await expect(detail.getByText("Amsterdam and online", { exact: true })).toBeVisible();
   await expect(detail.locator('a[href="https://example.test/portal-workshop"]')).toHaveAttribute(
     "href",
@@ -50,6 +50,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   );
   await expect(page.getByRole("link", { name: "Open registration" })).toHaveCount(0);
 
+  await detail.getByRole("tab", { name: "Communications" }).click();
   const communications = detail.locator("details").filter({ has: page.getByText("Email campaigns", { exact: true }) });
   await communications.getByText("Email campaigns", { exact: true }).click();
   await communications.getByPlaceholder("Email subject").fill("Workshop planning update");
@@ -65,6 +66,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await expect(communications.getByText("Email Preview", { exact: true })).toBeVisible();
   await expect(communications.getByText("0 recipients", { exact: true })).toBeVisible();
 
+  await detail.getByRole("tab", { name: "Settings" }).click();
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await registrationSetup.getByRole("button", { name: "Add attendee term" }).click();
   await registrationSetup.getByLabel("Key").fill("event-terms");
@@ -135,9 +137,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await editor.getByLabel("Peer invitation limit").fill("9");
   await editor.getByLabel("Location").fill("Rotterdam and online");
   await editor.getByRole("button", { name: "Save event" }).click();
-  await expect(
-    page.getByRole("region", { name: `${eventName} details` }).getByText("Rotterdam and online", { exact: true }),
-  ).toBeVisible();
+  await detail.getByRole("tab", { name: "Overview" }).click();
+  await expect(detail.getByText("Rotterdam and online", { exact: true })).toBeVisible();
 
   const stored = await page.evaluate(
     async ({ groupId, query }) => {

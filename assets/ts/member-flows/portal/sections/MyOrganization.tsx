@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { getJson, postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { confirmAction } from "../../../components/ConfirmDialog";
 import { Pager } from "../../../components/Pager";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { profile as profileSignal } from "../state";
@@ -169,7 +170,14 @@ function PendingReviewBanner({
   const fields = Object.entries(review.proposedChanges);
 
   async function withdraw(): Promise<void> {
-    if (!confirm("Withdraw this pending submission?")) return;
+    const confirmed = await confirmAction({
+      title: "Withdraw this pending submission?",
+      body: `Submitted ${fmt(review.submittedAt)}, still awaiting staff review.`,
+      consequences: ["The proposed changes are discarded", "You can submit new changes at any time"],
+      confirmLabel: "Withdraw submission",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await deleteJson(
@@ -391,7 +399,7 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
       <div class="card-header bg-white fw-semibold">Submission history</div>
       <div class="card-body">
         {history.loading ? (
-          <Spinner />
+          <Spinner label="Loading submission history…" />
         ) : history.error ? (
           <ErrorAlert
             error={history.error instanceof Error ? history.error.message : "Could not load submission history."}
@@ -458,7 +466,7 @@ export function MyOrganization({ organizationId: requestedOrganizationId }: { or
     void reload();
   }, [reload]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading your organization…" />;
   if (error) {
     return errorCode === "NO_ORGANIZATION" ? <div class="alert alert-info">{error}</div> : <ErrorAlert error={error} />;
   }

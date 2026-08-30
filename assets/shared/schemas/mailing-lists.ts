@@ -10,6 +10,32 @@ export const MAILING_LIST_PURPOSES = ["all_members", "consultation", "group", "c
 export const mailingListPurposeSchema = z.enum(MAILING_LIST_PURPOSES);
 export const MAILING_LIST_SUBSCRIPTION_DEFAULTS = ["group_members", "eligible_categories", "none"] as const;
 export const mailingListSubscriptionDefaultSchema = z.enum(MAILING_LIST_SUBSCRIPTION_DEFAULTS);
+
+/**
+ * Who may post to the list without the message being rejected outright.
+ * Previously an unconstrained 80-character string; the vocabulary below is
+ * the single source of truth so group-management UI can offer a select
+ * instead of free text.
+ */
+export const MAILING_LIST_POSTING_POLICIES = ["anyone", "members", "subscribers", "moderators"] as const;
+export const mailingListPostingPolicySchema = z.enum(MAILING_LIST_POSTING_POLICIES);
+export type MailingListPostingPolicy = z.infer<typeof mailingListPostingPolicySchema>;
+export const MAILING_LIST_POSTING_POLICY_LABELS = {
+  anyone: "Anyone can post",
+  members: "Group members only",
+  subscribers: "List subscribers only",
+  moderators: "Moderators only",
+} as const satisfies Record<MailingListPostingPolicy, string>;
+
+/** Whether posts are held for approval before delivery. */
+export const MAILING_LIST_MODERATION_POLICIES = ["unmoderated", "moderated", "new_members_moderated"] as const;
+export const mailingListModerationPolicySchema = z.enum(MAILING_LIST_MODERATION_POLICIES);
+export type MailingListModerationPolicy = z.infer<typeof mailingListModerationPolicySchema>;
+export const MAILING_LIST_MODERATION_POLICY_LABELS = {
+  unmoderated: "Unmoderated — posts are delivered immediately",
+  moderated: "Moderated — every post requires approval",
+  new_members_moderated: "New members moderated, existing members unmoderated",
+} as const satisfies Record<MailingListModerationPolicy, string>;
 export const mailingListPreferenceSchema = z.enum(["subscribed", "unsubscribed"]);
 export const mailingListPreferenceMutationSchema = z.object({
   preference: z.enum(["subscribed", "unsubscribed", "inherit"]),
@@ -24,8 +50,8 @@ export const mailingListSchema = z.object({
   groupId: groupIdSchema,
   primaryDiscussion: z.boolean(),
   subscriptionDefault: mailingListSubscriptionDefaultSchema,
-  postingPolicy: trimmedString(1, 80),
-  moderationPolicy: trimmedString(1, 80),
+  postingPolicy: mailingListPostingPolicySchema,
+  moderationPolicy: mailingListModerationPolicySchema,
   autoSyncCategories: membershipCategorySelectionSchema.nullable(),
   active: z.boolean(),
   archivedAt: z.string().nullable(),
@@ -51,8 +77,8 @@ const mailingListMutableFieldsSchema = z.object({
   purpose: mailingListPurposeSchema,
   primaryDiscussion: z.boolean().optional(),
   subscriptionDefault: mailingListSubscriptionDefaultSchema.optional(),
-  postingPolicy: trimmedString(1, 80).optional(),
-  moderationPolicy: trimmedString(1, 80).optional(),
+  postingPolicy: mailingListPostingPolicySchema.optional(),
+  moderationPolicy: mailingListModerationPolicySchema.optional(),
   autoSyncCategories: membershipCategorySelectionSchema.nullable().optional(),
   active: z.boolean().optional(),
 });

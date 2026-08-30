@@ -6,7 +6,7 @@ import { UsersList } from "../../assets/ts/member-flows/portal/sections/system-u
 
 const mounted: HTMLElement[] = [];
 
-function mount(canGrantAccess: boolean): HTMLElement {
+function mount(canGrantAccess: boolean, headshotUrl: string | null = null, onViewUser = vi.fn()): HTMLElement {
   vi.stubGlobal(
     "fetch",
     vi.fn(
@@ -23,6 +23,7 @@ function mount(canGrantAccess: boolean): HTMLElement {
                 role: "user",
                 active: 1,
                 created_at: "2026-01-01T00:00:00.000Z",
+                headshotUrl,
                 member_id: null,
                 member_category: null,
                 member_status: null,
@@ -43,7 +44,7 @@ function mount(canGrantAccess: boolean): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
-  void act(() => render(<UsersList canWrite canGrantAccess={canGrantAccess} onViewUser={vi.fn()} />, container));
+  void act(() => render(<UsersList canWrite canGrantAccess={canGrantAccess} onViewUser={onViewUser} />, container));
   return container;
 }
 
@@ -72,5 +73,31 @@ describe("portal System Users list permissions", () => {
     const container = mount(true);
     await settle();
     expect(container.querySelector(".adm-user-role-select")).not.toBeNull();
+  });
+
+  it("renders initials when a user has no headshot, and an image when one is set", async () => {
+    const container = mount(false, null);
+    await settle();
+    const avatar = container.querySelector(".portal-user-avatar");
+    expect(avatar?.querySelector("img")).toBeNull();
+    expect(avatar?.textContent).toBe("AL");
+
+    const withPhoto = mount(false, "/api/v1/users/00000000-0000-4000-8000-000000000001/headshots/photo.webp");
+    await settle();
+    const photoAvatar = withPhoto.querySelector(".portal-user-avatar img");
+    expect(photoAvatar).not.toBeNull();
+    expect(photoAvatar?.getAttribute("src")).toBe(
+      "/api/v1/users/00000000-0000-4000-8000-000000000001/headshots/photo.webp",
+    );
+  });
+
+  it("navigates to the user detail page when a row is clicked", async () => {
+    const onViewUser = vi.fn();
+    const container = mount(true, null, onViewUser);
+    await settle();
+    const row = container.querySelector<HTMLTableRowElement>(".adm-user-row");
+    expect(row).not.toBeNull();
+    row!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onViewUser).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
   });
 });

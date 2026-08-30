@@ -93,6 +93,7 @@ export function SystemManagement({
           <AccessControl
             canGrant={portalHasGlobalPermission(session, "access:grant")}
             canRevoke={portalHasGlobalPermission(session, "access:revoke")}
+            resourceId={resourceId}
           />
         ) : selected.path === "/system/leadership" ? (
           <Leadership

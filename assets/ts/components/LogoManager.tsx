@@ -1,4 +1,5 @@
 import { useRef, useState } from "preact/hooks";
+import { confirmAction } from "./ConfirmDialog";
 
 export interface LogoManagerProps {
   imageUrl: string | null;
@@ -35,7 +36,12 @@ export function LogoManager(props: LogoManagerProps) {
   }
 
   async function remove() {
-    if (!confirm(props.removeConfirmation)) return;
+    const confirmed = await confirmAction({
+      title: props.removeConfirmation,
+      confirmLabel: props.removeLabel,
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await props.onRemove();
@@ -68,7 +74,7 @@ export function LogoManager(props: LogoManagerProps) {
           }}
         />
         {props.imageUrl && (
-          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={remove}>
+          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
             {props.removeLabel}
           </button>
         )}

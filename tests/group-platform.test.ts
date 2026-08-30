@@ -28,6 +28,7 @@ import {
   revokeLocalGroupLeadership,
   updateGroup,
 } from "../functions/_lib/services/groups";
+import { getGroup } from "../functions/_lib/services/groups/read-model";
 import { queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
@@ -136,6 +137,12 @@ describe("group capacity membership", () => {
       new Set([memberAId, memberBId]),
     );
     expect(joined.group.id).toBe(group.id);
+
+    // One person acting for two Members: the counts must disagree on purpose.
+    const counted = await getGroup(env.DB, group.id);
+    expect(counted?.participantCount).toBe(1);
+    expect(counted?.membershipCapacityCount).toBe(2);
+    expect(counted?.representedMemberCount).toBe(2);
 
     await leaveGroup(env.DB, group.id, {
       actorUserId: userId,

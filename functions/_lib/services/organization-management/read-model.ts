@@ -20,6 +20,7 @@ import {
 import { primaryContactProjection, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
 import { nowIso } from "../../utils/time";
+import { publicUserHeadshotPath } from "../user-headshot";
 import type { DatabaseLike } from "../../types";
 
 export async function getOrgAggregate(
@@ -140,6 +141,7 @@ interface RepresentativeRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  headshot_r2_key: string | null;
   job_title: string | null;
   links_json: string | null;
   show_on_org_profile: number;
@@ -172,7 +174,8 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
 async function fetchRepresentatives(db: DatabaseLike, organizationId: string): Promise<RepresentativeRow[]> {
   return all<RepresentativeRow>(
     db,
-    `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name, u.email, u.job_title,
+    `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name, u.email,
+            u.headshot_r2_key, u.job_title,
             u.links_json,
             r.show_on_org_profile, r.created_at
      FROM organization_representatives r
@@ -210,6 +213,7 @@ async function toOrgDetail(
       userId: r.user_id,
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       email: r.email,
+      headshotUrl: publicUserHeadshotPath(r.headshot_r2_key),
       jobTitle: r.job_title,
       links: parseLinksJson(r.links_json),
       status: "active",

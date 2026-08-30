@@ -6,6 +6,7 @@ import {
   type EventAudienceDetail,
   type EventManagementSummary,
   type EventsListQuery,
+  type EventViewerState,
 } from "../../../../assets/shared/schemas/event-management";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
@@ -19,6 +20,7 @@ import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, type EventAudienceViewer } from "./visibility";
+import { fetchViewerEventState, fetchViewerEventStates } from "./viewer-state";
 
 interface EventAudienceRow {
   id: string;
@@ -32,13 +34,14 @@ interface EventAudienceRow {
   visibility: EventAudienceDetail["visibility"];
   settings_json: string;
   links_json: string | null;
+  base_path: string | null;
 }
 
 const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
-  event.visibility, event.settings_json, event.links_json`;
+  event.visibility, event.settings_json, event.links_json, event.base_path`;
 
-function mapEventAudience(row: EventAudienceRow): EventAudienceDetail {
+function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null): EventAudienceDetail {
   const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   return eventAudienceDetailSchema.parse({
     id: row.id,
@@ -53,6 +56,8 @@ function mapEventAudience(row: EventAudienceRow): EventAudienceDetail {
     accessLevel: row.visibility === "public" ? "public" : "participant",
     location: typeof settings.location === "string" ? settings.location : null,
     links: parseLinksJson(row.links_json),
+    basePath: row.base_path,
+    viewer,
   });
 }
 
@@ -119,13 +124,21 @@ function isAudienceSortColumn(sort: string): boolean {
 
 export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceViewer, query: EventsListQuery) {
   const page = await queryPage<EventAudienceRow>(db, buildEventsPageQuery(viewer, query));
-  return { events: page.rows.map(mapEventAudience), total: page.total };
+  const viewerStates = await fetchViewerEventStates(
+    db,
+    viewer.userId,
+    page.rows.map((row) => row.id),
+  );
+  return {
+    events: page.rows.map((row) => mapEventAudience(row, viewerStates.get(row.id) ?? null)),
+    total: page.total,
+  };
 }
 
 const EVENT_MANAGEMENT_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.source_mode, event.registration_mode,
-  event.visibility, event.invite_limit_attendee, event.owner_group_id, event.source_path,
-  event.base_path, event.updated_at`;
+  event.visibility, event.invite_limit_attendee, event.owner_group_id, owner_group.name AS owner_group_name,
+  event.source_path, event.base_path, event.updated_at`;
 
 interface EventManagementRow {
   id: string;
@@ -140,6 +153,7 @@ interface EventManagementRow {
   visibility: EventManagementSummary["visibility"];
   invite_limit_attendee: number;
   owner_group_id: string | null;
+  owner_group_name: string | null;
   source_path: string | null;
   base_path: string | null;
   updated_at: string;
@@ -155,6 +169,7 @@ export function buildManagedEventsPageQuery(viewer: EventAudienceViewer, query: 
   return {
     sql: `${EVENT_MANAGEMENT_SELECT}
       FROM events event
+      LEFT JOIN groups owner_group ON owner_group.id = event.owner_group_id
       WHERE ${whereSql}`,
     bindings,
     orderBy: resolveMappedOrderBy(
@@ -253,6 +268,7 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
       inviteLimitAttendee: row.invite_limit_attendee,
       updatedAt: row.updated_at,
       ownerGroupId: row.owner_group_id,
+      ownerGroupName: row.owner_group_name,
       sourcePath: row.source_path,
       basePath: row.base_path,
       totalRegistrations: statsByEvent.get(row.id)?.total_registrations ?? 0,
@@ -277,5 +293,6 @@ export async function getVisibleEventAudienceDetail(
     [eventSlug, ...audience.bindings],
   );
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
-  return mapEventAudience(row);
+  const viewerState = await fetchViewerEventState(db, viewer.userId, row.id);
+  return mapEventAudience(row, viewerState);
 }

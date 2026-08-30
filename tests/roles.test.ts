@@ -12,7 +12,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrgRepresentative, REPRESENTATIVE_ROLE_IDS } from "./helpers/membership";
-import { createRole, deleteRole } from "../functions/_lib/services/access-control/roles";
+import { createRole, deleteRole, updateRole } from "../functions/_lib/services/access-control/roles";
 import {
   assignUserRole,
   revokeUserRoleAssignment,
@@ -260,6 +260,143 @@ describe("roles (Built-in and custom roles)", () => {
       body: JSON.stringify({ name: "admin", permissions: [] }),
     });
     expect(response.status).toBe(409);
+  });
+
+  describe("PATCH /api/v1/roles/:id (role update)", () => {
+    it("updates a custom role's name, description, and permission bundle", async () => {
+      const createResponse = await call(adminToken, "/api/v1/roles", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "custom_editable",
+          description: "Before edit",
+          permissions: ["donations:read"],
+        }),
+      });
+      expect(createResponse.status).toBe(201);
+      const created = (await createResponse.json()) as { role: { id: string; updatedAt: string } };
+
+      const updateResponse = await call(adminToken, `/api/v1/roles/${created.role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: "custom_edited",
+          description: "After edit",
+          permissions: ["donations:read", "events:read"],
+          revision: created.role.updatedAt,
+        }),
+      });
+      expect(updateResponse.status, await updateResponse.clone().text()).toBe(200);
+      const updated = (await updateResponse.json()) as {
+        role: { name: string; description: string | null; permissions: string[]; updatedAt: string };
+      };
+      expect(updated.role).toMatchObject({ name: "custom_edited", description: "After edit" });
+      expect([...updated.role.permissions].sort()).toEqual(["donations:read", "events:read"]);
+      expect(updated.role.updatedAt).not.toBe(created.role.updatedAt);
+
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'role_updated' AND entity_id = ?", [
+          created.role.id,
+        ]),
+      ).toHaveLength(1);
+    });
+
+    it("rejects editing a system role", async () => {
+      const systemRole = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'admin'");
+      const response = await call(adminToken, `/api/v1/roles/${systemRole[0].id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description: "Should not apply", revision: "irrelevant" }),
+      });
+      expect(response.status).toBe(409);
+      expect((await response.json()) as { error: { code: string } }).toMatchObject({
+        error: { code: "SYSTEM_ROLE" },
+      });
+    });
+
+    it("rejects a stale revision without recording a false audit entry", async () => {
+      const createResponse = await call(adminToken, "/api/v1/roles", {
+        method: "POST",
+        body: JSON.stringify({ name: "custom_stale", permissions: [] }),
+      });
+      const created = (await createResponse.json()) as { role: { id: string; updatedAt: string } };
+      const staleRevision = created.role.updatedAt;
+
+      const firstUpdate = await call(adminToken, `/api/v1/roles/${created.role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description: "First edit", revision: staleRevision }),
+      });
+      expect(firstUpdate.status).toBe(200);
+
+      const staleUpdate = await call(adminToken, `/api/v1/roles/${created.role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description: "Second edit, stale", revision: staleRevision }),
+      });
+      expect(staleUpdate.status).toBe(409);
+      expect((await staleUpdate.json()) as { error: { code: string } }).toMatchObject({
+        error: { code: "ACCESS_CONTROL_TARGET_CHANGED" },
+      });
+
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'role_updated' AND entity_id = ?", [
+          created.role.id,
+        ]),
+      ).toHaveLength(1);
+      expect(
+        await queryAll<{ description: string | null }>(env.DB, "SELECT description FROM roles WHERE id = ?", [
+          created.role.id,
+        ]),
+      ).toEqual([{ description: "First edit" }]);
+    });
+
+    it("requires access:grant to update a role", async () => {
+      const createResponse = await call(adminToken, "/api/v1/roles", {
+        method: "POST",
+        body: JSON.stringify({ name: "custom_guarded", permissions: [] }),
+      });
+      const created = (await createResponse.json()) as { role: { id: string; updatedAt: string } };
+
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'access:revoke', ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, adminId)
+        .run();
+      const staffToken = await createAdminSession(env.DB, staffUserId, "staff-role-update-guard-token");
+
+      const response = await call(staffToken, `/api/v1/roles/${created.role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description: "Should be denied", revision: created.role.updatedAt }),
+      });
+      expect(response.status).toBe(403);
+    });
+
+    it("rolls back a role update when the actor loses authority before commit", async () => {
+      const actor: AuthAdmin = {
+        identityType: "user",
+        id: adminId,
+        email: "admin@pkic.org",
+        role: "admin",
+      };
+      const roleId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+           VALUES (?, ?, NULL, 0, ?, ?)`,
+      )
+        .bind(roleId, `racing_role_update_${crypto.randomUUID()}`, now, now)
+        .run();
+      const racingDb = mutateBeforeNextBatch(env.DB, () =>
+        env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      );
+
+      await expect(
+        updateRole(racingDb, actor, roleId, { description: "Racing edit", revision: now }),
+      ).rejects.toMatchObject({
+        status: 409,
+        code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+      });
+      expect(
+        await queryAll<{ description: string | null }>(env.DB, "SELECT description FROM roles WHERE id = ?", [roleId]),
+      ).toEqual([{ description: null }]);
+    });
   });
 
   it("system roles cannot be deleted; custom roles can be deleted if not assigned to any user", async () => {

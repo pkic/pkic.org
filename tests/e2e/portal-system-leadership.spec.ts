@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 const LEADERSHIP_API = "/api/v1/leadership/positions";
 const REMOVED_SYSTEM_LEADERSHIP_API = "/api/v1/system/leadership-positions";
@@ -50,12 +51,13 @@ test("permitted staff manage the public leadership roster through the System por
   const publicRoster = (await publicResponse.json()) as { current: Array<{ title: string }> };
   expect(publicRoster.current.some((entry) => entry.title === title)).toBe(true);
 
-  page.once("dialog", (dialog) => void dialog.accept());
   const deleteResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.startsWith(`${LEADERSHIP_API}/`) && response.request().method() === "DELETE",
   );
-  await position.getByRole("button", { name: "Remove" }).click();
+  await position.getByRole("button", { name: "Row actions" }).click();
+  await page.getByRole("menuitem", { name: "Remove position" }).click();
+  await acceptConfirmDialog(page, "Remove position");
   expect((await deleteResponse).status()).toBe(200);
   await expect(position).toHaveCount(0);
 

@@ -159,6 +159,8 @@ export const roleResponseSchema = z.object({
   isSystemRole: z.boolean(),
   permissions: z.array(permissionSchema),
   createdAt: z.string(),
+  /** `updated_at`; pass back as PATCH's `revision` to guard against a lost concurrent edit. */
+  updatedAt: z.string(),
 });
 export type Role = z.infer<typeof roleResponseSchema>;
 export const roleResponseEnvelopeSchema = z.object({
@@ -215,6 +217,56 @@ export const roleDeleteRouteSchema = {
     "404": { description: "Role not found." },
     "409": {
       description: "System roles and roles with assignment history cannot be deleted.",
+    },
+  },
+};
+
+export const roleGetRouteSchema = {
+  tags: ["Roles"],
+  summary: "Get a role",
+  "x-pkic-auth": { required: true, scopes: ["access:grant", "access:revoke"] },
+  request: { params: roleIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Role detail, including its current revision for editing.",
+      content: { "application/json": { schema: roleResponseEnvelopeSchema } },
+    },
+    "404": { description: "Role not found." },
+  },
+};
+
+export const roleUpdateSchema = z.object({
+  name: trimmedString(1, 80)
+    .regex(/^[a-z][a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only")
+    .optional(),
+  description: trimmedString(0, 400).nullable().optional(),
+  permissions: z.array(permissionSchema).max(64).optional(),
+  /** `updatedAt` from a prior GET; required to prevent lost concurrent edits. */
+  revision: z.string().min(1).max(64),
+});
+export type RoleUpdateInput = z.infer<typeof roleUpdateSchema>;
+
+export const roleUpdateRouteSchema = {
+  tags: ["Roles"],
+  summary: "Update a custom role",
+  description: "Updates a custom role's name, description, or bundled permissions. System roles cannot be edited.",
+  "x-pkic-auth": { required: true, scopes: ["access:grant"] },
+  request: {
+    params: roleIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: roleUpdateSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Role updated.",
+      content: { "application/json": { schema: roleResponseEnvelopeSchema } },
+    },
+    "404": { description: "Role not found." },
+    "409": {
+      description:
+        "System roles cannot be edited; a role with this name already exists; or the role changed concurrently.",
     },
   },
 };

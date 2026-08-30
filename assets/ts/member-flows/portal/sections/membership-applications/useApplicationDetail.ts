@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { toast } from "../../ui";
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import type { EcDecisionValue } from "../../../../../shared/schemas/ec-review";
@@ -105,7 +106,17 @@ export function useApplicationDetail(applicationId: string) {
   }
 
   async function approve() {
-    if (!confirm("Approve this application and run onboarding?")) return;
+    const applicantName = detail?.applicantName ?? "this applicant";
+    const confirmed = await confirmAction({
+      title: `Approve ${applicantName}'s application and run onboarding?`,
+      consequences: [
+        "The applicant becomes a member and receives their onboarding communication",
+        "Membership records and access are created for them immediately",
+      ],
+      confirmLabel: "Approve & run onboarding",
+      tone: "primary",
+    });
+    if (!confirmed) return;
     try {
       await postJson(`/api/v1/members/applications/${applicationId}/approve`, {}, applicationApproveResponseSchema);
       toast("Application approved", "success");

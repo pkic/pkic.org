@@ -7,10 +7,12 @@ const DONATION_ID = "70000000-0000-4000-8000-000000000001";
 test("permitted staff manage donations through the neutral resource API", async ({ page }) => {
   const canonicalRequests: string[] = [];
   const legacyRequests: string[] = [];
+  const analyticsRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.startsWith("/api/v1/donations")) canonicalRequests.push(`${request.method()} ${pathname}`);
     if (pathname.startsWith("/api/v1/admin/donations")) legacyRequests.push(`${request.method()} ${pathname}`);
+    if (pathname === "/api/v1/analytics/donations") analyticsRequests.push(pathname);
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-donations"));
@@ -30,6 +32,13 @@ test("permitted staff manage donations through the neutral resource API", async 
   await expect(page).toHaveURL(/\/portal\/#\/donations\/promoters$/);
   await expect(page.getByText("E2E Promoter", { exact: true })).toBeVisible();
 
+  // Donation analytics moved from System Analytics into a Stats tab here,
+  // alongside the domain that owns it (see portal-system-analytics.spec.ts,
+  // which confirms Donations no longer appears in System Analytics's tabs).
+  await page.getByRole("tab", { name: "Stats", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/donations\/stats$/);
+  await expect(page.getByText("Total Gross (USD)", { exact: true })).toBeVisible();
+
   await page.goto("/portal/#/donations");
   await expect(page).toHaveURL(/\/portal\/#\/donations$/);
   await expect(page.getByRole("cell", { name: /E2E Donor — Example Organization/ })).toBeVisible();
@@ -42,4 +51,5 @@ test("permitted staff manage donations through the neutral resource API", async 
     ]),
   );
   expect(legacyRequests).toEqual([]);
+  expect(analyticsRequests).toEqual(["/api/v1/analytics/donations"]);
 });

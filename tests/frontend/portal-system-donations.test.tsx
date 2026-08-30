@@ -10,6 +10,8 @@ import {
 } from "../../assets/shared/schemas/donation-management";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { DonationDetailPage } from "../../assets/ts/member-flows/portal/sections/system-donations/DonationDetailPage";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/donations", vi.fn()] }));
 
@@ -70,6 +72,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  portalSession.value = null;
 });
 
 describe("portal system donations", () => {
@@ -203,5 +206,67 @@ describe("portal system donations", () => {
     await settle();
     expect(requests.at(-1)?.pathname).toBe("/api/v1/donations/donation-1");
     expect(detail.textContent).toContain("Ada Lovelace");
+  });
+
+  it("renders the donation analytics on the Stats tab for a global analytics reader", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
+    });
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return new Response(
+          JSON.stringify({
+            generatedAt: "2026-08-28T12:00:00.000Z",
+            donations: {
+              byStatus: { completed: 1 },
+              byCurrency: [],
+              totals: { grossUsd: 1_000, netUsd: 900 },
+              daily: [],
+              weekly: [],
+              monthly: [],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    const container = mount(<Donations subTab="stats" />);
+    await settle();
+
+    expect(requests[0]?.pathname).toBe("/api/v1/analytics/donations");
+    expect(container.textContent).toContain("Total Gross (USD)");
+    expect(container.textContent).toContain("Stats");
+  });
+
+  it("does not offer the Stats tab or fetch analytics without analytics:read", async () => {
+    portalSession.value = portalSessionFixture({ staff: true, staffRole: "user", grants: [] });
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return response();
+      }),
+    );
+
+    const container = mount(<Donations subTab="stats" />);
+    await settle();
+
+    expect(container.textContent).not.toContain("Stats");
+    expect(requests.some((url) => url.pathname === "/api/v1/analytics/donations")).toBe(false);
   });
 });

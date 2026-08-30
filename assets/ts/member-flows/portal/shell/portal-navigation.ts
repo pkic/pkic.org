@@ -112,6 +112,7 @@ export function portalHasSponsorWorkspace(session: PortalSession | null): boolea
 
 export type PortalSectionKey =
   | "home"
+  | "participation"
   | "groups"
   | "events"
   | "organizations"
@@ -154,11 +155,14 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => Boolean(session?.member || session?.staff),
   },
   {
+    // Program-committee reviewers reach their proposal programs through the
+    // Events domain even without a generic event grant.
     section: "events",
     path: "/events",
     label: "Events",
     sidebar: true,
-    access: (session) => portalHasPermissionAtAnyScope(session, "events:read"),
+    access: (session) =>
+      portalHasPermissionAtAnyScope(session, "events:read") || portalHasPermissionAtAnyScope(session, "proposals:read"),
   },
   {
     // Representatives reach their organizations from the avatar menu and the
@@ -208,11 +212,20 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => portalHasGlobalPermission(session, "forms:read"),
   },
   {
+    // Identity destinations live in the avatar menu, not the sidebar.
     section: "profile",
     path: "/profile",
     label: "My Profile",
-    sidebar: true,
+    sidebar: false,
     access: (session) => Boolean(session?.member),
+  },
+  {
+    // Participation records for any authenticated identity, member or not.
+    section: "participation",
+    path: "/participation",
+    label: "My participation",
+    sidebar: false,
+    access: (session) => Boolean(session?.member || session?.staff || session?.sponsors.length),
   },
   {
     // Superseded by the organization workspaces; the route redirects there.
@@ -223,10 +236,11 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => Boolean(session?.member),
   },
   {
+    // Reached from the dashboard and the participation view, not the sidebar.
     section: "application",
     path: "/application",
     label: "My Application",
-    sidebar: true,
+    sidebar: false,
     access: (session) => Boolean(session?.member),
   },
   {
