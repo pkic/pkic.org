@@ -93,6 +93,7 @@ export interface EventEmailVariables {
   eventStartsAt: string;
   eventEndsAt: string;
   eventUrl: string;
+  sponsorsImageUrl: string | null;
 }
 
 export function deriveEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "starts_at">): string {
@@ -211,5 +212,6 @@ export function buildEventEmailVariables(event: EventEmailSource, siteBaseUrl: s
     eventStartsAt: event.starts_at ?? "",
     eventEndsAt: event.ends_at ?? "",
     eventUrl: resolveEventUrl(event, siteBaseUrl),
+    sponsorsImageUrl: resolveSponsorsImageUrl(event, siteBaseUrl),
   };
 }

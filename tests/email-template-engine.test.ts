@@ -602,4 +602,21 @@ describe("email renderer", () => {
 
     expect(rendered.text).toBe("Note: Dietary details are shared with the venue.");
   });
+
+  it("keeps local action links while using reachable branding and inline CTA styles", async () => {
+    const rendered = await renderEmail(
+      '<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in</a></div>',
+      {
+        magicLinkUrl: "http://localhost:8788/portal/#/verify?token=secret",
+      },
+      '<img src="{{brandBaseUrl}}/img/logo-white.png" alt="PKI Consortium">{{{body_html}}}',
+      "markdown",
+      "http://localhost:8788",
+    );
+
+    expect(rendered.html).toContain('src="https://pkic.org/img/logo-white.png"');
+    expect(rendered.html).toContain('href="http://localhost:8788/portal/#/verify?token=secret"');
+    expect(rendered.html).toContain("background:#0d1b2a");
+    expect(rendered.html).toContain("color:#ffffff!important");
+  });
 });
