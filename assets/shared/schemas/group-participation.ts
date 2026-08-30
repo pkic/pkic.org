@@ -32,7 +32,7 @@ export type SelfGroup = z.infer<typeof selfGroupSchema>;
 
 export const SELF_GROUP_VIEWS = ["catalog", "joined"] as const;
 export const selfGroupsListQuerySchema = groupsListQuerySchema
-  .pick({ q: true, typeKey: true, sort: true, limit: true, offset: true })
+  .pick({ id: true, q: true, typeKey: true, sort: true, limit: true, offset: true })
   .extend({ view: z.enum(SELF_GROUP_VIEWS).default("catalog") });
 export type SelfGroupsListQuery = z.infer<typeof selfGroupsListQuerySchema>;
 

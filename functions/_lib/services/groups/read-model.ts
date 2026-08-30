@@ -43,6 +43,7 @@ interface GroupRow {
   active: number;
   revision: number;
   membership_capacity_count: number;
+  represented_member_count: number;
   participant_count: number;
   child_count: number;
   created_at: string;
@@ -62,6 +63,8 @@ const GROUP_SELECT = `SELECT
   g.allow_automatic_opt_out, g.public_leadership, g.min_endorsers_for_ballot, g.active, g.revision,
   (SELECT COUNT(*) FROM group_memberships capacity
     WHERE capacity.group_id = g.id AND capacity.left_at IS NULL) AS membership_capacity_count,
+  (SELECT COUNT(DISTINCT represented.member_id) FROM group_memberships represented
+    WHERE represented.group_id = g.id AND represented.left_at IS NULL) AS represented_member_count,
   (SELECT COUNT(DISTINCT participant.user_id) FROM group_memberships participant
     WHERE participant.group_id = g.id AND participant.left_at IS NULL) AS participant_count,
   (SELECT COUNT(*) FROM groups child
@@ -108,6 +111,7 @@ function mapGroup(row: GroupRow): Group {
     active: row.active === 1,
     revision: row.revision,
     membershipCapacityCount: row.membership_capacity_count,
+    representedMemberCount: row.represented_member_count,
     participantCount: row.participant_count,
     childCount: row.child_count,
     createdAt: row.created_at,
@@ -253,6 +257,10 @@ export function buildGroupsPageQuery(
   if (query.typeKey !== undefined) {
     conditions.push("g.type_key = ?");
     bindings.push(query.typeKey);
+  }
+  if (query.id !== undefined) {
+    conditions.push("g.id = ?");
+    bindings.push(query.id);
   }
   if (query.parentGroupId !== undefined) {
     conditions.push(query.parentGroupId === null ? "g.parent_group_id IS NULL" : "g.parent_group_id = ?");
