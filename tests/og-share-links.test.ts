@@ -1,10 +1,11 @@
 import { env as workerEnv } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
-import { onRequestGet as donationBadgeImage } from "../functions/api/v1/og/donation/[session_id]";
+import { onRequestGet as donationBadgeImage } from "../functions/api/v1/donations/checkouts/[sessionId]/badge";
 import { onRequestGet as donationSharePage } from "../functions/donate/r/[code]";
-import { onRequestGet as eventBadgeImage } from "../functions/api/v1/og/[code]";
+import { onRequestGet as eventBadgeImage } from "../functions/api/v1/registrations/referrals/[code]/badge";
 import { onRequestGet as eventSharePage } from "../functions/r/[code]";
+import app from "../functions/router";
 import { createContext, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import type { Env } from "../functions/_lib/types";
@@ -158,7 +159,7 @@ describe("OG share links", () => {
     const response = await eventBadgeImage(
       createContext(
         envWithoutImages,
-        new Request(`https://app.test/api/v1/og/${code}?download=1&name=event-badge`, {
+        new Request(`https://app.test/api/v1/registrations/referrals/${code}/badge?download=1&name=event-badge`, {
           headers: { "user-agent": "LinkedInBot/1.0" },
         }),
         { code },
@@ -178,10 +179,10 @@ describe("OG share links", () => {
     const response = await donationBadgeImage(
       createContext(
         envWithoutImages,
-        new Request("https://app.test/api/v1/og/donation/cs_test_share?download=1&name=donation-badge", {
+        new Request("https://app.test/api/v1/donations/checkouts/cs_test_share/badge?download=1&name=donation-badge", {
           headers: { "user-agent": "LinkedInBot/1.0" },
         }),
-        { session_id: "cs_test_share" },
+        { sessionId: "cs_test_share" },
       ),
     );
 
@@ -203,7 +204,7 @@ describe("OG share links", () => {
     const eventResponse = await eventBadgeImage(
       createContext(
         envWithCachedWebp,
-        new Request(`https://app.test/api/v1/og/${code}?download=1&name=event-badge.webp`),
+        new Request(`https://app.test/api/v1/registrations/referrals/${code}/badge?download=1&name=event-badge.webp`),
         { code },
       ),
     );
@@ -215,13 +216,52 @@ describe("OG share links", () => {
     const donationResponse = await donationBadgeImage(
       createContext(
         envWithCachedWebp,
-        new Request("https://app.test/api/v1/og/donation/cs_test_share?download=1&name=donation-badge.webp"),
-        { session_id: "cs_test_share" },
+        new Request(
+          "https://app.test/api/v1/donations/checkouts/cs_test_share/badge?download=1&name=donation-badge.webp",
+        ),
+        { sessionId: "cs_test_share" },
       ),
     );
 
     expect(donationResponse.status).toBe(200);
     expect(donationResponse.headers.get("content-type")).toBe("image/webp");
     expect(donationResponse.headers.get("content-disposition")).toBe('attachment; filename="donation-badge.webp"');
+  });
+
+  it("mounts badge images under their owning resources and retires the mixed OG API bucket", async () => {
+    const code = await seedEventReferral();
+    await seedCompletedDonation("cs_test_mounted_share");
+    mockedGenerateBadgePng.mockResolvedValue(pngBytes());
+    mockedGenerateDonationBadgePng.mockResolvedValue(pngBytes());
+    const envWithoutImages = { ...baseEnv, IMAGES: undefined } as Env;
+    const executionCtx = {
+      passThroughOnException: vi.fn(),
+      waitUntil: vi.fn(),
+    } as unknown as ExecutionContext;
+
+    const eventResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/registrations/referrals/${code}/badge`),
+      envWithoutImages,
+      executionCtx,
+    );
+    expect(eventResponse.status).toBe(200);
+    expect(eventResponse.headers.get("content-type")).toBe("image/png");
+
+    const donationResponse = await app.fetch(
+      new Request("https://app.test/api/v1/donations/checkouts/cs_test_mounted_share/badge"),
+      envWithoutImages,
+      executionCtx,
+    );
+    expect(donationResponse.status).toBe(200);
+    expect(donationResponse.headers.get("content-type")).toBe("image/png");
+
+    for (const retiredPath of [`/api/v1/og/${code}`, "/api/v1/og/donation/cs_test_mounted_share"]) {
+      const retiredResponse = await app.fetch(
+        new Request(`https://app.test${retiredPath}`),
+        envWithoutImages,
+        executionCtx,
+      );
+      expect(retiredResponse.status).toBe(404);
+    }
   });
 });

@@ -9,7 +9,7 @@ import donate_Router from "./donate/router";
 import r_Router from "./r/router";
 import members_Router from "./members/router";
 import events_Router from "./events/router";
-import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
+import { onRequestGet as OgCardGet } from "./og/[...path]";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";

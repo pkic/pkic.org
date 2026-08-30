@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/og/donation/:session_id
+ * GET /api/v1/donations/checkouts/:sessionId/badge
  *
  * Returns a personalised 1200x630 donation badge for sharing on social
  * media. The badge shows the donor's name, the amount donated, and a
@@ -8,36 +8,36 @@
  * Only returns a badge for completed (paid) donations — pending or missing
  * sessions receive 202 { pending: true } or 404.
  *
- * The JPEG is cached in R2 (ASSETS_BUCKET, key "og-badges/donation-{session_id}")
+ * The JPEG is cached in R2 (ASSETS_BUCKET, key "og-badges/donation-{sessionId}")
  * on first render and served from cache on subsequent requests.
  */
 
-import { json } from "../../../../_lib/http";
-import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { readCachedBadge, serveGeneratedBadge } from "../../../../_lib/services/og-badge-http";
-import { generateDonationBadgePng } from "../../../../_lib/services/og-badge-prerender";
+import { json } from "../../../../../_lib/http";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { readCachedBadge, serveGeneratedBadge } from "../../../../../_lib/services/og-badge-http";
+import { generateDonationBadgePng } from "../../../../../_lib/services/og-badge-prerender";
 
 const R2_KEY_PREFIX = "og-badges/donation-";
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const session_id = c.req.param("session_id");
+  const sessionId = c.req.param("sessionId");
   const bucket = c.env.ASSETS_BUCKET;
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   const url = new URL(c.req.raw.url);
 
-  if (!session_id || !session_id.startsWith("cs_")) {
+  if (!sessionId || !sessionId.startsWith("cs_")) {
     return json({ error: "Invalid session_id" }, 400);
   }
 
   const isDownload = url.searchParams.get("download") === "1";
   const rawName = url.searchParams.get("name") ?? "donation-badge";
 
-  const r2Key = `${R2_KEY_PREFIX}${session_id}`;
+  const r2Key = `${R2_KEY_PREFIX}${sessionId}`;
 
   const responseOptions = {
     bucket,
     cacheKey: r2Key,
-    cacheMetadata: { sessionId: session_id },
+    cacheMetadata: { sessionId },
     isDownload,
     downloadName: rawName,
     fallbackDownloadName: "donation-badge",
@@ -48,7 +48,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   // 2. Generate PNG
   let png: Uint8Array | null;
   try {
-    png = await generateDonationBadgePng(session_id, c.env, origin);
+    png = await generateDonationBadgePng(sessionId, c.env, origin);
   } catch {
     return new Response("Badge rendering unavailable", {
       status: 503,
@@ -57,7 +57,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   if (!png) {
-    // Not found or not yet completed — same 202 pattern as /api/v1/donations/session
+    // Not found or not yet completed — preserve the checkout-status 202 behavior.
     return json({ pending: true }, 202);
   }
 

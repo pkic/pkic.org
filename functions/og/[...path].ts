@@ -14,11 +14,11 @@
  */
 
 import puppeteer from "@cloudflare/puppeteer";
-import { dispatchRequestMethod, json } from "../../../../_lib/http";
-import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { getStaticAssetsBinding } from "../../../../_lib/static-assets";
-import type { Env } from "../../../../_lib/types";
-import { readBoundedStream } from "../../../../_lib/utils/bounded-stream";
+import { dispatchRequestMethod, json } from "../_lib/http";
+import { resolveAppBaseUrl } from "../_lib/config";
+import { getStaticAssetsBinding } from "../_lib/static-assets";
+import type { Env } from "../_lib/types";
+import { readBoundedStream } from "../_lib/utils/bounded-stream";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
 const R2_KEY_PREFIX = "og-cards/";

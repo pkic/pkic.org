@@ -19,7 +19,7 @@ function promoterLink(code: string, sessionId: string, appBaseUrl: string): Dona
   return {
     code,
     shareUrl: `${appBaseUrl}/donate/r/${encodeURIComponent(code)}`,
-    ogImageUrl: `${appBaseUrl}/api/v1/og/donation/${encodeURIComponent(sessionId)}`,
+    ogImageUrl: `${appBaseUrl}/api/v1/donations/checkouts/${encodeURIComponent(sessionId)}/badge`,
   };
 }
 

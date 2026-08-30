@@ -69,7 +69,7 @@ export async function requestRegistrationBadgeRegeneration(
   return {
     jobId: job.id,
     referralCode: referral.code,
-    badgeUrl: `${payload.appBaseUrl}/api/v1/og/${referral.code}`,
+    badgeUrl: `${payload.appBaseUrl}/api/v1/registrations/referrals/${referral.code}/badge`,
   };
 }
 

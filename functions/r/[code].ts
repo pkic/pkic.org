@@ -228,7 +228,7 @@ function buildOgHtml(
   const ogDescription = escapeHtml(buildOgDescription(name, eventName, role, eventFormat));
   const ogImageAlt = escapeHtml(buildOgImageAlt(name, eventName, role, eventFormat));
 
-  const ogImage = `${appBaseUrl}/api/v1/og/${encodeURIComponent(code)}`;
+  const ogImage = `${appBaseUrl}/api/v1/registrations/referrals/${encodeURIComponent(code)}/badge`;
   const ogUrl = `${appBaseUrl}/r/${encodeURIComponent(code)}`;
   const canonical = escapeHtml(redirectUrl);
   const ogImageEsc = escapeHtml(ogImage);

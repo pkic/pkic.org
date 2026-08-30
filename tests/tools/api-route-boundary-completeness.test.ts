@@ -5,10 +5,37 @@ import { listTypeScriptFiles, readTypeScriptSource, REPOSITORY_ROOT, sourceLine 
 
 const API_ROOT = join(REPOSITORY_ROOT, "functions/api/v1");
 const RAW_ROUTE_ALLOWLIST = new Set([
+  "functions/api/v1/donations/router.ts:get:/checkouts/:sessionId/badge",
+  "functions/api/v1/registrations/router.ts:get:/referrals/:code/badge",
   "functions/api/v1/users/[userId]/headshots/router.ts:get:/:file",
-  "functions/api/v1/og/donation/router.ts:get:/:session_id",
-  "functions/api/v1/og/router.ts:get:/:code",
   "functions/api/v1/proposals/speaker/[token]/router.ts:get:/presentation/download",
+]);
+const APPROVED_API_ROOTS = new Set([
+  "analytics",
+  "audit-log",
+  "auth",
+  "calendar",
+  "donations",
+  "email",
+  "events",
+  "forms",
+  "geolocation",
+  "groups",
+  "invites",
+  "leadership",
+  "meetings",
+  "members",
+  "membership",
+  "organizations",
+  "permissions",
+  "proposals",
+  "registrations",
+  "retention",
+  "roles",
+  "scheduler",
+  "sponsors",
+  "users",
+  "votes",
 ]);
 const MANUAL_JSON_ALLOWLIST = new Set(["functions/api/v1/auth/passkeys/register-complete.ts"]);
 
@@ -72,12 +99,32 @@ function optionalValidatedData(details: SourceDetails): string[] {
   return locations;
 }
 
+function mountedApiRoots(): string[] {
+  const details = apiSources().find((source) => source.relativePath === "functions/api/v1/router.ts");
+  if (!details) throw new Error("Missing API root router");
+  const roots = new Set<string>();
+  visit(details.file, (node) => {
+    if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return;
+    if (!ts.isIdentifier(node.expression.expression) || node.expression.expression.text !== "openapi") return;
+    if (!new Set(["get", "route"]).has(node.expression.name.text)) return;
+    const route = node.arguments[0];
+    if (!route || !ts.isStringLiteralLike(route) || route.text === "/") return;
+    const root = route.text.replace(/^\/+/, "").split("/")[0];
+    if (root) roots.add(root);
+  });
+  return [...roots].sort();
+}
+
 describe("API route boundary completeness", () => {
   const sources = apiSources();
 
   it("keeps raw Hono routes within the explicit transport allowlist", () => {
     const registrations = sources.flatMap(rawRouteRegistrations).sort();
     expect(registrations).toEqual([...RAW_ROUTE_ALLOWLIST].sort());
+  });
+
+  it("mounts only approved business and resource domains at the API root", () => {
+    expect(mountedApiRoots()).toEqual([...APPROVED_API_ROOTS].sort());
   });
 
   it("limits manual JSON parsing to explicit auth-first and signed-integration boundaries", () => {

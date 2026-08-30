@@ -1,5 +1,6 @@
 /**
- * OG Badge image endpoint  GET /api/v1/og/:code
+ * Registration referral badge image endpoint
+ * GET /api/v1/registrations/referrals/:code/badge
  *
  * Returns a personalised 1200x630 social-sharing badge for the person
  * associated with the given referral code. The production path serves JPEG;
@@ -9,10 +10,10 @@
  * on first render and served from cache on subsequent requests.
  */
 
-import { dispatchRequestMethod, json } from "../../../_lib/http";
-import { resolveAppBaseUrl } from "../../../_lib/config";
-import { readCachedBadge, serveGeneratedBadge } from "../../../_lib/services/og-badge-http";
-import { generateBadgePng } from "../../../_lib/services/og-badge-prerender";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { readCachedBadge, serveGeneratedBadge } from "../../../../../_lib/services/og-badge-http";
+import { generateBadgePng } from "../../../../../_lib/services/og-badge-prerender";
 
 const R2_KEY_PREFIX = "og-badges/";
 

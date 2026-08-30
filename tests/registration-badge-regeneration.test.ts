@@ -203,7 +203,7 @@ describe("registration badge regeneration", () => {
       success: true,
       status: "queued",
       referralCode: seeded.referralCode,
-      badgeUrl: `https://app.test/api/v1/og/${seeded.referralCode}`,
+      badgeUrl: `https://app.test/api/v1/registrations/referrals/${seeded.referralCode}/badge`,
     });
     expect(background).toHaveLength(1);
     await Promise.allSettled(background);

@@ -160,7 +160,7 @@ export async function submitEventRegistration(
     twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,
     blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
     redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
-    badgeImageUrl: `${metadata.appBaseUrl}/api/v1/og/${referralCode}`,
+    badgeImageUrl: `${metadata.appBaseUrl}/api/v1/registrations/referrals/${referralCode}/badge`,
   };
 
   let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;

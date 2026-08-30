@@ -1774,9 +1774,9 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the scheduled-job portal
-      management cutover with 2,369 passing backend tests (one additional
-      skipped), 337 frontend tests, and 87 tooling tests. Type checks,
+      Current evidence: the complete gate passes after the natural API-root and
+      badge-resource cutover with 2,370 passing backend tests (one additional
+      skipped), 337 frontend tests, and 88 tooling tests. Type checks,
       ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -1924,6 +1924,16 @@ Status: In progress
       single-portal authentication slice removed the last admin and sponsor
       HTML shells without compatibility redirects. Ownerless/global event
       actions remain deliberately excluded in favor of group-owned creation.
+      A static route-boundary regression now requires the mounted API roots to
+      match the approved resource-domain set exactly. The mixed
+      `/api/v1/og` technical bucket is removed: registration badges are served
+      by `/api/v1/registrations/referrals/:code/badge`, donation badges by
+      `/api/v1/donations/checkouts/:sessionId/badge`, and mounted tests prove
+      the retired API URLs return 404. The separate public `/og/*` website
+      representation remains available for existing Open Graph card links.
+      Nested capability URLs that still use actor-oriented path segments remain
+      a separate cleanup slice; this checkpoint does not claim that every API
+      path is final.
       Migration 0035 remains consolidated and locally
       verified, but its preview and production ledger state must be reverified
       at handoff. The remaining unchecked tracker items are the authoritative

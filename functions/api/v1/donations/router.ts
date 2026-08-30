@@ -8,6 +8,7 @@ import { DonationDetailGet } from "./[id]";
 import { DonationsList } from "./index";
 import { DonationPromotersList } from "./promoters";
 import { DonationsSyncPost } from "./sync";
+import { onRequestGet as DonationCheckoutBadgeGet } from "./checkouts/[sessionId]/badge";
 
 const app = new Hono();
 export const openapi = fromHono(app);
@@ -20,6 +21,7 @@ openapi.post("/promoter", DonationsPromoterPost);
 openapi.get("/promoters", DonationPromotersList);
 openapi.get("/session", DonationsSessionGet);
 openapi.post("/sync", DonationsSyncPost);
+app.get("/checkouts/:sessionId/badge", DonationCheckoutBadgeGet);
 openapi.get("/", DonationsList);
 openapi.get("/:id", DonationDetailGet);
 

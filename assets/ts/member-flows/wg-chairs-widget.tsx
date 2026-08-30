@@ -18,7 +18,7 @@
  *     Puppeteer-rendered OG social-share card (all.og-card.html), bare
  *     (no wrapper), avatar size "sm" (72px). That page is
  *     screenshotted with `waitUntil: networkidle0`
- *     (functions/api/v1/og/card/[...path].ts), which waits for this fetch
+ *     (functions/og/[...path].ts), which waits for this fetch
  *     (and any resulting avatar/logo image loads) to settle before
  *     capturing, so the mount starts `hidden` and reveals itself — including
  *     switching its parent `.og-hero-inner` to the two-column layout — only

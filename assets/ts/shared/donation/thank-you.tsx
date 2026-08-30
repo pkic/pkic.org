@@ -86,7 +86,7 @@ function DonationBadge({
   const twitterHref = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: shareUrl })}`;
 
-  const badgeUrl = `/api/v1/og/donation/${encodeURIComponent(sessionId)}`;
+  const badgeUrl = `/api/v1/donations/checkouts/${encodeURIComponent(sessionId)}/badge`;
   const badgeFilename = `donation-badge${session.donorFirstName ? "-" + session.donorFirstName.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}.jpg`;
 
   return (

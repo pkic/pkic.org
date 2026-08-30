@@ -119,7 +119,7 @@
   aside is a client-fetched mount instead (layouts/partials/wg/chairs-og-card.html),
   the same pattern the footer sponsor strip below already uses, since this
   page is screenshotted with `waitUntil: networkidle0`
-  (functions/api/v1/og/card/[...path].ts), which waits for that fetch (and any
+  (functions/og/[...path].ts), which waits for that fetch (and any
   resulting image loads) to settle before capturing.
 */}}
 {{- $isWgPage := and (eq $page.Section "wg") ($page.Params.wgID) -}}
@@ -182,7 +182,7 @@
   Fetched client-side via the same
   sponsors-wall Preact component every other public sponsor surface uses —
   possible here because this page is screenshotted by Cloudflare Browser
-  Rendering with `waitUntil: networkidle0` (functions/api/v1/og/card/[...path].ts),
+  Rendering with `waitUntil: networkidle0` (functions/og/[...path].ts),
   which waits for the fetch to complete before capturing.
 */}}
 
