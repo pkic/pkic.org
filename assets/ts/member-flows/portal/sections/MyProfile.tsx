@@ -5,8 +5,8 @@
  * (profile.canEditOrganizationName). Headshot upload and the org-page
  * visibility toggle live in the same tab nav table.
  */
-import { useState } from "preact/hooks";
-import { deleteJson, getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
+import { useRef, useState } from "preact/hooks";
+import { getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
 import { replaceFile } from "../../../shared/file-upload";
 import { Spinner } from "../../../components/Spinner";
@@ -16,8 +16,9 @@ import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
 import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
-import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { representativeMutationResponseSchema } from "../../../../shared/schemas/organization-representation";
+import type { ApiTableActions } from "../../../components/ApiDataTable";
+import { OrganizationRepresentativeDirectory } from "./OrganizationRepresentativeDirectory";
 
 const CURRENT_USER_API = "/api/v1/users/current";
 
@@ -229,112 +230,41 @@ export function MyProfile() {
           </div>
         </div>
 
-        {current.organizationRepresentatives && current.organizationRepresentatives.length > 0 && (
-          <OrganizationRepresentativesCard current={current} />
-        )}
+        {current.organizationRepresentatives && <OrganizationRepresentativesCard current={current} />}
       </div>
     </div>
   );
 }
 
 function OrganizationRepresentativesCard({ current }: { current: MyProfileType }) {
-  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const directoryRef = useRef<ApiTableActions | null>(null);
 
   if (!current.organizationId || !current.organizationRepresentatives) return null;
-
-  async function updateVisibility(userId: string, showOnOrganizationProfile: boolean): Promise<void> {
-    setBusyUserId(userId);
-    try {
-      await patchJson(
-        `/api/v1/organizations/${encodeURIComponent(current.organizationId!)}/representatives/${encodeURIComponent(userId)}`,
-        { showOnOrganizationProfile },
-        representativeMutationResponseSchema,
-      );
-      await refreshProfile();
-      toast("Representative visibility updated", "success");
-    } catch (err) {
-      toast(err instanceof ApiClientError ? err.message : "Could not update representative visibility.", "error");
-    } finally {
-      setBusyUserId(null);
-    }
-  }
-
-  async function removeRepresentative(
-    rep: NonNullable<MyProfileType["organizationRepresentatives"]>[number],
-  ): Promise<void> {
-    if (!confirm(`Remove ${rep.name ?? rep.email} as a representative? Their account is not deleted.`)) return;
-    setBusyUserId(rep.userId);
-    try {
-      await deleteJson(
-        `/api/v1/organizations/${encodeURIComponent(current.organizationId!)}/representatives/${encodeURIComponent(rep.userId)}`,
-        successResponseSchema,
-      );
-      await refreshProfile();
-      toast("Representative removed", "success");
-    } catch (err) {
-      toast(err instanceof ApiClientError ? err.message : "Could not remove representative.", "error");
-    } finally {
-      setBusyUserId(null);
-    }
-  }
+  const primaryContactUserId = current.organizationRepresentatives.find(
+    (representative) => representative.isPrimaryContact,
+  )?.userId;
 
   return (
     <div class="card border-0 shadow-sm mt-3">
       <div class="card-body">
         <h3 class="h6 mb-3">Organization representatives</h3>
-        <ul class="list-group list-group-flush">
-          {current.organizationRepresentatives.map((rep) => {
-            const canRemove = current.isOrgContact && rep.userId !== current.userId && !rep.isPrimaryContact;
-            const busy = busyUserId === rep.userId;
-            return (
-              <li key={rep.userId} class="list-group-item px-0">
-                <div class="d-flex justify-content-between align-items-center gap-2">
-                  <span>
-                    {rep.name ?? rep.email} <span class="text-muted small">({rep.email})</span>
-                  </span>
-                  <span>
-                    {rep.isPrimaryContact && <span class="badge text-bg-success me-1">Primary contact</span>}
-                    {rep.isSecondaryContact && <span class="badge text-bg-secondary">Secondary contact</span>}
-                  </span>
-                </div>
-                {current.isOrgContact && (
-                  <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
-                    <div class="form-check form-switch">
-                      <input
-                        id={`organization-representative-visibility-${rep.userId}`}
-                        class="form-check-input"
-                        type="checkbox"
-                        role="switch"
-                        checked={rep.showOnOrgProfile}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void updateVisibility(rep.userId, (event.target as HTMLInputElement).checked)
-                        }
-                      />
-                      <label
-                        class="form-check-label small"
-                        for={`organization-representative-visibility-${rep.userId}`}
-                      >
-                        Show on organization profile
-                      </label>
-                    </div>
-                    {canRemove && (
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline-danger"
-                        disabled={busy}
-                        onClick={() => void removeRepresentative(rep)}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {current.isOrgContact && <AddCoworkerForm organizationId={current.organizationId} />}
+        <OrganizationRepresentativeDirectory
+          organizationId={current.organizationId}
+          activeRepresentatives={current.organizationRepresentatives}
+          canManage={current.isOrgContact}
+          canBlock={(userId) => userId !== current.userId && userId !== primaryContactUserId}
+          onChanged={refreshProfile}
+          actionsRef={directoryRef}
+        />
+        {current.isOrgContact && (
+          <AddCoworkerForm
+            organizationId={current.organizationId}
+            onAdded={async () => {
+              await refreshProfile();
+              await directoryRef.current?.reload();
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -416,7 +346,7 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
   );
 }
 
-function AddCoworkerForm({ organizationId }: { organizationId: string }) {
+function AddCoworkerForm({ organizationId, onAdded }: { organizationId: string; onAdded: () => Promise<void> }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -438,7 +368,7 @@ function AddCoworkerForm({ organizationId }: { organizationId: string }) {
       );
       setSuccess(`${name} (${email}) was added to your organization.`);
       form.reset();
-      await refreshProfile();
+      await onAdded();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Could not add this coworker. Please try again.");
     } finally {

@@ -1,11 +1,9 @@
 import type { Hono } from "hono";
 import type { Env } from "../types";
 import { MCP_AUTHORIZE_MAX_BYTES, readBoundedFormData, readBoundedJsonBody } from "../http-body";
-import { isAppError } from "../errors";
-import { publicAuthAdmin } from "../auth/admin-identity";
+import { AppError, isAppError } from "../errors";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
-  MCP_OAUTH_VERIFY_API_PATH,
   buildMcpOauthProps,
   describeMcpAuthorization,
   grantedMcpOauthScopes,
@@ -17,19 +15,16 @@ import {
   resolveAuthorizeReturnTo,
   sanitizeAuthorizeReturnTo,
   sendMcpAuthorizeMagicLink,
-  serializeExpiredMcpOauthLoginCookie,
-  serializeMcpOauthLoginCookie,
   toOAuthErrorResponse,
   type McpOAuthEnv,
-  verifyMcpAuthorizeMagicLink,
   wantsJsonResponse,
 } from "./oauth";
 import {
-  adminMcpOauthContextSchema,
-  adminMcpOauthMagicLinkResponseSchema,
-  adminMcpOauthRedirectResponseSchema,
-  adminMcpOauthVerifyResponseSchema,
-} from "../../../assets/shared/schemas/admin-oauth";
+  mcpOauthAuthorizeActionSchema,
+  mcpOauthContextSchema,
+  mcpOauthMagicLinkResponseSchema,
+  mcpOauthRedirectResponseSchema,
+} from "../../../assets/shared/schemas/mcp-oauth";
 
 interface McpAuthorizeHandlerOptions {
   app: Hono<{ Bindings: Env }>;
@@ -42,8 +37,11 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-async function parseAuthorizePayload(request: Request): Promise<{ action: string; email: string; returnTo: string }> {
+async function parseAuthorizePayload(
+  request: Request,
+): Promise<{ action: "request-link" | "approve" | "deny"; email: string; returnTo: string }> {
   const contentType = request.headers.get("content-type") ?? "";
+  let raw: { action: unknown; email?: unknown; return_to: unknown };
   if (contentType.includes("application/json")) {
     let parsed: unknown;
     try {
@@ -60,18 +58,28 @@ async function parseAuthorizePayload(request: Request): Promise<{ action: string
       return_to?: unknown;
     };
 
-    return {
+    raw = {
       action: String(body.action ?? ""),
       email: String(body.email ?? "").trim(),
-      returnTo: sanitizeAuthorizeReturnTo(typeof body.return_to === "string" ? body.return_to : null),
+      return_to: typeof body.return_to === "string" ? body.return_to : "",
+    };
+  } else {
+    const formData = await readBoundedFormData(request, MCP_AUTHORIZE_MAX_BYTES);
+    raw = {
+      action: String(formData.get("action") ?? ""),
+      email: String(formData.get("email") ?? "").trim(),
+      return_to: formData.get("return_to")?.toString() ?? "",
     };
   }
 
-  const formData = await readBoundedFormData(request, MCP_AUTHORIZE_MAX_BYTES);
+  const parsed = mcpOauthAuthorizeActionSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new AppError(400, "VALIDATION_ERROR", "Invalid OAuth authorization request", parsed.error.flatten());
+  }
   return {
-    action: String(formData.get("action") ?? ""),
-    email: String(formData.get("email") ?? "").trim(),
-    returnTo: sanitizeAuthorizeReturnTo(formData.get("return_to")?.toString()),
+    action: parsed.data.action,
+    email: parsed.data.action === "request-link" ? parsed.data.email : "",
+    returnTo: sanitizeAuthorizeReturnTo(parsed.data.return_to),
   };
 }
 
@@ -81,7 +89,7 @@ async function handleAuthorizeGet(request: Request, env: McpOAuthEnv): Promise<R
     return redirectToMcpOauthUi(env, request, returnTo);
   }
 
-  return jsonResponse(adminMcpOauthContextSchema.parse(await describeMcpAuthorization(request, env, returnTo)));
+  return jsonResponse(mcpOauthContextSchema.parse(await describeMcpAuthorization(request, env, returnTo)));
 }
 
 async function handleMagicLinkRequest(
@@ -92,7 +100,7 @@ async function handleMagicLinkRequest(
   returnTo: string,
 ): Promise<Response> {
   await sendMcpAuthorizeMagicLink({ request, env, executionCtx: ctx, email, returnTo });
-  return jsonResponse(adminMcpOauthMagicLinkResponseSchema.parse({ success: true, sentTo: email || null }));
+  return jsonResponse(mcpOauthMagicLinkResponseSchema.parse({ success: true, sentTo: email || null }));
 }
 
 async function handleAuthorizeApproval(
@@ -130,7 +138,7 @@ async function handleAuthorizeApproval(
     ),
   });
 
-  return adminMcpOauthRedirectResponseSchema.parse({ redirectTo });
+  return mcpOauthRedirectResponseSchema.parse({ redirectTo });
 }
 
 async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: ExecutionContext): Promise<Response> {
@@ -144,11 +152,7 @@ async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: Exec
 
   if (action === "deny") {
     const response = redirectAuthorizationDenied(authRequest);
-    response.headers.append("Set-Cookie", serializeExpiredMcpOauthLoginCookie(request));
-    return jsonResponse(
-      adminMcpOauthRedirectResponseSchema.parse({ redirectTo: response.headers.get("location") }),
-      200,
-    );
+    return jsonResponse(mcpOauthRedirectResponseSchema.parse({ redirectTo: response.headers.get("location") }), 200);
   }
 
   if (action === "approve") {
@@ -156,44 +160,6 @@ async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: Exec
   }
 
   return new Response("Method not allowed", { status: 405 });
-}
-
-async function handleVerifyApi(request: Request, env: McpOAuthEnv): Promise<Response> {
-  try {
-    if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405 });
-    }
-    let parsed: unknown;
-    try {
-      parsed = await readBoundedJsonBody(request, MCP_AUTHORIZE_MAX_BYTES);
-    } catch (error) {
-      if (isAppError(error) && error.code === "REQUEST_BODY_TOO_LARGE") {
-        throw error;
-      }
-      parsed = {};
-    }
-    const body = parsed as {
-      token?: unknown;
-    };
-    const token = typeof body.token === "string" ? body.token : "";
-    const verifyRequest = new Request(`${request.url}?token=${encodeURIComponent(token)}`, {
-      method: "GET",
-      headers: request.headers,
-    });
-    const verified = await verifyMcpAuthorizeMagicLink(verifyRequest, env);
-    const response = jsonResponse(
-      adminMcpOauthVerifyResponseSchema.parse({
-        success: true,
-        expiresAt: verified.expiresAt,
-        returnTo: verified.returnTo,
-        admin: publicAuthAdmin(verified.admin),
-      }),
-    );
-    response.headers.append("Set-Cookie", serializeMcpOauthLoginCookie(verified.sessionToken, request));
-    return response;
-  } catch (error) {
-    return toOAuthErrorResponse(error);
-  }
 }
 
 async function handleAuthorize(request: Request, env: McpOAuthEnv, ctx: ExecutionContext): Promise<Response> {
@@ -219,10 +185,6 @@ export function createMcpAuthorizeHandler(options: McpAuthorizeHandlerOptions) {
 
       if (url.pathname === MCP_OAUTH_AUTHORIZE_PATH) {
         return await handleAuthorize(request, env, ctx);
-      }
-
-      if (url.pathname === MCP_OAUTH_VERIFY_API_PATH) {
-        return await handleVerifyApi(request, env);
       }
 
       return await options.app.fetch(request, env, ctx);

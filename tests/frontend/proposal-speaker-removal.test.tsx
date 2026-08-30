@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import type { ProposalManageResponse } from "../../assets/shared/schemas/proposal-management";
+import type { ProposalAccessResponse } from "../../assets/shared/schemas/proposal-management";
 import type { ProposalSpeaker } from "../../assets/ts/member-flows/portal/sections/events/types";
 import {
   buildReplacementProposerOptions,
@@ -28,8 +28,8 @@ async function settle(): Promise<void> {
 }
 
 function managedSpeaker(
-  overrides: Partial<ProposalManageResponse["speakers"][number]> = {},
-): ProposalManageResponse["speakers"][number] {
+  overrides: Partial<ProposalAccessResponse["speakers"][number]> = {},
+): ProposalAccessResponse["speakers"][number] {
   return {
     userId: "speaker-1",
     role: "co_speaker",

@@ -153,7 +153,7 @@ describe("public resend rate limits", () => {
     const { manageToken } = (await create.json()) as { manageToken: string };
     const targetEmail = `correction-target-${crypto.randomUUID()}@example.test`;
     const makeRequest = () =>
-      callApi(limitedEnv, `/api/v1/registrations/manage/${encodeURIComponent(manageToken)}`, {
+      callApi(limitedEnv, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.43" },
         body: JSON.stringify({ action: "update", email: targetEmail }),

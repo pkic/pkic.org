@@ -236,6 +236,14 @@ WHERE expires_at IS NOT NULL
   AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS NOT NULL
   AND expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', expires_at);
 
+-- Duplicate resolution uses creation time to retain the most recently
+-- delivered capability. Normalize every parseable legacy value first so
+-- mixed but equivalent timestamp formats do not change the winner.
+UPDATE invites
+SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ', created_at)
+WHERE strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS NOT NULL
+  AND created_at <> strftime('%Y-%m-%dT%H:%M:%fZ', created_at);
+
 UPDATE proposal_speakers
 SET invite_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', invite_expires_at)
 WHERE invite_expires_at IS NOT NULL
@@ -288,6 +296,35 @@ WHERE EXISTS (
       OR invites.expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', invites.expires_at)
     )
 );
+
+-- Invitation recipients are case-insensitive application identities. Repair
+-- legacy whitespace/casing before duplicate detection so the uniqueness
+-- invariant cannot preserve parallel capabilities for the same mailbox.
+UPDATE invites
+SET invitee_email = lower(trim(invitee_email))
+WHERE invitee_email <> lower(trim(invitee_email));
+
+-- A blank or unmistakably malformed recipient and a deadline that has already
+-- elapsed cannot represent an active invitation. Keep this deliberately
+-- narrower than full email validation: SQL must not guess at unusual but valid
+-- mailboxes, while multiple separators, missing sides, or embedded whitespace
+-- can never match the application's normalized email contract.
+UPDATE invites
+SET status = 'expired'
+WHERE status = 'sent'
+  AND (
+    invitee_email = ''
+    OR instr(invitee_email, '@') < 2
+    OR instr(invitee_email, '@') = length(invitee_email)
+    OR length(invitee_email) - length(replace(invitee_email, '@', '')) <> 1
+    OR instr(invitee_email, ' ') > 0
+    OR instr(invitee_email, char(9)) > 0
+    OR instr(invitee_email, char(10)) > 0
+    OR instr(invitee_email, char(13)) > 0
+    OR expires_at IS NULL
+    OR expires_at <> strftime('%Y-%m-%dT%H:%M:%fZ', expires_at)
+    OR expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  );
 
 CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
@@ -3322,6 +3359,14 @@ As part of our transition to the new PKI Consortium member portal, an account ha
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
+-- Human authentication now uses one portal session and one user sign-in
+-- template. Preserve the legacy version for historical outbox rendering, but
+-- prevent it from appearing as an active alternative authentication flow.
+UPDATE email_template_versions
+SET status = 'archived'
+WHERE template_key = 'admin_magic_link'
+  AND status = 'active';
+
 -- Section: Secondary email addresses
 --
 -- Follow-up to a real, visible problem from the YAML->D1 migration:
@@ -5234,18 +5279,32 @@ INSERT INTO sponsorship_tier_config (id, sponsor_type, tier, currency, amount_ce
 -- sponsorships table, not added here.
 
 -- A sent invite is a single active capability per event, address, and purpose.
--- Resolve any legacy duplicates deterministically before enforcing the invariant.
+-- Resolve any legacy duplicates deterministically before enforcing the
+-- invariant. Retain the newest still-valid capability because it is the one
+-- most recently delivered. Prefer a canonical creation timestamp over an
+-- unparseable legacy value; equal or wholly ambiguous timestamps use the
+-- greatest id as a stable deterministic tiebreaker.
 UPDATE invites
 SET status = 'revoked'
 WHERE status = 'sent'
-  AND EXISTS (
-    SELECT 1
+  AND id <> (
+    SELECT keeper.id
     FROM invites keeper
     WHERE keeper.event_id = invites.event_id
       AND keeper.invitee_email = invites.invitee_email
       AND keeper.invite_type = invites.invite_type
       AND keeper.status = 'sent'
-      AND (keeper.created_at < invites.created_at OR (keeper.created_at = invites.created_at AND keeper.id < invites.id))
+    ORDER BY
+      CASE
+        WHEN keeper.created_at = strftime('%Y-%m-%dT%H:%M:%fZ', keeper.created_at) THEN 1
+        ELSE 0
+      END DESC,
+      CASE
+        WHEN keeper.created_at = strftime('%Y-%m-%dT%H:%M:%fZ', keeper.created_at) THEN keeper.created_at
+        ELSE ''
+      END DESC,
+      keeper.id DESC
+    LIMIT 1
   );
 
 CREATE UNIQUE INDEX uq_invites_active_recipient

@@ -8,6 +8,7 @@ import {
   speakerPresentationUploadResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
+import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
 
 const DEFAULT_PRESENTATION_TERMS = [
   "I am authorized to share this presentation with the PKI Consortium.",
@@ -21,7 +22,7 @@ async function main(): Promise<void> {
   const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
     selector: "[data-event-speaker-presentation]",
     request: async (token, boot) =>
-      getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, speakerSelfServiceReadResponseSchema),
+      getJson(proposalSpeakerAccessPath(boot.apiBase, token), speakerSelfServiceReadResponseSchema),
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
@@ -107,7 +108,7 @@ async function main(): Promise<void> {
       try {
         const upload = presentationUploadRequest(file);
         await requestJson(
-          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`,
+          proposalSpeakerAccessPath(boot.apiBase, token, "presentation"),
           speakerPresentationUploadResponseSchema,
           { method: "PUT", ...upload },
         );

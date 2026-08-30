@@ -42,7 +42,7 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   await page.reload();
   await expect(page.getByText(updatedJobTitle, { exact: true })).toBeVisible();
 
-  await page.goto("/admin/#/users");
+  await page.goto("/portal/#/system/users");
   await expect(page).toHaveURL(/\/portal\/#\/system\/users$/);
   await expect(page.getByRole("link", { name: "Users", exact: true })).toBeVisible();
 

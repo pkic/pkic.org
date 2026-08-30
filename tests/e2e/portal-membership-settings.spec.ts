@@ -76,7 +76,7 @@ test("a permitted staff identity reads and updates membership settings through t
   );
   expect(removedSystemRequests).toEqual([]);
 
-  await page.goto("/admin/#/membership/settings");
+  await page.goto("/portal/#/system/membership-settings");
   await expect(page).toHaveURL(/\/portal\/#\/system\/membership-settings$/);
   await expect(page.getByRole("heading", { name: "Application workflow" })).toBeVisible();
   await expect(page.getByLabel("Consultation window (days)")).toHaveValue(updatedWindow);

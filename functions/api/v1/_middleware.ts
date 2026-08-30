@@ -19,7 +19,6 @@ function isPublicCacheableGet(pathname: string): boolean {
  */
 function isSensitiveArchitecturePath(pathname: string): boolean {
   return (
-    pathname.startsWith("/api/v1/admin/") ||
     pathname.startsWith("/api/v1/analytics/") ||
     pathname === "/api/v1/audit-log" ||
     pathname.startsWith("/api/v1/audit-log/") ||

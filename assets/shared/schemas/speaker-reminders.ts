@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { successResponseSchema } from "./api-common";
 
-export const speakerReminderPreferenceSchema = z.object({
-  action: z.enum(["postpone_7d", "pause_30d", "resume"]),
+export const speakerReminderPreferencePatchSchema = z.object({
+  state: z.enum(["active", "postponed", "paused"]),
 });
 
 export const speakerReminderPreferenceResponseSchema = successResponseSchema.extend({

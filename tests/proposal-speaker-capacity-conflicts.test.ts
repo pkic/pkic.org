@@ -72,11 +72,14 @@ describe("proposal speaker capacity conflicts", () => {
       .run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${encodeURIComponent(manageToken)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "decline", reason: "Unavailable" }),
-      }),
+      new Request(
+        `https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(manageToken)}/participation`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "declined", reason: "Unavailable" }),
+        },
+      ),
       env,
       requestOptions,
     );
@@ -99,7 +102,7 @@ describe("proposal speaker capacity conflicts", () => {
 
     const response = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,

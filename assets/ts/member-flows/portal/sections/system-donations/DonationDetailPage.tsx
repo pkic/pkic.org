@@ -91,7 +91,7 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
     d.status === "pending" ||
     d.status === "awaiting_payment" ||
     (d.status === "completed" && (d.net_amount === null || d.payment_method_type === null));
-  const badgeUrl = `/api/v1/og/donation/${encodeURIComponent(d.checkout_session_id)}?name=${encodeURIComponent(d.name)}`;
+  const badgeUrl = `/api/v1/donations/checkouts/${encodeURIComponent(d.checkout_session_id)}/badge?name=${encodeURIComponent(d.name)}`;
 
   return (
     <div>

@@ -48,7 +48,7 @@ function extractOgBadgeUrl(shareUrl: string): string | null {
     const match = shareUrl.match(/\/r\/([A-Za-z0-9]+)(?:[?#]|$)/);
     if (!match) return null;
     const origin = new URL(shareUrl).origin;
-    return `${origin}/api/v1/og/${match[1]}`;
+    return `${origin}/api/v1/registrations/referrals/${match[1]}/badge`;
   } catch {
     return null;
   }

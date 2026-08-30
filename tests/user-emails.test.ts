@@ -371,9 +371,7 @@ describe("secondary user emails", () => {
         __authorizedCapabilityMarkers: [issued.queuedToken],
       }),
     );
-    const token = new URL(
-      `https://app.test/admin/?token=${encodeURIComponent(delivered.magicLinkUrl)}`,
-    ).searchParams.get("token")!;
+    const token = delivered.magicLinkUrl;
 
     await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = datetime('now') WHERE id = ?")
       .bind("changed-after-link@example.test", "changed-after-link@example.test", userId)

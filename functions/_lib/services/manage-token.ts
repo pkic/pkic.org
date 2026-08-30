@@ -1,6 +1,6 @@
 /**
  * Shared helper — resolves a raw registration manage token (plain or JWT) to a
- * `RegistrationRecord`.  Used by both the registration-manage endpoint and the
+ * `RegistrationRecord`. Used by both the registration access endpoint and the
  * attendee-facing headshot upload endpoint.
  */
 

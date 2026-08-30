@@ -6,10 +6,10 @@ import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions"
 import { markResponseSensitive, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { listScheduledJobs } from "../../../../_lib/services/scheduled-jobs/management";
+import { listScheduledJobsForActor } from "../../../../_lib/services/scheduled-jobs/management";
 
 export const SchedulerJobsList = openApiRoute(schedulerJobsListRouteSchema, async (c: AdminContext) => {
   markResponseSensitive(c);
-  const { db } = await requireStaffPermission(c, "scheduler:read");
-  return json(schedulerJobsListResponseSchema.parse({ jobs: await listScheduledJobs(db) }));
+  const { db, staff } = await requireStaffPermission(c, "scheduler:read");
+  return json(schedulerJobsListResponseSchema.parse({ jobs: await listScheduledJobsForActor(db, staff) }));
 });

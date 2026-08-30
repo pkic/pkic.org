@@ -339,7 +339,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });
 
-  it("exposes System Operations for either global email or retention read authority", () => {
+  it("exposes System Operations for global email, retention, or scheduler read authority", () => {
     const emailReader = portalSessionFixture({
       staff: true,
       staffRole: "user",
@@ -349,6 +349,11 @@ describe("portal capability-derived navigation", () => {
       staff: true,
       staffRole: "user",
       grants: [{ permission: "retention:read", contextType: null, contextId: null }],
+    });
+    const schedulerReader = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "scheduler:read", contextType: null, contextId: null }],
     });
     const writeOnly = portalSessionFixture({
       staff: true,
@@ -367,6 +372,11 @@ describe("portal capability-derived navigation", () => {
       label: "Operations",
     });
     expect(portalSystemNavigationItems(retentionReader)).toContainEqual({
+      path: "/system/operations",
+      section: "system",
+      label: "Operations",
+    });
+    expect(portalSystemNavigationItems(schedulerReader)).toContainEqual({
       path: "/system/operations",
       section: "system",
       label: "Operations",

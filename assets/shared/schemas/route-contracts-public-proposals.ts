@@ -1,22 +1,23 @@
-import { eventSlugParamsSchema, proposerManagedSpeakerParamsSchema, successResponseSchema } from "./api-common";
+import { eventSlugParamsSchema, proposalAccessSpeakerParamsSchema, successResponseSchema } from "./api-common";
 import {
+  coSpeakerInviteResponseSchema,
+  coSpeakerInviteSchema,
   inviteResendLinkSchema,
   proposalCreateResponseSchema,
   proposalCreateSchema,
-  proposalManageReadResponseSchema,
-  proposalManageSchema,
-  proposalManageTokenParamsSchema,
-  proposalManageUpdateResponseSchema,
-  proposalSpeakerReminderRequestSchema,
+  proposalAccessPatchResponseSchema,
+  proposalAccessPatchSchema,
+  proposalAccessReadResponseSchema,
+  proposalAccessTokenParamsSchema,
   proposalSpeakerRemovalResponseSchema,
   proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
   proposerSpeakerPatchSchema,
-  speakerParticipationActionSchema,
+  speakerParticipationPatchSchema,
   speakerProfilePatchSchema,
 } from "./proposal-management";
 import { jsonResponse, requiredJsonBody } from "./openapi";
-import { speakerReminderPreferenceResponseSchema, speakerReminderPreferenceSchema } from "./speaker-reminders";
+import { speakerReminderPreferencePatchSchema, speakerReminderPreferenceResponseSchema } from "./speaker-reminders";
 import { speakerParticipationResponseSchema, speakerSelfServiceReadResponseSchema } from "./speaker-self-service";
 import { publicOperation } from "./route-contract";
 
@@ -90,28 +91,28 @@ export const inviteResendLinkRouteSchema = {
   },
 };
 
-export const proposalManageReadRouteSchema = {
+export const proposalAccessReadRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Read a proposal through its management capability",
-  request: { params: proposalManageTokenParamsSchema },
+  request: { params: proposalAccessTokenParamsSchema },
   responses: {
-    "200": jsonResponse("Proposal management view.", proposalManageReadResponseSchema),
+    "200": jsonResponse("Proposal access view.", proposalAccessReadResponseSchema),
     "404": { description: "Proposal management capability not found." },
     "410": { description: "Proposal management capability expired." },
   },
 };
 
-export const proposalManageUpdateRouteSchema = {
+export const proposalAccessPatchRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Update or withdraw a proposal through its management capability",
   request: {
-    params: proposalManageTokenParamsSchema,
-    body: requiredJsonBody(proposalManageSchema),
+    params: proposalAccessTokenParamsSchema,
+    body: requiredJsonBody(proposalAccessPatchSchema),
   },
   responses: {
-    "200": jsonResponse("Proposal updated.", proposalManageUpdateResponseSchema),
+    "200": jsonResponse("Proposal updated.", proposalAccessPatchResponseSchema),
     "400": { description: "Invalid proposal update." },
     "404": { description: "Proposal management capability not found." },
     "409": { description: "Proposal is not editable or changed concurrently." },
@@ -119,14 +120,33 @@ export const proposalManageUpdateRouteSchema = {
   },
 };
 
-export const proposerManagedSpeakerDeleteRouteSchema = {
+export const proposalAccessCoSpeakerCreateRouteSchema = {
+  ...publicOperation(),
+  tags: ["Proposals", "Speakers"],
+  summary: "Invite a co-speaker to a proposal",
+  request: {
+    params: proposalAccessTokenParamsSchema,
+    body: requiredJsonBody(coSpeakerInviteSchema),
+  },
+  responses: {
+    "200": jsonResponse(
+      "Co-speaker invitation state, including whether a new delivery was queued.",
+      coSpeakerInviteResponseSchema,
+    ),
+    "400": { description: "Proposal is closed or the request is invalid." },
+    "404": { description: "Proposal management capability not found." },
+    "410": { description: "Proposal management capability expired." },
+  },
+};
+
+export const proposalAccessSpeakerDeleteRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Remove a speaker through proposal management",
   description:
     "Removes a non-proposer speaker while preserving the user and audit history. The final speaker and current proposer cannot be removed through this command.",
   request: {
-    params: proposerManagedSpeakerParamsSchema,
+    params: proposalAccessSpeakerParamsSchema,
   },
   responses: {
     "200": jsonResponse("Speaker removed from the proposal.", proposalSpeakerRemovalResponseSchema),
@@ -137,31 +157,30 @@ export const proposerManagedSpeakerDeleteRouteSchema = {
   },
 };
 
-export const proposerManagedSpeakerReminderRouteSchema = {
+export const proposalAccessSpeakerReminderCreateRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals", "Reminders"],
   summary: "Remind a proposal speaker through proposal management",
   description: "Queues a profile reminder for a confirmed speaker using the proposer management capability.",
   request: {
-    params: proposalManageTokenParamsSchema,
-    body: requiredJsonBody(proposalSpeakerReminderRequestSchema),
+    params: proposalAccessSpeakerParamsSchema,
   },
   responses: {
     "200": jsonResponse("Speaker reminder queued.", successResponseSchema),
-    "400": { description: "Invalid speaker reminder payload." },
+    "400": { description: "Invalid proposal or speaker identifier." },
     "404": { description: "Proposal management capability or speaker not found." },
     "409": { description: "The proposal or speaker is not eligible for a reminder." },
     "410": { description: "Proposal management capability expired." },
   },
 };
 
-export const proposerManagedSpeakerPatchRouteSchema = {
+export const proposalAccessSpeakerPatchRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals", "Speakers"],
   summary: "Update a proposal speaker through proposal management",
   description: "Updates a speaker profile and role using the proposer management capability.",
   request: {
-    params: proposerManagedSpeakerParamsSchema,
+    params: proposalAccessSpeakerParamsSchema,
     body: requiredJsonBody(proposerSpeakerPatchSchema),
   },
   responses: {
@@ -174,13 +193,13 @@ export const proposerManagedSpeakerPatchRouteSchema = {
   },
 };
 
-export const proposalSpeakerReminderPreferenceRouteSchema = {
+export const proposalSpeakerReminderPreferencePatchRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals", "Reminders"],
   summary: "Update presentation reminder preference",
   request: {
-    params: proposalManageTokenParamsSchema,
-    body: requiredJsonBody(speakerReminderPreferenceSchema),
+    params: proposalAccessTokenParamsSchema,
+    body: requiredJsonBody(speakerReminderPreferencePatchSchema),
   },
   responses: {
     "200": jsonResponse("Reminder preference updated.", speakerReminderPreferenceResponseSchema),
@@ -193,7 +212,7 @@ export const proposalSpeakerSelfServiceReadRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Read speaker self-service state",
-  request: { params: proposalManageTokenParamsSchema },
+  request: { params: proposalAccessTokenParamsSchema },
   responses: {
     "200": jsonResponse("Capability-safe speaker management view.", speakerSelfServiceReadResponseSchema),
     "404": { description: "Speaker management capability not found." },
@@ -206,8 +225,8 @@ export const proposalSpeakerParticipationRouteSchema = {
   tags: ["Proposals"],
   summary: "Confirm or decline speaker participation",
   request: {
-    params: proposalManageTokenParamsSchema,
-    body: requiredJsonBody(speakerParticipationActionSchema),
+    params: proposalAccessTokenParamsSchema,
+    body: requiredJsonBody(speakerParticipationPatchSchema),
   },
   responses: {
     "200": jsonResponse("Speaker participation updated.", speakerParticipationResponseSchema),
@@ -223,7 +242,7 @@ export const proposalSpeakerProfileUpdateRouteSchema = {
   tags: ["Proposals"],
   summary: "Update speaker self-service profile",
   request: {
-    params: proposalManageTokenParamsSchema,
+    params: proposalAccessTokenParamsSchema,
     body: requiredJsonBody(speakerProfilePatchSchema),
   },
   responses: {

@@ -215,7 +215,7 @@ describe("custom field validation", () => {
     expect(createResponse.status).toBe(200);
     const created = (await createResponse.json()) as { registrationId: string; manageToken: string };
 
-    const updateResponse = await callApi(env, `/api/v1/registrations/manage/${created.manageToken}`, {
+    const updateResponse = await callApi(env, `/api/v1/registrations/access/${created.manageToken}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { deleteJson, getJson, patchJson, postJson, requestJson } from "../shared/api-client";
-import type { ProposalManageResponse } from "../shared/types";
+import type { ProposalAccessResponse } from "../shared/types";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
@@ -15,12 +15,13 @@ import { speakerRoleSchema, headshotUploadResponseSchema } from "../../shared/sc
 import { successResponseSchema } from "../../shared/schemas/api-common";
 import {
   coSpeakerInviteResponseSchema,
-  proposalManageReadResponseSchema,
-  proposalManageUpdateResponseSchema,
+  proposalAccessPatchResponseSchema,
+  proposalAccessReadResponseSchema,
   proposerSpeakerPatchSchema,
   proposalSpeakerRemovalResponseSchema,
 } from "../../shared/schemas/proposal-management";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
+import { proposalAccessPath } from "../../shared/proposal-access-paths";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
   const token = root.dataset.manageToken?.trim();
@@ -48,7 +49,7 @@ function showResendProposalManageLinkForm(
   });
 }
 
-function displaySpeakerName(speaker: ProposalManageResponse["speakers"][number]): string {
+function displaySpeakerName(speaker: ProposalAccessResponse["speakers"][number]): string {
   return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 }
 
@@ -60,7 +61,7 @@ export function ProposalManageSpeakerCard({
   onReload,
   onStatus,
 }: {
-  speaker: ProposalManageResponse["speakers"][number];
+  speaker: ProposalAccessResponse["speakers"][number];
   token: string;
   apiBase: string;
   isCurrentProposer: boolean;
@@ -93,8 +94,8 @@ export function ProposalManageSpeakerCard({
   }, [speaker]);
 
   const speakerName = displaySpeakerName(speaker);
-  const profileEndpoint = `${apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers/${encodeURIComponent(speaker.userId)}`;
-  const headshotEndpoint = `${profileEndpoint}/headshot`;
+  const profileEndpoint = proposalAccessPath(apiBase, token, "speakers", speaker.userId);
+  const headshotEndpoint = proposalAccessPath(apiBase, token, "speakers", speaker.userId, "headshot");
 
   async function saveProfile(event: Event): Promise<void> {
     event.preventDefault();
@@ -126,8 +127,8 @@ export function ProposalManageSpeakerCard({
     setReminding(true);
     try {
       await postJson(
-        `${apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers/remind`,
-        { userId: speaker.userId },
+        proposalAccessPath(apiBase, token, "speakers", speaker.userId, "reminders"),
+        {},
         successResponseSchema,
       );
       onStatus(`${speaker.status === "invited" ? "Reminder" : "Profile link"} sent to ${speaker.email}.`);
@@ -335,7 +336,7 @@ function SpeakerList({
   onReload,
   onStatus,
 }: {
-  speakers: ProposalManageResponse["speakers"];
+  speakers: ProposalAccessResponse["speakers"];
   token: string;
   apiBase: string;
   proposerUserId: string;
@@ -363,7 +364,7 @@ function SpeakerList({
 }
 
 function renderSpeakerList(
-  speakers: ProposalManageResponse["speakers"],
+  speakers: ProposalAccessResponse["speakers"],
   token: string,
   apiBase: string,
   proposerUserId: string,
@@ -405,13 +406,10 @@ async function main(): Promise<void> {
   const apiBase = boot.apiBase;
   const manageToken = token;
 
-  let proposalData: ProposalManageResponse | null;
+  let proposalData: ProposalAccessResponse | null;
 
   async function reloadSpeakers(): Promise<void> {
-    const refreshed = await getJson(
-      `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
-      proposalManageReadResponseSchema,
-    );
+    const refreshed = await getJson(proposalAccessPath(apiBase, manageToken), proposalAccessReadResponseSchema);
     proposalData = refreshed;
     renderSpeakerList(
       refreshed.speakers,
@@ -429,10 +427,7 @@ async function main(): Promise<void> {
   }
 
   try {
-    proposalData = await getJson(
-      `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
-      proposalManageReadResponseSchema,
-    );
+    proposalData = await getJson(proposalAccessPath(apiBase, manageToken), proposalAccessReadResponseSchema);
     setField(boot.form, "proposalType", proposalData.proposal.proposal_type);
     setField(boot.form, "title", proposalData.proposal.title);
     setField(boot.form, "abstract", proposalData.proposal.abstract);
@@ -458,14 +453,13 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
         const response = await patchJson(
-          `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
+          proposalAccessPath(apiBase, manageToken),
           {
-            action: "update",
             proposalType: readField(boot.form, "proposalType"),
             title: readField(boot.form, "title"),
             abstract: readField(boot.form, "abstract"),
           },
-          proposalManageUpdateResponseSchema,
+          proposalAccessPatchResponseSchema,
         );
         setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
       } catch (error) {
@@ -478,9 +472,9 @@ async function main(): Promise<void> {
   withdrawButton?.addEventListener("click", async () => {
     try {
       const response = await patchJson(
-        `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
-        { action: "withdraw" },
-        proposalManageUpdateResponseSchema,
+        proposalAccessPath(apiBase, manageToken),
+        { status: "withdrawn" },
+        proposalAccessPatchResponseSchema,
       );
       setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
     } catch (error) {
@@ -524,7 +518,7 @@ async function main(): Promise<void> {
     await withLoadingButton(inviteBtn, async () => {
       try {
         const invited = await postJson(
-          `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}/speakers`,
+          proposalAccessPath(apiBase, manageToken, "speakers"),
           { email, firstName, lastName, role },
           coSpeakerInviteResponseSchema,
         );

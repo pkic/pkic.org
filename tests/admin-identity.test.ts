@@ -4,7 +4,7 @@ import {
   createServiceAuthAdmin,
   createUserBackedAuthAdmin,
   isUserBackedAuthAdmin,
-  publicAuthAdmin,
+  publicStaffCapacity,
   requireAdminDatabaseUserId,
 } from "../functions/_lib/auth/admin-identity";
 
@@ -24,7 +24,7 @@ describe("admin identity boundaries", () => {
     expect(isUserBackedAuthAdmin(actor)).toBe(true);
     expect(adminDatabaseUserId(actor)).toBe("user-admin");
     expect(requireAdminDatabaseUserId(actor)).toBe("user-admin");
-    expect(publicAuthAdmin(actor)).toEqual({
+    expect(publicStaffCapacity(actor)).toEqual({
       id: "user-admin",
       email: "admin@example.test",
       role: "admin",
@@ -55,7 +55,7 @@ describe("admin identity boundaries", () => {
       scopes: ["admin:read"],
     });
 
-    expect(publicAuthAdmin(actor)).toEqual({
+    expect(publicStaffCapacity(actor)).toEqual({
       id: "api-key",
       email: "api-key",
       role: "admin",

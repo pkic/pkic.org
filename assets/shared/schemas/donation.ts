@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SUPPORTED_CURRENCY_CODES } from "../constants/currencies";
 import { stripeCheckoutSessionIdSchema } from "./stripe";
 import { httpUrlSchema, relativeRedirectPathSchema } from "./urls";
+import { publicOperation } from "./route-contract";
 
 /**
  * Schema for POST /api/v1/donations/checkout — creates a Stripe Checkout Session.
@@ -67,7 +68,7 @@ export const donationCheckoutPostRouteSchema = {
 };
 
 export const donationPromoterRequestSchema = z.object({
-  session_id: stripeCheckoutSessionIdSchema.describe("A valid completed Stripe checkout session ID starting with cs_"),
+  sessionId: stripeCheckoutSessionIdSchema.describe("A valid completed Stripe checkout session ID starting with cs_"),
 });
 
 export const donationPromoterResponseSchema = z.object({
@@ -77,6 +78,7 @@ export const donationPromoterResponseSchema = z.object({
 });
 
 export const donationPromoterPostRouteSchema = {
+  ...publicOperation(),
   tags: ["Donations"],
   summary: "Create or retrieve promoter link",
   description:

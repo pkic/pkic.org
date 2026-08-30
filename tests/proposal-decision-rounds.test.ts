@@ -169,10 +169,10 @@ describe("proposal decision review rounds", () => {
     }
     expect((await finalize(seeded.proposalId, seeded.adminToken, "needs-work")).status).toBe(200);
 
-    const resubmit = await callApp(`/api/v1/proposals/manage/${encodeURIComponent(seeded.manageToken)}`, {
+    const resubmit = await callApp(`/api/v1/proposals/access/${encodeURIComponent(seeded.manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", title: "A revised proposal for the second review round" }),
+      body: JSON.stringify({ title: "A revised proposal for the second review round" }),
     });
     expect(resubmit.status).toBe(200);
     const [resubmitted] = await queryAll<{ status: string; review_round: number }>(
@@ -323,10 +323,10 @@ describe("proposal decision review rounds", () => {
        BEGIN SELECT RAISE(ABORT, 'forced resubmission audit failure'); END`,
     ).run();
 
-    const response = await callApp(`/api/v1/proposals/manage/${encodeURIComponent(seeded.manageToken)}`, {
+    const response = await callApp(`/api/v1/proposals/access/${encodeURIComponent(seeded.manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", title: "This must roll back" }),
+      body: JSON.stringify({ title: "This must roll back" }),
     });
     expect(response.status).toBe(500);
     const [proposal] = await queryAll<{ status: string; review_round: number; title: string }>(

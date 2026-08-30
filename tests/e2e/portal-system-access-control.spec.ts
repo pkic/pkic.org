@@ -57,7 +57,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   expect((await deleteResponse).status()).toBe(200);
   await expect(roleRow).toHaveCount(0);
 
-  await page.goto("/admin/#/access-control");
+  await page.goto("/portal/#/system/access-control");
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control$/);
   await expect(page.getByRole("link", { name: "Access Control" })).toBeVisible();
 

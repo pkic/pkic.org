@@ -1,6 +1,6 @@
 import { all, run } from "../../db/queries";
 import { logInfo } from "../../logging";
-import type { DatabaseLike, Env } from "../../types";
+import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { runScheduledJobWithD1Budget } from "../scheduled-job-runner";
 import {
@@ -70,10 +70,27 @@ export async function claimJob(
   jobKey: ScheduledJobKey,
   leaseSeconds: number,
 ): Promise<string | null> {
+  const claim = prepareJobClaim(db, jobKey, leaseSeconds);
+  const result = await claim.statement.run();
+  return result.meta?.changes === 1 ? claim.token : null;
+}
+
+/**
+ * Builds the canonical compare-and-set lease claim. Manual runs compose this
+ * statement with live authorization and audit guards in one D1 batch, while
+ * the platform dispatcher executes the same statement directly.
+ */
+export function prepareJobClaim(
+  db: DatabaseLike,
+  jobKey: ScheduledJobKey,
+  leaseSeconds: number,
+): { token: string; statement: StatementLike } {
   const token = uuid();
-  const result = await run(
-    db,
-    `UPDATE scheduled_jobs
+  return {
+    token,
+    statement: db
+      .prepare(
+        `UPDATE scheduled_jobs
         SET running_since = ${NOW_SQL},
             lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ','now', '+' || ? || ' seconds'),
             run_token = ?,
@@ -82,9 +99,9 @@ export async function claimJob(
       WHERE job_key = ?
         AND paused_at IS NULL
         AND running_since IS NULL`,
-    [leaseSeconds, token, jobKey],
-  );
-  return result.changes > 0 ? token : null;
+      )
+      .bind(leaseSeconds, token, jobKey),
+  };
 }
 
 export async function recordJobOutcome(

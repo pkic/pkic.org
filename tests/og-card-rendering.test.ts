@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { onRequestGet, parseOgCardRequest, publishedOgCardVersion } from "../functions/api/v1/og/card/[...path]";
+import { onRequestGet, parseOgCardRequest, publishedOgCardVersion } from "../functions/og/[...path]";
 import type { Env } from "../functions/_lib/types";
 
 const VERSION = "0123456789ab";

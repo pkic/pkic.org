@@ -6,7 +6,7 @@
  * The token only identifies the user/session and carries non-authoritative
  * context hints used by the read-replica and membership-context adapters.
  */
-import type { PublicAuthAdmin } from "../../../assets/shared/schemas/admin-auth";
+import type { PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
 import { first } from "../db/queries";
@@ -14,7 +14,7 @@ import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { createUserBackedAuthAdmin, publicAuthAdmin } from "./admin-identity";
+import { createUserBackedAuthAdmin, publicStaffCapacity } from "./admin-identity";
 import {
   findEligibleStaffUserById,
   staffSignInAuthorizationEvidence,
@@ -229,13 +229,13 @@ export async function resolveUserSessionFromRequest(
 
 export function publicUserSession(result: UserSessionResult): {
   identity: { id: string; email: string };
-  staff?: PublicAuthAdmin;
+  staff?: PublicStaffCapacity;
   member?: AuthMember;
   sponsors: SponsorCapacity[];
 } {
   return {
     identity: result.identity,
-    ...(result.staff ? { staff: publicAuthAdmin(result.staff) } : {}),
+    ...(result.staff ? { staff: publicStaffCapacity(result.staff) } : {}),
     ...(result.member ? { member: result.member } : {}),
     sponsors: result.sponsors,
   };

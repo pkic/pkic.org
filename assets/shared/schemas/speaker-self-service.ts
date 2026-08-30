@@ -1,23 +1,25 @@
 import { z } from "zod";
-import { proposalManageTokenParamsSchema } from "./proposal-management";
+import { proposalAccessTokenParamsSchema } from "./proposal-management";
 import { normalizedEmailSchema, successResponseSchema } from "./api-common";
 import { requiredTermSchema } from "./event-read-models";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import {
   MAX_PROPOSAL_PARTICIPANTS,
-  proposalManageSpeakerStatusSchema,
+  proposalAccessSpeakerStatusSchema,
   proposalTypeSchema,
 } from "./proposal-management";
 import { speakerRoleSchema } from "./registration";
 import { proposalStatusSchema } from "./proposal-status";
 import { httpUrlSchema } from "./urls";
+import { publicOperation } from "./route-contract";
+import { ALLOWED_PRESENTATION_MIME_TYPES } from "../presentation-upload";
 
 const nullableTimestampSchema = z.string().nullable();
 
 export const speakerSelfServiceAccessSchema = z.object({
   role: speakerRoleSchema,
-  status: proposalManageSpeakerStatusSchema,
+  status: proposalAccessSpeakerStatusSchema,
   confirmedAt: nullableTimestampSchema,
   declinedAt: nullableTimestampSchema,
   termsAcceptedAt: nullableTimestampSchema,
@@ -43,7 +45,7 @@ export const speakerSelfServiceProposalSchema = z.object({
       z.object({
         firstName: z.string().nullable(),
         lastName: z.string().nullable(),
-        status: proposalManageSpeakerStatusSchema,
+        status: proposalAccessSpeakerStatusSchema,
       }),
     )
     .max(MAX_PROPOSAL_PARTICIPANTS - 1),
@@ -76,14 +78,37 @@ export const speakerParticipationResponseSchema = successResponseSchema.extend({
 export const speakerPresentationUploadResponseSchema = successResponseSchema;
 
 export const speakerPresentationUploadRouteSchema = {
+  ...publicOperation(),
   tags: ["Proposals", "Presentations"],
   summary: "Upload a speaker presentation",
-  request: { params: proposalManageTokenParamsSchema },
+  request: { params: proposalAccessTokenParamsSchema },
   responses: {
     "200": {
       description: "Presentation uploaded.",
       content: { "application/json": { schema: speakerPresentationUploadResponseSchema } },
     },
+  },
+};
+
+const speakerPresentationFileSchema = z.any().describe("Current PDF or presentation file bytes");
+const speakerPresentationResponseContent = Object.fromEntries(
+  ALLOWED_PRESENTATION_MIME_TYPES.map((mimeType) => [mimeType, { schema: speakerPresentationFileSchema }]),
+);
+export const speakerPresentationDownloadRouteSchema = {
+  ...publicOperation(),
+  tags: ["Proposals", "Presentations"],
+  summary: "Download the current speaker presentation",
+  request: { params: proposalAccessTokenParamsSchema },
+  responses: {
+    "200": {
+      description: "Current presentation file.",
+      content: speakerPresentationResponseContent,
+    },
+    "403": { description: "Speaker participation has not been confirmed." },
+    "404": { description: "Speaker capability or presentation not found." },
+    "409": { description: "The proposal has not been accepted." },
+    "410": { description: "Speaker capability expired." },
+    "503": { description: "Presentation storage is unavailable." },
   },
 };
 

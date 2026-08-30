@@ -1,6 +1,6 @@
 export const E2E_ADMIN_SCOPES = Object.freeze([
   "default",
-  "admin-verification",
+  "portal-management-verification",
   "browser-auth",
   "browser-presentation",
   "browser-waitlist",
@@ -29,6 +29,8 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-identity-history",
   "portal-identity-logout",
   "portal-mobile-navigation",
+  "portal-dual-capacity",
+  "portal-dual-capacity-guard",
   "portal-system-audit-list",
   "portal-system-audit-states",
   "sponsor-workspace",

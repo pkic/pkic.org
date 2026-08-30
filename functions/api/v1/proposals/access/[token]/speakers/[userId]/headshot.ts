@@ -1,0 +1,112 @@
+import { OpenAPIRoute } from "chanfana";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { json } from "../../../../../../../_lib/http";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import { requireInternalSecret } from "../../../../../../../_lib/request";
+import { getProposerManagedSpeakerContext } from "../../../../../../../_lib/services/proposer-speaker-profile";
+import {
+  privateUserHeadshotResponse,
+  requireUserHeadshotBucket,
+} from "../../../../../../../_lib/services/user-headshot";
+import {
+  removeProposalSpeakerHeadshot,
+  replaceProposalSpeakerHeadshot,
+} from "../../../../../../../_lib/services/proposal-speaker-headshot";
+import { readValidatedUploadedImage } from "../../../../../../../_lib/utils/image-upload";
+import {
+  proposalAccessSpeakerHeadshotDeleteRouteSchema,
+  proposalAccessSpeakerHeadshotGetRouteSchema,
+  proposalAccessSpeakerHeadshotPutRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts";
+import { SPEAKER_HEADSHOT_MAX_BYTES } from "../../../../../../../../assets/shared/schemas/images";
+import { proposalAccessPath } from "../../../../../../../../assets/shared/proposal-access-paths";
+
+interface HeadshotParams {
+  token: string;
+  userId: string;
+}
+
+async function loadContext(c: AdminContext, params: HeadshotParams) {
+  c.set?.("sensitive", true);
+  return getProposerManagedSpeakerContext(requestDb(c), params.token, params.userId, requireInternalSecret(c.env));
+}
+
+async function onGet(c: AdminContext, params: HeadshotParams): Promise<Response> {
+  const { speaker } = await loadContext(c, params);
+  if (!speaker.headshot_r2_key) {
+    return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
+  }
+  return privateUserHeadshotResponse(requireUserHeadshotBucket(c.env), speaker.headshot_r2_key);
+}
+
+async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response> {
+  const { proposal, speaker } = await loadContext(c, params);
+  const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
+  const r2Key = await replaceProposalSpeakerHeadshot({
+    db: requestDb(c),
+    bucket: requireUserHeadshotBucket(c.env),
+    proposalId: proposal.id,
+    proposalSpeakerId: speaker.id,
+    speakerUserId: speaker.user_id,
+    previousOverrideSet: speaker.headshot_override_set,
+    previousOverrideKey: speaker.headshot_override_r2_key,
+    editableProposalSnapshot: { status: proposal.status, updatedAt: proposal.updated_at },
+    image,
+    audit: {
+      actorType: "user",
+      actorId: proposal.proposer_user_id,
+      action: "speaker_headshot_uploaded_by_proposer",
+      entityType: "proposal_speaker",
+      entityId: speaker.id,
+      scope: { type: "proposal", id: proposal.id },
+      details: { proposalId: proposal.id, speakerUserId: speaker.user_id },
+    },
+  });
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
+  return json({
+    success: true,
+    r2Key,
+    headshotUrl: `${proposalAccessPath(`${origin}/api/v1`, params.token, "speakers", speaker.user_id, "headshot")}?v=${encodeURIComponent(String(Date.now()))}`,
+  });
+}
+
+async function onDelete(c: AdminContext, params: HeadshotParams): Promise<Response> {
+  const { proposal, speaker } = await loadContext(c, params);
+  await removeProposalSpeakerHeadshot({
+    db: requestDb(c),
+    proposalId: proposal.id,
+    proposalSpeakerId: speaker.id,
+    speakerUserId: speaker.user_id,
+    previousOverrideSet: speaker.headshot_override_set,
+    previousOverrideKey: speaker.headshot_override_r2_key,
+    editableProposalSnapshot: { status: proposal.status, updatedAt: proposal.updated_at },
+    audit: {
+      actorType: "user",
+      actorId: proposal.proposer_user_id,
+      action: "speaker_headshot_deleted_by_proposer",
+      entityType: "proposal_speaker",
+      entityId: speaker.id,
+      scope: { type: "proposal", id: proposal.id },
+      details: { proposalId: proposal.id, speakerUserId: speaker.user_id },
+    },
+  });
+  return json({ success: true });
+}
+
+export const ProposalAccessSpeakerHeadshotGet = openApiRoute(proposalAccessSpeakerHeadshotGetRouteSchema, (c, data) =>
+  onGet(c, data.params as HeadshotParams),
+);
+
+export class ProposalAccessSpeakerHeadshotPut extends OpenAPIRoute {
+  schema = proposalAccessSpeakerHeadshotPutRouteSchema;
+
+  async handle(c: AdminContext) {
+    return onPut(c, { token: c.req.param("token"), userId: c.req.param("userId") });
+  }
+}
+
+export const ProposalAccessSpeakerHeadshotDelete = openApiRoute(
+  proposalAccessSpeakerHeadshotDeleteRouteSchema,
+  (c, data) => onDelete(c, data.params as HeadshotParams),
+);

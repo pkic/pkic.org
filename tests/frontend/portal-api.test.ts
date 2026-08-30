@@ -5,7 +5,7 @@ import { authStatus } from "../../assets/ts/member-flows/portal/state";
 import { PERMISSION_DENIED_MESSAGE, PERMISSION_DENIED_WITH_REFRESH_MESSAGE } from "../../assets/shared/auth-errors";
 import { presentationUploadRequest } from "../../assets/shared/presentation-upload";
 import { successResponseSchema } from "../../assets/shared/schemas/api-common";
-import { adminAuthSessionResponseSchema } from "../../assets/shared/schemas/admin-auth";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { ApiClientError, requestJson } from "../../assets/ts/shared/api-client";
 import { z } from "zod";
 import { eventInviteBulkResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
@@ -128,7 +128,7 @@ describe("portal API client", () => {
       ),
     );
 
-    await expect(api("/api/v1/auth/session", adminAuthSessionResponseSchema)).rejects.toBeInstanceOf(z.ZodError);
+    await expect(api("/api/v1/auth/session", userAuthSessionResponseSchema)).rejects.toBeInstanceOf(z.ZodError);
   });
 
   it("parses canonical API errors without trusting malformed error bodies", async () => {

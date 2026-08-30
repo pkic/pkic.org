@@ -86,7 +86,7 @@ export const representativeAssociateSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export const representativeProfileUpdateSchema = z.object({ showOnOrganizationProfile: z.boolean() });
-export const representativeRemoveSchema = z.object({ reason: trimmedString(1, 500).optional() });
+export const representativeRemoveSchema = z.object({ reason: trimmedString(1, 500).optional() }).default({});
 export const representativeRestoreSchema = z.object({ reason: trimmedString(1, 500).optional() });
 export const representativeMutationResponseSchema = successResponseSchema.extend({
   representativeId: databaseIdSchema,

@@ -1,11 +1,11 @@
 /** Neutral user identity authentication contracts used by every human UI. */
 import { z } from "zod";
-import { publicAuthAdminSchema } from "./admin-auth";
 import { authMemberSchema } from "./member-auth";
 import { emailRecoveryRequestSchema, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { publicOperation, requiresSession } from "./route-contract";
 import { sponsorCapacitySchema } from "./sponsor-access";
+import { publicStaffCapacitySchema } from "./staff-capacity";
 
 export const userAuthRequestSchema = emailRecoveryRequestSchema;
 export const userAuthVerifySchema = magicLinkVerifySchema;
@@ -17,7 +17,7 @@ export const userIdentitySchema = z.object({
 
 const userCapacityFields = {
   identity: userIdentitySchema,
-  staff: publicAuthAdminSchema.optional(),
+  staff: publicStaffCapacitySchema.optional(),
   member: authMemberSchema.optional(),
   sponsors: z.array(sponsorCapacitySchema).default([]),
 };

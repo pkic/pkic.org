@@ -12,7 +12,7 @@ export const CAPABILITY_TOKEN_PREFIX = "pkc1_";
 export const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const SIGNING_DOMAIN = "pkic-public-capability:v1";
 
-export type EmailAuthCapabilityPurpose = "user_sign_in" | "sponsor_sign_in" | "mcp_oauth_sign_in";
+export type EmailAuthCapabilityPurpose = "user_sign_in" | "sponsor_sign_in";
 
 export type CapabilityPurpose =
   | "registration_manage"
@@ -49,7 +49,6 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   member_join_apply: "mja",
   user_sign_in: "usi",
   sponsor_sign_in: "ssi",
-  mcp_oauth_sign_in: "moi",
 };
 
 const purposesByCode = Object.fromEntries(
@@ -171,8 +170,7 @@ export function isStatelessCapabilityPurpose(purpose: CapabilityPurpose): purpos
     purpose === "member_join_verify" ||
     purpose === "member_join_apply" ||
     purpose === "user_sign_in" ||
-    purpose === "sponsor_sign_in" ||
-    purpose === "mcp_oauth_sign_in"
+    purpose === "sponsor_sign_in"
   );
 }
 

@@ -76,5 +76,5 @@ export async function onRequestGet(c: any): Promise<Response> {
 // entirely), so its manual query-parsing/error-shape behavior can't change
 // here. GET has no request body, so wrapping it doesn't risk the
 // double-body-read hazard that rules out wrapping the POST endpoints in this
-// directory (see donations/promoter.ts).
+// directory (see donations/promoters.ts).
 export const DonationsSessionGet = openApiRoute(donationSessionGetRouteSchema, (c: any) => onRequestGet(c));

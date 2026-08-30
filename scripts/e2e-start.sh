@@ -20,7 +20,7 @@ unset npm_config__jsr_registry NPM_CONFIG__JSR_REGISTRY
 
 mkdir -p "$(dirname "$INTERCEPT_URL_FILE")"
 rm -f "$INTERCEPT_URL_FILE"
-rm -f test-results/admin-verification-auth.json
+rm -f test-results/portal-management-verification-auth.json
 rm -f test-results/portal-mobile-navigation-auth.json
 
 # ── 0. Clean stale build artifacts ───────────────────────────────────────────

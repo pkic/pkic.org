@@ -15,6 +15,36 @@ import {
 } from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
+const absentUserId = "00000000000000000000000000000000";
+
+const retiredCapabilityRoutes = [
+  { method: "GET", path: "/api/v1/registrations/manage/no-such-token" },
+  { method: "GET", path: "/api/v1/proposals/manage/no-such-token" },
+  { method: "PATCH", path: "/api/v1/proposals/manage/no-such-token" },
+  { method: "POST", path: "/api/v1/proposals/manage/no-such-token/speakers" },
+  { method: "POST", path: "/api/v1/proposals/manage/no-such-token/speakers/remind" },
+  { method: "PATCH", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}` },
+  { method: "DELETE", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}` },
+  { method: "GET", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "PUT", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "DELETE", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "POST", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "PATCH", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "PUT", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "DELETE", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "PUT", path: "/api/v1/proposals/speaker/no-such-token/presentation" },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token/presentation/download" },
+  { method: "POST", path: "/api/v1/proposals/speaker/no-such-token/reminders" },
+  {
+    method: "GET",
+    path: "/api/v1/proposals/access/no-such-token/speakers/reminders",
+    expectedStatus: 405,
+  },
+  { method: "GET", path: "/api/v1/proposals/speakers/access/no-such-token/reminders" },
+  { method: "GET", path: "/api/v1/proposals/speakers/access/no-such-token/presentation/download" },
+] as const;
 
 function callApp(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -24,6 +54,28 @@ describe("manage read endpoints", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it("does not retain the retired capability route operations", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const sessionToken = await createAdminSession(env.DB, admin.id, "retired-capability-route-test");
+
+    for (const route of retiredCapabilityRoutes) {
+      const response = await callApp(
+        new Request(`https://app.test${route.path}`, {
+          method: route.method,
+          headers: { authorization: `Bearer ${sessionToken}` },
+        }),
+      );
+
+      expect({ method: route.method, path: route.path, status: response.status }).toEqual({
+        method: route.method,
+        path: route.path,
+        status: "expectedStatus" in route ? route.expectedStatus : 404,
+      });
+    }
+  });
+
   it("returns registration state for a valid manage token", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -53,7 +105,7 @@ describe("manage read endpoints", () => {
       resourceId: registrationId,
     });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${token}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${token}`));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
@@ -92,7 +144,7 @@ describe("manage read endpoints", () => {
       `),
     ]);
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${tokenHash}`));
 
     expect(response.status).toBe(404);
     expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
@@ -120,7 +172,7 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${created.manageToken}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${created.manageToken}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -188,7 +240,7 @@ describe("manage read endpoints", () => {
     });
 
     const response = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${confirmedSecond.manageToken}`),
+      new Request(`https://app.test/api/v1/registrations/access/${confirmedSecond.manageToken}`),
     );
 
     expect(response.status).toBe(200);
@@ -258,7 +310,7 @@ describe("manage read endpoints", () => {
     expect(claims.sid).toBeTruthy();
 
     const validResponse = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: {
           "cf-connecting-ip": "203.0.113.30",
           "user-agent": "admin-browser",
@@ -268,7 +320,7 @@ describe("manage read endpoints", () => {
     expect(validResponse.status, JSON.stringify(await validResponse.clone().json())).toBe(200);
 
     const updateResponse = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -293,7 +345,7 @@ describe("manage read endpoints", () => {
     expect(audit).toEqual({ actor_type: "admin", actor_id: admin.id });
 
     const wrongContextResponse = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: {
           "cf-connecting-ip": "203.0.113.31",
           "user-agent": "admin-browser",
@@ -306,14 +358,14 @@ describe("manage read endpoints", () => {
 
     await env.DB.prepare("UPDATE sessions SET revoked_at = datetime('now') WHERE id = ?").bind(claims.sid).run();
     const revokedSessionGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
     );
     expect(revokedSessionGet.status).toBe(401);
 
     const revokedSessionPatch = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -326,7 +378,7 @@ describe("manage read endpoints", () => {
     expect(revokedSessionPatch.status).toBe(401);
 
     const revokedSessionHeadshot = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
         method: "PUT",
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
@@ -340,14 +392,14 @@ describe("manage read endpoints", () => {
     await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(admin.id).run();
 
     const deactivatedGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
     );
     expect(deactivatedGet.status).toBe(401);
 
     const deactivatedPatch = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -360,7 +412,7 @@ describe("manage read endpoints", () => {
     expect(deactivatedPatch.status).toBe(401);
 
     const deactivatedHeadshot = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
         method: "PUT",
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
@@ -424,7 +476,7 @@ describe("manage read endpoints", () => {
     const jwt = new URL(manageUrl).searchParams.get("token") as string;
 
     const validGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
@@ -441,7 +493,7 @@ describe("manage read endpoints", () => {
       ttlSeconds: 300,
     });
     const wrongEventGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${wrongEventJwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${wrongEventJwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
@@ -454,14 +506,14 @@ describe("manage read endpoints", () => {
       .run();
 
     const readOnlyGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
     expect(readOnlyGet.status).toBe(200);
 
     const revokedPatch = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -474,7 +526,7 @@ describe("manage read endpoints", () => {
     expect(revokedPatch.status).toBe(403);
 
     const revokedHeadshot = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
         method: "PUT",
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
@@ -488,7 +540,7 @@ describe("manage read endpoints", () => {
       .run();
 
     const revokedGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
@@ -529,7 +581,7 @@ describe("manage read endpoints", () => {
       resourceId: proposalId,
     });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/proposals/manage/${token}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/proposals/access/${token}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -590,10 +642,10 @@ describe("manage read endpoints", () => {
     });
 
     const updateResponse = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "update", proposalType: "ask me anything" }),
+        body: JSON.stringify({ proposalType: "ask me anything" }),
       }),
     );
     expect(updateResponse.status).toBe(200);
@@ -602,35 +654,35 @@ describe("manage read endpoints", () => {
     });
 
     const unsupportedType = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "update", proposalType: "unconfigured session" }),
+        body: JSON.stringify({ proposalType: "unconfigured session" }),
       }),
     );
     expect(unsupportedType.status).toBe(400);
     await expect(unsupportedType.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
 
     const emptyUpdate = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "update" }),
+        body: JSON.stringify({}),
       }),
     );
     expect(emptyUpdate.status).toBe(400);
 
     const ambiguousWithdrawal = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "withdraw", title: "Do not apply this title" }),
+        body: JSON.stringify({ status: "withdrawn", title: "Do not apply this title" }),
       }),
     );
     expect(ambiguousWithdrawal.status).toBe(400);
 
     const speakerResponse = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}/speakers/${userId}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}/speakers/${userId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ role: "moderator" }),

@@ -64,7 +64,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     const response = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,
@@ -107,11 +107,14 @@ describe("proposal speaker capacity reconciliation", () => {
     });
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${encodeURIComponent(speakerManageToken)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "decline", reason: "Schedule conflict" }),
-      }),
+      new Request(
+        `https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(speakerManageToken)}/participation`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "declined", reason: "Schedule conflict" }),
+        },
+      ),
       env,
       requestOptions,
     );
@@ -146,11 +149,14 @@ describe("proposal speaker capacity reconciliation", () => {
       .run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${encodeURIComponent(speakerManageToken)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "decline", reason: "Schedule conflict" }),
-      }),
+      new Request(
+        `https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(speakerManageToken)}/participation`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "declined", reason: "Schedule conflict" }),
+        },
+      ),
       env,
       requestOptions,
     );
@@ -170,7 +176,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     const response = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -217,7 +223,7 @@ describe("proposal speaker capacity reconciliation", () => {
     });
     const removeResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,
@@ -225,7 +231,7 @@ describe("proposal speaker capacity reconciliation", () => {
     );
     expect(removeResponse.status).toBe(200);
     const addResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers`, {
+      new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -267,7 +273,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     const response = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -298,7 +304,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     const moderator = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -323,7 +329,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     const panelist = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -370,7 +376,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     const removal = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,
@@ -483,10 +489,10 @@ describe("proposal speaker capacity reconciliation", () => {
     ]);
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "withdraw" }),
+        body: JSON.stringify({ status: "withdrawn" }),
       }),
       env,
       requestOptions,
@@ -550,7 +556,7 @@ describe("proposal speaker capacity reconciliation", () => {
     ]);
     const proposerResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${proposal.proposer_user_id}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${proposal.proposer_user_id}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,

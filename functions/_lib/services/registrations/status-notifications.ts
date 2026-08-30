@@ -241,7 +241,7 @@ export async function prepareRegistrationConfirmedEmail(
       shareUrl,
       ...(shareUrl
         ? {
-            badgeImageUrl: `${params.appBaseUrl}/api/v1/og/${params.referralCode}`,
+            badgeImageUrl: `${params.appBaseUrl}/api/v1/registrations/referrals/${params.referralCode}/badge`,
             linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
             twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me! ${shareUrl}`)}`,
             blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me!\n${shareUrl}`)}`,

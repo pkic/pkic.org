@@ -22,7 +22,7 @@ import {
   type ProposalProfileField,
 } from "./proposal-speaker-profile-overrides";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
+import type { ProposalAccessSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import { effectiveStoredInviteExpiry, type InviteEventWindow } from "../invite-validity";
@@ -32,7 +32,7 @@ export interface ProposalSpeakerRecord {
   proposal_id: string;
   user_id: string;
   role: SpeakerRole;
-  status: ProposalManageSpeakerStatus;
+  status: ProposalAccessSpeakerStatus;
   manage_link_secret: string | null;
   terms_accepted_at: string | null;
   confirmed_at: string | null;
@@ -356,7 +356,7 @@ export async function updateProposalSpeakerRole(
     [payload.proposalId],
   );
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  const speaker = await first<{ id: string; role: ProposalSpeakerRole; status: ProposalManageSpeakerStatus }>(
+  const speaker = await first<{ id: string; role: ProposalSpeakerRole; status: ProposalAccessSpeakerStatus }>(
     db,
     "SELECT id, role, status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
     [payload.proposalId, payload.userId],
@@ -431,7 +431,7 @@ export async function prepareProposalSpeakerRoleChange(
     userId: string;
     speakerId: string;
     currentRole?: ProposalSpeakerRole;
-    currentStatus: ProposalManageSpeakerStatus;
+    currentStatus: ProposalAccessSpeakerStatus;
     nextRole: ProposalSpeakerRole;
   },
 ): Promise<{ updateStatement: StatementLike; capacityStatements: StatementLike[] }> {
@@ -498,7 +498,7 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
   speaker_id: string;
   user_id: string;
   role: SpeakerRole;
-  status: ProposalManageSpeakerStatus;
+  status: ProposalAccessSpeakerStatus;
   manage_link_secret: string | null;
   confirmed_at: string | null;
   declined_at: string | null;

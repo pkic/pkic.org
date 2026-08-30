@@ -102,7 +102,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   if (!reg) return null;
 
   const shareUrl = reg.referral_code ? `${window.location.origin}/r/${reg.referral_code}` : null;
-  const ogBadgeUrl = reg.referral_code ? `${window.location.origin}/api/v1/og/${reg.referral_code}` : null;
+  const ogBadgeUrl = reg.referral_code
+    ? `${window.location.origin}/api/v1/registrations/referrals/${reg.referral_code}/badge`
+    : null;
   const name = reg.display_name ?? reg.user_email ?? "—";
 
   return (

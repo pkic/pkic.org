@@ -1,7 +1,7 @@
 import type { FormFieldDefinition } from "../../shared/schemas/forms";
 
 export type { EventFormsResponse, RequiredTerm } from "../../shared/schemas/forms";
-export type { ProposalManageResponse } from "../../shared/schemas/proposal-management";
+export type { ProposalAccessResponse } from "../../shared/schemas/proposal-management";
 export type { RegistrationManageReadResponse as RegistrationManageResponse } from "../../shared/schemas/registration";
 
 export type FormField = Omit<FormFieldDefinition, "id" | "updatedAt" | "archivedAt"> & {

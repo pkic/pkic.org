@@ -91,7 +91,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
       .getByText("In use"),
   ).toBeVisible();
 
-  await page.goto("/admin/#/email/templates");
+  await page.goto("/portal/#/system/email-templates");
   await expect(page).toHaveURL(/\/portal\/#\/system\/email-templates$/);
   await expect(page.getByRole("link", { name: "Email Templates" })).toBeVisible();
 

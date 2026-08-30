@@ -275,7 +275,7 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest(),
       }),
@@ -310,7 +310,7 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("invited.pdf"),
       }),
@@ -366,7 +366,7 @@ describe("presentation versioning", () => {
     const bucket = new BlockingPresentationBucket();
     const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
     const uploadPromise = app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("stale-speaker.pdf"),
       }),
@@ -394,7 +394,7 @@ describe("presentation versioning", () => {
     const bucket = new BlockingPresentationBucket();
     const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
     const uploadPromise = app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("stale-deadline.pdf"),
       }),
@@ -429,7 +429,7 @@ describe("presentation versioning", () => {
         .run();
       const bucket = new BlockingPresentationBucket();
       const uploadPromise = app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...presentationRequest("deadline-passed.pdf"),
         }),
@@ -575,7 +575,7 @@ describe("presentation versioning", () => {
     const upload = presentationRequest();
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...upload,
         headers: { ...upload.headers, [PRESENTATION_FILE_SIZE_HEADER]: String(MAX_PRESENTATION_BYTES + 1) },
@@ -600,7 +600,7 @@ describe("presentation versioning", () => {
     });
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         headers: {
           "content-type": "application/pdf",
@@ -633,7 +633,7 @@ describe("presentation versioning", () => {
     });
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         headers: {
           "content-type": "application/pdf",
@@ -674,7 +674,7 @@ describe("presentation versioning", () => {
     });
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         headers: {
           "content-type": "application/pdf",
@@ -703,7 +703,7 @@ describe("presentation versioning", () => {
     let res2: Response;
     try {
       await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...presentationRequest("v1.pdf"),
         }),
@@ -712,7 +712,7 @@ describe("presentation versioning", () => {
       );
 
       res2 = await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...presentationRequest("v2.pdf"),
         }),
@@ -747,7 +747,7 @@ describe("presentation versioning", () => {
     ]) {
       const upload = presentationUploadRequest(new File([content], name, { type: "application/pdf" }));
       const response = await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...upload,
         }),
@@ -910,7 +910,7 @@ describe("presentation versioning", () => {
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest(),
       }),
@@ -1272,7 +1272,7 @@ describe("presentation versioning", () => {
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest(),
       }),
@@ -1320,7 +1320,7 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -1345,7 +1345,7 @@ describe("presentation versioning", () => {
 
     // Upload first
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("quantum-talk.pdf"),
       }),
@@ -1355,7 +1355,7 @@ describe("presentation versioning", () => {
 
     // Download
     const dlRes = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation/download`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`),
       envWithBucket,
       execCtx,
     );
@@ -1375,7 +1375,7 @@ describe("presentation versioning", () => {
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
     const uploadResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("state-guard.pdf"),
       }),
@@ -1388,7 +1388,7 @@ describe("presentation versioning", () => {
       .bind(proposalId)
       .run();
     const declinedResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation/download`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`),
       envWithBucket,
       execCtx,
     );
@@ -1400,7 +1400,7 @@ describe("presentation versioning", () => {
       .run();
     await env.DB.prepare("UPDATE session_proposals SET status = 'canceled' WHERE id = ?").bind(proposalId).run();
     const canceledResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation/download`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`),
       envWithBucket,
       execCtx,
     );
@@ -1415,7 +1415,7 @@ describe("presentation versioning", () => {
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
     const uploadResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("redacted.pdf"),
       }),
@@ -1461,7 +1461,7 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
     const upload = presentationRequest("current.pdf");
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...upload,
       }),

@@ -3,6 +3,13 @@ import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
 
+function magicLinkUrl(baseUrl: string, token: string): string {
+  const url = new URL(baseUrl);
+  const separator = url.hash.includes("?") ? "&" : "?";
+  url.hash = `${url.hash}${separator}token=${encodeURIComponent(token)}`;
+  return url.toString();
+}
+
 export async function requestUserSignInLink(
   db: DatabaseLike,
   payload: {
@@ -26,7 +33,7 @@ export async function requestUserSignInLink(
     subject: "Your PKI Consortium sign-in link",
     data: {
       email: magic.identity.email,
-      magicLinkUrl: `${payload.magicLinkBaseUrl}?token=${encodeURIComponent(magic.queuedToken)}`,
+      magicLinkUrl: magicLinkUrl(payload.magicLinkBaseUrl, magic.queuedToken),
       expiresInMinutes: payload.ttlMinutes,
     },
     capabilityLinkValues: [magic.queuedToken],

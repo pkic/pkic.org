@@ -16,7 +16,6 @@ const TRANSPORT_HELPERS = new Map([
       ["deleteJson", 1],
     ]),
   ],
-  ["assets/ts/admin/api.ts", new Map([["api", 1]])],
 ]);
 const PERMISSIVE_SCHEMA_FACTORIES = new Set(["any", "unknown", "custom"]);
 

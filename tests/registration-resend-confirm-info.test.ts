@@ -245,7 +245,7 @@ describe("resend-confirmation endpoint", () => {
     );
     await gate.reached;
 
-    const emailChange = await callApi(env, `/api/v1/registrations/manage/${encodeURIComponent(manageToken)}`, {
+    const emailChange = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "update", email: "resend-corrected@example.test" }),
@@ -324,7 +324,7 @@ describe("resend-confirmation endpoint", () => {
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const { registrationId, manageToken } = await registerAttendee();
 
-    const emailChange = await callApi(env, `/api/v1/registrations/manage/${encodeURIComponent(manageToken)}`, {
+    const emailChange = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "update", email: "delayed-new@example.test" }),
@@ -537,7 +537,7 @@ describe("resend-manage-link endpoint", () => {
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const { manageToken, email } = await registerAttendee();
 
-    const change = await callApi(env, `/api/v1/registrations/manage/${encodeURIComponent(manageToken)}`, {
+    const change = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "update", email: "unverified-pending@example.test" }),

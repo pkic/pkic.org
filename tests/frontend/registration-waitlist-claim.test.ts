@@ -128,7 +128,7 @@ describe("registration waitlist claim UI", () => {
     expect(document.querySelector("[data-post-action]")?.classList.contains("d-none")).toBe(true);
     expect(document.querySelector("[data-post-action-title]")?.textContent).not.toContain("claimed");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/v1/registrations/manage/claim-token",
+      "/api/v1/registrations/access/claim-token",
       expect.objectContaining({ method: "PATCH" }),
     );
   });

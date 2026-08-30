@@ -5,7 +5,7 @@ import type { DatabaseLike } from "../functions/_lib/types";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
 import { getEventById } from "../functions/_lib/services/events";
 import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "../functions/_lib/services/forms";
-import { saveProposalManageChanges } from "../functions/_lib/services/proposal-self-service";
+import { saveProposalAccessChanges } from "../functions/_lib/services/proposal-self-service";
 import { submitProposal } from "../functions/_lib/services/proposal-submission";
 import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
 import { updateManagedRegistration } from "../functions/_lib/services/registrations/manage-update";
@@ -218,10 +218,10 @@ describe("form revision guards on registration and proposal commands", () => {
     ).rejects.toMatchObject({ status: 409, code: "FORM_CHANGED" });
 
     await expect(
-      saveProposalManageChanges(editFormBeforeFirstBatch(proposalFormId), {
+      saveProposalAccessChanges(editFormBeforeFirstBatch(proposalFormId), {
         token: proposal.manageToken!,
         signingSecret: SIGNING_SECRET,
-        body: { action: "update", details: { answer: "stale proposal answer" } },
+        body: { details: { answer: "stale proposal answer" } },
       }),
     ).rejects.toMatchObject({ status: 409, code: "FORM_CHANGED" });
 
@@ -254,10 +254,10 @@ describe("form revision guards on registration and proposal commands", () => {
       confirmationLinkTtlHours: 24,
       waitlistClaimWindowHours: 24,
     });
-    await saveProposalManageChanges(env.DB, {
+    await saveProposalAccessChanges(env.DB, {
       token: proposal.manageToken!,
       signingSecret: SIGNING_SECRET,
-      body: { action: "update", details: { answer: "current proposal answer" } },
+      body: { details: { answer: "current proposal answer" } },
     });
 
     expect(

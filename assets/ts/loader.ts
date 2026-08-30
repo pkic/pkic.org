@@ -6,7 +6,6 @@
  * at module level), so importing it is sufficient to initialize it.
  *
  * Convention: data-module="<path-relative-to-assets/ts-without-.ts>"
- *   data-module="legacy/admin-redirect"             → ./legacy/admin-redirect
  *   data-module="event-flows/registration-page"     → ./event-flows/registration-page
  *   data-module="shared/donation-form"              → ./shared/donation-form
  *
@@ -20,7 +19,6 @@
 // import() into a separate chunk. Only the chunk requested by the page is
 // ever fetched by the browser.
 const modules: Record<string, () => Promise<unknown>> = {
-  "legacy/admin-redirect": () => import("./legacy/admin-redirect"),
   "invite-decline": () => import("./invite-decline"),
   "event-flows/registration-page": () => import("./event-flows/registration-page"),
   "event-flows/registration-confirm-page": () => import("./event-flows/registration-confirm-page"),

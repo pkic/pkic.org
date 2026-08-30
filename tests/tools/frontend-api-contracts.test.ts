@@ -58,17 +58,6 @@ describe("frontend API contract architecture", () => {
     expect(output).toContain("Do not call getJson<T>()");
   });
 
-  it("rejects admin API response generics", () => {
-    const output = checkerFailure(
-      createFrontendFixture({
-        "admin/api.ts": "export declare function api<T>(url: string, schema: unknown): Promise<T>;\n",
-        "fixture.ts": 'import { api } from "./admin/api";\nvoid api<{ id: string }>("/api/v1/admin/example");\n',
-      }),
-    );
-
-    expect(output).toContain("Do not call api<T>()");
-  });
-
   it("rejects casts of direct fetch JSON responses", () => {
     const output = checkerFailure(
       createFrontendFixture({

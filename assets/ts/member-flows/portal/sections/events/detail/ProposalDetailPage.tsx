@@ -12,7 +12,7 @@ import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
-import { buildReplacementProposerOptions, SpeakerCard } from "./proposal-detail/SpeakerCard";
+import { proposalSpeakerEndpoints } from "./proposal-detail/proposal-api";
 import {
   isProposalDecidableStatus,
   proposalFlagResponseSchema,
@@ -25,10 +25,21 @@ import { proposalAccessLinkResponseSchema } from "../../../../../../shared/schem
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
 import { proposalResourcePath } from "./proposal-detail/proposal-api";
+import { ProposalSpeakersPanel } from "../../../../../components/proposals/ProposalSpeakersPanel";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposalId: string }) {
+export function ProposalDetailPage({
+  slug,
+  proposalId,
+  contextLabel,
+  onBack,
+}: {
+  slug: string;
+  proposalId: string;
+  contextLabel?: string | null;
+  onBack?: () => void;
+}) {
   const [, navigate] = useHashLocation();
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
@@ -44,8 +55,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     reviewSummary,
     myReview,
     loadingMoreReviews,
-    speakers,
-    setSpeakers,
     comments,
     commentPage,
     loadingMoreComments,
@@ -87,6 +96,12 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     }
   }, [activeTab, data?.proposal]);
 
+  useEffect(() => {
+    if (!data?.access.canReview && (activeTab === "reviews" || activeTab === "audit-log")) {
+      setActiveTab("submission");
+    }
+  }, [activeTab, data?.access.canReview]);
+
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
@@ -110,8 +125,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
 
   const tabItems = [
     { key: "submission", label: "Submission" },
-    { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
-    { key: "reviews", label: `Reviews (${loadingSub ? "…" : reviewCount})` },
+    { key: "speakers", label: "Speakers" },
+    ...(access.canReview ? [{ key: "reviews", label: `Reviews (${loadingSub ? "…" : reviewCount})` }] : []),
     ...(canManagePresentation
       ? [
           {
@@ -120,7 +135,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           },
         ]
       : []),
-    { key: "audit-log", label: "Audit Log" },
+    ...(access.canReview ? [{ key: "audit-log", label: "Audit Log" }] : []),
     ...((access.canFinalize && (proposalDecidable || proposal.decision_status)) ||
     (access.canCancelAcceptedProposal && proposal.status === "accepted") ||
     proposal.status === "canceled"
@@ -191,9 +206,13 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     <div>
       {/* ── Header ── */}
       <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/events/${slug}/proposals`)}>
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}
+        >
           ← Back
         </button>
+        {contextLabel && <span class="text-muted small">{contextLabel}</span>}
         <h5 class="mb-0 me-1">{proposal.title}</h5>
         <Badge status={proposal.status} />
         {proposal.decision_status && <Badge status={proposal.decision_status} />}
@@ -313,39 +332,23 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           )}
 
           {/* ── Speakers tab ── */}
-          {activeTab === "speakers" && (
-            <div>
-              {loadingSub ? (
-                <Spinner />
-              ) : speakers.length === 0 ? (
-                <p class="text-muted fst-italic">No speakers assigned yet.</p>
-              ) : (
-                speakers.map((s) => (
-                  <SpeakerCard
-                    key={s.userId}
-                    speaker={s}
-                    proposalId={proposalId}
-                    canEdit={access.canReview}
-                    canFinalize={access.canFinalize}
-                    decisionStatus={proposal.decision_status}
-                    isCurrentProposer={s.userId === proposal.proposer_user_id}
-                    replacementSpeakers={buildReplacementProposerOptions(speakers, s.userId)}
-                    requiresPresentation={
-                      sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())
-                        ?.requiresPresentation ?? false
-                    }
-                    onSaved={(userId, patch) =>
-                      setSpeakers((prev) => prev.map((sp) => (sp.userId === userId ? { ...sp, ...patch } : sp)))
-                    }
-                    onRemoved={() => {
-                      void loadSubData();
-                      void reload();
-                    }}
-                  />
-                ))
-              )}
-            </div>
-          )}
+          {activeTab === "speakers" &&
+            (access.canRead ? (
+              <ProposalSpeakersPanel
+                endpoint={proposalResourcePath(proposalId)}
+                proposalId={proposalId}
+                access={access}
+                proposal={proposal}
+                sessionTypes={sessionTypes}
+                onReload={reload}
+                notify={toast}
+                endpoints={proposalSpeakerEndpoints()}
+                inviteEndpoint={proposalResourcePath(proposalId, "speakers")}
+                inviteWindow={data.event}
+              />
+            ) : (
+              <p class="text-muted fst-italic">Speaker access requires proposal read permission.</p>
+            ))}
 
           {/* ── Presentation tab ── */}
           {activeTab === "presentation" && (
@@ -355,6 +358,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
               loading={loadingSub}
               hasMore={versionPage?.hasMore ?? false}
               loadingMore={loadingMoreVersions}
+              canManage={access.canFinalize}
               onLoadMore={() => void handleLoadMoreVersions()}
               onReload={() => void loadSubData()}
             />
