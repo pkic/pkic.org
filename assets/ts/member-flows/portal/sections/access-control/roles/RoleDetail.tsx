@@ -8,6 +8,7 @@ import { deleteJson, getJson } from "../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../../ui";
 import {
+  SYSTEM_ROLE_IDS,
   roleAssignmentsListResponseSchema,
   roleResponseEnvelopeSchema,
   type Role,
@@ -33,6 +34,7 @@ export function RoleDetail({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const assignmentsRef = useRef<ApiTableActions | null>(null);
+  const capacityBoundLeadership = roleId === SYSTEM_ROLE_IDS.groupLead || roleId === SYSTEM_ROLE_IDS.groupDeputyLead;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,7 +127,14 @@ export function RoleDetail({
           <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">Assignees</div>
             <div class="card-body">
-              {canGrant && <RoleAssignForm roleId={role.id} onAssigned={() => void assignmentsRef.current?.reload()} />}
+              {canGrant && capacityBoundLeadership ? (
+                <p class="alert alert-info small">
+                  Assign this role from the selected group&apos;s Leadership section, where the person&apos;s active
+                  Member capacity is selected explicitly.
+                </p>
+              ) : canGrant ? (
+                <RoleAssignForm roleId={role.id} onAssigned={() => void assignmentsRef.current?.reload()} />
+              ) : null}
               <ApiDataTable
                 endpoint={`/api/v1/roles/${encodeURIComponent(role.id)}/assignments`}
                 responseSchema={roleAssignmentsListResponseSchema}

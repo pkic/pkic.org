@@ -53,6 +53,7 @@ import { hasVoteManagementAuthorization } from "../functions/_lib/services/votes
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch, gateNextRun } from "./helpers/d1-batch-gate";
 import { queryAll } from "./helpers/context";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { addRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import {
@@ -78,16 +79,13 @@ async function callAnonymous(path: string): Promise<Response> {
   return app.fetch(new Request(new URL(path, "https://app.test")), env, createExecutionContext());
 }
 
-async function assignGroupRole(userId: string, groupId: string, roleId = "role-group_lead"): Promise<string> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, ?, 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(id, userId, roleId, groupId)
-    .run();
-  return id;
+async function assignGroupRole(
+  userId: string,
+  groupId: string,
+  roleId: "role-group_lead" | "role-group_deputy_lead" = "role-group_lead",
+): Promise<{ roleId: string; memberId: string }> {
+  const granted = await grantGroupLeadershipCapacity(env.DB, groupId, userId, { roleId });
+  return { roleId: granted.roleAssignmentId, memberId: granted.memberId };
 }
 
 describe("canonical group voting", () => {
@@ -127,8 +125,14 @@ describe("canonical group voting", () => {
 
   it("lets effective group leadership create only for its managed group", async () => {
     const leaderId = await insertUser(env.DB, "vote-leader@example.test");
-    await assignGroupRole(leaderId, TEST_GROUPS.pqc);
-    const leaderToken = await createAdminSession(env.DB, leaderId, "vote-leader-session");
+    const leadership = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    const leaderToken = await createAdminSession(
+      env.DB,
+      leaderId,
+      "vote-leader-session",
+      undefined,
+      leadership.memberId,
+    );
     const body = {
       title: "Leadership vote",
       voteType: "motion",
@@ -156,15 +160,22 @@ describe("canonical group voting", () => {
 
   it("uses the selected group as the immutable vote-management boundary", async () => {
     const leaderId = await insertUser(env.DB, "selected-group-vote-manager@example.test");
-    await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    const leadership = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
     await assignGroupRole(leaderId, TEST_GROUPS.cm);
     const leader = {
       identityType: "user" as const,
       id: leaderId,
       email: "selected-group-vote-manager@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
-    const leaderToken = await createAdminSession(env.DB, leaderId, `selected-vote-manager-${crypto.randomUUID()}`);
+    const leaderToken = await createAdminSession(
+      env.DB,
+      leaderId,
+      `selected-vote-manager-${crypto.randomUUID()}`,
+      undefined,
+      leadership.memberId,
+    );
     const createdResponse = await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes`, {
       method: "POST",
       body: JSON.stringify({
@@ -286,12 +297,13 @@ describe("canonical group voting", () => {
     expect((await call(adminToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/ballots`)).status).toBe(403);
 
     const managerId = await insertUser(env.DB, "revoked-ballot-auditor@example.test");
-    await assignGroupRole(managerId, TEST_GROUPS.cm);
+    const leadership = await assignGroupRole(managerId, TEST_GROUPS.cm);
     const manager = {
       identityType: "user" as const,
       id: managerId,
       email: "revoked-ballot-auditor@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
     await env.DB.prepare(
       "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
@@ -313,12 +325,13 @@ describe("canonical group voting", () => {
   it("correlates a live manage grant with authority over that same grantee group", async () => {
     const vote = await createCanonicalVote(env.DB, admin, { title: "Correlated management vote" });
     const managerId = await insertUser(env.DB, "correlated-vote-manager@example.test");
-    await assignGroupRole(managerId, TEST_GROUPS.cm);
+    const leadership = await assignGroupRole(managerId, TEST_GROUPS.cm);
     const actor = {
       identityType: "user" as const,
       id: managerId,
       email: "correlated-vote-manager@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
     await env.DB.batch([
       env.DB.prepare(
@@ -347,12 +360,13 @@ describe("canonical group voting", () => {
 
   it("rechecks vote creation permission inside the D1 batch", async () => {
     const leaderId = await insertUser(env.DB, "revoked-vote-leader@example.test");
-    const roleId = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    const leadership = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
     const actor = {
       identityType: "user" as const,
       id: leaderId,
       email: "revoked-vote-leader@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
     const gate = gateNextBatch(env.DB);
     const pending = createVoteDirect(gate.db, actor, {
@@ -364,7 +378,9 @@ describe("canonical group voting", () => {
       closesAt: new Date(Date.now() + 60_000).toISOString(),
     });
     await gate.reached;
-    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleId).run();
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(leadership.roleId)
+      .run();
     gate.release();
     await expect(pending).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.code === "VOTE_CREATE_AUTHORIZATION_CHANGED",
@@ -1020,17 +1036,20 @@ describe("canonical group voting", () => {
       ownerGroupId: TEST_GROUPS.pqc,
     });
     const leaderId = await insertUser(env.DB, "proposal-leader@example.test");
-    const roleId = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    const leadership = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
     const leader = {
       identityType: "user" as const,
       id: leaderId,
       email: "proposal-leader@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
     const gate = gateNextBatch(env.DB);
     const pending = approveVoteProposal(gate.db, leader, proposal.id);
     await gate.reached;
-    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleId).run();
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(leadership.roleId)
+      .run();
     gate.release();
     await expect(pending).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
@@ -1360,17 +1379,20 @@ describe("canonical group voting", () => {
       closesAt: new Date(Date.now() + 120_000).toISOString(),
     });
     const leaderId = await insertUser(env.DB, "transition-leader@example.test");
-    const roleId = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
+    const leadership = await assignGroupRole(leaderId, TEST_GROUPS.pqc);
     const leader = {
       identityType: "user" as const,
       id: leaderId,
       email: "transition-leader@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
     const gate = gateNextBatch(env.DB);
     const pending = transitionManagedVote(gate.db, leader, vote.id, { transition: "open" }, TEST_GROUPS.pqc);
     await gate.reached;
-    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleId).run();
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(leadership.roleId)
+      .run();
     gate.release();
     await expect(pending).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",
@@ -1473,8 +1495,14 @@ describe("canonical group voting", () => {
     );
 
     const leaderId = await insertUser(env.DB, "shared-vote-manager@example.test");
-    await assignGroupRole(leaderId, TEST_GROUPS.cm);
-    const leaderToken = await createAdminSession(env.DB, leaderId, `shared-vote-manager-${crypto.randomUUID()}`);
+    const leadership = await assignGroupRole(leaderId, TEST_GROUPS.cm);
+    const leaderToken = await createAdminSession(
+      env.DB,
+      leaderId,
+      `shared-vote-manager-${crypto.randomUUID()}`,
+      undefined,
+      leadership.memberId,
+    );
     const detailResponse = await call(leaderToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}`);
     expect(detailResponse.status, await detailResponse.clone().text()).toBe(200);
     const managedVote = groupVoteDetailResponseSchema.parse(await detailResponse.json()).vote;
@@ -1613,17 +1641,20 @@ describe("canonical group voting", () => {
   it("rechecks vote-management authorization for visibility updates", async () => {
     const vote = await createCanonicalVote(env.DB, admin);
     const managerId = await insertUser(env.DB, "visibility-manager@example.test");
-    const roleId = await assignGroupRole(managerId, TEST_GROUPS.pqc);
+    const leadership = await assignGroupRole(managerId, TEST_GROUPS.pqc);
     const manager = {
       identityType: "user" as const,
       id: managerId,
       email: "visibility-manager@example.test",
       role: "user",
+      memberId: leadership.memberId,
     };
     const gate = gateNextBatch(env.DB);
     const pending = updateVoteVisibility(gate.db, manager, vote.id, { visibility: "public" });
     await gate.reached;
-    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleId).run();
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(leadership.roleId)
+      .run();
     gate.release();
     await expect(pending).rejects.toSatisfy(
       (error: unknown) => isAppError(error) && error.code === "VOTE_MANAGEMENT_CHANGED",

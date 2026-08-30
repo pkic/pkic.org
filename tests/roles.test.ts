@@ -473,6 +473,23 @@ describe("roles (Built-in and custom roles)", () => {
     expect([...(deputy?.permissions ?? [])].sort()).toEqual([...(lead?.permissions ?? [])].sort());
   });
 
+  it.each(["role-group_lead", "role-group_deputy_lead"])(
+    "requires the group leadership resource to assign %s with an explicit Member capacity",
+    async (roleId) => {
+      const response = await call(adminToken, `/api/v1/users/${staffUserId}/roles`, {
+        method: "POST",
+        body: JSON.stringify({ roleId, contextType: "group", contextId: crypto.randomUUID() }),
+      });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { code: "GROUP_LEADERSHIP_REQUIRES_MEMBER_CAPACITY" },
+      });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [staffUserId, roleId]),
+      ).toHaveLength(0);
+    },
+  );
+
   it("does not seed legacy forum or working-group-specific leadership roles", async () => {
     const response = await call(adminToken, "/api/v1/roles");
     const body = (await response.json()) as {

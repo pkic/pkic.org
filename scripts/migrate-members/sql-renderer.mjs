@@ -155,6 +155,10 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
  * One durable `organization_representatives` row for each (org, user) pair.
  * INSERT OR IGNORE keeps the migration importer idempotent without changing
  * an existing association's source or lifecycle state.
+ * @param {string} normalizedOrgName
+ * @param {string} normalizedEmail
+ * @param {boolean} showOnOrgProfile
+ * @param {{ jobTitle?: string | null, biography?: string | null, linksJson?: string | null }} [profile]
  */
 export function buildOrganizationRepresentativeStatement(
   normalizedOrgName,

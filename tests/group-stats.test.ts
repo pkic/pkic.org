@@ -3,14 +3,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { groupStatsQuerySchema, groupStatsResponseSchema } from "../assets/shared/schemas/group-statistics";
 import { writeAuditLog } from "../functions/_lib/services/audit";
 import { buildGroupStatsQuerySet, createGroup, getGroupStatistics } from "../functions/_lib/services/groups";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
-async function adminActor(email: string, role = "admin"): Promise<AuthAdmin> {
+async function adminActor(email: string, role = "admin"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   return { identityType: "user", id, email, role };
@@ -75,15 +76,16 @@ describe("group statistics", () => {
       typeKey: "working_group",
       name: `Other stats ${crypto.randomUUID()}`,
     });
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), outsider.id, otherGroup.id)
-      .run();
+    const { memberId: outsiderMemberId } = await grantGroupLeadershipCapacity(env.DB, otherGroup.id, outsider.id);
+    outsider.memberId = outsiderMemberId;
     const adminToken = await createAdminSession(env.DB, admin.id, `group-stats-admin-${crypto.randomUUID()}`);
-    const outsiderToken = await createAdminSession(env.DB, outsider.id, `group-stats-outsider-${crypto.randomUUID()}`);
+    const outsiderToken = await createAdminSession(
+      env.DB,
+      outsider.id,
+      `group-stats-outsider-${crypto.randomUUID()}`,
+      undefined,
+      outsiderMemberId,
+    );
     await writeAuditLog(
       env.DB,
       "admin",
@@ -152,14 +154,8 @@ describe("group statistics", () => {
       typeKey: "working_group",
       name: `Stats race ${crypto.randomUUID()}`,
     });
-    const roleId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(roleId, leader.id, group.id)
-      .run();
+    const { roleAssignmentId: roleId, memberId } = await grantGroupLeadershipCapacity(env.DB, group.id, leader.id);
+    leader.memberId = memberId;
 
     await expect(
       getGroupStatistics(

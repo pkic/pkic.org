@@ -398,8 +398,10 @@ describe("GET /api/v1/members/:id", () => {
         organizationId,
       )
       .run();
-    await env.DB.prepare(`UPDATE users SET job_title = ?, biography = ? WHERE id = ?`)
-      .bind("CTO", "Leads engineering.", shownUserId)
+    await env.DB.prepare(
+      `UPDATE organization_representatives SET job_title = ?, biography = ? WHERE member_id = ? AND user_id = ?`,
+    )
+      .bind("CTO", "Leads engineering.", memberId, shownUserId)
       .run();
 
     const hiddenUserId = await insertUser(env.DB);

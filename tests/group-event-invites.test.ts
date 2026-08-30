@@ -6,6 +6,7 @@ import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { processOutboxById } from "../functions/_lib/email/outbox";
 import { createGroup } from "../functions/_lib/services/groups";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
@@ -162,19 +163,21 @@ describe("selected-group attendee invitation lifecycle", () => {
       eligibilityMode: "open",
     });
     const leader = await actor("invite-grantee");
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, grantee.id)
-      .run();
+    const { memberId } = await grantGroupLeadershipCapacity(env.DB, grantee.id, leader.id);
+    leader.memberId = memberId;
     const series = await createInviteEvent(administrator, owner.id, "Delegated invite test");
     await grantResourceToGroup(env.DB, administrator, owner.id, "event", series.eventId, {
       granteeGroupId: grantee.id,
       capability: "manage",
     });
     const attendeeId = await insertInvite(series.eventId, "attendee");
-    const token = await createAdminSession(env.DB, leader.id, `invite-grantee-${crypto.randomUUID()}`);
+    const token = await createAdminSession(
+      env.DB,
+      leader.id,
+      `invite-grantee-${crypto.randomUUID()}`,
+      undefined,
+      memberId,
+    );
     const response = await request(token, `/api/v1/groups/${grantee.id}/events/${series.eventId}/invites?q=attendee`);
     expect(response.status, await response.clone().text()).toBe(200);
     expect(((await response.json()) as { page: { total: number } }).page.total).toBe(1);

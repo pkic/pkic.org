@@ -60,3 +60,31 @@ export async function ensureGroupMembershipCapacity(
   }
   return row.member_id;
 }
+
+/** Seeds a capacity-bound group leadership assignment and returns both row ids. */
+export async function grantGroupLeadershipCapacity(
+  db: DatabaseLike,
+  groupId: string,
+  userId: string,
+  options: { roleId?: "role-group_lead" | "role-group_deputy_lead"; grantedByUserId?: string | null } = {},
+): Promise<{ roleAssignmentId: string; memberId: string }> {
+  const memberId = await ensureGroupMembershipCapacity(db, groupId, userId);
+  const roleAssignmentId = crypto.randomUUID();
+  await db
+    .prepare(
+      `INSERT INTO user_roles
+         (id, user_id, member_id, role_id, context_type, context_id, single_holder_per_context,
+          granted_by_user_id, created_at)
+       VALUES (?, ?, ?, ?, 'group', ?, 0, ?, datetime('now'))`,
+    )
+    .bind(
+      roleAssignmentId,
+      userId,
+      memberId,
+      options.roleId ?? "role-group_lead",
+      groupId,
+      options.grantedByUserId ?? null,
+    )
+    .run();
+  return { roleAssignmentId, memberId };
+}

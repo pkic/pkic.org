@@ -10,6 +10,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { memberCapacityListResponseSchema } from "../assets/shared/schemas/membership-management";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -170,12 +171,12 @@ describe("membership provisioning and capacities", () => {
     expect(repRows[0].show_on_org_profile).toBe(1);
     expect(repRows[0].left_at).toBeNull();
 
-    const [user] = await queryAll<{ links_json: string | null }>(
+    const [representative] = await queryAll<{ links_json: string | null }>(
       env.DB,
-      "SELECT links_json FROM users WHERE id = ?",
-      body.members[0].userId,
+      "SELECT links_json FROM organization_representatives WHERE id = ?",
+      body.members[0].id,
     );
-    expect(JSON.parse(user.links_json as string)).toEqual([
+    expect(JSON.parse(representative.links_json as string)).toEqual([
       "https://linkedin.com/in/janedoe",
       "https://github.com/janedoe",
     ]);
@@ -390,11 +391,16 @@ describe("membership provisioning and capacities", () => {
 
   it("a group lead is denied consortium-wide membership:write", async () => {
     const staffId = await insertUser("wg-chair-only@example.test");
-    await assignRole(staffId, "role-group_lead", adminId, {
-      type: "group",
-      id: "20000000-0000-4000-8000-000000000003",
+    const leadership = await grantGroupLeadershipCapacity(env.DB, "20000000-0000-4000-8000-000000000003", staffId, {
+      grantedByUserId: adminId,
     });
-    const staffToken = await createAdminSession(env.DB, staffId, "staff-wg-chair-token");
+    const staffToken = await createAdminSession(
+      env.DB,
+      staffId,
+      "staff-wg-chair-token",
+      undefined,
+      leadership.memberId,
+    );
 
     const response = await call(staffToken, "/api/v1/members", {
       method: "POST",

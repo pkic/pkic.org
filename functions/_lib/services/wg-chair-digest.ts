@@ -94,12 +94,14 @@ export function resolveWgChairDigestWindow(now: Date = new Date()): WgChairDiges
 
 const CHANGE_EVENTS_CTE_SQL = `
   change_events AS (
-    SELECT membership.id AS membership_id, membership.group_id AS working_group_id, membership.user_id,
+    SELECT membership.id AS membership_id, membership.member_id, membership.group_id AS working_group_id,
+           membership.user_id,
            'joined' AS change_type, membership.joined_at AS changed_at
       FROM group_memberships membership
      WHERE membership.joined_at >= ? AND membership.joined_at < ?
     UNION ALL
-    SELECT membership.id AS membership_id, membership.group_id AS working_group_id, membership.user_id,
+    SELECT membership.id AS membership_id, membership.member_id, membership.group_id AS working_group_id,
+           membership.user_id,
            'left' AS change_type, membership.left_at AS changed_at
       FROM group_memberships membership
      WHERE membership.left_at IS NOT NULL AND membership.left_at >= ? AND membership.left_at < ?
@@ -114,7 +116,7 @@ export const WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY = `WITH ${CHANGE_EVENTS_CTE_SQL
     FROM change_events ce
     JOIN groups wg ON wg.id = ce.working_group_id AND wg.active = 1
     JOIN users u ON u.id = ce.user_id
-    JOIN members m ON m.id = ce.membership_id
+    JOIN members m ON m.id = ce.member_id
     LEFT JOIN organizations o ON o.id = m.organization_id
    ORDER BY wg.name, wg.id, ce.changed_at, ce.membership_id, ce.change_type`;
 

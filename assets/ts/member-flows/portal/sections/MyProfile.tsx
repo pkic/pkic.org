@@ -193,8 +193,11 @@ export function MyProfile() {
                   />
                 </div>
                 <div class="col-sm-6">
-                  <label class="form-label fw-semibold small">Job title</label>
+                  <label class="form-label fw-semibold small" for="portal-profile-job-title">
+                    Job title
+                  </label>
                   <input
+                    id="portal-profile-job-title"
                     class="form-control"
                     value={form.jobTitle}
                     onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
@@ -213,8 +216,11 @@ export function MyProfile() {
                   </div>
                 )}
                 <div class="col-12">
-                  <label class="form-label fw-semibold small">Biography</label>
+                  <label class="form-label fw-semibold small" for="portal-profile-biography">
+                    Biography
+                  </label>
                   <textarea
+                    id="portal-profile-biography"
                     class="form-control"
                     rows={5}
                     value={form.biography}
@@ -222,8 +228,11 @@ export function MyProfile() {
                   />
                 </div>
                 <div class="col-12">
-                  <label class="form-label fw-semibold small">Social / profile links</label>
+                  <label class="form-label fw-semibold small" for="portal-profile-links">
+                    Social / profile links
+                  </label>
                   <textarea
+                    id="portal-profile-links"
                     class="form-control"
                     rows={3}
                     placeholder="One URL per line"

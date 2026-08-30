@@ -153,11 +153,17 @@ describe("organization representation API", () => {
       staffEmail,
     );
     expect(created.status).toBe(201);
-    expect(await created.json()).toMatchObject({ success: true, representativeId: expect.any(String) });
+    const createdBody = (await created.json()) as { success: boolean; representativeId: string };
+    expect(createdBody).toMatchObject({ success: true, representativeId: expect.any(String) });
     expect(
       await env.DB.prepare(
         "SELECT job_title, links_json FROM users WHERE normalized_email = 'staff-added@direct-email.example'",
       ).all(),
+    ).toMatchObject({ results: [{ job_title: null, links_json: null }] });
+    expect(
+      await env.DB.prepare("SELECT job_title, links_json FROM organization_representatives WHERE id = ?")
+        .bind(createdBody.representativeId)
+        .all(),
     ).toMatchObject({
       results: [{ job_title: "Security Engineer", links_json: '["https://example.test/profile"]' }],
     });

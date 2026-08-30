@@ -126,7 +126,17 @@ function sessionFor(persona: Persona): Record<string, unknown> {
 function profileFor(persona: Persona): Record<string, unknown> {
   return {
     userId: USER_ID,
+    emailId: null,
     email: persona.email,
+    emailAddresses: [
+      {
+        id: null,
+        email: persona.email,
+        primary: true,
+        verifiedAt: null,
+        verificationMethod: null,
+      },
+    ],
     firstName: "Synthetic",
     lastName: "Persona",
     preferredName: null,
@@ -209,14 +219,25 @@ async function openGroup(page: Page, persona: Persona): Promise<void> {
   await expect(page.getByRole("navigation", { name: `${group.name} sections` })).toBeVisible();
 }
 
-function sectionLinks(page: Page): ReturnType<Page["getByRole"]> {
-  return page.getByRole("navigation", { name: `${group.name} sections` }).getByRole("link");
+async function expectSections(page: Page, labels: readonly string[]): Promise<void> {
+  const navigation = page.getByRole("navigation", { name: `${group.name} sections` });
+  for (const label of labels) {
+    await expect(navigation.getByRole("link", { name: label, exact: true })).toBeVisible();
+  }
+}
+
+async function expectNoSections(page: Page, labels: readonly string[]): Promise<void> {
+  const navigation = page.getByRole("navigation", { name: `${group.name} sections` });
+  for (const label of labels) {
+    await expect(navigation.getByRole("link", { name: label, exact: true })).toHaveCount(0);
+  }
 }
 
 test.describe("selected-group portal personas", () => {
   test("member participant sees collaboration sections but no management sections", async ({ page }) => {
     await openGroup(page, PERSONAS.participant);
-    await expect(sectionLinks(page)).toHaveText(["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
+    await expectSections(page, ["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
+    await expectNoSections(page, ["Settings", "Members", "Leadership", "Statistics"]);
     // A plain member holds no global system permission, so the sidebar has no
     // admin surface at all.
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
@@ -228,7 +249,7 @@ test.describe("selected-group portal personas", () => {
 
   test("direct chair sees the complete group management surface", async ({ page }) => {
     await openGroup(page, PERSONAS.directManager);
-    await expect(sectionLinks(page)).toHaveText([
+    await expectSections(page, [
       "Overview",
       "Events",
       "Meetings",
@@ -251,13 +272,13 @@ test.describe("selected-group portal personas", () => {
 
   test("inherited manager gets the same resource surface through the selected group", async ({ page }) => {
     await openGroup(page, PERSONAS.inheritedManager);
-    await expect(sectionLinks(page)).toContainText(["Settings", "Members", "Leadership"]);
+    await expectSections(page, ["Settings", "Members", "Leadership"]);
     await expect(page.getByRole("heading", { name: group.name })).toBeVisible();
   });
 
   test("local-only child participant cannot see management controls", async ({ page }) => {
     await openGroup(page, PERSONAS.localOnly);
-    await expect(sectionLinks(page)).not.toContainText(["Settings", "Members", "Leadership", "Statistics"]);
+    await expectNoSections(page, ["Settings", "Members", "Leadership", "Statistics"]);
     // No global system permission means no admin surface for this identity.
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
@@ -268,7 +289,7 @@ test.describe("selected-group portal personas", () => {
 
   test("staff-only manager enters the same portal without member navigation", async ({ page }) => {
     await openGroup(page, PERSONAS.staffOnly);
-    await expect(sectionLinks(page)).toContainText(["Settings", "Members", "Leadership"]);
+    await expectSections(page, ["Settings", "Members", "Leadership"]);
     await expect(page.getByRole("link", { name: "My Profile" })).toHaveCount(0);
     // Reaches group management the same way any manager does: the "Groups"
     // sidebar entry and this group listed under "Your groups".

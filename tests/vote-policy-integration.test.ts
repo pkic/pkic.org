@@ -108,10 +108,11 @@ describe("vote policy against real D1", () => {
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, opponent.userId, [opponent.memberId]);
 
     await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+      `INSERT INTO user_roles
+         (id, user_id, member_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, 'role-group_lead', 'group', ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
     )
-      .bind(crypto.randomUUID(), chair.userId, TEST_GROUPS.pqc, chair.userId)
+      .bind(crypto.randomUUID(), chair.userId, chair.memberId, TEST_GROUPS.pqc, chair.userId)
       .run();
 
     const vote = await createCanonicalVote(env.DB, admin, { tieBreakMode: "chair" });
@@ -133,10 +134,11 @@ describe("vote policy against real D1", () => {
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, chair.userId, [chair.memberId]);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, opponent.userId, [opponent.memberId]);
     await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+      `INSERT INTO user_roles
+         (id, user_id, member_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, 'role-group_lead', 'group', ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
     )
-      .bind(crypto.randomUUID(), chair.userId, TEST_GROUPS.pqc, chair.userId)
+      .bind(crypto.randomUUID(), chair.userId, chair.memberId, TEST_GROUPS.pqc, chair.userId)
       .run();
 
     const vote = await createCanonicalVote(env.DB, admin);

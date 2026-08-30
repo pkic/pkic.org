@@ -10,6 +10,7 @@ import {
 } from "../functions/_lib/services/wg-chair-digest";
 import type { Env } from "../functions/_lib/types";
 import { queryAll } from "./helpers/context";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { resetDb } from "./helpers/reset-db";
 
 const env = workerEnv as unknown as Env;
@@ -65,12 +66,7 @@ async function assignLeadership(
   workingGroupId: string,
   roleId: "role-group_lead" | "role-group_deputy_lead",
 ): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
-     VALUES (?, ?, ?, 'group', ?, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, roleId, workingGroupId)
-    .run();
+  await grantGroupLeadershipCapacity(env.DB, workingGroupId, userId, { roleId });
 }
 
 async function insertMembership(

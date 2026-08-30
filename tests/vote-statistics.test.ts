@@ -7,6 +7,7 @@ import { getVoteStatisticsForManager, submitBallot } from "../functions/_lib/ser
 import { VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY } from "../functions/_lib/services/votes/voter-eligibility";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { queryAll } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -23,18 +24,6 @@ import {
 
 async function call(token: string, path: string): Promise<Response> {
   return app.fetch(authorizedRequest(token, path), env, createExecutionContext());
-}
-
-async function assignGroupLeader(userId: string, groupId: string): Promise<string> {
-  const roleId = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(roleId, userId, groupId)
-    .run();
-  return roleId;
 }
 
 describe("group vote statistics", () => {
@@ -203,7 +192,11 @@ describe("group vote statistics", () => {
     );
 
     const managerId = await insertUser(env.DB, "vote-statistics-manager@example.test");
-    const roleId = await assignGroupLeader(managerId, TEST_GROUPS.cm);
+    const { roleAssignmentId: roleId, memberId } = await grantGroupLeadershipCapacity(
+      env.DB,
+      TEST_GROUPS.cm,
+      managerId,
+    );
     await env.DB.prepare(
       "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
     )
@@ -214,8 +207,9 @@ describe("group vote statistics", () => {
       id: managerId,
       email: "vote-statistics-manager@example.test",
       role: "user",
+      memberId,
     };
-    const managerToken = await createAdminSession(env.DB, managerId, crypto.randomUUID());
+    const managerToken = await createAdminSession(env.DB, managerId, crypto.randomUUID(), undefined, memberId);
     expect((await call(managerToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/statistics`)).status).toBe(200);
     expect((await call(managerToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/statistics`)).status).toBe(
       403,
