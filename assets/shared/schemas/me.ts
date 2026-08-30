@@ -11,6 +11,7 @@ import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresSession } from "./route-contract";
+import { verifiedEmailIdentitySchema } from "./organization-representation";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: databaseIdSchema,
@@ -33,7 +34,9 @@ export const myActiveMembershipSchema = z.object({
 
 export const myProfileSchema = z.object({
   userId: databaseIdSchema,
+  emailId: databaseIdSchema.nullable(),
   email: z.string(),
+  emailAddresses: z.array(verifiedEmailIdentitySchema),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   preferredName: z.string().nullable(),
@@ -94,6 +97,7 @@ export const myProfileUpdateSchema = z.object({
   firstName: z.string().trim().min(1).max(120).optional(),
   lastName: z.string().trim().min(1).max(120).optional(),
   preferredName: z.string().trim().max(120).optional(),
+  emailId: databaseIdSchema.nullable().optional(),
   jobTitle: z.string().trim().max(160).optional(),
   biography: z.string().trim().max(5000).optional(),
   links: linksSchema.optional(),

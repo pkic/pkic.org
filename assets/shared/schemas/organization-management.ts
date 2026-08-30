@@ -57,9 +57,11 @@ export const organizationRepresentativeManagementSchema = z.object({
   membershipId: databaseIdSchema.nullable(),
   userId: databaseIdSchema,
   name: z.string(),
+  emailId: databaseIdSchema.nullable(),
   email: z.string(),
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   jobTitle: z.string().nullable(),
+  biography: z.string().nullable(),
   links: linksSchema,
   status: memberStatusSchema,
   showOnOrgProfile: z.boolean(),
@@ -113,6 +115,7 @@ export const organizationRepresentativeCreateSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   jobTitle: trimmedString(0, 200).optional(),
+  biography: trimmedString(0, 5000).optional(),
   links: linksSchema.optional(),
 });
 

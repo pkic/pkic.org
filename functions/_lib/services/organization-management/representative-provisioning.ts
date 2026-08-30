@@ -34,6 +34,7 @@ export interface AddRepresentativeInput {
   name: string;
   email: string;
   jobTitle?: string;
+  biography?: string;
   links?: string[];
 }
 
@@ -94,15 +95,15 @@ export async function addOrganizationRepresentative(
     email: input.email,
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
-    jobTitle: input.jobTitle,
-    linksJson: input.links && input.links.length > 0 ? serializeLinks(input.links) : null,
-    allowProfileUpdate: true,
   });
 
   const now = nowIso();
   const { representativeId, statement } = await buildAddRepresentativeStatement(db, {
     memberId,
     userId: user.id,
+    jobTitle: input.jobTitle ?? null,
+    biography: input.biography ?? null,
+    linksJson: input.links ? serializeLinks(input.links) : null,
     source: "staff",
     now,
   });
@@ -150,7 +151,9 @@ export async function addOrganizationRepresentative(
     userId: user.id,
     name: input.name,
     email: user.email,
+    emailId: null,
     jobTitle: input.jobTitle ?? null,
+    biography: input.biography ?? null,
     links: input.links ?? [],
     status: "active",
     showOnOrgProfile: true,

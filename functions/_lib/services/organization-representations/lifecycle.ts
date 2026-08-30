@@ -12,12 +12,14 @@ import {
 } from "./authorization";
 import { loadRepresentationNotificationContext, prepareRepresentationNotification } from "./notifications";
 import type { RepresentativeManagerActor } from "./types";
+import { serializeLinks } from "../../../../assets/shared/schemas/links";
 
 interface RepresentativeStateRow {
   id: string;
   left_at: string | null;
   blocked_at: string | null;
   show_on_org_profile: number;
+  updated_at: string;
 }
 
 async function commitRepresentativeLifecycleBatch(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
@@ -38,6 +40,13 @@ async function commitRepresentativeLifecycleBatch(db: DatabaseLike, statements: 
         "The organization representation changed concurrently; reload and retry",
       );
     }
+    if (error instanceof Error && error.message.includes("REPRESENTATIVE_EMAIL_INVALID")) {
+      throw new AppError(
+        422,
+        "REPRESENTATIVE_EMAIL_INVALID",
+        "The selected email must be a verified address owned by this user",
+      );
+    }
     throw error;
   }
 }
@@ -49,7 +58,7 @@ async function requireRepresentation(
 ): Promise<RepresentativeStateRow> {
   const representative = await first<RepresentativeStateRow>(
     db,
-    `SELECT id, left_at, blocked_at, show_on_org_profile
+    `SELECT id, left_at, blocked_at, show_on_org_profile, updated_at
        FROM organization_representatives
       WHERE member_id = ? AND user_id = ?`,
     [memberId, userId],
@@ -175,7 +184,15 @@ export async function restoreOrganizationRepresentative(
 export async function updateOrganizationRepresentativeProfile(
   db: DatabaseLike,
   actor: RepresentativeManagerActor,
-  input: { memberId: string; userId: string; showOnOrganizationProfile: boolean },
+  input: {
+    memberId: string;
+    userId: string;
+    emailId?: string | null;
+    jobTitle?: string | null;
+    biography?: string | null;
+    links?: string[];
+    showOnOrganizationProfile?: boolean;
+  },
 ): Promise<string> {
   await requireOrganizationRepresentativeManagement(db, {
     memberId: input.memberId,
@@ -198,10 +215,29 @@ export async function updateOrganizationRepresentativeProfile(
     db
       .prepare(
         `UPDATE organization_representatives
-            SET show_on_org_profile = ?, updated_at = ?
-          WHERE id = ? AND left_at IS NULL AND blocked_at IS NULL AND show_on_org_profile = ?`,
+            SET email_id = CASE WHEN ? = 1 THEN ? ELSE email_id END,
+                job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
+                biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
+                links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
+                show_on_org_profile = CASE WHEN ? = 1 THEN ? ELSE show_on_org_profile END,
+                updated_at = ?
+          WHERE id = ? AND left_at IS NULL AND blocked_at IS NULL AND updated_at = ?`,
       )
-      .bind(input.showOnOrganizationProfile ? 1 : 0, at, representative.id, representative.show_on_org_profile),
+      .bind(
+        input.emailId !== undefined ? 1 : 0,
+        input.emailId ?? null,
+        input.jobTitle !== undefined ? 1 : 0,
+        input.jobTitle ?? null,
+        input.biography !== undefined ? 1 : 0,
+        input.biography ?? null,
+        input.links !== undefined ? 1 : 0,
+        input.links === undefined ? null : serializeLinks(input.links),
+        input.showOnOrganizationProfile !== undefined ? 1 : 0,
+        input.showOnOrganizationProfile ? 1 : 0,
+        at,
+        representative.id,
+        representative.updated_at,
+      ),
     prepareScopedAuditLogAfterOneChange(
       db,
       { type: "organization", id: input.memberId },
@@ -210,7 +246,13 @@ export async function updateOrganizationRepresentativeProfile(
       "organization_representative_profile_updated",
       "organization_representative",
       representative.id,
-      { userId: input.userId, showOnOrganizationProfile: input.showOnOrganizationProfile },
+      {
+        userId: input.userId,
+        memberId: input.memberId,
+        fields: Object.keys(input)
+          .filter((field) => !["memberId", "userId"].includes(field))
+          .sort(),
+      },
       at,
     ),
   ]);

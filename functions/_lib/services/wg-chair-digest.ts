@@ -4,7 +4,6 @@ import { prepareBulkQueueEmailChunkStatements, processSelectedOutbox, type BulkE
 import { getConfig } from "../config";
 import type { DatabaseLike, Env } from "../types";
 import { sha256Hex } from "../utils/crypto";
-import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { CURRENT_GROUP_LEADERSHIP_CTES_SQL, GROUP_LEAD_ROLE_ID } from "./group-leadership-query";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -115,8 +114,7 @@ export const WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY = `WITH ${CHANGE_EVENTS_CTE_SQL
     FROM change_events ce
     JOIN groups wg ON wg.id = ce.working_group_id AND wg.active = 1
     JOIN users u ON u.id = ce.user_id
-${deterministicRepresentativeJoinSql("ce.user_id")}
-    LEFT JOIN members m ON m.id = rep.member_id
+    JOIN members m ON m.id = ce.membership_id
     LEFT JOIN organizations o ON o.id = m.organization_id
    ORDER BY wg.name, wg.id, ce.changed_at, ce.membership_id, ce.change_type`;
 

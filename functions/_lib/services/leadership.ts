@@ -14,7 +14,6 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/links";
 import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
-import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { toPublicRoleProfile, type PublicRoleProfile } from "./membership/public-role-profile";
 import { prepareAuditLog } from "./audit";
 import { resolveLeadershipAffiliation } from "./leadership-affiliations";
@@ -272,10 +271,12 @@ export async function getLeadershipPublic(
 ): Promise<{ current: LeadershipPublicPerson[]; past: LeadershipPublicPerson[] }> {
   const rows = await all<PublicPositionRow>(
     db,
-    `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email, u.job_title,
+    `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email,
+            CASE WHEN m.organization_id IS NULL THEN u.job_title ELSE rep.job_title END AS job_title,
             lp.member_id, lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
             o.id AS org_id, o.name AS org_name, o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            COALESCE(rep.id, individual.id) AS photo_member_id, u.headshot_r2_key, u.links_json
+            COALESCE(rep.id, individual.id) AS photo_member_id, u.headshot_r2_key,
+            CASE WHEN m.organization_id IS NULL THEN u.links_json ELSE rep.links_json END AS links_json
      FROM leadership_positions lp
      JOIN users u ON u.id = lp.user_id
      LEFT JOIN members m ON m.id = lp.member_id
@@ -339,10 +340,13 @@ export async function getConsortiumChairsPublic(
 ): Promise<{ chair: ConsortiumChairPublic | null; viceChair: ConsortiumChairPublic | null }> {
   const rows = await all<ConsortiumChairRow>(
     db,
-    `SELECT ur.role_id, u.first_name, u.last_name, u.job_title,
+    `SELECT ur.role_id, u.first_name, u.last_name,
+            CASE WHEN m.organization_id IS NULL THEN u.job_title ELSE rep.job_title END AS job_title,
             o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json, ur.created_at
+            COALESCE(rep.id, m.id) AS member_id, u.headshot_r2_key,
+            CASE WHEN m.organization_id IS NULL THEN u.links_json ELSE rep.links_json END AS links_json,
+            ur.created_at
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
      JOIN groups leadership_group
@@ -350,18 +354,23 @@ export async function getConsortiumChairsPublic(
       AND leadership_group.slug = 'all-members'
       AND leadership_group.active = 1
       AND leadership_group.public_leadership = 1
-     -- A group leader can represent more than one organization at
-     -- once (consolidated migration 0035) — join to a single deterministic
-     -- representative row (earliest joined_at) instead of fanning out one
-     -- result row per represented organization.
-${deterministicRepresentativeJoinSql("u.id")}
-     LEFT JOIN members m ON m.id = rep.member_id
-     LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
+     JOIN group_memberships membership
+       ON membership.group_id = leadership_group.id
+      AND membership.user_id = ur.user_id
+      AND membership.member_id = ur.member_id
+      AND membership.left_at IS NULL
+     JOIN members m ON m.id = membership.member_id AND m.status = 'active'
+     LEFT JOIN organization_representatives rep
+       ON rep.member_id = m.id
+      AND rep.user_id = ur.user_id
+      AND rep.left_at IS NULL
+      AND rep.blocked_at IS NULL
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE ur.context_type = 'group'
        AND ur.role_id IN (?, ?)
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       AND (m.organization_id IS NULL OR rep.id IS NOT NULL)
      ORDER BY ur.created_at DESC`,
     [SYSTEM_ROLE_IDS.groupLead, SYSTEM_ROLE_IDS.groupDeputyLead],
   );

@@ -27,6 +27,7 @@ import { queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
 
 async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
@@ -36,6 +37,23 @@ async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin>
 
 async function token(userId: string, raw = crypto.randomUUID()): Promise<string> {
   return createAdminSession(env.DB, userId, raw);
+}
+
+async function grantLeadership(
+  groupId: string,
+  leader: UserBackedAuthAdmin,
+  leadershipId = crypto.randomUUID(),
+): Promise<string> {
+  const memberId = await ensureGroupMembershipCapacity(env.DB, groupId, leader.id);
+  leader.memberId = memberId;
+  await env.DB.prepare(
+    `INSERT INTO user_roles
+       (id, user_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
+     VALUES (?, ?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
+  )
+    .bind(leadershipId, leader.id, memberId, groupId)
+    .run();
+  return leadershipId;
 }
 
 function jsonRequest(path: string, method: string, body: unknown, authToken: string): Promise<Response> {
@@ -59,12 +77,7 @@ describe("group mailing-list management routes", () => {
       visibility: "public",
     });
     const leader = await actor(`mailing-list-local-leader-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, group.id)
-      .run();
+    await grantLeadership(group.id, leader);
 
     const leaderToken = await token(leader.id);
     const created = await jsonRequest(
@@ -149,12 +162,7 @@ describe("group mailing-list management routes", () => {
       visibility: "public",
     });
     const leader = await actor(`mailing-list-inherited-leader-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, parent.id)
-      .run();
+    await grantLeadership(parent.id, leader);
     const leaderToken = await token(leader.id);
     const created = await jsonRequest(
       `/api/v1/groups/${child.id}/mailing-lists`,
@@ -173,8 +181,10 @@ describe("group mailing-list management routes", () => {
     expect(managedPage.status, await managedPage.clone().text()).toBe(200);
 
     const localLeader = await actor(`mailing-list-local-only-leader-${crypto.randomUUID()}@example.test`);
+    localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, globalAdmin, child.id, {
       userId: localLeader.id,
+      memberId: localLeader.memberId,
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, globalAdmin, child.id, { governanceInheritanceMode: "local_only" });
@@ -299,12 +309,7 @@ describe("group mailing-list management routes", () => {
       visibility: "public",
     });
     const leader = await actor(`mailing-list-shared-leader-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, grantee.id)
-      .run();
+    await grantLeadership(grantee.id, leader);
     const list = await createGroupMailingList(env.DB, staff, owner.id, {
       email: `shared-${crypto.randomUUID()}@lists.example.test`,
       label: "Shared discussion",
@@ -389,12 +394,7 @@ describe("group mailing-list management routes", () => {
     });
     const leader = await actor(`mailing-list-race-leader-${crypto.randomUUID()}@example.test`);
     const leadershipId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(leadershipId, leader.id, group.id)
-      .run();
+    await grantLeadership(group.id, leader, leadershipId);
     const created = await createGroupMailingList(env.DB, leader, group.id, {
       email: `race-${crypto.randomUUID()}@lists.example.test`,
       label: "Before race",
@@ -420,12 +420,7 @@ describe("group mailing-list management routes", () => {
     });
     const leader = await actor(`mailing-list-read-race-leader-${crypto.randomUUID()}@example.test`);
     const leadershipId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(leadershipId, leader.id, group.id)
-      .run();
+    await grantLeadership(group.id, leader, leadershipId);
     await createGroupMailingList(env.DB, leader, group.id, {
       email: `read-race-${crypto.randomUUID()}@lists.example.test`,
       label: "Read race",

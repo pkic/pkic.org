@@ -33,7 +33,17 @@ function jsonResponse(body: unknown): Response {
 function memberProfile(): NonNullable<typeof profile.value> {
   return {
     userId: "00000000-0000-4000-8000-000000000001",
+    emailId: null,
     email: "person@example.test",
+    emailAddresses: [
+      {
+        id: null,
+        email: "person@example.test",
+        primary: true,
+        verifiedAt: "2026-08-01T00:00:00.000Z",
+        verificationMethod: "magic_link",
+      },
+    ],
     firstName: "Portal",
     lastName: "Tester",
     preferredName: null,

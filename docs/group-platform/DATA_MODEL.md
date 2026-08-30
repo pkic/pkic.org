@@ -150,7 +150,9 @@ ineligible.
 
 The existing roles, role_permissions, user_roles, and permission_grants tables
 remain canonical. Group-scoped assignments use context_type group and
-context_id groups.id.
+context_id groups.id. A group lead or deputy assignment additionally records
+member_id and is valid only while the same user actively participates in that
+group through that exact Member. Other role kinds leave member_id null.
 
 Working-group-specific context literals and role names migrate to generic group
 vocabulary with compatibility parsing only during the code transition.
@@ -184,6 +186,12 @@ that evidence is not already represented:
 Only verified primary or secondary email addresses participate in domain
 matching. A pending email address is never trusted.
 
+The address rows are identities of one canonical user, not separate accounts.
+A verified secondary address may authenticate the same user and is rechecked
+in the session-creation transaction; removing or unverifying it invalidates an
+outstanding sign-in capability. Profile and relationship tables store only the
+address id, never another copy of the email string.
+
 ### organization_representatives
 
 The existing table remains the authoritative relationship and is finalized as
@@ -192,6 +200,10 @@ one row per Member and user pair:
     id
     member_id -> members.id
     user_id -> users.id
+    email_id -> user_emails.id, nullable (null selects users.email)
+    job_title
+    biography
+    links_json
     source
     show_on_org_profile
     joined_at
@@ -219,6 +231,13 @@ Closing a representative relationship atomically:
 - inserts any required notification into the outbox.
 
 Past actions remain attributed to the original user and Member.
+
+Names and the headshot describe the person and remain on users. Job title,
+biography, links, and the selected verified address describe the role in one
+organization and therefore live on organization_representatives. An individual
+Member uses the corresponding global user profile fields. A person representing
+two organizations can consequently present two different profiles without
+duplicating the person or creating linked login accounts.
 
 Association, removal, and restoration enqueue an informational notice in the
 same transaction as the relationship mutation. The notice never asks the

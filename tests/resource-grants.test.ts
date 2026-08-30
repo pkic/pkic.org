@@ -19,6 +19,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
 import {
   addResourceGrantGroupLeader as addGroupLeader,
   addResourceGrantParticipant as addParticipant,
@@ -292,8 +293,10 @@ describe("shared resource grant management", () => {
     });
     const parentLeader = await addGroupLeader(parent.id, "grant-parent-leader");
     const localLeader = await insertActor("grant-local-leader");
+    localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, parentLeader, child.id, {
       userId: localLeader.id,
+      memberId: localLeader.memberId,
       roleId: "role-group_lead",
     });
     const eventId = crypto.randomUUID();
@@ -329,7 +332,7 @@ describe("shared resource grant management", () => {
 });
 
 describe("shared resource access evaluator", () => {
-  it("separates participant capabilities from leadership-only response and management capabilities", async () => {
+  it("adds leadership-only response and management capabilities to a leader's required participant capacity", async () => {
     const fixture = await createFixture();
     const admin = await insertActor("access-admin", "admin");
     const granteeMember = await addParticipant(fixture.grantee.id, "grantee-member");
@@ -360,7 +363,7 @@ describe("shared resource access evaluator", () => {
     ).toBe(true);
     expect(
       await canAccessGroupResource(env.DB, granteeLeader, "formPlacement", fixture.formPlacementId, "submit"),
-    ).toBe(false);
+    ).toBe(true);
     expect(await canAccessGroupResource(env.DB, ownerMember, "formPlacement", fixture.formPlacementId, "submit")).toBe(
       true,
     );
@@ -373,7 +376,7 @@ describe("shared resource access evaluator", () => {
     ).toBe(true);
     expect(
       await canAccessGroupResource(env.DB, granteeLeader, "formPlacement", fixture.formPlacementId, "submit"),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       await canAccessGroupResource(env.DB, granteeMember, "formPlacement", fixture.formPlacementId, "manage"),
     ).toBe(false);

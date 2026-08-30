@@ -169,7 +169,8 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
     headshot_r2_key: string | null;
   }>(
     db,
-    `SELECT r.id AS representative_id, u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key
+    `SELECT r.id AS representative_id, u.first_name, u.last_name,
+            r.job_title, r.biography, r.links_json, u.headshot_r2_key
      FROM organization_representatives r
      JOIN members m ON m.id = r.member_id
      JOIN users u ON u.id = r.user_id

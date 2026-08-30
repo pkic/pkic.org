@@ -19,6 +19,7 @@ export async function createOrganization(db: DatabaseLike, actor: UserBackedAuth
       name: representative.name,
       email: representative.email,
       jobTitle: representative.jobTitle,
+      biography: representative.biography,
       links: representative.links,
     })),
     representationSource: "staff",

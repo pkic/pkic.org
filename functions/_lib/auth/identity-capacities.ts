@@ -33,10 +33,18 @@ export function staffSignInAuthorizationEvidence(userId: string, normalizedEmail
     sql: `SELECT 1
           FROM users u
           WHERE u.id = ?
-            AND u.normalized_email = ?
             AND u.active = 1
+            AND (
+              u.normalized_email = ?
+              OR EXISTS (
+                SELECT 1 FROM user_emails ue
+                 WHERE ue.user_id = u.id
+                   AND ue.normalized_email = ?
+                   AND ue.verified_at IS NOT NULL
+              )
+            )
             AND ${STAFF_ACCESS_CONDITION}`,
-    bindings: [userId, normalizedEmail],
+    bindings: [userId, normalizedEmail, normalizedEmail],
   };
 }
 
@@ -99,11 +107,20 @@ export function memberSignInAuthorizationEvidence(userId: string, normalizedEmai
   return {
     sql: `SELECT 1
           FROM (${MEMBER_ELIGIBLE_USER_SELECT}) eligible
+          JOIN users sign_in_user ON sign_in_user.id = eligible.id
           WHERE eligible.id = ?
-            AND eligible.normalized_email = ?
             AND eligible.active = 1
+            AND (
+              sign_in_user.normalized_email = ?
+              OR EXISTS (
+                SELECT 1 FROM user_emails ue
+                 WHERE ue.user_id = sign_in_user.id
+                   AND ue.normalized_email = ?
+                   AND ue.verified_at IS NOT NULL
+              )
+            )
           LIMIT 1`,
-    bindings: [userId, normalizedEmail],
+    bindings: [userId, normalizedEmail, normalizedEmail],
   };
 }
 

@@ -247,8 +247,12 @@ export const groupLeadershipRoleIdSchema = z.enum(GROUP_LEADERSHIP_ROLE_IDS);
 export const groupLeadershipAssignmentSchema = z.object({
   userRoleId: databaseIdSchema,
   userId: databaseIdSchema,
+  memberId: databaseIdSchema,
+  memberType: z.enum(["individual", "organization"]),
+  organizationName: z.string().nullable(),
   userName: z.string(),
   email: z.email(),
+  jobTitle: z.string().nullable(),
   roleId: groupLeadershipRoleIdSchema,
   sourceGroup: groupLabelSchema,
   inherited: z.boolean(),
@@ -258,6 +262,7 @@ export const groupLeadershipAssignmentSchema = z.object({
 export type GroupLeadershipAssignment = z.infer<typeof groupLeadershipAssignmentSchema>;
 export const groupLeadershipAssignSchema = z.object({
   userId: databaseIdSchema,
+  memberId: databaseIdSchema,
   roleId: groupLeadershipRoleIdSchema,
   expiresAt: utcInstantSchema.nullable().optional(),
 });

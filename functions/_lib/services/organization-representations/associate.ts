@@ -16,11 +16,21 @@ import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../users";
 import type { UserBackedAuthAdmin } from "../../types";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
+import { normalizeEmail } from "../../validation";
+import { first } from "../../db/queries";
 
 export async function associateOrganizationRepresentative(
   db: DatabaseLike,
   actor: RepresentativeManagerActor,
-  input: { memberId: string; userId: string; showOnOrganizationProfile: boolean },
+  input: {
+    memberId: string;
+    userId: string;
+    emailId?: string | null;
+    jobTitle?: string | null;
+    biography?: string | null;
+    links?: string[];
+    showOnOrganizationProfile: boolean;
+  },
 ): Promise<string> {
   await requireOrganizationRepresentativeManagement(db, {
     memberId: input.memberId,
@@ -34,6 +44,10 @@ export async function associateOrganizationRepresentative(
   const { representativeId, statement } = await buildAddRepresentativeStatement(db, {
     memberId: input.memberId,
     userId: input.userId,
+    emailId: input.emailId,
+    jobTitle: input.jobTitle,
+    biography: input.biography,
+    linksJson: input.links === undefined ? undefined : serializeLinks(input.links),
     source,
     showOnOrgProfile: input.showOnOrganizationProfile,
     now: at,
@@ -55,7 +69,7 @@ export async function associateOrganizationRepresentative(
         "organization_representative_associated",
         "organization_representative",
         representativeId,
-        { userId: input.userId, source },
+        { userId: input.userId, memberId: input.memberId, emailId: input.emailId ?? null, source },
         at,
       ),
       prepareRepresentationNotification(db, {
@@ -100,6 +114,7 @@ export async function associateOrganizationRepresentativeByEmail(
     email: string;
     name: string;
     jobTitle?: string;
+    biography?: string;
     links?: string[];
     showOnOrganizationProfile: boolean;
   },
@@ -112,10 +127,26 @@ export async function associateOrganizationRepresentativeByEmail(
     email: input.email,
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
-    jobTitle: input.jobTitle,
-    linksJson: input.links && input.links.length > 0 ? serializeLinks(input.links) : null,
-    allowProfileUpdate: true,
   });
+  const normalizedInputEmail = normalizeEmail(input.email);
+  const emailId =
+    normalizeEmail(user.email) === normalizedInputEmail
+      ? null
+      : (
+          await first<{ id: string }>(
+            db,
+            `SELECT id FROM user_emails
+              WHERE user_id = ? AND normalized_email = ? AND verified_at IS NOT NULL`,
+            [user.id, normalizedInputEmail],
+          )
+        )?.id;
+  if (emailId === undefined) {
+    throw new AppError(
+      422,
+      "REPRESENTATIVE_EMAIL_UNVERIFIED",
+      "The selected secondary email must be verified before it can identify an organization representation",
+    );
+  }
   const staffActor: RepresentativeManagerActor = {
     userId: actor.id,
     databaseUserId: actor.id,
@@ -132,6 +163,10 @@ export async function associateOrganizationRepresentativeByEmail(
   const { representativeId, statement } = await buildAddRepresentativeStatement(db, {
     memberId: input.memberId,
     userId: user.id,
+    emailId,
+    jobTitle: input.jobTitle ?? null,
+    biography: input.biography ?? null,
+    linksJson: input.links ? serializeLinks(input.links) : null,
     source: "staff",
     showOnOrgProfile: input.showOnOrganizationProfile,
     now: at,

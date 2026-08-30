@@ -276,6 +276,8 @@ interface AuthAdminBase {
 /** A staff actor whose canonical id is also a real users(id) value. */
 export interface UserBackedAuthAdmin extends AuthAdminBase {
   identityType: "user";
+  /** Live Member capacity selected by the canonical user session, when one exists. */
+  memberId?: string | null;
   sessionId?: string;
   expiresAt?: string;
   state?: string | null;

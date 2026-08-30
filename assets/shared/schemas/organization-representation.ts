@@ -24,6 +24,7 @@ export const EMAIL_VERIFICATION_METHODS = [
 export const emailVerificationMethodSchema = z.enum(EMAIL_VERIFICATION_METHODS);
 
 export const verifiedEmailIdentitySchema = z.object({
+  id: databaseIdSchema.nullable(),
   email: normalizedEmailSchema,
   primary: z.boolean(),
   verifiedAt: z.string().nullable(),
@@ -58,7 +59,11 @@ export const organizationRepresentativeSchema = z.object({
   organizationName: z.string(),
   userId: databaseIdSchema,
   userName: z.string(),
+  emailId: databaseIdSchema.nullable(),
   email: z.email(),
+  jobTitle: z.string().nullable(),
+  biography: z.string().nullable(),
+  links: linksSchema,
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   source: organizationRepresentationSourceSchema,
   showOnOrganizationProfile: z.boolean(),
@@ -76,6 +81,10 @@ export const representativeAssociateSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("existing_user"),
     userId: databaseIdSchema,
+    emailId: databaseIdSchema.nullable().optional(),
+    jobTitle: trimmedString(0, 200).nullable().optional(),
+    biography: trimmedString(0, 5000).nullable().optional(),
+    links: linksSchema.optional(),
     showOnOrganizationProfile: z.boolean().default(true),
   }),
   z.object({
@@ -83,11 +92,18 @@ export const representativeAssociateSchema = z.discriminatedUnion("kind", [
     email: normalizedEmailSchema,
     name: trimmedString(1, 200),
     jobTitle: trimmedString(0, 200).optional(),
+    biography: trimmedString(0, 5000).optional(),
     links: linksSchema.optional(),
     showOnOrganizationProfile: z.boolean().default(true),
   }),
 ]);
-export const representativeProfileUpdateSchema = z.object({ showOnOrganizationProfile: z.boolean() });
+export const representativeProfileUpdateSchema = z.object({
+  emailId: databaseIdSchema.nullable().optional(),
+  jobTitle: trimmedString(0, 200).nullable().optional(),
+  biography: trimmedString(0, 5000).nullable().optional(),
+  links: linksSchema.optional(),
+  showOnOrganizationProfile: z.boolean().optional(),
+});
 export const representativeRemoveSchema = z.object({ reason: trimmedString(1, 500).optional() }).default({});
 export const representativeRestoreSchema = z.object({ reason: trimmedString(1, 500).optional() });
 export const representativeMutationResponseSchema = successResponseSchema.extend({

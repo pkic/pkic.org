@@ -33,6 +33,7 @@ export function MyProfile() {
     firstName: current?.firstName ?? "",
     lastName: current?.lastName ?? "",
     preferredName: current?.preferredName ?? "",
+    emailId: current?.emailId ?? "",
     jobTitle: current?.jobTitle ?? "",
     biography: current?.biography ?? "",
     linksText: linksToText(current?.links ?? []),
@@ -57,6 +58,9 @@ export function MyProfile() {
         biography: form.biography.trim(),
         links: textToLinks(form.linksText),
       };
+      if (current!.organizationId) {
+        input.emailId = form.emailId || null;
+      }
       if (current!.canEditOrganizationName) {
         input.organizationName = form.organizationName.trim();
       }
@@ -149,6 +153,27 @@ export function MyProfile() {
                     required
                   />
                 </div>
+                {current.organizationId && (
+                  <div class="col-sm-6">
+                    <label class="form-label fw-semibold small" for="portal-representation-email">
+                      Email for this organization
+                    </label>
+                    <select
+                      class="form-select"
+                      id="portal-representation-email"
+                      value={form.emailId}
+                      onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
+                    >
+                      {current.emailAddresses.map((address) => (
+                        <option value={address.id ?? ""} key={address.id ?? "primary"}>
+                          {address.email}
+                          {address.primary ? " (primary)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <div class="form-text">Used for your profile and actions in this organization capacity.</div>
+                  </div>
+                )}
                 <div class="col-sm-6">
                   <label class="form-label fw-semibold small">Last name</label>
                   <input
@@ -220,7 +245,7 @@ export function MyProfile() {
         <div class="card border-0 shadow-sm mt-3">
           <div class="card-body">
             <dl class="row mb-0 small">
-              <dt class="col-sm-4">Email</dt>
+              <dt class="col-sm-4">Email in this capacity</dt>
               <dd class="col-sm-8">{current.email}</dd>
               <dt class="col-sm-4">Membership category</dt>
               <dd class="col-sm-8">{current.membershipCategory}</dd>

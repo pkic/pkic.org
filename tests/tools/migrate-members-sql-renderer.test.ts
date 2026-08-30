@@ -102,12 +102,19 @@ describe("buildOrganizationMemberAggregateStatements", () => {
 
 describe("buildOrganizationRepresentativeStatement / buildRepresentativeRoleGrantStatement", () => {
   it("targets organization_representatives with the given visibility flag", () => {
-    const shown = buildOrganizationRepresentativeStatement("acme corp", "alice@acme.example", true);
-    expect(shown).toContain("INSERT OR IGNORE INTO organization_representatives");
-    expect(shown).toMatch(/SELECT [^,]+, m\.id, u\.id, 'migration', 1,/);
+    const shown = buildOrganizationRepresentativeStatement("acme corp", "alice@acme.example", true, {
+      jobTitle: "Policy lead",
+      biography: "Organization-specific biography",
+      linksJson: '["https://acme.example/alice"]',
+    });
+    expect(shown).toContain("INSERT INTO organization_representatives");
+    expect(shown).toContain("'Policy lead'");
+    expect(shown).toContain("'Organization-specific biography'");
+    expect(shown).toContain(sqlString('["https://acme.example/alice"]'));
+    expect(shown).toMatch(/'migration', 1,/);
 
     const hidden = buildOrganizationRepresentativeStatement("acme corp", "bare@acme.example", false);
-    expect(hidden).toMatch(/SELECT [^,]+, m\.id, u\.id, 'migration', 0,/);
+    expect(hidden).toMatch(/'migration', 0,/);
   });
 
   it("grants a role scoped to context_type='organization'", () => {

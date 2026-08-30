@@ -2,8 +2,7 @@
  * user-emails.test.ts
  *
  * Secondary email CRUD, global ownership constraints, searchable aliases,
- * and the "no login effect" decision (secondary emails must not resolve via
- * magic-link auth).
+ * and verified-alias sign-in into the same canonical user.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -308,7 +307,7 @@ describe("secondary user emails", () => {
     ]);
   });
 
-  it("adding a secondary email does not allow magic-link login via that alias", async () => {
+  it("does not allow magic-link login through an unverified secondary email", async () => {
     const userId = await insertUser("canonical@example.test");
     // Give this user staff access so it's eligible for a magic link at all.
     const staffRole = await queryAll<{ id: string }>(
@@ -341,6 +340,157 @@ describe("secondary user emails", () => {
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
     expect(viaAlias).toBeNull();
+  });
+
+  it("signs a verified secondary email into the same canonical user", async () => {
+    const userId = await insertUser("canonical-login@example.test");
+    const staffRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'membership_processor'")
+    )[0];
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
+      .run();
+    const emailId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO user_emails
+         (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'), 'staff', datetime('now'))`,
+    )
+      .bind(emailId, userId, "verified-alias@example.test", "verified-alias@example.test")
+      .run();
+
+    const issued = await queueUserSignInCapability({
+      db: env.DB,
+      email: "verified-alias@example.test",
+      ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    expect(issued).toMatchObject({ identity: { id: userId, email: "canonical-login@example.test" } });
+    if (!issued) throw new Error("Expected a verified-alias sign-in capability");
+    const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(
+      env.DB,
+      env,
+      JSON.stringify({
+        magicLinkUrl: issued.queuedToken,
+        __authorizedCapabilityMarkers: [issued.queuedToken],
+      }),
+    );
+    const redeemed = await redeemUserSignInCapability(env.DB, {
+      token: delivered.magicLinkUrl,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      sessionTtlHours: 8,
+    });
+
+    expect(redeemed.session.identity).toMatchObject({ id: userId, email: "canonical-login@example.test" });
+    expect(redeemed.session.staff?.id).toBe(userId);
+    expect(
+      await queryAll<{ verified_at: string | null }>(env.DB, "SELECT verified_at FROM user_emails WHERE id = ?", [
+        emailId,
+      ]),
+    ).toEqual([{ verified_at: expect.any(String) }]);
+  });
+
+  it("invalidates an issued alias sign-in capability when the alias is removed", async () => {
+    const userId = await insertUser("alias-removal@example.test");
+    const staffRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'membership_processor'")
+    )[0];
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
+      .run();
+    const emailId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO user_emails
+         (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'), 'staff', datetime('now'))`,
+    )
+      .bind(emailId, userId, "removed-alias@example.test", "removed-alias@example.test")
+      .run();
+    const issued = await queueUserSignInCapability({
+      db: env.DB,
+      email: "removed-alias@example.test",
+      ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    if (!issued) throw new Error("Expected a verified-alias sign-in capability");
+    const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(
+      env.DB,
+      env,
+      JSON.stringify({
+        magicLinkUrl: issued.queuedToken,
+        __authorizedCapabilityMarkers: [issued.queuedToken],
+      }),
+    );
+
+    await env.DB.prepare("DELETE FROM user_emails WHERE id = ? AND user_id = ?").bind(emailId, userId).run();
+    await expect(
+      redeemUserSignInCapability(env.DB, {
+        token: delivered.magicLinkUrl,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        sessionTtlHours: 8,
+      }),
+    ).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+  });
+
+  it("rolls back alias sign-in when verification is revoked during redemption", async () => {
+    const userId = await insertUser("alias-race@example.test");
+    const staffRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'membership_processor'")
+    )[0];
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
+      .run();
+    const emailId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO user_emails
+         (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'), 'staff', datetime('now'))`,
+    )
+      .bind(emailId, userId, "alias-race-verified@example.test", "alias-race-verified@example.test")
+      .run();
+    const issued = await queueUserSignInCapability({
+      db: env.DB,
+      email: "alias-race-verified@example.test",
+      ttlMinutes: 15,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    if (!issued) throw new Error("Expected a verified-alias sign-in capability");
+    const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(
+      env.DB,
+      env,
+      JSON.stringify({
+        magicLinkUrl: issued.queuedToken,
+        __authorizedCapabilityMarkers: [issued.queuedToken],
+      }),
+    );
+    const gate = gateNextBatch(env.DB);
+    const redemption = redeemUserSignInCapability(gate.db, {
+      token: delivered.magicLinkUrl,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      sessionTtlHours: 8,
+    });
+    await gate.reached;
+    await env.DB.prepare("UPDATE user_emails SET verified_at = NULL, verification_method = NULL WHERE id = ?")
+      .bind(emailId)
+      .run();
+    gate.release();
+
+    await expect(redemption).rejects.toMatchObject({ code: "MAGIC_LINK_INVALID" });
+    expect(await queryAll(env.DB, "SELECT id FROM sessions WHERE user_id = ?", [userId])).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE actor_id = ? AND action = 'user_magic_link_verified'", [
+        userId,
+      ]),
+    ).toHaveLength(0);
   });
 
   it("invalidates an issued sign-in capability when the primary email changes", async () => {
