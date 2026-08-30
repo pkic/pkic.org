@@ -846,7 +846,7 @@ Status: Complete
 
 ## 10. Unified portal and admin retirement
 
-Status: In progress
+Status: Complete
 
 - [x] Make human authentication identity-based.
       The neutral `/api/v1/auth/*` flow uses one purpose-bound magic link,
@@ -920,7 +920,7 @@ Status: In progress
       Working Group, and Committee cards in the same view, Committee parent
       context, and the legacy hash-route redirect; no preview or production data
       was used.
-- [ ] Move group, leadership, meetings, forms, votes, mailing lists, stats, and
+- [x] Move group, leadership, meetings, forms, votes, mailing lists, stats, and
       audit management into the portal.
       Current evidence: the selected-group portal owns group settings,
       capacity-aware participant add/remove, local leadership assign/revoke,
@@ -1083,19 +1083,26 @@ Status: In progress
       form answers, referral data, raw RSVP payloads, delivery state, and sponsor
       consent outside the group boundary while reusing the shared server-side
       search, sorting, pagination, and statistics reducer. The duplicate admin
-      day-attendance panel, service adapter, route, and contract are removed;
-      reasoned VIP admission remains available through the canonical event API,
-      but selected-group portal parity remains the one open management item
-      below because it is a distinct higher-risk override. Focused backend
-      regressions pass 145 tests,
-      the focused component suite passes 2 tests, and a real Worker/D1 Playwright
-      journey changes one attendee from accepted to waitlisted and back through
-      group routes without any admin API request. All static, build, frontend
-      (240), tools (80), architecture, formatting, and zero-duplication gates
-      pass. The complete backend run passed 2,024 tests with one skipped and one
-      unrelated Google Groups batching assertion; its isolated 27-test suite
-      passed immediately afterward, documenting the nondeterministic failure
-      without misreporting the complete run as green.
+      day-attendance panel, service adapter, route, and contract are removed.
+      Selected-group admission now uses the RESTful nested resource
+      `POST /api/v1/groups/:groupId/events/:eventId/registrations/:registrationId/admissions`.
+      `capacity_exempt` retains the exact effective `manage_attendance`
+      capability and active-waitlist prerequisite. The higher-risk `vip` mode
+      requires effective `manage`, explicitly selected days, and a required
+      3–1000 character reason, and may override capacity without a waitlist
+      row. The portal renders VIP controls only from the server-provided
+      effective `manage` capability. The service repeats the same mode-specific
+      capability and selected-group context inside the protected D1 batch;
+      deterministic revocation tests prove that stale authority rolls back the
+      admission, audit, waitlist, and outbox writes. Both modes reuse the one
+      admission service, audit action, and registration-update notification.
+      The retired verb path `/admit` has no compatibility alias. The focused
+      mounted admission and OpenAPI suites pass 62 tests, the focused portal
+      component suite passes 3 tests, and the real selected-group browser
+      journey proves a non-waitlisted VIP override succeeds without any admin
+      API request. The exact accumulated state passes the complete repository
+      gate with 2,393 backend tests (one skipped), 340 frontend tests, and 88
+      tooling tests, and the uninterrupted complete browser gate passes 79/79.
       Attendee and speaker invitation create, preview, list, search, resend, and
       revoke now use the same
       selected-group event context. The canonical D1 query owns invite-type
@@ -1219,9 +1226,8 @@ Status: In progress
       fallback. The complete repository gate now passes 2,137 backend tests
       (one skipped), 259 frontend tests, and 80 tool tests, with zero duplicated
       changed-code blocks.
-      The only remaining part of this parent item is selected-group parity for
-      the existing reasoned VIP admission override; every other named group
-      management area and the admin-shell retirement are complete.
+      Selected-group VIP admission completes the last named group-management
+      parity item without widening the ordinary attendance-manager role.
 - [x] Move remaining global management views into the portal.
       Current evidence: the global audit log is the first permission-derived
       portal destination. Its schema, service, and API moved rather than being
@@ -1777,8 +1783,8 @@ Status: Complete
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes on the exact architecture and
-      browser-evidence state with 2,391 passing backend tests (one skipped),
-      339 frontend tests, and 88 tooling tests. Type
+      browser-evidence state with 2,393 passing backend tests (one skipped),
+      340 frontend tests, and 88 tooling tests. Type
       checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.

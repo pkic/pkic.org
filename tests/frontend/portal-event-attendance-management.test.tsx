@@ -14,11 +14,11 @@ function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-function mount(): HTMLElement {
+function mount(canVip = false): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
-  void act(() => render(<GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} />, container));
+  void act(() => render(<GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} canVip={canVip} />, container));
   return container;
 }
 
@@ -132,7 +132,7 @@ function installApi(waitlisted: boolean) {
       if (method === "PATCH" && url.pathname === `${REGISTRATION_ENDPOINT}/day-attendance`) {
         return json({ success: true });
       }
-      if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/admit`) {
+      if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/admissions`) {
         return json({
           success: true,
           registration: attendanceDetail(false).registration,
@@ -215,7 +215,7 @@ describe("portal event attendance management", () => {
     await settle();
 
     expect(requests).toContainEqual({
-      path: `${REGISTRATION_ENDPOINT}/admit`,
+      path: `${REGISTRATION_ENDPOINT}/admissions`,
       method: "POST",
       body: {
         mode: "capacity_exempt",
@@ -225,6 +225,53 @@ describe("portal event attendance management", () => {
     });
     expect(container.textContent).toContain("registration update email was queued");
     expect(requests.some(({ path }) => path.endsWith(`/events/${EVENT_ID}/days`))).toBe(false);
+    expect(requests.some(({ path }) => path.startsWith("/api/v1/admin/"))).toBe(false);
+  });
+
+  it("shows the reasoned VIP override only with event manage and sends its explicit selected-day payload", async () => {
+    const hiddenRequests = installApi(false);
+    const hidden = mount(false);
+    await openAttendance(hidden);
+    expect(hidden.textContent).not.toContain("Reasoned VIP admission override");
+    expect(hiddenRequests.some(({ method }) => method === "POST")).toBe(false);
+
+    vi.unstubAllGlobals();
+    const requests = installApi(false);
+    const container = mount(true);
+    await openAttendance(container);
+
+    expect(container.textContent).toContain("Requires the effective event manage capability");
+    const vipDay = container.querySelector<HTMLInputElement>(`#group-registration-${REGISTRATION_ID}-vip-2026-09-01`);
+    const reason = container.querySelector<HTMLTextAreaElement>(`#group-registration-${REGISTRATION_ID}-vip-reason`);
+    expect(vipDay).not.toBeNull();
+    expect(reason).not.toBeNull();
+    await act(async () => {
+      vipDay?.click();
+      if (reason) {
+        reason.value = "Approved consortium guest";
+        reason.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+
+    const applyButton = Array.from(container.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "Apply VIP override",
+    );
+    expect(applyButton?.disabled).toBe(false);
+    await act(async () => {
+      applyButton?.click();
+    });
+    await settle();
+
+    expect(requests).toContainEqual({
+      path: `${REGISTRATION_ENDPOINT}/admissions`,
+      method: "POST",
+      body: {
+        mode: "vip",
+        reason: "Approved consortium guest",
+        dayDates: ["2026-09-01"],
+      },
+    });
+    expect(container.textContent).toContain("VIP override applied");
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin/"))).toBe(false);
   });
 });

@@ -94,9 +94,16 @@ Base path: `/api/v1`
   request atomically.
 - Day waitlisting and admission remain per-day state. There is no generic
   registration-level force-status action.
-- Selected-group attendance management remains under the group event resource
-  and uses its narrower `manage_attendance` capability and reduced attendee
-  projection.
+- Selected-group attendance management remains under the group event resource:
+  `POST /groups/:groupId/events/:eventId/registrations/:registrationId/admissions`.
+  The request must explicitly select its event days and admission mode.
+  `capacity_exempt` requires the effective event `manage_attendance` capability
+  and every selected day must have an active waitlist entry. `vip` is a
+  capacity-bypassing exception: it requires the stronger effective event
+  `manage` capability and a 3–1000 character reason, but no waitlist entry.
+  The same exact capability and selected-group management context are rechecked
+  in the D1 mutation batch. Both modes write the existing admission audit event
+  and queue the normal registration-update notification.
 - The former `/admin/events/:eventSlug/registrations` and waitlist routes are
   removed rather than retained as aliases.
 

@@ -87,9 +87,9 @@ export const eventRegistrationAdmitSchema = z.object({
   dayDates: z.array(dayDateSchema).min(1).max(31).optional(),
 });
 
-/** Group attendance managers may admit only explicitly selected days. */
-export const eventRegistrationCapacityAdmitSchema = eventRegistrationAdmitSchema.extend({
-  mode: z.literal("capacity_exempt"),
+/** Group managers must explicitly select both the admission mode and event days. */
+export const eventRegistrationSelectedDayAdmitSchema = eventRegistrationAdmitSchema.extend({
+  mode: z.enum(["vip", "capacity_exempt"]),
   dayDates: z.array(dayDateSchema).min(1).max(31),
 });
 
@@ -97,4 +97,4 @@ export type EventRegistrationDetailResponse = z.infer<typeof eventRegistrationDe
 export type EventRegistrationAttendanceDetailResponse = z.infer<typeof eventRegistrationAttendanceDetailResponseSchema>;
 export type EventRegistrationDayAttendanceChange = z.infer<typeof eventRegistrationDayAttendanceChangeSchema>;
 export type EventRegistrationAdmitInput = z.infer<typeof eventRegistrationAdmitSchema>;
-export type EventRegistrationCapacityAdmitInput = z.infer<typeof eventRegistrationCapacityAdmitSchema>;
+export type EventRegistrationSelectedDayAdmitInput = z.infer<typeof eventRegistrationSelectedDayAdmitSchema>;

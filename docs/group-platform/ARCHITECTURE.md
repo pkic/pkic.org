@@ -272,6 +272,20 @@ atomic authorization guard and a group-scoped audit event with the mutation,
 so grant revocation, leadership revocation, group deactivation, or actor
 deactivation cannot race a prepared update.
 
+Selected-group registration admission is one nested admission resource, not a
+second attendee-management implementation:
+`POST /api/v1/groups/:groupId/events/:eventId/registrations/:registrationId/admissions`.
+The `capacity_exempt` mode is the ordinary waitlist workflow. It requires the
+effective `manage_attendance` capability, explicitly selected event days, and
+an active waitlist row for every selected day. The `vip` mode is a deliberate
+capacity override. It requires the stronger effective `manage` capability,
+explicitly selected event days, and a 3–1000 character reason; it does not
+require a waitlist row. The portal receives `manage` from the server-provided
+event capabilities before it renders the VIP controls. The service repeats the
+same chosen capability and selected-group context in the protected D1 batch,
+so losing leadership or a grant cannot race either mode. Both modes reuse the
+same admission, audit, and registration-update outbox services.
+
 ## Forms
 
 Forms are a live-editable Google Forms or Microsoft Forms alternative.

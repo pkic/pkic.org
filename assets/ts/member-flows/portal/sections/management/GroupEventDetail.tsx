@@ -112,7 +112,7 @@ export function GroupEventDetail({
 
       {event.capabilities.includes("manage_attendance") && (
         <div class="border-top pt-3">
-          <GroupEventRegistrations groupId={groupId} eventId={event.id} />
+          <GroupEventRegistrations groupId={groupId} eventId={event.id} canVip={canManage} />
         </div>
       )}
     </section>

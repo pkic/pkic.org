@@ -26,6 +26,8 @@ export interface DayAttendanceManagerProps {
   eventDays: EventDay[];
   registrationEndpoint: string;
   idPrefix: string;
+  /** Server-derived effective event manage capability; never infer this in the component. */
+  canVip?: boolean;
   onReload: () => void | Promise<void>;
   onSuccess?: (message: string) => void;
 }
@@ -41,6 +43,7 @@ export function DayAttendanceManager({
   eventDays,
   registrationEndpoint,
   idPrefix,
+  canVip = false,
   onReload,
   onSuccess,
 }: DayAttendanceManagerProps) {
@@ -48,20 +51,27 @@ export function DayAttendanceManager({
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [admitDayDates, setAdmitDayDates] = useState<string[]>([]);
   const [admitting, setAdmitting] = useState(false);
+  const [vipDayDates, setVipDayDates] = useState<string[]>([]);
+  const [vipReason, setVipReason] = useState("");
+  const [applyingVip, setApplyingVip] = useState(false);
   const [message, setMessage] = useState<{ text: string; kind: "success" | "danger" } | null>(null);
 
   if (!eventDays.length) return <p class="small text-muted fst-italic mb-0">No event days configured.</p>;
 
   const attendanceByDate = new Map(dayAttendance.map((day) => [day.dayDate, day.attendanceType as DayOption]));
   const waitlistByDate = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry]));
-  const rows = eventDays.map((day) => ({
-    dayDate: day.date,
-    label: day.label,
-    inPersonCapacity: day.attendanceOptions.find((option) => option.value === "in_person")?.capacity ?? null,
-    current: attendanceByDate.get(day.date) ?? ("none" as DayOption),
-    options: day.attendanceOptions,
-    waitlist: waitlistByDate.get(day.date) ?? null,
-  }));
+  const rows = eventDays.map((day) => {
+    const inPerson = day.attendanceOptions.find((option) => option.value === "in_person");
+    return {
+      dayDate: day.date,
+      label: day.label,
+      supportsInPerson: Boolean(inPerson),
+      inPersonCapacity: inPerson?.capacity ?? null,
+      current: attendanceByDate.get(day.date) ?? ("none" as DayOption),
+      options: day.attendanceOptions,
+      waitlist: waitlistByDate.get(day.date) ?? null,
+    };
+  });
   const activeWaitlistCount = dayWaitlist.filter(
     (entry) => entry.status === "waiting" || entry.status === "offered",
   ).length;
@@ -103,13 +113,22 @@ export function DayAttendanceManager({
     });
   }
 
+  function setVipChecked(dayDate: string, checked: boolean): void {
+    setVipDayDates((current) => {
+      const next = new Set(current);
+      if (checked) next.add(dayDate);
+      else next.delete(dayDate);
+      return Array.from(next);
+    });
+  }
+
   async function admitSelectedDays(): Promise<void> {
     if (admitDayDates.length === 0) return;
     setAdmitting(true);
     setMessage(null);
     try {
       await postJson(
-        `${registrationEndpoint}/admit`,
+        `${registrationEndpoint}/admissions`,
         {
           mode: "capacity_exempt",
           reason: "Event manager approved in-person admission",
@@ -126,6 +145,30 @@ export function DayAttendanceManager({
       setMessage({ text: (error as Error).message, kind: "danger" });
     } finally {
       setAdmitting(false);
+    }
+  }
+
+  async function applyVipOverride(): Promise<void> {
+    const reason = vipReason.trim();
+    if (vipDayDates.length === 0 || reason.length < 3) return;
+    setApplyingVip(true);
+    setMessage(null);
+    try {
+      await postJson(
+        `${registrationEndpoint}/admissions`,
+        { mode: "vip", reason, dayDates: vipDayDates },
+        eventRegistrationAdmitResponseSchema,
+      );
+      const admittedCount = vipDayDates.length;
+      setVipDayDates([]);
+      setVipReason("");
+      await reloadWithSuccess(
+        `VIP override applied to ${admittedCount} ${admittedCount === 1 ? "day" : "days"}; the registration update email was queued.`,
+      );
+    } catch (error) {
+      setMessage({ text: (error as Error).message, kind: "danger" });
+    } finally {
+      setApplyingVip(false);
     }
   }
 
@@ -271,6 +314,64 @@ export function DayAttendanceManager({
             : "Select waitlisted in-person days to enable admission."}
         </span>
       </div>
+      {canVip && (
+        <fieldset class="card border-warning mt-3">
+          <legend class="card-header h6 mb-0">Reasoned VIP admission override</legend>
+          <div class="card-body">
+            <p class="small text-muted">
+              Requires the effective event <code>manage</code> capability. The narrower <code>manage_attendance</code>
+              capability can admit only actively waitlisted days and cannot use this capacity override.
+            </p>
+            <div class="d-flex flex-wrap gap-3 mb-3">
+              {rows
+                .filter((day) => day.supportsInPerson)
+                .map((day) => {
+                  const inputId = `${idPrefix}-vip-${day.dayDate}`;
+                  return (
+                    <div class="form-check" key={day.dayDate}>
+                      <input
+                        id={inputId}
+                        type="checkbox"
+                        class="form-check-input"
+                        checked={vipDayDates.includes(day.dayDate)}
+                        disabled={applyingVip}
+                        onChange={(event) => setVipChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
+                      />
+                      <label class="form-check-label" for={inputId}>
+                        {day.label ? `${day.label} — ` : ""}
+                        {day.dayDate}
+                      </label>
+                    </div>
+                  );
+                })}
+            </div>
+            <label class="form-label" for={`${idPrefix}-vip-reason`}>
+              Required reason
+            </label>
+            <textarea
+              id={`${idPrefix}-vip-reason`}
+              class="form-control"
+              rows={2}
+              minLength={3}
+              maxLength={1000}
+              value={vipReason}
+              disabled={applyingVip}
+              onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
+            />
+            <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
+              <button
+                type="button"
+                class="btn btn-sm btn-warning"
+                disabled={vipDayDates.length === 0 || vipReason.trim().length < 3 || applyingVip}
+                onClick={() => void applyVipOverride()}
+              >
+                {applyingVip ? "Applying…" : "Apply VIP override"}
+              </button>
+              <span class="small text-muted">This action is audited and queues a registration-update email.</span>
+            </div>
+          </div>
+        </fieldset>
+      )}
     </>
   );
 }

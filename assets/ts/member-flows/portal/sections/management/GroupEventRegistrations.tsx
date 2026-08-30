@@ -5,7 +5,15 @@ import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
 import { GroupEventRegistrationAttendance } from "./GroupEventRegistrationAttendance";
 
-export function GroupEventRegistrations({ groupId, eventId }: { groupId: string; eventId: string }) {
+export function GroupEventRegistrations({
+  groupId,
+  eventId,
+  canVip,
+}: {
+  groupId: string;
+  eventId: string;
+  canVip: boolean;
+}) {
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
   const [managementMessage, setManagementMessage] = useState<string | null>(null);
   const tableActions = useRef<ApiTableActions | null>(null);
@@ -80,6 +88,7 @@ export function GroupEventRegistrations({ groupId, eventId }: { groupId: string;
                 groupId={groupId}
                 eventId={eventId}
                 registrationId={registration.id}
+                canVip={canVip}
                 onUpdated={async (message) => {
                   setManagementMessage(message);
                   await tableActions.current?.reload();

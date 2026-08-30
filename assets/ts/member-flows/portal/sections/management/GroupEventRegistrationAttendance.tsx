@@ -11,11 +11,13 @@ export function GroupEventRegistrationAttendance({
   groupId,
   eventId,
   registrationId,
+  canVip,
   onUpdated,
 }: {
   groupId: string;
   eventId: string;
   registrationId: string;
+  canVip: boolean;
   onUpdated?: (message: string) => void | Promise<void>;
 }) {
   const eventEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
@@ -49,6 +51,7 @@ export function GroupEventRegistrationAttendance({
         eventDays={detail.data.eventDays}
         registrationEndpoint={registrationEndpoint}
         idPrefix={`group-registration-${registrationId}`}
+        canVip={canVip}
         onReload={detail.reload}
         onSuccess={(message) => void onUpdated?.(message)}
       />
