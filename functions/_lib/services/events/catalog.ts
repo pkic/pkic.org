@@ -137,8 +137,8 @@ export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceV
 
 const EVENT_MANAGEMENT_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.source_mode, event.registration_mode,
-  event.visibility, event.invite_limit_attendee, event.owner_group_id, event.source_path,
-  event.base_path, event.updated_at`;
+  event.visibility, event.invite_limit_attendee, event.owner_group_id, owner_group.name AS owner_group_name,
+  event.source_path, event.base_path, event.updated_at`;
 
 interface EventManagementRow {
   id: string;
@@ -153,6 +153,7 @@ interface EventManagementRow {
   visibility: EventManagementSummary["visibility"];
   invite_limit_attendee: number;
   owner_group_id: string | null;
+  owner_group_name: string | null;
   source_path: string | null;
   base_path: string | null;
   updated_at: string;
@@ -168,6 +169,7 @@ export function buildManagedEventsPageQuery(viewer: EventAudienceViewer, query: 
   return {
     sql: `${EVENT_MANAGEMENT_SELECT}
       FROM events event
+      LEFT JOIN groups owner_group ON owner_group.id = event.owner_group_id
       WHERE ${whereSql}`,
     bindings,
     orderBy: resolveMappedOrderBy(
@@ -266,6 +268,7 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
       inviteLimitAttendee: row.invite_limit_attendee,
       updatedAt: row.updated_at,
       ownerGroupId: row.owner_group_id,
+      ownerGroupName: row.owner_group_name,
       sourcePath: row.source_path,
       basePath: row.base_path,
       totalRegistrations: statsByEvent.get(row.id)?.total_registrations ?? 0,

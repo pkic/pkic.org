@@ -1,6 +1,9 @@
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
+import { portalSession } from "../../state";
+import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
+import type { PortalSession } from "../../types";
 
 const EventList = lazy(() => import("./EventList").then((module) => ({ default: module.EventList })));
 const ProposalPrograms = lazy(() =>
@@ -31,6 +34,16 @@ function WorkspaceSection({ title, children }: { title: string; children: Compon
   );
 }
 
+/**
+ * ProposalPrograms is the proposal-only surface for identities that cannot
+ * see the events management list at all; an events:read holder manages
+ * proposals through the event detail workspace instead, so showing both
+ * here would duplicate the same proposals twice.
+ */
+export function eventListShowsProposalPrograms(session: PortalSession | null): boolean {
+  return !portalHasPermissionAtAnyScope(session, "events:read");
+}
+
 export function EventWorkspace(props: EventWorkspaceProps) {
   let content: ComponentChildren;
   let title: string;
@@ -39,7 +52,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     content = (
       <div class="d-flex flex-column gap-3">
         <EventList />
-        <ProposalPrograms />
+        {eventListShowsProposalPrograms(portalSession.value) && <ProposalPrograms />}
       </div>
     );
   } else if (props.view === "proposal") {

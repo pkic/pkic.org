@@ -421,7 +421,7 @@ test("renders the portal proposal detail workflow with submission answers and op
     });
   });
 
-  await page.goto(`/portal/#/events/pqc-2026/proposals/${proposalId}`);
+  await page.goto(`/portal/#/events/pqc-2026/proposals/detail/${proposalId}`);
 
   await expect(page.getByRole("heading", { name: "Operational PKI at Internet Scale" })).toBeVisible();
 

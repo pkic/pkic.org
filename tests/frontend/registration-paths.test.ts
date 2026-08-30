@@ -21,6 +21,8 @@ describe("event registration resource paths", () => {
       "/api/v1/events/event/registrations/registration/audit",
     );
     expect(eventRegistrationsViewPath("event")).toBe("/events/event/registrations");
-    expect(eventRegistrationViewPath("event", "registration")).toBe("/events/event/registrations/registration");
+    // The detail view lives under a reserved `detail` segment so it cannot
+    // collide with a Registrations sub-tab key (e.g. `responses`, `email`).
+    expect(eventRegistrationViewPath("event", "registration")).toBe("/events/event/registrations/detail/registration");
   });
 });

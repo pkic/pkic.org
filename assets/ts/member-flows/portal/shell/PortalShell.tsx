@@ -136,7 +136,7 @@ export function PortalShell() {
           <Switch>
             {hasEventWorkspace && (
               <Route
-                path="/events/:slug/registrations/:registrationId"
+                path="/events/:slug/registrations/detail/:registrationId"
                 component={({ params }: { params: { slug: string; registrationId: string } }) => (
                   <LazyEventWorkspace view="registration" slug={params.slug} resourceId={params.registrationId} />
                 )}
@@ -144,7 +144,7 @@ export function PortalShell() {
             )}
             {hasEventWorkspace && (
               <Route
-                path="/events/:slug/proposals/:proposalId"
+                path="/events/:slug/proposals/detail/:proposalId"
                 component={({ params }: { params: { slug: string; proposalId: string } }) => (
                   <LazyEventWorkspace view="proposal" slug={params.slug} resourceId={params.proposalId} />
                 )}
@@ -388,6 +388,25 @@ export function PortalShell() {
                   <PortalRouteRedirect
                     to={params.resourceId ? `/donations/${encodeURIComponent(params.resourceId)}` : "/donations"}
                   />
+                )}
+              />
+            )}
+            {hasSystemManagement && (
+              // A role detail needs a second path segment beyond the generic
+              // `/system/:view/:resourceId` shape below (view="access-control",
+              // resourceId="roles"), so this route composes the extra
+              // `:roleId` into a single `roles/:roleId` resourceId string
+              // instead of threading a third URL param through SystemManagement
+              // and every other `/system/:view/:resourceId` consumer. Must stay
+              // above the generic route: wouter's <Switch> renders the first
+              // match, and the generic route would otherwise win with
+              // resourceId="roles" and silently drop the role id.
+              <Route
+                path="/system/access-control/roles/:roleId"
+                component={({ params }: { params: { roleId: string } }) => (
+                  <SectionWrapper title="Settings">
+                    <SystemManagement session={session} view="access-control" resourceId={`roles/${params.roleId}`} />
+                  </SectionWrapper>
                 )}
               />
             )}

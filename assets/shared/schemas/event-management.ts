@@ -193,6 +193,7 @@ export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
  */
 export const eventManagementSummarySchema = eventResourceCoreSchema.extend({
   ownerGroupId: groupIdSchema.nullable(),
+  ownerGroupName: z.string().nullable(),
   sourcePath: z.string().nullable(),
   basePath: z.string().nullable(),
   totalRegistrations: z.number().int().nonnegative(),
