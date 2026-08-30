@@ -7,6 +7,7 @@ import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, type PaginationDefaults } from "./pagination";
 import { membershipCategorySelectionSchema } from "./membership-categories";
+import { formFieldDefinitionSchema } from "./forms";
 import { groupIdSchema } from "./groups";
 import { publicOperation } from "./route-contract";
 
@@ -56,24 +57,16 @@ export const voteBallotCountsSchema = z.object({
   abstain: z.number().int().nonnegative(),
 });
 
-/** A consultation's questions, borrowed from a form. */
-export const consultationQuestionOptionSchema = z.object({
-  value: z.string(),
-  label: z.string(),
-  active: z.boolean(),
-});
-export const consultationQuestionSchema = z.object({
-  fieldId: databaseIdSchema,
-  key: z.string(),
-  label: z.string(),
-  fieldType: z.string(),
-  required: z.boolean(),
-  options: z.array(consultationQuestionOptionSchema),
-});
+/**
+ * The consultation's form, in the same projection every other form uses, so
+ * the portal renders it with the ordinary form components rather than a
+ * second field renderer that would drift from them.
+ */
 export const consultationFormSchema = z.object({
-  formId: databaseIdSchema,
+  id: databaseIdSchema,
   title: z.string(),
-  questions: z.array(consultationQuestionSchema),
+  description: z.string().nullable(),
+  fields: z.array(formFieldDefinitionSchema),
 });
 
 export const consultationQuestionResultSchema = z.object({
@@ -209,6 +202,8 @@ export const memberVoteSchema = z.object({
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
   memberBallots: z.array(eligibleMemberBallotSchema).nullable(),
+  /** Present only for a consultation that asks a form. */
+  questionForm: consultationFormSchema.nullable().default(null),
   result: voteResultSchema,
 });
 

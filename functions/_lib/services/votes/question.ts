@@ -1,6 +1,7 @@
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
-import { formFieldOptionsSchema } from "../../../../assets/shared/schemas/form-field-rules";
+import { mapManagedFormFields, resolveFormFieldOptionCatalogs, type FormFieldRow } from "../forms/read";
+import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
 import type { DatabaseLike } from "../../types";
 import type { VoteRow } from "./shared";
 
@@ -13,97 +14,55 @@ import type { VoteRow } from "./shared";
  * consultation is actually for: would you support this, and how would you
  * want it done — two questions and one opinion.
  *
- * Linking a form gives it all of that, plus what forms already guarantee:
- * stable field and option identities, labels that may be reworded after
- * responses exist, and options archived without invalidating an answer
- * already given. The vote keeps only what a vote owns — who may respond, the
- * window, and one response per represented Member.
+ * The fields are projected through the same reader every other form uses, so
+ * the portal renders a consultation with the ordinary form components rather
+ * than a second implementation that would drift from them.
  */
-export interface ConsultationQuestionOption {
-  value: string;
-  label: string;
-  active: boolean;
-}
-
-export interface ConsultationQuestion {
-  fieldId: string;
-  key: string;
-  label: string;
-  fieldType: string;
-  required: boolean;
-  /** Empty for free-text questions, which are recorded but never tallied. */
-  options: ConsultationQuestionOption[];
-}
-
 export interface ConsultationForm {
-  formId: string;
+  id: string;
   title: string;
-  questions: ConsultationQuestion[];
+  description: string | null;
+  fields: FormFieldDefinition[];
 }
-
-const FORM_QUERY = `SELECT id, title, status FROM forms WHERE id = ?`;
-const FIELDS_QUERY = `
-  SELECT id, key, label, field_type, required, options_json
-    FROM form_fields
-   WHERE form_id = ? AND archived_at IS NULL
-   ORDER BY sort_order ASC, id ASC`;
 
 export async function loadConsultationForm(db: DatabaseLike, vote: VoteRow): Promise<ConsultationForm | null> {
   if (!vote.question_form_id) return null;
 
-  const form = await first<{ id: string; title: string; status: string }>(db, FORM_QUERY, [vote.question_form_id]);
+  const form = await first<{ id: string; title: string; description: string | null; status: string }>(
+    db,
+    `SELECT id, title, description, status FROM forms WHERE id = ?`,
+    [vote.question_form_id],
+  );
   if (!form) throw new AppError(409, "VOTE_FORM_MISSING", "This consultation's form no longer exists");
   if (form.status === "archived") {
     throw new AppError(409, "VOTE_FORM_ARCHIVED", "This consultation's form has been archived");
   }
 
-  const rows = await all<{
-    id: string;
-    key: string;
-    label: string;
-    field_type: string;
-    required: number;
-    options_json: string | null;
-  }>(db, FIELDS_QUERY, [vote.question_form_id]);
+  const rows = await all<FormFieldRow>(
+    db,
+    `SELECT id, form_id, key, label, field_type, required, options_json, option_source, validation_json,
+            sort_order, updated_at, archived_at
+       FROM form_fields
+      WHERE form_id = ? AND archived_at IS NULL
+      ORDER BY sort_order ASC, id ASC`,
+    [vote.question_form_id],
+  );
   if (rows.length === 0) throw new AppError(409, "VOTE_FORM_HAS_NO_QUESTIONS", "This consultation asks nothing");
 
+  const catalogs = await resolveFormFieldOptionCatalogs(db, rows);
   return {
-    formId: form.id,
+    id: form.id,
     title: form.title,
-    questions: rows.map((row) => {
-      const parsed = formFieldOptionsSchema.safeParse(JSON.parse(row.options_json ?? "[]"));
-      return {
-        fieldId: row.id,
-        key: row.key,
-        label: row.label,
-        fieldType: row.field_type,
-        required: row.required === 1,
-        options: parsed.success ? parsed.data : [],
-      };
-    }),
+    description: form.description,
+    fields: mapManagedFormFields(rows, catalogs),
   };
 }
 
 /** The questions a tally can count: those offering a fixed set of choices. */
-export function tallyableQuestions(form: ConsultationForm): ConsultationQuestion[] {
-  return form.questions.filter(
-    (question) =>
-      question.options.length > 0 && (question.fieldType === "select" || question.fieldType === "multi_select"),
+export function tallyableQuestions(form: ConsultationForm): FormFieldDefinition[] {
+  return form.fields.filter(
+    (field) => (field.options?.length ?? 0) > 0 && (field.fieldType === "select" || field.fieldType === "multi_select"),
   );
-}
-
-/**
- * Whether an answer may be given now. Only active options may be chosen,
- * while an archived one stays valid on a response already recorded — the same
- * distinction forms draw between answering and having answered.
- */
-export function questionAcceptsAnswer(question: ConsultationQuestion, answer: unknown): boolean {
-  if (question.options.length === 0) return typeof answer === "string" || answer === null;
-  const values = new Set(question.options.filter((option) => option.active).map((option) => option.value));
-  if (question.fieldType === "multi_select") {
-    return Array.isArray(answer) && answer.every((entry) => typeof entry === "string" && values.has(entry));
-  }
-  return typeof answer === "string" && values.has(answer);
 }
 
 /**
@@ -119,7 +78,7 @@ export async function consultationResponses(
   voteId: string,
   round: number,
 ): Promise<Array<Record<string, unknown>>> {
-  const rows = await all<{ submission_id: string; field_key: string; data_json: string | null }>(
+  const rows = await all<{ submission_id: string; field_key: string | null; data_json: string | null }>(
     db,
     `SELECT response.submission_id AS submission_id, answer.field_key AS field_key, answer.data_json AS data_json
        FROM vote_consultation_responses response

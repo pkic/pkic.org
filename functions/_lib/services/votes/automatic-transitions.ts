@@ -216,13 +216,13 @@ async function finalizeMotionOrConsultation(
   // would report a decision nobody took.
   const result = consultationForm
     ? computeConsultationResult(
-        consultationForm.formId,
-        tallyableQuestions(consultationForm).map((question) => ({
-          fieldId: question.fieldId,
-          key: question.key,
-          label: question.label,
-          optionValues: question.options.map((option) => option.value),
-          multiple: question.fieldType === "multi_select",
+        consultationForm.id,
+        tallyableQuestions(consultationForm).map((field) => ({
+          fieldId: field.id,
+          key: field.key,
+          label: field.label,
+          optionValues: (field.options ?? []).map((option) => option.value),
+          multiple: field.fieldType === "multi_select",
         })),
         await consultationResponses(db, vote.id, vote.current_round),
         quorum,

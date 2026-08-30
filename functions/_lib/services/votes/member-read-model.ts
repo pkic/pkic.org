@@ -1,6 +1,7 @@
 /** Member-scoped vote discovery, detail, and results for group resource adapters. */
 import { nowIso } from "../../utils/time";
 import { deriveVoteStatus, isVoteAcceptingBallots } from "./status";
+import { loadConsultationForm, type ConsultationForm } from "./question";
 import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
@@ -38,6 +39,8 @@ export interface EligibleMemberBallot {
 }
 
 export interface MemberVoteSummary extends VoteSummary {
+  /** Resolved only on the detail read; null in list projections. */
+  questionForm: ConsultationForm | null;
   candidates: CandidateSummary[] | null;
   canCastBallot: boolean;
   hasCastBallot: boolean;
@@ -224,6 +227,10 @@ export async function hydrateVotesForUser(
       canCastBallot,
       hasCastBallot,
       memberBallots,
+      // Resolved only in the detail read: a list of votes has no use for
+      // every consultation's full field definitions, and loading them per row
+      // would turn one page into a query per vote.
+      questionForm: null,
       result,
     };
   });
@@ -291,7 +298,10 @@ export async function getVoteDetailForMember(
   if (row.visibility !== "public" && !(await canMemberAccessGroupResource(db, member.userId, "vote", row.id, "view"))) {
     throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   }
-  return (await hydrateVotesForUser(db, [row], member.userId))[0];
+  const [vote] = await hydrateVotesForUser(db, [row], member.userId);
+  // The questions themselves, projected through the shared form reader so the
+  // portal renders a consultation with the ordinary form components.
+  return { ...vote, questionForm: await loadConsultationForm(db, row) };
 }
 
 export async function getVoteResultsForMember(
