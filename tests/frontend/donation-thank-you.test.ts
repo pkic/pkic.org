@@ -41,7 +41,7 @@ describe("donation thank-you page", () => {
     expect(
       fetchMock.mock.calls.every(([input]) => String(input).includes("/api/v1/donations/session?session_id=")),
     ).toBe(true);
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoter"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoters"))).toBe(false);
     expect(
       fetchMock.mock.calls.some((call) => {
         const [, init] = call as unknown as [RequestInfo | URL, RequestInit | undefined];
@@ -75,7 +75,7 @@ describe("donation thank-you page", () => {
     // Should have polled more than once
     expect(callCount).toBeGreaterThan(1);
     // Promoter endpoint must not be called (no confirmed payment)
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoter"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoters"))).toBe(false);
     // Container should be visible with the async-pending message
     const container = document.querySelector<HTMLElement>("[data-donation-badge]");
     expect(container?.hidden).toBe(false);
@@ -113,7 +113,7 @@ describe("donation thank-you page", () => {
         );
       }
       // Promoter POST — expected after confirmation
-      if (url.includes("/api/v1/donations/promoter")) {
+      if (url.includes("/api/v1/donations/promoters")) {
         return new Response(
           JSON.stringify({
             code: "abc123",
@@ -137,6 +137,11 @@ describe("donation thank-you page", () => {
     const container = document.querySelector<HTMLElement>("[data-donation-badge]");
     expect(container?.hidden).toBe(false);
     expect(container?.innerHTML).toContain("donation-badge-amount");
+    const promoterCall = fetchMock.mock.calls.find(
+      ([input]) => String(input) === "/api/v1/donations/promoters",
+    ) as unknown as [RequestInfo | URL, RequestInit];
+    expect(promoterCall[1].method).toBe("POST");
+    expect(JSON.parse(String(promoterCall[1].body))).toEqual({ sessionId: "cs_test_async_confirmed" });
   });
 
   it("does not fetch anything when the session_id is missing or invalid", async () => {

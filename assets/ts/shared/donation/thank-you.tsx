@@ -379,8 +379,8 @@ type PromoterResult = z.infer<typeof donationPromoterResponseSchema>;
 
 async function fetchPromoterCode(sessionId: string): Promise<PromoterResult | null> {
   try {
-    const payload = donationPromoterRequestSchema.parse({ session_id: sessionId });
-    return postJson("/api/v1/donations/promoter", payload, donationPromoterResponseSchema);
+    const payload = donationPromoterRequestSchema.parse({ sessionId });
+    return postJson("/api/v1/donations/promoters", payload, donationPromoterResponseSchema);
   } catch {
     return null;
   }

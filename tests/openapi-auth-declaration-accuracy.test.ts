@@ -56,11 +56,20 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     expect(response.status).not.toBe(403);
   });
 
-  const declaredPublicProposalMutations: Array<{
+  const declaredPublicMutations: Array<{
     label: string;
     path: string;
     init: () => RequestInit;
   }> = [
+    {
+      label: "donation promoter creation",
+      path: "/api/v1/donations/promoters",
+      init: () => ({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "cs_test_missing" }),
+      }),
+    },
     {
       label: "proposal capability update",
       path: "/api/v1/proposals/access/no-such-token",
@@ -168,14 +177,11 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     },
   ];
 
-  it.each(declaredPublicProposalMutations)(
-    "$label is reachable without credentials, as declared",
-    async ({ path, init }) => {
-      const response = await callApi(env, path, init());
-      expect({ path, status: response.status }).not.toMatchObject({ status: 401 });
-      expect({ path, status: response.status }).not.toMatchObject({ status: 403 });
-    },
-  );
+  it.each(declaredPublicMutations)("$label is reachable without credentials, as declared", async ({ path, init }) => {
+    const response = await callApi(env, path, init());
+    expect({ path, status: response.status }).not.toMatchObject({ status: 401 });
+    expect({ path, status: response.status }).not.toMatchObject({ status: 403 });
+  });
 
   const declaredSessionRequired = [
     "/api/v1/auth/session",

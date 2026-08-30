@@ -3,7 +3,7 @@
  *
  * Covers:
  *  - GET  /api/v1/donations/session?session_id=...    (positive, negative)
- *  - POST /api/v1/donations/promoter                  (positive, negative)
+ *  - POST /api/v1/donations/promoters                 (positive, negative)
  *  - POST /api/v1/donations/payments/stripe/webhook   (various event types)
  */
 
@@ -111,7 +111,7 @@ describe("GET /api/v1/donations/session", () => {
   });
 });
 
-describe("POST /api/v1/donations/promoter", () => {
+describe("POST /api/v1/donations/promoters", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -120,10 +120,10 @@ describe("POST /api/v1/donations/promoter", () => {
     await insertDonation({ sessionId: "cs_test_promo", status: "completed" });
 
     const response = await mountedDonationPromoter(
-      new Request("https://app.test/api/v1/donations/promoter", {
+      new Request("https://app.test/api/v1/donations/promoters", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: "cs_test_promo" }),
+        body: JSON.stringify({ sessionId: "cs_test_promo" }),
       }),
     );
 
@@ -138,10 +138,10 @@ describe("POST /api/v1/donations/promoter", () => {
     await insertDonation({ sessionId: "cs_test_idempotent", status: "completed" });
 
     const request = () =>
-      new Request("https://app.test/api/v1/donations/promoter", {
+      new Request("https://app.test/api/v1/donations/promoters", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: "cs_test_idempotent" }),
+        body: JSON.stringify({ sessionId: "cs_test_idempotent" }),
       });
     const response1 = await mountedDonationPromoter(request());
     const body1 = (await response1.json()) as { code: string };
@@ -156,10 +156,10 @@ describe("POST /api/v1/donations/promoter", () => {
     const donationId = await insertDonation({ sessionId: "cs_test_concurrent_promoter", status: "completed" });
     const requestPromoter = () =>
       mountedDonationPromoter(
-        new Request("https://app.test/api/v1/donations/promoter", {
+        new Request("https://app.test/api/v1/donations/promoters", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ session_id: "cs_test_concurrent_promoter" }),
+          body: JSON.stringify({ sessionId: "cs_test_concurrent_promoter" }),
         }),
       );
 
@@ -178,10 +178,10 @@ describe("POST /api/v1/donations/promoter", () => {
     await insertDonation({ sessionId: "cs_test_uncompleted", status: "pending" });
 
     const response = await mountedDonationPromoter(
-      new Request("https://app.test/api/v1/donations/promoter", {
+      new Request("https://app.test/api/v1/donations/promoters", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: "cs_test_uncompleted" }),
+        body: JSON.stringify({ sessionId: "cs_test_uncompleted" }),
       }),
     );
 
@@ -190,12 +190,12 @@ describe("POST /api/v1/donations/promoter", () => {
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
-  it("rejects for an invalid session_id format", async () => {
+  it("rejects an invalid sessionId", async () => {
     const response = await mountedDonationPromoter(
-      new Request("https://app.test/api/v1/donations/promoter", {
+      new Request("https://app.test/api/v1/donations/promoters", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: "not-valid" }),
+        body: JSON.stringify({ sessionId: "not-valid" }),
       }),
     );
 
@@ -206,7 +206,7 @@ describe("POST /api/v1/donations/promoter", () => {
 
   it("rejects invalid JSON body", async () => {
     const response = await mountedDonationPromoter(
-      new Request("https://app.test/api/v1/donations/promoter", {
+      new Request("https://app.test/api/v1/donations/promoters", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "not-json",
@@ -214,6 +214,18 @@ describe("POST /api/v1/donations/promoter", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("does not retain the singular promoter compatibility route", async () => {
+    const response = await mountedDonationPromoter(
+      new Request("https://app.test/api/v1/donations/promoter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "cs_test_retired" }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
   });
 });
 
