@@ -4,8 +4,12 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventAttendeeInviteSummary, EventInviteSummary } from "../../assets/shared/schemas/event-invites";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
-import { GroupEventDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupEventDetail";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
+import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", vi.fn()],
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -407,12 +411,16 @@ describe("portal event invitations", () => {
       vi.fn(async () => json(response())),
     );
 
-    const readOnly = mount(<GroupEventDetail event={event} groupId={GROUP_ID} />);
+    const readOnly = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="invitations" />);
     await settle();
     expect(readOnly.textContent).not.toContain("Attendee invitations");
 
     const manager = mount(
-      <GroupEventDetail event={{ ...event, capabilities: ["view", "manage"] }} groupId={GROUP_ID} />,
+      <GroupEventWorkspace
+        event={{ ...event, capabilities: ["view", "manage"] }}
+        groupId={GROUP_ID}
+        tab="invitations"
+      />,
     );
     await settle();
     expect(manager.textContent).toContain("Attendee invitations");

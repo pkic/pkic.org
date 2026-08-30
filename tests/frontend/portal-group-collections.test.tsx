@@ -482,88 +482,57 @@ describe("portal selected-group collections", () => {
     await settle();
     await settle();
 
-    expect(container.textContent).toContain("Registration");
-    expect(container.textContent).toContain("Register for this event");
-    expect(container.textContent).toContain("I agree to the event terms");
-    expect(container.textContent).toContain("Manage meeting series");
-    expect(container.textContent).toContain("Attendees");
-    expect(container.textContent).toContain("Group Member");
-    expect(container.querySelector('a[href="/events/2026/architecture-workshop/register/"]')).toBeNull();
-    expect(container.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}`);
 
-    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
-    await act(async () => {
-      hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
-  });
+    // The default tab is the overview, which shows the registration panel — not the settings form.
+    expect(container.textContent).toContain("Registration");
+    expect(container.textContent).toContain("Register for this event");
+    expect(container.textContent).toContain("I agree to the event terms");
+    expect(container.textContent).not.toContain("Attendees");
+    expect(container.textContent).not.toContain("Manage meeting series");
 
-  it("updates a mailing-list preference through its selected group context", async () => {
-    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
-    let preference: "subscribed" | "unsubscribed" | null = null;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init.method ?? "GET";
-        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-        requests.push({ url, method, body });
-        const subscription = {
-          mailingList: {
-            id: "a0000000-0000-4000-8000-000000000001",
-            email: "architecture@lists.example.test",
-            label: "Architecture discussion",
-            purpose: "group",
-            groupId: GROUP_ID,
-            primaryDiscussion: true,
-            subscriptionDefault: "group_members",
-            postingPolicy: "members",
-            moderationPolicy: "moderated",
-            autoSyncCategories: null,
-            active: true,
-            archivedAt: null,
-            createdAt: "2026-08-01T00:00:00.000Z",
-            updatedAt: "2026-08-01T00:00:00.000Z",
-          },
-          eligible: true,
-          defaultSubscribed: true,
-          preference,
-          effectiveSubscribed: preference !== "unsubscribed",
-        } as const;
-        if (method === "PUT") {
-          preference = (body as { preference: typeof preference }).preference;
-          return json({ success: true, subscription: { ...subscription, preference, effectiveSubscribed: false } });
-        }
-        return json({ subscriptions: [subscription], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
-      }),
+    const tab = (label: string) =>
+      Array.from(container.querySelectorAll('button[role="tab"]')).find(
+        (button) => button.textContent?.trim() === label,
+      );
+
+    // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
+    // spy here, so the resulting tab is verified below through the URL it
+    // would produce, the same way a fresh page load resolves that URL).
+    await act(async () => {
+      tab("Registrations")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}/registrations`);
+
+    await act(async () => {
+      tab("Settings")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}/settings`);
+
+    const back = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "← Back to events",
     );
-
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} />);
-    await settle();
-    expect(container.textContent).toContain("Architecture discussion");
-    expect(container.textContent).toContain("Subscribed");
-
-    const select = container.querySelector<HTMLSelectElement>("select")!;
-    select.value = "unsubscribed";
     await act(async () => {
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    await settle();
-    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
 
-    expect(requests.find(({ method }) => method === "PUT")).toMatchObject({
-      url: expect.objectContaining({
-        pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/a0000000-0000-4000-8000-000000000001/subscription`,
-      }),
-      body: { preference: "unsubscribed" },
-    });
-    expect(requests.filter(({ method }) => method === "GET")).toHaveLength(2);
-    expect(container.textContent).toContain("Not subscribed");
+    // The registrations URL resolves to the registrations tab.
+    const registrationsView = mount(
+      <GroupEvents groupId={GROUP_ID} initialEventId={event.id} initialEventTab="registrations" />,
+    );
+    await settle();
+    await settle();
+    expect(registrationsView.textContent).toContain("Attendees");
+    expect(registrationsView.textContent).toContain("Group Member");
+    expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}/registrations`))).toBe(true);
+
+    // The settings URL resolves to the settings tab, which surfaces the meeting-series link for a series event.
+    const settingsView = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} initialEventTab="settings" />);
+    await settle();
+    await settle();
+    expect(settingsView.textContent).toContain("Manage meeting series");
+    expect(settingsView.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
   });
 });

@@ -43,6 +43,7 @@ function group(revision = 0) {
     active: true,
     revision,
     membershipCapacityCount: 4,
+    representedMemberCount: 3,
     participantCount: 3,
     childCount: 1,
     createdAt: "2026-08-01T00:00:00.000Z",
@@ -147,7 +148,7 @@ describe("portal selected-group workspace", () => {
 
     expect(container.textContent).toContain("Architecture Committee");
     expect(container.textContent).toContain("Part of Parent Group");
-    expect(container.textContent).toContain("Membership capacities");
+    expect(container.textContent).toContain("Members represented");
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     // The group workspace is route-addressed; no manageable-group picker request is made.
     expect(requests.some(({ url }) => url.searchParams.get("manageable") === "true")).toBe(false);

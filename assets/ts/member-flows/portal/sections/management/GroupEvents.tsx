@@ -11,27 +11,23 @@ import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
-import { GroupEventDetail } from "./GroupEventDetail";
 import { GroupEventEditor } from "./GroupEventEditor";
+import { GroupEventWorkspace } from "./GroupEventWorkspace";
 import { ResourceCapabilities } from "./ResourceCapabilities";
-import { ResourceSharingEditor } from "./ResourceSharingEditor";
-
-function isStandaloneEvent(event: { seriesId: string | null; profileKey: string | null }): boolean {
-  return event.seriesId === null && event.profileKey !== "meeting" && event.profileKey !== "board_meeting";
-}
 
 export function GroupEvents({
   groupId,
   canManage = false,
   initialEventId,
+  initialEventTab,
 }: {
   groupId: string;
   canManage?: boolean;
   initialEventId?: string;
+  initialEventTab?: string;
 }) {
   const [, navigate] = useHashLocation();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const tableActions = useRef<ApiTableActions | null>(null);
   const detail = useData(
@@ -51,6 +47,23 @@ export function GroupEvents({
       eventId
         ? `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`
         : `/groups/${encodeURIComponent(groupId)}/events`,
+    );
+  }
+
+  if (selectedEventId) {
+    return (
+      <div class="d-flex flex-column gap-3">
+        {detail.loading && <Spinner />}
+        {detail.error && <ErrorAlert error={detail.error} />}
+        {!detail.loading && !detail.error && detail.data?.event.id === selectedEventId && (
+          <GroupEventWorkspace
+            event={detail.data.event}
+            groupId={groupId}
+            tab={initialEventTab}
+            onUpdated={detail.reload}
+          />
+        )}
+      </div>
     );
   }
 
@@ -121,68 +134,14 @@ export function GroupEvents({
               header: "",
               className: "text-end",
               cell: (event) => (
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-secondary"
-                  aria-expanded={selectedEventId === event.id}
-                  onClick={() => selectEvent(selectedEventId === event.id ? null : event.id)}
-                >
-                  {selectedEventId === event.id ? "Hide" : "Details"}
+                <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => selectEvent(event.id)}>
+                  Details
                 </button>
               ),
             },
           ]}
           empty="No events are available through this group."
           rowKey={(event) => event.id}
-          detailRow={(event) => {
-            if (selectedEventId !== event.id) return null;
-            if (detail.loading) return <Spinner />;
-            if (detail.error) return <ErrorAlert error={detail.error} />;
-            if (detail.data?.event.id !== event.id) return null;
-            const selected = detail.data.event;
-            return (
-              <div class="p-3 bg-body-tertiary">
-                <GroupEventDetail
-                  event={selected}
-                  groupId={groupId}
-                  onUpdated={async () => {
-                    await detail.reload();
-                    await tableActions.current?.reload();
-                  }}
-                  onEdit={
-                    selected.capabilities.includes("manage") && isStandaloneEvent(selected)
-                      ? () => setEditingEventId(selected.id)
-                      : undefined
-                  }
-                />
-                {editingEventId === selected.id && (
-                  <div class="border-top mt-3 pt-3">
-                    <h6>Edit event</h6>
-                    <GroupEventEditor
-                      groupId={groupId}
-                      event={selected}
-                      onSaved={async () => {
-                        setEditingEventId(null);
-                        await detail.reload();
-                        await tableActions.current?.reload();
-                      }}
-                      onCancel={() => setEditingEventId(null)}
-                    />
-                  </div>
-                )}
-                {selected.capabilities.includes("manage") && selected.ownerGroupId === groupId && (
-                  <div class="border-top mt-3 pt-3">
-                    <ResourceSharingEditor
-                      kind="event"
-                      groupId={groupId}
-                      resourceId={selected.id}
-                      ownerGroupId={selected.ownerGroupId}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          }}
         />
       </div>
     </div>

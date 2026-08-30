@@ -11,10 +11,14 @@ import {
   type GroupCapability,
   type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
+import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { portalSession } from "../../state";
+import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
+import { GroupParticipationCard } from "../GroupParticipationCard";
 import { groupContextNavigation } from "./group-context-navigation";
 
 const GroupSettingsForm = lazy(() =>
@@ -55,8 +59,8 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
             <dd class="mb-0">{group.participantCount}</dd>
           </div>
           <div>
-            <dt>Membership capacities</dt>
-            <dd class="mb-0">{group.membershipCapacityCount}</dd>
+            <dt>Members represented</dt>
+            <dd class="mb-0">{group.representedMemberCount}</dd>
           </div>
           <div>
             <dt>Subgroups</dt>
@@ -68,14 +72,45 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   );
 }
 
+/**
+ * Join from the group itself: the same capacity-aware participation card the
+ * catalog uses, fetched for exactly this group. Renders nothing while the
+ * viewer already participates or holds no member capacity.
+ */
+function GroupJoinPanel({ groupId, onChanged }: { groupId: string; onChanged: () => void | Promise<void> }) {
+  const selfGroup = useData(
+    () =>
+      getJson(
+        `/api/v1/users/current/groups?view=catalog&id=${encodeURIComponent(groupId)}&limit=1`,
+        selfGroupsListResponseSchema,
+      ),
+    [groupId],
+  );
+  const row = selfGroup.data?.groups[0];
+  if (!row || row.eligibleCapacities.length === 0) return null;
+  return (
+    <GroupParticipationCard
+      group={row}
+      onChanged={async () => {
+        refreshPortalSidebarGroups();
+        await selfGroup.reload();
+        await onChanged();
+      }}
+    />
+  );
+}
+
 export function GroupWorkspace({
   groupId,
   view = OVERVIEW_VIEW,
   resourceId,
+  resourceTab,
 }: {
   groupId: string;
   view?: string;
   resourceId?: string;
+  /** A second URL segment below `resourceId`, currently only meaningful for the events view's tab. */
+  resourceTab?: string;
 }) {
   const detail = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
@@ -110,16 +145,20 @@ export function GroupWorkspace({
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
               <>
+                {!canParticipate && Boolean(portalSession.value?.member) && (
+                  <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
+                )}
                 <div class="card border-0 shadow-sm">
                   <div class="card-header bg-white fw-semibold">About this group</div>
                   <div class="card-body">
                     <p class="mb-0">{group.description || "No group description has been provided."}</p>
                   </div>
                 </div>
-                <p class="text-muted small mb-0">
-                  {canParticipate ? "You participate in this group." : "You are not a participant in this group."}{" "}
-                  <Link href="/groups">Manage your participation</Link>
-                </p>
+                {canParticipate && (
+                  <p class="text-muted small mb-0">
+                    You participate in this group. <Link href="/groups">Manage your participation</Link>
+                  </p>
+                )}
               </>
             )}
             {view === "settings" && canManage && settingsGroup && (
@@ -138,6 +177,7 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 initialEventId={resourceId}
+                initialEventTab={resourceTab}
               />
             )}
             {view === "meetings" && (
