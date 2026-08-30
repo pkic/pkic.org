@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { useProposalReviewComments } from "../../../../../../components/proposals/useProposalReviewComments";
 import { api } from "../../../../api";
-import type { ProposalSpeaker } from "../../types";
 import { toast } from "../../../../ui";
-import { proposalSpeakersResponseSchema } from "../../../../../../../shared/schemas/proposal-speakers";
 import { presentationVersionsResponseSchema } from "../../../../../../../shared/schemas/presentation-versions";
 import type { ProposalReview } from "../../../../../../../shared/schemas/proposal-reviews";
 import type { PresentationVersion } from "./model";
@@ -28,7 +26,6 @@ export function useProposalSubresources(
   const canReadPrivateResources = access?.canRead === true;
   const canReviewPrivateResources = access?.canReview === true;
   const reviewComments = useProposalReviewComments(proposalBase, reloadProposal, canReviewPrivateResources);
-  const [speakers, setSpeakers] = useState<ProposalSpeaker[]>([]);
   const [versions, setVersions] = useState<PresentationVersion[]>([]);
   const [versionPage, setVersionPage] = useState<{
     limit: number;
@@ -41,7 +38,6 @@ export function useProposalSubresources(
 
   const reloadAdditional = useCallback(async () => {
     if (!canReadPrivateResources) {
-      setSpeakers([]);
       setVersions([]);
       setVersionPage(null);
       setLoadingAdditional(false);
@@ -49,18 +45,15 @@ export function useProposalSubresources(
     }
     setLoadingAdditional(true);
     try {
-      const [speakerData, presentationData] = await Promise.all([
-        api(proposalResourcePath(proposalId, "speakers"), proposalSpeakersResponseSchema).catch(
-          recoverSubresource("speakers", { speakers: [] }),
-        ),
-        api(`${proposalResourcePath(proposalId, "presentations")}?limit=25`, presentationVersionsResponseSchema).catch(
-          recoverSubresource("presentation versions", {
-            versions: [],
-            page: { limit: 25, offset: 0, total: 0, hasMore: false },
-          }),
-        ),
-      ]);
-      setSpeakers(speakerData.speakers);
+      const presentationData = await api(
+        `${proposalResourcePath(proposalId, "presentations")}?limit=25`,
+        presentationVersionsResponseSchema,
+      ).catch(
+        recoverSubresource("presentation versions", {
+          versions: [],
+          page: { limit: 25, offset: 0, total: 0, hasMore: false },
+        }),
+      );
       setVersions(presentationData.versions);
       setVersionPage(presentationData.page);
     } finally {
@@ -130,8 +123,6 @@ export function useProposalSubresources(
     reviewSummary: reviewComments.reviewSummary,
     myReview: reviewComments.myReview,
     loadingMoreReviews: reviewComments.loadingMoreReviews,
-    speakers,
-    setSpeakers,
     comments: reviewComments.comments,
     commentPage: reviewComments.commentPage,
     loadingMoreComments: reviewComments.loadingMoreComments,

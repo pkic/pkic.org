@@ -298,6 +298,7 @@ describe("group event proposal portal", () => {
     expect(calls.some(({ url }) => url.includes("/comments"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/decisions"))).toBe(false);
+    expect(calls.some(({ url }) => url.endsWith(`/proposals/${PROPOSAL_ID}/speakers`))).toBe(false);
   });
 
   it("shows audit only to reviewers and never renders decision controls without finalize access", async () => {
@@ -326,6 +327,43 @@ describe("group event proposal portal", () => {
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(true);
   });
 
+  it("returns to submission when live reviewer access is removed", async () => {
+    let currentAccess: typeof access = { ...access, canReview: true, eventPermissions: ["proposals:score"] };
+    const calls: RequestRecord[] = [];
+    stubFetch(calls, () => currentAccess);
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
+    await settle();
+    await settle();
+
+    const reviewsTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("Reviews"),
+    );
+    await act(async () => reviewsTab?.click());
+    expect(container.textContent).toContain("Reviews");
+
+    currentAccess = { ...access };
+    const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("Refresh"),
+    );
+    await act(async () => refresh?.click());
+    await settle();
+    await settle();
+
+    expect(container.textContent).toContain("Abstract");
+    expect(
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) =>
+        button.textContent?.includes("Reviews"),
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) =>
+        button.textContent?.includes("Audit Log"),
+      ),
+    ).toBe(false);
+  });
+
   it("loads speakers through the canonical proposal resource and keeps all actions off admin paths", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls, { ...access, canReview: true, canFinalize: true, eventPermissions: ["proposals:manage"] });
@@ -348,6 +386,7 @@ describe("group event proposal portal", () => {
     );
     await act(async () => speakersTab?.click());
     await settle();
+    expect(calls.filter(({ url }) => url.endsWith(`/proposals/${PROPOSAL_ID}/speakers`))).toHaveLength(1);
 
     const edit = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("Edit profile"),

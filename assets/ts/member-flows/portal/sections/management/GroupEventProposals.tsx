@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { lazy, Suspense } from "preact/compat";
 import type { EventProposalSummary } from "../../../../../shared/schemas/event-proposals";
 import { proposalProgramsListResponseSchema } from "../../../../../shared/schemas/proposal-programs";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -6,7 +7,10 @@ import { Spinner } from "../../../../components/Spinner";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
-import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
+
+const ProposalDetailPage = lazy(() =>
+  import("../events/detail/ProposalDetailPage").then((module) => ({ default: module.ProposalDetailPage })),
+);
 
 /** Program committee surface for a proposal program owned by the selected group event. */
 export function GroupEventProposals({
@@ -32,13 +36,14 @@ export function GroupEventProposals({
 
   if (selected) {
     return (
-      <ProposalDetailPage
-        slug={resolvedEventSlug ?? ""}
-        proposalId={selected.id}
-        contextLabel={program ? `${program.group.name} / ${program.event.name}` : null}
-        onBack={() => setSelected(null)}
-        enableSpeakerInvites
-      />
+      <Suspense fallback={<Spinner />}>
+        <ProposalDetailPage
+          slug={resolvedEventSlug ?? ""}
+          proposalId={selected.id}
+          contextLabel={program ? `${program.group.name} / ${program.event.name}` : null}
+          onBack={() => setSelected(null)}
+        />
+      </Suspense>
     );
   }
 
