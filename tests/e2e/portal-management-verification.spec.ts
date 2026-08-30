@@ -545,7 +545,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.reload();
     await expectStaffSessionLanding(page);
     await page.goto("/portal/#/system/organization-content-reviews");
-    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
     await page.getByRole("button", { name: orgName }).click();
 
@@ -573,7 +573,7 @@ test.describe("Portal management browser-verification pass", () => {
 
     await page.goto("/portal/#/system/organization-content-reviews");
     await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
-    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
     expect(legacyRequests).toEqual([]);
   });
 
@@ -656,7 +656,7 @@ test.describe("Portal management browser-verification pass", () => {
     await expectStaffSessionLanding(page);
 
     await page.goto("/portal/#/system/membership-applications");
-    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Membership Applications" })).toHaveAttribute("aria-current", "page");
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter is sufficient here because every earlier fixture has

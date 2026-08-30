@@ -5,6 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SelfGroup } from "../../assets/shared/schemas/group-participation";
 import { GroupParticipationCard } from "../../assets/ts/member-flows/portal/sections/GroupParticipationCard";
 import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["/groups", vi.fn()],
+}));
 
 const mounted: HTMLElement[] = [];
 
@@ -59,6 +65,7 @@ function mountCard(value: SelfGroup, onChanged = vi.fn(async () => {})): HTMLEle
 }
 
 function mountGroups(): HTMLElement {
+  portalSession.value = portalSessionFixture({ member: true });
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
@@ -89,6 +96,7 @@ async function settle(): Promise<void> {
 }
 
 afterEach(() => {
+  portalSession.value = null;
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();

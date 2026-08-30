@@ -388,10 +388,22 @@ actions separately enforce membership.
 The portal presents a selected-group context and derives navigation from that
 group's capabilities. The same views support differently typed groups.
 
+Navigation is group-centered and declared in one manifest. The sidebar lists
+the identity's joined and managed groups directly beneath the Groups entry,
+each linking into that group's workspace at `/portal/#/groups/:groupId/:view`;
+sub-resources extend the same URL with their identifier so every view is
+linkable and reloadable. There is no separate management navigation entry: the
+retired `/portal/#/management` URLs redirect into the groups section, and the
+former bare management landing (group creation, managed-group catalog, proposal
+programs) lives on the Groups page for identities with those capabilities.
+Account settings are reached through the user menu rather than a sidebar item,
+and authenticated members and staff land on `/portal/#/groups` by default.
+
 Global system-management destinations use the same portal identity but require
 an exact global permission independently of group capacity. The global audit
 log is available at `/portal/#/system/audit-log` only with `audit:read`; System
-is an interface grouping, while the canonical domain API is
+is an interface grouping surfaced as the single permission-gated
+"Administration" sidebar entry, while the canonical domain API is
 `/api/v1/audit-log`. It recomputes live staff grants and performs search, exact
 filters, sorting, counting, and pagination in D1. Entity and actor filters are
 open strings rather than a duplicated frontend catalog, so adding a new audited

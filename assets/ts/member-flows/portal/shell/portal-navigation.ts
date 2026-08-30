@@ -1,3 +1,9 @@
+/**
+ * Single source of truth for portal navigation: every top-level section the
+ * portal owns is declared once here with its access rule. Sidebar items, the
+ * active-section highlight, capacity fallbacks, and the shell's route guards
+ * all derive from this manifest so they cannot drift apart.
+ */
 import type { PortalSession } from "../types";
 
 export interface PortalNavItem {
@@ -10,37 +16,6 @@ interface SystemNavItem extends PortalNavItem {
   permission?: string;
   permissions?: readonly string[];
 }
-
-const MEMBER_NAV_ITEMS: PortalNavItem[] = [
-  { path: "/profile", section: "profile", label: "My Profile" },
-  { path: "/organization", section: "organization", label: "My Organization" },
-  { path: "/groups", section: "groups", label: "Groups" },
-  { path: "/application", section: "application", label: "My Application" },
-];
-
-const MANAGEMENT_NAV_ITEM: PortalNavItem = {
-  path: "/management",
-  section: "management",
-  label: "Management",
-};
-
-const FORMS_NAV_ITEM: PortalNavItem = {
-  path: "/forms",
-  section: "forms",
-  label: "Forms",
-};
-
-const EVENTS_NAV_ITEM: PortalNavItem = {
-  path: "/events",
-  section: "events",
-  label: "Events",
-};
-
-const SPONSORS_NAV_ITEM: PortalNavItem = {
-  path: "/sponsors",
-  section: "sponsors",
-  label: "Sponsors",
-};
 
 const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   {
@@ -112,22 +87,6 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
   },
 ] as const;
 
-const ACCOUNT_NAV_ITEM: PortalNavItem = { path: "/account", section: "account", label: "Account Settings" };
-
-export const PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS = {
-  "/working-groups": "/groups",
-  "/calendar": "/groups",
-} as const;
-const CAPACITY_ROUTE_PATHS = new Set([
-  ...MEMBER_NAV_ITEMS.map((item) => item.path),
-  ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS),
-  MANAGEMENT_NAV_ITEM.path,
-  FORMS_NAV_ITEM.path,
-  SPONSORS_NAV_ITEM.path,
-  ...SYSTEM_NAV_ITEMS.map((item) => item.path),
-  ACCOUNT_NAV_ITEM.path,
-]);
-
 /** Mirrors the backend's global-permission semantics for navigation only. */
 export function portalHasGlobalPermission(session: PortalSession | null, permission: string): boolean {
   const staff = session?.staff;
@@ -175,22 +134,121 @@ export function portalHasSponsorWorkspace(session: PortalSession | null): boolea
   );
 }
 
+export type PortalSectionKey =
+  "groups" | "events" | "sponsors" | "forms" | "profile" | "organization" | "application" | "system" | "account";
+
+interface PortalSectionDef {
+  /** Stable key; equal to the first URL segment the section owns. */
+  section: PortalSectionKey;
+  /** Sidebar destination. The system section resolves dynamically to the first permitted view. */
+  path: string;
+  label: string;
+  sidebar: boolean;
+  access: (session: PortalSession | null) => boolean;
+}
+
+const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
+  {
+    section: "groups",
+    path: "/groups",
+    label: "Groups",
+    sidebar: true,
+    access: (session) => Boolean(session?.member || session?.staff),
+  },
+  {
+    section: "events",
+    path: "/events",
+    label: "Events",
+    sidebar: true,
+    access: (session) => portalHasPermissionAtAnyScope(session, "events:read"),
+  },
+  {
+    section: "sponsors",
+    path: "/sponsors",
+    label: "Sponsors",
+    sidebar: true,
+    access: portalHasSponsorWorkspace,
+  },
+  {
+    section: "forms",
+    path: "/forms",
+    label: "Forms",
+    sidebar: true,
+    access: (session) => portalHasGlobalPermission(session, "forms:read"),
+  },
+  {
+    section: "profile",
+    path: "/profile",
+    label: "My Profile",
+    sidebar: true,
+    access: (session) => Boolean(session?.member),
+  },
+  {
+    section: "organization",
+    path: "/organization",
+    label: "My Organization",
+    sidebar: true,
+    access: (session) => Boolean(session?.member),
+  },
+  {
+    section: "application",
+    path: "/application",
+    label: "My Application",
+    sidebar: true,
+    access: (session) => Boolean(session?.member),
+  },
+  {
+    section: "system",
+    path: "/system",
+    label: "Administration",
+    sidebar: true,
+    access: portalHasSystemManagement,
+  },
+  {
+    section: "account",
+    path: "/account",
+    label: "Account Settings",
+    sidebar: false,
+    access: (session) => Boolean(session?.member || session?.staff),
+  },
+];
+
+export const PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS = {
+  "/working-groups": "/groups",
+  "/calendar": "/groups",
+} as const;
+
+/** Superseded route prefixes that the groups section now owns and redirects. */
+const LEGACY_GROUPS_PREFIXES = ["/management", ...Object.keys(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS)];
+
+function ownsLocation(prefix: string, location: string): boolean {
+  return location === prefix || location.startsWith(`${prefix}/`);
+}
+
+function portalSectionForLocation(location: string): PortalSectionDef | null {
+  if (LEGACY_GROUPS_PREFIXES.some((prefix) => ownsLocation(prefix, location))) {
+    return PORTAL_SECTIONS.find((def) => def.section === "groups") ?? null;
+  }
+  return PORTAL_SECTIONS.find((def) => ownsLocation(def.path, location)) ?? null;
+}
+
+export function portalSectionEnabled(session: PortalSession | null, section: PortalSectionKey): boolean {
+  const def = PORTAL_SECTIONS.find((candidate) => candidate.section === section);
+  return def ? def.access(session) : false;
+}
+
 export function portalNavigationItems(session: PortalSession | null): PortalNavItem[] {
-  const systemHome = portalSystemNavigationItems(session)[0];
-  return [
-    ...(session?.member ? MEMBER_NAV_ITEMS : []),
-    ...(session?.staff ? [MANAGEMENT_NAV_ITEM] : []),
-    ...(portalHasPermissionAtAnyScope(session, "events:read") ? [EVENTS_NAV_ITEM] : []),
-    ...(portalHasSponsorWorkspace(session) ? [SPONSORS_NAV_ITEM] : []),
-    ...(portalHasGlobalPermission(session, "forms:read") ? [FORMS_NAV_ITEM] : []),
-    ...(systemHome ? [{ ...systemHome, label: "System" }] : []),
-    ...(session?.member || session?.staff ? [ACCOUNT_NAV_ITEM] : []),
-  ];
+  return PORTAL_SECTIONS.filter((def) => def.sidebar && def.access(session)).map((def) => {
+    if (def.section === "system") {
+      const home = portalSystemNavigationItems(session)[0];
+      return { path: home?.path ?? def.path, section: def.section, label: def.label };
+    }
+    return { path: def.path, section: def.section, label: def.label };
+  });
 }
 
 export function portalDefaultPath(session: PortalSession | null): string {
-  if (session?.member) return "/profile";
-  if (session?.staff) return "/management";
+  if (session?.member || session?.staff) return "/groups";
   if (session?.sponsors.length) return "/sponsors";
   return "/";
 }
@@ -201,36 +259,14 @@ export function portalDefaultPath(session: PortalSession | null): string {
  * a capacity the identity just lost moves to the remaining valid home.
  */
 export function portalCapacityFallbackPath(session: PortalSession | null, location: string): string | null {
-  const isManagementRoute =
-    location === MANAGEMENT_NAV_ITEM.path || location.startsWith(`${MANAGEMENT_NAV_ITEM.path}/`);
-  const isSystemRoute = location === "/system" || location.startsWith("/system/");
-  const isSelectedGroupRoute = location.startsWith("/groups/");
-  const isEventsRoute = location === "/events" || location.startsWith("/events/");
-  const isFormsRoute = location === "/forms" || location.startsWith("/forms/");
-  const isSponsorsRoute = location === "/sponsors" || location.startsWith("/sponsors/");
-  if (
-    !CAPACITY_ROUTE_PATHS.has(location) &&
-    !isManagementRoute &&
-    !isSystemRoute &&
-    !isSelectedGroupRoute &&
-    !isEventsRoute &&
-    !isFormsRoute &&
-    !isSponsorsRoute
-  ) {
-    return null;
-  }
-  if (portalNavigationItems(session).some((item) => item.path === location)) return null;
-  if (isManagementRoute && session?.staff) return null;
-  if (isSystemRoute && portalHasSystemManagement(session)) return null;
-  if (isSelectedGroupRoute && (session?.member || session?.staff)) return null;
-  if (isEventsRoute && portalHasPermissionAtAnyScope(session, "events:read")) return null;
-  if (isFormsRoute && portalHasGlobalPermission(session, "forms:read")) return null;
-  if (isSponsorsRoute && portalHasSponsorWorkspace(session)) return null;
+  const owner = portalSectionForLocation(location);
+  if (!owner) return null;
+  if (owner.access(session)) return null;
   return portalDefaultPath(session);
 }
 
-export function portalActiveSection(location: string, session?: PortalSession | null): string {
-  if (location.startsWith("/groups/") && !session?.member && session?.staff) return "management";
-  const top = location.replace(/^\//, "").split("/")[0];
-  return top || "profile";
+export function portalActiveSection(location: string): string {
+  const owner = portalSectionForLocation(location);
+  if (owner) return owner.section;
+  return location.replace(/^\//, "").split("/")[0] || "groups";
 }

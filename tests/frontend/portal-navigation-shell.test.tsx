@@ -13,27 +13,80 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("wouter/use-hash-location", () => ({
-  useHashLocation: () => ["/management", vi.fn()],
+  useHashLocation: () => ["/groups", vi.fn()],
 }));
 
 let container: HTMLDivElement;
 
+function json(value: unknown): Response {
+  return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+}
+
+function emptyPage(key: string): unknown {
+  return { [key]: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } };
+}
+
+function group(id: string, name: string): Record<string, unknown> {
+  return {
+    id,
+    slug: name.toLowerCase().replace(/\s+/g, "-"),
+    name,
+    type: { key: "working_group", singularLabel: "Working Group", pluralLabel: "Working Groups" },
+    parentGroup: null,
+    description: null,
+    links: [],
+    visibility: "participants",
+    governanceInheritanceMode: "inherited",
+    eligibilityMode: "open",
+    automaticEnrollmentMode: "none",
+    allowAutomaticOptOut: true,
+    publicLeadership: false,
+    minEndorsersForBallot: 0,
+    active: true,
+    revision: 0,
+    membershipCapacityCount: 1,
+    participantCount: 1,
+    childCount: 0,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+  };
+}
+
 beforeEach(() => {
-  window.location.hash = "#/management";
+  window.location.hash = "#/groups";
   container = document.createElement("div");
   document.body.append(container);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    }),
+  );
 });
 
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
   window.location.hash = "";
+  vi.unstubAllGlobals();
 });
 
-function mountNavigation(): void {
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function mountNavigation(session = portalSessionFixture({ staff: true })): void {
   void act(() =>
     render(
-      <PortalNavigationShell session={portalSessionFixture({ staff: true })} displayName="Portal Tester">
+      <PortalNavigationShell session={session} displayName="Portal Tester">
         <p>Page content</p>
       </PortalNavigationShell>,
       container,
@@ -42,8 +95,9 @@ function mountNavigation(): void {
 }
 
 describe("portal navigation shell", () => {
-  it("exposes one labelled navigation and controlled mobile drawer", () => {
+  it("exposes one labelled navigation and controlled mobile drawer", async () => {
     mountNavigation();
+    await settle();
     const toggle = container.querySelector<HTMLButtonElement>("#portal-sidebar-toggle")!;
     const sidebar = container.querySelector<HTMLElement>("#portal-sidebar")!;
     const backdrop = container.querySelector<HTMLButtonElement>("#portal-sidebar-backdrop")!;
@@ -64,8 +118,9 @@ describe("portal navigation shell", () => {
     expect(sidebar.classList.contains("open")).toBe(false);
   });
 
-  it("closes on Escape and restores focus to the drawer control", () => {
+  it("closes on Escape and restores focus to the drawer control", async () => {
     mountNavigation();
+    await settle();
     const toggle = container.querySelector<HTMLButtonElement>("#portal-sidebar-toggle")!;
 
     void act(() => toggle.click());
@@ -75,5 +130,75 @@ describe("portal navigation shell", () => {
 
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(toggle);
+  });
+
+  it("lists the identity's groups under the Groups entry with their roles", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname === "/api/v1/users/current/groups") {
+        expect(url.searchParams.get("view")).toBe("joined");
+        return json({
+          groups: [
+            {
+              ...group("10000000-0000-4000-8000-000000000001", "Architecture"),
+              eligibleCapacities: [],
+              memberships: [
+                {
+                  id: "20000000-0000-4000-8000-000000000001",
+                  memberId: "30000000-0000-4000-8000-000000000001",
+                  memberType: "organization",
+                  organizationName: "Example Org",
+                  source: "self_service",
+                  joinedAt: "2026-08-01T00:00:00.000Z",
+                  membershipCategory: "A",
+                },
+              ],
+            },
+          ],
+          page: { limit: 12, offset: 0, total: 1, hasMore: false },
+        });
+      }
+      if (url.pathname === "/api/v1/groups") {
+        expect(url.searchParams.get("manageable")).toBe("true");
+        return json({
+          groups: [group("10000000-0000-4000-8000-000000000002", "Coordination")],
+          page: { limit: 12, offset: 0, total: 1, hasMore: false },
+        });
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    mountNavigation(portalSessionFixture({ staff: true, member: true }));
+    await settle();
+    await settle();
+
+    const groupsList = container.querySelector(".portal-sidebar-groups")!;
+    expect(groupsList).toBeTruthy();
+    const entries = [...groupsList.querySelectorAll("a")].map((link) => link.textContent);
+    expect(entries.some((text) => text?.includes("Architecture"))).toBe(true);
+    expect(entries.some((text) => text?.includes("Coordination"))).toBe(true);
+    const roles = [...groupsList.querySelectorAll(".portal-sidebar-group-role")].map((el) => el.textContent);
+    expect(roles).toContain("manages");
+  });
+
+  it("keeps account settings in the user menu, not the sidebar items", async () => {
+    mountNavigation(portalSessionFixture({ staff: true, member: true }));
+    await settle();
+
+    expect([...container.querySelectorAll(".portal-sidebar-link")].map((link) => link.textContent)).not.toContain(
+      "Account Settings",
+    );
+    const userButton = container.querySelector<HTMLButtonElement>(".portal-sidebar-user")!;
+    expect(userButton.textContent).toBe("Portal Tester");
+    expect(userButton.getAttribute("aria-haspopup")).toBe("menu");
+
+    void act(() => userButton.click());
+    await settle();
+    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(items).toEqual(["Account settings", "Sign out"]);
   });
 });

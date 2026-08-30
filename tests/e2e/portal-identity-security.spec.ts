@@ -85,7 +85,10 @@ test("signing out revokes the session rather than only clearing the view", async
   });
   expect(before).toBe(200);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  // Sign out now lives in the sidebar footer's account menu rather than as a
+  // standalone button.
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 15_000 });
 
   // A cleared UI is not a revoked session: ask the API directly.

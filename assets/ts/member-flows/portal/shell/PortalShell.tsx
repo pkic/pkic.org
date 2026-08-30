@@ -14,9 +14,7 @@ import {
   portalCapacityFallbackPath,
   portalDefaultPath,
   portalHasGlobalPermission,
-  portalHasPermissionAtAnyScope,
-  portalHasSponsorWorkspace,
-  portalHasSystemManagement,
+  portalSectionEnabled,
 } from "./portal-navigation";
 
 const EventWorkspace = lazy(() =>
@@ -37,8 +35,8 @@ const Forms = lazy(() => import("../sections/Forms").then((module) => ({ default
 const SystemManagement = lazy(() =>
   import("../sections/SystemManagement").then((module) => ({ default: module.SystemManagement })),
 );
-const Management = lazy(() =>
-  import("../sections/management/Management").then((module) => ({ default: module.Management })),
+const GroupWorkspace = lazy(() =>
+  import("../sections/management/GroupWorkspace").then((module) => ({ default: module.GroupWorkspace })),
 );
 const GroupEventProposals = lazy(() =>
   import("../sections/management/GroupEventProposals").then((module) => ({ default: module.GroupEventProposals })),
@@ -86,19 +84,25 @@ function PortalRouteRedirect({ to }: { to: string }) {
 }
 
 export function PortalShell() {
-  const hasMemberCapacity = Boolean(portalSession.value?.member);
-  const hasAdminCapacity = Boolean(portalSession.value?.staff);
-  const defaultPath = portalDefaultPath(portalSession.value);
-  const hasEventWorkspace = portalHasPermissionAtAnyScope(portalSession.value, "events:read");
+  const session = portalSession.value;
+  const hasGroupsAccess = portalSectionEnabled(session, "groups");
+  const hasEventWorkspace = portalSectionEnabled(session, "events");
+  const hasSponsorWorkspace = portalSectionEnabled(session, "sponsors");
+  const hasFormsAccess = portalSectionEnabled(session, "forms");
+  const hasMemberCapacity = portalSectionEnabled(session, "profile");
+  const hasSystemManagement = portalSectionEnabled(session, "system");
+  const hasAccountAccess = portalSectionEnabled(session, "account");
+  const hasAdminCapacity = Boolean(session?.staff);
+  const defaultPath = portalDefaultPath(session);
   const displayName =
     profile.value?.preferredName ||
     [profile.value?.firstName, profile.value?.lastName].filter(Boolean).join(" ").trim() ||
     profile.value?.email ||
-    portalSession.value?.identity.email ||
+    session?.identity.email ||
     "";
   return (
     <Router hook={useHashLocation}>
-      <PortalNavigationShell session={portalSession.value} displayName={displayName}>
+      <PortalNavigationShell session={session} displayName={displayName}>
         <Suspense fallback={<Spinner />}>
           <Switch>
             {hasEventWorkspace && (
@@ -134,18 +138,18 @@ export function PortalShell() {
               />
             )}
             {hasEventWorkspace && <Route path="/events" component={() => <LazyEventWorkspace view="list" />} />}
-            {portalHasSponsorWorkspace(portalSession.value) && (
+            {hasSponsorWorkspace && (
               <Route path="/sponsors/access" component={() => <PortalRouteRedirect to="/sponsors" />} />
             )}
-            {portalHasSponsorWorkspace(portalSession.value) && (
+            {hasSponsorWorkspace && (
               <Route
                 path="/sponsors/:sponsorId"
                 component={({ params }: { params: { sponsorId: string } }) => (
                   <SectionWrapper title="Sponsors">
                     <SponsorWorkspace
-                      sponsors={portalSession.value?.sponsors ?? []}
-                      canRead={portalHasGlobalPermission(portalSession.value, "sponsorships:read")}
-                      canWrite={portalHasGlobalPermission(portalSession.value, "sponsorships:write")}
+                      sponsors={session?.sponsors ?? []}
+                      canRead={portalHasGlobalPermission(session, "sponsorships:read")}
+                      canWrite={portalHasGlobalPermission(session, "sponsorships:write")}
                       detailId={params.sponsorId}
                       onSessionExpired={clearAuth}
                     />
@@ -153,40 +157,37 @@ export function PortalShell() {
                 )}
               />
             )}
-            {portalHasSponsorWorkspace(portalSession.value) && (
+            {hasSponsorWorkspace && (
               <Route
                 path="/sponsors"
                 component={() => (
                   <SectionWrapper title="Sponsors">
                     <SponsorWorkspace
-                      sponsors={portalSession.value?.sponsors ?? []}
-                      canRead={portalHasGlobalPermission(portalSession.value, "sponsorships:read")}
-                      canWrite={portalHasGlobalPermission(portalSession.value, "sponsorships:write")}
+                      sponsors={session?.sponsors ?? []}
+                      canRead={portalHasGlobalPermission(session, "sponsorships:read")}
+                      canWrite={portalHasGlobalPermission(session, "sponsorships:write")}
                       onSessionExpired={clearAuth}
                     />
                   </SectionWrapper>
                 )}
               />
             )}
-            {portalHasGlobalPermission(portalSession.value, "forms:read") && (
+            {hasFormsAccess && (
               <Route
                 path="/forms/:formKey"
                 component={({ params }: { params: { formKey: string } }) => (
                   <SectionWrapper title="Forms">
-                    <Forms
-                      formKey={params.formKey}
-                      canWrite={portalHasGlobalPermission(portalSession.value, "forms:write")}
-                    />
+                    <Forms formKey={params.formKey} canWrite={portalHasGlobalPermission(session, "forms:write")} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {portalHasGlobalPermission(portalSession.value, "forms:read") && (
+            {hasFormsAccess && (
               <Route
                 path="/forms"
                 component={() => (
                   <SectionWrapper title="Forms">
-                    <Forms canWrite={portalHasGlobalPermission(portalSession.value, "forms:write")} />
+                    <Forms canWrite={portalHasGlobalPermission(session, "forms:write")} />
                   </SectionWrapper>
                 )}
               />
@@ -201,61 +202,71 @@ export function PortalShell() {
                 )}
               />
             )}
-            {(hasAdminCapacity || hasMemberCapacity) && (
-              <Route
-                path="/groups/:groupId/votes/:voteId"
-                component={({ params }: { params: { groupId: string; voteId: string } }) => (
-                  <SectionWrapper title="Group">
-                    <Management groupId={params.groupId} view="votes" resourceId={params.voteId} />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {portalHasSystemManagement(portalSession.value) && (
+            {hasSystemManagement && (
               <Route
                 path="/system/donations/detail/:donationId"
                 component={({ params }: { params: { donationId: string } }) => (
                   <SectionWrapper title="Donation">
                     <DonationDetailPage
                       donationId={params.donationId}
-                      canRead={portalHasGlobalPermission(portalSession.value, "donations:read")}
-                      canSync={portalHasGlobalPermission(portalSession.value, "donations:sync")}
+                      canRead={portalHasGlobalPermission(session, "donations:read")}
+                      canSync={portalHasGlobalPermission(session, "donations:sync")}
                     />
                   </SectionWrapper>
                 )}
               />
             )}
-            {portalHasSystemManagement(portalSession.value) && (
+            {hasSystemManagement && (
               <Route
                 path="/system/:view/:resourceId"
                 component={({ params }: { params: { view: string; resourceId: string } }) => (
-                  <SectionWrapper title="System">
-                    <SystemManagement session={portalSession.value} view={params.view} resourceId={params.resourceId} />
+                  <SectionWrapper title="Administration">
+                    <SystemManagement session={session} view={params.view} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {portalHasSystemManagement(portalSession.value) && (
+            {hasSystemManagement && (
               <Route
                 path="/system/:view?"
                 component={({ params }: { params: { view?: string } }) => (
-                  <SectionWrapper title="System">
-                    <SystemManagement session={portalSession.value} view={params.view} />
+                  <SectionWrapper title="Administration">
+                    <SystemManagement session={session} view={params.view} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {(hasAdminCapacity || hasMemberCapacity) && (
+            {hasGroupsAccess && (
+              <Route
+                path="/groups"
+                component={() => (
+                  <SectionWrapper title="Groups">
+                    <Groups />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasGroupsAccess && (
+              <Route
+                path="/groups/:groupId/:view/:resourceId"
+                component={({ params }: { params: { groupId: string; view: string; resourceId: string } }) => (
+                  <SectionWrapper title="Group">
+                    <GroupWorkspace groupId={params.groupId} view={params.view} resourceId={params.resourceId} />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasGroupsAccess && (
               <Route
                 path="/groups/:groupId/:view?"
                 component={({ params }: { params: { groupId: string; view?: string } }) => (
                   <SectionWrapper title="Group">
-                    <Management groupId={params.groupId} view={params.view} />
+                    <GroupWorkspace groupId={params.groupId} view={params.view} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {hasAdminCapacity && (
+            {hasGroupsAccess && (
               <Route
                 path="/management/:groupId/:view?"
                 component={({ params }: { params: { groupId: string; view?: string } }) => (
@@ -265,16 +276,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasAdminCapacity && (
-              <Route
-                path="/management"
-                component={() => (
-                  <SectionWrapper title="Management">
-                    <Management />
-                  </SectionWrapper>
-                )}
-              />
-            )}
+            {hasGroupsAccess && <Route path="/management" component={() => <PortalRouteRedirect to="/groups" />} />}
             {hasMemberCapacity && (
               <Route
                 path="/profile"
@@ -295,17 +297,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasMemberCapacity && (
-              <Route
-                path="/groups"
-                component={() => (
-                  <SectionWrapper title="Groups">
-                    <Groups />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasMemberCapacity &&
+            {hasGroupsAccess &&
               Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
                 <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
               ))}
@@ -319,7 +311,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {(hasAdminCapacity || hasMemberCapacity) && (
+            {hasAccountAccess && (
               <Route
                 path="/account"
                 component={() => (
@@ -335,7 +327,7 @@ export function PortalShell() {
                 return null;
               }}
             </Route>
-            <Route component={() => <PortalRouteFallback session={portalSession.value} />} />
+            <Route component={() => <PortalRouteFallback session={session} />} />
           </Switch>
         </Suspense>
       </PortalNavigationShell>

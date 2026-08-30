@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/management/GroupAuditLog";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
+
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -28,6 +34,10 @@ async function settle(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
+
+beforeEach(() => {
+  navigate.mockReset();
+});
 
 afterEach(() => {
   for (const container of mounted.splice(0)) {
@@ -481,6 +491,14 @@ describe("portal selected-group collections", () => {
     expect(container.querySelector('a[href="/events/2026/architecture-workshop/register/"]')).toBeNull();
     expect(container.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}`);
+
+    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
+    await act(async () => {
+      hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
   });
 
   it("updates a mailing-list preference through its selected group context", async () => {

@@ -6,7 +6,7 @@ const PERMISSIONS_API = "/api/v1/permissions";
 const ROLES_API = "/api/v1/roles";
 const REMOVED_ADMIN_PREFIXES = ["/api/v1/admin/access-grants", "/api/v1/admin/roles", "/api/v1/admin/users"];
 
-test("permitted staff manage a custom role through the System portal", async ({ page }) => {
+test("permitted staff manage a custom role through the Administration portal", async ({ page }) => {
   const permissionRequests: string[] = [];
   const retiredSystemRequests: string[] = [];
   const removedAdminRequests: string[] = [];
@@ -29,7 +29,7 @@ test("permitted staff manage a custom role through the System portal", async ({ 
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-access-control"));
-  await page.getByRole("link", { name: "System", exact: true }).click();
+  await page.getByRole("link", { name: "Administration", exact: true }).click();
   await page.getByRole("link", { name: "Access Control" }).click();
   await page.getByRole("tab", { name: "Roles" }).click();
 

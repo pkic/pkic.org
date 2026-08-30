@@ -91,7 +91,7 @@ export async function submitMembershipApplication(
 /** Opens one application's detail view from the System list, filtered by stage. */
 export async function openApplicationDetail(page: Page, email: string, stage: string): Promise<void> {
   await page.goto("/portal/#/system/membership-applications");
-  await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
   const stageFilter = page.locator("select").filter({ has: page.locator(`option[value="${stage}"]`) });
   await stageFilter.selectOption(stage);
   const row = page.locator("tr").filter({ hasText: email });

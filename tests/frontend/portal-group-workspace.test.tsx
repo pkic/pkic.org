@@ -2,10 +2,7 @@
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  Management,
-  managementRouteOwnsHash,
-} from "../../assets/ts/member-flows/portal/sections/management/Management";
+import { GroupWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupWorkspace";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const navigate = vi.fn();
@@ -69,10 +66,21 @@ function json(value: unknown): Response {
 }
 
 async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
+  // Two rounds: one for the group-detail fetch, one for the lazily imported view.
+  for (let round = 0; round < 3; round += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
 }
+
+// The workspace lazy-loads its tab views; warm the module graph so the lazy
+// import resolves within the act() flushes above instead of stalling on a
+// cold vitest transform.
+beforeEach(async () => {
+  await import("../../assets/ts/member-flows/portal/sections/management/GroupSettingsForm");
+  await import("../../assets/ts/member-flows/portal/sections/management/GroupCategoryRulesEditor");
+});
 
 let container: HTMLDivElement;
 
@@ -88,14 +96,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("portal selected-group management", () => {
-  it("does not let delayed group selection override another portal route", () => {
-    expect(managementRouteOwnsHash(undefined, "#/management")).toBe(true);
-    expect(managementRouteOwnsHash(undefined, "#/system/users")).toBe(false);
-    expect(managementRouteOwnsHash(GROUP_ID, `#/groups/${GROUP_ID}/settings`)).toBe(true);
-    expect(managementRouteOwnsHash(GROUP_ID, "#/system/users")).toBe(false);
-  });
-
+describe("portal selected-group workspace", () => {
   it("loads one server-derived group context and updates through the canonical group route", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     let revision = 0;
@@ -108,12 +109,6 @@ describe("portal selected-group management", () => {
         );
         const method = init.method ?? "GET";
         requests.push({ url, method, body: typeof init.body === "string" ? JSON.parse(init.body) : undefined });
-        if (url.pathname === "/api/v1/groups" && method === "GET") {
-          return json({
-            groups: [group(revision)],
-            page: { limit: 25, offset: 0, total: 1, hasMore: false },
-          });
-        }
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "GET") {
           return json({
             group: group(revision),
@@ -147,16 +142,15 @@ describe("portal selected-group management", () => {
       }),
     );
 
-    await act(() => render(<Management groupId={GROUP_ID} view="settings" />, container));
+    await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="settings" />, container));
     await settle();
 
     expect(container.textContent).toContain("Architecture Committee");
     expect(container.textContent).toContain("Part of Parent Group");
     expect(container.textContent).toContain("Membership capacities");
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
-    expect(
-      requests.some(({ url }) => url.pathname === "/api/v1/groups" && url.searchParams.get("manageable") === "true"),
-    ).toBe(true);
+    // The group workspace is route-addressed; no manageable-group picker request is made.
+    expect(requests.some(({ url }) => url.searchParams.get("manageable") === "true")).toBe(false);
     expect(requests.some(({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}`)).toBe(true);
     expect(requests.some(({ url }) => url.pathname === `/api/v1/groups/${GROUP_ID}/context`)).toBe(false);
     expect(requests.some(({ url }) => url.searchParams.has("manageable") && url.pathname.includes(GROUP_ID))).toBe(
@@ -199,11 +193,12 @@ describe("portal selected-group management", () => {
       }),
     );
 
-    await act(() => render(<Management groupId={GROUP_ID} view="overview" />, container));
+    await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="overview" />, container));
     await settle();
 
     const tabs = [...container.querySelectorAll("nav a")].map((link) => link.textContent);
     expect(tabs).toEqual(["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
+    expect(container.textContent).toContain("You participate in this group.");
     expect(container.textContent).not.toContain("Save group settings");
   });
 });

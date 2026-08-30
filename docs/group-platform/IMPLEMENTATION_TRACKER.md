@@ -1982,6 +1982,43 @@ Status: Complete
       `codex/pr1-remaining-architecture-security-fixes` head `bb22b0e8` as the
       base and rollback/reference point.
 
+## 13. Group-centered portal navigation cutover
+
+Status: In progress (2026-08-30)
+
+- [x] Declare portal navigation once: sections, labels, access rules, capacity
+      fallbacks, and the active-section highlight derive from one manifest in
+      `assets/ts/member-flows/portal/shell/portal-navigation.ts`; the shell's
+      route guards consume the same section predicates.
+- [x] Replace the Management entry and managed-group dropdown with a
+      group-centered sidebar: joined and managed groups render beneath the
+      Groups entry and link straight into `/portal/#/groups/:groupId/:view`.
+      The former bare management landing (group creation, managed-group
+      catalog, proposal programs) moved onto the Groups page behind the same
+      capability checks, and `/portal/#/management` URLs redirect into the
+      groups section.
+- [x] Rename the selected-group dispatcher to `GroupWorkspace`, drop its
+      picker, lazy-load every tab view, and pass the route's `resourceId`
+      through so sub-resources are URL-addressed.
+- [x] Surface the System interface grouping as one permission-gated
+      "Administration" sidebar entry; routes remain `/portal/#/system/...`.
+- [x] Move account settings into an accessible user menu (new shared `Menu`
+      primitive following the WAI-ARIA menu-button pattern); the `/account`
+      route is unchanged.
+- [x] Unify the two HTTP client wrappers: `shared/api-client.ts` gained
+      unauthorized and error-payload interceptors, the portal registers them at
+      bootstrap (session expiry clears auth, records the return path, and
+      re-authentication restores it), and `portal/api.ts` was deleted with all
+      call sites migrated.
+- [x] Close the bundle blind spots: a named `vendor` chunk (Rolldown
+      `codeSplitting.groups`), a CSS budget gate wired into `pnpm check`, and
+      dev artifacts in `public/js/built` cleaned before every build.
+- [ ] Update the Playwright suites to the new navigation and re-run the
+      affected projects; refresh the persona and system specs that asserted
+      the retired Management and System entries.
+- [ ] Extend group event, meeting, and form detail views to the URL-addressed
+      resource pattern already used by votes.
+
 ## Manual test checklist
 
 The final PR description must include, at minimum:

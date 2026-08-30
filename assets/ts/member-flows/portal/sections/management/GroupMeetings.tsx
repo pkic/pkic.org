@@ -104,13 +104,21 @@ function CreateMeetingSeries({ groupId, onCreated }: { groupId: string; onCreate
   );
 }
 
-export function GroupMeetings({ groupId, canManage }: { groupId: string; canManage: boolean }) {
+export function GroupMeetings({
+  groupId,
+  canManage,
+  initialSeriesId,
+}: {
+  groupId: string;
+  canManage: boolean;
+  initialSeriesId?: string;
+}) {
   const listActions = useRef<ApiTableActions | null>(null);
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Meetings</div>
       <div class="card-body d-flex flex-column gap-3">
-        <GroupMeetingSeriesList groupId={groupId} actionsRef={listActions} />
+        <GroupMeetingSeriesList groupId={groupId} actionsRef={listActions} initialSeriesId={initialSeriesId} />
         {canManage && (
           <CreateMeetingSeries groupId={groupId} onCreated={async () => void listActions.current?.reload()} />
         )}

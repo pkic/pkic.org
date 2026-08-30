@@ -1,0 +1,186 @@
+/**
+ * The selected-group workspace: one URL-addressed context whose tabs derive
+ * from the identity's live capabilities in that group. The same views serve
+ * members, leaders, and staff — the backend decides what each may do.
+ */
+import { lazy, Suspense } from "preact/compat";
+import { Link } from "wouter";
+import {
+  authenticatedGroupDetailResponseSchema,
+  type AuthenticatedGroup,
+  type GroupCapability,
+  type GroupSettingsDetail,
+} from "../../../../../shared/schemas/groups";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Spinner } from "../../../../components/Spinner";
+import { useData } from "../../../../hooks/useData";
+import { getJson } from "../../../../shared/api-client";
+import { groupContextNavigation } from "./group-context-navigation";
+
+const GroupSettingsForm = lazy(() =>
+  import("./GroupSettingsForm").then((module) => ({ default: module.GroupSettingsForm })),
+);
+const GroupCategoryRulesEditor = lazy(() =>
+  import("./GroupCategoryRulesEditor").then((module) => ({ default: module.GroupCategoryRulesEditor })),
+);
+const GroupMembers = lazy(() => import("./GroupMembers").then((module) => ({ default: module.GroupMembers })));
+const GroupLeadership = lazy(() => import("./GroupLeadership").then((module) => ({ default: module.GroupLeadership })));
+const GroupMeetings = lazy(() => import("./GroupMeetings").then((module) => ({ default: module.GroupMeetings })));
+const GroupAuditLog = lazy(() => import("./GroupAuditLog").then((module) => ({ default: module.GroupAuditLog })));
+const GroupEvents = lazy(() => import("./GroupEvents").then((module) => ({ default: module.GroupEvents })));
+const GroupForms = lazy(() => import("./GroupForms").then((module) => ({ default: module.GroupForms })));
+const GroupMailingLists = lazy(() =>
+  import("./GroupMailingLists").then((module) => ({ default: module.GroupMailingLists })),
+);
+const GroupVotes = lazy(() => import("./GroupVotes").then((module) => ({ default: module.GroupVotes })));
+const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => ({ default: module.GroupStatistics })));
+
+const OVERVIEW_VIEW = "overview";
+
+function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
+  return (
+    <div class="portal-management-context card border-0 shadow-sm">
+      <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
+        <div>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <h5 class="mb-0">{group.name}</h5>
+            <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
+            {!group.active && <span class="badge text-bg-warning">Inactive</span>}
+          </div>
+          {group.parentGroup && <p class="text-muted small mb-0 mt-1">Part of {group.parentGroup.name}</p>}
+        </div>
+        <dl class="d-flex flex-wrap gap-4 mb-0 small">
+          <div>
+            <dt>People</dt>
+            <dd class="mb-0">{group.participantCount}</dd>
+          </div>
+          <div>
+            <dt>Membership capacities</dt>
+            <dd class="mb-0">{group.membershipCapacityCount}</dd>
+          </div>
+          <div>
+            <dt>Subgroups</dt>
+            <dd class="mb-0">{group.childCount}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+export function GroupWorkspace({
+  groupId,
+  view = OVERVIEW_VIEW,
+  resourceId,
+}: {
+  groupId: string;
+  view?: string;
+  resourceId?: string;
+}) {
+  const detail = useData(
+    () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
+    [groupId],
+  );
+  const group = detail.data?.group;
+  const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
+  const views = groupContextNavigation(capabilities);
+  const canManage = capabilities.includes("manage");
+  const canParticipate = capabilities.includes("participate");
+  const settingsGroup: GroupSettingsDetail | null =
+    group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
+
+  return (
+    <div class="d-flex flex-column gap-3">
+      {detail.loading && <Spinner />}
+      {detail.error && <ErrorAlert error={detail.error} />}
+      {group && (
+        <>
+          <GroupContextHeader group={group} />
+          <nav class="nav nav-tabs" aria-label={`${group.name} sections`}>
+            {views.map((item) => (
+              <Link
+                key={item.key}
+                href={`/groups/${encodeURIComponent(group.id)}/${item.key}`}
+                class={`nav-link${view === item.key ? " active" : ""}`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <Suspense fallback={<Spinner />}>
+            {view === OVERVIEW_VIEW && (
+              <>
+                <div class="card border-0 shadow-sm">
+                  <div class="card-header bg-white fw-semibold">About this group</div>
+                  <div class="card-body">
+                    <p class="mb-0">{group.description || "No group description has been provided."}</p>
+                  </div>
+                </div>
+                <p class="text-muted small mb-0">
+                  {canParticipate ? "You participate in this group." : "You are not a participant in this group."}{" "}
+                  <Link href="/groups">Manage your participation</Link>
+                </p>
+              </>
+            )}
+            {view === "settings" && canManage && settingsGroup && (
+              <div class="d-flex flex-column gap-3">
+                <GroupSettingsForm group={settingsGroup} onUpdated={detail.reload} />
+                <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
+              </div>
+            )}
+            {view === "members" && canManage && (
+              <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />
+            )}
+            {view === "leadership" && canManage && <GroupLeadership key={group.id} groupId={group.id} />}
+            {view === "events" && (
+              <GroupEvents
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                initialEventId={resourceId}
+              />
+            )}
+            {view === "meetings" && (
+              <GroupMeetings
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                initialSeriesId={resourceId}
+              />
+            )}
+            {view === "forms" && (
+              <GroupForms
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                initialPlacementId={resourceId}
+              />
+            )}
+            {view === "votes" && (
+              <GroupVotes
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                canParticipate={canParticipate}
+                initialVoteId={resourceId}
+              />
+            )}
+            {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}
+            {view === "mailing-lists" && (
+              <GroupMailingLists
+                key={group.id}
+                groupId={group.id}
+                canManage={canManage}
+                canParticipate={canParticipate}
+              />
+            )}
+            {view === "audit" && canManage && <GroupAuditLog key={group.id} groupId={group.id} />}
+          </Suspense>
+          {!views.some((item) => item.key === view) && (
+            <ErrorAlert error="This group section is not available to your current identity." />
+          )}
+        </>
+      )}
+    </div>
+  );
+}

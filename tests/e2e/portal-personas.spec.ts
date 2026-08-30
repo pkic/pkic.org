@@ -172,6 +172,32 @@ async function installPersona(page: Page, persona: Persona): Promise<void> {
       await json(route, { groups: [group], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
       return;
     }
+    if (url.pathname === "/api/v1/users/current/groups") {
+      // The group-centered sidebar's "Your groups" list draws joined groups
+      // from this self-participation projection; only a member persona has
+      // anything to report here.
+      const groups = persona.member
+        ? [
+            {
+              ...group,
+              eligibleCapacities: [],
+              memberships: [
+                {
+                  id: "40000000-0000-4000-8000-000000000001",
+                  memberId: MEMBER_ID,
+                  memberType: "individual",
+                  organizationName: null,
+                  source: "self_service",
+                  joinedAt: "2026-08-01T00:00:00.000Z",
+                  membershipCategory: "H5",
+                },
+              ],
+            },
+          ]
+        : [];
+      await json(route, { groups, page: { limit: 12, offset: 0, total: groups.length, hasMore: false } });
+      return;
+    }
     await json(route, {});
   });
 }
@@ -191,7 +217,9 @@ test.describe("selected-group portal personas", () => {
   test("member participant sees collaboration sections but no management sections", async ({ page }) => {
     await openGroup(page, PERSONAS.participant);
     await expect(sectionLinks(page)).toHaveText(["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
-    await expect(page.getByRole("link", { name: "Management" })).toHaveCount(0);
+    // A plain member holds no global system permission, so the sidebar has no
+    // admin surface at all.
+    await expect(page.getByRole("link", { name: "Administration" })).toHaveCount(0);
   });
 
   test("direct chair sees the complete group management surface", async ({ page }) => {
@@ -209,7 +237,13 @@ test.describe("selected-group portal personas", () => {
       "Members",
       "Leadership",
     ]);
-    await expect(page.getByRole("link", { name: "Management" })).toBeVisible();
+    // The chair reaches group management through the group-centered sidebar:
+    // the "Groups" entry, and this specific group listed under "Your groups"
+    // with its manage capability shown.
+    await expect(page.getByRole("link", { name: "Groups" })).toBeVisible();
+    const sidebarGroups = page.locator(".portal-sidebar-groups");
+    await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
+    await expect(sidebarGroups.getByText("member · manages")).toBeVisible();
   });
 
   test("inherited manager gets the same resource surface through the selected group", async ({ page }) => {
@@ -221,14 +255,20 @@ test.describe("selected-group portal personas", () => {
   test("local-only child participant cannot see management controls", async ({ page }) => {
     await openGroup(page, PERSONAS.localOnly);
     await expect(sectionLinks(page)).not.toContainText(["Settings", "Members", "Leadership", "Statistics"]);
-    await expect(page.getByRole("link", { name: "Management" })).toHaveCount(0);
+    // No global system permission means no admin surface for this identity.
+    await expect(page.getByRole("link", { name: "Administration" })).toHaveCount(0);
   });
 
   test("staff-only manager enters the same portal without member navigation", async ({ page }) => {
     await openGroup(page, PERSONAS.staffOnly);
     await expect(sectionLinks(page)).toContainText(["Settings", "Members", "Leadership"]);
     await expect(page.getByRole("link", { name: "My Profile" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Management" })).toBeVisible();
+    // Reaches group management the same way any manager does: the "Groups"
+    // sidebar entry and this group listed as manage-only under "Your groups".
+    await expect(page.getByRole("link", { name: "Groups" })).toBeVisible();
+    const sidebarGroups = page.locator(".portal-sidebar-groups");
+    await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
+    await expect(sidebarGroups.getByText("manages", { exact: true })).toBeVisible();
   });
 
   test("unauthorized identity stays on login and cannot render a selected group", async ({ page }) => {
