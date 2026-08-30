@@ -45,6 +45,7 @@ export interface LeadershipPositionRecord {
 
 export interface LeadershipPublicPerson {
   name: string;
+  jobTitle: string | null;
   title: string;
   organizationName: string | null;
   organizationLogoUrl: string | null;
@@ -255,6 +256,7 @@ export async function deleteLeadershipPosition(db: DatabaseLike, id: string, act
 }
 
 interface PublicPositionRow extends LeadershipPositionRow {
+  job_title: string | null;
   org_id: string | null;
   org_name: string | null;
   org_logo_r2_key: string | null;
@@ -270,7 +272,7 @@ export async function getLeadershipPublic(
 ): Promise<{ current: LeadershipPublicPerson[]; past: LeadershipPublicPerson[] }> {
   const rows = await all<PublicPositionRow>(
     db,
-    `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email,
+    `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email, u.job_title,
             lp.member_id, lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
             o.id AS org_id, o.name AS org_name, o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
             COALESCE(rep.id, individual.id) AS photo_member_id, u.headshot_r2_key, u.links_json
@@ -293,6 +295,7 @@ export async function getLeadershipPublic(
 
   const toPublic = (row: PublicPositionRow): LeadershipPublicPerson => ({
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+    jobTitle: row.job_title,
     title: row.title,
     organizationName: row.org_name,
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
@@ -316,6 +319,7 @@ interface ConsortiumChairRow {
   role_id: string;
   first_name: string | null;
   last_name: string | null;
+  job_title: string | null;
   org_id: string | null;
   org_name: string | null;
   org_logo_r2_key: string | null;
@@ -335,7 +339,8 @@ export async function getConsortiumChairsPublic(
 ): Promise<{ chair: ConsortiumChairPublic | null; viceChair: ConsortiumChairPublic | null }> {
   const rows = await all<ConsortiumChairRow>(
     db,
-    `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
+    `SELECT ur.role_id, u.first_name, u.last_name, u.job_title,
+            o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
             COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json, ur.created_at
      FROM user_roles ur

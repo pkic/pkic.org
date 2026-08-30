@@ -372,6 +372,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
   it("public GET /api/v1/leadership/:body returns current and past positions with organization enrichment, isolated per body", async () => {
     const orgId = await insertOrganization("Digitorus", "https://digitorus.com");
     const chairUserId = await insertUser("paul@example.test", ["Paul", "van Brouwershaven"]);
+    await env.DB.prepare("UPDATE users SET job_title = ? WHERE id = ?").bind("Deputy PKI Officer", chairUserId).run();
     await insertMember(chairUserId, orgId);
     const pastUserId = await insertUser("kirk@example.test", ["Kirk", "Hall"]);
 
@@ -394,11 +395,17 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const response = await call(null, "/api/v1/leadership/board");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      current: Array<{ name: string; organizationName: string | null; organizationWebsite: string | null }>;
+      current: Array<{
+        name: string;
+        jobTitle: string | null;
+        organizationName: string | null;
+        organizationWebsite: string | null;
+      }>;
       past: Array<{ name: string; endsAt: string | null }>;
     };
     expect(body.current).toHaveLength(1);
     expect(body.current[0].name).toBe("Paul van Brouwershaven");
+    expect(body.current[0].jobTitle).toBe("Deputy PKI Officer");
     expect(body.current[0].organizationName).toBe("Digitorus");
     expect(body.current[0].organizationWebsite).toBe("https://digitorus.com");
     expect(body.past).toHaveLength(1);

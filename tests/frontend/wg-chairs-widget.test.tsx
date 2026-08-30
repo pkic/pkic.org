@@ -61,6 +61,7 @@ function assignment(roleId: "role-group_lead" | "role-group_deputy_lead", name: 
     roleId,
     person: {
       name,
+      jobTitle: "Principal Cryptographer",
       organizationName: "Example Consortium",
       organizationLogoUrl: null,
       organizationWebsite: "https://example.test",
@@ -124,6 +125,7 @@ describe("WgChairsWidget", () => {
     expect(container.textContent).toContain("Ada Lovelace");
     expect(container.textContent).toContain("Grace Hopper");
     expect(container.textContent).toContain("Katherine Johnson");
+    expect(container.textContent).toContain("Principal Cryptographer at Example Consortium");
     expect(container.querySelectorAll('a[aria-label="LinkedIn"]')).toHaveLength(3);
   });
 

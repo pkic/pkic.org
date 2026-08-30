@@ -38,15 +38,20 @@ async function insertGroup(options: {
   return id;
 }
 
-async function insertLeader(groupId: string, roleId: "role-group_lead" | "role-group_deputy_lead", name: string) {
+async function insertLeader(
+  groupId: string,
+  roleId: "role-group_lead" | "role-group_deputy_lead",
+  name: string,
+  jobTitle: string | null = null,
+) {
   const userId = crypto.randomUUID();
   const [firstName, ...rest] = name.split(" ");
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users
-         (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null),
+         (id, email, normalized_email, first_name, last_name, job_title, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+    ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null, jobTitle),
     env.DB.prepare(
       `INSERT INTO user_roles
          (id, user_id, role_id, context_type, context_id, created_at)
@@ -68,7 +73,7 @@ describe("public generic group directory", () => {
       parentGroupId: parentId,
     });
     await insertLeader(parentId, "role-group_lead", "Parent Leader");
-    await insertLeader(childId, "role-group_deputy_lead", "Local Deputy");
+    await insertLeader(childId, "role-group_deputy_lead", "Local Deputy", "Deputy PKI Officer");
 
     const response = await callApi(env as any, "/api/v1/groups/directory-committee/directory");
 
@@ -84,7 +89,7 @@ describe("public generic group directory", () => {
         expect.objectContaining({
           roleId: "role-group_deputy_lead",
           inherited: false,
-          person: expect.objectContaining({ name: "Local Deputy" }),
+          person: expect.objectContaining({ name: "Local Deputy", jobTitle: "Deputy PKI Officer" }),
         }),
         expect.objectContaining({
           roleId: "role-group_lead",

@@ -123,6 +123,12 @@ export function PublicPersonCard({
             <span class="person-card-name">{person.name}</span>
             <LinkedInBadge person={person} />
           </div>
+          {person.jobTitle && (
+            <div class="person-card-jobtitle">
+              {person.jobTitle}
+              {person.organizationName && person.organizationName !== person.name && ` at ${person.organizationName}`}
+            </div>
+          )}
           <OrganizationBlock person={person} />
         </div>
       </div>

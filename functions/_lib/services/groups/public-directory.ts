@@ -41,7 +41,7 @@ export async function getPublicGroupDirectory(db: DatabaseLike, idOrSlug: string
       ? all<PublicLeadershipRow>(
           db,
           `${EFFECTIVE_GROUP_LINEAGE_CTE}
-           SELECT ur.role_id, u.first_name, u.last_name,
+           SELECT ur.role_id, u.first_name, u.last_name, u.job_title,
                   o.id AS org_id, o.name AS org_name,
                   o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
                   COALESCE(rep.id, individual_member.id) AS member_id,

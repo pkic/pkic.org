@@ -4,6 +4,7 @@ import { sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
 export interface PublicRoleProfileRow {
   first_name: string | null;
   last_name: string | null;
+  job_title: string | null;
   org_id: string | null;
   org_name: string | null;
   org_logo_r2_key: string | null;
@@ -15,6 +16,7 @@ export interface PublicRoleProfileRow {
 
 export interface PublicRoleProfile {
   name: string;
+  jobTitle: string | null;
   organizationName: string | null;
   organizationLogoUrl: string | null;
   organizationWebsite: string | null;
@@ -26,6 +28,7 @@ export interface PublicRoleProfile {
 export function toPublicRoleProfile(row: PublicRoleProfileRow): PublicRoleProfile {
   return {
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+    jobTitle: row.job_title,
     organizationName: row.org_name,
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
     organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
