@@ -87,30 +87,28 @@ export function SidebarGroups({ session, onNavigate }: { session: PortalSession 
     entries.length > visible.length || Boolean(joined.data?.page.hasMore) || Boolean(manageable.data?.page.hasMore);
 
   return (
-    <div class="portal-sidebar-groups" role="list" aria-label="Your groups">
+    <ul class="portal-sidebar-groups" aria-label="Your groups">
       {visible.map((entry) => {
         const path = `/groups/${encodeURIComponent(entry.id)}`;
         const active = location === path || location.startsWith(`${path}/`);
         return (
-          <Link
-            key={entry.id}
-            role="listitem"
-            href={path}
-            class={`portal-sidebar-group${active ? " active" : ""}`}
-            onClick={onNavigate}
-          >
-            <span class="portal-sidebar-group-name">{entry.name}</span>
-            {entry.canManage && (
-              <span class="portal-sidebar-group-role">{entry.isMember ? "member · manages" : "manages"}</span>
-            )}
-          </Link>
+          <li key={entry.id}>
+            <Link href={path} class={`portal-sidebar-group${active ? " active" : ""}`} onClick={onNavigate}>
+              <span class="portal-sidebar-group-name">{entry.name}</span>
+              {entry.canManage && (
+                <span class="portal-sidebar-group-role">{entry.isMember ? "member · manages" : "manages"}</span>
+              )}
+            </Link>
+          </li>
         );
       })}
       {truncated && (
-        <Link href="/groups" class="portal-sidebar-group portal-sidebar-group-more" onClick={onNavigate}>
-          All groups…
-        </Link>
+        <li>
+          <Link href="/groups" class="portal-sidebar-group portal-sidebar-group-more" onClick={onNavigate}>
+            All groups…
+          </Link>
+        </li>
       )}
-    </div>
+    </ul>
   );
 }

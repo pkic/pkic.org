@@ -240,7 +240,7 @@ test.describe("selected-group portal personas", () => {
     // The chair reaches group management through the group-centered sidebar:
     // the "Groups" entry, and this specific group listed under "Your groups"
     // with its manage capability shown.
-    await expect(page.getByRole("link", { name: "Groups" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
     const sidebarGroups = page.locator(".portal-sidebar-groups");
     await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
     await expect(sidebarGroups.getByText("member · manages")).toBeVisible();
@@ -265,7 +265,7 @@ test.describe("selected-group portal personas", () => {
     await expect(page.getByRole("link", { name: "My Profile" })).toHaveCount(0);
     // Reaches group management the same way any manager does: the "Groups"
     // sidebar entry and this group listed as manage-only under "Your groups".
-    await expect(page.getByRole("link", { name: "Groups" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
     const sidebarGroups = page.locator(".portal-sidebar-groups");
     await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
     await expect(sidebarGroups.getByText("manages", { exact: true })).toBeVisible();
