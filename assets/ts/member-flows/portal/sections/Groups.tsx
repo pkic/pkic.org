@@ -68,6 +68,7 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
       <div class="card-header bg-white fw-semibold">All groups</div>
       <div class="card-body">
         <ApiDataTable
+          urlState="groups"
           endpoint="/api/v1/groups"
           responseSchema={groupsListResponseSchema}
           resolve={(response) => response.groups}

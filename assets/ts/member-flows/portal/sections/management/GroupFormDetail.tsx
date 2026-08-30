@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import {
   groupFormDefinitionResponseSchema,
   groupFormSubmissionResponseSchema,
@@ -18,22 +18,29 @@ import { ResourceSharingEditor } from "./ResourceSharingEditor";
 
 type GroupFormTab = "respond" | "statistics" | "responses" | "definition" | "availability" | "sharing";
 
+const DEFAULT_TAB: GroupFormTab = "respond";
+
 export function GroupFormDetail({
   groupId,
   placementId,
+  initialTab,
   onChanged,
 }: {
   groupId: string;
   placementId: string;
+  /** The URL-addressed tab segment, if any. Undefined or unrecognized selects the default tab. */
+  initialTab?: string;
   onChanged: () => void | Promise<void>;
 }) {
+  const [, navigate] = useHashLocation();
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`;
-  const [tab, setTab] = useState<GroupFormTab>("respond");
+  const requestedTab = (initialTab as GroupFormTab | undefined) ?? DEFAULT_TAB;
   const detail = useData(() => getJson(base, groupFormDefinitionResponseSchema), [base]);
   const canViewResponses = detail.data?.capabilities.includes("view_responses") ?? false;
   const canSubmitResponse =
     (detail.data?.capabilities.includes("submit") ?? false) && (detail.data?.acceptingResponses ?? false);
-  const shouldLoadStats = canViewResponses && (tab === "statistics" || (!canSubmitResponse && tab === "respond"));
+  const shouldLoadStats =
+    canViewResponses && (requestedTab === "statistics" || (!canSubmitResponse && requestedTab === "respond"));
   const stats = useData(
     () =>
       shouldLoadStats
@@ -62,7 +69,17 @@ export function GroupFormDetail({
     ...(canManagePlacement ? [{ key: "availability", label: "Availability" }] : []),
     ...(canManageDefinition ? [{ key: "sharing", label: "Sharing" }] : []),
   ];
-  const activeTab = tabs.some((item) => item.key === tab) ? tab : (tabs[0]?.key as GroupFormTab | undefined);
+  const activeTab = tabs.some((item) => item.key === requestedTab)
+    ? requestedTab
+    : (tabs[0]?.key as GroupFormTab | undefined);
+
+  function tabPath(key: string): string {
+    return `/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}/${key}`;
+  }
+
+  function goToTab(key: string): void {
+    navigate(tabPath(key));
+  }
 
   async function reload(): Promise<void> {
     await Promise.all([detail.reload(), shouldLoadStats ? stats.reload() : Promise.resolve(), onChanged()]);
@@ -74,9 +91,7 @@ export function GroupFormDetail({
         <h6 class="mb-1">{form.form.title}</h6>
         {form.form.description && <p class="small text-muted mb-0">{form.form.description}</p>}
       </div>
-      {tabs.length > 1 && (
-        <Tabs items={tabs} active={activeTab ?? ""} onChange={(key) => setTab(key as GroupFormTab)} />
-      )}
+      {tabs.length > 1 && <Tabs items={tabs} active={activeTab ?? ""} onChange={goToTab} hrefFor={tabPath} />}
       {!activeTab && <p class="small text-muted mb-0">No actions are available for this form.</p>}
       {activeTab === "respond" && (
         <FormSubmissionForm
@@ -107,7 +122,7 @@ export function GroupFormDetail({
           placementId={placementId}
           detail={form}
           onSaved={reload}
-          onCancel={() => setTab(canViewResponses ? "statistics" : "availability")}
+          onCancel={() => goToTab(canViewResponses ? "statistics" : "availability")}
         />
       )}
       {activeTab === "availability" && (

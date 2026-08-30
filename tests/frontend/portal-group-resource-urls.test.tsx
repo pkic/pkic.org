@@ -11,6 +11,14 @@ vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
 
@@ -208,5 +216,84 @@ describe("URL-addressed group sub-resources", () => {
     await settle();
 
     expect(container.textContent).toContain("HTTP 403");
+  });
+
+  it("threads the group form's resourceTab through GroupForms so a responses deep link opens the responses tab", async () => {
+    const placementId = "80000000-0000-4000-8000-000000000002";
+    const page = { limit: 50, offset: 0, total: 1, hasMore: false };
+    const row = {
+      form: {
+        id: "80000000-0000-4000-8000-000000000001",
+        key: "architecture-survey",
+        purpose: "survey",
+        status: "active",
+        title: "Architecture survey",
+        description: null,
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      },
+      placement: {
+        id: placementId,
+        formId: "80000000-0000-4000-8000-000000000001",
+        ownerGroupId: GROUP_ID,
+        contextType: "group",
+        contextRef: GROUP_ID,
+        audience: "group_members",
+        active: true,
+        opensAt: null,
+        closesAt: null,
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      },
+      capabilities: ["view_definition", "submit", "view_responses"],
+      acceptingResponses: true,
+    } as const;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/forms")) return json({ forms: [row], page });
+        if (url.pathname.endsWith("/submissions")) {
+          return json({ form: row.form, placement: row.placement, submissions: [], page });
+        }
+        if (url.pathname.endsWith(`/forms/${placementId}`)) {
+          return json({
+            form: row.form,
+            placement: row.placement,
+            fields: [],
+            capabilities: row.capabilities,
+            acceptingResponses: row.acceptingResponses,
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(
+      <GroupForms
+        groupId={GROUP_ID}
+        canManage={false}
+        initialPlacementId={placementId}
+        initialPlacementTab="responses"
+      />,
+    );
+    await settle();
+    await settle();
+
+    const responsesTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent?.trim() === "Responses",
+    );
+    expect(responsesTab?.getAttribute("aria-selected")).toBe("true");
+
+    const statisticsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent?.trim() === "Statistics",
+    )!;
+    expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${placementId}/statistics`);
+    await act(async () => {
+      statisticsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/${placementId}/statistics`);
   });
 });

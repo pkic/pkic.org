@@ -8,6 +8,14 @@ import { Settings } from "../../assets/ts/member-flows/portal/sections/events/de
 import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
 import { eventDetailTabsForCapabilities } from "../../assets/ts/member-flows/portal/sections/events/detail/EventDetail";
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
@@ -163,7 +171,7 @@ describe("admin event general settings", () => {
 
     expect(container.textContent).not.toContain("Event Name");
     expect(container.textContent).toContain("managed by a meeting series");
-    const link = container.querySelector<HTMLAnchorElement>("a");
+    const link = container.querySelector<HTMLAnchorElement>("a:not([role='tab'])");
     expect(link?.getAttribute("href")).toBe(
       "#/groups/20000000-0000-4000-8000-000000000001/meetings/60000000-0000-4000-8000-000000000001",
     );
@@ -179,7 +187,7 @@ describe("admin event general settings", () => {
     await settle();
 
     expect(container.textContent).toContain("could not be determined");
-    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector("a:not([role='tab'])")).toBeNull();
   });
 
   it("keeps sponsor tiers and team working for a meeting-series event", async () => {

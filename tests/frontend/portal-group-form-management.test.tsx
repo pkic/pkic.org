@@ -5,6 +5,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupFormDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupFormDetail";
 import { GroupFormEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormEditor";
 
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
+
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const OTHER_GROUP_ID = "10000000-0000-4000-8000-000000000002";
 const FORM_ID = "80000000-0000-4000-8000-000000000001";
@@ -86,6 +100,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  navigate.mockReset();
 });
 
 describe("group form management", () => {
@@ -144,7 +159,28 @@ describe("group form management", () => {
     expect(container.querySelector(".adm-fkey-input")).toBeNull();
   });
 
-  it("uses placement-isolated backend statistics and paginated response endpoints", async () => {
+  it("does not fetch statistics for the default respond tab", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return json(detail(GROUP_ID, ["view_definition", "submit", "view_responses"]));
+      }),
+    );
+
+    mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={() => undefined} />);
+    await settle();
+    await settle();
+
+    expect(requests.some((url) => url.pathname.endsWith("/submissions/stats"))).toBe(false);
+  });
+
+  it("requests placement-isolated statistics and paginated responses for their URL-addressed tabs", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -174,29 +210,74 @@ describe("group form management", () => {
       }),
     );
 
+    const statsContainer = mount(
+      <GroupFormDetail
+        groupId={GROUP_ID}
+        placementId={PLACEMENT_ID}
+        initialTab="statistics"
+        onChanged={() => undefined}
+      />,
+    );
+    await settle();
+    await settle();
+    expect(statsContainer.textContent).toContain("No responses yet.");
+    expect(requests.some((url) => url.pathname.endsWith(`/${PLACEMENT_ID}/submissions/stats`))).toBe(true);
+
+    mount(
+      <GroupFormDetail
+        groupId={GROUP_ID}
+        placementId={PLACEMENT_ID}
+        initialTab="responses"
+        onChanged={() => undefined}
+      />,
+    );
+    await settle();
+    await settle();
+
+    const listRequest = requests.find((url) => url.pathname.endsWith(`/${PLACEMENT_ID}/submissions`));
+    expect(listRequest?.searchParams.get("limit")).toBe("50");
+    expect(listRequest?.searchParams.get("sort")).toBe("-submitted_at");
+  });
+
+  it("opens the tab given by an initial resourceTab", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(detail(GROUP_ID, ["view_definition", "submit", "view_responses"]))),
+    );
+
+    const container = mount(
+      <GroupFormDetail
+        groupId={GROUP_ID}
+        placementId={PLACEMENT_ID}
+        initialTab="responses"
+        onChanged={() => undefined}
+      />,
+    );
+    await settle();
+
+    const responsesTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent === "Responses",
+    );
+    expect(responsesTab?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("navigates to the canonical placement tab URL when a tab is clicked", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(detail(GROUP_ID, ["view_definition", "submit", "view_responses"]))),
+    );
+
     const container = mount(
       <GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={() => undefined} />,
     );
     await settle();
-    await settle();
-    expect(requests.some((url) => url.pathname.endsWith("/submissions/stats"))).toBe(false);
 
-    const statisticsTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Statistics",
+    const statisticsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent === "Statistics",
     )!;
+    expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${PLACEMENT_ID}/statistics`);
+
     await act(async () => statisticsTab.click());
-    await settle();
-    expect(container.textContent).toContain("No responses yet.");
-
-    const responsesTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Responses",
-    )!;
-    await act(async () => responsesTab.click());
-    await settle();
-
-    expect(requests.some((url) => url.pathname.endsWith(`/${PLACEMENT_ID}/submissions/stats`))).toBe(true);
-    const listRequest = requests.find((url) => url.pathname.endsWith(`/${PLACEMENT_ID}/submissions`));
-    expect(listRequest?.searchParams.get("limit")).toBe("50");
-    expect(listRequest?.searchParams.get("sort")).toBe("-submitted_at");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/${PLACEMENT_ID}/statistics`);
   });
 });

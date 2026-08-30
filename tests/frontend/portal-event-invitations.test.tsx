@@ -12,6 +12,14 @@ vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
 const INVITE_ID = "30000000-0000-4000-8000-000000000001";

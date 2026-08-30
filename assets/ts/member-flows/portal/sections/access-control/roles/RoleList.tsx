@@ -70,6 +70,7 @@ export function RoleList({
   return (
     <div>
       <ApiDataTable
+        urlState="roles"
         endpoint="/api/v1/roles"
         responseSchema={rolesListResponseSchema}
         resolve={(data) => data.roles}

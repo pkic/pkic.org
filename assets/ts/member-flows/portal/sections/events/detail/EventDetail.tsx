@@ -89,6 +89,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
         items={visibleTabs}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/${key}`)}
+        hrefFor={(key) => `/events/${slug}/${key}`}
         className="mb-3 flex-wrap"
       />
 

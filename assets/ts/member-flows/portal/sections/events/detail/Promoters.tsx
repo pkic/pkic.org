@@ -186,6 +186,7 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/promoters/${key === "promoters" ? "" : key}`)}
+        hrefFor={(key) => `/events/${slug}/promoters/${key === "promoters" ? "" : key}`}
       />
 
       {tab === "promoters" &&

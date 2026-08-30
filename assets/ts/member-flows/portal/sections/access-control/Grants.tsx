@@ -149,6 +149,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
       )}
 
       <ApiDataTable
+        urlState="grants"
         endpoint="/api/v1/permissions/grants"
         responseSchema={accessGrantsListResponseSchema}
         resolve={(data) => data.grants}

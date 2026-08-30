@@ -19,6 +19,7 @@ export function EventList() {
   return (
     <div>
       <ApiDataTable
+        urlState="events"
         endpoint="/api/v1/events"
         responseSchema={eventsManagementListResponseSchema}
         resolve={(data) => data.events}

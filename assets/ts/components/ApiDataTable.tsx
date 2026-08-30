@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type MutableRef } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
 import { useOffsetPager } from "../hooks/useOffsetPager";
+import { useUrlTableState } from "../hooks/useUrlTableState";
 import {
   buildCollectionResetKey,
   useCollectionOffset,
@@ -11,7 +12,7 @@ import {
 } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
 import { ErrorAlert } from "./ErrorAlert";
-import { Pager } from "./Pager";
+import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { Spinner } from "./Spinner";
 import { DataTable, type DataTableProps } from "./Table";
 
@@ -37,6 +38,13 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * The form it reveals stays behind this action — never in the default view.
    */
   createAction?: { label: string; onSelect: () => void; disabled?: boolean };
+  /**
+   * Namespace for URL-addressed list state: search, sort, and page mirror
+   * into `<namespace>.q` etc. in the query string, so a filtered page can be
+   * refreshed, shared, and restored by the back button. Use one namespace
+   * per surface, on the page's primary list.
+   */
+  urlState?: string;
   actionsRef?: MutableRef<ApiTableActions | null>;
   onData?: (data: Response) => void;
   load?: CollectionLoader;
@@ -64,16 +72,27 @@ export function ApiDataTable<T, Response = unknown>({
   initialSort = "",
   toolbar,
   createAction,
+  urlState,
   actionsRef,
   onData,
   load = loadCollection,
 }: ApiDataTableProps<T, Response>) {
-  const pager = useOffsetPager(initialPageSize);
+  const url = useUrlTableState(urlState, {
+    q: "",
+    sort: initialSort,
+    offset: 0,
+    pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
+  });
+  const pager = useOffsetPager(url.initial.pageSize, url.initial.offset);
   const resetKey = buildCollectionResetKey(endpoint, params);
   const requestOffset = useCollectionOffset(resetKey, pager.offset, pager.resetPage);
-  const [sort, setSort] = useState(initialSort);
-  const [search, setSearch] = useState("");
-  const [pendingSearch, setPendingSearch] = useState("");
+  const [sort, setSort] = useState(url.initial.sort);
+  const [search, setSearch] = useState(url.initial.q);
+  const [pendingSearch, setPendingSearch] = useState(url.initial.q);
+  useEffect(() => {
+    url.mirror({ q: search, sort, offset: pager.offset, pageSize: pager.pageSize });
+    // url.mirror is stable per namespace; mirroring reacts to state only.
+  }, [search, sort, pager.offset, pager.pageSize]);
 
   function applySort(nextSort: string) {
     setSort(nextSort);

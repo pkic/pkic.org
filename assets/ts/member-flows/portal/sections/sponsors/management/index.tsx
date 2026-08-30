@@ -201,6 +201,7 @@ export function Sponsorships({
 
       {!selectedCompany && (
         <ApiDataTable
+          urlState="sponsorships"
           endpoint="/api/v1/sponsors/companies"
           responseSchema={sponsorshipCompaniesListResponseSchema}
           resolve={(data) => data.companies}

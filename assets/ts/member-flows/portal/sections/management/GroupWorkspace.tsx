@@ -110,7 +110,7 @@ export function GroupWorkspace({
   groupId: string;
   view?: string;
   resourceId?: string;
-  /** A second URL segment below `resourceId`, currently only meaningful for the events view's tab. */
+  /** A second URL segment below `resourceId`: the events, forms, and meetings views forward it as the resource's initial tab. */
   resourceTab?: string;
 }) {
   const detail = useData(
@@ -188,6 +188,7 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 initialSeriesId={resourceId}
+                initialSeriesTab={resourceTab}
               />
             )}
             {view === "forms" && (
@@ -196,6 +197,7 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 initialPlacementId={resourceId}
+                initialPlacementTab={resourceTab}
               />
             )}
             {view === "votes" && (

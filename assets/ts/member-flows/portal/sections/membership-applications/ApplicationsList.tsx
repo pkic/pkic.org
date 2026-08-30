@@ -51,6 +51,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
     <div>
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable
+        urlState="applications"
         endpoint="/api/v1/members/applications"
         responseSchema={membershipApplicationsListResponseSchema}
         resolve={(data) => data.applications}

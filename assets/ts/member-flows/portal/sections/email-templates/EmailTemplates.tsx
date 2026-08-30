@@ -273,6 +273,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
 
   return (
     <ApiDataTable
+      urlState="templates"
       endpoint={EMAIL_TEMPLATES_API}
       responseSchema={emailTemplatesListResponseSchema}
       resolve={(data) => data.templates}
