@@ -1946,23 +1946,34 @@ Status: Complete
       serves browser and Worker URL producers, while the existing stateless,
       time-limited, recipient-bound, secret-generation-bound capabilities
       remain unchanged and create no session or cookie.
-      Migration 0035 remains consolidated and locally
-      verified, but its preview and production ledger state must be reverified
-      at handoff. The remaining unchecked tracker items are the authoritative
-      completion scope; this historical audit is not current completion proof.
+      Migration 0035 remains consolidated and locally verified. Read-only
+      Wrangler checks on 2026-08-30 confirm that it is the sole pending
+      migration in both preview and production. The remaining unchecked tracker
+      item is the authoritative implementation scope; this historical audit is
+      not a substitute for that current completion evidence.
 
 ## 12. Pull-request handoff
 
-Status: Pending
+Status: Complete
 
-- [ ] Keep the PR description current after every completed phase.
-- [ ] Push normal, descriptive commits after every coherent round.
-- [ ] Do not force-push routine implementation history.
-- [ ] Include migration status and manual application instructions.
-- [ ] Include a comprehensive manual-test checklist.
-- [ ] Separate automated evidence from manual tests still required.
-- [ ] Do not approve the stacked PR automatically.
-- [ ] Preserve PR3 and its branch as the rollback/reference point.
+- [x] Keep the PR description current after every completed phase.
+- [x] Push normal, descriptive commits after every coherent round.
+- [x] Do not force-push routine implementation history.
+- [x] Include migration status and manual application instructions.
+- [x] Include a comprehensive manual-test checklist.
+- [x] Separate automated evidence from manual tests still required.
+- [x] Do not approve the stacked PR automatically.
+- [x] Preserve PR3 and its branch as the rollback/reference point.
+      Evidence: the draft PR #7 description was replaced on 2026-08-30 with the
+      cumulative PR #1/PR #3/PR #7 architecture, the domain-only API inventory,
+      current migration instructions, the exact `pnpm check` and uninterrupted
+      79-test Playwright evidence, the one retained implementation decision, and
+      a comprehensive local/preview manual matrix. GitHub confirms the published
+      body at head `85866682`. The implementation history consists of normal,
+      descriptive commits and normal pushes. PR #7 remains a draft and was not
+      approved. PR #3 remains open at its unchanged
+      `codex/pr1-remaining-architecture-security-fixes` head `bb22b0e8` as the
+      base and rollback/reference point.
 
 ## Manual test checklist
 
