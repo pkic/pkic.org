@@ -33,6 +33,11 @@ export const voteCreateInputSchema = z.object({
    * is stricter than the bylaws require and is a deliberate choice per vote.
    */
   quorumPercent: z.number().int().min(1).max(100).nullable().optional(),
+  /**
+   * The form a consultation asks. Its questions, options, and live editing
+   * all come from the form; the vote only decides who may answer and when.
+   */
+  questionFormId: databaseIdSchema.nullable().optional(),
   /** `chair` settles a tie by counting the chair's own ballot twice. */
   tieBreakMode: z.enum(["none", "chair"]).optional(),
   /**

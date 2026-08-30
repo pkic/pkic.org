@@ -304,6 +304,16 @@ export const submitBallotSchema = z.object({
 });
 export const submitBallotResponseSchema = successResponseSchema;
 
+/**
+ * A consultation is answered with the form's own answers, keyed by field, so
+ * the payload is the same shape every other form submission uses.
+ */
+export const submitConsultationResponseSchema = z.object({
+  memberId: databaseIdSchema.nullable().optional(),
+  answers: z.record(z.string(), z.unknown()),
+});
+export const submitConsultationResponseResponseSchema = successResponseSchema;
+
 // ── Vote proposals (authenticated voting-category members) ──────────
 
 export const proposalSummarySchema = z.object({

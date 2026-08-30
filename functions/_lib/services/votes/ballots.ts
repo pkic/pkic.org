@@ -11,12 +11,12 @@ import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import { voteCategoryEligibilitySql, voteMemberNotExcludedSql } from "./electorate";
 import { loadConsultationForm } from "./question";
 
-interface EligibleCapacity {
+export interface EligibleCapacity {
   memberId: string;
   membershipCategory: string;
 }
 
-interface BallotActor {
+export interface BallotActor {
   userId: string;
 }
 
@@ -47,7 +47,7 @@ async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: 
   }
 }
 
-function assertVoteOpen(vote: VoteRow, now: string): void {
+export function assertVoteOpen(vote: VoteRow, now: string): void {
   if (!isVoteAcceptingBallots(vote, now)) {
     throw new AppError(409, "VOTE_NOT_OPEN", "This vote is not currently open for ballots");
   }
@@ -58,7 +58,7 @@ function categoryAllowed(vote: VoteRow, category: string): boolean {
   return !restriction || restriction.includes(category);
 }
 
-async function resolvePerMemberCapacity(
+export async function resolvePerMemberCapacity(
   db: DatabaseLike,
   vote: VoteRow,
   member: BallotActor,
@@ -103,7 +103,7 @@ async function resolvePerMemberCapacity(
   return { memberId: capacity.member_id, membershipCategory: capacity.category_code };
 }
 
-async function resolvePerPersonCapacity(
+export async function resolvePerPersonCapacity(
   db: DatabaseLike,
   vote: VoteRow,
   member: BallotActor,
