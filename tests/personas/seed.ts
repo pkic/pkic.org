@@ -21,6 +21,11 @@ export interface SeededPersona {
   capacities: Array<{ organizationId: string; memberId: string }>;
   /** Bearer token, or null for the anonymous persona. */
   token: string | null;
+  /**
+   * The row id of each direct grant, so a test can revoke one mid-request and
+   * check the authorization is re-evaluated rather than trusted from preflight.
+   */
+  grantIds: Map<string, string>;
 }
 
 export interface SeedPersonaOptions {
@@ -32,15 +37,45 @@ export interface SeedPersonaOptions {
   joinGroupWithCapacities?: boolean;
 }
 
+/**
+ * Combines several named profiles into one definition.
+ *
+ * Real people do hold more than one capability — somebody may run the
+ * scheduler and also hold the retention permissions it dispatches. Composing
+ * named profiles keeps that expressible without reopening the door to
+ * arbitrary permission lists, which is how a test ends up asserting on an
+ * authority the product never issues.
+ */
+function composed(keys: string[]): PersonaDefinition {
+  const definitions = keys.map((key) => {
+    const definition = ALL_PERSONAS[key];
+    if (!definition) throw new Error(`Unknown persona: ${key}`);
+    return definition;
+  });
+  return {
+    key: keys.join("+"),
+    description: definitions.map((definition) => definition.description).join("; also "),
+    membershipCategory: definitions.find((definition) => definition.membershipCategory)?.membershipCategory ?? null,
+    organizationCount: Math.max(...definitions.map((definition) => definition.organizationCount)),
+    roles: definitions.flatMap((definition) => definition.roles),
+    grants: [...new Set(definitions.flatMap((definition) => definition.grants))],
+    mayVote: definitions.some((definition) => definition.mayVote),
+  } satisfies PersonaDefinition & { key: string } as PersonaDefinition & { key: string } extends never
+    ? never
+    : PersonaDefinition;
+}
+
 export async function seedPersona(
   db: DatabaseLike,
-  key: string,
+  key: string | string[],
   options: SeedPersonaOptions = {},
 ): Promise<SeededPersona> {
-  const definition = ALL_PERSONAS[key];
-  if (!definition) throw new Error(`Unknown persona: ${key}`);
+  const keys = Array.isArray(key) ? key : [key];
+  const definition = keys.length === 1 ? ALL_PERSONAS[keys[0]] : composed(keys);
+  if (!definition) throw new Error(`Unknown persona: ${keys.join(", ")}`);
+  key = keys.join("+");
   if (key === "anonymous") {
-    return { key, definition, userId: "", email: "", capacities: [], token: null };
+    return { key, definition, userId: "", email: "", capacities: [], token: null, grantIds: new Map() };
   }
 
   // Every instance is a distinct person at a distinct organization. Deriving
@@ -92,14 +127,17 @@ export async function seedPersona(
       .run();
   }
 
+  const grantIds = new Map<string, string>();
   for (const permission of definition.grants) {
+    const grantId = crypto.randomUUID();
     await db
       .prepare(
         `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
          VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       )
-      .bind(crypto.randomUUID(), userId, permission, userId)
+      .bind(grantId, userId, permission, userId)
       .run();
+    grantIds.set(permission, grantId);
   }
 
   if (options.groupId && options.joinGroupWithCapacities && capacities.length > 0) {
@@ -121,7 +159,7 @@ export async function seedPersona(
     ? await createAdminSession(db, userId, `persona-${key}-${crypto.randomUUID()}`)
     : await createMemberSession(db, userId, `persona-${key}-${crypto.randomUUID()}`);
 
-  return { key, definition, userId, email, capacities, token };
+  return { key, definition, userId, email, capacities, token, grantIds };
 }
 
 /** Convenience for suites that only need the request header. */

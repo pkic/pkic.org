@@ -10,6 +10,8 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
+import { onlyPersona } from "./personas/catalog";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import {
@@ -91,18 +93,10 @@ describe("Sponsorship sales pipeline", () => {
   });
 
   it("requires sponsorships:read/write permission", async () => {
-    const staffId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'sponsorship-reader@example.test', 'sponsorship-reader@example.test', 'user', 1, datetime('now'), datetime('now'))`,
-      ).bind(staffId),
-      env.DB.prepare(
-        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-         VALUES (?, ?, 'sponsorships:read', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), staffId, adminId),
-    ]);
-    const staffToken = await createAdminSession(env.DB, staffId, "sponsorship-reader-token");
+    // Read and nothing else: the boundary is only proved by someone who can
+    // legitimately see the list and still must not add to it.
+    const reader = await seedPersona(env.DB, onlyPersona("sponsorships:read"));
+    const staffToken = reader.token!;
 
     const listResponse = await call(staffToken, "/api/v1/sponsors");
     expect(listResponse.status).toBe(200);
@@ -166,19 +160,9 @@ describe("Sponsorship sales pipeline", () => {
 
   it("rejects a sponsorship write whose live permission was revoked before its D1 batch", async () => {
     const { organizationId } = await seedOrganization("Revoked Sponsorship Writer");
-    const staffId = crypto.randomUUID();
-    const grantId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'sponsorship-writer@example.test', 'sponsorship-writer@example.test', 'user', 1, datetime('now'), datetime('now'))`,
-      ).bind(staffId),
-      env.DB.prepare(
-        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-         VALUES (?, ?, 'sponsorships:write', ?, datetime('now'))`,
-      ).bind(grantId, staffId, adminId),
-    ]);
-    await createAdminSession(env.DB, staffId, "sponsorship-revocation-token");
+    const writer = await seedPersona(env.DB, onlyPersona("sponsorships:write"));
+    const staffId = writer.userId;
+    const grantId = writer.grantIds.get("sponsorships:write")!;
     const session = await env.DB.prepare("SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
       .bind(staffId)
       .first<{ id: string }>();
