@@ -2097,6 +2097,32 @@ Status: In progress (2026-08-30)
       workspace screenshot could not be reproduced against a production
       build (scripted browser walkthrough + jsdom harness) and is attributed
       to vite dev HMR remounting after hot edits.
+      Create-behind-action landed 2026-08-30: `ApiDataTable` gained an
+      optional `createAction` rendered in the same toolbar row as search and
+      refresh (the interim placement until the design update), and every
+      list's New/Add affordance moved there; default-visible create forms
+      (group members, leadership, meeting guests, meeting series, event
+      team, coworkers) now render only behind their action with a Cancel.
+      Organization and sponsorship logos became SVG-only with sanitize-by-reconstruction:
+      uploads are reparsed through resvg's usvg tree (scripts, handlers,
+      metadata, comments, DOCTYPEs, and editor cruft cannot survive),
+      embedded rasters and entity declarations are rejected outright,
+      paint-order-first full-canvas background rects are dropped, the
+      viewBox is cropped to the rendered content's bounding box, and root
+      width/height are removed for responsive embedding
+      (functions/_lib/utils/svg-logo.ts). The pipeline is proven shared
+      three ways: one reader used by all three upload routes, a
+      parametrized backend matrix demanding byte-identical stored output
+      across the organization and sponsorship endpoints
+      (tests/svg-logo-uploads.test.ts), and a real-browser Playwright
+      spec from file picker to served bytes
+      (tests/e2e/svg-logo-upload.spec.ts) — which immediately caught
+      that the staff organization uploader had been JSON-stringifying
+      the File (the original "upload fails" defect); it now uses the
+      shared replaceFile helper.
+      The portal page also stopped inheriting public-site chrome (member
+      logo wall, edit-on-GitHub) and the login card breathes on mobile;
+      passkeys correctly hide on non-secure origins such as LAN http.
       Remaining waves:
       (1 residue) events-surface confirms after the projection slice;
       (2) EmptyState + labeled Spinner + DetailsSummary
