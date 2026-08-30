@@ -68,7 +68,7 @@ test("an approved applicant can sign in to the portal as a member", async ({ pag
   expect(profile.status, JSON.stringify(profile.body)).toBe(200);
   expect(profile.body.profile?.email ?? profile.body.email).toBe(email);
 
-  await expect(page.getByRole("link", { name: "Administration", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
 });
 
 test("a sign-in request for an unknown address creates no session", async ({ page }) => {

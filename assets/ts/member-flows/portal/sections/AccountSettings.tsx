@@ -1,5 +1,6 @@
 /** Member account email, access summary, shared passkey management, and notifications. */
 import { useEffect, useState } from "preact/hooks";
+import { Link } from "wouter";
 import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
@@ -102,7 +103,13 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
             <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
               {memberships.map((membership) => (
                 <li key={membership.memberId} class="small">
-                  {membership.organizationName ?? "Individual membership"}
+                  {membership.organizationId ? (
+                    <Link href={`/organizations/${encodeURIComponent(membership.organizationId)}`}>
+                      {membership.organizationName ?? "Organization"}
+                    </Link>
+                  ) : (
+                    "Individual membership"
+                  )}
                   <span class="badge text-bg-light ms-2">Category {membership.membershipCategory}</span>
                 </li>
               ))}

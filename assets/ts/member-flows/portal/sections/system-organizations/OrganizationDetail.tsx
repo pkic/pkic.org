@@ -58,11 +58,7 @@ export function OrganizationDetail({
   return (
     <section aria-labelledby="organization-detail-heading">
       <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          onClick={() => navigate("/system/organizations")}
-        >
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => navigate("/organizations")}>
           ← Back to organizations
         </button>
         <h5 id="organization-detail-heading" class="mb-0">

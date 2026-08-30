@@ -17,7 +17,7 @@ test("a permitted staff identity uses the system audit log only through the port
   await page.goto("/portal/#/system/audit-log");
 
   await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Administration" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.locator("tbody tr").first()).toBeVisible();
   expect(auditLogRequests).toContain("GET /api/v1/audit-log");

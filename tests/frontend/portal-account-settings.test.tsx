@@ -10,6 +10,10 @@ vi.mock("../../assets/ts/components/passkey-settings", () => ({
   PasskeySettings: () => <div>Passkeys</div>,
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href }: { children?: ComponentChildren; href: string }) => <a href={`#${href}`}>{children}</a>,
+}));
+
 let container: HTMLDivElement;
 
 function mount(node: ComponentChildren): void {
@@ -201,6 +205,8 @@ describe("portal account settings capacity cutover", () => {
 
     expect(container.textContent).toContain("Member capacities");
     expect(container.textContent).toContain("Example Org");
+    const organizationLink = [...container.querySelectorAll("a")].find((a) => a.textContent === "Example Org");
+    expect(organizationLink?.getAttribute("href")).toBe("#/organizations/00000000-0000-4000-8000-000000000010");
     expect(container.textContent).toContain("Category A");
     expect(container.textContent).toContain("Individual membership");
     expect(container.textContent).toContain("Category H5");

@@ -119,7 +119,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         empty="No organizations found"
         rowKey={(organization) => organization.id}
         rowClass={() => "adm-user-row"}
-        onRowClick={(organization) => navigate(`/system/organizations/${encodeURIComponent(organization.id)}`)}
+        onRowClick={(organization) => navigate(`/organizations/${encodeURIComponent(organization.id)}`)}
       />
     </section>
   );

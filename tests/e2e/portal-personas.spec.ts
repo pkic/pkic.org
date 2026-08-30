@@ -219,7 +219,11 @@ test.describe("selected-group portal personas", () => {
     await expect(sectionLinks(page)).toHaveText(["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
     // A plain member holds no global system permission, so the sidebar has no
     // admin surface at all.
-    await expect(page.getByRole("link", { name: "Administration" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Organizations", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Donations", exact: true })).toHaveCount(0);
   });
 
   test("direct chair sees the complete group management surface", async ({ page }) => {
@@ -255,7 +259,11 @@ test.describe("selected-group portal personas", () => {
     await openGroup(page, PERSONAS.localOnly);
     await expect(sectionLinks(page)).not.toContainText(["Settings", "Members", "Leadership", "Statistics"]);
     // No global system permission means no admin surface for this identity.
-    await expect(page.getByRole("link", { name: "Administration" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Organizations", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Donations", exact: true })).toHaveCount(0);
   });
 
   test("staff-only manager enters the same portal without member navigation", async ({ page }) => {

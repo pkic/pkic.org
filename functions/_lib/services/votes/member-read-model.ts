@@ -1,6 +1,6 @@
 /** Member-scoped vote discovery, detail, and results for group resource adapters. */
 import { nowIso } from "../../utils/time";
-import { deriveVoteStatus, isVoteAcceptingBallots } from "./status";
+import { deriveVoteStatus, isVoteAcceptingBallots, voteStatusSql } from "./status";
 import { loadConsultationForm, type ConsultationForm } from "./question";
 import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
@@ -261,12 +261,14 @@ export async function listVisibleVotesForMember(
     bindings.push(params.ownerGroupId);
   }
   if (params.status && params.status.length > 0) {
-    const statusFilter = buildD1JsonMembershipFilter("status", params.status);
+    // Vote status is derived, never stored; filter through the shared SQL rule.
+    const now = nowIso();
+    const statusFilter = buildD1JsonMembershipFilter(voteStatusSql("votes"), params.status);
     filters.push(statusFilter.sql);
-    bindings.push(...statusFilter.bindings);
+    bindings.push(now, now, ...statusFilter.bindings);
   }
   if (params.q) {
-    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type"]);
+    const search = buildD1TextSearchFilter(params.q, ["votes.title", "votes.description", "votes.vote_type"]);
     filters.push(search.sql);
     bindings.push(...search.bindings);
   }

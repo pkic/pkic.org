@@ -26,6 +26,11 @@ export {
   listGroupFormPlacements,
   type GroupFormViewer,
 } from "./group-placement-read";
+export {
+  buildMemberFormPlacementsPageQuery,
+  listOpenFormPlacementsForMember,
+  type MemberFormPlacementsQuery,
+} from "./member-read-model";
 export { updateGroupFormPlacement } from "./group-placement-mutation";
 export { createGroupFormDefinition, updateGroupFormDefinition } from "./group-definition-mutation";
 export { submitGroupFormResponse } from "./group-response-submission";

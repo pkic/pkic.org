@@ -545,7 +545,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.reload();
     await expectStaffSessionLanding(page);
     await page.goto("/portal/#/system/organization-content-reviews");
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
     await page.getByRole("button", { name: orgName }).click();
 
@@ -573,7 +573,7 @@ test.describe("Portal management browser-verification pass", () => {
 
     await page.goto("/portal/#/system/organization-content-reviews");
     await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     expect(legacyRequests).toEqual([]);
   });
 
@@ -596,7 +596,7 @@ test.describe("Portal management browser-verification pass", () => {
       orgName: `E2E Users Org ${stamp}`,
     });
 
-    await page.goto("/portal/#/system/users");
+    await page.goto("/portal/#/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
     await page.getByPlaceholder("email or name").press("Enter");
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
@@ -655,9 +655,9 @@ test.describe("Portal management browser-verification pass", () => {
     await page.reload();
     await expectStaffSessionLanding(page);
 
-    await page.goto("/portal/#/system/membership-applications");
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Membership Applications" })).toHaveAttribute("aria-current", "page");
+    await page.goto("/portal/#/membership/applications");
+    await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveClass(/active/);
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter is sufficient here because every earlier fixture has
     // already moved out of ec_review.

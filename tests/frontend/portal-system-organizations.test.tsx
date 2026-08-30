@@ -11,7 +11,7 @@ import { organizationRepresentativesListResponseSchema } from "../../assets/shar
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
 
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/system/organizations", vi.fn()] }));
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
 
 const mounted: HTMLElement[] = [];
 const organizationId = "00000000-0000-4000-8000-000000000010";
