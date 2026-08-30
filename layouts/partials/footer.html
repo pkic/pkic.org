@@ -1,8 +1,13 @@
+    {{/* The member-logo wall is public-site chrome; the portal is an
+         application shell where stray logos under the content read as
+         clutter (most visibly beneath the sign-in card on mobile). */}}
+    {{ if ne .Type "portal" }}
     <div class="container members text-nowrap overflow-hidden my-4 text-center">
         <div class="banner">
             {{ partialCached "members/wall.html" . }}
         </div>
     </div>
+    {{ end }}
 
     <footer id="site-footer">
 

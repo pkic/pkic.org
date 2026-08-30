@@ -45,7 +45,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
   }
 
   return (
-    <div class="d-flex justify-content-center py-5">
+    <div class="d-flex justify-content-center py-4 py-md-5">
       <div class="card shadow-sm content-width-sm">
         <div class="card-body p-4">
           <h2 class="h4 mb-3">PKI Consortium Portal</h2>

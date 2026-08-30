@@ -13,7 +13,8 @@
   <body {{ printf "style=%q" $themeVars | safeHTMLAttr }}>
     {{ partial "navbar.html" . }}
     
-    {{ partial "edit-on-github.html" . }}
+    {{/* An application shell has no page source for visitors to edit. */}}
+    {{ if ne .Type "portal" }}{{ partial "edit-on-github.html" . }}{{ end }}
     <main>
     {{ block "main" . }}
     <div class="py-5 bg-light">
