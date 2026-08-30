@@ -18,10 +18,16 @@ import {
   voteProposalStatusSchema,
 } from "../assets/shared/schemas/votes";
 
+// A result stored before turnout floors and casting votes existed parses
+// into the current shape with both explicitly absent, rather than with the
+// keys missing — consumers then never have to distinguish "old result" from
+// "no quorum was required".
 const MOTION_RESULT = {
   thresholdType: "supermajority",
   counts: { in_favor: 12, opposed: 3, abstain: 1 },
   totalBallots: 16,
+  quorum: null,
+  castingVote: null,
   outcome: "passed",
 };
 

@@ -6,6 +6,8 @@ import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../aud
 import { VOTE_ELECTION_TALLY_QUERY, VOTE_MOTION_TALLY_QUERY, VOTE_STANDING_CANDIDATES_QUERY } from "./due-queries";
 import type { CandidateRow, VoteRow } from "./shared";
 import { computeMotionResultFromCounts, tallyElectionRoundFromCounts, type ElectionRoundTally } from "./tally";
+import { ELIGIBLE_MEMBER_COUNT_QUERY, ELIGIBLE_PERSON_COUNT_QUERY } from "./electorate";
+import { findCastingVote } from "./tie-break";
 import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
 
 interface MotionCountsRow {
@@ -175,11 +177,39 @@ async function finalizeMotionOrConsultation(
   context: VoteCloseTransitionContext,
 ): Promise<CloseOutcome> {
   const counts = await first<MotionCountsRow>(db, VOTE_MOTION_TALLY_QUERY, [vote.id, vote.current_round]);
-  const result = computeMotionResultFromCounts(vote.threshold_type as "simple_majority" | "supermajority", {
+  const tally = {
     in_favor: Number(counts?.in_favor ?? 0),
     opposed: Number(counts?.opposed ?? 0),
     abstain: Number(counts?.abstain ?? 0),
-  });
+  };
+
+  // Both extras are read only when the vote asked for them, so an ordinary
+  // vote closes on exactly the queries it always did.
+  const quorum = vote.quorum_percent
+    ? {
+        percent: vote.quorum_percent,
+        eligible: Number(
+          (
+            await first<{ eligible: number }>(
+              db,
+              vote.electorate_mode === "per_member" ? ELIGIBLE_MEMBER_COUNT_QUERY : ELIGIBLE_PERSON_COUNT_QUERY,
+              [vote.id],
+            )
+          )?.eligible ?? 0,
+        ),
+      }
+    : null;
+  const castingVote =
+    vote.tie_break_mode === "chair" && tally.in_favor === tally.opposed
+      ? await findCastingVote(db, vote.id, vote.current_round, now)
+      : null;
+
+  const result = computeMotionResultFromCounts(
+    vote.threshold_type as "simple_majority" | "supermajority",
+    tally,
+    quorum,
+    castingVote,
+  );
 
   try {
     await db.batch([

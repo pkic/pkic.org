@@ -1051,6 +1051,8 @@ describe("canonical group voting", () => {
       thresholdType: "simple_majority" as const,
       counts: { in_favor: 1, opposed: 0, abstain: 0 },
       totalBallots: 1,
+      quorum: null,
+      castingVote: null,
       outcome: "passed" as const,
     };
     await env.DB.prepare(
@@ -1420,6 +1422,8 @@ describe("canonical group voting", () => {
       thresholdType: "simple_majority",
       counts: { in_favor: 1, opposed: 0, abstain: 0 },
       totalBallots: 1,
+      quorum: null,
+      castingVote: null,
       outcome: "passed",
     };
     await env.DB.prepare(
@@ -1444,6 +1448,8 @@ describe("canonical group voting", () => {
       thresholdType: "simple_majority",
       counts: { in_favor: 0, opposed: 0, abstain: 0 },
       totalBallots: 0,
+      quorum: null,
+      castingVote: null,
       outcome: "failed",
     };
     await env.DB.prepare(
