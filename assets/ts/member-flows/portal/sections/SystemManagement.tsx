@@ -131,6 +131,7 @@ export function SystemManagement({
             canReadEmail={portalHasGlobalPermission(session, "email:read")}
             canManageEmail={portalHasGlobalPermission(session, "email:manage")}
             canReadRetention={portalHasGlobalPermission(session, "retention:read")}
+            canReadScheduler={portalHasGlobalPermission(session, "scheduler:read")}
             canRunRetention={portalHasGlobalPermission(session, "retention:run")}
             canAnonymizeUsers={portalHasGlobalPermission(session, "users:anonymize")}
             canWriteMembership={portalHasGlobalPermission(session, "membership:write")}

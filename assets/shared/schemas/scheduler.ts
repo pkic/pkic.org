@@ -39,7 +39,16 @@ export const scheduledJobSchema = z.object({
 });
 export type ScheduledJob = z.infer<typeof scheduledJobSchema>;
 
-export const schedulerJobsListResponseSchema = z.object({ jobs: z.array(scheduledJobSchema).max(200) });
+export const scheduledJobCapabilitiesSchema = z.object({
+  run: z.boolean(),
+  manageState: z.boolean(),
+});
+export const scheduledJobResourceSchema = scheduledJobSchema.extend({
+  capabilities: scheduledJobCapabilitiesSchema,
+});
+export type ScheduledJobResource = z.infer<typeof scheduledJobResourceSchema>;
+
+export const schedulerJobsListResponseSchema = z.object({ jobs: z.array(scheduledJobResourceSchema).max(200) });
 
 export const schedulerJobParamsSchema = z.object({ jobKey: z.string().trim().min(1).max(80) });
 
@@ -50,8 +59,12 @@ export const schedulerJobRunResponseSchema = successResponseSchema.extend({
   durationMs: z.number().int().nonnegative(),
 });
 
-export const schedulerJobPauseSchema = z.object({ reason: trimmedString(3, 500) });
-export const schedulerJobStateResponseSchema = successResponseSchema.extend({ job: scheduledJobSchema });
+export const schedulerJobStateUpdateSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("paused"), reason: trimmedString(3, 500) }),
+  z.object({ state: z.literal("active") }),
+]);
+export type ScheduledJobStateUpdate = z.infer<typeof schedulerJobStateUpdateSchema>;
+export const schedulerJobStateResponseSchema = successResponseSchema.extend({ job: scheduledJobResourceSchema });
 
 export const schedulerJobsListRouteSchema = {
   tags: ["Scheduler"],
@@ -85,31 +98,22 @@ export const schedulerJobRunCreateRouteSchema = {
   },
 };
 
-export const schedulerJobPauseRouteSchema = {
+export const schedulerJobStateUpdateRouteSchema = {
   tags: ["Scheduler"],
   ...requiresPermissions("scheduler:read", "scheduler:manage"),
-  summary: "Pause a scheduled job",
+  summary: "Update scheduled job state",
   description:
-    "Stops the dispatcher selecting this job until it is resumed. Because the dispatcher re-derives due work from domain state on every pass, a pause loses no work — the job simply finds it again on resume. A reason is required so a pause is attributable.",
+    "Pauses or resumes one scheduled job. A pause stops future dispatcher selection without cancelling a run that already holds the lease. Because each job re-derives due work from domain state, accumulated work is found after resume. A pause reason is required for attribution.",
   request: {
     params: schedulerJobParamsSchema,
-    body: { required: true, content: { "application/json": { schema: schedulerJobPauseSchema } } },
+    body: { required: true, content: { "application/json": { schema: schedulerJobStateUpdateSchema } } },
   },
   responses: {
-    ...ok("Job paused.", schedulerJobStateResponseSchema),
-    ...authErrors({ forbidden: "Requires scheduler:manage.", notFound: "Unknown job." }),
-  },
-};
-
-export const schedulerJobResumeRouteSchema = {
-  tags: ["Scheduler"],
-  ...requiresPermissions("scheduler:read", "scheduler:manage"),
-  summary: "Resume a paused scheduled job",
-  description:
-    "Returns the job to the dispatcher. Any work that accumulated while it was paused is found by the next pass, because due work is derived from domain state rather than queued.",
-  request: { params: schedulerJobParamsSchema },
-  responses: {
-    ...ok("Job resumed.", schedulerJobStateResponseSchema),
-    ...authErrors({ forbidden: "Requires scheduler:manage.", notFound: "Unknown job." }),
+    ...ok("Updated scheduled job.", schedulerJobStateResponseSchema),
+    ...authErrors({
+      forbidden: "Requires scheduler:manage.",
+      notFound: "Unknown job.",
+      conflict: "The job state or scheduler authorization changed while the update was being saved.",
+    }),
   },
 };
