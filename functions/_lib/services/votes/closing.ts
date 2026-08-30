@@ -44,7 +44,10 @@ export async function closeDueVotes(
 ): Promise<CloseDueVotesResult> {
   const result: CloseDueVotesResult = { opened: [], closed: [], roundsAdvanced: [] };
   const requestedLimit = Math.max(0, Math.min(MAX_DUE_VOTES_PER_PASS, Math.floor(limit)));
-  if (requestedLimit === 0) return result;
+  // A non-numeric limit otherwise survives the clamp as NaN and reaches D1 as
+  // a bind parameter, where it surfaces as an opaque SQLITE_MISMATCH rather
+  // than as the caller error it is.
+  if (!Number.isFinite(requestedLimit) || requestedLimit === 0) return result;
 
   const budgetActionLimit = d1QueryBudget
     ? Math.floor(

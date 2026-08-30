@@ -56,11 +56,31 @@ export const voteBallotCountsSchema = z.object({
   abstain: z.number().int().nonnegative(),
 });
 
+export const voteQuorumSchema = z.object({
+  percent: z.number().int().min(1).max(100),
+  eligible: z.number().int().nonnegative(),
+  required: z.number().int().nonnegative(),
+  met: z.boolean(),
+});
+
+export const voteCastingVoteSchema = z.object({
+  role: z.enum(["lead", "deputy_lead"]),
+  choice: z.enum(["in_favor", "opposed"]),
+});
+
 export const motionVoteResultSchema = z.object({
   thresholdType: thresholdTypeSchema.extract(["simple_majority", "supermajority"]),
   counts: voteBallotCountsSchema,
   totalBallots: z.number().int().nonnegative(),
-  outcome: z.enum(["passed", "failed"]),
+  /** Null unless the vote opted into a turnout floor. */
+  quorum: voteQuorumSchema.nullable().default(null),
+  /** Set only when a tie was settled by the chair's ballot counting twice. */
+  castingVote: voteCastingVoteSchema.nullable().default(null),
+  /**
+   * `not_quorate` means the question was not settled, which is materially
+   * different from being rejected.
+   */
+  outcome: z.enum(["passed", "failed", "not_quorate"]),
 });
 
 export const electionRoundTallySchema = z.object({
@@ -114,6 +134,9 @@ export const voteSummaryFieldsSchema = {
   ownerGroupName: z.string(),
   electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
+  quorumPercent: z.number().int().min(1).max(100).nullable().default(null),
+  tieBreakMode: z.enum(["none", "chair"]).default("none"),
+  excludedMemberIds: z.array(databaseIdSchema).max(200).nullable().default(null),
   eligibleCategories: membershipCategorySelectionSchema.nullable(),
   opensAt: z.string(),
   closesAt: z.string(),

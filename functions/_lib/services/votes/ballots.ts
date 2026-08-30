@@ -8,6 +8,7 @@ import { nowIso } from "../../utils/time";
 import { MOTION_CHOICES, eligibleCategoriesOf, getVoteRowOrThrow, type BallotChoice, type VoteRow } from "./shared";
 import { exactVoteGroupMembership, voteParticipationGroupPredicate } from "./vote-access";
 import { votingMembershipCategoryExistsSql } from "../membership/categories";
+import { voteCategoryEligibilitySql, voteMemberNotExcludedSql } from "./electorate";
 
 interface EligibleCapacity {
   memberId: string;
@@ -74,6 +75,7 @@ async function resolvePerMemberCapacity(
        AND represented_member.status = 'active'
        AND represented_member.organization_id IS NOT NULL
        AND ${votingMembershipCategoryExistsSql("category.category_code")}
+       AND ${voteMemberNotExcludedSql("current_vote", "represented_member.id")}
      LIMIT 1`,
     [member.userId, vote.id, ...context.bindings, requestedMemberId],
   );
@@ -169,14 +171,8 @@ function preparePerMemberBallotUpsert(
              AND represented_member.status = 'active'
              AND represented_member.organization_id IS NOT NULL
              AND category.category_code = ?
-             AND ${votingMembershipCategoryExistsSql("category.category_code")}
-             AND (
-               current_vote.eligible_categories IS NULL
-               OR EXISTS (
-                 SELECT 1 FROM json_each(current_vote.eligible_categories) allowed
-                 WHERE allowed.value = category.category_code
-               )
-             )
+             AND ${voteCategoryEligibilitySql("current_vote", "category.category_code")}
+             AND ${voteMemberNotExcludedSql("current_vote", "represented_member.id")}
          )
        ON CONFLICT(vote_id, member_id, round) WHERE member_id IS NOT NULL DO UPDATE SET
          user_id = excluded.user_id,
@@ -240,14 +236,7 @@ function preparePerPersonBallotUpsert(
              ${context.sql}
              AND membership.left_at IS NULL
              AND represented_member.status = 'active'
-             AND ${votingMembershipCategoryExistsSql("category.category_code")}
-             AND (
-               current_vote.eligible_categories IS NULL
-               OR EXISTS (
-                 SELECT 1 FROM json_each(current_vote.eligible_categories) allowed
-                 WHERE allowed.value = category.category_code
-               )
-             )
+             AND ${voteCategoryEligibilitySql("current_vote", "category.category_code")}
          )
        ON CONFLICT(vote_id, user_id, round) WHERE member_id IS NULL DO UPDATE SET
          choice = excluded.choice,
