@@ -96,7 +96,7 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     path: "/system/operations",
     section: "system",
     label: "Operations",
-    permissions: ["email:read", "retention:read"],
+    permissions: ["email:read", "retention:read", "scheduler:read"],
   },
   {
     path: "/system/access-control",

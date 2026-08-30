@@ -59,6 +59,11 @@ describe("OpenAPI schema generation", () => {
 
     expect(Object.keys(spec.paths).some((path) => path.startsWith("/api/v1/admin"))).toBe(false);
 
+    expect(spec.paths["/api/v1/scheduler/jobs"].get).toBeDefined();
+    expect(spec.paths["/api/v1/scheduler/jobs/{jobKey}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/scheduler/jobs/{jobKey}/runs"].post).toBeDefined();
+    expect(spec.paths["/api/v1/scheduler/jobs/{jobKey}/pause"]).toBeUndefined();
+    expect(spec.paths["/api/v1/scheduler/jobs/{jobKey}/resume"]).toBeUndefined();
     expect(spec.paths["/api/v1/events/imports"].post).toBeDefined();
     // The ownerless admin event collection and its Hugo sync route are retired.
     expect(spec.paths["/api/v1/admin/events"]).toBeUndefined();

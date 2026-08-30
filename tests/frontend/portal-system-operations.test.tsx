@@ -4,6 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScheduledWork } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledWork";
 import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
+import { ScheduledJobs } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledJobs";
+import type { ScheduledJobResource } from "../../assets/shared/schemas/scheduler";
 
 let container: HTMLDivElement | null = null;
 
@@ -18,6 +20,29 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+function scheduledJob(overrides: Partial<ScheduledJobResource> = {}): ScheduledJobResource {
+  return {
+    jobKey: "retention",
+    intervalSeconds: 86_400,
+    nextRunAt: "2026-09-01T00:00:00.000Z",
+    wakeRequested: false,
+    lastRunAt: null,
+    lastSuccessAt: null,
+    lastStatus: null,
+    lastError: null,
+    lastDurationMs: null,
+    consecutiveFailures: 0,
+    consecutiveAbandoned: 0,
+    runningSince: null,
+    leaseExpiresAt: null,
+    pausedAt: null,
+    pausedReason: null,
+    leaseExpired: false,
+    capabilities: { manageState: false, run: false },
+    ...overrides,
+  };
 }
 
 afterEach(() => {
@@ -380,5 +405,112 @@ describe("portal Operations command visibility", () => {
         ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
       ),
     ).toBe(false);
+  });
+});
+
+describe("portal scheduled-job management", () => {
+  it("renders the bounded registry without reconstructing server-denied actions", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        requests.push(`${method} ${url.pathname}`);
+        if (url.pathname === "/api/v1/scheduler/jobs") return json({ jobs: [scheduledJob()] });
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ScheduledJobs />, container!));
+    await settle();
+
+    expect(container.textContent).toContain("Retention");
+    expect(container.textContent).toContain("1 day");
+    expect(container.textContent).not.toContain("Run now");
+    expect(container.textContent).not.toContain("Pause");
+    expect(container.textContent).not.toContain("Resume");
+    expect(requests).toEqual(["GET /api/v1/scheduler/jobs"]);
+  });
+
+  it("uses the canonical state resource and runs collection for server-authorized controls", async () => {
+    const requests: Array<{ method: string; path: string; body: unknown }> = [];
+    let current = scheduledJob({ capabilities: { manageState: true, run: true } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        requests.push({ method, path: url.pathname, body });
+        if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") return json({ jobs: [current] });
+        if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
+          const state = (body as { state: "active" | "paused" }).state;
+          current = scheduledJob({
+            capabilities: { manageState: true, run: true },
+            pausedAt: state === "paused" ? "2026-08-30T00:00:00.000Z" : null,
+            pausedReason: state === "paused" ? (body as { reason: string }).reason : null,
+          });
+          return json({ success: true, job: current });
+        }
+        if (url.pathname === "/api/v1/scheduler/jobs/retention/runs" && method === "POST") {
+          current = scheduledJob({
+            capabilities: { manageState: true, run: true },
+            lastRunAt: "2026-08-30T00:00:01.000Z",
+            lastSuccessAt: "2026-08-30T00:00:01.000Z",
+            lastStatus: "succeeded",
+            lastDurationMs: 12,
+          });
+          return json({ success: true, jobKey: "retention", status: "succeeded", durationMs: 12 });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ScheduledJobs />, container!));
+    await settle();
+
+    const pause = [...container.querySelectorAll("button")].find((button) => button.textContent === "Pause")!;
+    await act(() => pause.click());
+    const reason = container.querySelector<HTMLTextAreaElement>("#pause-reason-retention")!;
+    await act(() => {
+      reason.value = "investigating delivery failures";
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const confirm = [...container.querySelectorAll("button")].find((button) => button.textContent === "Confirm pause")!;
+    await act(() => confirm.click());
+    await settle();
+    expect(container.textContent).toContain("Resume");
+
+    const resume = [...container.querySelectorAll("button")].find((button) => button.textContent === "Resume")!;
+    await act(() => resume.click());
+    await settle();
+    const run = [...container.querySelectorAll("button")].find((button) => button.textContent === "Run now")!;
+    await act(() => run.click());
+    for (let attempt = 0; attempt < 3; attempt += 1) await settle();
+
+    expect(requests).toEqual(
+      expect.arrayContaining([
+        {
+          method: "PATCH",
+          path: "/api/v1/scheduler/jobs/retention",
+          body: { state: "paused", reason: "investigating delivery failures" },
+        },
+        { method: "PATCH", path: "/api/v1/scheduler/jobs/retention", body: { state: "active" } },
+        { method: "POST", path: "/api/v1/scheduler/jobs/retention/runs", body: {} },
+      ]),
+    );
+    expect(requests.some(({ path }) => path.endsWith("/pause") || path.endsWith("/resume"))).toBe(false);
+    expect(container.textContent).toContain("Succeeded");
   });
 });

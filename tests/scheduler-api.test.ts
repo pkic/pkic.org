@@ -7,14 +7,26 @@ import { queryAll } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
 import { schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
 import type { Permission } from "../assets/shared/schemas/permissions";
+import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 async function call(token: string | null, path: string, init: RequestInit = {}): Promise<Response> {
+  return callWithDatabase(token, path, env.DB, init);
+}
+
+async function callWithDatabase(
+  token: string | null,
+  path: string,
+  db: DatabaseLike,
+  init: RequestInit = {},
+): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set("authorization", `Bearer ${token}`);
   if (init.body) headers.set("content-type", "application/json");
   return app.fetch(
     new Request(`https://app.test${path}`, { ...init, headers }),
-    env as never,
+    { ...env, DB: db } as never,
     {
       passThroughOnException: () => {},
       waitUntil: () => {},
@@ -23,17 +35,24 @@ async function call(token: string | null, path: string, init: RequestInit = {}):
 }
 
 /** A staff user holding exactly the listed grants and nothing more. */
-async function staffWith(grants: Permission[], label: string): Promise<string> {
+async function staffIdentityWith(grants: Permission[], label: string) {
   const userId = await insertUser(env.DB, `${label}@example.test`);
+  const grantIds = new Map<Permission, string>();
   for (const permission of grants) {
+    const grantId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (lower(hex(randomblob(16))), ?, ?, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+       VALUES (?, ?, ?, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
     )
-      .bind(userId, permission)
+      .bind(grantId, userId, permission)
       .run();
+    grantIds.set(permission, grantId);
   }
-  return createAdminSession(env.DB, userId, `${label}-token`);
+  return { userId, grantIds, token: await createAdminSession(env.DB, userId, `${label}-token`) };
+}
+
+async function staffWith(grants: Permission[], label: string): Promise<string> {
+  return (await staffIdentityWith(grants, label)).token;
 }
 
 describe("scheduler API", () => {
@@ -45,11 +64,12 @@ describe("scheduler API", () => {
     for (const [path, method] of [
       ["/api/v1/scheduler/jobs", "GET"],
       ["/api/v1/scheduler/jobs/retention/runs", "POST"],
-      ["/api/v1/scheduler/jobs/retention/pause", "POST"],
+      ["/api/v1/scheduler/jobs/retention", "PATCH"],
     ] as const) {
       const response = await call(null, path, {
         method,
-        ...(method === "POST" ? { body: JSON.stringify({ reason: "because" }) } : {}),
+        ...(method === "PATCH" ? { body: JSON.stringify({ state: "paused", reason: "because" }) } : {}),
+        ...(method === "POST" ? { body: JSON.stringify({}) } : {}),
       });
       expect(response.status, `${method} ${path}`).toBe(401);
     }
@@ -65,7 +85,31 @@ describe("scheduler API", () => {
     expect(retention).toBeDefined();
     expect(retention!.lastSuccessAt).toBeNull();
     expect(retention!.leaseExpired).toBe(false);
+    expect(retention!.capabilities).toEqual({ manageState: false, run: false });
     expect(payload.jobs.map((job) => job.jobKey)).toContain("votes_due_work");
+  });
+
+  it("derives exact state and run capabilities from the job's live domain grants", async () => {
+    const manager = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-capability-manager");
+    const managerPayload = schedulerJobsListResponseSchema.parse(
+      await (await call(manager, "/api/v1/scheduler/jobs")).json(),
+    );
+    expect(managerPayload.jobs.find((job) => job.jobKey === "retention")?.capabilities).toEqual({
+      manageState: true,
+      run: false,
+    });
+
+    const runner = await staffWith(
+      ["scheduler:read", "scheduler:manage", "retention:run", "users:anonymize"],
+      "scheduler-capability-runner",
+    );
+    const runnerPayload = schedulerJobsListResponseSchema.parse(
+      await (await call(runner, "/api/v1/scheduler/jobs")).json(),
+    );
+    expect(runnerPayload.jobs.find((job) => job.jobKey === "retention")?.capabilities).toEqual({
+      manageState: true,
+      run: true,
+    });
   });
 
   it("refuses a run to a caller holding scheduler:manage but not the job's own grants", async () => {
@@ -131,9 +175,9 @@ describe("scheduler API", () => {
       "scheduler-pauser",
     );
 
-    const paused = await call(token, "/api/v1/scheduler/jobs/retention/pause", {
-      method: "POST",
-      body: JSON.stringify({ reason: "investigating a redaction defect" }),
+    const paused = await call(token, "/api/v1/scheduler/jobs/retention", {
+      method: "PATCH",
+      body: JSON.stringify({ state: "paused", reason: "investigating a redaction defect" }),
     });
     expect(paused.status).toBe(200);
     await expect(paused.json()).resolves.toMatchObject({
@@ -146,7 +190,10 @@ describe("scheduler API", () => {
     });
     expect(blocked.status).toBe(409);
 
-    const resumed = await call(token, "/api/v1/scheduler/jobs/retention/resume", { method: "POST" });
+    const resumed = await call(token, "/api/v1/scheduler/jobs/retention", {
+      method: "PATCH",
+      body: JSON.stringify({ state: "active" }),
+    });
     expect(resumed.status).toBe(200);
     await expect(resumed.json()).resolves.toMatchObject({ job: { pausedAt: null, pausedReason: null } });
 
@@ -161,10 +208,75 @@ describe("scheduler API", () => {
 
   it("does not let a pause be recorded without a reason", async () => {
     const token = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-noreason");
-    const response = await call(token, "/api/v1/scheduler/jobs/retention/pause", {
+    const response = await call(token, "/api/v1/scheduler/jobs/retention", {
+      method: "PATCH",
+      body: JSON.stringify({ state: "paused" }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("removes the superseded pause and resume action routes", async () => {
+    const token = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-old-actions");
+    for (const path of ["/api/v1/scheduler/jobs/retention/pause", "/api/v1/scheduler/jobs/retention/resume"]) {
+      expect((await call(token, path, { method: "POST", body: JSON.stringify({ reason: "legacy" }) })).status).toBe(
+        404,
+      );
+    }
+  });
+
+  it("rolls back a state update when scheduler authority is revoked before commit", async () => {
+    const identity = await staffIdentityWith(
+      ["scheduler:read", "scheduler:manage"],
+      "scheduler-state-authorization-race",
+    );
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+        .bind(identity.grantIds.get("scheduler:manage"))
+        .run(),
+    );
+    const response = await callWithDatabase(identity.token, "/api/v1/scheduler/jobs/retention", racedDb, {
+      method: "PATCH",
+      body: JSON.stringify({ state: "paused", reason: "must not commit" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("SCHEDULER_AUTHORIZATION_CHANGED");
+    expect(await queryAll(env.DB, "SELECT paused_at FROM scheduled_jobs WHERE job_key = 'retention'")).toEqual([
+      { paused_at: null },
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'scheduled_job_paused' AND entity_id = 'retention'",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back a manual claim when a job-domain grant is revoked before commit", async () => {
+    const identity = await staffIdentityWith(
+      ["scheduler:read", "scheduler:manage", "retention:run", "users:anonymize"],
+      "scheduler-run-authorization-race",
+    );
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+        .bind(identity.grantIds.get("users:anonymize"))
+        .run(),
+    );
+    const response = await callWithDatabase(identity.token, "/api/v1/scheduler/jobs/retention/runs", racedDb, {
       method: "POST",
       body: JSON.stringify({}),
     });
-    expect(response.status).toBe(400);
+
+    expect(response.status).toBe(409);
+    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("SCHEDULER_AUTHORIZATION_CHANGED");
+    expect(await queryAll(env.DB, "SELECT running_since FROM scheduled_jobs WHERE job_key = 'retention'")).toEqual([
+      { running_since: null },
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'scheduled_job_triggered' AND entity_id = 'retention'",
+      ),
+    ).toHaveLength(0);
   });
 });

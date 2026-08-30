@@ -1,14 +1,25 @@
+import { lazy, Suspense } from "preact/compat";
 import { useState } from "preact/hooks";
+import { Spinner } from "../../../../components/Spinner";
 import { EmailOutbox } from "./EmailOutbox";
 import { ScheduledWork } from "./ScheduledWork";
 
-type OperationsTab = "outbox" | "scheduled-work";
+const ScheduledJobs = lazy(() => import("./ScheduledJobs").then((module) => ({ default: module.ScheduledJobs })));
+
+type OperationsTab = "outbox" | "scheduled-work" | "scheduler";
+
+const TAB_LABELS: Record<OperationsTab, string> = {
+  outbox: "Email Outbox",
+  "scheduled-work": "Scheduled Work",
+  scheduler: "Scheduled Jobs",
+};
 
 export function Operations({
   initialTab,
   canReadEmail,
   canManageEmail,
   canReadRetention,
+  canReadScheduler,
   canRunRetention,
   canAnonymizeUsers,
   canWriteMembership,
@@ -18,6 +29,7 @@ export function Operations({
   canReadEmail: boolean;
   canManageEmail: boolean;
   canReadRetention: boolean;
+  canReadScheduler: boolean;
   canRunRetention: boolean;
   canAnonymizeUsers: boolean;
   canWriteMembership: boolean;
@@ -26,6 +38,7 @@ export function Operations({
   const readableTabs: OperationsTab[] = [
     ...(canReadEmail ? ["outbox" as const] : []),
     ...(canReadRetention ? ["scheduled-work" as const] : []),
+    ...(canReadScheduler ? ["scheduler" as const] : []),
   ];
   const [tab, setTab] = useState<OperationsTab>(() =>
     readableTabs.includes(initialTab as OperationsTab) ? (initialTab as OperationsTab) : (readableTabs[0] ?? "outbox"),
@@ -55,7 +68,7 @@ export function Operations({
             role="tab"
             onClick={() => setTab(key)}
           >
-            {key === "outbox" ? "Email Outbox" : "Scheduled Work"}
+            {TAB_LABELS[key]}
           </button>
         ))}
       </nav>
@@ -69,6 +82,10 @@ export function Operations({
           canWriteMembership={canWriteMembership}
           canApproveMembership={canApproveMembership}
         />
+      ) : selectedTab === "scheduler" && canReadScheduler ? (
+        <Suspense fallback={<Spinner />}>
+          <ScheduledJobs />
+        </Suspense>
       ) : null}
     </section>
   );
