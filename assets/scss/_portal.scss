@@ -263,10 +263,19 @@ $portal-sidebar-width: 240px;
   white-space: nowrap;
 }
 
+// Slightly larger than the account-menu avatar so a headshot or initials
+// stays legible at row height in the representatives and users directories.
+.portal-user-avatar--table {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.75rem;
+}
+
+// Positioned to the trigger by Menu.tsx with fixed coordinates so overflow
+// ancestors (scrolling table wrappers) cannot clip it and opening it never
+// scrolls the page.
 .pkic-menu-popup {
-  position: absolute;
-  top: calc(100% + 0.25rem);
-  min-width: 100%;
+  position: fixed;
   z-index: 1050;
   display: flex;
   flex-direction: column;
@@ -275,20 +284,6 @@ $portal-sidebar-width: 240px;
   border: 1px solid #dee2e6;
   border-radius: 0.375rem;
   box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
-}
-
-.pkic-menu-start {
-  left: 0;
-}
-
-.pkic-menu-end {
-  right: 0;
-}
-
-// The sidebar footer sits at the viewport bottom, so its menu opens upward.
-.portal-sidebar-footer .pkic-menu-popup {
-  top: auto;
-  bottom: calc(100% + 0.25rem);
 }
 
 .pkic-menu-item {
@@ -311,6 +306,118 @@ $portal-sidebar-width: 240px;
   &:disabled {
     color: #adb5bd;
   }
+}
+
+// The public site uppercases every `main h5` for its editorial look; inside
+// the application that style shouts from card headers and dialog titles.
+// Restore sentence case for all portal headings.
+#portal-root h5,
+#portal-root .h5,
+.pkic-confirm-dialog h5 {
+  text-transform: none;
+  letter-spacing: normal;
+  color: inherit;
+}
+
+.pkic-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(33, 37, 41, 0.45);
+}
+
+.pkic-confirm-dialog {
+  width: 100%;
+  max-width: 420px;
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.25);
+}
+
+.pkic-confirm-title {
+  margin-bottom: 0.5rem;
+}
+
+.pkic-confirm-body {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #495057;
+}
+
+.pkic-confirm-consequences {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+  color: #495057;
+
+  li + li {
+    margin-top: 0.25rem;
+  }
+}
+
+.pkic-confirm-typed {
+  margin-bottom: 0.75rem;
+}
+
+.pkic-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.pkic-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.pkic-row-actions-status {
+  font-size: 0.8125rem;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.pkic-row-actions-trigger {
+  padding: 0 0.5rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #495057;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+
+  &:hover,
+  &:focus-visible {
+    background: #f0f7f4;
+    border-color: #dee2e6;
+    color: $portal-green;
+  }
+}
+
+.pkic-empty-state {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.pkic-empty-state-title {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.pkic-empty-state-body {
+  max-width: 34rem;
+  margin: 0 auto 0.75rem;
+  font-size: 0.875rem;
+  color: #6c757d;
 }
 
 .portal-section-title {

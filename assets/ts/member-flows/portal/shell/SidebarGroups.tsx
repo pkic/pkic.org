@@ -145,7 +145,12 @@ export function SidebarGroups({ session, onNavigate }: { session: PortalSession 
     const active = location === path || location.startsWith(`${path}/`);
     return (
       <li key={node.id}>
-        <Link href={path} class={`portal-sidebar-group${active ? " active" : ""}`} onClick={onNavigate}>
+        <Link
+          href={path}
+          title={node.name}
+          class={`portal-sidebar-group${active ? " active" : ""}`}
+          onClick={onNavigate}
+        >
           {node.parentContext && <span class="portal-sidebar-group-context">{node.parentContext}</span>}
           <span class="portal-sidebar-group-name">{node.name}</span>
         </Link>
