@@ -9,6 +9,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
+import { onlyPersona } from "./personas/catalog";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { auditLogListQuerySchema } from "../assets/shared/schemas/audit-log";
@@ -70,19 +72,6 @@ async function insertAuditLogRow(row: {
 async function getAdminUserId(): Promise<string> {
   const rows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1");
   return rows[0].id;
-}
-
-async function replaceAdminRoleWithStaffPermissions(userId: string, permissions: string[]): Promise<string> {
-  await env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(userId).run();
-  for (const permission of permissions) {
-    await env.DB.prepare(
-      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), userId, permission, userId)
-      .run();
-  }
-  return createAdminSession(env.DB, userId, `audit-log-${crypto.randomUUID()}`);
 }
 
 describe("GET /api/v1/audit-log", () => {
@@ -255,7 +244,10 @@ describe("GET /api/v1/audit-log", () => {
   });
 
   it("allows a non-admin staff identity with a global audit:read grant", async () => {
-    const staffToken = await replaceAdminRoleWithStaffPermissions(adminUserId, ["audit:read"]);
+    // Exactly the audit permission and nothing else, which is what makes this
+    // a statement about the grant rather than about being staff.
+    const reader = await seedPersona(env.DB, onlyPersona("audit:read"));
+    const staffToken = reader.token!;
     await insertAuditLogRow({ actorType: "system", action: "staff_visible", entityType: "event", secondsAgo: 1 });
 
     const response = await callAppGet("/api/v1/audit-log", staffToken);
@@ -266,7 +258,10 @@ describe("GET /api/v1/audit-log", () => {
   });
 
   it("denies a staff identity that has portal capacity but no global audit permission", async () => {
-    const staffToken = await replaceAdminRoleWithStaffPermissions(adminUserId, ["admin:read"]);
+    // Portal capacity without the audit permission: a real staff identity
+    // whose authority simply does not extend here.
+    const outsider = await seedPersona(env.DB, onlyPersona("admin:read"));
+    const staffToken = outsider.token!;
     const response = await callAppGet("/api/v1/audit-log", staffToken);
     expect(response.status).toBe(403);
   });
