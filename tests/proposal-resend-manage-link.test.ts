@@ -256,7 +256,7 @@ describe("proposal resend-manage-link endpoint", () => {
 
     const response = await callApi(
       { ...env, INTERNAL_SIGNING_SECRET: signingSecret },
-      `/api/v1/proposals/manage/${encodeURIComponent(token)}`,
+      `/api/v1/proposals/access/${encodeURIComponent(token)}`,
     );
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TOKEN_EXPIRED" } });

@@ -881,7 +881,7 @@ test.describe("browser workflows", () => {
       const fd = new FormData();
       fd.append("file", new File([blob], "headshot.jpg", { type: "image/jpeg" }));
       fd.append("consent", "true");
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/headshot`, {
+      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/headshot`, {
         method: "PUT",
         body: fd,
       });
@@ -913,7 +913,7 @@ test.describe("browser workflows", () => {
       const pdfContent =
         "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
       const file = new File([pdfContent], "presentation.pdf", { type: "application/pdf" });
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
+      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/presentation`, {
         method: "PUT",
         headers: {
           "content-type": file.type,
@@ -1050,7 +1050,7 @@ test.describe("browser workflows", () => {
     // PATCH a completely fabricated speaker token — must be 4xx
     const isolationStatus = await page.evaluate(async () => {
       const fakeSpkToken = encodeURIComponent("ISOLATION-FAKE-SPEAKER-TOKEN-000000");
-      const res = await fetch(`/api/v1/proposals/speaker/${fakeSpkToken}`, {
+      const res = await fetch(`/api/v1/proposals/speakers/access/${fakeSpkToken}/profile`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ biography: "injected bio" }),
@@ -1307,7 +1307,7 @@ test.describe("browser workflows", () => {
         formData.append("file", new File([bytes], "co-speaker-headshot.png", { type: "image/png" }));
 
         const res = await fetch(
-          `/api/v1/proposals/manage/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}/headshot`,
+          `/api/v1/proposals/access/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}/headshot`,
           {
             method: "PUT",
             body: formData,
@@ -1478,7 +1478,7 @@ test.describe("browser workflows", () => {
 
     // ── 7. Speaker downloads their presentation ───────────────────────────────
     const downloadStatus = await page.evaluate(async (token) => {
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation/download`);
+      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/presentation`);
       return { status: res.status, contentType: res.headers.get("content-type") };
     }, speakerToken);
     expect(downloadStatus.status).toBe(200);

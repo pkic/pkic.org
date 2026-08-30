@@ -3,7 +3,6 @@ import { Hono } from "hono";
 import { env } from "cloudflare:workers";
 import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
 import worker from "../functions/router";
-import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/access/[token]/headshot";
 
 function context(method: string) {
@@ -58,35 +57,35 @@ describe("HTTP method dispatch", () => {
     },
     {
       label: "speaker presentation",
-      path: "/proposals/speaker/token/presentation",
+      path: "/proposals/speakers/access/token/presentation",
       method: "POST",
-      allow: "PUT",
-      handler: speakerPresentationDispatch,
+      allow: "GET, PUT",
+      mounted: true,
     },
     {
       label: "speaker self-management",
-      path: "/proposals/speaker/token",
+      path: "/proposals/speakers/access/token",
       method: "DELETE",
-      allow: "GET, POST, PATCH",
+      allow: "GET",
       mounted: true,
     },
     {
       label: "proposer speaker invitation",
-      path: "/proposals/manage/token/speakers",
+      path: "/proposals/access/token/speakers",
       method: "GET",
       allow: "POST",
       mounted: true,
     },
     {
       label: "proposer speaker reminder",
-      path: "/proposals/manage/token/speakers/remind",
+      path: "/proposals/access/token/speakers/user/reminders",
       method: "GET",
       allow: "POST",
       mounted: true,
     },
     {
       label: "proposer speaker management",
-      path: "/proposals/manage/token/speakers/user",
+      path: "/proposals/access/token/speakers/user",
       method: "POST",
       allow: "PATCH, DELETE",
       mounted: true,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
+import { ALLOWED_PRESENTATION_MIME_TYPES } from "../assets/shared/presentation-upload";
 import { registrationConfirmResponseSchema } from "../assets/shared/schemas/registration";
 import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/router";
@@ -28,11 +29,32 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/registrations/access/{token}"].get).toBeDefined();
     expect(spec.paths["/api/v1/registrations/access/{token}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/registrations/manage/{token}"]).toBeUndefined();
-    expect(spec.paths["/api/v1/proposals/speaker/{token}"].get).toBeDefined();
-    expect(spec.paths["/api/v1/proposals/speaker/{token}"].post).toBeDefined();
-    expect(spec.paths["/api/v1/proposals/speaker/{token}"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/remind"].post).toBeDefined();
-    expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/{userId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/access/{token}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/access/{token}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/access/{token}/speakers"].post).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}"].post).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}"].patch).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/participation"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/profile"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/headshot"].get).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/headshot"].put).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/headshot"].delete).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/presentation"].get).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/presentation"].put).toBeDefined();
+    const presentationContent =
+      spec.paths["/api/v1/proposals/speakers/access/{token}/presentation"].get.responses["200"].content;
+    for (const mimeType of ALLOWED_PRESENTATION_MIME_TYPES) {
+      expect(presentationContent[mimeType]).toBeDefined();
+    }
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/reminder-preferences"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/access/{token}/speakers/{userId}/reminders"].post).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/access/{token}/speakers/{userId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/manage/{token}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/speaker/{token}"]).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/access/{token}/speakers/reminders"]).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/reminders"]).toBeUndefined();
+    expect(spec.paths["/api/v1/proposals/speakers/access/{token}/presentation/download"]).toBeUndefined();
     expect(spec.paths["/api/v1/forms"].get).toBeDefined();
     expect(spec.paths["/api/v1/forms"].post).toBeDefined();
     expect(spec.paths["/api/v1/members/applications"].post).toBeDefined();

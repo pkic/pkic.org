@@ -107,9 +107,9 @@ export const proposalResendSpeakerManageLinkSchema = proposalResendManageLinkSch
 
 export const inviteResendLinkSchema = proposalResendManageLinkSchema;
 
-export const proposalManageSchema = boundedJsonObject(
+export const proposalAccessPatchSchema = boundedJsonObject(
   {
-    action: z.enum(["update", "withdraw"]),
+    status: z.literal("withdrawn").optional(),
     proposalType: proposalTypeSchema.optional(),
     title: proposalTitleSchema.optional(),
     abstract: proposalAbstractSchema.optional(),
@@ -118,17 +118,17 @@ export const proposalManageSchema = boundedJsonObject(
   30_000,
 ).superRefine((value, context) => {
   const updateFields = [value.proposalType, value.title, value.abstract, value.details];
-  if (value.action === "update" && updateFields.every((field) => field === undefined)) {
+  if (value.status === undefined && updateFields.every((field) => field === undefined)) {
     context.addIssue({ code: "custom", message: "Provide at least one proposal field to update" });
   }
-  if (value.action === "withdraw" && updateFields.some((field) => field !== undefined)) {
+  if (value.status === "withdrawn" && updateFields.some((field) => field !== undefined)) {
     context.addIssue({ code: "custom", message: "A withdrawal cannot include proposal field updates" });
   }
 });
 
-export const proposalManageTokenParamsSchema = z.object({ token: tokenSchema });
+export const proposalAccessTokenParamsSchema = z.object({ token: tokenSchema });
 
-export const proposalManageRecordSchema = z.object({
+export const proposalAccessRecordSchema = z.object({
   id: databaseIdSchema,
   proposer_user_id: databaseIdSchema,
   status: proposalStatusSchema,
@@ -138,13 +138,13 @@ export const proposalManageRecordSchema = z.object({
   details: z.record(z.string(), z.unknown()).nullable(),
 });
 
-export const proposalManageSpeakerStatusSchema = z.enum(["pending", "invited", "confirmed", "declined"]);
-export type ProposalManageSpeakerStatus = z.infer<typeof proposalManageSpeakerStatusSchema>;
+export const proposalAccessSpeakerStatusSchema = z.enum(["pending", "invited", "confirmed", "declined"]);
+export type ProposalAccessSpeakerStatus = z.infer<typeof proposalAccessSpeakerStatusSchema>;
 /** Canonical transport fields shared by proposer and admin speaker views. */
 export const proposalSpeakerProfileSchema = z.object({
   userId: databaseIdSchema,
   role: speakerRoleSchema,
-  status: proposalManageSpeakerStatusSchema,
+  status: proposalAccessSpeakerStatusSchema,
   email: normalizedEmailSchema,
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
@@ -155,23 +155,23 @@ export const proposalSpeakerProfileSchema = z.object({
   headshotUrl: httpUrlSchema.nullable(),
 });
 
-export const proposalManageSpeakerSchema = proposalSpeakerProfileSchema.extend({
+export const proposalAccessSpeakerSchema = proposalSpeakerProfileSchema.extend({
   confirmedAt: z.string().nullable(),
   declinedAt: z.string().nullable(),
   bio: z.string().nullable(),
   headshotUploaded: z.boolean(),
 });
 
-export const proposalManageReadResponseSchema = successResponseSchema.extend({
-  proposal: proposalManageRecordSchema,
-  speakers: z.array(proposalManageSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
+export const proposalAccessReadResponseSchema = successResponseSchema.extend({
+  proposal: proposalAccessRecordSchema,
+  speakers: z.array(proposalAccessSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
 });
 
-export const proposalManageUpdateResponseSchema = successResponseSchema.extend({
-  proposal: proposalManageRecordSchema,
+export const proposalAccessPatchResponseSchema = successResponseSchema.extend({
+  proposal: proposalAccessRecordSchema,
 });
 
-export type ProposalManageResponse = z.infer<typeof proposalManageReadResponseSchema>;
+export type ProposalAccessResponse = z.infer<typeof proposalAccessReadResponseSchema>;
 
 export const finalizeProposalSchema = z
   .object({
@@ -247,20 +247,16 @@ export const speakerProfilePatchSchema = z.object({
   links: linksSchema.optional(),
 });
 
-export const speakerParticipationActionSchema = z.discriminatedUnion("action", [
+export const speakerParticipationPatchSchema = z.discriminatedUnion("status", [
   z.object({
-    action: z.literal("confirm"),
+    status: z.literal("confirmed"),
     consents: z.array(consentItemSchema).min(1).max(20),
   }),
   z.object({
-    action: z.literal("decline"),
+    status: z.literal("declined"),
     reason: z.string().trim().max(2000).optional(),
   }),
 ]);
-
-export const proposalSpeakerReminderRequestSchema = z.object({
-  userId: databaseIdSchema,
-});
 
 export const proposerSpeakerPatchSchema = speakerProfilePatchSchema.extend({
   role: speakerRoleSchema.optional(),
@@ -292,19 +288,3 @@ export const coSpeakerInviteResponseSchema = successResponseSchema.extend({
   expiresAt: utcInstantSchema,
   queued: z.boolean(),
 });
-
-export const coSpeakerInviteRouteSchema = {
-  tags: ["Proposals", "Speakers"],
-  summary: "Invite a co-speaker to a proposal",
-  request: {
-    params: proposalManageTokenParamsSchema,
-    body: { content: { "application/json": { schema: coSpeakerInviteSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Co-speaker invitation state, including whether a new delivery was queued.",
-      content: { "application/json": { schema: coSpeakerInviteResponseSchema } },
-    },
-    "400": { description: "Proposal is closed or the request is invalid." },
-  },
-};

@@ -41,8 +41,11 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/leadership/consortium-chairs",
     "/api/v1/invites/no-such-token/info",
     "/api/v1/registrations/access/no-such-token",
-    "/api/v1/proposals/manage/no-such-token",
-    "/api/v1/proposals/speaker/no-such-token",
+    "/api/v1/proposals/access/no-such-token",
+    `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/headshot`,
+    "/api/v1/proposals/speakers/access/no-such-token",
+    "/api/v1/proposals/speakers/access/no-such-token/headshot",
+    "/api/v1/proposals/speakers/access/no-such-token/presentation",
   ];
 
   it.each(declaredPublic)("%s is reachable without credentials, as declared", async (path) => {
@@ -52,6 +55,127 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     expect(response.status).not.toBe(401);
     expect(response.status).not.toBe(403);
   });
+
+  const declaredPublicProposalMutations: Array<{
+    label: string;
+    path: string;
+    init: () => RequestInit;
+  }> = [
+    {
+      label: "proposal capability update",
+      path: "/api/v1/proposals/access/no-such-token",
+      init: () => ({
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "withdrawn" }),
+      }),
+    },
+    {
+      label: "co-speaker invitation",
+      path: "/api/v1/proposals/access/no-such-token/speakers",
+      init: () => ({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "speaker@example.test", role: "speaker" }),
+      }),
+    },
+    {
+      label: "proposal speaker profile update",
+      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}`,
+      init: () => ({
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: "speaker" }),
+      }),
+    },
+    {
+      label: "proposal speaker removal",
+      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}`,
+      init: () => ({ method: "DELETE" }),
+    },
+    {
+      label: "proposal speaker reminder",
+      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/reminders`,
+      init: () => ({ method: "POST" }),
+    },
+    {
+      label: "proposal speaker headshot upload",
+      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/headshot`,
+      init: () => ({
+        method: "PUT",
+        headers: { "content-type": "image/png" },
+        body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+      }),
+    },
+    {
+      label: "proposal speaker headshot removal",
+      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/headshot`,
+      init: () => ({ method: "DELETE" }),
+    },
+    {
+      label: "speaker participation update",
+      path: "/api/v1/proposals/speakers/access/no-such-token/participation",
+      init: () => ({
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "declined", reason: "Unavailable" }),
+      }),
+    },
+    {
+      label: "speaker profile update",
+      path: "/api/v1/proposals/speakers/access/no-such-token/profile",
+      init: () => ({
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ biography: "Updated speaker profile" }),
+      }),
+    },
+    {
+      label: "speaker headshot upload",
+      path: "/api/v1/proposals/speakers/access/no-such-token/headshot",
+      init: () => ({
+        method: "PUT",
+        headers: { "content-type": "image/png" },
+        body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+      }),
+    },
+    {
+      label: "speaker headshot removal",
+      path: "/api/v1/proposals/speakers/access/no-such-token/headshot",
+      init: () => ({ method: "DELETE" }),
+    },
+    {
+      label: "speaker presentation upload",
+      path: "/api/v1/proposals/speakers/access/no-such-token/presentation",
+      init: () => ({
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          "x-presentation-file-name": "slides.pdf",
+          "x-presentation-file-size": "4",
+        },
+        body: new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+      }),
+    },
+    {
+      label: "speaker reminder preference update",
+      path: "/api/v1/proposals/speakers/access/no-such-token/reminder-preferences",
+      init: () => ({
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ state: "active" }),
+      }),
+    },
+  ];
+
+  it.each(declaredPublicProposalMutations)(
+    "$label is reachable without credentials, as declared",
+    async ({ path, init }) => {
+      const response = await callApi(env, path, init());
+      expect({ path, status: response.status }).not.toMatchObject({ status: 401 });
+      expect({ path, status: response.status }).not.toMatchObject({ status: 403 });
+    },
+  );
 
   const declaredSessionRequired = [
     "/api/v1/auth/session",

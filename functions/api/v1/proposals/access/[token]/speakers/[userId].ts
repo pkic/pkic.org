@@ -10,16 +10,16 @@ import { successResponseSchema } from "../../../../../../../assets/shared/schema
 import { requireInternalSecret } from "../../../../../../_lib/request";
 import { proposalSpeakerRemovalResponseSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
 import {
-  proposerManagedSpeakerDeleteRouteSchema,
-  proposerManagedSpeakerPatchRouteSchema,
+  proposalAccessSpeakerDeleteRouteSchema,
+  proposalAccessSpeakerPatchRouteSchema,
 } from "../../../../../../../assets/shared/schemas/route-contracts-public-proposals";
 import { removeProposalSpeakerByProposer } from "../../../../../../_lib/services/proposal-speaker-removal";
 
-type ProposalManageSpeakerContext = AdminContext<{ token: string; userId: string }>;
+type ProposalAccessSpeakerContext = AdminContext<{ token: string; userId: string }>;
 
 async function handleProposalSpeakerPatch(
-  c: ProposalManageSpeakerContext,
-  data: ValidatedData<typeof proposerManagedSpeakerPatchRouteSchema>,
+  c: ProposalAccessSpeakerContext,
+  data: ValidatedData<typeof proposalAccessSpeakerPatchRouteSchema>,
 ): Promise<Response> {
   const { proposal, speaker } = await getProposerManagedSpeakerContext(
     c.env.DB,
@@ -47,7 +47,7 @@ async function handleProposalSpeakerPatch(
 
 export async function onRequestDelete(
   c: any,
-  data: ValidatedData<typeof proposerManagedSpeakerDeleteRouteSchema>,
+  data: ValidatedData<typeof proposalAccessSpeakerDeleteRouteSchema>,
 ): Promise<Response> {
   c.set?.("sensitive", true);
   const params = data.params;
@@ -59,8 +59,8 @@ export async function onRequestDelete(
   return json(proposalSpeakerRemovalResponseSchema.parse(result));
 }
 
-export const ProposalsManageTokenSpeakerPatch = openApiRoute(
-  proposerManagedSpeakerPatchRouteSchema,
+export const ProposalAccessSpeakerPatch = openApiRoute(
+  proposalAccessSpeakerPatchRouteSchema,
   handleProposalSpeakerPatch,
-  (c: ProposalManageSpeakerContext) => c.set?.("sensitive", true),
+  (c: ProposalAccessSpeakerContext) => c.set?.("sensitive", true),
 );

@@ -1,5 +1,5 @@
 import { render } from "preact";
-import { getJson, patchJson, postJson } from "../shared/api-client";
+import { getJson, patchJson } from "../shared/api-client";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
@@ -15,13 +15,14 @@ import {
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
 import { successResponseSchema } from "../../shared/schemas/api-common";
-import { speakerProfilePatchSchema, speakerParticipationActionSchema } from "../../shared/schemas/proposal-management";
+import { speakerProfilePatchSchema, speakerParticipationPatchSchema } from "../../shared/schemas/proposal-management";
+import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
 
 async function main(): Promise<void> {
   const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
     selector: "[data-event-speaker-manage]",
     request: async (token, boot) =>
-      getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, speakerSelfServiceReadResponseSchema),
+      getJson(proposalSpeakerAccessPath(boot.apiBase, token), speakerSelfServiceReadResponseSchema),
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
@@ -115,9 +116,9 @@ async function main(): Promise<void> {
 
     await withLoadingButton(findSubmitButton(confirmForm), async () => {
       try {
-        await postJson(
-          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`,
-          speakerParticipationActionSchema.parse({ action: "confirm", consents }),
+        await patchJson(
+          proposalSpeakerAccessPath(boot.apiBase, token, "participation"),
+          speakerParticipationPatchSchema.parse({ status: "confirmed", consents }),
           speakerParticipationResponseSchema,
         );
         window.location.reload();
@@ -142,10 +143,10 @@ async function main(): Promise<void> {
   declineConfirm?.addEventListener("click", async () => {
     await withLoadingButton(declineConfirm, async () => {
       try {
-        await postJson(
-          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`,
-          speakerParticipationActionSchema.parse({
-            action: "decline",
+        await patchJson(
+          proposalSpeakerAccessPath(boot.apiBase, token, "participation"),
+          speakerParticipationPatchSchema.parse({
+            status: "declined",
             reason: declineReason?.value.trim() || undefined,
           }),
           speakerParticipationResponseSchema,
@@ -199,7 +200,7 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(profileForm), async () => {
       try {
         await patchJson(
-          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`,
+          proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
           speakerProfilePatchSchema.parse({
             firstName: firstNameField?.value.trim() || null,
             lastName: lastNameField?.value.trim() || null,
@@ -230,8 +231,8 @@ async function main(): Promise<void> {
       root: boot.root,
       initialHeadshotUrl: data.profile.headshotUrl,
       statusEl: boot.statusEl,
-      uploadUrl: `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`,
-      deleteUrl: `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`,
+      uploadUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
+      deleteUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
       emptyLabel: "No headshot uploaded yet.",
       uploadSuccessStatus: "Headshot uploaded successfully.",
       deleteSuccessStatus: "Headshot removed successfully.",

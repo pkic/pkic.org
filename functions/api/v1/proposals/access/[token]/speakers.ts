@@ -1,7 +1,7 @@
 /**
  * Proposer-only: invite a co-speaker to an existing proposal.
  *
- * POST /api/v1/proposals/manage/[token]/speakers
+ * POST /api/v1/proposals/access/[token]/speakers
  *   Body: { email, firstName?, lastName?, role }
  *   Auth: possession of the proposal manage token proves proposer identity.
  *

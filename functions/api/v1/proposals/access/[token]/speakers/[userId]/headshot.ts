@@ -15,11 +15,12 @@ import {
 } from "../../../../../../../_lib/services/proposal-speaker-headshot";
 import { readValidatedUploadedImage } from "../../../../../../../_lib/utils/image-upload";
 import {
-  proposerManagedSpeakerHeadshotDeleteRouteSchema,
-  proposerManagedSpeakerHeadshotGetRouteSchema,
-  proposerManagedSpeakerHeadshotPutRouteSchema,
+  proposalAccessSpeakerHeadshotDeleteRouteSchema,
+  proposalAccessSpeakerHeadshotGetRouteSchema,
+  proposalAccessSpeakerHeadshotPutRouteSchema,
 } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { SPEAKER_HEADSHOT_MAX_BYTES } from "../../../../../../../../assets/shared/schemas/images";
+import { proposalAccessPath } from "../../../../../../../../assets/shared/proposal-access-paths";
 
 interface HeadshotParams {
   token: string;
@@ -66,7 +67,7 @@ async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response>
   return json({
     success: true,
     r2Key,
-    headshotUrl: `${origin}/api/v1/proposals/manage/${encodeURIComponent(params.token)}/speakers/${encodeURIComponent(speaker.user_id)}/headshot?v=${encodeURIComponent(String(Date.now()))}`,
+    headshotUrl: `${proposalAccessPath(`${origin}/api/v1`, params.token, "speakers", speaker.user_id, "headshot")}?v=${encodeURIComponent(String(Date.now()))}`,
   });
 }
 
@@ -93,19 +94,19 @@ async function onDelete(c: AdminContext, params: HeadshotParams): Promise<Respon
   return json({ success: true });
 }
 
-export const ProposerManagedSpeakerHeadshotGet = openApiRoute(proposerManagedSpeakerHeadshotGetRouteSchema, (c, data) =>
+export const ProposalAccessSpeakerHeadshotGet = openApiRoute(proposalAccessSpeakerHeadshotGetRouteSchema, (c, data) =>
   onGet(c, data.params as HeadshotParams),
 );
 
-export class ProposerManagedSpeakerHeadshotPut extends OpenAPIRoute {
-  schema = proposerManagedSpeakerHeadshotPutRouteSchema;
+export class ProposalAccessSpeakerHeadshotPut extends OpenAPIRoute {
+  schema = proposalAccessSpeakerHeadshotPutRouteSchema;
 
   async handle(c: AdminContext) {
-    return onPut(c, c.req.param() as unknown as HeadshotParams);
+    return onPut(c, { token: c.req.param("token"), userId: c.req.param("userId") });
   }
 }
 
-export const ProposerManagedSpeakerHeadshotDelete = openApiRoute(
-  proposerManagedSpeakerHeadshotDeleteRouteSchema,
+export const ProposalAccessSpeakerHeadshotDelete = openApiRoute(
+  proposalAccessSpeakerHeadshotDeleteRouteSchema,
   (c, data) => onDelete(c, data.params as HeadshotParams),
 );

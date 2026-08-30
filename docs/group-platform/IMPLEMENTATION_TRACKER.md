@@ -1774,10 +1774,10 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the registration
-      capability-resource cutover with 2,371 passing backend tests (one additional
-      skipped), 337 frontend tests, and 88 tooling tests. Type checks,
-      ESLint, SQL projection,
+      Current evidence: the complete gate passes after the proposal and
+      proposal-speaker capability-resource cutover with 2,389 passing backend
+      tests (one skipped), 337 frontend tests, and 88 tooling tests. Type
+      checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
       An earlier combined run exposed a nondeterministic Google Groups boundary
@@ -1840,23 +1840,19 @@ Status: In progress
       scheduled-job registry, pauses and resumes one job through the canonical
       PATCH resource, and proves the removed pause and resume action routes are
       not requested.
-- [x] Run the complete pnpm run test:e2e gate because navigation and portal
+- [ ] Run the complete pnpm run test:e2e gate because navigation and portal
       workflows change.
-      Current evidence: all 52 browser tests pass in one uninterrupted
-      2.5-minute run against freshly seeded local Worker, D1, R2, and
-      intercepted SendGrid environments. This checkpoint includes the unified
-      user sign-in path, staff/member/dual-capacity personas, group management,
-      public event flows, and every permission-derived global destination. The
-      full run exposed and now covers two real client races: event profile data
-      can no longer reset a create form after the user starts typing, and a
-      delayed managed-group auto-selection can no longer override navigation to
-      another portal section. The mailing-list journey also waits for the
-      requested group and its server-backed table before editing, then asserts
-      the canonical create response. Each independently seeded sign-in identity
-      uses a stable TEST-NET client address, so the serial local runner does not
-      collapse unrelated users into one per-IP rate-limit bucket while retaining
-      the production-equivalent limiter. Browser, Worker, and Wrangler temporary
-      state for this checkpoint was kept on `/Volumes/ScanDisk`.
+      Current evidence: an earlier uninterrupted 52-test checkpoint passed
+      against freshly seeded local Worker, D1, R2, and intercepted SendGrid
+      environments. The current expanded 79-test run completed 78 tests and
+      exposed one real narrow-screen backdrop geometry defect: the drawer
+      covered the center point Playwright selected for the backdrop. The
+      backdrop now occupies only the visible area beside the 240px drawer, and
+      the complete mobile-navigation file passes 4/4 after the correction. All
+      affected proposal submission, speaker invitation, confirmation, profile,
+      headshot, presentation, decline, and resend journeys passed in the broad
+      run. A new uninterrupted current 79-test run remains required before
+      final handoff; the combined evidence is not represented as 79/79.
 - [x] Inspect browser rendering for desktop, narrow navigation, keyboard access,
       error, empty, loading, and pagination states.
       Evidence: the identity phase covers real-browser desktop and 390x844
@@ -1935,9 +1931,17 @@ Status: In progress
       `/api/v1/registrations/access/:token`; the actor-oriented
       `/api/v1/registrations/manage/:token` family is absent from routing and
       OpenAPI without an alias. Its existing stateless, secret-generation-bound
-      authorization model is unchanged. Proposal capability URLs that still
-      use actor-oriented path segments remain a separate cleanup slice; this
-      checkpoint does not claim that every API path is final.
+      authorization model is unchanged. Proposal and proposal-speaker
+      self-service now follow the same resource model under
+      `/api/v1/proposals/access/:token` and
+      `/api/v1/proposals/speakers/access/:token`. Participation, profile,
+      headshot, presentation, and reminder preferences are nested resources
+      expressed through HTTP methods; the actor-oriented `/manage` and
+      singular `/speaker` paths, reminder action path, and presentation
+      download action path are absent without aliases. One shared path builder
+      serves browser and Worker URL producers, while the existing stateless,
+      time-limited, recipient-bound, secret-generation-bound capabilities
+      remain unchanged and create no session or cookie.
       Migration 0035 remains consolidated and locally
       verified, but its preview and production ledger state must be reverified
       at handoff. The remaining unchecked tracker items are the authoritative

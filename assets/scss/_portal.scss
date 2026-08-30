@@ -4,6 +4,7 @@ $portal-bg: #f4f5f7;
 $portal-surface: #fff;
 $portal-border: #dee2e6;
 $portal-green: #198754;
+$portal-sidebar-width: 240px;
 
 .portal-organization-logo {
   max-height: 140px;
@@ -77,8 +78,8 @@ $portal-green: #198754;
 }
 
 #portal-sidebar {
-  width: 240px;
-  min-width: 240px;
+  width: $portal-sidebar-width;
+  min-width: $portal-sidebar-width;
   background: $portal-surface;
   border-right: 1px solid $portal-border;
   display: flex;
@@ -223,7 +224,7 @@ $portal-green: #198754;
   #portal-sidebar-backdrop.active {
     display: block;
     position: fixed;
-    inset: var(--pkic-navbar-height, 57px) 0 0;
+    inset: var(--pkic-navbar-height, 57px) 0 0 $portal-sidebar-width;
     background: rgba(0, 0, 0, 0.35);
     z-index: 205;
   }

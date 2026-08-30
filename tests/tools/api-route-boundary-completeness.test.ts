@@ -8,7 +8,6 @@ const RAW_ROUTE_ALLOWLIST = new Set([
   "functions/api/v1/donations/router.ts:get:/checkouts/:sessionId/badge",
   "functions/api/v1/registrations/router.ts:get:/referrals/:code/badge",
   "functions/api/v1/users/[userId]/headshots/router.ts:get:/:file",
-  "functions/api/v1/proposals/speaker/[token]/router.ts:get:/presentation/download",
 ]);
 const APPROVED_API_ROOTS = new Set([
   "analytics",

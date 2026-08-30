@@ -4,18 +4,17 @@ import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "
 import { AppError } from "../errors";
 import { getSpeakerByManageToken } from "./proposals";
 
-export type SpeakerPresentationReminderAction = "postpone_7d" | "pause_30d" | "resume";
+export type SpeakerPresentationReminderState = "active" | "postponed" | "paused";
 
 export async function setSpeakerPresentationReminderPreference(
   db: DatabaseLike,
   manageToken: string,
   signingSecret: string,
-  action: SpeakerPresentationReminderAction,
+  state: SpeakerPresentationReminderState,
 ): Promise<{ state: "active" | "postponed" | "paused"; pausedUntil: string | null }> {
   const { speaker, proposal } = await getSpeakerByManageToken(db, manageToken, signingSecret);
   const now = nowIso();
-  const pausedUntil = action === "resume" ? null : addHours(now, action === "postpone_7d" ? 24 * 7 : 24 * 30);
-  const state = action === "resume" ? "active" : action === "postpone_7d" ? "postponed" : "paused";
+  const pausedUntil = state === "active" ? null : addHours(now, state === "postponed" ? 24 * 7 : 24 * 30);
 
   try {
     await db.batch([
@@ -48,7 +47,7 @@ export async function setSpeakerPresentationReminderPreference(
         "presentation_reminder_preference_updated",
         "proposal_speaker",
         speaker.id,
-        { action, pausedUntil },
+        { state, pausedUntil },
         now,
       ),
     ]);

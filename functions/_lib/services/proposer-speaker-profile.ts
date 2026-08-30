@@ -14,7 +14,7 @@ import { getProposalByManageToken, type ProposalRecord } from "./proposals";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
-import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
+import type { ProposalAccessSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import {
   updateProposalProfileOverrides,
   type ProposalProfilePatch,
@@ -25,7 +25,7 @@ export interface ProposerManagedSpeaker {
   id: string;
   user_id: string;
   role: ProposalSpeakerRole;
-  status: ProposalManageSpeakerStatus;
+  status: ProposalAccessSpeakerStatus;
   first_name: string | null;
   last_name: string | null;
   organization_name: string | null;

@@ -1,50 +1,50 @@
 /**
- * Speaker self-management endpoint (token-authenticated).
+ * Proposal-speaker capability endpoint.
  *
- * GET  /api/v1/proposals/speaker/[token]
+ * GET  /api/v1/proposals/speakers/access/[token]
  *   Returns the speaker's participation status, proposal details, and profile.
  *
- * POST /api/v1/proposals/speaker/[token]
- *   Body: { action: "confirm", termsAccepted: true }   — confirm participation
- *         { action: "decline", reason?: string }        — decline participation
+ * PATCH /api/v1/proposals/speakers/access/[token]/participation
+ *   Body: { status: "confirmed", consents } or { status: "declined", reason? }
  *
- * PATCH /api/v1/proposals/speaker/[token]
+ * PATCH /api/v1/proposals/speakers/access/[token]/profile
  *   Body: { biography?: string, links?: string[] }      — update speaker profile (bio / links)
  *
  * For headshot and presentation file uploads see:
- *   PUT /api/v1/proposals/speaker/[token]/headshot
- *   PUT /api/v1/proposals/speaker/[token]/presentation
+ *   PUT /api/v1/proposals/speakers/access/[token]/headshot
+ *   PUT /api/v1/proposals/speakers/access/[token]/presentation
  */
-import { handleError, json } from "../../../../_lib/http";
+import { handleError, json } from "../../../../../_lib/http";
 import type { ValidatedData } from "chanfana";
-import { getSpeakerByManageToken } from "../../../../_lib/services/proposals";
+import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import {
   confirmSpeakerParticipation,
   declineSpeakerParticipation,
   updateSpeakerProfile,
   getProposalCoSpeakers,
   getPresentationUploader,
-} from "../../../../_lib/services/proposals-speaker-profile";
-import { getRequiredTerms } from "../../../../_lib/services/events";
-import { speakerPresentationPageUrl } from "../../../../_lib/services/frontend-links";
-import { requireInternalSecret } from "../../../../_lib/request";
-import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
-import { isProposalSpeakerRosterEditableStatus } from "../../../../../assets/shared/schemas/proposal-status";
-import { getEventById } from "../../../../_lib/services/events";
-import { requestDb } from "../../../../_lib/db/context";
-import { requiredTermReadModel } from "../../../../_lib/services/event-read-models";
+} from "../../../../../_lib/services/proposals-speaker-profile";
+import { getRequiredTerms } from "../../../../../_lib/services/events";
+import { speakerPresentationPageUrl } from "../../../../../_lib/services/frontend-links";
+import { requireInternalSecret } from "../../../../../_lib/request";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { parseLinksJson, serializeLinks } from "../../../../../../assets/shared/schemas/links";
+import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
+import { getEventById } from "../../../../../_lib/services/events";
+import { requestDb } from "../../../../../_lib/db/context";
+import { requiredTermReadModel } from "../../../../../_lib/services/event-read-models";
 import {
   speakerParticipationResponseSchema,
   speakerSelfServiceReadResponseSchema,
-} from "../../../../../assets/shared/schemas/speaker-self-service";
+} from "../../../../../../assets/shared/schemas/speaker-self-service";
 import {
   proposalSpeakerParticipationRouteSchema,
   proposalSpeakerProfileUpdateRouteSchema,
   proposalSpeakerSelfServiceReadRouteSchema,
-} from "../../../../../assets/shared/schemas/route-contracts-public-proposals";
-import { successResponseSchema } from "../../../../../assets/shared/schemas/api-common";
-import { openApiRoute } from "../../../../_lib/openapi/route";
+} from "../../../../../../assets/shared/schemas/route-contracts-public-proposals";
+import { successResponseSchema } from "../../../../../../assets/shared/schemas/api-common";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { proposalSpeakerAccessPath } from "../../../../../../assets/shared/proposal-access-paths";
 
 export async function onRequestGet(
   c: any,
@@ -98,7 +98,7 @@ export async function onRequestGet(
           headshotUploaded: Boolean(user.headshot_r2_key),
           headshotUpdatedAt: user.headshot_updated_at,
           headshotUrl: user.headshot_r2_key
-            ? `${appBaseUrl}/api/v1/proposals/speaker/${encodeURIComponent(token)}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
+            ? `${proposalSpeakerAccessPath(`${appBaseUrl}/api/v1`, token, "headshot")}?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
             : null,
         },
       }),
@@ -108,7 +108,7 @@ export async function onRequestGet(
   }
 }
 
-export async function onRequestPost(
+export async function onRequestParticipationPatch(
   c: any,
   data: ValidatedData<typeof proposalSpeakerParticipationRouteSchema>,
 ): Promise<Response> {
@@ -116,7 +116,7 @@ export async function onRequestPost(
     const body = data.body;
     const token = data.params.token;
 
-    if (body.action === "confirm") {
+    if (body.status === "confirmed") {
       await confirmSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
         consents: body.consents,
         ip: c.req.raw.headers.get("cf-connecting-ip"),
@@ -134,7 +134,7 @@ export async function onRequestPost(
   }
 }
 
-export async function onRequestPatch(
+export async function onRequestProfilePatch(
   c: any,
   data: ValidatedData<typeof proposalSpeakerProfileUpdateRouteSchema>,
 ): Promise<Response> {
@@ -189,18 +189,18 @@ function markSensitive(c: any): void {
   c.set("sensitive", true);
 }
 
-export const ProposalsSpeakerTokenGet = openApiRoute(
+export const ProposalSpeakerAccessGet = openApiRoute(
   proposalSpeakerSelfServiceReadRouteSchema,
   onRequestGet,
   markSensitive,
 );
-export const ProposalsSpeakerTokenPost = openApiRoute(
+export const ProposalSpeakerAccessParticipationPatch = openApiRoute(
   proposalSpeakerParticipationRouteSchema,
-  onRequestPost,
+  onRequestParticipationPatch,
   markSensitive,
 );
-export const ProposalsSpeakerTokenPatch = openApiRoute(
+export const ProposalSpeakerAccessProfilePatch = openApiRoute(
   proposalSpeakerProfileUpdateRouteSchema,
-  onRequestPatch,
+  onRequestProfilePatch,
   markSensitive,
 );

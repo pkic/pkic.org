@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { userIdParamsSchema, proposalSpeakerIdParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { proposalManageTokenParamsSchema } from "./proposal-management";
+import { proposalAccessTokenParamsSchema } from "./proposal-management";
 import { headshotImageUploadFormSchema, headshotUploadResponseSchema } from "./registration";
+import { publicOperation } from "./route-contract";
 
 const rawHeadshotImageSchema = z.any().describe("Raw JPEG, PNG, or WebP image bytes");
 const headshotUploadRequestContent = {
@@ -84,15 +85,15 @@ export const userHeadshotPutRouteSchema = {
   },
 };
 
-const proposalSpeakerHeadshotParamsSchema = proposalManageTokenParamsSchema;
-const proposerManagedSpeakerHeadshotParamsSchema = proposalManageTokenParamsSchema.extend({
+const proposalSpeakerHeadshotParamsSchema = proposalAccessTokenParamsSchema;
+const proposalAccessSpeakerHeadshotParamsSchema = proposalAccessTokenParamsSchema.extend({
   userId: databaseIdSchema,
 });
 const managedProposalSpeakerHeadshotParamsSchema = proposalSpeakerIdParamsSchema;
 
 type HeadshotParamsSchema =
   | typeof proposalSpeakerHeadshotParamsSchema
-  | typeof proposerManagedSpeakerHeadshotParamsSchema
+  | typeof proposalAccessSpeakerHeadshotParamsSchema
   | typeof managedProposalSpeakerHeadshotParamsSchema;
 type HeadshotRouteOptions = {
   tags?: string[];
@@ -113,7 +114,7 @@ function privateHeadshotGetRouteSchema<TParams extends HeadshotParamsSchema>(
   return {
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
-    ...(options.auth ? { "x-pkic-auth": options.auth } : {}),
+    ...(options.auth ? { "x-pkic-auth": options.auth } : publicOperation()),
     request: { params },
     responses: {
       "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
@@ -132,7 +133,7 @@ function headshotPutRouteSchema<TParams extends HeadshotParamsSchema>(
   return {
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
-    ...(options.auth ? { "x-pkic-auth": options.auth } : {}),
+    ...(options.auth ? { "x-pkic-auth": options.auth } : publicOperation()),
     request: {
       params,
       body: { content: headshotUploadRequestContent, required: true },
@@ -157,7 +158,7 @@ function headshotDeleteRouteSchema<TParams extends HeadshotParamsSchema>(
   return {
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
-    ...(options.auth ? { "x-pkic-auth": options.auth } : {}),
+    ...(options.auth ? { "x-pkic-auth": options.auth } : publicOperation()),
     request: { params },
     responses: {
       "200": {
@@ -182,17 +183,17 @@ export const proposalSpeakerHeadshotDeleteRouteSchema = headshotDeleteRouteSchem
   "Delete the current speaker headshot",
   proposalSpeakerHeadshotParamsSchema,
 );
-export const proposerManagedSpeakerHeadshotGetRouteSchema = privateHeadshotGetRouteSchema(
+export const proposalAccessSpeakerHeadshotGetRouteSchema = privateHeadshotGetRouteSchema(
   "Download a proposal speaker headshot",
-  proposerManagedSpeakerHeadshotParamsSchema,
+  proposalAccessSpeakerHeadshotParamsSchema,
 );
-export const proposerManagedSpeakerHeadshotPutRouteSchema = headshotPutRouteSchema(
+export const proposalAccessSpeakerHeadshotPutRouteSchema = headshotPutRouteSchema(
   "Upload or replace a proposal speaker headshot",
-  proposerManagedSpeakerHeadshotParamsSchema,
+  proposalAccessSpeakerHeadshotParamsSchema,
 );
-export const proposerManagedSpeakerHeadshotDeleteRouteSchema = headshotDeleteRouteSchema(
+export const proposalAccessSpeakerHeadshotDeleteRouteSchema = headshotDeleteRouteSchema(
   "Delete a proposal speaker headshot",
-  proposerManagedSpeakerHeadshotParamsSchema,
+  proposalAccessSpeakerHeadshotParamsSchema,
 );
 
 export const userHeadshotDeleteRouteSchema = {

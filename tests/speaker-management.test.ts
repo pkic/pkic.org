@@ -2,9 +2,9 @@
  * speaker-management.test.ts
  *
  * Covers:
- *  - GET  /api/v1/proposals/speaker/:token       (speaker self-view)
- *  - POST /api/v1/proposals/speaker/:token       (confirm / decline)
- *  - PATCH /api/v1/proposals/speaker/:token       (update profile)
+ *  - GET  /api/v1/proposals/speakers/access/:token       (speaker self-view)
+ *  - PATCH /api/v1/proposals/speakers/access/:token/participation (confirm / decline)
+ *  - PATCH /api/v1/proposals/speakers/access/:token/profile (update profile)
  *  - POST /api/v1/events/:slug/speakers/invitations   (attendee nominates speakers)
  */
 
@@ -159,7 +159,7 @@ describe("speaker self-management endpoints", () => {
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
 
     const response = await speakerGet(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}`), {
         token: speakerManageToken,
       }),
     );
@@ -190,7 +190,7 @@ describe("speaker self-management endpoints", () => {
     await setupWorkflow();
 
     const response = await speakerGet(
-      createContext(env, new Request("https://app.test/api/v1/proposals/speaker/bogus-token-0000"), {
+      createContext(env, new Request("https://app.test/api/v1/proposals/speakers/access/bogus-token-0000"), {
         token: "bogus-token-0000",
       }),
     );
@@ -217,7 +217,7 @@ describe("speaker self-management endpoints", () => {
       .run();
 
     const response = await speakerGet(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}`), {
         token: speakerManageToken,
       }),
     );
@@ -231,11 +231,11 @@ describe("speaker self-management endpoints", () => {
     const confirmation = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "confirm",
+            status: "confirmed",
             consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
         }),
@@ -250,7 +250,7 @@ describe("speaker self-management endpoints", () => {
       .run();
 
     const response = await speakerGet(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}`), {
         token: speakerManageToken,
       }),
     );
@@ -274,7 +274,7 @@ describe("speaker self-management endpoints", () => {
     );
     const bucket = new FakeUploadsBucket();
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/presentation`, {
         method: "PUT",
         body: upload.body,
         headers: upload.headers,
@@ -298,11 +298,14 @@ describe("speaker self-management endpoints", () => {
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${encodeURIComponent(speakerManageToken)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
-      }),
+      new Request(
+        `https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(speakerManageToken)}/participation`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "approve" }),
+        },
+      ),
       env,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -334,7 +337,7 @@ describe("speaker self-management endpoints", () => {
 
     const response = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
           method: "DELETE",
           headers: { "content-type": "application/json" },
@@ -390,7 +393,7 @@ describe("speaker self-management endpoints", () => {
     );
 
     const staleCapability = await speakerGet(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}`), {
         token: speakerManageToken,
       }),
     );
@@ -434,7 +437,7 @@ describe("speaker self-management endpoints", () => {
 
     const proposerResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${proposal.proposer_user_id}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${proposal.proposer_user_id}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,
@@ -488,10 +491,10 @@ describe("speaker self-management endpoints", () => {
       [proposalId],
     );
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "withdraw" }),
+        body: JSON.stringify({ status: "withdrawn" }),
       }),
       env,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -551,10 +554,10 @@ describe("speaker self-management endpoints", () => {
     ).run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "withdraw" }),
+        body: JSON.stringify({ status: "withdrawn" }),
       }),
       env,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -673,7 +676,7 @@ describe("speaker self-management endpoints", () => {
 
     const selfRemoval = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${before.proposer_user_id}`,
+        `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${before.proposer_user_id}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
       env,
@@ -719,7 +722,7 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toEqual([{ user_id: coSpeakerUserId, role: "speaker", subrole: "co_speaker" }]);
 
     const staleProposalCapability = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`),
+      new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}`),
       env,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -757,7 +760,7 @@ describe("speaker self-management endpoints", () => {
     const replacementToken = new URL(deliveredTransfer.manageUrl).searchParams.get("token");
     expect(replacementToken).toBeTruthy();
     const replacementAccess = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(replacementToken!)}`),
+      new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(replacementToken!)}`),
       env,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -987,11 +990,11 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "confirm",
+            status: "confirmed",
             consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
         }),
@@ -1015,11 +1018,11 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "confirm",
+            status: "confirmed",
             consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
         }),
@@ -1044,11 +1047,11 @@ describe("speaker self-management endpoints", () => {
       speakerPost(
         createContext(
           env,
-          new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-            method: "POST",
+          new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+            method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              action: "confirm",
+              status: "confirmed",
               consents: [{ termKey: "speaker-terms", version: "v1" }],
             }),
           }),
@@ -1078,11 +1081,11 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "confirm",
+            status: "confirmed",
             consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
         }),
@@ -1115,11 +1118,11 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "decline",
+            status: "declined",
             reason: "Schedule conflict",
           }),
         }),
@@ -1143,10 +1146,10 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "decline", reason: "Too late" }),
+          body: JSON.stringify({ status: "declined", reason: "Too late" }),
         }),
         { token: speakerManageToken },
       ),
@@ -1169,7 +1172,7 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPatch(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/profile`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -1189,7 +1192,7 @@ describe("speaker self-management endpoints", () => {
 
     // Verify the profile was updated
     const getResponse = await speakerGet(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}`), {
         token: speakerManageToken,
       }),
     );
@@ -1221,7 +1224,7 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPatch(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/profile`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ jobTitle: "Updated title" }),
@@ -1249,7 +1252,7 @@ describe("speaker self-management endpoints", () => {
     const response = await speakerPatch(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/profile`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ firstName: "Must not commit" }),
@@ -1423,7 +1426,7 @@ describe("speaker self-management endpoints", () => {
     );
 
     await expect(
-      setSpeakerPresentationReminderPreference(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, "pause_30d"),
+      setSpeakerPresentationReminderPreference(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, "paused"),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(
       queryAll(
@@ -1439,7 +1442,7 @@ describe("speaker self-management endpoints", () => {
     const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1498,7 +1501,7 @@ describe("speaker self-management endpoints", () => {
     });
 
     const manageGet = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}`),
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}`),
       env,
       {
         passThroughOnException: () => {},
@@ -1535,10 +1538,8 @@ describe("speaker self-management endpoints", () => {
     const headers = { "content-type": "application/json" };
 
     const reminderResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/remind`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/not-a-uuid/reminders`, {
         method: "POST",
-        headers,
-        body: JSON.stringify({ userId: "not-a-uuid" }),
       }),
       env,
       workerContext,
@@ -1547,7 +1548,7 @@ describe("speaker self-management endpoints", () => {
     expect(await reminderResponse.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
 
     const patchResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/not-a-uuid`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/not-a-uuid`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({ firstName: "Invalid target" }),
@@ -1559,7 +1560,7 @@ describe("speaker self-management endpoints", () => {
     expect(await patchResponse.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
 
     const validPatchResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({ firstName: "Mounted" }),
@@ -1584,7 +1585,7 @@ describe("speaker self-management endpoints", () => {
     ).run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ firstName: "Must Roll Back", role: "moderator" }),
@@ -1663,7 +1664,7 @@ describe("speaker self-management endpoints", () => {
     ).run();
 
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: "rollback-speaker@example.test", firstName: "Rollback", role: "speaker" }),
@@ -1706,7 +1707,7 @@ describe("speaker self-management endpoints", () => {
         .run();
 
       const response = await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers`, {
+        new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ email: `blocked-${status}@example.test`, firstName: "Blocked", role: "speaker" }),
@@ -1889,10 +1890,10 @@ describe("speaker self-management endpoints", () => {
     const declineResponse = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "decline", reason: "Not available" }),
+          body: JSON.stringify({ status: "declined", reason: "Not available" }),
         }),
         { token: speakerManageToken },
       ),
@@ -1922,17 +1923,17 @@ describe("speaker self-management endpoints", () => {
         error: { code: "SPEAKER_TOKEN_NOT_FOUND" },
       });
     };
-    const staleTokenPath = `https://app.test/api/v1/proposals/speaker/${oldManageToken}`;
+    const staleTokenPath = `https://app.test/api/v1/proposals/speakers/access/${oldManageToken}`;
     await expectStaleCapability(new Request(staleTokenPath));
     await expectStaleCapability(
-      new Request(staleTokenPath, {
-        method: "POST",
+      new Request(`${staleTokenPath}/participation`, {
+        method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "decline", reason: "stale token" }),
+        body: JSON.stringify({ status: "declined", reason: "stale token" }),
       }),
     );
     await expectStaleCapability(
-      new Request(staleTokenPath, {
+      new Request(`${staleTokenPath}/profile`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ biography: "stale token" }),
@@ -1954,12 +1955,12 @@ describe("speaker self-management endpoints", () => {
     await expectStaleCapability(
       new Request(`${staleTokenPath}/presentation`, { method: "PUT", body: stalePresentationForm }),
     );
-    await expectStaleCapability(new Request(`${staleTokenPath}/presentation/download`));
+    await expectStaleCapability(new Request(`${staleTokenPath}/presentation`));
     await expectStaleCapability(
-      new Request(`${staleTokenPath}/reminders`, {
-        method: "POST",
+      new Request(`${staleTokenPath}/reminder-preferences`, {
+        method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "pause_30d" }),
+        body: JSON.stringify({ state: "paused" }),
       }),
     );
 
@@ -1969,7 +1970,9 @@ describe("speaker self-management endpoints", () => {
       purpose: "speaker_manage",
       resourceId: speaker.id,
     });
-    const currentResponse = await mounted(new Request(`https://app.test/api/v1/proposals/speaker/${newManageToken}`));
+    const currentResponse = await mounted(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${newManageToken}`),
+    );
     expect(currentResponse.status).toBe(200);
     expect(
       (
@@ -1994,7 +1997,7 @@ describe("speaker self-management endpoints", () => {
 
     const uploadResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
         {
           method: "PUT",
           body: formData,
@@ -2011,7 +2014,7 @@ describe("speaker self-management endpoints", () => {
     const uploadPayload = (await uploadResponse.json()) as { success: boolean; headshotUrl: string; r2Key: string };
     expect(uploadPayload.success).toBe(true);
     expect(uploadPayload.headshotUrl).toContain(
-      `/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+      `/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
     );
     expect(uploadPayload.r2Key.startsWith(`proposal-headshots/${proposalId}/${coSpeakerUserId}/`)).toBe(true);
     expect(
@@ -2024,7 +2027,7 @@ describe("speaker self-management endpoints", () => {
 
     const serveResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
       ),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       {
@@ -2038,7 +2041,7 @@ describe("speaker self-management endpoints", () => {
 
     const deleteResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
         { method: "DELETE" },
       ),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
@@ -2048,7 +2051,7 @@ describe("speaker self-management endpoints", () => {
 
     const repeatedDeleteResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
         { method: "DELETE" },
       ),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
@@ -2060,7 +2063,7 @@ describe("speaker self-management endpoints", () => {
     replacementForm.append("file", file);
     const replacementResponse = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
         { method: "PUT", body: replacementForm },
       ),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
@@ -2070,7 +2073,7 @@ describe("speaker self-management endpoints", () => {
     const replacementPayload = (await replacementResponse.json()) as { r2Key: string };
 
     const removeSpeakerResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
         method: "DELETE",
       }),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
@@ -2160,7 +2163,7 @@ describe("speaker self-management endpoints", () => {
     proposerFormData.append("file", file);
     const proposerUpload = await app.fetch(
       new Request(
-        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
         { method: "PUT", body: proposerFormData },
       ),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
@@ -2173,7 +2176,7 @@ describe("speaker self-management endpoints", () => {
     formData.append("file", file);
 
     const uploadResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/headshot`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/headshot`, {
         method: "PUT",
         body: formData,
       }),
@@ -2207,7 +2210,7 @@ describe("speaker self-management endpoints", () => {
     ).toEqual([{ object_key: proposerR2Key }]);
 
     const serveResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/headshot`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/headshot`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       {
         passThroughOnException: () => {},
@@ -2251,7 +2254,7 @@ describe("speaker self-management endpoints", () => {
         {
           db: racingDb,
           env: scopedEnv,
-          request: new Request("https://app.test/api/v1/proposals/speaker/race/headshot"),
+          request: new Request("https://app.test/api/v1/proposals/speakers/access/race/headshot"),
           waitUntil: () => {},
           proposalId: proposal.id,
           proposalSpeakerId: speaker.id,
@@ -2319,7 +2322,7 @@ describe("speaker self-management endpoints", () => {
       removeProposalSpeakerSelfHeadshot({
         db: racingDb,
         env: { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any,
-        request: new Request("https://app.test/api/v1/proposals/speaker/race/headshot"),
+        request: new Request("https://app.test/api/v1/proposals/speakers/access/race/headshot"),
         waitUntil: () => {},
         proposalId: proposal.id,
         proposalSpeakerId: speaker.id,
@@ -2363,9 +2366,11 @@ describe("speaker self-management endpoints", () => {
     };
 
     const proposerResponse = await upload(
-      `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+      `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
     );
-    const speakerResponse = await upload(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/headshot`);
+    const speakerResponse = await upload(
+      `https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/headshot`,
+    );
 
     expect(proposerResponse.status).toBe(415);
     expect(speakerResponse.status).toBe(415);
@@ -2378,11 +2383,11 @@ describe("speaker self-management endpoints", () => {
     const confirmResponse = await speakerPost(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
-          method: "POST",
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "confirm",
+            status: "confirmed",
             consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
         }),
@@ -2392,11 +2397,12 @@ describe("speaker self-management endpoints", () => {
     expect(confirmResponse.status).toBe(200);
 
     const remindResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/remind`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId: coSpeakerUserId }),
-      }),
+      new Request(
+        `https://app.test/api/v1/proposals/access/${proposalManageToken}/speakers/${coSpeakerUserId}/reminders`,
+        {
+          method: "POST",
+        },
+      ),
       env,
       {
         passThroughOnException: () => {},
@@ -2444,7 +2450,7 @@ describe("speaker self-management endpoints", () => {
 
     // The token from the email must be usable to access the speaker endpoint
     const speakerResponse = await speakerGet(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${token}`, { method: "GET" }), {
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${token}`, { method: "GET" }), {
         token: token!,
       }),
     );

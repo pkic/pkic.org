@@ -15,6 +15,36 @@ import {
 } from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
+const absentUserId = "00000000000000000000000000000000";
+
+const retiredCapabilityRoutes = [
+  { method: "GET", path: "/api/v1/registrations/manage/no-such-token" },
+  { method: "GET", path: "/api/v1/proposals/manage/no-such-token" },
+  { method: "PATCH", path: "/api/v1/proposals/manage/no-such-token" },
+  { method: "POST", path: "/api/v1/proposals/manage/no-such-token/speakers" },
+  { method: "POST", path: "/api/v1/proposals/manage/no-such-token/speakers/remind" },
+  { method: "PATCH", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}` },
+  { method: "DELETE", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}` },
+  { method: "GET", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "PUT", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "DELETE", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "POST", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "PATCH", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "PUT", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "DELETE", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "PUT", path: "/api/v1/proposals/speaker/no-such-token/presentation" },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token/presentation/download" },
+  { method: "POST", path: "/api/v1/proposals/speaker/no-such-token/reminders" },
+  {
+    method: "GET",
+    path: "/api/v1/proposals/access/no-such-token/speakers/reminders",
+    expectedStatus: 405,
+  },
+  { method: "GET", path: "/api/v1/proposals/speakers/access/no-such-token/reminders" },
+  { method: "GET", path: "/api/v1/proposals/speakers/access/no-such-token/presentation/download" },
+] as const;
 
 function callApp(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -25,10 +55,25 @@ describe("manage read endpoints", () => {
     await resetDb();
   });
 
-  it("does not retain the actor-oriented registration manage route", async () => {
-    const response = await callApp(new Request("https://app.test/api/v1/registrations/manage/no-such-token"));
+  it("does not retain the retired capability route operations", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const sessionToken = await createAdminSession(env.DB, admin.id, "retired-capability-route-test");
 
-    expect(response.status).toBe(404);
+    for (const route of retiredCapabilityRoutes) {
+      const response = await callApp(
+        new Request(`https://app.test${route.path}`, {
+          method: route.method,
+          headers: { authorization: `Bearer ${sessionToken}` },
+        }),
+      );
+
+      expect({ method: route.method, path: route.path, status: response.status }).toEqual({
+        method: route.method,
+        path: route.path,
+        status: "expectedStatus" in route ? route.expectedStatus : 404,
+      });
+    }
   });
 
   it("returns registration state for a valid manage token", async () => {
@@ -536,7 +581,7 @@ describe("manage read endpoints", () => {
       resourceId: proposalId,
     });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/proposals/manage/${token}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/proposals/access/${token}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -597,10 +642,10 @@ describe("manage read endpoints", () => {
     });
 
     const updateResponse = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "update", proposalType: "ask me anything" }),
+        body: JSON.stringify({ proposalType: "ask me anything" }),
       }),
     );
     expect(updateResponse.status).toBe(200);
@@ -609,35 +654,35 @@ describe("manage read endpoints", () => {
     });
 
     const unsupportedType = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "update", proposalType: "unconfigured session" }),
+        body: JSON.stringify({ proposalType: "unconfigured session" }),
       }),
     );
     expect(unsupportedType.status).toBe(400);
     await expect(unsupportedType.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
 
     const emptyUpdate = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "update" }),
+        body: JSON.stringify({}),
       }),
     );
     expect(emptyUpdate.status).toBe(400);
 
     const ambiguousWithdrawal = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "withdraw", title: "Do not apply this title" }),
+        body: JSON.stringify({ status: "withdrawn", title: "Do not apply this title" }),
       }),
     );
     expect(ambiguousWithdrawal.status).toBe(400);
 
     const speakerResponse = await callApp(
-      new Request(`https://app.test/api/v1/proposals/manage/${token}/speakers/${userId}`, {
+      new Request(`https://app.test/api/v1/proposals/access/${token}/speakers/${userId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ role: "moderator" }),

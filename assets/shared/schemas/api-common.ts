@@ -109,7 +109,7 @@ export const proposalSpeakerIdParamsSchema = proposalIdParamsSchema.extend({
   userId: databaseIdSchema,
 });
 
-export const proposerManagedSpeakerParamsSchema = z.object({
+export const proposalAccessSpeakerParamsSchema = z.object({
   token: tokenSchema,
   userId: databaseIdSchema,
 });

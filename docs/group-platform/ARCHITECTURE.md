@@ -337,9 +337,11 @@ and external-delivery policy do not live in routes.
 
 Program-committee proposal and speaker management is event-scoped under the
 owning group. The neutral proposal/speaker contracts and UI components serve
-the group portal; temporary admin routes are adapters over the same services,
-not a second implementation. Speaker self-service remains a separate,
-resource-bound capability surface.
+the single group portal; there is no second admin implementation. Proposal and
+speaker self-service remain separate, resource-bound capability surfaces under
+`/api/v1/proposals/access/:token` and
+`/api/v1/proposals/speakers/access/:token`. Their signed capabilities do not
+create a second human-authentication session or cookie.
 
 Proposal co-speaker invitations use the same event-bounded validity policy as
 other event invitations: omission resolves to the event start and an explicit

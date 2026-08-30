@@ -157,8 +157,21 @@ Base path: `/api/v1`
 
 - `POST /events/:eventSlug/proposals`
 - `GET /events/:eventSlug/forms/placements/:purpose`
-- `GET /proposals/manage/:token`
-- `PATCH /proposals/manage/:token`
+- `GET /proposals/access/:token`
+- `PATCH /proposals/access/:token`
+- `POST /proposals/access/:token/speakers`
+- `PATCH` and `DELETE /proposals/access/:token/speakers/:userId`
+- `POST /proposals/access/:token/speakers/:userId/reminders`
+- `GET /proposals/speakers/access/:token`
+- `PATCH /proposals/speakers/access/:token/participation`
+- `PATCH /proposals/speakers/access/:token/profile`
+- `GET`, `PUT`, and `DELETE /proposals/speakers/access/:token/headshot`
+- `GET` and `PUT /proposals/speakers/access/:token/presentation`
+- `PATCH /proposals/speakers/access/:token/reminder-preferences`
+- Capability routes expose proposal or proposal-speaker resources rather than
+  actor-oriented `manage` or `speaker` action namespaces. The signed,
+  time-limited, resource-secret-bound capability remains the authorization
+  boundary; these routes do not create another session or cookie.
 - Proposal participants:
 - `proposer` and `speakers[]` share the same user component (`firstName`, `lastName`, `email`, `organizationName`, `jobTitle`, `bio`, `links[]`).
 - `speakers[].role` supports `speaker`, `co_speaker`, `moderator`, `panelist` (plus proposer role in system internals).
