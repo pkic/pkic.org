@@ -2,6 +2,7 @@ import { z } from "zod";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { proposalSessionTypesSchema } from "./proposal-management";
 import { eventIdSchema, slugPattern, trimmedString, utcInstantSchema } from "./api-common";
+import { eventDayDateSchema } from "./event-read-models";
 import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
@@ -13,6 +14,7 @@ import { groupIdSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -143,6 +145,33 @@ export const eventResourceCoreSchema = z.object({
 });
 export type EventResourceCore = z.infer<typeof eventResourceCoreSchema>;
 
+/**
+ * Per-day state of the viewer's own registration, keyed by the event day's
+ * calendar date. Present only for events with day-level registration; a
+ * single-attendance-type registration has no day rows and yields `[]`.
+ */
+export const eventViewerDayStateSchema = z.enum(["registered", "waitlisted"]);
+export const eventViewerDaySchema = z.object({
+  date: eventDayDateSchema,
+  state: eventViewerDayStateSchema,
+});
+export type EventViewerDay = z.infer<typeof eventViewerDaySchema>;
+
+/**
+ * The caller's own standing for an event, derived from their registration.
+ * `waitlisted` is true when at least one of the registration's day-waitlist
+ * rows is active (day waitlist rows are the sole authoritative waitlist
+ * state); `days` mirrors that per day. Null for anonymous callers and for
+ * callers with no standing (non-existent or cancelled registration).
+ */
+export const eventViewerStateSchema = z.object({
+  registrationStatus: registrationLifecycleStatusSchema,
+  attendanceType: attendanceTypeSchema,
+  waitlisted: z.boolean(),
+  days: z.array(eventViewerDaySchema).max(31),
+});
+export type EventViewerState = z.infer<typeof eventViewerStateSchema>;
+
 /** Public/member-safe event representation; management configuration is deliberately absent. */
 export const eventAudienceDetailSchema = eventResourceCoreSchema
   .omit({ sourceMode: true, inviteLimitAttendee: true, updatedAt: true })
@@ -150,6 +179,9 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     accessLevel: z.enum(["public", "participant"]),
     location: z.string().nullable(),
     links: linksSchema,
+    /** The public page path for this event, when the event has one. */
+    basePath: z.string().nullable(),
+    viewer: eventViewerStateSchema.nullable(),
   });
 export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
 

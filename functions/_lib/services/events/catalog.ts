@@ -6,6 +6,7 @@ import {
   type EventAudienceDetail,
   type EventManagementSummary,
   type EventsListQuery,
+  type EventViewerState,
 } from "../../../../assets/shared/schemas/event-management";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
@@ -19,6 +20,7 @@ import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, type EventAudienceViewer } from "./visibility";
+import { fetchViewerEventState, fetchViewerEventStates } from "./viewer-state";
 
 interface EventAudienceRow {
   id: string;
@@ -32,13 +34,14 @@ interface EventAudienceRow {
   visibility: EventAudienceDetail["visibility"];
   settings_json: string;
   links_json: string | null;
+  base_path: string | null;
 }
 
 const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
-  event.visibility, event.settings_json, event.links_json`;
+  event.visibility, event.settings_json, event.links_json, event.base_path`;
 
-function mapEventAudience(row: EventAudienceRow): EventAudienceDetail {
+function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null): EventAudienceDetail {
   const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   return eventAudienceDetailSchema.parse({
     id: row.id,
@@ -53,6 +56,8 @@ function mapEventAudience(row: EventAudienceRow): EventAudienceDetail {
     accessLevel: row.visibility === "public" ? "public" : "participant",
     location: typeof settings.location === "string" ? settings.location : null,
     links: parseLinksJson(row.links_json),
+    basePath: row.base_path,
+    viewer,
   });
 }
 
@@ -119,7 +124,15 @@ function isAudienceSortColumn(sort: string): boolean {
 
 export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceViewer, query: EventsListQuery) {
   const page = await queryPage<EventAudienceRow>(db, buildEventsPageQuery(viewer, query));
-  return { events: page.rows.map(mapEventAudience), total: page.total };
+  const viewerStates = await fetchViewerEventStates(
+    db,
+    viewer.userId,
+    page.rows.map((row) => row.id),
+  );
+  return {
+    events: page.rows.map((row) => mapEventAudience(row, viewerStates.get(row.id) ?? null)),
+    total: page.total,
+  };
 }
 
 const EVENT_MANAGEMENT_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
@@ -277,5 +290,6 @@ export async function getVisibleEventAudienceDetail(
     [eventSlug, ...audience.bindings],
   );
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
-  return mapEventAudience(row);
+  const viewerState = await fetchViewerEventState(db, viewer.userId, row.id);
+  return mapEventAudience(row, viewerState);
 }

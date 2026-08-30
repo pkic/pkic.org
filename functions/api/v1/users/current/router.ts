@@ -14,6 +14,9 @@ import organizationsRouter from "./organizations/router";
 import { CurrentUserVotesGet } from "./votes/index";
 import { CurrentUserMeetingsGet } from "./meetings/index";
 import { CurrentUserFormsGet } from "./forms/index";
+import { CurrentUserRegistrationsGet } from "./registrations/index";
+import { CurrentUserDonationsGet } from "./donations/index";
+import { CurrentUserProposalsGet } from "./proposals/index";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -27,6 +30,9 @@ openapi.patch("/notifications/preferences", CurrentUserNotificationPreferencesPa
 openapi.get("/votes", CurrentUserVotesGet);
 openapi.get("/meetings", CurrentUserMeetingsGet);
 openapi.get("/forms", CurrentUserFormsGet);
+openapi.get("/registrations", CurrentUserRegistrationsGet);
+openapi.get("/donations", CurrentUserDonationsGet);
+openapi.get("/proposals", CurrentUserProposalsGet);
 openapi.route("/groups", groupsRouter);
 openapi.route("/applications", applicationsRouter);
 openapi.route("/organizations", organizationsRouter);

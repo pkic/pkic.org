@@ -241,6 +241,57 @@ export function publicUserSession(result: UserSessionResult): {
   };
 }
 
+/**
+ * The one authenticated human identity behind a session, independent of
+ * which capacity (staff, member, sponsor) currently backs it.
+ *
+ * Identity-first participation records (see IMPLEMENTATION_TRACKER.md
+ * section 13) gate on this alone: a future credential-less guest inherits
+ * every feed that only requires `requireIdentityFromRequest`, while the
+ * existing group/vote/meeting/form self-feeds stay gated on
+ * `requireMemberFromRequest` because they are inherently membership-scoped.
+ */
+export interface AuthenticatedIdentity {
+  userId: string;
+  email: string;
+  sessionId: string;
+  expiresAt: string;
+}
+
+const identityByRequest = new WeakMap<Request, AuthenticatedIdentity>();
+
+/**
+ * Requires only that the caller hold a valid, active user session —
+ * `resolveUserSessionFromRequest` already guarantees at least one live
+ * capacity (staff, member, or sponsor) exists before returning, so a
+ * staff-only or sponsor-only identity is accepted here exactly like a
+ * member. Never weakens `requireMemberFromRequest`, which additionally
+ * requires the member capacity itself.
+ */
+export async function requireIdentityFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env?: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<AuthenticatedIdentity> {
+  const cached = identityByRequest.get(request);
+  if (cached) return cached;
+
+  if (!getUserSessionToken(request)) {
+    throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
+  }
+  const session = await resolveUserSessionFromRequest(db, request, {
+    INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET,
+  });
+  const identity: AuthenticatedIdentity = {
+    userId: session.identity.id,
+    email: session.identity.email,
+    sessionId: session.sessionId,
+    expiresAt: session.expiresAt,
+  };
+  identityByRequest.set(request, identity);
+  return identity;
+}
+
 export async function queueUserSignInCapability(payload: {
   db: DatabaseLike;
   email: string;
