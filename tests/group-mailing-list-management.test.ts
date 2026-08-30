@@ -27,6 +27,7 @@ import { queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 
 async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
@@ -58,15 +59,16 @@ describe("group mailing-list management routes", () => {
       name: `Local mailing list group ${crypto.randomUUID()}`,
       visibility: "public",
     });
-    const leader = await actor(`mailing-list-local-leader-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, group.id)
-      .run();
-
-    const leaderToken = await token(leader.id);
+    // A real chair of group: mailing-list management is a chair
+    // capability, so the test only means something if the caller holds it.
+    const leaderPersona = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    const leader: UserBackedAuthAdmin = {
+      identityType: "user",
+      id: leaderPersona.userId,
+      email: leaderPersona.email,
+      role: "user",
+    };
+    const leaderToken = leaderPersona.token!;
     const created = await jsonRequest(
       `/api/v1/groups/${group.id}/mailing-lists`,
       "POST",
