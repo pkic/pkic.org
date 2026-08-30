@@ -5,7 +5,13 @@ import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { VOTE_ELECTION_TALLY_QUERY, VOTE_MOTION_TALLY_QUERY, VOTE_STANDING_CANDIDATES_QUERY } from "./due-queries";
 import type { CandidateRow, VoteRow } from "./shared";
-import { computeMotionResultFromCounts, tallyElectionRoundFromCounts, type ElectionRoundTally } from "./tally";
+import {
+  computeConsultationResult,
+  computeMotionResultFromCounts,
+  tallyElectionRoundFromCounts,
+  type ElectionRoundTally,
+} from "./tally";
+import { consultationResponses, loadConsultationForm, tallyableQuestions } from "./question";
 import { ELIGIBLE_MEMBER_COUNT_QUERY, ELIGIBLE_PERSON_COUNT_QUERY } from "./electorate";
 import { findCastingVote } from "./tie-break";
 import { prepareVoteRepresentativeNotificationIntents } from "./representative-notification-intents";
@@ -176,6 +182,7 @@ async function finalizeMotionOrConsultation(
   now: string,
   context: VoteCloseTransitionContext,
 ): Promise<CloseOutcome> {
+  const consultationForm = await loadConsultationForm(db, vote);
   const counts = await first<MotionCountsRow>(db, VOTE_MOTION_TALLY_QUERY, [vote.id, vote.current_round]);
   const tally = {
     in_favor: Number(counts?.in_favor ?? 0),
@@ -204,12 +211,28 @@ async function finalizeMotionOrConsultation(
       ? await findCastingVote(db, vote.id, vote.current_round, now)
       : null;
 
-  const result = computeMotionResultFromCounts(
-    vote.threshold_type as "simple_majority" | "supermajority",
-    tally,
-    quorum,
-    castingVote,
-  );
+  // A consultation that asks a form is counted per question, per option: it
+  // gathers preference rather than carrying a motion, so a for/against tally
+  // would report a decision nobody took.
+  const result = consultationForm
+    ? computeConsultationResult(
+        consultationForm.formId,
+        tallyableQuestions(consultationForm).map((question) => ({
+          fieldId: question.fieldId,
+          key: question.key,
+          label: question.label,
+          optionValues: question.options.map((option) => option.value),
+          multiple: question.fieldType === "multi_select",
+        })),
+        await consultationResponses(db, vote.id, vote.current_round),
+        quorum,
+      )
+    : computeMotionResultFromCounts(
+        vote.threshold_type as "simple_majority" | "supermajority",
+        tally,
+        quorum,
+        castingVote,
+      );
 
   try {
     await db.batch([

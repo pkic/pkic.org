@@ -20,6 +20,7 @@ function managedVote(): GroupVoteDetail {
     ownerGroupName: "Architecture Committee",
     electorateMode: "per_member",
     thresholdType: "simple_majority",
+    questionFormId: null,
     quorumPercent: null,
     tieBreakMode: "none" as const,
     excludedMemberIds: null,

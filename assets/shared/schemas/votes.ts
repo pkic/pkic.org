@@ -56,6 +56,43 @@ export const voteBallotCountsSchema = z.object({
   abstain: z.number().int().nonnegative(),
 });
 
+/** A consultation's questions, borrowed from a form. */
+export const consultationQuestionOptionSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+  active: z.boolean(),
+});
+export const consultationQuestionSchema = z.object({
+  fieldId: databaseIdSchema,
+  key: z.string(),
+  label: z.string(),
+  fieldType: z.string(),
+  required: z.boolean(),
+  options: z.array(consultationQuestionOptionSchema),
+});
+export const consultationFormSchema = z.object({
+  formId: databaseIdSchema,
+  title: z.string(),
+  questions: z.array(consultationQuestionSchema),
+});
+
+export const consultationQuestionResultSchema = z.object({
+  fieldId: databaseIdSchema,
+  key: z.string(),
+  label: z.string(),
+  counts: z.record(z.string(), z.number().int().nonnegative()),
+  leadingOption: z.string().nullable(),
+  answered: z.number().int().nonnegative(),
+});
+
+export const consultationVoteResultSchema = z.object({
+  formId: databaseIdSchema,
+  questions: z.array(consultationQuestionResultSchema),
+  totalResponses: z.number().int().nonnegative(),
+  quorum: z.lazy(() => voteQuorumSchema).nullable(),
+  quorumMet: z.boolean(),
+});
+
 export const voteQuorumSchema = z.object({
   percent: z.number().int().min(1).max(100),
   eligible: z.number().int().nonnegative(),
@@ -96,7 +133,11 @@ export const electionVoteResultSchema = z.object({
 });
 
 /** Full-detail closed-vote result, as returned by the staff-only ballots/results endpoints. */
-export const voteFullResultSchema = z.union([motionVoteResultSchema, electionVoteResultSchema]);
+export const voteFullResultSchema = z.union([
+  motionVoteResultSchema,
+  electionVoteResultSchema,
+  consultationVoteResultSchema,
+]);
 
 /**
  * Redacted shape returned when a public vote's publicDetailLevel is
@@ -134,6 +175,7 @@ export const voteSummaryFieldsSchema = {
   ownerGroupName: z.string(),
   electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
+  questionFormId: databaseIdSchema.nullable().default(null),
   quorumPercent: z.number().int().min(1).max(100).nullable().default(null),
   tieBreakMode: z.enum(["none", "chair"]).default("none"),
   excludedMemberIds: z.array(databaseIdSchema).max(200).nullable().default(null),

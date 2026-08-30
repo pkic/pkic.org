@@ -9,6 +9,7 @@ import { MOTION_CHOICES, eligibleCategoriesOf, getVoteRowOrThrow, type BallotCho
 import { exactVoteGroupMembership, voteParticipationGroupPredicate } from "./vote-access";
 import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import { voteCategoryEligibilitySql, voteMemberNotExcludedSql } from "./electorate";
+import { loadConsultationForm } from "./question";
 
 interface EligibleCapacity {
   memberId: string;
@@ -27,7 +28,21 @@ async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: 
       [choice, vote.id],
     );
     if (!candidate) throw new AppError(422, "INVALID_CHOICE", "choice must be a standing candidate id");
-  } else if (!MOTION_CHOICES.has(choice as BallotChoice)) {
+    return;
+  }
+
+  // A consultation that asks a form does not take a single choice at all —
+  // its answers are a form submission, recorded through the consultation
+  // response path rather than as a ballot.
+  if (await loadConsultationForm(db, vote)) {
+    throw new AppError(
+      422,
+      "VOTE_TAKES_A_FORM_RESPONSE",
+      "This consultation is answered by submitting its form, not by casting a single choice",
+    );
+  }
+
+  if (!MOTION_CHOICES.has(choice as BallotChoice)) {
     throw new AppError(422, "INVALID_CHOICE", "choice must be one of in_favor, opposed, abstain");
   }
 }
