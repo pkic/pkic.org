@@ -226,12 +226,12 @@ describe("group event attendee management", () => {
     ).toEqual({ attendance_type: "livestream" });
 
     for (const body of [
-      { mode: "vip", reason: "Legacy broad admission", dayDates: ["2027-04-12"] },
+      { mode: "vip", reason: "x", dayDates: ["2027-04-12"] },
       { mode: "capacity_exempt", reason: "Missing selected day" },
     ]) {
       const invalid = await request(
         fixture.ownerLeaderToken,
-        `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admit`,
+        `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admissions`,
         { method: "POST", body: JSON.stringify(body) },
       );
       expect(invalid.status, await invalid.clone().text()).toBe(400);
@@ -249,7 +249,7 @@ describe("group event attendee management", () => {
       .first<{ count: number }>();
     const unwaitlistedAdmit = await request(
       fixture.ownerLeaderToken,
-      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admit`,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admissions`,
       {
         method: "POST",
         body: JSON.stringify({ mode: "capacity_exempt", reason: "Must not bypass waitlist", dayDates: ["2027-04-12"] }),
@@ -287,7 +287,7 @@ describe("group event attendee management", () => {
 
     const admitted = await request(
       fixture.ownerLeaderToken,
-      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admit`,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admissions`,
       {
         method: "POST",
         body: JSON.stringify({ mode: "capacity_exempt", reason: "Approved exception", dayDates: ["2027-04-12"] }),
@@ -328,6 +328,16 @@ describe("group event attendee management", () => {
     );
     expect(response.status, await response.clone().text()).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: "REGISTRATION_CANCELLED" } });
+    const vipResponse = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/admissions`,
+      {
+        method: "POST",
+        body: JSON.stringify({ mode: "vip", reason: "Cancelled attendee exception", dayDates: ["2027-04-12"] }),
+      },
+    );
+    expect(vipResponse.status, await vipResponse.clone().text()).toBe(409);
+    expect(await vipResponse.json()).toMatchObject({ error: { code: "REGISTRATION_CANCELLED" } });
     expect(
       await env.DB.prepare(
         `SELECT status, cancellation_reason_code, attendance_type
@@ -386,6 +396,84 @@ describe("group event attendee management", () => {
       `/api/v1/groups/${fixture.granteeGroupId}/events/${wrongEvent.id}/registrations/${registrationId}`,
     );
     expect(wrongGroup.status).toBe(403);
+  });
+
+  it("requires manage for a reasoned VIP override while preserving narrower waitlist admission", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId } = await seedAttendees(event.id);
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", event.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "manage_attendance",
+    });
+
+    const endpoint = `/api/v1/groups/${fixture.granteeGroupId}/events/${event.id}/registrations/${registrationId}/admissions`;
+    const retiredVerbPath = await request(fixture.granteeLeaderToken, endpoint.replace(/\/admissions$/, "/admit"), {
+      method: "POST",
+      body: JSON.stringify({ mode: "vip", reason: "No compatibility alias", dayDates: ["2027-04-12"] }),
+    });
+    expect(retiredVerbPath.status).toBe(404);
+
+    const vipDenied = await request(fixture.granteeLeaderToken, endpoint, {
+      method: "POST",
+      body: JSON.stringify({ mode: "vip", reason: "Requires stronger authority", dayDates: ["2027-04-12"] }),
+    });
+    expect(vipDenied.status, await vipDenied.clone().text()).toBe(403);
+
+    const nonWaitlistedDenied = await request(fixture.granteeLeaderToken, endpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        mode: "capacity_exempt",
+        reason: "Attendance authority remains waitlist-bound",
+        dayDates: ["2027-04-12"],
+      }),
+    });
+    expect(nonWaitlistedDenied.status, await nonWaitlistedDenied.clone().text()).toBe(409);
+    expect(await nonWaitlistedDenied.json()).toMatchObject({
+      error: { code: "REGISTRATION_DAY_NOT_WAITLISTED" },
+    });
+
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", event.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "manage",
+    });
+    const admitted = await request(fixture.granteeLeaderToken, endpoint, {
+      method: "POST",
+      body: JSON.stringify({ mode: "vip", reason: "Approved consortium guest", dayDates: ["2027-04-12"] }),
+    });
+    expect(admitted.status, await admitted.clone().text()).toBe(200);
+    expect(await admitted.json()).toMatchObject({
+      registration: { id: registrationId, status: "registered" },
+      admittedDayDates: ["2027-04-12"],
+    });
+    expect(
+      await env.DB.prepare(
+        `SELECT status, reason_code, reason_note
+           FROM event_day_waitlist_entries
+          WHERE registration_id = ?`,
+      )
+        .bind(registrationId)
+        .first(),
+    ).toEqual({
+      status: "accepted",
+      reason_code: "admin_capacity_exempt",
+      reason_note: "vip:Approved consortium guest",
+    });
+    const audit = await env.DB.prepare(
+      "SELECT details_json FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
+    )
+      .bind(registrationId)
+      .first<{ details_json: string }>();
+    expect(JSON.parse(audit!.details_json)).toMatchObject({
+      mode: { from: null, to: "vip" },
+      reason: { from: null, to: "Approved consortium guest" },
+      admittedDayDates: { from: null, to: ["2027-04-12"] },
+    });
+    expect(
+      await env.DB.prepare("SELECT template_key FROM email_outbox WHERE event_id = ? AND recipient_email IS NOT NULL")
+        .bind(event.id)
+        .first(),
+    ).toEqual({ template_key: "registration_updated" });
   });
 
   it("rolls back an attendee mutation when delegated authority is revoked before commit", async () => {
@@ -476,5 +564,42 @@ describe("group event attendee management", () => {
         .bind(registrationId)
         .first(),
     ).toEqual({ attendance_type: "in_person" });
+  });
+
+  it("rolls back a VIP override when manage authority is revoked before commit", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId } = await seedAttendees(event.id);
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", event.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "manage",
+    });
+
+    await expect(
+      admitGroupManagedEventRegistration(
+        mutateBeforeNextBatch(env.DB, async () => {
+          await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
+            .bind(fixture.granteeLeader.id)
+            .run();
+        }),
+        fixture.granteeLeader,
+        fixture.granteeGroupId,
+        event.id,
+        registrationId,
+        { mode: "vip", reason: "Must observe live manage authority", dayDates: ["2027-04-12"] },
+        "https://example.test",
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?").bind(registrationId).first(),
+    ).toEqual({ count: 0 });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM email_outbox WHERE event_id = ?").bind(event.id).first(),
+    ).toEqual({ count: 0 });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(registrationId)
+        .first(),
+    ).toEqual({ count: 0 });
   });
 });

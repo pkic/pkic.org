@@ -28,12 +28,24 @@ function applyEmailValidity(field: HTMLInputElement): void {
 
   const value = field.value.trim();
   if (value.length === 0) {
-    field.setCustomValidity("");
+    if (field.dataset.emailFormatError === "true") {
+      field.setCustomValidity("");
+      delete field.dataset.emailFormatError;
+    }
     return;
   }
 
   const result = normalizedEmailSchema.safeParse(value);
-  field.setCustomValidity(result.success ? "" : (result.error.issues[0]?.message ?? "Invalid email address"));
+  if (result.success) {
+    if (field.dataset.emailFormatError === "true") {
+      field.setCustomValidity("");
+      delete field.dataset.emailFormatError;
+    }
+    return;
+  }
+
+  field.setCustomValidity(result.error.issues[0]?.message ?? "Invalid email address");
+  field.dataset.emailFormatError = "true";
 }
 
 function writeFieldError(form: HTMLFormElement, name: string, message: string): void {

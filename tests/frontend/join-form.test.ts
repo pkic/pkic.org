@@ -1,14 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  ORGANIZATION_EMAIL_POLICY_MESSAGE,
+  applyJoinApplicantKindUI,
+  applyJoinEmailPolicy,
   buildApplicationPayload,
   applyCategoryUI,
+  configureMembershipLegalFields,
   filterCategoriesForApplicantKind,
+  renderMembershipCategorySummary,
   renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
 
 type Category = MemberApplicationFormResponse["categories"][number];
+type FormField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
 
 const organizationContext = {
   status: "application_ready" as const,
@@ -46,6 +52,22 @@ const categories: Category[] = [
   },
 ];
 
+function formField(key: string, fieldType: FormField["fieldType"] = "boolean"): FormField {
+  return {
+    id: crypto.randomUUID(),
+    key,
+    label: `Configured ${key}`,
+    fieldType,
+    required: true,
+    options: null,
+    optionSource: null,
+    validation: fieldType === "boolean" ? { requireTrue: true } : null,
+    sortOrder: 1,
+    updatedAt: "2026-08-30T00:00:00.000Z",
+    archivedAt: null,
+  };
+}
+
 function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormElement {
   const form = document.createElement("form");
   form.innerHTML = `
@@ -56,6 +78,23 @@ function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormEle
     </div>
     <input name="custom.reason" value="Because PKI." />
     <input name="custom.warranted_authority" type="checkbox" checked />
+  `;
+  document.body.append(form);
+  return form;
+}
+
+function buildJoinStartForm(): HTMLFormElement {
+  const form = document.createElement("form");
+  form.innerHTML = `
+    <div data-join-path-details hidden>
+      <div data-join-organization-policy hidden></div>
+      <div data-join-individual-policy hidden></div>
+      <div data-join-individual-categories hidden></div>
+      <label data-join-email-label for="joinEmail"></label>
+      <input id="joinEmail" name="email" type="email" disabled />
+      <div data-field-error="email"></div>
+      <div data-join-email-help></div>
+    </div>
   `;
   document.body.append(form);
   return form;
@@ -109,5 +148,97 @@ describe("join-form helpers", () => {
     expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
     expect(container.textContent).toContain("Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
+  });
+
+  it("binds configured agreement fields to canonical document controls without generic duplicates", () => {
+    const form = document.createElement("form");
+    form.innerHTML = `
+      <div data-membership-legal-agreements hidden>
+        <section data-membership-legal-field="agrees_bylaws">
+          <input type="checkbox" name="custom.agrees_bylaws" data-membership-legal-input />
+          <label data-membership-legal-label></label>
+        </section>
+        <section data-membership-legal-field="agrees_ipr_policy">
+          <input type="checkbox" name="custom.agrees_ipr_policy" data-membership-legal-input />
+          <label data-membership-legal-label></label>
+        </section>
+      </div>
+    `;
+    const genericFields = configureMembershipLegalFields(form, [
+      formField("reason", "textarea"),
+      formField("agrees_bylaws"),
+    ]);
+
+    expect(genericFields.map(({ key }) => key)).toEqual(["reason"]);
+    expect(form.querySelector<HTMLElement>("[data-membership-legal-agreements]")?.hidden).toBe(false);
+    const bylaws = form.querySelector<HTMLElement>('[data-membership-legal-field="agrees_bylaws"]')!;
+    expect(bylaws.hidden).toBe(false);
+    expect(bylaws.querySelector<HTMLInputElement>("input")?.required).toBe(true);
+    expect(bylaws.querySelector("label")?.textContent).toBe("Configured agrees_bylaws");
+    const missingIpr = form.querySelector<HTMLElement>('[data-membership-legal-field="agrees_ipr_policy"]')!;
+    expect(missingIpr.hidden).toBe(true);
+    expect(missingIpr.querySelector<HTMLInputElement>("input")?.disabled).toBe(true);
+  });
+
+  it("renders an informational summary of eligible individual categories", () => {
+    const container = document.createElement("div");
+    renderMembershipCategorySummary(container, filterCategoriesForApplicantKind(categories, "individual"));
+    expect(container.querySelectorAll("li")).toHaveLength(1);
+    expect(container.textContent).toContain("H6 — Independent consultant");
+    expect(container.textContent).not.toContain("Certification authority");
+  });
+
+  it("renders mutually exclusive organization and individual start states", () => {
+    const form = buildJoinStartForm();
+    const details = form.querySelector<HTMLElement>("[data-join-path-details]")!;
+    const organizationPolicy = form.querySelector<HTMLElement>("[data-join-organization-policy]")!;
+    const individualPolicy = form.querySelector<HTMLElement>("[data-join-individual-policy]")!;
+    const individualCategories = form.querySelector<HTMLElement>("[data-join-individual-categories]")!;
+    const email = form.querySelector<HTMLInputElement>("#joinEmail")!;
+    const label = form.querySelector<HTMLElement>("[data-join-email-label]")!;
+
+    applyJoinApplicantKindUI(form, null);
+    expect(details.hidden).toBe(true);
+    expect(email.disabled).toBe(true);
+
+    applyJoinApplicantKindUI(form, "organization");
+    expect(details.hidden).toBe(false);
+    expect(organizationPolicy.hidden).toBe(false);
+    expect(individualPolicy.hidden).toBe(true);
+    expect(individualCategories.hidden).toBe(true);
+    expect(email.disabled).toBe(false);
+    expect(label.textContent).toBe("Your official work or organization email address");
+    expect(email.placeholder).toBe("you@organization.example");
+
+    applyJoinApplicantKindUI(form, "individual");
+    expect(organizationPolicy.hidden).toBe(true);
+    expect(individualPolicy.hidden).toBe(false);
+    expect(individualCategories.hidden).toBe(false);
+    expect(label.textContent).toBe("Your personal or university email address");
+    expect(email.placeholder).toBe("you@example.com");
+  });
+
+  it("links a personal organization email error to the email field and clears it when corrected", () => {
+    const form = buildJoinStartForm();
+    const email = form.querySelector<HTMLInputElement>("#joinEmail")!;
+    const error = form.querySelector<HTMLElement>('[data-field-error="email"]')!;
+    applyJoinApplicantKindUI(form, "organization");
+
+    email.value = "person@gmail.com";
+    expect(applyJoinEmailPolicy(form, "organization")).toBe(false);
+    expect(email.validationMessage).toBe(ORGANIZATION_EMAIL_POLICY_MESSAGE);
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(email.classList.contains("is-invalid")).toBe(true);
+    expect(error.textContent).toBe(ORGANIZATION_EMAIL_POLICY_MESSAGE);
+
+    email.value = "person@organization.example";
+    expect(applyJoinEmailPolicy(form, "organization")).toBe(true);
+    expect(email.validationMessage).toBe("");
+    expect(email.hasAttribute("aria-invalid")).toBe(false);
+    expect(email.classList.contains("is-invalid")).toBe(false);
+    expect(error.textContent).toBe("");
+
+    email.value = "person@gmail.com";
+    expect(applyJoinEmailPolicy(form, "individual")).toBe(true);
   });
 });

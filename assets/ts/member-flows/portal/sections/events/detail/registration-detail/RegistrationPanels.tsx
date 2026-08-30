@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { Spinner } from "../../../../../../components/Spinner";
-import { api } from "../../../../api";
+import { getJson, patchJson } from "../../../../../../shared/api-client";
 import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../types";
 import { useData } from "../../../../../../hooks/useData";
@@ -26,7 +26,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 
   const { loading } = useData(
     () =>
-      api(eventRegistrationResourcePath(slug, regId, "badge"), registrationBadgeResponseSchema).then((d) => {
+      getJson(eventRegistrationResourcePath(slug, regId, "badge"), registrationBadgeResponseSchema).then((d) => {
         setInfo(d);
         setSelectedRole(d.admin_override ?? "");
         return d;
@@ -38,10 +38,11 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
     setSaving(true);
     setSaveStatus("");
     try {
-      const res = await api(eventRegistrationResourcePath(slug, regId, "badge"), registrationBadgeResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify({ role: selectedRole || null }),
-      });
+      const res = await patchJson(
+        eventRegistrationResourcePath(slug, regId, "badge"),
+        { role: selectedRole || null },
+        registrationBadgeResponseSchema,
+      );
       setInfo(res);
       setSelectedRole(res.admin_override ?? "");
       toast("Badge role updated", "success");
@@ -152,10 +153,11 @@ export function RegistrationEmailEditor({
     setSaving(true);
     setError("");
     try {
-      await api(eventRegistrationPath(slug, regId), eventRegistrationManagementUpdateResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "update", email: trimmed }),
-      });
+      await patchJson(
+        eventRegistrationPath(slug, regId),
+        { action: "update", email: trimmed },
+        eventRegistrationManagementUpdateResponseSchema,
+      );
       toast("Email updated — confirmation sent to new address", "success");
       setEditing(false);
       onSaved();

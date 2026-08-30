@@ -1,5 +1,5 @@
 import { ProposalReviewsPanel } from "../../../../../../components/proposals/ProposalReviewsPanel";
-import { api } from "../../../../api";
+import { postJson } from "../../../../../../shared/api-client";
 import type { ProposalReview } from "../../types";
 import { toast } from "../../../../ui";
 import type { PageInfo } from "../../../../../../../shared/schemas/pagination";
@@ -51,10 +51,11 @@ export function ProposalReviewsTab({
       loadingMore={loadingMore}
       onLoadMore={onLoadMore}
       onSave={async (draft) => {
-        const result = await api(proposalResourcePath(proposalId, "reviews"), proposalReviewWriteResponseSchema, {
-          method: "POST",
-          body: JSON.stringify(draft),
-        });
+        const result = await postJson(
+          proposalResourcePath(proposalId, "reviews"),
+          draft,
+          proposalReviewWriteResponseSchema,
+        );
         toast("Review saved", "success");
         return result.review;
       }}

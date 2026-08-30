@@ -1,6 +1,6 @@
 import { AcceptedProposalCancellationPanel } from "../../../../../../components/proposals/AcceptedProposalCancellationPanel";
 import { cancelAcceptedProposalResponseSchema } from "../../../../../../../shared/schemas/proposal-management";
-import { api } from "../../../../api";
+import { postJson } from "../../../../../../shared/api-client";
 import { toast } from "../../../../ui";
 import type { ProposalDetailRecord } from "./model";
 import { proposalResourcePath } from "./proposal-api";
@@ -21,13 +21,10 @@ export function ProposalCancellationPanel({
       proposal={proposal}
       canCancel={canCancel}
       onCancel={async (comment) => {
-        const result = await api(
+        const result = await postJson(
           proposalResourcePath(proposalId, "cancellations"),
+          { comment },
           cancelAcceptedProposalResponseSchema,
-          {
-            method: "POST",
-            body: JSON.stringify({ comment }),
-          },
         );
         return { notifiedSpeakerCount: result.notifiedSpeakerCount };
       }}

@@ -4879,6 +4879,24 @@ CREATE TABLE votes (
   -- means eligibility follows the owning group's membership policy.
   threshold_type        TEXT NOT NULL,
   -- allowed: simple_majority | supermajority | successive_elimination
+  quorum_percent        INTEGER CHECK (quorum_percent IS NULL OR (quorum_percent BETWEEN 1 AND 100)),
+  -- NULL is the bylaw default: Article 10 decides a matter "by majority vote
+  -- of the members ... who cast a vote", so the denominator is ballots cast
+  -- and no minimum turnout applies. A percentage opts one vote into a
+  -- turnout floor, which is stricter than the bylaws require and therefore a
+  -- deliberate per-vote choice rather than an installation-wide default.
+  tie_break_mode        TEXT NOT NULL DEFAULT 'none',
+  -- allowed: none | chair
+  -- 'none' is Article 10: "In the case of a tie vote, the matter will not be
+  -- approved." 'chair' is the Board and Executive Council rule that the Chair
+  -- has the deciding vote — implemented as the chair's own ballot counting
+  -- twice, so the deciding vote is one they actually cast rather than a
+  -- separate decision taken after seeing the result.
+  excluded_member_ids   TEXT,
+  -- JSON array of members.id barred from this vote regardless of category.
+  -- Article 3 requires it: a proposal to withdraw a Member's status is
+  -- decided "not including the Member who is the subject of the proposal ...
+  -- who is not entitled to vote on the proposal".
   opens_at              TEXT NOT NULL,
   closes_at             TEXT NOT NULL,
   current_round         INTEGER NOT NULL DEFAULT 1,

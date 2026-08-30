@@ -32,11 +32,11 @@ SELECT
   ${sqlString(sha256Hex(template.content))},
   'active',
   (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedAdminEmail)} LIMIT 1),
-  datetime('now')${missingGuard};
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')${missingGuard};
 `;
 }
 
-/** Render idempotent or version-replacing email-template seed SQL. */
+/** Render idempotent baseline or explicitly version-replacing email-template seed SQL. */
 export function buildTemplateSqlStatements(cli, templates) {
   const statements = [];
   const normalizedAdminEmail = cli.adminEmail.trim().toLowerCase();

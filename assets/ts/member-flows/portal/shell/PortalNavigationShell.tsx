@@ -3,23 +3,47 @@ import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
+import { Menu } from "../../../components/Menu";
 import { MenuIcon } from "../../../components/MenuIcon";
-import { postJson } from "../../../shared/api-client";
+import { useData } from "../../../hooks/useData";
+import { getJson, postJson } from "../../../shared/api-client";
 import { clearAuth } from "../state";
 import type { PortalSession } from "../types";
-import { portalActiveSection, portalNavigationItems } from "./portal-navigation";
+import { portalActiveSection, portalNavigationItems, portalSectionEnabled } from "./portal-navigation";
+import { SidebarGroups } from "./SidebarGroups";
 
 interface PortalNavigationShellProps {
   children: ComponentChildren;
   displayName: string;
+  headshotUrl: string | null;
   session: PortalSession | null;
 }
 
-export function PortalNavigationShell({ children, displayName, session }: PortalNavigationShellProps) {
-  const [location] = useHashLocation();
+/** First letters of the first two name words; falls back to the first character. */
+export function portalAvatarInitials(displayName: string): string {
+  const words = displayName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
+export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
+  const [location, navigate] = useHashLocation();
   const [navigationOpen, setNavigationOpen] = useState(false);
+  // The identity's organizations live in the account menu, not the sidebar:
+  // each one deep-links into its organization workspace.
+  const organizations = useData(
+    () =>
+      session?.member
+        ? getJson("/api/v1/users/current/organizations?limit=12", userOrganizationsListResponseSchema)
+        : Promise.resolve(null),
+    [Boolean(session?.member)],
+  );
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
   const closeNavigation = () => setNavigationOpen(false);
 
   // Attach once and test the state inside, rather than attaching only while
@@ -41,6 +65,19 @@ export function PortalNavigationShell({ children, displayName, session }: Portal
     document.addEventListener("keydown", closeWithEscape);
     return () => document.removeEventListener("keydown", closeWithEscape);
   }, []);
+
+  async function signOut(): Promise<void> {
+    setSignOutError(null);
+    try {
+      if (session) await postJson("/api/v1/auth/logout", {}, successResponseSchema);
+      clearAuth();
+      window.location.assign("/portal/");
+    } catch {
+      setSignOutError("Sign out failed. Your session is still active; please try again.");
+    }
+  }
+
+  const activeSection = portalActiveSection(location);
 
   return (
     <div id="portal-root">
@@ -67,40 +104,56 @@ export function PortalNavigationShell({ children, displayName, session }: Portal
       <aside id="portal-sidebar" class={`p-2${navigationOpen ? " open" : ""}`} aria-label="Portal navigation">
         <div class="px-2 py-3 mb-1">
           <div class="portal-brand">PKI Consortium Portal</div>
-          <div id="portal-sb-user">{displayName}</div>
         </div>
         {portalNavigationItems(session).map((item) => (
-          <Link
-            key={item.section}
-            href={item.path}
-            class={`portal-sidebar-link${item.section === portalActiveSection(location, session) ? " active" : ""}`}
-            onClick={closeNavigation}
-          >
-            {item.label}
-          </Link>
+          <div key={item.section}>
+            <Link
+              href={item.path}
+              class={`portal-sidebar-link${item.section === activeSection ? " active" : ""}`}
+              onClick={closeNavigation}
+            >
+              {item.label}
+            </Link>
+            {item.section === "groups" && <SidebarGroups session={session} onNavigate={closeNavigation} />}
+          </div>
         ))}
         <div class="portal-sidebar-footer px-1 pt-3">
           {signOutError && <div class="alert alert-danger small">{signOutError}</div>}
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary w-100"
-            disabled={signingOut}
-            onClick={async () => {
-              setSignOutError(null);
-              setSigningOut(true);
-              try {
-                if (session) await postJson("/api/v1/auth/logout", {}, successResponseSchema);
-                clearAuth();
-                window.location.assign("/portal/");
-              } catch {
-                setSignOutError("Sign out failed. Your session is still active; please try again.");
-              } finally {
-                setSigningOut(false);
-              }
-            }}
-          >
-            {signingOut ? "Signing out…" : "Sign out"}
-          </button>
+          <Menu
+            label="Account menu"
+            buttonClass="portal-sidebar-user"
+            buttonContent={
+              <>
+                <span class="portal-user-avatar" aria-hidden="true">
+                  {headshotUrl ? <img src={headshotUrl} alt="" /> : portalAvatarInitials(displayName)}
+                </span>
+                <span class="portal-user-name">{displayName || "Account"}</span>
+              </>
+            }
+            actions={[
+              ...(organizations.data?.organizations ?? []).map((organization) => ({
+                key: `organization-${organization.organizationId}`,
+                label: organization.name,
+                onSelect: () => {
+                  closeNavigation();
+                  navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`);
+                },
+              })),
+              ...(portalSectionEnabled(session, "account")
+                ? [
+                    {
+                      key: "account",
+                      label: "Account settings",
+                      onSelect: () => {
+                        closeNavigation();
+                        navigate("/account");
+                      },
+                    },
+                  ]
+                : []),
+              { key: "sign-out", label: "Sign out", onSelect: () => void signOut() },
+            ]}
+          />
         </div>
       </aside>
       <main id="portal-main">{children}</main>

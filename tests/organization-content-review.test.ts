@@ -15,6 +15,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
@@ -992,41 +993,18 @@ describe("Organization content moderation", () => {
   });
 
   it("a non-privileged staff user is rejected from the moderation queue with 403", async () => {
-    const staffUserId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(staffUserId, "staff@example.test", "staff@example.test")
-      .run();
-    // Baseline unrelated grant so this actor is eligible for a staff session at all.
-    await env.DB.prepare(
-      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), staffUserId, staffUserId)
-      .run();
-    const staffToken = await createAdminSession(env.DB, staffUserId, "unprivileged-staff-token");
+    // A real staff identity whose authority lies entirely elsewhere. That is
+    // the caller most likely to slip through: the session is valid and only
+    // the permission is wrong.
+    const unrelated = await seedPersona(env.DB, "donationsOperator");
 
-    const response = await call(staffToken, "/api/v1/organizations/content-reviews");
+    const response = await call(unrelated.token!, "/api/v1/organizations/content-reviews");
     expect(response.status).toBe(403);
   });
 
   it("allows a non-admin staff identity with the global content-review permission", async () => {
-    const staffUserId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(staffUserId, "content-review-staff@example.test", "content-review-staff@example.test")
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (?, ?, 'organizations:content-review', ?, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), staffUserId, adminId)
-      .run();
-    const staffToken = await createAdminSession(env.DB, staffUserId, "content-review-staff-token");
+    const reviewer = await seedPersona(env.DB, "organizationContentReviewer");
+    const staffToken = reviewer.token!;
 
     const response = await call(staffToken, "/api/v1/organizations/content-reviews?limit=1");
     expect(response.status).toBe(200);

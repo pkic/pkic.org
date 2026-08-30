@@ -23,7 +23,7 @@ import { findLogoFile, findRepPhotoFile } from "./r2-adapter.mjs";
 import { repSummary } from "./report.mjs";
 import { REPRESENTATIVE_ROLE_IDS } from "../../assets/shared/schemas/representative-roles.ts";
 import { upsertMemberUser } from "./user-upsert.mjs";
-import { forEachResolvedEventSponsorship } from "./sponsorships.mjs";
+import { forEachResolvedEventSponsorship, normalizeImportedSponsorTier } from "./sponsorships.mjs";
 
 /**
  * Consortium-wide and per-event sponsorships from a member's YAML
@@ -34,7 +34,7 @@ function upsertSponsorshipsForOrg(ctx, { normalizedOrgName, doc, filename, name 
   const sponsor = doc.sponsor;
   if (!sponsor) return;
 
-  const level = String(sponsor.level ?? "").trim();
+  const level = normalizeImportedSponsorTier(sponsor.level);
   if (level) {
     const startDate = sponsor.since ?? doc.memberSince ?? null;
     ctx.statements.push(...buildConsortiumSponsorshipStatements(normalizedOrgName, level, startDate));

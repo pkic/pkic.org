@@ -11,7 +11,7 @@ import {
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { DonationDetailPage } from "../../assets/ts/member-flows/portal/sections/system-donations/DonationDetailPage";
 
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/system/donations", vi.fn()] }));
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/donations", vi.fn()] }));
 
 const mounted: HTMLElement[] = [];
 

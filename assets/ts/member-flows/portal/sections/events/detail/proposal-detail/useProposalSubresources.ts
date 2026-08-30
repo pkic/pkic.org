@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { useProposalReviewComments } from "../../../../../../components/proposals/useProposalReviewComments";
-import { api } from "../../../../api";
+import { getJson } from "../../../../../../shared/api-client";
 import { toast } from "../../../../ui";
 import { presentationVersionsResponseSchema } from "../../../../../../../shared/schemas/presentation-versions";
 import type { ProposalReview } from "../../../../../../../shared/schemas/proposal-reviews";
@@ -45,7 +45,7 @@ export function useProposalSubresources(
     }
     setLoadingAdditional(true);
     try {
-      const presentationData = await api(
+      const presentationData = await getJson(
         `${proposalResourcePath(proposalId, "presentations")}?limit=25`,
         presentationVersionsResponseSchema,
       ).catch(
@@ -104,7 +104,7 @@ export function useProposalSubresources(
     if (!versionPage?.hasMore || loadingMoreVersions) return;
     setLoadingMoreVersions(true);
     try {
-      const next = await api(
+      const next = await getJson(
         `${proposalResourcePath(proposalId, "presentations")}?limit=${versionPage.limit}&offset=${versions.length}`,
         presentationVersionsResponseSchema,
       );

@@ -17,7 +17,7 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   });
 
   await signInToPortal(page, staffEmail);
-  await page.goto("/portal/#/system/users");
+  await page.goto("/portal/#/users");
 
   await expect(page.getByRole("link", { name: "Users", exact: true })).toBeVisible();
   const search = page.getByPlaceholder("email or name");
@@ -42,8 +42,8 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   await page.reload();
   await expect(page.getByText(updatedJobTitle, { exact: true })).toBeVisible();
 
-  await page.goto("/portal/#/system/users");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/users$/);
+  await page.goto("/portal/#/users");
+  await expect(page).toHaveURL(/\/portal\/#\/users$/);
   await expect(page.getByRole("link", { name: "Users", exact: true })).toBeVisible();
 
   expect(canonicalRequests).toEqual(

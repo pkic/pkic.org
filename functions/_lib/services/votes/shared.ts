@@ -56,6 +56,9 @@ export interface VoteRow {
   proposed_by_user_id: string | null;
   eligible_categories: string | null;
   threshold_type: ThresholdType;
+  quorum_percent: number | null;
+  tie_break_mode: "none" | "chair";
+  excluded_member_ids: string | null;
   opens_at: string;
   closes_at: string;
   current_round: number;
@@ -79,7 +82,9 @@ export function voteRowProjection(alias: "votes" | "vote"): string {
     ${alias}.owner_group_id,
     (SELECT name FROM groups owner_group WHERE owner_group.id = ${alias}.owner_group_id) AS owner_group_name,
     ${alias}.electorate_mode, ${alias}.created_by_user_id, ${alias}.proposed_by_user_id,
-    ${alias}.eligible_categories, ${alias}.threshold_type, ${alias}.opens_at, ${alias}.closes_at,
+    ${alias}.eligible_categories, ${alias}.threshold_type,
+    ${alias}.quorum_percent, ${alias}.tie_break_mode, ${alias}.excluded_member_ids,
+    ${alias}.opens_at, ${alias}.closes_at,
     ${alias}.current_round, ${alias}.transition_revision, ${alias}.transition_processing_token,
     ${alias}.transition_lease_expires_at, ${alias}.opened_at, ${alias}.closed_at,
     ${alias}.cancelled_at, ${alias}.cancellation_reason,
@@ -159,6 +164,9 @@ export interface VoteSummary {
   ownerGroupName: string;
   electorateMode: VoteElectorateMode;
   thresholdType: ThresholdType;
+  quorumPercent: number | null;
+  tieBreakMode: "none" | "chair";
+  excludedMemberIds: string[] | null;
   eligibleCategories: string[] | null;
   opensAt: string;
   closesAt: string;
@@ -182,6 +190,9 @@ export function toVoteSummary(row: VoteRow, now: string = nowIso()): VoteSummary
     ownerGroupName: row.owner_group_name,
     electorateMode: row.electorate_mode,
     thresholdType: row.threshold_type,
+    quorumPercent: row.quorum_percent,
+    tieBreakMode: row.tie_break_mode,
+    excludedMemberIds: parseJsonSafe<string[] | null>(row.excluded_member_ids, null),
     eligibleCategories: eligibleCategoriesOf(row),
     opensAt: row.opens_at,
     closesAt: row.closes_at,

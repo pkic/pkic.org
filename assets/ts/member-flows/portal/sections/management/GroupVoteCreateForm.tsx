@@ -31,6 +31,8 @@ export function GroupVoteCreateForm({ groupId, onCreated }: { groupId: string; o
   const [electorateMode, setElectorateMode] = useState<(typeof VOTE_ELECTORATE_MODES)[number]>("per_member");
   const [thresholdType, setThresholdType] = useState("simple_majority");
   const [opensAt, setOpensAt] = useState("");
+  const [quorumPercent, setQuorumPercent] = useState("");
+  const [tieBreakMode, setTieBreakMode] = useState<"none" | "chair">("none");
   const [closesAt, setClosesAt] = useState("");
   const [candidates, setCandidates] = useState<CandidateDraft[]>([
     { name: "", bio: "" },
@@ -57,6 +59,8 @@ export function GroupVoteCreateForm({ groupId, onCreated }: { groupId: string; o
         electorateMode,
         thresholdType,
         opensAt: opensAt ? new Date(opensAt).toISOString() : undefined,
+        quorumPercent: quorumPercent ? Number(quorumPercent) : null,
+        tieBreakMode,
         closesAt: new Date(closesAt).toISOString(),
         candidates:
           voteType === "election"
@@ -69,6 +73,8 @@ export function GroupVoteCreateForm({ groupId, onCreated }: { groupId: string; o
       setTitle("");
       setDescription("");
       setOpensAt("");
+      setQuorumPercent("");
+      setTieBreakMode("none");
       setClosesAt("");
       await onCreated();
     } catch (cause) {
@@ -187,6 +193,44 @@ export function GroupVoteCreateForm({ groupId, onCreated }: { groupId: string; o
             disabled={saving}
             onInput={(event) => setClosesAt(event.currentTarget.value)}
           />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="group-vote-quorum">
+            Minimum turnout (blank means none)
+          </label>
+          <div class="input-group">
+            <input
+              id="group-vote-quorum"
+              type="number"
+              min={1}
+              max={100}
+              class="form-control"
+              placeholder="No minimum"
+              value={quorumPercent}
+              disabled={saving}
+              onInput={(event) => setQuorumPercent(event.currentTarget.value)}
+            />
+            <span class="input-group-text">% of eligible members</span>
+          </div>
+          <div class="form-text">
+            The bylaws decide a matter by majority of those who cast a vote, so leave this blank unless this particular
+            vote should also require a minimum turnout.
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="group-vote-tie-break">
+            Tied vote
+          </label>
+          <select
+            id="group-vote-tie-break"
+            class="form-select"
+            value={tieBreakMode}
+            disabled={saving}
+            onChange={(event) => setTieBreakMode(event.currentTarget.value as "none" | "chair")}
+          >
+            <option value="none">Not approved (default)</option>
+            <option value="chair">The chair's own ballot counts twice</option>
+          </select>
         </div>
         {voteType === "election" && (
           <div class="col-12">

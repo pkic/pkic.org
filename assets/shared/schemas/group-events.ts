@@ -49,7 +49,7 @@ import {
 import {
   eventRegistrationAdmitResponseSchema,
   eventRegistrationAttendanceDetailResponseSchema,
-  eventRegistrationCapacityAdmitSchema,
+  eventRegistrationSelectedDayAdmitSchema,
   eventRegistrationDayAttendanceChangeSchema,
   eventRegistrationDayAttendanceResponseSchema,
 } from "./event-registration-detail";
@@ -481,14 +481,15 @@ export const groupEventRegistrationDayAttendancePatchRouteSchema = {
   },
 };
 
-export const groupEventRegistrationAdmitRouteSchema = {
+export const groupEventRegistrationAdmissionCreateRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
   summary: "Admit selected days for a group event attendee",
-  description: "Admits selected waitlisted days without creating a registration-wide waitlisted state.",
+  description:
+    "The capacity_exempt mode requires effective event manage_attendance capability and every selected day to be actively waitlisted. The vip mode requires the stronger effective event manage capability, a reason, and explicitly selected days; it may override capacity without a waitlist row. Both modes recheck the exact capability in the protected D1 batch and queue the existing registration-update notification.",
   request: {
     params: groupEventRegistrationParamsSchema,
-    body: { required: true, content: { "application/json": { schema: eventRegistrationCapacityAdmitSchema } } },
+    body: { required: true, content: { "application/json": { schema: eventRegistrationSelectedDayAdmitSchema } } },
   },
   responses: {
     "200": {
@@ -496,7 +497,9 @@ export const groupEventRegistrationAdmitRouteSchema = {
       content: { "application/json": { schema: eventRegistrationAdmitResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated portal identity is required."),
-    "403": jsonErrorResponse("Event attendance-management access is required."),
+    "403": jsonErrorResponse(
+      "Effective event manage_attendance is required for waitlist admission; effective event manage is required for VIP admission.",
+    ),
     "404": jsonErrorResponse("The event or registration is not available through this group."),
     "409": jsonErrorResponse("The event or registration changed; reload and retry."),
   },

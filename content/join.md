@@ -10,8 +10,6 @@ menu:
         weight: 12
 ---
 
-# Join the PKI Consortium
-
 We welcome all organizations and individuals that are [eligible to join the PKI Consortium](/bylaws/#eligibility) as defined by the Bylaws of the PKI Consortium. Membership applications will be reviewed following the [Process for Admitting New Members](/bylaws/#process-for-admitting-new-members). 
 
 {{< alert type="success" >}}

@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { api } from "../../../../api";
+import { getJson, putJson } from "../../../../../../shared/api-client";
 import { eventSponsorTiersResponseSchema } from "../../../../../../../shared/schemas/sponsorship-management";
 import { useEditorResource } from "../../../../../../hooks/useEditorResource";
 import { saveEditor } from "../../../../actions";
@@ -8,7 +8,7 @@ import { SettingsEditor } from "./SettingsEditor";
 export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: boolean }) {
   const tiersResource = useEditorResource(
     async () => {
-      const data = await api(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema);
+      const data = await getJson(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema);
       return data.tiers ?? [];
     },
     [slug],
@@ -23,10 +23,11 @@ export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: bo
       setSaving,
       setStatus: setSaveStatus,
       request: () =>
-        api(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema, {
-          method: "PUT",
-          body: JSON.stringify({ tiers: tiers.filter((tier) => tier.tierName.trim()) }),
-        }),
+        putJson(
+          `/api/v1/events/${slug}/sponsors/tiers`,
+          { tiers: tiers.filter((tier) => tier.tierName.trim()) },
+          eventSponsorTiersResponseSchema,
+        ),
       successMessage: "Sponsor tiers updated",
       reload,
     });

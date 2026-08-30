@@ -1,6 +1,6 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
-import { api, apiCommand } from "../../../api";
+import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
   EVENT_TEAM_ROLES,
@@ -8,6 +8,7 @@ import {
   eventTeamRolesResponseSchema,
   type EventTeamRole,
 } from "../../../../../../shared/schemas/event-team";
+import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { performAction } from "../../../actions";
 
 const ROLE_LABELS: Record<EventTeamRole, string> = {
@@ -29,7 +30,7 @@ export function Team({ slug }: { slug: string }) {
     if (!confirm("Remove this team member?")) return;
     await performAction({
       request: () =>
-        apiCommand(`/api/v1/events/${encodeURIComponent(slug)}/roles/${roleAssignmentId}`, { method: "DELETE" }),
+        deleteJson(`/api/v1/events/${encodeURIComponent(slug)}/roles/${roleAssignmentId}`, successResponseSchema),
       successMessage: "Role revoked",
       afterSuccess: () => tableRef.current?.reload(),
     });
@@ -42,14 +43,15 @@ export function Team({ slug }: { slug: string }) {
     await performAction({
       setBusy: setAdding,
       request: () =>
-        api(`/api/v1/events/${encodeURIComponent(slug)}/roles`, eventTeamRoleCreateResponseSchema, {
-          method: "POST",
-          body: JSON.stringify({
+        postJson(
+          `/api/v1/events/${encodeURIComponent(slug)}/roles`,
+          {
             userEmail: newEmail.trim(),
             role: newRole,
             expiresAt: newExpiresAt ? new Date(newExpiresAt).toISOString() : undefined,
-          }),
-        }),
+          },
+          eventTeamRoleCreateResponseSchema,
+        ),
       successMessage: "Role assigned",
       afterSuccess: async () => {
         setNewEmail("");

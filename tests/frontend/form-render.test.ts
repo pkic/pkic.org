@@ -179,4 +179,24 @@ describe("frontend field rendering", () => {
     expect(email.validationMessage).toContain("valid email address");
     expect(emailError.textContent).toContain("valid email address");
   });
+
+  it("does not clear a business-rule email error on change or blur", () => {
+    const form = document.createElement("form");
+    const status = document.createElement("p");
+    const email = document.createElement("input");
+    email.type = "email";
+    email.name = "email";
+    email.value = "person@gmail.com";
+    const emailError = document.createElement("div");
+    emailError.dataset.fieldError = "email";
+    form.append(email, emailError, status);
+    installLiveValidation(form, status);
+
+    email.setCustomValidity("Use an organization email address.");
+    email.dispatchEvent(new Event("change", { bubbles: true }));
+    email.dispatchEvent(new Event("blur", { bubbles: false }));
+
+    expect(email.validationMessage).toBe("Use an organization email address.");
+    expect(emailError.textContent).toBe("Use an organization email address.");
+  });
 });

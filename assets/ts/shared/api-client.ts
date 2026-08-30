@@ -29,6 +29,38 @@ export interface JsonRequestInit extends RequestInit {
   mapError?: (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
 }
 
+export type UnauthorizedHandler = (status: number) => void;
+export type ErrorPayloadInterceptor = (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+let errorPayloadInterceptor: ErrorPayloadInterceptor | null = null;
+
+/**
+ * Registers a side-effecting hook invoked once per unauthorized (401)
+ * response, before the ApiClientError is thrown. Intended for a single
+ * feature surface (e.g. the member portal, at bootstrap) to react to session
+ * expiry — this module stays free of any feature-specific import so shared
+ * code can never depend on a frontend feature. Pass `null` to remove the
+ * handler (e.g. in test teardown).
+ *
+ * The handler may be invoked once for every in-flight request that resolves
+ * with a 401 for the same expired session, so it must be safe to call
+ * repeatedly in quick succession (idempotent).
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler;
+}
+
+/**
+ * Registers a hook that can rewrite an error payload (e.g. its message)
+ * before it is thrown, for every request that goes through `requestJson`.
+ * Runs before any call-site `mapError`, so a call site can still further
+ * refine the result. Pass `null` to remove the interceptor.
+ */
+export function setErrorPayloadInterceptor(interceptor: ErrorPayloadInterceptor | null): void {
+  errorPayloadInterceptor = interceptor;
+}
+
 export async function requestJson<Schema extends z.ZodType>(
   url: string,
   schema: Schema,
@@ -55,7 +87,11 @@ export async function requestJson<Schema extends z.ZodType>(
     };
     const parsed = apiErrorPayloadSchema.safeParse(body);
     const payload = parsed.success ? parsed.data : fallback;
-    throw new ApiClientError(mapError?.(payload, response.status) ?? payload, response.status);
+    if (response.status === 401) {
+      unauthorizedHandler?.(response.status);
+    }
+    const intercepted = errorPayloadInterceptor?.(payload, response.status) ?? payload;
+    throw new ApiClientError(mapError?.(intercepted, response.status) ?? intercepted, response.status);
   }
 
   return schema.parse(body);

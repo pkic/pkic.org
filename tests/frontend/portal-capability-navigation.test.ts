@@ -8,6 +8,7 @@ import {
   portalHasPermissionAtAnyScope,
   portalHasSystemManagement,
   portalNavigationItems,
+  portalSectionEnabled,
   portalSystemNavigationItems,
   portalActiveSection,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
@@ -19,12 +20,16 @@ describe("portal capability-derived navigation", () => {
     expect(portalMagicLinkToken("#/verify")).toBeNull();
   });
 
-  it("shows management but no member actions to a staff-only identity", () => {
-    const labels = portalNavigationItems(portalSessionFixture({ staff: true })).map((item) => item.label);
-    expect(labels).toContain("Management");
-    expect(labels).toContain("System");
-    expect(labels).toContain("Account Settings");
+  it("shows the group workspace but no member actions to a staff-only identity", () => {
+    const session = portalSessionFixture({ staff: true });
+    const labels = portalNavigationItems(session).map((item) => item.label);
+    expect(labels).toContain("Groups");
+    expect(labels).toContain("Settings");
+    expect(labels).not.toContain("Management");
     expect(labels).not.toContain("My Profile");
+    // Account settings moved into the user menu; it is a section, not a sidebar item.
+    expect(labels).not.toContain("Account Settings");
+    expect(portalSectionEnabled(session, "account")).toBe(true);
   });
 
   it("shows system management only for the matching global permission", () => {
@@ -39,10 +44,10 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "audit:read", contextType: "group", contextId: "group-1" }],
     });
     expect(portalHasGlobalPermission(globalAudit, "audit:read")).toBe(true);
-    expect(portalNavigationItems(globalAudit).map((item) => item.label)).toContain("System");
+    expect(portalNavigationItems(globalAudit).map((item) => item.label)).toContain("Settings");
     expect(portalHasGlobalPermission(contextualAudit, "audit:read")).toBe(false);
-    expect(portalNavigationItems(contextualAudit).map((item) => item.label)).not.toContain("System");
-    expect(portalCapacityFallbackPath(contextualAudit, "/system/audit-log")).toBe("/management");
+    expect(portalNavigationItems(contextualAudit).map((item) => item.label)).not.toContain("Settings");
+    expect(portalCapacityFallbackPath(contextualAudit, "/system/audit-log")).toBe("/home");
   });
 
   it("shows only the system-management tabs granted to a staff identity", () => {
@@ -55,7 +60,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(contentReviewer)).toContainEqual({
       path: "/system/organization-content-reviews",
       section: "system",
-      label: "System",
+      label: "Settings",
     });
     expect(portalSystemNavigationItems(contentReviewer)).toEqual([
       {
@@ -83,7 +88,7 @@ describe("portal capability-derived navigation", () => {
       { path: "/system/analytics", section: "system", label: "Analytics" },
     ]);
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
-    expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/management");
+    expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/home");
   });
 
   it("exposes Forms only to global form readers", () => {
@@ -106,7 +111,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(reader)).toContainEqual({ path: "/forms", section: "forms", label: "Forms" });
     expect(portalCapacityFallbackPath(reader, "/forms/member-feedback")).toBeNull();
     expect(portalNavigationItems(writerOnly)).not.toContainEqual(expect.objectContaining({ path: "/forms" }));
-    expect(portalCapacityFallbackPath(writerOnly, "/forms")).toBe("/management");
+    expect(portalCapacityFallbackPath(writerOnly, "/forms")).toBe("/home");
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/forms" }));
   });
 
@@ -133,7 +138,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(eventReader)).toContainEqual({ path: "/events", section: "events", label: "Events" });
     expect(portalCapacityFallbackPath(eventReader, "/events/event-1/settings")).toBeNull();
     expect(portalNavigationItems(proposalOnly)).not.toContainEqual(expect.objectContaining({ path: "/events" }));
-    expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBe("/management");
+    expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBe("/home");
   });
 
   it("exposes Donations to global readers or synchronizers", () => {
@@ -153,21 +158,21 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "donations:read", contextType: "group", contextId: "group-1" }],
     });
 
-    expect(portalSystemNavigationItems(reader)).toContainEqual({
-      path: "/system/donations",
-      section: "system",
+    expect(portalNavigationItems(reader)).toContainEqual({
+      path: "/donations",
+      section: "donations",
       label: "Donations",
     });
-    expect(portalSystemNavigationItems(synchronizer)).toContainEqual({
-      path: "/system/donations",
-      section: "system",
+    expect(portalNavigationItems(synchronizer)).toContainEqual({
+      path: "/donations",
+      section: "donations",
       label: "Donations",
     });
     expect(portalHasGlobalPermission(reader, "donations:read")).toBe(true);
     expect(portalHasGlobalPermission(synchronizer, "donations:read")).toBe(false);
-    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/donations" }),
-    );
+    expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/donations" }));
+    // Donations is a domain entry now, not part of the Settings residue.
+    expect(portalSystemNavigationItems(reader)).toEqual([]);
   });
 
   it("exposes Sponsors as a resource workspace to global readers or writers", () => {
@@ -227,18 +232,18 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "organizations:read", contextType: "group", contextId: "group-1" }],
     });
 
-    expect(portalSystemNavigationItems(reader)).toContainEqual({
-      path: "/system/organizations",
-      section: "system",
+    expect(portalNavigationItems(reader)).toContainEqual({
+      path: "/organizations",
+      section: "organizations",
       label: "Organizations",
     });
-    expect(portalSystemNavigationItems(membershipWriter)).toContainEqual({
-      path: "/system/organizations",
-      section: "system",
+    expect(portalNavigationItems(membershipWriter)).toContainEqual({
+      path: "/organizations",
+      section: "organizations",
       label: "Organizations",
     });
-    expect(portalSystemNavigationItems(contextualReader)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/organizations" }),
+    expect(portalNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/organizations" }),
     );
   });
 
@@ -261,12 +266,10 @@ describe("portal capability-derived navigation", () => {
       ],
     });
 
-    expect(portalSystemNavigationItems(actionOnly)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/users" }),
-    );
-    expect(portalSystemNavigationItems(readerAndWriter)).toContainEqual({
-      path: "/system/users",
-      section: "system",
+    expect(portalNavigationItems(actionOnly)).not.toContainEqual(expect.objectContaining({ path: "/users" }));
+    expect(portalNavigationItems(readerAndWriter)).toContainEqual({
+      path: "/users",
+      section: "users",
       label: "Users",
     });
     expect(portalHasGlobalPermission(readerAndWriter, "users:write")).toBe(true);
@@ -284,18 +287,21 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "membership:read", contextType: "group", contextId: "group-1" }],
     });
 
+    expect(portalNavigationItems(reader)).toContainEqual({
+      path: "/membership/applications",
+      section: "membership",
+      label: "Membership",
+    });
     expect(portalSystemNavigationItems(reader)).toEqual([
-      {
-        path: "/system/membership-applications",
-        section: "system",
-        label: "Membership Applications",
-      },
       {
         path: "/system/membership-settings",
         section: "system",
         label: "Membership Settings",
       },
     ]);
+    expect(portalNavigationItems(contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/membership/applications" }),
+    );
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });
 
@@ -419,7 +425,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
       expect.objectContaining({ path: "/system/access-control" }),
     );
-    expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/management");
+    expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/home");
     expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
       path: "/system/leadership",
       section: "system",
@@ -436,13 +442,21 @@ describe("portal capability-derived navigation", () => {
   });
 
   it("shows member actions but no management entry to a member-only identity", () => {
-    const labels = portalNavigationItems(portalSessionFixture({ member: true })).map((item) => item.label);
+    const session = portalSessionFixture({ member: true });
+    const labels = portalNavigationItems(session).map((item) => item.label);
+    expect(labels[0]).toBe("Home");
     expect(labels).toContain("My Profile");
-    expect(labels).toContain("Account Settings");
     expect(labels).toContain("Groups");
+    // Organizations are reached through the avatar menu and dashboard; the
+    // sidebar entry is the permission-gated directory.
+    expect(labels).not.toContain("My Organization");
+    expect(labels).not.toContain("Organizations");
+    expect(portalSectionEnabled(session, "organizations")).toBe(true);
     expect(labels).not.toContain("Votes");
     expect(labels).not.toContain("Working Groups");
     expect(labels).not.toContain("Management");
+    expect(labels).not.toContain("Account Settings");
+    expect(portalSectionEnabled(session, "account")).toBe(true);
   });
 
   it("redirects superseded member group and uploaded-calendar routes to groups", () => {
@@ -455,23 +469,25 @@ describe("portal capability-derived navigation", () => {
   it("shows both navigation capacities to one dual-capacity identity", () => {
     const labels = portalNavigationItems(portalSessionFixture({ staff: true, member: true })).map((item) => item.label);
     expect(labels).toContain("My Profile");
-    expect(labels).toContain("Management");
-    expect(labels).toContain("Account Settings");
+    expect(labels).toContain("Groups");
+    expect(labels).not.toContain("Management");
   });
 
   it("keeps shared selected-group routes after member-capacity loss", () => {
     const staffOnly = portalSessionFixture({ staff: true });
-    expect(portalDefaultPath(staffOnly)).toBe("/management");
-    expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/management");
-    expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBe("/management");
+    expect(portalDefaultPath(staffOnly)).toBe("/home");
+    expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/home");
     expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBeNull();
+    // Superseded /management and /working-groups URLs redirect within the groups section.
+    expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBeNull();
     expect(portalCapacityFallbackPath(staffOnly, "/management")).toBeNull();
     expect(portalCapacityFallbackPath(staffOnly, "/management/group-id/overview")).toBeNull();
   });
 
-  it("moves a selected-group management route after live staff-capacity loss", () => {
+  it("keeps a superseded management route for a member because groups own it now", () => {
     const memberOnly = portalSessionFixture({ member: true });
-    expect(portalCapacityFallbackPath(memberOnly, "/management/group-id/overview")).toBe("/profile");
+    expect(portalCapacityFallbackPath(memberOnly, "/management/group-id/overview")).toBeNull();
+    expect(portalDefaultPath(memberOnly)).toBe("/home");
   });
 
   it("keeps a selected-group meeting route for a current member", () => {
@@ -479,10 +495,12 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(memberOnly, "/groups/group-id/meetings")).toBeNull();
   });
 
-  it("keeps selected-group routes for staff and highlights their management entry", () => {
+  it("keeps selected-group routes for staff and highlights the groups entry", () => {
     const staffOnly = portalSessionFixture({ staff: true });
     expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/overview")).toBeNull();
-    expect(portalActiveSection("/groups/group-id/overview", staffOnly)).toBe("management");
+    expect(portalActiveSection("/groups/group-id/overview")).toBe("groups");
+    expect(portalActiveSection("/management/group-id/overview")).toBe("groups");
+    expect(portalActiveSection("/system/audit-log")).toBe("system");
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {

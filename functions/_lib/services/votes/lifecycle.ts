@@ -45,6 +45,9 @@ export interface CreateVoteInput {
   electorateMode: VoteElectorateMode;
   thresholdType: ThresholdType;
   eligibleCategories?: string[] | null;
+  quorumPercent?: number | null;
+  tieBreakMode?: "none" | "chair";
+  excludedMemberIds?: string[] | null;
   opensAt?: string;
   closesAt: string;
   candidates?: { name: string; bio?: string; userId?: string | null }[];
@@ -83,9 +86,10 @@ export async function createVoteDirect(
         `INSERT INTO votes
            (id, slug, title, description, vote_type, owner_group_id, electorate_mode,
             created_by_user_id, proposed_by_user_id,
-            eligible_categories, threshold_type, opens_at, closes_at, current_round, result_json,
+            eligible_categories, threshold_type, quorum_percent, tie_break_mode, excluded_member_ids,
+            opens_at, closes_at, current_round, result_json,
             visibility, public_detail_level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1, NULL, 'private', 'aggregate', ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 1, NULL, 'private', 'aggregate', ?, ?)`,
       )
       .bind(
         id,
@@ -98,6 +102,9 @@ export async function createVoteDirect(
         databaseUserId,
         input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
         input.thresholdType,
+        input.quorumPercent ?? null,
+        input.tieBreakMode ?? "none",
+        input.excludedMemberIds && input.excludedMemberIds.length > 0 ? stringifyJson(input.excludedMemberIds) : null,
         opensAt,
         input.closesAt,
         now,

@@ -1,4 +1,5 @@
 import { useRef, useState, type MutableRef } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
@@ -9,13 +10,25 @@ import { ResourceCapabilities } from "./ResourceCapabilities";
 export function GroupMeetingSeriesList({
   groupId,
   actionsRef,
+  initialSeriesId,
 }: {
   groupId: string;
   actionsRef?: MutableRef<ApiTableActions | null>;
+  initialSeriesId?: string;
 }) {
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
+  const [, navigate] = useHashLocation();
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(initialSeriesId ?? null);
   const localActions = useRef<ApiTableActions | null>(null);
   const effectiveActions = actionsRef ?? localActions;
+
+  function selectSeries(seriesId: string | null): void {
+    setSelectedSeriesId(seriesId);
+    navigate(
+      seriesId
+        ? `/groups/${encodeURIComponent(groupId)}/meetings/${encodeURIComponent(seriesId)}`
+        : `/groups/${encodeURIComponent(groupId)}/meetings`,
+    );
+  }
 
   return (
     <ApiDataTable
@@ -66,7 +79,7 @@ export function GroupMeetingSeriesList({
                 class="btn btn-sm btn-outline-secondary"
                 aria-expanded={selectedSeriesId === series.id}
                 aria-controls={`meeting-series-detail-${series.id}`}
-                onClick={() => setSelectedSeriesId((current) => (current === series.id ? null : series.id))}
+                onClick={() => selectSeries(selectedSeriesId === series.id ? null : series.id)}
               >
                 {selectedSeriesId === series.id ? "Hide" : "Details"}
               </button>

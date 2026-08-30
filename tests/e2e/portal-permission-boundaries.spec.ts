@@ -88,7 +88,7 @@ test("membership:read alone reads applications but offers and accepts no stage c
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  await page.goto("/portal/#/system/membership-applications");
+  await page.goto("/portal/#/membership/applications");
 
   // Reading is exactly what the permission grants.
   const row = page.locator("tr").filter({ hasText: target.email });
@@ -135,7 +135,7 @@ test("membership:write can move stages but cannot approve", async ({ page }) => 
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  await page.goto("/portal/#/system/membership-applications");
+  await page.goto("/portal/#/membership/applications");
   const row = page.locator("tr").filter({ hasText: target.email });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();

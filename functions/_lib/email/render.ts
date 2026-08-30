@@ -6,6 +6,7 @@ import {
   EMAIL_TEMPLATE_RENDER_MAX_CHARS,
   throwEmailTemplateRenderLimitExceeded,
 } from "./render-limit";
+import { inlineEmailComponentStyles, resolveEmailBrandBaseUrl } from "./render-components";
 
 export { EMAIL_TEMPLATE_RENDER_MAX_CHARS } from "./render-limit";
 
@@ -526,14 +527,17 @@ export async function renderEmail(
   baseUrl = "https://pkic.org",
 ): Promise<{ html: string; text: string }> {
   const budget = createTemplateRenderBudget();
-  // Inject baseUrl into template data so {{baseUrl}} resolves in body + partials.
-  const dataWithBase = resolveEmailTemplateData({ baseUrl, ...data }, contentType);
+  // Keep application links environment-specific while serving static branding
+  // from a publicly reachable origin when a developer email uses localhost.
+  const brandBaseUrl = resolveEmailBrandBaseUrl(baseUrl);
+  const dataWithBase = resolveEmailTemplateData({ ...data, baseUrl, brandBaseUrl }, contentType);
   const rendered = compileSimpleTemplateWithBudget(template, dataWithBase, budget, 0);
 
   if (contentType === "html") {
     // Template is already HTML — wrap in layout but skip markdown processing.
-    const html = wrapHtml(rendered, layoutHtml, dataWithBase, baseUrl, budget);
-    const text = stripHtmlToText(rendered);
+    const htmlBody = inlineEmailComponentStyles(rendered);
+    const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
+    const text = stripHtmlToText(htmlBody);
     return { html, text };
   }
 
@@ -546,10 +550,12 @@ export async function renderEmail(
   }
 
   // Default: markdown
-  const htmlBody = await marked.parse(rendered, {
-    gfm: true,
-    breaks: false,
-  });
+  const htmlBody = inlineEmailComponentStyles(
+    await marked.parse(rendered, {
+      gfm: true,
+      breaks: false,
+    }),
+  );
   assertTemplateRenderLength(htmlBody.length, budget);
   const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
 

@@ -1,5 +1,5 @@
 import type {
-  EventRegistrationCapacityAdmitInput,
+  EventRegistrationSelectedDayAdmitInput,
   EventRegistrationAttendanceDetailResponse,
   EventRegistrationDayAttendanceChange,
 } from "../../../../assets/shared/schemas/event-registration-detail";
@@ -10,14 +10,21 @@ import {
   guardEventResourceManagementDatabase,
   commitEventResourceManagementBatch,
   requireEventResourceManagementContext,
+  type EventResourceManagementCapability,
 } from "../event-series/management";
 import { getEventRegistrationAttendanceDetail } from "./detail";
 import { admitRegistration } from "./admission";
 import { updateRegistrationDayAttendance } from "./day-attendance-management";
 
-async function requireManagedEvent(db: DatabaseLike, actor: AuthAdmin, groupIdOrSlug: string, eventId: string) {
+async function requireManagedEvent(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  eventId: string,
+  capability: EventResourceManagementCapability = "manage_attendance",
+) {
   const event = await getEventById(db, eventId);
-  const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, event.id, "manage_attendance");
+  const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, event.id, capability);
   return { event, context };
 }
 
@@ -61,21 +68,26 @@ export async function updateGroupManagedEventRegistrationDayAttendance(
   });
 }
 
-/** Admits only the requested days and returns the minimal manager projection. */
+/**
+ * Applies one explicitly selected admission mode and returns the minimal
+ * manager projection. Waitlist admission requires manage_attendance; the
+ * capacity-bypassing VIP override requires the stronger manage capability.
+ */
 export async function admitGroupManagedEventRegistration(
   db: DatabaseLike,
   actor: AuthAdmin,
   groupIdOrSlug: string,
   eventId: string,
   registrationId: string,
-  input: EventRegistrationCapacityAdmitInput,
+  input: EventRegistrationSelectedDayAdmitInput,
   appBaseUrl: string,
 ): Promise<{
   registration: EventRegistrationAttendanceDetailResponse["registration"];
   admittedDayDates: string[];
   outboxId: string | null;
 }> {
-  const { event, context } = await requireManagedEvent(db, actor, groupIdOrSlug, eventId);
+  const capability: EventResourceManagementCapability = input.mode === "vip" ? "manage" : "manage_attendance";
+  const { event, context } = await requireManagedEvent(db, actor, groupIdOrSlug, eventId, capability);
   const admitted = await admitRegistration(db, {
     registrationId,
     event,
@@ -84,12 +96,11 @@ export async function admitGroupManagedEventRegistration(
     reason: input.reason,
     actorUserId: actor.id,
     appBaseUrl,
-    requireActiveWaitlist: true,
-    commitBatch: (statements) =>
-      commitEventResourceManagementBatch(db, actor, context, "manage_attendance", statements),
+    requireActiveWaitlist: input.mode === "capacity_exempt",
+    commitBatch: (statements) => commitEventResourceManagementBatch(db, actor, context, capability, statements),
   });
   const detail = await getEventRegistrationAttendanceDetail(
-    guardEventResourceManagementDatabase(db, actor, context, "manage_attendance"),
+    guardEventResourceManagementDatabase(db, actor, context, capability),
     event.id,
     registrationId,
   );

@@ -171,13 +171,28 @@ test("a selected-group manager changes one attendee day through portal routes", 
   await expect(attendance.getByLabel("Attendance for 2027-07-10")).toHaveValue("in_person");
   await expect(page.getByRole("status")).toContainText("admitted");
 
+  const vipOverride = attendance.getByRole("group", { name: "Reasoned VIP admission override" });
+  await expect(vipOverride).toContainText("Requires the effective event manage capability");
+  await vipOverride.getByLabel("E2E Saturday — 2027-07-10").check();
+  await vipOverride.getByLabel("Required reason").fill("E2E invited consortium guest");
+  const vipResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /^\/api\/v1\/groups\/[^/]+\/events\/[^/]+\/registrations\/[^/]+\/admissions$/.test(
+        new URL(response.url()).pathname,
+      ),
+  );
+  await vipOverride.getByRole("button", { name: "Apply VIP override" }).click();
+  expect((await vipResponse).status()).toBe(200);
+  await expect(page.getByRole("status").filter({ hasText: "VIP override applied" })).toBeVisible();
+
   expect(adminRequests, "portal attendee management must not call admin APIs").toEqual([]);
   expect(groupRegistrationRequests).toEqual(
     expect.arrayContaining([
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/registrations$/),
       expect.stringMatching(/^GET \/api\/v1\/groups\/.*\/events\/.*\/registrations\/.*$/),
       expect.stringMatching(/^PATCH \/api\/v1\/groups\/.*\/events\/.*\/registrations\/.*\/day-attendance$/),
-      expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/registrations\/.*\/admit$/),
+      expect.stringMatching(/^POST \/api\/v1\/groups\/.*\/events\/.*\/registrations\/.*\/admissions$/),
     ]),
   );
 });

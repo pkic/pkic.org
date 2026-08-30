@@ -312,7 +312,7 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
           { key: "promoters", label: "Share Links" },
         ]}
         active={tab}
-        onChange={(k) => navigate(k === "list" ? "/system/donations" : "/system/donations/promoters")}
+        onChange={(k) => navigate(k === "list" ? "/donations" : "/donations/promoters")}
       />
 
       {tab === "list" && (
@@ -367,7 +367,7 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
             empty="No donations found"
             className="align-middle"
             rowKey={(d) => d.id}
-            onRowClick={(d) => navigate(`/system/donations/detail/${d.id}`)}
+            onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
           />
         </>
       )}

@@ -1,54 +1,86 @@
 <div data-member-application data-module="member-flows/join-form" class="join-flow">
   <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
 
-  <section data-join-start>
-    <h2>Join the PKI Consortium</h2>
-    <p class="lead">Start with your employer or organization email address.</p>
-    <div class="alert alert-info">
-      <p class="mb-1"><strong>Organization participation is the default.</strong></p>
-      <p class="mb-0">
-        If you are employed by, own, or represent an organization, you must join on behalf of that organization using
-        its email address. This protects clear organizational and IPR attribution.
-      </p>
-    </div>
+  <div data-join-start>
+    <p class="lead">First, tell us whether an organization is connected to your participation.</p>
     <form data-join-start-form class="row g-3 my-2 needs-validation" novalidate>
-      <div class="col-12">
-        <label for="joinEmail" class="form-label">Work or organization email address</label>
+      <fieldset class="col-12">
+        <legend class="form-label fs-6 fw-semibold">Are you employed by, or do you own, an organization?</legend>
+        <p id="joinApplicantKindHelp" class="form-text mb-3">
+          If an organization has separately authorized you to act on its behalf, choose Yes even if you are not its
+          employee or owner.
+        </p>
+        <div class="form-check mb-2">
+          <input
+            class="form-check-input"
+            type="radio"
+            name="applicantKind"
+            id="joinApplicantOrganization"
+            value="organization"
+            aria-describedby="joinApplicantKindHelp"
+            required
+          />
+          <label class="form-check-label" for="joinApplicantOrganization">
+            <strong>Yes</strong> — I am employed by or own an organization
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            name="applicantKind"
+            id="joinApplicantIndividual"
+            value="individual"
+            aria-describedby="joinApplicantKindHelp"
+            required
+          />
+          <label class="form-check-label" for="joinApplicantIndividual">
+            <strong>No</strong> — I am not employed by and do not own an organization
+          </label>
+        </div>
+        <div class="invalid-feedback">Choose the statement that describes your situation.</div>
+      </fieldset>
+
+      <div data-join-path-details class="col-12" hidden>
+        <div data-join-organization-policy class="alert alert-info" hidden>
+          You must participate on behalf of that organization. Use an email address belonging to it so we can verify the
+          relationship and keep organizational and IPR attribution clear.
+        </div>
+        <div data-join-individual-policy class="alert alert-warning" hidden>
+          Individual participation is limited to eligible categories for people who are not employed by, do not own, and
+          are not acting for an organization.
+        </div>
+
+        <div data-join-individual-categories class="mb-3" hidden>
+          <p class="form-label fw-semibold mb-2">Eligible individual categories</p>
+          <div data-join-individual-category-list class="form-text" aria-live="polite">
+            Loading eligible categories…
+          </div>
+        </div>
+
+        <label for="joinEmail" class="form-label" data-join-email-label
+          >Your official work or organization email address</label
+        >
         <input
           type="email"
           class="form-control"
           id="joinEmail"
           name="email"
           autocomplete="email"
-          aria-describedby="joinEmailHelp"
+          placeholder="you@organization.example"
+          aria-describedby="joinEmailHelp joinEmailError"
           required
+          disabled
         />
-        <div data-field-error="email" class="invalid-feedback d-block"></div>
-        <div id="joinEmailHelp" class="form-text">
+        <div id="joinEmailError" data-field-error="email" class="invalid-feedback d-block" aria-live="polite"></div>
+        <div id="joinEmailHelp" class="form-text" data-join-email-help>
           We will send a short-lived verification link before showing the appropriate next step.
         </div>
+
+        <button type="submit" class="btn btn-success mt-3">Continue</button>
       </div>
-      <div class="col-12">
-        <button type="button" class="btn btn-link p-0" data-show-unaffiliated>
-          I am not employed by or representing an organization
-        </button>
-      </div>
-      <div data-unaffiliated-attestation class="col-12" hidden>
-        <div class="alert alert-warning mb-3">
-          Personal and free email addresses cannot establish organization participation. If you are employed by or
-          represent an organization, use that organization&rsquo;s email address instead.
-        </div>
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="unaffiliatedAttestation" name="unaffiliatedAttestation" />
-          <label class="form-check-label" for="unaffiliatedAttestation">
-            I confirm that I am not employed by, acting for, or representing an organization, and I want to be assessed
-            only for an eligible individual category.
-          </label>
-        </div>
-      </div>
-      <div class="col-12"><button type="submit" class="btn btn-success">Continue</button></div>
     </form>
-  </section>
+  </div>
 
   <section data-join-verification-pending hidden tabindex="-1">
     <h2>Check your email</h2>
@@ -78,9 +110,21 @@
 
   <form data-join-application-form class="row g-3 my-2 needs-validation" novalidate hidden>
     <div class="col-12">
-      <h2>Membership application</h2>
+      <div class="membership-verified-context">
+        <p class="mb-1">
+          <strong data-verified-application-kind></strong> using verified email address
+          <strong data-verified-application-email></strong>.
+        </p>
+        <p class="small mb-0">
+          Your verified email address and application path are fixed for this application. Start again if either is
+          incorrect.
+        </p>
+      </div>
+    </div>
+
+    <div class="col-12">
       <p class="form-text mb-0">
-        Continuing with verified email address <strong data-verified-application-email></strong>.
+        Only eligibility categories permitted for this verified application path are available below.
       </p>
     </div>
 
@@ -115,6 +159,39 @@
 
     <div class="col-12" data-custom-fields>
       <p class="form-text">Loading additional questions…</p>
+    </div>
+
+    <div class="col-12 membership-legal-agreements" data-membership-legal-agreements hidden>
+      <div>
+        <h3 class="h6 mb-1">Review and accept the membership terms</h3>
+        <p class="form-text mb-0">
+          Read each document in the scrollable panel. The agreement control is located at the bottom of each document.
+        </p>
+      </div>
+
+      {{- with .Site.GetPage "/bylaws" -}} {{ partial "forms/legal-document-agreement.html" (dict "page" . "fieldKey"
+      "agrees_bylaws") }} {{- end -}} {{- with .Site.GetPage "/code-of-conduct" -}} {{ partial
+      "forms/legal-document-agreement.html" (dict "page" . "fieldKey" "agrees_code_of_conduct") }} {{- end -}} {{- with
+      .Site.GetPage "/ipr" -}} {{ partial "forms/legal-document-agreement.html" (dict "page" . "fieldKey"
+      "agrees_ipr_policy") }} {{- end -}}
+
+      <div class="membership-legal-authority" data-membership-legal-field="warranted_authority">
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="custom-warranted-authority"
+            name="custom.warranted_authority"
+            data-membership-legal-input
+            required
+          />
+          <label class="form-check-label fw-semibold" for="custom-warranted-authority" data-membership-legal-label>
+            I represent and warrant that I have the necessary authority to submit this membership application and to be
+            legally bound by these terms.
+          </label>
+          <div class="invalid-feedback d-block" data-field-error="warranted_authority"></div>
+        </div>
+      </div>
     </div>
 
     <div class="col-12">

@@ -17,9 +17,9 @@ import {
 } from "../../../../../../shared/schemas/event-promoters";
 import { promoterRankCardClass, promoterRankTier } from "../../../../../shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../../../../hooks/useOffsetPager";
-import { api } from "../../../api";
+import { getJson } from "../../../../../shared/api-client";
 
-const loadEventPromoters: CollectionLoader = (url, signal, schema) => api(url, schema, { signal });
+const loadEventPromoters: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
 function conversionColor(rate: number): string {
   if (rate >= 50) return "high";

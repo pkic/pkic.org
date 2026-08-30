@@ -1,4 +1,5 @@
 import { useRef, useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
@@ -6,10 +7,28 @@ import { GroupFormDetail } from "./GroupFormDetail";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { ResourceCapabilities } from "./ResourceCapabilities";
 
-export function GroupForms({ groupId, canManage }: { groupId: string; canManage: boolean }) {
+export function GroupForms({
+  groupId,
+  canManage,
+  initialPlacementId,
+}: {
+  groupId: string;
+  canManage: boolean;
+  initialPlacementId?: string;
+}) {
+  const [, navigate] = useHashLocation();
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(initialPlacementId ?? null);
   const tableActions = useRef<ApiTableActions | null>(null);
+
+  function selectPlacement(placementId: string | null): void {
+    setSelectedPlacementId(placementId);
+    navigate(
+      placementId
+        ? `/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`
+        : `/groups/${encodeURIComponent(groupId)}/forms`,
+    );
+  }
 
   return (
     <div class="card border-0 shadow-sm">
@@ -91,9 +110,7 @@ export function GroupForms({ groupId, canManage }: { groupId: string; canManage:
                   type="button"
                   class="btn btn-sm btn-outline-secondary"
                   aria-expanded={selectedPlacementId === row.placement.id}
-                  onClick={() =>
-                    setSelectedPlacementId((current) => (current === row.placement.id ? null : row.placement.id))
-                  }
+                  onClick={() => selectPlacement(selectedPlacementId === row.placement.id ? null : row.placement.id)}
                 >
                   {selectedPlacementId === row.placement.id ? "Hide" : "Details"}
                 </button>

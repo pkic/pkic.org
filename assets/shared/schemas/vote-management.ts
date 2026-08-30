@@ -27,6 +27,19 @@ export const voteCreateInputSchema = z.object({
   electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
   eligibleCategories: membershipCategorySelectionSchema.nullable().optional(),
+  /**
+   * A minimum turnout, as a percentage of the eligible electorate. Omitted by
+   * default: Article 10 decides by "members ... who cast a vote", so a floor
+   * is stricter than the bylaws require and is a deliberate choice per vote.
+   */
+  quorumPercent: z.number().int().min(1).max(100).nullable().optional(),
+  /** `chair` settles a tie by counting the chair's own ballot twice. */
+  tieBreakMode: z.enum(["none", "chair"]).optional(),
+  /**
+   * Members barred from this vote regardless of category — Article 3 bars the
+   * Member whose withdrawal is the subject of the proposal.
+   */
+  excludedMemberIds: z.array(databaseIdSchema).max(200).nullable().optional(),
   opensAt: z.iso.datetime({ offset: true }).optional(),
   closesAt: z.iso.datetime({ offset: true }),
   candidates: z.array(voteCandidateInputSchema).max(50).optional(),

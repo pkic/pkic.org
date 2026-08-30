@@ -1,6 +1,6 @@
 import {
   groupEventRegistrationCreateRouteSchema,
-  groupEventRegistrationAdmitRouteSchema,
+  groupEventRegistrationAdmissionCreateRouteSchema,
   groupEventRegistrationDayAttendancePatchRouteSchema,
   groupEventRegistrationDetailRouteSchema,
   groupEventRegistrationsListRouteSchema,
@@ -116,8 +116,8 @@ export const GroupEventRegistrationDayAttendancePatch = openApiRoute(
   },
 );
 
-export const GroupEventRegistrationAdmitPost = openApiRoute(
-  groupEventRegistrationAdmitRouteSchema,
+export const GroupEventRegistrationAdmissionCreate = openApiRoute(
+  groupEventRegistrationAdmissionCreateRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);

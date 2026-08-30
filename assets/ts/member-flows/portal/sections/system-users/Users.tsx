@@ -6,7 +6,7 @@ export function Users({ userId, permissions }: { userId?: string; permissions: U
   const [, navigate] = useHashLocation();
 
   if (userId) {
-    return <UserDetail userId={userId} permissions={permissions} onBack={() => navigate("/system/users")} />;
+    return <UserDetail userId={userId} permissions={permissions} onBack={() => navigate("/users")} />;
   }
 
   if (!permissions.canRead) {
@@ -21,7 +21,7 @@ export function Users({ userId, permissions }: { userId?: string; permissions: U
       <UsersList
         canWrite={permissions.canWrite}
         canGrantAccess={permissions.canGrantAccess}
-        onViewUser={(id) => navigate(`/system/users/${encodeURIComponent(id)}`)}
+        onViewUser={(id) => navigate(`/users/${encodeURIComponent(id)}`)}
       />
     </section>
   );

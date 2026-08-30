@@ -2,11 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { createAdminSession } from "./helpers/auth";
+import { seedPersona } from "./personas/seed";
+import { onlyPersona } from "./personas/catalog";
 import { queryAll } from "./helpers/context";
-import { insertUser } from "./helpers/membership";
 import { schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
-import type { Permission } from "../assets/shared/schemas/permissions";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -34,25 +33,18 @@ async function callWithDatabase(
   );
 }
 
-/** A staff user holding exactly the listed grants and nothing more. */
-async function staffIdentityWith(grants: Permission[], label: string) {
-  const userId = await insertUser(env.DB, `${label}@example.test`);
-  const grantIds = new Map<Permission, string>();
-  for (const permission of grants) {
-    const grantId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (?, ?, ?, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    )
-      .bind(grantId, userId, permission)
-      .run();
-    grantIds.set(permission, grantId);
-  }
-  return { userId, grantIds, token: await createAdminSession(env.DB, userId, `${label}-token`) };
+/**
+ * A staff identity composed from named profiles, holding exactly what those
+ * profiles grant and nothing more. Composing named profiles rather than
+ * listing permissions keeps every identity here one the product can issue.
+ */
+async function staffIdentityWith(personas: string[]) {
+  const seeded = await seedPersona(env.DB, personas);
+  return { userId: seeded.userId, grantIds: seeded.grantIds, token: seeded.token! };
 }
 
-async function staffWith(grants: Permission[], label: string): Promise<string> {
-  return (await staffIdentityWith(grants, label)).token;
+async function staffWith(personas: string[]): Promise<string> {
+  return (await staffIdentityWith(personas)).token;
 }
 
 describe("scheduler API", () => {
@@ -76,7 +68,7 @@ describe("scheduler API", () => {
   });
 
   it("lists the registry for scheduler:read and reports lease and success state", async () => {
-    const token = await staffWith(["scheduler:read"], "scheduler-reader");
+    const token = await staffWith([onlyPersona("scheduler:read")]);
     const response = await call(token, "/api/v1/scheduler/jobs");
     expect(response.status).toBe(200);
 
@@ -90,7 +82,7 @@ describe("scheduler API", () => {
   });
 
   it("derives exact state and run capabilities from the job's live domain grants", async () => {
-    const manager = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-capability-manager");
+    const manager = await staffWith(["schedulerOperator"]);
     const managerPayload = schedulerJobsListResponseSchema.parse(
       await (await call(manager, "/api/v1/scheduler/jobs")).json(),
     );
@@ -99,10 +91,7 @@ describe("scheduler API", () => {
       run: false,
     });
 
-    const runner = await staffWith(
-      ["scheduler:read", "scheduler:manage", "retention:run", "users:anonymize"],
-      "scheduler-capability-runner",
-    );
+    const runner = await staffWith(["schedulerOperator", "retentionOperator"]);
     const runnerPayload = schedulerJobsListResponseSchema.parse(
       await (await call(runner, "/api/v1/scheduler/jobs")).json(),
     );
@@ -115,7 +104,7 @@ describe("scheduler API", () => {
   it("refuses a run to a caller holding scheduler:manage but not the job's own grants", async () => {
     // The escalation this surface must not permit: retention redacts user data,
     // so triggering it through the scheduler still requires users:anonymize.
-    const token = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-only");
+    const token = await staffWith(["schedulerOperator"]);
     const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
       method: "POST",
       body: JSON.stringify({}),
@@ -126,7 +115,9 @@ describe("scheduler API", () => {
   });
 
   it("refuses a run to a caller holding the job's grants but not scheduler:manage", async () => {
-    const token = await staffWith(["scheduler:read", "retention:run", "users:anonymize"], "domain-only");
+    const token = // Holds the retention domain itself but not scheduler:manage, so it must
+      // not be able to run retention *through* the scheduler.
+      await staffWith([onlyPersona("scheduler:read"), "retentionOperator"]);
     const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
       method: "POST",
       body: JSON.stringify({}),
@@ -135,10 +126,7 @@ describe("scheduler API", () => {
   });
 
   it("runs a job for a caller holding both, and records the trigger", async () => {
-    const token = await staffWith(
-      ["scheduler:read", "scheduler:manage", "retention:run", "users:anonymize"],
-      "scheduler-runner",
-    );
+    const token = await staffWith(["schedulerOperator", "retentionOperator"]);
     const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
       method: "POST",
       body: JSON.stringify({}),
@@ -161,7 +149,7 @@ describe("scheduler API", () => {
   });
 
   it("returns 404 for an unknown job rather than leaking the registry shape", async () => {
-    const token = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-unknown");
+    const token = await staffWith(["schedulerOperator"]);
     const response = await call(token, "/api/v1/scheduler/jobs/not-a-job/runs", {
       method: "POST",
       body: JSON.stringify({}),
@@ -170,10 +158,7 @@ describe("scheduler API", () => {
   });
 
   it("pauses with an attributed reason, refuses to run while paused, and resumes", async () => {
-    const token = await staffWith(
-      ["scheduler:read", "scheduler:manage", "retention:run", "users:anonymize"],
-      "scheduler-pauser",
-    );
+    const token = await staffWith(["schedulerOperator", "retentionOperator"]);
 
     const paused = await call(token, "/api/v1/scheduler/jobs/retention", {
       method: "PATCH",
@@ -207,7 +192,7 @@ describe("scheduler API", () => {
   });
 
   it("does not let a pause be recorded without a reason", async () => {
-    const token = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-noreason");
+    const token = await staffWith(["schedulerOperator"]);
     const response = await call(token, "/api/v1/scheduler/jobs/retention", {
       method: "PATCH",
       body: JSON.stringify({ state: "paused" }),
@@ -216,7 +201,7 @@ describe("scheduler API", () => {
   });
 
   it("removes the superseded pause and resume action routes", async () => {
-    const token = await staffWith(["scheduler:read", "scheduler:manage"], "scheduler-old-actions");
+    const token = await staffWith(["schedulerOperator"]);
     for (const path of ["/api/v1/scheduler/jobs/retention/pause", "/api/v1/scheduler/jobs/retention/resume"]) {
       expect((await call(token, path, { method: "POST", body: JSON.stringify({ reason: "legacy" }) })).status).toBe(
         404,
@@ -225,10 +210,7 @@ describe("scheduler API", () => {
   });
 
   it("rolls back a state update when scheduler authority is revoked before commit", async () => {
-    const identity = await staffIdentityWith(
-      ["scheduler:read", "scheduler:manage"],
-      "scheduler-state-authorization-race",
-    );
+    const identity = await staffIdentityWith(["schedulerOperator"]);
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
         .bind(identity.grantIds.get("scheduler:manage"))
@@ -253,10 +235,7 @@ describe("scheduler API", () => {
   });
 
   it("rolls back a manual claim when a job-domain grant is revoked before commit", async () => {
-    const identity = await staffIdentityWith(
-      ["scheduler:read", "scheduler:manage", "retention:run", "users:anonymize"],
-      "scheduler-run-authorization-race",
-    );
+    const identity = await staffIdentityWith(["schedulerOperator", "retentionOperator"]);
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
         .bind(identity.grantIds.get("users:anonymize"))

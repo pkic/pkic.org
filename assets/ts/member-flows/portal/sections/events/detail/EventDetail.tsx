@@ -4,7 +4,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Tabs } from "../../../../../components/Tabs";
-import { api } from "../../../api";
+import { getJson } from "../../../../../shared/api-client";
 import { eventManagementDetailResponseSchema } from "../../../../../../shared/schemas/event-management";
 import { toast } from "../../../ui";
 import type { EventDetail } from "../types";
@@ -41,7 +41,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
     setLoading(true);
     setError(null);
     try {
-      const data = await api(`/api/v1/events/${encodeURIComponent(slug)}`, eventManagementDetailResponseSchema);
+      const data = await getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventManagementDetailResponseSchema);
       setEvent(data.event);
       currentEvent.value = data.event;
     } catch (e) {

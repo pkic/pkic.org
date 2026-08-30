@@ -24,16 +24,19 @@ async function openVerifiedApplicationForm(
 ): Promise<void> {
   const since = await capturedEmailCount();
   await page.goto("/join/");
-  await page.getByLabel("Work or organization email address").fill(email);
   if (options.unaffiliated) {
-    await page.getByRole("button", { name: "I am not employed by or representing an organization" }).click();
-    await page.getByLabel(/I confirm that I am not employed/).check();
+    await page.getByLabel("No — I am not employed by and do not own an organization").check();
+    await page.getByLabel("Your personal or university email address").fill(email);
+  } else {
+    await page.getByLabel("Yes — I am employed by or own an organization").check();
+    await page.getByLabel("Your official work or organization email address").fill(email);
   }
   await page.getByRole("button", { name: "Continue" }).click();
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
   await page.goto(extractEmailUrl(verification, "#verify="));
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Membership application", exact: true })).toBeVisible();
+  await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
+  await expect(page.locator('[data-membership-categories] input[name="category"]').first()).toBeVisible();
 }
 
 test("an organization applicant is offered only organization-tied categories", async ({ page }) => {
@@ -89,7 +92,7 @@ test("an organization applicant submits in a category other than the default", a
   await page.getByLabel("Last name").fill("Applicant");
   await page.getByLabel("Organization name").fill(`Category ${chosen} Organization ${suffix}`);
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
-  for (const agreement of await page.locator('[data-custom-fields] input[type="checkbox"][required]').all()) {
+  for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();
   }
 

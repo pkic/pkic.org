@@ -7,8 +7,8 @@ import { buildExactScopedAuditLogPageQuery } from "../functions/_lib/services/au
 import { createGroup, updateGroup } from "../functions/_lib/services/groups";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
-import { createAdminSession } from "./helpers/auth";
 import { insertUser } from "./helpers/membership";
+import { seedPersona } from "./personas/seed";
 import { resetDb } from "./helpers/reset-db";
 
 async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
@@ -40,24 +40,12 @@ describe("group-scoped audit log", () => {
       typeKey: "working_group",
       name: `Audit other ${crypto.randomUUID()}`,
     });
-    const leader = await userActor("group-audit-leader");
-    const outsider = await userActor("group-audit-outsider");
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), leader.id, parent.id)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), outsider.id, other.id)
-      .run();
-    const leaderToken = await createAdminSession(env.DB, leader.id, `group-audit-leader-${crypto.randomUUID()}`);
-    const outsiderToken = await createAdminSession(env.DB, outsider.id, `group-audit-outsider-${crypto.randomUUID()}`);
+    // Two chairs, each of a different group: the one under test, and one who
+    // must see nothing of it.
+    const leader = await seedPersona(env.DB, "groupLead", { groupId: parent.id });
+    const outsider = await seedPersona(env.DB, "groupLead", { groupId: other.id });
+    const leaderToken = leader.token!;
+    const outsiderToken = outsider.token!;
 
     await writeAuditLog(
       env.DB,
@@ -119,28 +107,12 @@ describe("group-scoped audit log", () => {
       parentGroupId: parent.id,
       name: `Audit local only ${crypto.randomUUID()}`,
     });
-    const parentLeader = await userActor("group-audit-parent-leader");
-    const localLeader = await userActor("group-audit-local-leader");
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), parentLeader.id, parent.id)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO user_roles
-         (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-       VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), localLeader.id, localOnlyChild.id)
-      .run();
+    // The parent's chair, and a chair local to the child. Local-only
+    // governance must stop the former reaching the latter's group.
+    const parentLeader = await seedPersona(env.DB, "groupLead", { groupId: parent.id });
+    await seedPersona(env.DB, "groupLead", { groupId: localOnlyChild.id });
     await updateGroup(env.DB, admin, localOnlyChild.id, { governanceInheritanceMode: "local_only" });
-    const parentLeaderToken = await createAdminSession(
-      env.DB,
-      parentLeader.id,
-      `group-audit-parent-leader-${crypto.randomUUID()}`,
-    );
+    const parentLeaderToken = parentLeader.token!;
 
     await writeAuditLog(
       env.DB,

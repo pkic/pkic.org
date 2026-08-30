@@ -1,4 +1,5 @@
 import { useRef, useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
@@ -19,8 +20,17 @@ function isStandaloneEvent(event: { seriesId: string | null; profileKey: string 
   return event.seriesId === null && event.profileKey !== "meeting" && event.profileKey !== "board_meeting";
 }
 
-export function GroupEvents({ groupId, canManage = false }: { groupId: string; canManage?: boolean }) {
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+export function GroupEvents({
+  groupId,
+  canManage = false,
+  initialEventId,
+}: {
+  groupId: string;
+  canManage?: boolean;
+  initialEventId?: string;
+}) {
+  const [, navigate] = useHashLocation();
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const tableActions = useRef<ApiTableActions | null>(null);
@@ -34,6 +44,15 @@ export function GroupEvents({ groupId, canManage = false }: { groupId: string; c
         : Promise.resolve(null),
     [groupId, selectedEventId],
   );
+
+  function selectEvent(eventId: string | null): void {
+    setSelectedEventId(eventId);
+    navigate(
+      eventId
+        ? `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`
+        : `/groups/${encodeURIComponent(groupId)}/events`,
+    );
+  }
 
   return (
     <div class="card border-0 shadow-sm">
@@ -106,7 +125,7 @@ export function GroupEvents({ groupId, canManage = false }: { groupId: string; c
                   type="button"
                   class="btn btn-sm btn-outline-secondary"
                   aria-expanded={selectedEventId === event.id}
-                  onClick={() => setSelectedEventId((current) => (current === event.id ? null : event.id))}
+                  onClick={() => selectEvent(selectedEventId === event.id ? null : event.id)}
                 >
                   {selectedEventId === event.id ? "Hide" : "Details"}
                 </button>

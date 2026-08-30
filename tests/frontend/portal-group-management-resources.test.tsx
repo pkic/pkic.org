@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
 import { GroupLeadershipAssignmentForm } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
+
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const MEMBERSHIP_ID = "20000000-0000-4000-8000-000000000001";
@@ -70,6 +76,10 @@ function usersPage(id: string, email: string) {
     page: { limit: 8, offset: 0, total: 1, hasMore: false },
   };
 }
+
+beforeEach(() => {
+  navigate.mockReset();
+});
 
 afterEach(() => {
   for (const container of mounted.splice(0)) {
@@ -168,6 +178,114 @@ describe("portal group management resources", () => {
     );
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     expect(requests.some(({ url }) => url.pathname.includes("/admin/"))).toBe(false);
+  });
+
+  it("navigates to and from a meeting series' canonical URL when its detail is opened and closed", async () => {
+    const seriesId = "60000000-0000-4000-8000-000000000001";
+    const series = {
+      id: seriesId,
+      eventId: "70000000-0000-4000-8000-000000000001",
+      ownerGroupId: GROUP_ID,
+      eventName: "Architecture call",
+      eventSlug: "architecture-call",
+      profileKey: "meeting",
+      registrationPolicy: "no_registration",
+      visibility: "group_members",
+      memberEligibility: "owner_group",
+      guestPolicy: "occurrence_invitation",
+      startsAt: "2026-09-01T15:00:00.000Z",
+      recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
+      timezone: "Europe/Amsterdam",
+      durationMinutes: 60,
+      location: "https://meet.example.test/architecture",
+      providerType: null,
+      providerConfigured: false,
+      active: true,
+      inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
+      nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      capabilities: ["view", "manage"],
+      occurrenceCount: 0,
+    } as const;
+    const page = { limit: 25, offset: 0, total: 1, hasMore: false };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/occurrences")) return json({ occurrences: [], page });
+        return json({ series: [series], page });
+      }),
+    );
+
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
+    await settle();
+    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    await act(async () => {
+      details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${seriesId}`);
+
+    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
+    await act(async () => {
+      hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings`);
+  });
+
+  it("opens a meeting series from its URL-addressed initial series and reports a failed occurrences fetch", async () => {
+    const seriesId = "60000000-0000-4000-8000-000000000001";
+    const series = {
+      id: seriesId,
+      eventId: "70000000-0000-4000-8000-000000000001",
+      ownerGroupId: GROUP_ID,
+      eventName: "Architecture call",
+      eventSlug: "architecture-call",
+      profileKey: "meeting",
+      registrationPolicy: "no_registration",
+      visibility: "group_members",
+      memberEligibility: "owner_group",
+      guestPolicy: "occurrence_invitation",
+      startsAt: "2026-09-01T15:00:00.000Z",
+      recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
+      timezone: "Europe/Amsterdam",
+      durationMinutes: 60,
+      location: "https://meet.example.test/architecture",
+      providerType: null,
+      providerConfigured: false,
+      active: true,
+      inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
+      nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      capabilities: ["view", "manage"],
+      occurrenceCount: 0,
+    } as const;
+    const page = { limit: 25, offset: 0, total: 1, hasMore: false };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/occurrences")) {
+          return new Response(JSON.stringify({ message: "Server error" }), { status: 500 });
+        }
+        return json({ series: [series], page });
+      }),
+    );
+
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage initialSeriesId={seriesId} />);
+    await settle();
+    await settle();
+
+    expect(container.textContent).toContain("HTTP 500");
   });
 
   it("searches and removes exact membership capacities through canonical group routes", async () => {

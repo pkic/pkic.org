@@ -1,0 +1,71 @@
+.membership-verified-context {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--bs-success-border-subtle);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-success-bg-subtle);
+  color: var(--bs-success-text-emphasis);
+}
+
+.membership-legal-agreements {
+  display: grid;
+  gap: 1rem;
+}
+
+.membership-legal-card {
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-body-bg);
+}
+
+.membership-legal-card-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  background: var(--bs-tertiary-bg);
+  font-size: 0.9rem;
+}
+
+.membership-legal-card-scroll {
+  height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+  scroll-behavior: smooth;
+}
+
+.membership-legal-card-scroll:focus-visible {
+  outline: 0.2rem solid color-mix(in srgb, var(--bs-primary) 35%, transparent);
+  outline-offset: -0.2rem;
+}
+
+.membership-legal-document {
+  color: var(--bs-body-color);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.membership-legal-document h2,
+.membership-legal-document h3,
+.membership-legal-document h4 {
+  margin-top: 1.25rem;
+  font-size: 1.1rem;
+}
+
+.membership-legal-acceptance {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-top: 1px solid var(--bs-border-color);
+  background: var(--bs-tertiary-bg);
+}
+
+.membership-legal-authority {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-tertiary-bg);
+}
+
+.was-validated .membership-legal-card:has(.form-check-input:invalid),
+.was-validated .membership-legal-authority:has(.form-check-input:invalid) {
+  border-color: var(--bs-danger);
+}

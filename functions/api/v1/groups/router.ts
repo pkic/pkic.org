@@ -51,7 +51,7 @@ import { GroupEventProfilesList } from "./[groupId]/events/profiles";
 import { GroupEventDetailGet, GroupEventSettingsPatch } from "./[groupId]/events/[eventId]";
 import { GroupEventProposalsList } from "./[groupId]/events/[eventId]/proposals";
 import {
-  GroupEventRegistrationAdmitPost,
+  GroupEventRegistrationAdmissionCreate,
   GroupEventRegistrationCreate,
   GroupEventRegistrationDayAttendancePatch,
   GroupEventRegistrationDetailGet,
@@ -146,7 +146,10 @@ openapi.patch(
   "/:groupId/events/:eventId/registrations/:registrationId/day-attendance",
   GroupEventRegistrationDayAttendancePatch,
 );
-openapi.post("/:groupId/events/:eventId/registrations/:registrationId/admit", GroupEventRegistrationAdmitPost);
+openapi.post(
+  "/:groupId/events/:eventId/registrations/:registrationId/admissions",
+  GroupEventRegistrationAdmissionCreate,
+);
 openapi.get("/:groupId/events/:eventId/registration-config", GroupEventRegistrationConfigGet);
 openapi.get("/:groupId/events/:eventId/days", GroupEventDaysGet);
 openapi.put("/:groupId/events/:eventId/days", GroupEventDaysPut);

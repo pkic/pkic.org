@@ -9,10 +9,10 @@
  *   data-module="event-flows/registration-page"     → ./event-flows/registration-page
  *   data-module="shared/donation-form"              → ./shared/donation-form
  *
- * Hugo builds this file with js.Build { format: "esm", splitting: true } so
- * each entry below becomes its own lazy-loaded chunk, fetched only when the
- * corresponding [data-module] element is present on the page.
- * No separate build script or manifest is needed.
+ * Built by scripts/build-frontend.mjs (Vite/Rolldown) from a single entry point
+ * into hashed chunks and a manifest (data/asset-manifest.json). Each entry
+ * below becomes a lazy-loaded chunk, fetched only when the corresponding
+ * [data-module] element is present on the page.
  */
 
 // Each value is a function returning a dynamic import — esbuild turns each

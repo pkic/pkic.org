@@ -16,7 +16,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-organizations"));
-  await page.goto("/portal/#/system/organizations");
+  await page.goto("/portal/#/organizations");
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
@@ -55,8 +55,8 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
   await expect(page.getByText("Program Manager", { exact: true })).toBeVisible();
 
-  await page.goto("/portal/#/system/organizations");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/organizations$/);
+  await page.goto("/portal/#/organizations");
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
   await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();
 
   await page.context().clearCookies();

@@ -4,7 +4,7 @@ import { Badge } from "../../../../../components/Badge";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Tabs } from "../../../../../components/Tabs";
-import { api } from "../../../api";
+import { getJson, patchJson, postJson } from "../../../../../shared/api-client";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../../components/forms/FormResponseViews";
@@ -44,7 +44,7 @@ export function ProposalDetailPage({
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
-    async () => api(proposalResourcePath(proposalId), eventProposalDetailResponseSchema),
+    async () => getJson(proposalResourcePath(proposalId), eventProposalDetailResponseSchema),
     [proposalId],
   );
 
@@ -147,10 +147,7 @@ export function ProposalDetailPage({
     const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
     if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
     try {
-      await api(proposalResourcePath(proposalId, "moderations"), proposalFlagResponseSchema, {
-        method: "POST",
-        body: JSON.stringify({ action }),
-      });
+      await postJson(proposalResourcePath(proposalId, "moderations"), { action }, proposalFlagResponseSchema);
       toast(`Proposal ${action === "delete" ? "deleted" : `marked as ${action}`}`, "success");
       void reload();
     } catch (err) {
@@ -160,13 +157,10 @@ export function ProposalDetailPage({
 
   async function handleOpenManage() {
     try {
-      const { manageUrl } = await api(
+      const { manageUrl } = await postJson(
         proposalResourcePath(proposalId, "access-links"),
+        {},
         proposalAccessLinkResponseSchema,
-        {
-          method: "POST",
-          body: "{}",
-        },
       );
       window.open(manageUrl, "_blank", "noopener");
     } catch (e) {
@@ -178,10 +172,7 @@ export function ProposalDetailPage({
     e.preventDefault();
     setSavingAbstract(true);
     try {
-      await api(proposalResourcePath(proposalId), proposalPatchResponseSchema, {
-        method: "PATCH",
-        body: JSON.stringify({ abstract: abstractDraft }),
-      });
+      await patchJson(proposalResourcePath(proposalId), { abstract: abstractDraft }, proposalPatchResponseSchema);
       setEditingAbstract(false);
       toast("Abstract updated", "success");
       void reload();

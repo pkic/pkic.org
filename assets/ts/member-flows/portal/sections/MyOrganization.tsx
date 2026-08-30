@@ -421,8 +421,10 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
   );
 }
 
-export function MyOrganization() {
-  const organizationId = profileSignal.value?.organizationId ?? null;
+export function MyOrganization({ organizationId: requestedOrganizationId }: { organizationId?: string } = {}) {
+  // Any organization the user actively represents may be requested; the
+  // backend authorizes by representation and 404s everything else.
+  const organizationId = requestedOrganizationId ?? profileSignal.value?.organizationId ?? null;
   const [org, setOrg] = useState<MyOrganizationProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

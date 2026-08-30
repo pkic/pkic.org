@@ -205,7 +205,10 @@ test.describe("portal sponsor workspace", () => {
     expect(csv).toContain("Casey");
 
     // ── Sign out clears the canonical session; a fresh visit is anonymous ─
-    await page.getByRole("button", { name: "Sign out" }).click();
+    // Sign out now lives in the sidebar footer's account menu rather than as
+    // a standalone button.
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/portal\/$/);
     await expect(page.getByRole("heading", { name: "PKI Consortium Portal" })).toBeVisible();
     await page.reload();

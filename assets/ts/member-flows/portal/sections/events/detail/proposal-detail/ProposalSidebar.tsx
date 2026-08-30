@@ -1,6 +1,6 @@
 import { Badge } from "../../../../../../components/Badge";
 import { ProposalInternalCommentsPanel } from "../../../../../../components/proposals/ProposalInternalCommentsPanel";
-import { api } from "../../../../api";
+import { postJson } from "../../../../../../shared/api-client";
 import { proposalSpeakerRemindersResponseSchema } from "../../../../../../../shared/schemas/proposal-speakers";
 import type { ProposalAccess, ProposalReview } from "../../types";
 import { fmt, toast } from "../../../../ui";
@@ -53,13 +53,10 @@ export function ProposalSidebar({
 }) {
   async function remindAll(kind: "profile" | "presentation") {
     try {
-      const response = await api(
+      const response = await postJson(
         proposalResourcePath(proposalId, "speakers/reminders"),
+        { kind },
         proposalSpeakerRemindersResponseSchema,
-        {
-          method: "POST",
-          body: JSON.stringify({ kind }),
-        },
       );
       toast(
         `${kind === "profile" ? "Profile" : "Presentation"} reminder sent to ${response.queued} speaker(s)`,
