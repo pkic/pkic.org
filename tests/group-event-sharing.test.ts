@@ -49,6 +49,7 @@ import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/data
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { userRecordColumns, type UserRecord } from "../functions/_lib/services/users";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 
 interface Fixture {
   admin: UserBackedAuthAdmin;
@@ -106,14 +107,17 @@ async function createFixture(): Promise<Fixture> {
     source: "self_service",
     allowManaged: false,
   });
-  const leader = await userActor("group-event-leader");
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), leader.id, grantee.id)
-    .run();
+  // The grantee group's chair. Sharing is decided by the resource grant, so
+  // this identity must not be able to reach an event the grant does not cover
+  // — which only means something if it is a real chair rather than an
+  // administrator who could reach it either way.
+  const leaderPersona = await seedPersona(env.DB, "groupLead", { groupId: grantee.id });
+  const leader: UserBackedAuthAdmin = {
+    identityType: "user",
+    id: leaderPersona.userId,
+    email: leaderPersona.email,
+    role: "user",
+  };
   const series = await createGroupEventSeries(env.DB, admin, owner.id, {
     eventName: "Shared architecture workshop",
     eventSlug: `shared-architecture-${crypto.randomUUID()}`,
@@ -150,7 +154,7 @@ async function createFixture(): Promise<Fixture> {
     memberEmail,
     memberToken: await createMemberSession(env.DB, member.userId, `group-event-member-${crypto.randomUUID()}`),
     leader,
-    leaderToken: await createAdminSession(env.DB, leader.id, `group-event-leader-${crypto.randomUUID()}`),
+    leaderToken: leaderPersona.token!,
   };
 }
 
