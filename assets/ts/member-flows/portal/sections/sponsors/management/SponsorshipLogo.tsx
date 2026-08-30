@@ -23,6 +23,8 @@ export function SponsorshipLogo({ sponsorship, onChanged }: { sponsorship: Spons
       placeholderClass="d-flex align-items-center justify-content-center border rounded bg-light text-muted small sponsorship-management-logo-placeholder"
       removeConfirmation="Remove this sponsor's logo?"
       removeLabel="Remove logo"
+      accept="image/svg+xml"
+      hint="SVG only. The logo is sanitized, cropped to its content, and made responsive automatically."
       onUpload={(file) =>
         requestJson(endpoint, logoUploadResponseSchema, {
           method: "PUT",

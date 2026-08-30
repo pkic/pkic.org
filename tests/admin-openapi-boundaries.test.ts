@@ -201,8 +201,8 @@ describe("admin OpenAPI mutation boundaries", () => {
 
     const put = await callAdmin(`/api/v1/organizations/${organizationId}/logo`, {
       method: "PUT",
-      headers: { "content-type": "image/jpeg" },
-      body: validJpegBytes(),
+      headers: { "content-type": "image/svg+xml" },
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="60" height="60" fill="#175"/></svg>',
     });
     expect(put.status).toBe(200);
     const putBody = (await put.json()) as { success: boolean; r2Key: string; logoUrl: string };

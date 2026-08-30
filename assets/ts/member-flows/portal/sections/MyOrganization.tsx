@@ -85,11 +85,11 @@ function LogoUploader({
   return (
     <div>
       <label class="btn btn-sm btn-outline-primary w-100 mb-1">
-        {busy ? "Uploading…" : "Change logo"}
+        {busy ? "Uploading…" : "Change logo (SVG)"}
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/svg+xml"
           class="d-none"
           disabled={busy}
           onChange={(e) => {

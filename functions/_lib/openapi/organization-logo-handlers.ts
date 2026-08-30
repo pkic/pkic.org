@@ -5,7 +5,7 @@ import { AppError } from "../errors";
 import { json } from "../http";
 import { deleteStoredImageInBackground } from "../services/stored-image-pointer";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../types";
-import { readValidatedUploadedImage } from "../utils/image-upload";
+import { readValidatedUploadedSvgLogo } from "../utils/image-upload";
 import { logoUploadResponseSchema } from "../../../assets/shared/schemas/images";
 import { successResponseSchema } from "../../../assets/shared/schemas/api-common";
 
@@ -43,7 +43,7 @@ export function buildOrganizationLogoHandlers(config: OrganizationLogoHandlersCo
     const bucket = c.env.ASSETS_BUCKET;
     if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
     const id = data?.params[config.idParam] ?? c.req.param(config.idParam);
-    const result = await config.replaceLogo(db, actor, bucket, id, await readValidatedUploadedImage(c.req.raw, "Logo"));
+    const result = await config.replaceLogo(db, actor, bucket, id, await readValidatedUploadedSvgLogo(c.req.raw));
     c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
     return json(
       logoUploadResponseSchema.parse({ success: true, r2Key: result.r2Key, logoUrl: config.publicLogoUrl(id) }),

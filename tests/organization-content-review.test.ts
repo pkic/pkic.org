@@ -39,7 +39,6 @@ import {
   assignRepresentativeRole,
   REPRESENTATIVE_ROLE_IDS,
 } from "./helpers/membership";
-import { validJpegBytes } from "./helpers/raster-images";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -77,7 +76,8 @@ class FakeAssetsBucket {
   }
 }
 
-const JPEG_BYTES = validJpegBytes();
+const LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="60" height="60" fill="#175"/></svg>';
 
 function organizationPath(organizationId: string): string {
   return `/api/v1/organizations/${organizationId}`;
@@ -93,7 +93,7 @@ function secondaryContactNominationPath(organizationId: string): string {
 
 function logoUploadRequest(token: string, organizationId: string): Request {
   const formData = new FormData();
-  formData.append("file", new File([JPEG_BYTES], "organization-logo.jpg", { type: "image/jpeg" }));
+  formData.append("file", new File([LOGO_SVG], "organization-logo.svg", { type: "image/svg+xml" }));
   return request(token, `${organizationPath(organizationId)}/logo`, { method: "POST", body: formData });
 }
 
