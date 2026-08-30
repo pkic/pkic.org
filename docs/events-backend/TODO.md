@@ -72,7 +72,7 @@
 - [x] Add frontend test/typecheck scripts and include them in `pnpm run check`.
 - [x] Add event route metadata support in sync schema (`event.frontend.routes`) and backend route resolver.
 - [x] Add forms hydration endpoint (`GET /events/:eventSlug/forms/placements/:purpose`) with required terms in response.
-- [x] Add manage token read endpoints (`GET /registrations/manage/:token`, `GET /proposals/manage/:token`).
+- [x] Add manage token read endpoints (`GET /registrations/access/:token`, `GET /proposals/manage/:token`).
 - [x] Refactor backend-generated event links (invites, referral redirects, manage URLs) to route resolver.
 - [x] Add Hugo shortcodes and event-specific pages for registration/proposal/confirm/manage flows.
 - [x] Update active 2026 event CTA to canonical event-specific registration page.

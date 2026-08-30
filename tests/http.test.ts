@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
 import worker from "../functions/router";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
-import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
+import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/access/[token]/headshot";
 
 function context(method: string) {
   return { req: { raw: new Request("https://app.test/resource", { method }) } };
@@ -93,14 +93,14 @@ describe("HTTP method dispatch", () => {
     },
     {
       label: "registration self-management",
-      path: "/registrations/manage/token",
+      path: "/registrations/access/token",
       method: "POST",
       allow: "GET, PATCH",
       mounted: true,
     },
     {
       label: "registration headshot",
-      path: "/registrations/manage/token/headshot",
+      path: "/registrations/access/token/headshot",
       method: "PATCH",
       allow: "PUT, DELETE",
       handler: registrationHeadshotDispatch,

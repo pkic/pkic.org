@@ -90,8 +90,8 @@ export function wireHeadshotSection(
     root,
     initialHeadshotUrl,
     statusEl,
-    uploadUrl: `${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`,
-    deleteUrl: `${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`,
+    uploadUrl: `${apiBase}/registrations/access/${encodeURIComponent(token)}/headshot`,
+    deleteUrl: `${apiBase}/registrations/access/${encodeURIComponent(token)}/headshot`,
     onChanged,
   });
 }

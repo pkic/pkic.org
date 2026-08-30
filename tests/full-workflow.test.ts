@@ -393,7 +393,7 @@ describe("full workflow", () => {
       expect(secondConfirmPayload.status).toBe("registered");
 
       const cancelRegistrationResponse = await callMountedApp(
-        new Request(`https://app.test/api/v1/registrations/manage/${firstConfirmPayload.manageToken}`, {
+        new Request(`https://app.test/api/v1/registrations/access/${firstConfirmPayload.manageToken}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "cancel" }),

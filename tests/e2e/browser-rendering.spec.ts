@@ -999,8 +999,8 @@ test.describe("browser workflows", () => {
     const apiResults = await page.evaluate(async () => {
       const fake = encodeURIComponent("FAKE-TOKEN-000000000000000000000000");
       const [getStatus, patchStatus] = await Promise.all([
-        fetch(`/api/v1/registrations/manage/${fake}`).then((r) => r.status),
-        fetch(`/api/v1/registrations/manage/${fake}`, {
+        fetch(`/api/v1/registrations/access/${fake}`).then((r) => r.status),
+        fetch(`/api/v1/registrations/access/${fake}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "update", attendanceType: "on_demand" }),
@@ -1013,7 +1013,7 @@ test.describe("browser workflows", () => {
 
     // ── 6. Schema validation: SQL-injection in enum field → 400, not 500 ───
     const invalidEnumStatus = await page.evaluate(async (token) => {
-      const res = await fetch(`/api/v1/registrations/manage/${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/v1/registrations/access/${encodeURIComponent(token)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "update", attendanceType: "'; DROP TABLE registrations; --" }),

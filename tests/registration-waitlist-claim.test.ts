@@ -89,7 +89,7 @@ function callMountedClaim(
   additionalDayAttendance: Array<{ dayDate: string; attendanceType: string }> = [],
 ): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/registrations/manage/${token}`, {
+    new Request(`https://app.test/api/v1/registrations/access/${token}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -109,7 +109,7 @@ function callMountedClaim(
 
 function callMountedClaimWithSelection(token: string, claimDayDate: string, attendanceType: string): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/registrations/manage/${token}`, {
+    new Request(`https://app.test/api/v1/registrations/access/${token}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -126,7 +126,7 @@ function callMountedClaimWithSelection(token: string, claimDayDate: string, atte
 
 function callMountedScalarAttendanceUpdate(token: string, attendanceType: string): Promise<Response> {
   return app.fetch(
-    new Request(`https://app.test/api/v1/registrations/manage/${token}`, {
+    new Request(`https://app.test/api/v1/registrations/access/${token}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "update", attendanceType }),

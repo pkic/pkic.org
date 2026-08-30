@@ -40,7 +40,7 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/geolocation/country",
     "/api/v1/leadership/consortium-chairs",
     "/api/v1/invites/no-such-token/info",
-    "/api/v1/registrations/manage/no-such-token",
+    "/api/v1/registrations/access/no-such-token",
     "/api/v1/proposals/manage/no-such-token",
     "/api/v1/proposals/speaker/no-such-token",
   ];

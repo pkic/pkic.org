@@ -1,8 +1,8 @@
 /**
  * Attendee headshot management via registration manage token.
  *
- * PUT    /api/v1/registrations/manage/:token/headshot  — upload / replace headshot
- * DELETE /api/v1/registrations/manage/:token/headshot  — remove headshot
+ * PUT    /api/v1/registrations/access/:token/headshot  — upload / replace headshot
+ * DELETE /api/v1/registrations/access/:token/headshot  — remove headshot
  *
  * Authentication is via the registration manage token (plain DB token or
  * admin-issued JWT).  No separate login session is required — the token in

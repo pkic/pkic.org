@@ -24,6 +24,13 @@ describe("manage read endpoints", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it("does not retain the actor-oriented registration manage route", async () => {
+    const response = await callApp(new Request("https://app.test/api/v1/registrations/manage/no-such-token"));
+
+    expect(response.status).toBe(404);
+  });
+
   it("returns registration state for a valid manage token", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -53,7 +60,7 @@ describe("manage read endpoints", () => {
       resourceId: registrationId,
     });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${token}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${token}`));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
@@ -92,7 +99,7 @@ describe("manage read endpoints", () => {
       `),
     ]);
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${tokenHash}`));
 
     expect(response.status).toBe(404);
     expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
@@ -120,7 +127,7 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${created.manageToken}`));
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${created.manageToken}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -188,7 +195,7 @@ describe("manage read endpoints", () => {
     });
 
     const response = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${confirmedSecond.manageToken}`),
+      new Request(`https://app.test/api/v1/registrations/access/${confirmedSecond.manageToken}`),
     );
 
     expect(response.status).toBe(200);
@@ -258,7 +265,7 @@ describe("manage read endpoints", () => {
     expect(claims.sid).toBeTruthy();
 
     const validResponse = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: {
           "cf-connecting-ip": "203.0.113.30",
           "user-agent": "admin-browser",
@@ -268,7 +275,7 @@ describe("manage read endpoints", () => {
     expect(validResponse.status, JSON.stringify(await validResponse.clone().json())).toBe(200);
 
     const updateResponse = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -293,7 +300,7 @@ describe("manage read endpoints", () => {
     expect(audit).toEqual({ actor_type: "admin", actor_id: admin.id });
 
     const wrongContextResponse = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: {
           "cf-connecting-ip": "203.0.113.31",
           "user-agent": "admin-browser",
@@ -306,14 +313,14 @@ describe("manage read endpoints", () => {
 
     await env.DB.prepare("UPDATE sessions SET revoked_at = datetime('now') WHERE id = ?").bind(claims.sid).run();
     const revokedSessionGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
     );
     expect(revokedSessionGet.status).toBe(401);
 
     const revokedSessionPatch = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -326,7 +333,7 @@ describe("manage read endpoints", () => {
     expect(revokedSessionPatch.status).toBe(401);
 
     const revokedSessionHeadshot = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
         method: "PUT",
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
@@ -340,14 +347,14 @@ describe("manage read endpoints", () => {
     await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(admin.id).run();
 
     const deactivatedGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
     );
     expect(deactivatedGet.status).toBe(401);
 
     const deactivatedPatch = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -360,7 +367,7 @@ describe("manage read endpoints", () => {
     expect(deactivatedPatch.status).toBe(401);
 
     const deactivatedHeadshot = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
         method: "PUT",
         headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
       }),
@@ -424,7 +431,7 @@ describe("manage read endpoints", () => {
     const jwt = new URL(manageUrl).searchParams.get("token") as string;
 
     const validGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
@@ -441,7 +448,7 @@ describe("manage read endpoints", () => {
       ttlSeconds: 300,
     });
     const wrongEventGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${wrongEventJwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${wrongEventJwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
@@ -454,14 +461,14 @@ describe("manage read endpoints", () => {
       .run();
 
     const readOnlyGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );
     expect(readOnlyGet.status).toBe(200);
 
     const revokedPatch = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -474,7 +481,7 @@ describe("manage read endpoints", () => {
     expect(revokedPatch.status).toBe(403);
 
     const revokedHeadshot = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
         method: "PUT",
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
@@ -488,7 +495,7 @@ describe("manage read endpoints", () => {
       .run();
 
     const revokedGet = await callApp(
-      new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
         headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
       }),
     );

@@ -144,8 +144,8 @@ Base path: `/api/v1`
 - `POST /events/:eventSlug/registrations/confirm-email`
 - `GET /events/:eventSlug/registrations/confirm-email?token=...`
 - `GET /events/:eventSlug/forms/placements/:purpose`
-- `GET /registrations/manage/:token`
-- `PATCH /registrations/manage/:token`
+- `GET /registrations/access/:token`
+- `PATCH /registrations/access/:token`
 - `POST /events/:eventSlug/invites`
 - `POST /invites/:token/accept`
 - `POST /invites/:token/decline`

@@ -25,8 +25,9 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-email"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-info"].get).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/resend-confirmation"].post).toBeDefined();
-    expect(spec.paths["/api/v1/registrations/manage/{token}"].get).toBeDefined();
-    expect(spec.paths["/api/v1/registrations/manage/{token}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/registrations/access/{token}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/registrations/access/{token}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/registrations/manage/{token}"]).toBeUndefined();
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].get).toBeDefined();
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].post).toBeDefined();
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].patch).toBeDefined();

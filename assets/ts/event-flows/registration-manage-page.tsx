@@ -162,7 +162,7 @@ async function main(): Promise<void> {
 
   try {
     [manageData, formsData] = await Promise.all([
-      getJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, registrationManageReadResponseSchema),
+      getJson(`${apiBase}/registrations/access/${encodeURIComponent(token)}`, registrationManageReadResponseSchema),
       getJson(`${apiBase}/events/${eventSlug}/forms/placements/event_registration`, eventFormsResponseSchema).catch(
         () => null,
       ),
@@ -264,7 +264,7 @@ async function main(): Promise<void> {
                     try {
                       const selections = readDayAttendance(form);
                       await patchJson(
-                        `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+                        `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
                         { action: "update", dayAttendance: selections, claimDayWaitlistOffers: offeredDayDates },
                         registrationManageUpdateResponseSchema,
                       );
@@ -344,7 +344,7 @@ async function main(): Promise<void> {
         restoreBtn.disabled = true;
         try {
           await patchJson(
-            `/api/v1/registrations/manage/${encodeURIComponent(token)}`,
+            `/api/v1/registrations/access/${encodeURIComponent(token)}`,
             { action: "update" },
             registrationManageUpdateResponseSchema,
           );
@@ -441,7 +441,7 @@ async function main(): Promise<void> {
         const emailValue = (form.elements.namedItem("email") as HTMLInputElement | null)?.value.trim() || undefined;
         const emailIsChanged = emailValue && emailValue.toLowerCase() !== originalEmail;
         const result = await patchJson(
-          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
           registrationManageSchema.parse({
             action: "update",
             attendanceType:
@@ -494,7 +494,7 @@ async function main(): Promise<void> {
     await withLoadingButton(yesBtn, async () => {
       try {
         await patchJson(
-          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
           { action: "cancel" },
           registrationManageUpdateResponseSchema,
         );
@@ -535,7 +535,7 @@ async function main(): Promise<void> {
     await withLoadingButton(yesBtn, async () => {
       try {
         await patchJson(
-          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
           { action: "report_unauthorized" },
           registrationManageUpdateResponseSchema,
         );

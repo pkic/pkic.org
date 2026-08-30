@@ -52,7 +52,7 @@ function postConfirmation(body: unknown): Promise<Response> {
 function patchManage(token: string, body: unknown, headers?: HeadersInit): Promise<Response> {
   const requestHeaders = new Headers(headers);
   requestHeaders.set("content-type", "application/json");
-  return callApi(env, `/api/v1/registrations/manage/${encodeURIComponent(token)}`, {
+  return callApi(env, `/api/v1/registrations/access/${encodeURIComponent(token)}`, {
     method: "PATCH",
     headers: requestHeaders,
     body: JSON.stringify(body),

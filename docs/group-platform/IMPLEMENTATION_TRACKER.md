@@ -1774,8 +1774,8 @@ Status: In progress
       endorsement/proposal state, audit log, and email outbox all roll back.
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
-      Current evidence: the complete gate passes after the natural API-root and
-      badge-resource cutover with 2,370 passing backend tests (one additional
+      Current evidence: the complete gate passes after the registration
+      capability-resource cutover with 2,371 passing backend tests (one additional
       skipped), 337 frontend tests, and 88 tooling tests. Type checks,
       ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
@@ -1931,9 +1931,13 @@ Status: In progress
       `/api/v1/donations/checkouts/:sessionId/badge`, and mounted tests prove
       the retired API URLs return 404. The separate public `/og/*` website
       representation remains available for existing Open Graph card links.
-      Nested capability URLs that still use actor-oriented path segments remain
-      a separate cleanup slice; this checkpoint does not claim that every API
-      path is final.
+      Registration self-service now uses the nested capability resource
+      `/api/v1/registrations/access/:token`; the actor-oriented
+      `/api/v1/registrations/manage/:token` family is absent from routing and
+      OpenAPI without an alias. Its existing stateless, secret-generation-bound
+      authorization model is unchanged. Proposal capability URLs that still
+      use actor-oriented path segments remain a separate cleanup slice; this
+      checkpoint does not claim that every API path is final.
       Migration 0035 remains consolidated and locally
       verified, but its preview and production ledger state must be reverified
       at handoff. The remaining unchecked tracker items are the authoritative
