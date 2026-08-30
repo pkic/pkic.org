@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import app, { openapi } from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { AUTH_EXTENSION } from "../functions/_lib/openapi/mcp";
-import { ALL_PERSONAS, ALL_PERSONA_KEYS } from "./personas/catalog";
+import { ALL_PERSONAS, ALL_PERSONA_KEYS, onlyPersona } from "./personas/catalog";
+import type { Permission } from "../assets/shared/schemas/permissions";
 import { personaRequest, seedPersona, type SeededPersona } from "./personas/seed";
 import { TEST_GROUPS } from "./helpers/voting";
 import { seedEventAndAdmin } from "./helpers/context";
@@ -75,10 +76,12 @@ describe("declared permissions are enforced", () => {
   const operations = declaredOperations();
   let outsider: SeededPersona;
   let anonymous: SeededPersona;
+  let sweepEventId: string;
 
   beforeAll(async () => {
     await resetDb();
     const { eventId } = await seedEventAndAdmin(env.DB);
+    sweepEventId = eventId;
     // `analyticsReader` holds one narrow permission, so it is an outsider to
     // almost every other route while still being a real, session-holding
     // staff identity — the case a route is most likely to get wrong.
@@ -116,6 +119,29 @@ describe("declared permissions are enforced", () => {
       if (response.status < 400) allowed.push(`${operation.path} -> ${response.status}`);
     }
     expect(allowed).toEqual([]);
+  });
+
+  it("admits a caller holding exactly the declared permission and nothing else", async () => {
+    // The other half of the boundary, and the one a suite testing through a
+    // blanket administrator can never show: that a realistically scoped
+    // identity can actually do the job. An administrator holds everything, so
+    // it proves the route works for somebody — not that the permission the
+    // route declares is the permission it needs.
+    const refused: string[] = [];
+    for (const operation of operations) {
+      const holder = await seedPersona(
+        env.DB,
+        operation.scopes.map((scope) => onlyPersona(scope as Permission)),
+        { groupId: TEST_GROUPS.pqc, eventId: sweepEventId },
+      );
+      const response = await call(personaRequest(holder, fillPath(operation.path)!));
+      // 404 is fine: the identifiers match no row on purpose. 401 or 403 means
+      // the declared permission is not sufficient, so the declaration is wrong.
+      if (response.status === 401 || response.status === 403) {
+        refused.push(`${operation.path} declares ${operation.scopes.join(", ")} -> ${response.status}`);
+      }
+    }
+    expect(refused).toEqual([]);
   });
 
   it("names the personas it swept with", () => {
