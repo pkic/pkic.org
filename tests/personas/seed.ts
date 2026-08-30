@@ -3,7 +3,7 @@ import { createAdminSession, createMemberSession } from "../helpers/auth";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "../helpers/membership";
 import { joinGroup } from "../../functions/_lib/services/groups";
 import type { DatabaseLike } from "../../functions/_lib/types";
-import { PERSONAS, type PersonaDefinition, type PersonaKey } from "./catalog";
+import { ALL_PERSONAS, type PersonaDefinition } from "./catalog";
 
 /**
  * Brings a persona into existence in D1 for the mounted Worker suites.
@@ -13,7 +13,7 @@ import { PERSONAS, type PersonaDefinition, type PersonaKey } from "./catalog";
  * a test-only shortcut.
  */
 export interface SeededPersona {
-  key: PersonaKey;
+  key: string;
   definition: PersonaDefinition;
   userId: string;
   email: string;
@@ -34,10 +34,11 @@ export interface SeedPersonaOptions {
 
 export async function seedPersona(
   db: DatabaseLike,
-  key: PersonaKey,
+  key: string,
   options: SeedPersonaOptions = {},
 ): Promise<SeededPersona> {
-  const definition = PERSONAS[key];
+  const definition = ALL_PERSONAS[key];
+  if (!definition) throw new Error(`Unknown persona: ${key}`);
   if (key === "anonymous") {
     return { key, definition, userId: "", email: "", capacities: [], token: null };
   }
