@@ -71,18 +71,6 @@ export function GroupEvents({
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Events</div>
       <div class="card-body">
-        {canManage && (
-          <div class="mb-3">
-            <button
-              type="button"
-              class="btn btn-sm btn-primary"
-              aria-expanded={showCreate}
-              onClick={() => setShowCreate((shown) => !shown)}
-            >
-              {showCreate ? "Hide event editor" : "Create event"}
-            </button>
-          </div>
-        )}
         {showCreate && (
           <div class="card mb-3">
             <div class="card-header fw-semibold">New group event</div>
@@ -106,6 +94,7 @@ export function GroupEvents({
           resolvePage={(response) => response.page}
           paginate
           actionsRef={tableActions}
+          createAction={canManage ? { label: "Create event", onSelect: () => setShowCreate(true) } : undefined}
           searchPlaceholder="Search events…"
           initialSort="next_occurrence_at"
           columns={[

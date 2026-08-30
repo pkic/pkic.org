@@ -20,6 +20,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
   );
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   async function revoke(assignment: GroupLeadershipAssignment): Promise<void> {
     if (assignment.inherited) return;
@@ -54,13 +55,18 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
 
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white d-flex flex-wrap justify-content-between gap-2">
+      <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
         <span class="fw-semibold">Effective leadership</span>
-        {leadership.data && (
-          <span class="small text-muted">
-            {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
-          </span>
-        )}
+        <div class="d-flex align-items-center gap-2">
+          {leadership.data && (
+            <span class="small text-muted">
+              {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
+            </span>
+          )}
+          <button type="button" class="btn btn-sm btn-success" onClick={() => setShowAddForm(true)}>
+            Add leadership
+          </button>
+        </div>
       </div>
       <div class="card-body d-flex flex-column gap-3">
         <p class="text-muted small mb-0">
@@ -102,7 +108,16 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
             </div>
           ))}
         </div>
-        <GroupLeadershipAssignmentForm groupId={groupId} onAssigned={leadership.reload} />
+        {showAddForm && (
+          <GroupLeadershipAssignmentForm
+            groupId={groupId}
+            onAssigned={async () => {
+              await leadership.reload();
+              setShowAddForm(false);
+            }}
+            onCancel={() => setShowAddForm(false)}
+          />
+        )}
       </div>
     </div>
   );

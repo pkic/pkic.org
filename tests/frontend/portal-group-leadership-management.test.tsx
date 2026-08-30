@@ -218,6 +218,12 @@ describe("portal group leadership management", () => {
     );
     const container = mount(<GroupLeadership groupId={GROUP_ID} />);
     await settle();
+
+    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
+    const addLeadership = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Add leadership",
+    )!;
+    await act(async () => addLeadership.click());
     await pickUser(container, "leader@example.test");
 
     const role = container.querySelector<HTMLSelectElement>("#managed-group-leadership-role")!;
@@ -244,7 +250,7 @@ describe("portal group leadership management", () => {
       roleId: "role-group_deputy_lead",
     });
     expect((request?.body as { expiresAt: string }).expiresAt).toBe(new Date("2026-10-01T12:30").toISOString());
-    expect(container.textContent).toContain("Leadership assignment added.");
+    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
   });
 
   it("keeps a rejected leadership assignment visible and does not report success", async () => {

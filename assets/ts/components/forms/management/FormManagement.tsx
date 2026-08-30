@@ -290,13 +290,6 @@ export function FormManagementList({
 }) {
   return (
     <div>
-      {canWrite && onCreateNew && (
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <button type="button" class="btn btn-sm btn-success" onClick={onCreateNew}>
-            New form
-          </button>
-        </div>
-      )}
       <ApiDataTable
         endpoint="/api/v1/forms"
         responseSchema={formsListResponseSchema}
@@ -306,6 +299,7 @@ export function FormManagementList({
         initialPageSize={25}
         initialSort="title"
         searchPlaceholder="Search forms…"
+        createAction={canWrite && onCreateNew ? { label: "New form", onSelect: onCreateNew } : undefined}
         columns={[
           { header: "Key", cell: (form: FormSummary) => <span class="mono small">{form.key}</span> },
           {

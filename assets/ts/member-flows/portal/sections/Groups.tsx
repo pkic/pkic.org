@@ -60,7 +60,7 @@ function MemberGroupCatalog() {
   );
 }
 
-function AllGroups() {
+function AllGroups({ onCreate }: { onCreate?: () => void }) {
   const [, navigate] = useHashLocation();
 
   return (
@@ -72,6 +72,7 @@ function AllGroups() {
           responseSchema={groupsListResponseSchema}
           resolve={(response) => response.groups}
           resolvePage={(response) => response.page}
+          createAction={onCreate ? { label: "New group", onSelect: onCreate } : undefined}
           paginate
           initialSort="name"
           searchPlaceholder="Search groups…"
@@ -132,7 +133,7 @@ export function Groups() {
 
   return (
     <div class="d-flex flex-column gap-3 content-width-schedule">
-      {canCreateGroups && (
+      {canCreateGroups && session?.member && (
         <div class="d-flex justify-content-end">
           <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
             New group
@@ -140,7 +141,9 @@ export function Groups() {
         </div>
       )}
       {session?.member && <MemberGroupCatalog />}
-      {session?.staff && !session.member && <AllGroups />}
+      {session?.staff && !session.member && (
+        <AllGroups onCreate={canCreateGroups ? () => setCreating(true) : undefined} />
+      )}
     </div>
   );
 }

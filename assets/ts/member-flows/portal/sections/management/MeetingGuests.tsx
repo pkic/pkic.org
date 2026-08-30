@@ -28,6 +28,7 @@ export function MeetingGuests({
   timeZone: string;
 }) {
   const actions = useRef<ApiTableActions | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [affiliation, setAffiliation] = useState("");
@@ -58,6 +59,7 @@ export function MeetingGuests({
       setName("");
       setAffiliation("");
       toast("Guest eligibility added", "success");
+      setShowAddForm(false);
       await actions.current?.reload();
     } catch (caught) {
       const message = (caught as Error).message;
@@ -92,89 +94,94 @@ export function MeetingGuests({
 
   return (
     <div class="d-flex flex-column gap-3">
-      <form class="row g-2 border rounded p-3" onSubmit={(event) => void invite(event)}>
-        <div class="col-12">
-          <h6 class="mb-0">Add external guest eligibility</h6>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`meeting-guest-email-${occurrence.id}`}>
-            Email
-          </label>
-          <input
-            id={`meeting-guest-email-${occurrence.id}`}
-            type="email"
-            class="form-control form-control-sm"
-            value={email}
-            required
-            onInput={(e) => setEmail(e.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`meeting-guest-name-${occurrence.id}`}>
-            Name
-          </label>
-          <input
-            id={`meeting-guest-name-${occurrence.id}`}
-            class="form-control form-control-sm"
-            value={name}
-            required
-            onInput={(e) => setName(e.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`meeting-guest-affiliation-${occurrence.id}`}>
-            Affiliation
-          </label>
-          <input
-            id={`meeting-guest-affiliation-${occurrence.id}`}
-            class="form-control form-control-sm"
-            value={affiliation}
-            onInput={(e) => setAffiliation(e.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`meeting-guest-expiry-${occurrence.id}`}>
-            Eligibility expires
-          </label>
-          <input
-            id={`meeting-guest-expiry-${occurrence.id}`}
-            type="datetime-local"
-            class="form-control form-control-sm"
-            value={expiresAt}
-            required
-            max={maximumExpiry}
-            onInput={(e) => setExpiresAt(e.currentTarget.value)}
-          />
-          <div class="form-text">
-            Defaults to the {seriesWide ? "series event" : "occurrence"} start and cannot extend beyond its end.
+      {showAddForm && (
+        <form class="row g-2 border rounded p-3" onSubmit={(event) => void invite(event)}>
+          <div class="col-12 d-flex justify-content-between align-items-start gap-2">
+            <h6 class="mb-0">Add external guest eligibility</h6>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setShowAddForm(false)}>
+              Cancel
+            </button>
           </div>
-        </div>
-        <div class="col-md-8 d-flex align-items-end">
-          <div class="form-check mb-1">
-            <input
-              id={`guest-series-wide-${occurrence.id}`}
-              type="checkbox"
-              class="form-check-input"
-              checked={seriesWide}
-              onChange={(e) => {
-                const checked = e.currentTarget.checked;
-                setSeriesWide(checked);
-                const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
-                if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
-              }}
-            />
-            <label class="form-check-label" for={`guest-series-wide-${occurrence.id}`}>
-              Eligible for every occurrence in this series
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold" for={`meeting-guest-email-${occurrence.id}`}>
+              Email
             </label>
+            <input
+              id={`meeting-guest-email-${occurrence.id}`}
+              type="email"
+              class="form-control form-control-sm"
+              value={email}
+              required
+              onInput={(e) => setEmail(e.currentTarget.value)}
+            />
           </div>
-        </div>
-        <div class="col-12 d-flex gap-2 align-items-center">
-          <button type="submit" class="btn btn-sm btn-primary" disabled={saving}>
-            {saving ? "Adding…" : "Add guest"}
-          </button>
-          {error && <ErrorAlert error={error} />}
-        </div>
-      </form>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold" for={`meeting-guest-name-${occurrence.id}`}>
+              Name
+            </label>
+            <input
+              id={`meeting-guest-name-${occurrence.id}`}
+              class="form-control form-control-sm"
+              value={name}
+              required
+              onInput={(e) => setName(e.currentTarget.value)}
+            />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold" for={`meeting-guest-affiliation-${occurrence.id}`}>
+              Affiliation
+            </label>
+            <input
+              id={`meeting-guest-affiliation-${occurrence.id}`}
+              class="form-control form-control-sm"
+              value={affiliation}
+              onInput={(e) => setAffiliation(e.currentTarget.value)}
+            />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold" for={`meeting-guest-expiry-${occurrence.id}`}>
+              Eligibility expires
+            </label>
+            <input
+              id={`meeting-guest-expiry-${occurrence.id}`}
+              type="datetime-local"
+              class="form-control form-control-sm"
+              value={expiresAt}
+              required
+              max={maximumExpiry}
+              onInput={(e) => setExpiresAt(e.currentTarget.value)}
+            />
+            <div class="form-text">
+              Defaults to the {seriesWide ? "series event" : "occurrence"} start and cannot extend beyond its end.
+            </div>
+          </div>
+          <div class="col-md-8 d-flex align-items-end">
+            <div class="form-check mb-1">
+              <input
+                id={`guest-series-wide-${occurrence.id}`}
+                type="checkbox"
+                class="form-check-input"
+                checked={seriesWide}
+                onChange={(e) => {
+                  const checked = e.currentTarget.checked;
+                  setSeriesWide(checked);
+                  const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
+                  if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
+                }}
+              />
+              <label class="form-check-label" for={`guest-series-wide-${occurrence.id}`}>
+                Eligible for every occurrence in this series
+              </label>
+            </div>
+          </div>
+          <div class="col-12 d-flex gap-2 align-items-center">
+            <button type="submit" class="btn btn-sm btn-primary" disabled={saving}>
+              {saving ? "Adding…" : "Add guest"}
+            </button>
+            {error && <ErrorAlert error={error} />}
+          </div>
+        </form>
+      )}
       <ApiDataTable
         endpoint={endpoint}
         responseSchema={eventOccurrenceGuestsListResponseSchema}
@@ -183,6 +190,7 @@ export function MeetingGuests({
         paginate
         searchPlaceholder="Search guests…"
         initialSort="name"
+        createAction={{ label: "Add guest", onSelect: () => setShowAddForm(true) }}
         actionsRef={actions}
         columns={[
           {

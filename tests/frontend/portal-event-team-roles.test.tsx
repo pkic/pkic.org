@@ -112,6 +112,13 @@ describe("event team role management", () => {
       body: undefined,
     });
 
+    expect(container.querySelector('input[type="email"]')).toBeNull();
+    const addTeamMemberButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add team member",
+    );
+    expect(addTeamMemberButton).toBeDefined();
+    await act(async () => addTeamMemberButton!.click());
+
     const email = container.querySelector<HTMLInputElement>('input[type="email"]')!;
     const role = container.querySelector<HTMLSelectElement>("select")!;
     await act(async () => {

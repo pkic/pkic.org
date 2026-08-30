@@ -110,6 +110,7 @@ export function OrganizationRepresentativeDirectory({
   canBlock = () => true,
   onChanged,
   actionsRef,
+  createAction,
 }: {
   organizationId: string;
   activeRepresentatives: ActiveOrganizationRepresentative[];
@@ -117,6 +118,8 @@ export function OrganizationRepresentativeDirectory({
   canBlock?: (userId: string) => boolean;
   onChanged?: () => Promise<void>;
   actionsRef?: MutableRef<ApiTableActions | null>;
+  /** The directory's create affordance, rendered in its own toolbar row alongside search and refresh. */
+  createAction?: { label: string; onSelect: () => void };
 }) {
   const localTableRef = useRef<ApiTableActions | null>(null);
   const tableRef = actionsRef ?? localTableRef;
@@ -250,6 +253,7 @@ export function OrganizationRepresentativeDirectory({
       initialSort="user_name"
       searchPlaceholder="name or email"
       actionsRef={tableRef}
+      createAction={createAction}
       onRowClick={onRowNavigate ? (representative) => onRowNavigate(representative.userId) : undefined}
       columns={[
         {

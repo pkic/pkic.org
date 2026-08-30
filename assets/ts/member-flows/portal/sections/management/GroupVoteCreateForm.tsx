@@ -24,7 +24,15 @@ function thresholdOptions(voteType: (typeof VOTE_TYPES)[number]) {
       ];
 }
 
-export function GroupVoteCreateForm({ groupId, onCreated }: { groupId: string; onCreated: () => Promise<void> }) {
+export function GroupVoteCreateForm({
+  groupId,
+  onCreated,
+  onCancel,
+}: {
+  groupId: string;
+  onCreated: () => Promise<void>;
+  onCancel?: () => void;
+}) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [voteType, setVoteType] = useState<(typeof VOTE_TYPES)[number]>("motion");
@@ -282,9 +290,16 @@ export function GroupVoteCreateForm({ groupId, onCreated }: { groupId: string; o
           </div>
         )}
       </div>
-      <button type="submit" class="btn btn-success mt-3" disabled={saving}>
-        {saving ? "Creating…" : "Create vote"}
-      </button>
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-success" disabled={saving}>
+          {saving ? "Creating…" : "Create vote"}
+        </button>
+        {onCancel && (
+          <button type="button" class="btn btn-outline-secondary" onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   );
 }

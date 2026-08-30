@@ -39,7 +39,15 @@ function slugify(value: string): string {
     .slice(0, 200);
 }
 
-function CreateMeetingSeries({ groupId, onCreated }: { groupId: string; onCreated: () => Promise<void> }) {
+function CreateMeetingSeries({
+  groupId,
+  onCreated,
+  onCancel,
+}: {
+  groupId: string;
+  onCreated: () => Promise<void>;
+  onCancel: () => void;
+}) {
   const [draft, setDraft] = useState(initialDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,11 +90,16 @@ function CreateMeetingSeries({ groupId, onCreated }: { groupId: string; onCreate
 
   return (
     <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={(event) => void submit(event)}>
-      <div>
-        <h6 class="mb-1">Schedule a recurring meeting</h6>
-        <p class="text-muted small mb-0">
-          Configure attendance eligibility, registration, and guest access once for the recurring series.
-        </p>
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div>
+          <h6 class="mb-1">Schedule a recurring meeting</h6>
+          <p class="text-muted small mb-0">
+            Configure attendance eligibility, registration, and guest access once for the recurring series.
+          </p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
       {error && <ErrorAlert error={error} />}
       <MeetingSeriesFields
@@ -114,14 +127,27 @@ export function GroupMeetings({
   initialSeriesId?: string;
 }) {
   const listActions = useRef<ApiTableActions | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Meetings</div>
       <div class="card-body d-flex flex-column gap-3">
-        <GroupMeetingSeriesList groupId={groupId} actionsRef={listActions} initialSeriesId={initialSeriesId} />
-        {canManage && (
-          <CreateMeetingSeries groupId={groupId} onCreated={async () => void listActions.current?.reload()} />
+        {canManage && showCreate && (
+          <CreateMeetingSeries
+            groupId={groupId}
+            onCreated={async () => {
+              setShowCreate(false);
+              await listActions.current?.reload();
+            }}
+            onCancel={() => setShowCreate(false)}
+          />
         )}
+        <GroupMeetingSeriesList
+          groupId={groupId}
+          actionsRef={listActions}
+          initialSeriesId={initialSeriesId}
+          createAction={canManage ? { label: "New series", onSelect: () => setShowCreate(true) } : undefined}
+        />
       </div>
     </div>
   );

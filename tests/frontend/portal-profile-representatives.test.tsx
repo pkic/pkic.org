@@ -233,6 +233,21 @@ describe("portal organization-contact representative controls", () => {
     expect(container.textContent).toContain("Blocked Person");
     expect(container.textContent).toContain("Removed — blocked from re-adding");
 
+    // The "Add a coworker" form stays behind its toolbar action until clicked.
+    expect(container.querySelector('input[name="name"]')).toBeNull();
+    const addCoworkerButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Add coworker",
+    );
+    expect(addCoworkerButton).toBeTruthy();
+    await act(async () => addCoworkerButton!.click());
+    expect(container.textContent).toContain("Add a coworker");
+    expect(container.querySelector('input[name="name"]')).not.toBeNull();
+    const cancelAddCoworker = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Cancel" && button.closest("form") === null,
+    );
+    await act(async () => cancelAddCoworker!.click());
+    expect(container.querySelector('input[name="name"]')).toBeNull();
+
     async function openMenu(name: string): Promise<void> {
       const trigger = await waitForElement(() =>
         container.querySelector<HTMLButtonElement>(`[aria-label="Actions for ${name}"]:not(:disabled)`),

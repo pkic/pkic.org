@@ -4,7 +4,15 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { ApiClientError, postJson } from "../../../../shared/api-client";
 
-export function GroupMemberAddForm({ groupId, onAdded }: { groupId: string; onAdded: () => Promise<void> }) {
+export function GroupMemberAddForm({
+  groupId,
+  onAdded,
+  onCancel,
+}: {
+  groupId: string;
+  onAdded: () => Promise<void>;
+  onCancel?: () => void;
+}) {
   const [user, setUser] = useState<PickedUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,11 +46,18 @@ export function GroupMemberAddForm({ groupId, onAdded }: { groupId: string; onAd
 
   return (
     <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={submit}>
-      <div>
-        <h6 class="mb-1">Add a person</h6>
-        <p class="text-muted small mb-0">
-          The person joins through every currently eligible Member affiliation. Existing capacities remain unchanged.
-        </p>
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div>
+          <h6 class="mb-1">Add a person</h6>
+          <p class="text-muted small mb-0">
+            The person joins through every currently eligible Member affiliation. Existing capacities remain unchanged.
+          </p>
+        </div>
+        {onCancel && (
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
       {error && <ErrorAlert error={error} />}
       {saved && <div class="alert alert-success mb-0">Group participation added.</div>}

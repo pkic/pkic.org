@@ -288,6 +288,12 @@ describe("portal group meeting management", () => {
     );
     await settle();
 
+    expect(container.querySelector(`#meeting-guest-expiry-${occurrence.id}`)).toBeNull();
+    const addGuest = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Add guest",
+    )!;
+    await act(async () => addGuest.click());
+
     const expiry = container.querySelector<HTMLInputElement>(`#meeting-guest-expiry-${occurrence.id}`)!;
     expect(expiry.value).toBe("2026-09-08T13:00");
     expect(expiry.max).toBe("2026-09-08T14:00");

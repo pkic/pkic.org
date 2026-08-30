@@ -180,6 +180,7 @@ describe("portal form management", () => {
     const container = mount(<FormManagementList canWrite onOpenForm={vi.fn()} onCreateNew={onCreateNew} />);
     await settle();
 
+    expect(container.querySelector("form")).toBeNull();
     expect(container.textContent).toContain("New form");
     const newFormButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "New form",

@@ -167,6 +167,9 @@ describe("portal group management resources", () => {
     await settle();
 
     expect(container.textContent).toContain("No matching meeting series");
+    expect(container.querySelector("#managed-group-meeting-create-name")).toBeNull();
+    const newSeries = [...container.querySelectorAll("button")].find((button) => button.textContent === "New series")!;
+    await act(async () => newSeries.click());
     const name = container.querySelector<HTMLInputElement>("#managed-group-meeting-create-name")!;
     name.value = "Architecture call";
     void act(() => {
@@ -426,6 +429,12 @@ describe("portal group management resources", () => {
     const onChanged = vi.fn(async () => {});
     const container = mount(<GroupMembers groupId={GROUP_ID} onChanged={onChanged} />);
     await settle();
+
+    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
+    const addPerson = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Add person",
+    )!;
+    await act(async () => addPerson.click());
     await pickUser(container, "selected@example.test");
 
     const add = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -441,6 +450,6 @@ describe("portal group management resources", () => {
       )?.body,
     ).toEqual({ capacitySelection: { mode: "all_eligible", confirmed: true } });
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(container.textContent).toContain("Group participation added.");
+    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
   });
 });

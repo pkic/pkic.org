@@ -161,38 +161,31 @@ export function Sponsorships({
 
   return (
     <div>
-      <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
-        <div class="d-flex gap-2">
-          <select
-            class="form-select form-select-sm"
-            value={type}
-            onChange={(e) => setType((e.target as HTMLSelectElement).value as typeof type)}
-          >
-            <option value="">All types</option>
-            {SPONSOR_TYPES.map((t) => (
-              <option value={t} key={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <select
-            class="form-select form-select-sm"
-            value={stage}
-            onChange={(e) => setStage((e.target as HTMLSelectElement).value as typeof stage)}
-          >
-            <option value="">All stages</option>
-            {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
-              <option value={s} key={s}>
-                {stageLabel(s)}
-              </option>
-            ))}
-          </select>
-        </div>
-        {canWrite && (
-          <button type="button" class="btn btn-primary btn-sm" onClick={() => setShowCreate((v) => !v)}>
-            {showCreate ? "Cancel" : "Create sponsorship"}
-          </button>
-        )}
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <select
+          class="form-select form-select-sm"
+          value={type}
+          onChange={(e) => setType((e.target as HTMLSelectElement).value as typeof type)}
+        >
+          <option value="">All types</option>
+          {SPONSOR_TYPES.map((t) => (
+            <option value={t} key={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <select
+          class="form-select form-select-sm"
+          value={stage}
+          onChange={(e) => setStage((e.target as HTMLSelectElement).value as typeof stage)}
+        >
+          <option value="">All stages</option>
+          {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
+            <option value={s} key={s}>
+              {stageLabel(s)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {canWrite && showCreate && (
@@ -213,6 +206,7 @@ export function Sponsorships({
           resolvePage={(data) => data.page}
           paginate
           actionsRef={tableRef}
+          createAction={canWrite ? { label: "Create sponsorship", onSelect: () => setShowCreate(true) } : undefined}
           columns={companyColumns}
           params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
           rowKey={(c) => c.key}

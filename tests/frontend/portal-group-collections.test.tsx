@@ -170,6 +170,7 @@ describe("portal selected-group collections", () => {
     await settle();
     const button = (label: string) =>
       Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === label);
+    expect(container.querySelector("form")).toBeNull();
     await act(async () => {
       button("Add mailing list")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

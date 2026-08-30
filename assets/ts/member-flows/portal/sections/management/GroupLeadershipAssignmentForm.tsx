@@ -13,9 +13,11 @@ import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
 export function GroupLeadershipAssignmentForm({
   groupId,
   onAssigned,
+  onCancel,
 }: {
   groupId: string;
   onAssigned: () => Promise<void>;
+  onCancel?: () => void;
 }) {
   const [user, setUser] = useState<PickedUser | null>(null);
   const [roleId, setRoleId] = useState<GroupLeadershipAssignment["roleId"]>("role-group_lead");
@@ -54,11 +56,18 @@ export function GroupLeadershipAssignmentForm({
 
   return (
     <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={submit}>
-      <div>
-        <h6 class="mb-1">Add local leadership</h6>
-        <p class="text-muted small mb-0">
-          Local assignments extend inherited leadership. An optional expiry ends the assignment automatically.
-        </p>
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div>
+          <h6 class="mb-1">Add local leadership</h6>
+          <p class="text-muted small mb-0">
+            Local assignments extend inherited leadership. An optional expiry ends the assignment automatically.
+          </p>
+        </div>
+        {onCancel && (
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
       {error && <ErrorAlert error={error} />}
       {saved && <div class="alert alert-success mb-0">Leadership assignment added.</div>}

@@ -278,15 +278,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
       resolvePage={(data) => data.page}
       paginate
       searchPlaceholder="Search template key…"
-      toolbar={
-        canWrite
-          ? () => (
-              <button class="btn btn-success btn-sm ms-auto" onClick={() => setView("create")}>
-                + New Template
-              </button>
-            )
-          : undefined
-      }
+      createAction={canWrite ? { label: "New template", onSelect: () => setView("create") } : undefined}
       columns={[
         {
           header: "Template Key",

@@ -20,6 +20,7 @@ const ROLE_LABELS: Record<EventTeamRole, string> = {
 
 export function Team({ slug }: { slug: string }) {
   const tableRef = useRef<ApiTableActions | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<EventTeamRole>("organizer");
   const [newExpiresAt, setNewExpiresAt] = useState("");
@@ -57,6 +58,7 @@ export function Team({ slug }: { slug: string }) {
         setNewEmail("");
         setNewExpiresAt("");
         setAddStatus("");
+        setShowAddForm(false);
         await tableRef.current?.reload();
       },
       onError: setAddStatus,
@@ -65,60 +67,74 @@ export function Team({ slug }: { slug: string }) {
 
   return (
     <div>
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white fw-semibold">Add team member</div>
-        <div class="card-body">
-          <form onSubmit={handleAdd} class="d-flex gap-2 align-items-end flex-wrap">
-            <div>
-              <label class="form-label small fw-semibold" for="event-team-email">
-                Email
-              </label>
-              <input
-                id="event-team-email"
-                class="form-control form-control-sm"
-                type="email"
-                value={newEmail}
-                onInput={(e) => setNewEmail((e.target as HTMLInputElement).value)}
-                placeholder="user@example.com"
-                required
-              />
-            </div>
-            <div>
-              <label class="form-label small fw-semibold" for="event-team-role">
-                Role
-              </label>
-              <select
-                id="event-team-role"
-                class="form-select form-select-sm"
-                value={newRole}
-                onChange={(e) => setNewRole((e.target as HTMLSelectElement).value as EventTeamRole)}
-              >
-                {EVENT_TEAM_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label class="form-label small fw-semibold" for="event-team-expires-at">
-                Expires (optional)
-              </label>
-              <input
-                id="event-team-expires-at"
-                class="form-control form-control-sm"
-                type="datetime-local"
-                value={newExpiresAt}
-                onInput={(e) => setNewExpiresAt((e.target as HTMLInputElement).value)}
-              />
-            </div>
-            <button type="submit" class="btn btn-sm btn-success" disabled={adding}>
-              Add
+      {showAddForm && (
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between">
+            <span class="fw-semibold">Add team member</span>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              onClick={() => {
+                setShowAddForm(false);
+                setAddStatus("");
+              }}
+            >
+              Cancel
             </button>
-            {addStatus && <span class="small text-danger">{addStatus}</span>}
-          </form>
+          </div>
+          <div class="card-body">
+            <form onSubmit={handleAdd} class="d-flex gap-2 align-items-end flex-wrap">
+              <div>
+                <label class="form-label small fw-semibold" for="event-team-email">
+                  Email
+                </label>
+                <input
+                  id="event-team-email"
+                  class="form-control form-control-sm"
+                  type="email"
+                  value={newEmail}
+                  onInput={(e) => setNewEmail((e.target as HTMLInputElement).value)}
+                  placeholder="user@example.com"
+                  required
+                />
+              </div>
+              <div>
+                <label class="form-label small fw-semibold" for="event-team-role">
+                  Role
+                </label>
+                <select
+                  id="event-team-role"
+                  class="form-select form-select-sm"
+                  value={newRole}
+                  onChange={(e) => setNewRole((e.target as HTMLSelectElement).value as EventTeamRole)}
+                >
+                  {EVENT_TEAM_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {ROLE_LABELS[role]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label class="form-label small fw-semibold" for="event-team-expires-at">
+                  Expires (optional)
+                </label>
+                <input
+                  id="event-team-expires-at"
+                  class="form-control form-control-sm"
+                  type="datetime-local"
+                  value={newExpiresAt}
+                  onInput={(e) => setNewExpiresAt((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <button type="submit" class="btn btn-sm btn-success" disabled={adding}>
+                Add
+              </button>
+              {addStatus && <span class="small text-danger">{addStatus}</span>}
+            </form>
+          </div>
         </div>
-      </div>
+      )}
 
       <ApiDataTable
         endpoint={`/api/v1/events/${encodeURIComponent(slug)}/roles`}
@@ -127,6 +143,7 @@ export function Team({ slug }: { slug: string }) {
         resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="Search email or role…"
+        createAction={{ label: "Add team member", onSelect: () => setShowAddForm(true) }}
         actionsRef={tableRef}
         columns={[
           { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },

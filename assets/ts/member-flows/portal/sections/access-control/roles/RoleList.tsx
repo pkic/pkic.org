@@ -43,14 +43,6 @@ export function RoleList({
 
   return (
     <div>
-      {canGrant && (
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <button type="button" class="btn btn-sm btn-success" onClick={onCreateNew}>
-            New role
-          </button>
-        </div>
-      )}
-
       <ApiDataTable
         endpoint="/api/v1/roles"
         responseSchema={rolesListResponseSchema}
@@ -58,6 +50,7 @@ export function RoleList({
         resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
+        createAction={canGrant ? { label: "New role", onSelect: onCreateNew } : undefined}
         columns={[
           {
             header: "Name",

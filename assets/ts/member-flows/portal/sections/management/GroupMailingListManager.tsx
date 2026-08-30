@@ -101,17 +101,17 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
 
   return (
     <section class="card border-0 shadow-sm mb-3" aria-label="Mailing-list management">
-      <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <span class="fw-semibold">Managed mailing lists</span>
-        <button type="button" class="btn btn-sm btn-primary" onClick={() => setShowCreate((value) => !value)}>
-          {showCreate ? "Cancel" : "Add mailing list"}
-        </button>
-      </div>
+      <div class="card-header bg-white fw-semibold">Managed mailing lists</div>
       <div class="card-body">
         {error && <ErrorAlert error={error} />}
         {showCreate && (
           <form class="card card-body bg-body-tertiary mb-3" onSubmit={(event) => void createList(event)}>
-            <h6 class="card-title">New group mailing list</h6>
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <h6 class="card-title">New group mailing list</h6>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setShowCreate(false)}>
+                Cancel
+              </button>
+            </div>
             <MailingListForm
               draft={newDraft}
               onChange={(patch) => setNewDraft((current) => ({ ...current, ...patch }))}
@@ -131,6 +131,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
           resolve={(response) => response.mailingLists}
           resolvePage={(response) => response.page}
           paginate
+          createAction={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
           searchPlaceholder="Search managed mailing lists…"
           initialSort="label"
           columns={[

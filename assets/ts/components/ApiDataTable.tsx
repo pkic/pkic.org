@@ -31,6 +31,12 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   initialPageSize?: number;
   initialSort?: string;
   toolbar?: (actions: ApiTableActions) => ComponentChildren;
+  /**
+   * The list's create affordance, rendered in the same bar as search and
+   * refresh so every collection offers "New …" in one predictable place.
+   * The form it reveals stays behind this action — never in the default view.
+   */
+  createAction?: { label: string; onSelect: () => void; disabled?: boolean };
   actionsRef?: MutableRef<ApiTableActions | null>;
   onData?: (data: Response) => void;
   load?: CollectionLoader;
@@ -57,6 +63,7 @@ export function ApiDataTable<T, Response = unknown>({
   detailRow,
   initialSort = "",
   toolbar,
+  createAction,
   actionsRef,
   onData,
   load = loadCollection,
@@ -111,7 +118,7 @@ export function ApiDataTable<T, Response = unknown>({
 
   return (
     <div>
-      {(searchPlaceholder || toolbar) && (
+      {(searchPlaceholder || toolbar || createAction) && (
         <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
           {searchPlaceholder && (
             <input
@@ -127,7 +134,21 @@ export function ApiDataTable<T, Response = unknown>({
             />
           )}
           {toolbar?.(actions)}
-          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onClick={collection.reload}>
+          {createAction && (
+            <button
+              type="button"
+              class="btn btn-sm btn-success ms-auto"
+              disabled={createAction.disabled}
+              onClick={createAction.onSelect}
+            >
+              {createAction.label}
+            </button>
+          )}
+          <button
+            type="button"
+            class={`btn btn-sm btn-outline-secondary${createAction ? "" : " ms-auto"}`}
+            onClick={collection.reload}
+          >
             ↺ Refresh
           </button>
         </div>

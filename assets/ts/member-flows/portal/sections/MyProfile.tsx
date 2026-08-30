@@ -238,6 +238,7 @@ export function MyProfile() {
 
 function OrganizationRepresentativesCard({ current }: { current: MyProfileType }) {
   const directoryRef = useRef<ApiTableActions | null>(null);
+  const [showAddCoworker, setShowAddCoworker] = useState(false);
 
   if (!current.organizationId || !current.organizationRepresentatives) return null;
   const primaryContactUserId = current.organizationRepresentatives.find(
@@ -248,6 +249,17 @@ function OrganizationRepresentativesCard({ current }: { current: MyProfileType }
     <div class="card border-0 shadow-sm mt-3">
       <div class="card-body">
         <h3 class="h6 mb-3">Organization representatives</h3>
+        {current.isOrgContact && showAddCoworker && (
+          <AddCoworkerForm
+            organizationId={current.organizationId}
+            onCancel={() => setShowAddCoworker(false)}
+            onAdded={async () => {
+              setShowAddCoworker(false);
+              await refreshProfile();
+              await directoryRef.current?.reload();
+            }}
+          />
+        )}
         <OrganizationRepresentativeDirectory
           organizationId={current.organizationId}
           activeRepresentatives={current.organizationRepresentatives}
@@ -255,16 +267,10 @@ function OrganizationRepresentativesCard({ current }: { current: MyProfileType }
           canBlock={(userId) => userId !== current.userId && userId !== primaryContactUserId}
           onChanged={refreshProfile}
           actionsRef={directoryRef}
+          createAction={
+            current.isOrgContact ? { label: "Add coworker", onSelect: () => setShowAddCoworker(true) } : undefined
+          }
         />
-        {current.isOrgContact && (
-          <AddCoworkerForm
-            organizationId={current.organizationId}
-            onAdded={async () => {
-              await refreshProfile();
-              await directoryRef.current?.reload();
-            }}
-          />
-        )}
       </div>
     </div>
   );
@@ -346,7 +352,15 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
   );
 }
 
-function AddCoworkerForm({ organizationId, onAdded }: { organizationId: string; onAdded: () => Promise<void> }) {
+function AddCoworkerForm({
+  organizationId,
+  onAdded,
+  onCancel,
+}: {
+  organizationId: string;
+  onAdded: () => Promise<void>;
+  onCancel: () => void;
+}) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -377,8 +391,13 @@ function AddCoworkerForm({ organizationId, onAdded }: { organizationId: string; 
   }
 
   return (
-    <div class="mt-4">
-      <h4 class="h6 mb-2">Add a coworker</h4>
+    <div class="mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h4 class="h6 mb-0">Add a coworker</h4>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
       <form
         onSubmit={(e) => {
           void handleSubmit(e);
