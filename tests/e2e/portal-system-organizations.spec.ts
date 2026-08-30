@@ -41,7 +41,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Add representative", exact: true }).click();
+  await page.getByRole("button", { name: "Add new person", exact: true }).click();
   await page.locator("#organization-representative-name").fill("Secondary Representative");
   await page.locator("#organization-representative-email").fill(secondaryEmail);
   await page.locator("#organization-representative-job-title").fill("Program Manager");
