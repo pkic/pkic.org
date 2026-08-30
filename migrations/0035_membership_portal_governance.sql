@@ -3341,11 +3341,11 @@ You have joined {{groupName}}. If this group has meetings, you can view upcoming
   (
     lower(hex(randomblob(16))), 'user_magic_link', 1,
     'Your PKI Consortium sign-in link',
-    'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
+    'A sign-in link was requested for the **PKI Consortium portal**.
 
-[Sign in]({{magicLinkUrl}})
+<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to the portal &rarr;</a></div>
 
-If you did not request this link, you can safely ignore this email.',
+<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
