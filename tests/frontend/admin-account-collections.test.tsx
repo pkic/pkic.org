@@ -5,6 +5,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
 import { UserEmailAddressesPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAccountPanels";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000002";
@@ -98,6 +99,7 @@ describe("portal access-control collection pagination", () => {
                 isSystemRole: true,
                 permissions: [],
                 createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
               },
             ],
             page: page(url, 1, 1),
@@ -201,5 +203,58 @@ describe("portal access-control collection pagination", () => {
     await settle();
     expect(requests.at(-1)?.searchParams.get("q")).toBe("alias");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("only removes a secondary email through the confirm dialog when the removal is confirmed", async () => {
+    const requests: Array<{ method: string; pathname: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        requests.push({ method: init?.method ?? "GET", pathname: url.pathname });
+        if (url.pathname === `/api/v1/users/${USER_ID}/emails/${EMAIL_ID}`) return jsonResponse({ success: true });
+        if (url.pathname !== `/api/v1/users/${USER_ID}/emails`) throw new Error(`Unexpected request: ${url}`);
+        return jsonResponse({
+          emails: [
+            {
+              id: EMAIL_ID,
+              userId: USER_ID,
+              email: "alias@example.test",
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+          page: page(url, 1, 1),
+        });
+      }),
+    );
+
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <UserEmailAddressesPanel userId={USER_ID} primaryEmail="primary@example.test" canWrite />
+      </>,
+    );
+    await settle();
+
+    function dialogButton(label: string): HTMLButtonElement {
+      const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+      if (!button) throw new Error(`missing button: ${label}`);
+      return button;
+    }
+
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
+    void act(() => trigger.click());
+    void act(() => dialogButton("Remove email").click());
+    expect(container.textContent).toContain("Remove alias@example.test from this account?");
+    void act(() => dialogButton("Cancel").click());
+    await settle();
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+
+    void act(() => trigger.click());
+    void act(() => dialogButton("Remove email").click());
+    void act(() => dialogButton("Remove email").click());
+    await settle();
+    const deleteRequest = requests.find((r) => r.method === "DELETE");
+    expect(deleteRequest?.pathname).toBe(`/api/v1/users/${USER_ID}/emails/${EMAIL_ID}`);
   });
 });

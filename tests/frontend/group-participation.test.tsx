@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SelfGroup } from "../../assets/shared/schemas/group-participation";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupParticipationCard } from "../../assets/ts/member-flows/portal/sections/GroupParticipationCard";
 import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
@@ -61,8 +62,24 @@ function mountCard(value: SelfGroup, onChanged = vi.fn(async () => {})): HTMLEle
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
-  void act(() => render(<GroupParticipationCard group={value} onChanged={onChanged} />, container));
+  void act(() =>
+    render(
+      <>
+        <ConfirmDialogHost />
+        <GroupParticipationCard group={value} onChanged={onChanged} />
+      </>,
+      container,
+    ),
+  );
   return container;
+}
+
+function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
+  const dialog = container.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing dialog button: ${label}`);
+  return button;
 }
 
 function mountGroups(): HTMLElement {
@@ -189,10 +206,6 @@ describe("generic group participation card", () => {
   it("adds and removes individual organization capacities without leaving the group", async () => {
     const requests: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         requests.push({ url: String(input), body: JSON.parse(String(init.body)) });
@@ -231,11 +244,58 @@ describe("generic group participation card", () => {
       },
     });
 
-    void act(() => (container.querySelector("button.btn-outline-danger") as HTMLButtonElement).click());
+    const rowActionsTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for Organization A"]');
+    if (!rowActionsTrigger) throw new Error("missing row actions trigger");
+    void act(() => rowActionsTrigger.click());
+    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === "Remove",
+    );
+    if (!removeItem) throw new Error("missing Remove menu item");
+    void act(() => removeItem.click());
+
+    const dialog = container.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain("Stop participating in Architecture Group on behalf of Organization A?");
+
+    void act(() => dialogButton(container, "Stop participating").click());
     await settle();
     expect(requests[1]).toEqual({
       url: "/api/v1/groups/10000000-0000-4000-8000-000000000001/leave",
       body: { mode: "selected", memberIds: ["20000000-0000-4000-8000-000000000001"] },
     });
+  });
+
+  it("keeps the affiliation when the removal confirmation is cancelled", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const container = mountCard(
+      group({
+        memberships: [
+          {
+            id: "30000000-0000-4000-8000-000000000001",
+            memberId: "20000000-0000-4000-8000-000000000001",
+            memberType: "organization",
+            organizationName: "Organization A",
+            membershipCategory: "A",
+            source: "self_service",
+            joinedAt: "2026-08-20T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const rowActionsTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for Organization A"]');
+    if (!rowActionsTrigger) throw new Error("missing row actions trigger");
+    void act(() => rowActionsTrigger.click());
+    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === "Remove",
+    );
+    if (!removeItem) throw new Error("missing Remove menu item");
+    void act(() => removeItem.click());
+
+    void act(() => dialogButton(container, "Cancel").click());
+    await settle();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 });

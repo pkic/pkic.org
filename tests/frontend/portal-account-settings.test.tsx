@@ -150,6 +150,8 @@ describe("portal account settings capacity cutover", () => {
     await settle();
 
     expect(container.textContent).toContain("Your access");
+    expect(container.textContent).toContain("Permissions");
+    expect(container.textContent).not.toContain("Staff access");
     expect(container.textContent).toContain("Administrator — this account holds every administrative permission.");
   });
 
@@ -210,6 +212,8 @@ describe("portal account settings capacity cutover", () => {
     expect(container.textContent).toContain("Category A");
     expect(container.textContent).toContain("Individual membership");
     expect(container.textContent).toContain("Category H5");
+    expect(container.textContent).toContain("Contact an administrator to change it.");
+    expect(container.textContent).not.toContain("staff");
   });
 
   it("reports a notification-preference load failure instead of hiding it", async () => {

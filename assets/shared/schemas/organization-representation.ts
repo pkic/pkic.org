@@ -4,6 +4,7 @@ import { booleanQueryFlagSchema, normalizedEmailSchema, successResponseSchema, t
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { httpOrSameOriginUrlSchema } from "./urls";
 
 export const ORGANIZATION_REPRESENTATION_SOURCES = [
   "verified_domain",
@@ -58,6 +59,7 @@ export const organizationRepresentativeSchema = z.object({
   userId: databaseIdSchema,
   userName: z.string(),
   email: z.email(),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   source: organizationRepresentationSourceSchema,
   showOnOrganizationProfile: z.boolean(),
   joinedAt: z.string(),

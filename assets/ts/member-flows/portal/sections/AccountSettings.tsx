@@ -118,7 +118,7 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
         )}
         {staff && (
           <div>
-            <h6 class="small fw-semibold text-muted text-uppercase">Staff access</h6>
+            <h6 class="small fw-semibold text-muted text-uppercase">Permissions</h6>
             {staff.role === "admin" ? (
               <p class="small mb-0">Administrator — this account holds every administrative permission.</p>
             ) : staff.grants.length === 0 ? (
@@ -170,7 +170,7 @@ export function AccountSettings() {
           <p class="mb-0">{email}</p>
           <p class="text-muted small mb-0">
             {hasMemberCapacity
-              ? "This is the verified primary email address for your account. Contact PKI Consortium staff to change it."
+              ? "This is the verified primary email address for your account. Contact an administrator to change it."
               : "This is the verified primary email address for your portal identity."}
           </p>
         </div>

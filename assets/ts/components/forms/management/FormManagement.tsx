@@ -22,6 +22,7 @@ import {
 } from "../../../../shared/schemas/event-registrations";
 import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-client";
 import { ApiDataTable } from "../../ApiDataTable";
+import { confirmAction } from "../../ConfirmDialog";
 import { ErrorAlert } from "../../ErrorAlert";
 import { Spinner } from "../../Spinner";
 import { Tabs } from "../../Tabs";
@@ -152,7 +153,16 @@ export function FormManagementDetail({
   }, [load]);
 
   async function remove(): Promise<void> {
-    if (!window.confirm(`Archive or delete form ${formKey}?`)) return;
+    const confirmed = await confirmAction({
+      title: `Archive or delete "${detail?.form.title ?? formKey}"?`,
+      consequences: [
+        "A form with existing responses is archived and kept for records",
+        "A form with no responses is deleted permanently",
+      ],
+      confirmLabel: "Archive or delete form",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try {
       const result = await deleteJson(base, formDeleteResponseSchema);
       notify?.(result.message ?? `Form ${result.action}`, "success");
@@ -163,7 +173,7 @@ export function FormManagementDetail({
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading form…" />;
   if (error) return <ErrorAlert error={error} />;
   if (!detail) return null;
   const canManageForm = canWrite && detail.form.scope_type !== "community";

@@ -8,6 +8,7 @@ import {
   organizationsListResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { organizationRepresentativesListResponseSchema } from "../../assets/shared/schemas/organization-representation";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
 
@@ -74,6 +75,7 @@ function detail() {
           userId,
           name: "Ada Lovelace",
           email: "ada@example.test",
+          headshotUrl: null,
           jobTitle: "Engineer",
           links: [],
           status: "active",
@@ -98,6 +100,7 @@ function representativePage() {
         userId,
         userName: "Ada Lovelace",
         email: "ada@example.test",
+        headshotUrl: null,
         source: "staff",
         showOnOrganizationProfile: true,
         joinedAt: "2026-01-01T00:00:00.000Z",
@@ -114,6 +117,14 @@ function representativePage() {
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+}
+
+function dialogButton(root: HTMLElement, label: string): HTMLButtonElement {
+  const dialog = root.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing dialog button: ${label}`);
+  return button;
 }
 
 afterEach(() => {
@@ -189,14 +200,17 @@ describe("portal System Organizations", () => {
     const writer = mount(
       <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />,
     );
-    await waitForElement(
-      () => [...writer.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Block") ?? null,
+    const menuTrigger = await waitForElement(() =>
+      writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
     expect(writer.textContent).toContain("Edit");
     expect(writer.textContent).toContain("Contacts");
     expect(writer.textContent).toContain("Add new person");
     expect(writer.textContent).toContain("Link existing user");
-    expect(writer.textContent).toContain("Block");
+    expect(writer.textContent).toContain("Active");
+
+    await act(async () => menuTrigger!.click());
+    expect(writer.textContent).toContain("Remove from organization");
   });
 
   it("submits the canonical representative command and accepts its mutation receipt", async () => {
@@ -265,5 +279,84 @@ describe("portal System Organizations", () => {
         showOnOrganizationProfile: true,
       },
     });
+  });
+
+  it("removes a representative through the row menu only after the named confirmation is accepted", async () => {
+    const requests: Array<{ method: string; path: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        requests.push({ method, path: url.pathname });
+        if (method === "DELETE") return json({ success: true });
+        return json(url.pathname.endsWith("/representatives") ? representativePage() : detail());
+      }),
+    );
+
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />
+      </>,
+    );
+    const menuTrigger = await waitForElement(() =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
+    );
+    await act(async () => menuTrigger!.click());
+    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === "Remove from organization",
+    );
+    if (!removeItem) throw new Error("missing Remove from organization menu item");
+    await act(async () => removeItem.click());
+
+    const dialog = container.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain("Remove Ada Lovelace from this organization?");
+    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
+
+    await act(async () => dialogButton(container, "Remove from organization").click());
+    await settle();
+
+    expect(requests).toContainEqual({
+      method: "DELETE",
+      path: `/api/v1/organizations/${organizationId}/representatives/${userId}`,
+    });
+  });
+
+  it("keeps the representative active when the removal confirmation is cancelled", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      return json(url.pathname.endsWith("/representatives") ? representativePage() : detail());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />
+      </>,
+    );
+    const menuTrigger = await waitForElement(() =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
+    );
+    await act(async () => menuTrigger!.click());
+    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === "Remove from organization",
+    );
+    if (!removeItem) throw new Error("missing Remove from organization menu item");
+    const callsBeforeCancel = fetchMock.mock.calls.length;
+    await act(async () => removeItem.click());
+
+    await act(async () => dialogButton(container, "Cancel").click());
+    await settle();
+
+    expect(fetchMock.mock.calls.length).toBe(callsBeforeCancel);
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 });

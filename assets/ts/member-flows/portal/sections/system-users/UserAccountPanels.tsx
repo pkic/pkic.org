@@ -8,6 +8,8 @@ import {
 } from "../../../../../shared/schemas/user-emails";
 import { fmt, toast } from "../../ui";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { RowActions } from "../../../../components/RowActions";
 
 export function UserEmailAddressesPanel({
   userId,
@@ -44,7 +46,12 @@ export function UserEmailAddressesPanel({
   }
 
   async function handleRemove(emailId: string, email: string) {
-    if (!confirm(`Remove ${email} from this account?`)) return;
+    const confirmed = await confirmAction({
+      title: `Remove ${email} from this account?`,
+      consequences: ["This secondary email is no longer associated with this account"],
+      confirmLabel: "Remove email",
+    });
+    if (!confirmed) return;
     try {
       await deleteJson(
         `/api/v1/users/${encodeURIComponent(userId)}/emails/${encodeURIComponent(emailId)}`,
@@ -111,12 +118,15 @@ export function UserEmailAddressesPanel({
                   {
                     header: "",
                     cell: (email: UserEmailRecord) => (
-                      <button
-                        class="btn btn-sm btn-outline-danger"
-                        onClick={() => void handleRemove(email.id, email.email)}
-                      >
-                        Remove
-                      </button>
+                      <RowActions
+                        actions={[
+                          {
+                            key: "remove",
+                            label: "Remove email",
+                            onSelect: () => void handleRemove(email.id, email.email),
+                          },
+                        ]}
+                      />
                     ),
                   },
                 ]

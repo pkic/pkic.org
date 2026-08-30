@@ -13,7 +13,7 @@ import {
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-management";
 import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { httpUrlSchema } from "./urls";
+import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
 export { MEMBER_STATUSES, memberStatusSchema };
 
@@ -58,6 +58,7 @@ export const organizationRepresentativeManagementSchema = z.object({
   userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   jobTitle: z.string().nullable(),
   links: linksSchema,
   status: memberStatusSchema,

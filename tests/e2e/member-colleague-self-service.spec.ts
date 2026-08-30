@@ -11,6 +11,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, readActiveMemberships, uniqueSuffix } from "./helpers/membership";
 
 /** An open working group anyone eligible may join without an invitation. */
@@ -83,19 +84,19 @@ test("an organization contact adds a colleague and can take the access away agai
   await page.context().clearCookies();
   await signInToPortal(page, contactEmail);
   await page.goto("/portal/#/profile");
-  const blockButton = page.getByRole("button", { name: new RegExp(`Block Colleague ${suffix} as representative`) });
-  await expect(blockButton).toBeVisible({ timeout: 15_000 });
-  await blockButton.click();
-  await expect(page.locator(".my-toast", { hasText: "Representative blocked" })).toBeVisible({ timeout: 15_000 });
+  const actionsButton = page.getByRole("button", { name: new RegExp(`Actions for Colleague ${suffix}`) });
+  await expect(actionsButton).toBeVisible({ timeout: 15_000 });
+  await actionsButton.click();
+  await page.getByRole("menuitem", { name: "Remove from organization" }).click();
+  await acceptConfirmDialog(page, "Remove from organization");
+  await expect(page.locator(".my-toast", { hasText: "Representative removed" })).toBeVisible({ timeout: 15_000 });
 
   await expect.poll(async () => await activeRepresentativeEmails(page)).not.toContain(colleagueEmail);
 
-  // A block is a consent decision that persists until it is explicitly undone.
-  const restoreButton = page.getByRole("button", {
-    name: new RegExp(`Restore Colleague ${suffix} as representative`),
-  });
-  await expect(restoreButton).toBeVisible({ timeout: 15_000 });
-  await restoreButton.click();
+  // A removal is a consent decision that persists until it is explicitly undone.
+  await actionsButton.click();
+  await page.getByRole("menuitem", { name: "Restore" }).click();
+  await acceptConfirmDialog(page, "Restore representative");
   await expect(page.locator(".my-toast", { hasText: "Representative restored" })).toBeVisible({ timeout: 15_000 });
   await expect.poll(async () => await activeRepresentativeEmails(page)).toContain(colleagueEmail);
 });

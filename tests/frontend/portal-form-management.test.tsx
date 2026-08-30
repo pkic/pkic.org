@@ -15,6 +15,7 @@ import {
   FormManagementDetail,
   FormManagementList,
 } from "../../assets/ts/components/forms/management/FormManagement";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 
 const mounted: HTMLElement[] = [];
 
@@ -102,6 +103,37 @@ function emptyStatsResponse(): Response {
     ),
     { status: 200, headers: { "content-type": "application/json" } },
   );
+}
+
+function globalFormDetailResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formDetailResponseSchema.parse({
+        form: {
+          id: "00000000-0000-4000-8000-000000000004",
+          key: "member-feedback",
+          scope_type: "global",
+          scope_ref: null,
+          purpose: "feedback",
+          status: "active",
+          title: "Member feedback",
+          description: null,
+          created_at: "2026-08-29T10:00:00.000Z",
+          updated_at: "2026-08-29T10:00:00.000Z",
+        },
+        fields: [],
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function dialogButton(root: HTMLElement, label: string): HTMLButtonElement {
+  const dialog = root.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing dialog button: ${label}`);
+  return button;
 }
 
 afterEach(() => {
@@ -301,5 +333,90 @@ describe("portal form management", () => {
     expect(created?.url.pathname).toBe("/api/v1/forms");
     expect(created?.body).toMatchObject({ key: "new-member-form", title: "New member form" });
     expect(onCreated).toHaveBeenCalledWith("new-member-form");
+  });
+
+  it("archives or deletes a form only after the named confirmation is accepted", async () => {
+    const requests: { method: string; url: URL }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        requests.push({ method, url });
+        if (method === "DELETE") {
+          return new Response(JSON.stringify({ action: "deleted", message: "Form deleted" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : globalFormDetailResponse();
+      }),
+    );
+    const onBack = vi.fn();
+    const notify = vi.fn();
+
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <FormManagementDetail formKey="member-feedback" canWrite onBack={onBack} notify={notify} />
+      </>,
+    );
+    await settle();
+
+    const removeButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Archive/Delete",
+    );
+    if (!removeButton) throw new Error("missing Archive/Delete button");
+    void act(() => removeButton.click());
+
+    const dialog = container.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain('Archive or delete "Member feedback"?');
+    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
+
+    void act(() => dialogButton(container, "Archive or delete form").click());
+    await settle();
+
+    expect(requests).toContainEqual(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.objectContaining({ pathname: "/api/v1/forms/member-feedback" }),
+      }),
+    );
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the form when the archive/delete confirmation is cancelled", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : globalFormDetailResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onBack = vi.fn();
+
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <FormManagementDetail formKey="member-feedback" canWrite onBack={onBack} />
+      </>,
+    );
+    await settle();
+
+    const removeButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Archive/Delete",
+    );
+    if (!removeButton) throw new Error("missing Archive/Delete button");
+    const callsBeforeCancel = fetchMock.mock.calls.length;
+    void act(() => removeButton.click());
+    void act(() => dialogButton(container, "Cancel").click());
+    await settle();
+
+    expect(fetchMock.mock.calls.length).toBe(callsBeforeCancel);
+    expect(onBack).not.toHaveBeenCalled();
   });
 });
