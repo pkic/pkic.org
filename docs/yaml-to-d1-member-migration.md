@@ -23,7 +23,7 @@ command. The repository's `engines.node` declaration reflects this minimum.
 
 Confirm the source data is in place:
 
-- `data/members/*.yaml` — 419 member YAML files (plus a non-YAML `AGENTS.md`)
+- `data/members/*.yaml` — 418 member YAML files (plus a non-YAML `AGENTS.md`)
 - `csv/pkic.csv` + `csv/{ca,cbom,cm,pkimm,pqc,tcwg}.csv` — Google Groups roster
   exports (`csv/ec.csv` also exists but is intentionally not consumed — EC
   membership) — untracked, never commit these; they carry real people's
@@ -273,6 +273,9 @@ noted:
    `EVENT_NAME_ALIASES` table (only 3 distinct event names exist across all
    YAML) rather than fuzzy name matching; unrecognized event names are
    reported, not silently dropped.
+   Legacy blank or case-insensitive `none` levels mean “not a sponsor,”
+   matching the former Hugo behavior; they do not create an active D1
+   sponsorship or populate `organizations.sponsor_tier`.
 5. **`--logo-bucket` now defaults per environment** (`pkic-assets-preview`
    for `--preview`, `pkic-assets` for `--local`/`--production`) instead of
    always `pkic-assets` — running `--preview` without an explicit

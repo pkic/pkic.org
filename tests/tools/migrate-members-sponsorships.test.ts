@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { forEachResolvedEventSponsorship } from "../../scripts/migrate-members/sponsorships.mjs";
+import {
+  forEachResolvedEventSponsorship,
+  normalizeImportedSponsorTier,
+} from "../../scripts/migrate-members/sponsorships.mjs";
+
+describe("normalizeImportedSponsorTier", () => {
+  it("treats blank and legacy none values as no sponsorship", () => {
+    expect(normalizeImportedSponsorTier(undefined)).toBeNull();
+    expect(normalizeImportedSponsorTier("   ")).toBeNull();
+    expect(normalizeImportedSponsorTier(" none ")).toBeNull();
+    expect(normalizeImportedSponsorTier("NoNe")).toBeNull();
+    expect(normalizeImportedSponsorTier(" Silver ")).toBe("Silver");
+  });
+});
 
 describe("forEachResolvedEventSponsorship", () => {
   it("resolves known events, trims tiers, skips empty tiers, and reports unknown events", () => {
@@ -11,6 +24,7 @@ describe("forEachResolvedEventSponsorship", () => {
         "Post-Quantum Cryptography Conference Amsterdam 2023": { level: " silver " },
         "Unknown Conference": { level: "gold" },
         "No Tier": { level: "  " },
+        "Legacy None": { level: "NONE" },
       },
       { onResolved, onUnmatched },
     );

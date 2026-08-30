@@ -266,6 +266,21 @@ sponsor:
       "utf8",
     );
     fs.writeFileSync(path.join(membersDir, "bob.yaml"), `id: bob\nname: Bob Individual\nmemberType: H5\n`, "utf8");
+    fs.writeFileSync(
+      sponsorsYamlPath,
+      `- name: Venue Partner
+  website: https://venue.example
+  sponsor:
+    sponsoring:
+      Post-Quantum Cryptography Conference Amsterdam 2023:
+        level: Ambassador
+- name: Legacy Non-Sponsor
+  website: https://not-a-sponsor.example
+  sponsor:
+    level: none
+`,
+      "utf8",
+    );
 
     const alice = ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"];
     const carol = ["carol@acme.example", "Carol", "x", "x", "x", "x", "2023", "01", "16", "10", "00", "00"];
@@ -292,6 +307,7 @@ sponsor:
       sponsorsYamlPath,
     });
     expect(report.wgOnlyRosterUsers).toContainEqual({ email: "unresolved@example.test", workingGroups: ["ca"] });
+    expect(report.nonMemberSponsorships).toEqual({ created: 1, unmatchedEvents: [] });
     expect(sql).toContain("INSERT OR IGNORE INTO group_memberships");
     expect(sql).not.toMatch(/\bworking_group_members\b/);
     expect(sql).not.toMatch(/\bworking_groups\b/);
@@ -343,7 +359,8 @@ sponsor:
     expect(first.categoryAssignments).toHaveLength(2);
     expect(first.representatives).toHaveLength(2);
     expect(first.roles.length).toBeGreaterThanOrEqual(2); // primary + secondary contact
-    expect(first.sponsorships).toHaveLength(2); // consortium + event
+    expect(first.sponsorships).toHaveLength(3); // member consortium + member event + non-member event
+    expect(first.sponsorships.some((row) => String(row.tier).toLowerCase() === "none")).toBe(false);
     expect(first.groupMemberships).toHaveLength(1);
     expect(first.groupMemberships[0]).toMatchObject({ source: "migration" });
     expect(first.groupMemberships[0]!.member_id).toBe(first.representatives[0]!.member_id);

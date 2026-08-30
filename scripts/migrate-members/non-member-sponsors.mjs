@@ -14,7 +14,7 @@ import {
   buildNonMemberConsortiumSponsorshipStatement,
   buildNonMemberEventSponsorshipStatements,
 } from "./sql-renderer.mjs";
-import { forEachResolvedEventSponsorship } from "./sponsorships.mjs";
+import { forEachResolvedEventSponsorship, normalizeImportedSponsorTier } from "./sponsorships.mjs";
 
 export function processNonMemberSponsors(ctx, { sponsorsYamlPath, sponsorLogoDir }) {
   if (!fs.existsSync(sponsorsYamlPath)) return;
@@ -36,7 +36,7 @@ export function processNonMemberSponsors(ctx, { sponsorsYamlPath, sponsorLogoDir
     }
 
     const sponsor = entry.sponsor ?? {};
-    const level = String(sponsor.level ?? "").trim();
+    const level = normalizeImportedSponsorTier(sponsor.level);
     if (level) {
       ctx.statements.push(buildNonMemberConsortiumSponsorshipStatement(sponsorName, website, logoR2Key, level));
       ctx.report.nonMemberSponsorships.created += 1;
