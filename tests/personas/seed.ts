@@ -21,6 +21,11 @@ export interface SeededPersona {
   capacities: Array<{ organizationId: string; memberId: string }>;
   /** Bearer token, or null for the anonymous persona. */
   token: string | null;
+  /**
+   * The row id of each direct grant, so a test can revoke one mid-request and
+   * check the authorization is re-evaluated rather than trusted from preflight.
+   */
+  grantIds: Map<string, string>;
 }
 
 export interface SeedPersonaOptions {
@@ -40,7 +45,7 @@ export async function seedPersona(
   const definition = ALL_PERSONAS[key];
   if (!definition) throw new Error(`Unknown persona: ${key}`);
   if (key === "anonymous") {
-    return { key, definition, userId: "", email: "", capacities: [], token: null };
+    return { key, definition, userId: "", email: "", capacities: [], token: null, grantIds: new Map() };
   }
 
   // Every instance is a distinct person at a distinct organization. Deriving
@@ -92,14 +97,17 @@ export async function seedPersona(
       .run();
   }
 
+  const grantIds = new Map<string, string>();
   for (const permission of definition.grants) {
+    const grantId = crypto.randomUUID();
     await db
       .prepare(
         `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
          VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       )
-      .bind(crypto.randomUUID(), userId, permission, userId)
+      .bind(grantId, userId, permission, userId)
       .run();
+    grantIds.set(permission, grantId);
   }
 
   if (options.groupId && options.joinGroupWithCapacities && capacities.length > 0) {
@@ -121,7 +129,7 @@ export async function seedPersona(
     ? await createAdminSession(db, userId, `persona-${key}-${crypto.randomUUID()}`)
     : await createMemberSession(db, userId, `persona-${key}-${crypto.randomUUID()}`);
 
-  return { key, definition, userId, email, capacities, token };
+  return { key, definition, userId, email, capacities, token, grantIds };
 }
 
 /** Convenience for suites that only need the request header. */

@@ -1,4 +1,4 @@
-import type { Permission } from "../../assets/shared/schemas/permissions";
+import { PERMISSIONS, type Permission } from "../../assets/shared/schemas/permissions";
 
 /**
  * Who the people in our tests are.
@@ -363,6 +363,43 @@ export const CAPABILITY_PERSONAS: Record<string, PersonaDefinition> = Object.fro
   ]),
 );
 
+/**
+ * A holder of exactly one permission, for every permission the system defines.
+ *
+ * The grouped profiles above describe how authority is usually issued — a
+ * screen that reads and writes one domain gets both. Boundary tests need the
+ * opposite: somebody holding read and *not* write, to prove the write is
+ * actually refused. Grants are issued per permission, so each of these is a
+ * shape the product can genuinely produce.
+ *
+ * Generated rather than hand-written, so a new permission arrives with its
+ * minimal holder already present and the completeness invariants keep
+ * holding without anyone remembering.
+ */
+export const SINGLE_PERMISSION_PERSONAS: Record<string, PersonaDefinition> = Object.fromEntries(
+  PERMISSIONS.map((permission) => [
+    `only:${permission}`,
+    {
+      key: `only:${permission}`,
+      description: `Holds ${permission} and nothing else`,
+      membershipCategory: null,
+      organizationCount: 0,
+      roles: [],
+      grants: [permission],
+      mayVote: false,
+    },
+  ]),
+);
+
+/** The key of the persona holding exactly one permission. */
+export function onlyPersona(permission: Permission): string {
+  return `only:${permission}`;
+}
+
 /** Every persona: the people with roles, and the narrow capability profiles. */
-export const ALL_PERSONAS: Record<string, PersonaDefinition> = { ...PERSONAS, ...CAPABILITY_PERSONAS };
+export const ALL_PERSONAS: Record<string, PersonaDefinition> = {
+  ...PERSONAS,
+  ...CAPABILITY_PERSONAS,
+  ...SINGLE_PERMISSION_PERSONAS,
+};
 export const ALL_PERSONA_KEYS = Object.keys(ALL_PERSONAS);
