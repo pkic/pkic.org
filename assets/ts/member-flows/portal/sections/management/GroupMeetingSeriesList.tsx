@@ -11,10 +11,12 @@ export function GroupMeetingSeriesList({
   groupId,
   actionsRef,
   initialSeriesId,
+  createAction,
 }: {
   groupId: string;
   actionsRef?: MutableRef<ApiTableActions | null>;
   initialSeriesId?: string;
+  createAction?: { label: string; onSelect: () => void; disabled?: boolean };
 }) {
   const [, navigate] = useHashLocation();
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(initialSeriesId ?? null);
@@ -37,6 +39,7 @@ export function GroupMeetingSeriesList({
       resolve={(response) => response.series}
       resolvePage={(response) => response.page}
       paginate
+      createAction={createAction}
       searchPlaceholder="Search meeting name or location…"
       initialSort="next_occurrence_at"
       actionsRef={effectiveActions}

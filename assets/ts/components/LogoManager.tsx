@@ -1,4 +1,5 @@
 import { useRef, useState } from "preact/hooks";
+import { confirmAction } from "./ConfirmDialog";
 
 export interface LogoManagerProps {
   imageUrl: string | null;
@@ -8,6 +9,10 @@ export interface LogoManagerProps {
   placeholderClass: string;
   removeConfirmation: string;
   removeLabel: string;
+  /** Accepted upload types; callers with an SVG-only policy narrow this. */
+  accept?: string;
+  /** One-line policy hint rendered under the file input. */
+  hint?: string;
   onUpload: (file: File) => Promise<unknown>;
   onRemove: () => Promise<unknown>;
   onChanged: () => void;
@@ -35,7 +40,12 @@ export function LogoManager(props: LogoManagerProps) {
   }
 
   async function remove() {
-    if (!confirm(props.removeConfirmation)) return;
+    const confirmed = await confirmAction({
+      title: props.removeConfirmation,
+      confirmLabel: props.removeLabel,
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await props.onRemove();
@@ -59,7 +69,7 @@ export function LogoManager(props: LogoManagerProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={props.accept ?? "image/jpeg,image/png,image/webp"}
           class={`form-control form-control-sm${centered ? " w-auto" : ""}`}
           disabled={busy}
           onChange={(event) => {
@@ -67,8 +77,9 @@ export function LogoManager(props: LogoManagerProps) {
             if (file) void upload(file);
           }}
         />
+        {props.hint && <div class="form-text">{props.hint}</div>}
         {props.imageUrl && (
-          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={remove}>
+          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
             {props.removeLabel}
           </button>
         )}

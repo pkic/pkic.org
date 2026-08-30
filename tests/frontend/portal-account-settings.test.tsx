@@ -10,6 +10,10 @@ vi.mock("../../assets/ts/components/passkey-settings", () => ({
   PasskeySettings: () => <div>Passkeys</div>,
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href }: { children?: ComponentChildren; href: string }) => <a href={`#${href}`}>{children}</a>,
+}));
+
 let container: HTMLDivElement;
 
 function mount(node: ComponentChildren): void {
@@ -146,6 +150,8 @@ describe("portal account settings capacity cutover", () => {
     await settle();
 
     expect(container.textContent).toContain("Your access");
+    expect(container.textContent).toContain("Permissions");
+    expect(container.textContent).not.toContain("Staff access");
     expect(container.textContent).toContain("Administrator — this account holds every administrative permission.");
   });
 
@@ -201,9 +207,13 @@ describe("portal account settings capacity cutover", () => {
 
     expect(container.textContent).toContain("Member capacities");
     expect(container.textContent).toContain("Example Org");
+    const organizationLink = [...container.querySelectorAll("a")].find((a) => a.textContent === "Example Org");
+    expect(organizationLink?.getAttribute("href")).toBe("#/organizations/00000000-0000-4000-8000-000000000010");
     expect(container.textContent).toContain("Category A");
     expect(container.textContent).toContain("Individual membership");
     expect(container.textContent).toContain("Category H5");
+    expect(container.textContent).toContain("Contact an administrator to change it.");
+    expect(container.textContent).not.toContain("staff");
   });
 
   it("reports a notification-preference load failure instead of hiding it", async () => {

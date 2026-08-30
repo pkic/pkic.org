@@ -1,4 +1,5 @@
 /** Generic self-service participation view shared by every configured group type. */
+import { useState } from "preact/hooks";
 import type { z } from "zod";
 import { useHashLocation } from "wouter/use-hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
@@ -10,11 +11,11 @@ import { Pager } from "../../../components/Pager";
 import { Spinner } from "../../../components/Spinner";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { ApiClientError } from "../../../shared/api-client";
+import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalSession } from "../state";
 import { refreshPortalSidebarGroups } from "../shell/SidebarGroups";
 import { GroupParticipationCard } from "./GroupParticipationCard";
 import { GroupCreateForm } from "./management/GroupCreateForm";
-import { ProposalPrograms } from "./management/ProposalPrograms";
 
 type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
 type Group = z.infer<typeof groupSchema>;
@@ -59,22 +60,22 @@ function MemberGroupCatalog() {
   );
 }
 
-function ManagedGroups() {
+function AllGroups({ onCreate }: { onCreate?: () => void }) {
   const [, navigate] = useHashLocation();
 
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Managed groups</div>
+      <div class="card-header bg-white fw-semibold">All groups</div>
       <div class="card-body">
         <ApiDataTable
           endpoint="/api/v1/groups"
-          params={{ manageable: "true" }}
           responseSchema={groupsListResponseSchema}
           resolve={(response) => response.groups}
           resolvePage={(response) => response.page}
+          createAction={onCreate ? { label: "New group", onSelect: onCreate } : undefined}
           paginate
           initialSort="name"
-          searchPlaceholder="Search managed groups…"
+          searchPlaceholder="Search groups…"
           columns={[
             {
               header: "Group",
@@ -97,7 +98,7 @@ function ManagedGroups() {
               cell: () => <span class="btn btn-sm btn-outline-secondary">Open</span>,
             },
           ]}
-          empty="No groups are manageable with your current permissions."
+          empty="No groups are visible to your identity."
           rowKey={(group: Group) => group.id}
           onRowClick={(group: Group) => navigate(`/groups/${encodeURIComponent(group.id)}/overview`)}
         />
@@ -108,20 +109,40 @@ function ManagedGroups() {
 
 export function Groups() {
   const [, navigate] = useHashLocation();
+  const [creating, setCreating] = useState(false);
   const session = portalSession.value;
+  const canCreateGroups = portalHasGlobalPermission(session, "groups:write");
 
-  return (
-    <div class="d-flex flex-column gap-3 content-width-schedule">
-      {session?.member && <MemberGroupCatalog />}
-      {session?.staff && <ManagedGroups />}
-      {session?.staff && <ProposalPrograms />}
-      {session?.staff && (
+  if (creating && canCreateGroups) {
+    return (
+      <div class="d-flex flex-column gap-3 content-width-schedule">
+        <div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setCreating(false)}>
+            ← All groups
+          </button>
+        </div>
         <GroupCreateForm
           onCreated={(created) => {
             refreshPortalSidebarGroups();
             navigate(`/groups/${encodeURIComponent(created.id)}/settings`);
           }}
         />
+      </div>
+    );
+  }
+
+  return (
+    <div class="d-flex flex-column gap-3 content-width-schedule">
+      {canCreateGroups && session?.member && (
+        <div class="d-flex justify-content-end">
+          <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
+            New group
+          </button>
+        </div>
+      )}
+      {session?.member && <MemberGroupCatalog />}
+      {session?.staff && !session.member && (
+        <AllGroups onCreate={canCreateGroups ? () => setCreating(true) : undefined} />
       )}
     </div>
   );

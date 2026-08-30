@@ -1,5 +1,6 @@
 /** Member account email, access summary, shared passkey management, and notifications. */
 import { useEffect, useState } from "preact/hooks";
+import { Link } from "wouter";
 import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
@@ -102,7 +103,13 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
             <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
               {memberships.map((membership) => (
                 <li key={membership.memberId} class="small">
-                  {membership.organizationName ?? "Individual membership"}
+                  {membership.organizationId ? (
+                    <Link href={`/organizations/${encodeURIComponent(membership.organizationId)}`}>
+                      {membership.organizationName ?? "Organization"}
+                    </Link>
+                  ) : (
+                    "Individual membership"
+                  )}
                   <span class="badge text-bg-light ms-2">Category {membership.membershipCategory}</span>
                 </li>
               ))}
@@ -111,7 +118,7 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
         )}
         {staff && (
           <div>
-            <h6 class="small fw-semibold text-muted text-uppercase">Staff access</h6>
+            <h6 class="small fw-semibold text-muted text-uppercase">Permissions</h6>
             {staff.role === "admin" ? (
               <p class="small mb-0">Administrator — this account holds every administrative permission.</p>
             ) : staff.grants.length === 0 ? (
@@ -163,7 +170,7 @@ export function AccountSettings() {
           <p class="mb-0">{email}</p>
           <p class="text-muted small mb-0">
             {hasMemberCapacity
-              ? "This is the verified primary email address for your account. Contact PKI Consortium staff to change it."
+              ? "This is the verified primary email address for your account. Contact an administrator to change it."
               : "This is the verified primary email address for your portal identity."}
           </p>
         </div>

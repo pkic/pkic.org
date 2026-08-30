@@ -4,7 +4,7 @@
  * `onSelect` so this primitive stays router-agnostic.
  */
 import type { ComponentChildren } from "preact";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 export interface MenuAction {
   key: string;
@@ -33,7 +33,9 @@ export function Menu({ label, buttonContent, buttonClass, align = "start", actio
   const enabledIndexes = actions.map((action, index) => (action.disabled ? null : index)).filter((v) => v !== null);
 
   function focusItem(index: number): void {
-    itemRefs.current[index]?.focus();
+    // preventScroll: the popup is positioned by this component; letting the
+    // browser scroll ancestors to "reveal" it yanks the whole page instead.
+    itemRefs.current[index]?.focus({ preventScroll: true });
   }
 
   function openAndFocus(index: number): void {
@@ -44,7 +46,7 @@ export function Menu({ label, buttonContent, buttonClass, align = "start", actio
 
   function close(refocusButton: boolean): void {
     setOpen(false);
-    if (refocusButton) buttonRef.current?.focus();
+    if (refocusButton) buttonRef.current?.focus({ preventScroll: true });
   }
 
   useEffect(() => {
@@ -54,9 +56,43 @@ export function Menu({ label, buttonContent, buttonClass, align = "start", actio
         setOpen(false);
       }
     };
+    // Reposition-on-scroll is not worth the jitter; the menu simply closes.
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [open]);
+
+  // Fixed positioning frees the popup from overflow ancestors (table wrappers
+  // scroll-clip an absolutely positioned popup) and viewport edges: it aligns
+  // to the trigger, flips upward when the space below is too small, and never
+  // scrolls the page.
+  const popupRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = buttonRef.current;
+    const popup = popupRef.current;
+    if (!trigger || !popup) return;
+    const triggerRect = trigger.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const gap = 4;
+    const openUpward =
+      triggerRect.bottom + gap + popupRect.height > window.innerHeight && triggerRect.top - gap - popupRect.height > 0;
+    const top = openUpward ? triggerRect.top - gap - popupRect.height : triggerRect.bottom + gap;
+    let left = align === "end" ? triggerRect.right - popupRect.width : triggerRect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - popupRect.width - 8));
+    popup.style.top = `${Math.max(8, top)}px`;
+    popup.style.left = `${left}px`;
+    popup.style.minWidth = `${Math.max(triggerRect.width, popupRect.width)}px`;
+  }, [open, align, actions.length]);
 
   function onButtonKeyDown(event: KeyboardEvent): void {
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
@@ -108,7 +144,7 @@ export function Menu({ label, buttonContent, buttonClass, align = "start", actio
         {buttonContent ?? label}
       </button>
       {open && (
-        <div id={menuId} role="menu" aria-label={label} class={`pkic-menu-popup pkic-menu-${align}`}>
+        <div ref={popupRef} id={menuId} role="menu" aria-label={label} class="pkic-menu-popup">
           {actions.map((action, index) => (
             <button
               key={action.key}

@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
@@ -39,7 +40,17 @@ export function UserMembershipCard({
   }
 
   async function removeMembership() {
-    if (!confirm("Remove this person's membership? Their user account is not deleted.")) return;
+    const target = membership.organizationName ?? "this individual membership";
+    const confirmed = await confirmAction({
+      title: `Remove the membership for ${target}?`,
+      body: "Their user account is kept.",
+      consequences: [
+        "This membership capacity and its group memberships are removed",
+        "Their user account and sign-in remain",
+      ],
+      confirmLabel: "Remove membership",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await deleteJson(`/api/v1/members/capacities/${encodeURIComponent(membership.memberId)}`, successResponseSchema);

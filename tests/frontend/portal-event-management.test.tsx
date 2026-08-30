@@ -3,8 +3,12 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
-import { GroupEventDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupEventDetail";
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
+import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", vi.fn()],
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -61,7 +65,7 @@ afterEach(() => {
 describe("portal event management", () => {
   it("does not advertise registration for a no-registration event", () => {
     const container = mount(
-      <GroupEventDetail
+      <GroupEventWorkspace
         event={{ ...responseEvent, basePath: "/events/no-registration-event/", capabilities: ["view", "register"] }}
         groupId={GROUP_ID}
       />,
@@ -247,7 +251,7 @@ describe("portal event management", () => {
       }),
     );
 
-    const container = mount(<GroupEventDetail event={responseEvent} groupId={GROUP_ID} />);
+    const container = mount(<GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" />);
     await settle();
     expect(container.textContent).toContain("Registration setup");
     expect(
@@ -372,7 +376,9 @@ describe("portal event management", () => {
     );
 
     const onUpdated = vi.fn();
-    const container = mount(<GroupEventDetail event={responseEvent} groupId={GROUP_ID} onUpdated={onUpdated} />);
+    const container = mount(
+      <GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" onUpdated={onUpdated} />,
+    );
     await settle();
 
     const policy = container.querySelector<HTMLSelectElement>(`#event-registration-policy-${responseEvent.id}`)!;

@@ -152,17 +152,6 @@
 <div class="pkic-mega-backdrop" id="pkicMegaBackdrop"></div>
 
 {{/* ── Members Mega-menu panel ──────────────────────────────────────── */}}
-{{ $allMemberData := hugo.Data.members }}
-{{ $independentTypes := slice "H5" "H6" "H7" }}
-{{ $totalMembers := 0 }}
-{{ $indepCount := 0 }}
-{{ range $allMemberData }}
-  {{ $totalMembers = add $totalMembers 1 }}
-  {{ if in $independentTypes .memberType }}
-    {{ $indepCount = add $indepCount 1 }}
-  {{ end }}
-{{ end }}
-{{ $regularCount := sub $totalMembers $indepCount }}
 <div class="pkic-mega-panel pkic-members-mega-panel" id="pkic-members-mega" aria-label="Members navigation">
   <div class="container py-4">
     <div class="row g-4 align-items-start">
@@ -175,11 +164,11 @@
         </p>
         <div class="d-flex gap-3 mb-3">
           <a href="/members/" class="pkic-members-stat-card">
-            <span class="pkic-members-stat-num">{{ $regularCount }}</span>
+            <span class="pkic-members-stat-num" data-member-count="organization" aria-live="polite">—</span>
             <span class="pkic-members-stat-label">Members</span>
           </a>
           <a href="/members/#independent-tab" class="pkic-members-stat-card pkic-members-stat-card--indep">
-            <span class="pkic-members-stat-num">{{ $indepCount }}</span>
+            <span class="pkic-members-stat-num" data-member-count="independent" aria-live="polite">—</span>
             <span class="pkic-members-stat-label">Independent</span>
           </a>
         </div>

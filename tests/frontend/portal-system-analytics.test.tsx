@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe("portal System Analytics", () => {
-  it("loads only the focused domain endpoint for the selected tab and never calls a legacy API", async () => {
+  it("loads only the focused domain endpoint for the selected tab, never calls a legacy API, and no longer lists Donations", async () => {
     const paths: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -74,19 +74,6 @@ describe("portal System Analytics", () => {
             },
           });
         }
-        if (url.pathname.endsWith("/donations")) {
-          return json({
-            generatedAt: "2026-08-28T12:00:00.000Z",
-            donations: {
-              byStatus: { completed: 1 },
-              byCurrency: [],
-              totals: { grossUsd: 1_000, netUsd: 900 },
-              daily: [],
-              weekly: [],
-              monthly: [],
-            },
-          });
-        }
         throw new Error(`Unexpected request: ${url.pathname}`);
       }),
     );
@@ -94,6 +81,11 @@ describe("portal System Analytics", () => {
     const overview = mount();
     await settle();
     expect(overview.textContent).toContain("Total Registrations");
+    const tabLabels = Array.from(overview.querySelectorAll('nav[aria-label="System analytics"] a')).map(
+      (a) => a.textContent,
+    );
+    expect(tabLabels).toEqual(["Overview", "Registrations"]);
+    expect(tabLabels).not.toContain("Donations");
     expect(paths).toEqual(["/api/v1/analytics/summary"]);
 
     void act(() => render(null, overview));
@@ -101,14 +93,17 @@ describe("portal System Analytics", () => {
     await settle();
     expect(registrations.textContent).toContain("2026-W34");
     expect(paths.at(-1)).toBe("/api/v1/analytics/registrations");
-
-    void act(() => render(null, registrations));
-    const donations = mount("donations");
-    await settle();
-    expect(donations.textContent).toContain("Total Gross (USD)");
-    expect(paths.at(-1)).toBe("/api/v1/analytics/donations");
     expect(paths.some((path) => path.startsWith("/api/v1/admin/"))).toBe(false);
     expect(paths.some((path) => path.startsWith("/api/v1/system/analytics/"))).toBe(false);
+    expect(paths.some((path) => path.endsWith("/analytics/donations"))).toBe(false);
+
+    // Even if a stale hash still points at the retired donations sub-tab,
+    // System Analytics falls back to Overview rather than rendering it.
+    void act(() => render(null, registrations));
+    const staleDonationsTab = mount("donations");
+    await settle();
+    expect(staleDonationsTab.textContent).toContain("Total Registrations");
+    expect(paths.at(-1)).toBe("/api/v1/analytics/summary");
   });
 
   it("escapes database-controlled status labels in generated chart markup", async () => {

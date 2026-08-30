@@ -16,6 +16,7 @@ import {
   REPRESENTATIVE_ROLE_IDS,
   buildAssignRepresentativeRoleStatements,
   buildRevokeRepresentativeRoleStatement,
+  resolveRepresentativeRoleHolders,
 } from "../membership/representative-roles";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { getOrgAggregate, fetchOrgDetailRow, getOrganization } from "./read-model";
@@ -162,6 +163,23 @@ export async function updateOrganization(
     );
     for (const representative of representatives) {
       statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, representative.user_id, now));
+    }
+  }
+  if (aggregateId && (input.primaryContactUserId !== undefined || input.secondaryContactUserId !== undefined)) {
+    // The secondary contact exists for redundancy; one person holding both
+    // roles would silently defeat it. Validate the EFFECTIVE pair, so a
+    // single-field update cannot collide with the retained other role.
+    const holders = await resolveRepresentativeRoleHolders(db, aggregateId);
+    const effectivePrimary =
+      input.primaryContactUserId !== undefined ? input.primaryContactUserId : holders.primaryContactUserId;
+    const effectiveSecondary =
+      input.secondaryContactUserId !== undefined ? input.secondaryContactUserId : holders.secondaryContactUserId;
+    if (effectivePrimary && effectiveSecondary && effectivePrimary === effectiveSecondary) {
+      throw new AppError(
+        400,
+        "CONTACT_ROLES_MUST_DIFFER",
+        "The primary and secondary contact must be different people.",
+      );
     }
   }
   if (aggregateId && input.primaryContactUserId !== undefined) {

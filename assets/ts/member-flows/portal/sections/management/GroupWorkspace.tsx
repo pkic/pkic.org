@@ -11,10 +11,14 @@ import {
   type GroupCapability,
   type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
+import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { portalSession } from "../../state";
+import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
+import { GroupParticipationCard } from "../GroupParticipationCard";
 import { groupContextNavigation } from "./group-context-navigation";
 
 const GroupSettingsForm = lazy(() =>
@@ -33,6 +37,7 @@ const GroupMailingLists = lazy(() =>
   import("./GroupMailingLists").then((module) => ({ default: module.GroupMailingLists })),
 );
 const GroupVotes = lazy(() => import("./GroupVotes").then((module) => ({ default: module.GroupVotes })));
+const GroupOverview = lazy(() => import("./GroupOverview").then((module) => ({ default: module.GroupOverview })));
 const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => ({ default: module.GroupStatistics })));
 
 const OVERVIEW_VIEW = "overview";
@@ -43,7 +48,7 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
       <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
         <div>
           <div class="d-flex flex-wrap align-items-center gap-2">
-            <h5 class="mb-0">{group.name}</h5>
+            <h4 class="portal-context-title mb-0">{group.name}</h4>
             <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
             {!group.active && <span class="badge text-bg-warning">Inactive</span>}
           </div>
@@ -55,8 +60,8 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
             <dd class="mb-0">{group.participantCount}</dd>
           </div>
           <div>
-            <dt>Membership capacities</dt>
-            <dd class="mb-0">{group.membershipCapacityCount}</dd>
+            <dt>Members represented</dt>
+            <dd class="mb-0">{group.representedMemberCount}</dd>
           </div>
           <div>
             <dt>Subgroups</dt>
@@ -68,20 +73,54 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   );
 }
 
+/**
+ * Join from the group itself: the same capacity-aware participation card the
+ * catalog uses, fetched for exactly this group. Renders nothing while the
+ * viewer already participates or holds no member capacity.
+ */
+function GroupJoinPanel({ groupId, onChanged }: { groupId: string; onChanged: () => void | Promise<void> }) {
+  const selfGroup = useData(
+    () =>
+      getJson(
+        `/api/v1/users/current/groups?view=catalog&id=${encodeURIComponent(groupId)}&limit=1`,
+        selfGroupsListResponseSchema,
+      ),
+    [groupId],
+  );
+  const row = selfGroup.data?.groups[0];
+  if (!row || row.eligibleCapacities.length === 0) return null;
+  return (
+    <GroupParticipationCard
+      group={row}
+      onChanged={async () => {
+        refreshPortalSidebarGroups();
+        await selfGroup.reload();
+        await onChanged();
+      }}
+    />
+  );
+}
+
 export function GroupWorkspace({
   groupId,
   view = OVERVIEW_VIEW,
   resourceId,
+  resourceTab,
 }: {
   groupId: string;
   view?: string;
   resourceId?: string;
+  /** A second URL segment below `resourceId`, currently only meaningful for the events view's tab. */
+  resourceTab?: string;
 }) {
   const detail = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
     [groupId],
   );
-  const group = detail.data?.group;
+  // While a different group loads, useData still holds the previous group's
+  // data; rendering it would leave the old workspace on screen with no
+  // feedback. Treat it as absent so the switch shows a spinner immediately.
+  const group = detail.data?.group.id === groupId ? detail.data.group : undefined;
   const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");
@@ -91,16 +130,19 @@ export function GroupWorkspace({
 
   return (
     <div class="d-flex flex-column gap-3">
-      {detail.loading && <Spinner />}
+      {detail.loading && !group && <Spinner label="Loading group…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {group && (
         <>
           <GroupContextHeader group={group} />
+          {/* Tab targets derive from the route's groupId, never from fetched
+              data: while another group's data is in flight, links must not
+              point back into the group being left. */}
           <nav class="nav nav-tabs" aria-label={`${group.name} sections`}>
             {views.map((item) => (
               <Link
                 key={item.key}
-                href={`/groups/${encodeURIComponent(group.id)}/${item.key}`}
+                href={`/groups/${encodeURIComponent(groupId)}/${item.key}`}
                 class={`nav-link${view === item.key ? " active" : ""}`}
               >
                 {item.label}
@@ -110,16 +152,15 @@ export function GroupWorkspace({
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
               <>
-                <div class="card border-0 shadow-sm">
-                  <div class="card-header bg-white fw-semibold">About this group</div>
-                  <div class="card-body">
-                    <p class="mb-0">{group.description || "No group description has been provided."}</p>
-                  </div>
-                </div>
-                <p class="text-muted small mb-0">
-                  {canParticipate ? "You participate in this group." : "You are not a participant in this group."}{" "}
-                  <Link href="/groups">Manage your participation</Link>
-                </p>
+                {!canParticipate && Boolean(portalSession.value?.member) && (
+                  <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
+                )}
+                <GroupOverview groupId={group.id} description={group.description} />
+                {canParticipate && (
+                  <p class="text-muted small mb-0">
+                    You participate in this group. <Link href="/groups">Manage your participation</Link>
+                  </p>
+                )}
               </>
             )}
             {view === "settings" && canManage && settingsGroup && (
@@ -138,6 +179,7 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 initialEventId={resourceId}
+                initialEventTab={resourceTab}
               />
             )}
             {view === "meetings" && (

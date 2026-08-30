@@ -4,6 +4,7 @@ import { EventProposalsTable } from "../../../../../components/proposals/EventPr
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { EventFormResponses } from "./Forms";
 import { toast } from "../../../ui";
+import { eventProposalDetailViewPath } from "./proposal-paths";
 
 function ProposalsList({ slug }: { slug: string }) {
   const [, navigate] = useHashLocation();
@@ -12,7 +13,7 @@ function ProposalsList({ slug }: { slug: string }) {
     <EventProposalsTable
       endpoint={`/api/v1/events/${encodeURIComponent(slug)}/proposals`}
       storageKey={`adm_proposal_filters_${slug}`}
-      onSelect={(proposal) => navigate(`/events/${slug}/proposals/${proposal.id}`)}
+      onSelect={(proposal) => navigate(eventProposalDetailViewPath(slug, proposal.id))}
       toolbarPrefix={(_, access) =>
         access?.canRead ? (
           <div class="btn-group" role="group" aria-label="Download event presentations">

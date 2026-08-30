@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 test("permitted staff manage organizations through the canonical domain API", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -16,7 +17,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-organizations"));
-  await page.goto("/portal/#/system/organizations");
+  await page.goto("/portal/#/organizations");
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
@@ -41,7 +42,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Add representative", exact: true }).click();
+  await page.getByRole("button", { name: "Add new person", exact: true }).click();
   await page.locator("#organization-representative-name").fill("Secondary Representative");
   await page.locator("#organization-representative-email").fill(secondaryEmail);
   await page.locator("#organization-representative-job-title").fill("Program Manager");
@@ -55,8 +56,8 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
   await expect(page.getByText("Program Manager", { exact: true })).toBeVisible();
 
-  await page.goto("/portal/#/system/organizations");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/organizations$/);
+  await page.goto("/portal/#/organizations");
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
   await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();
 
   await page.context().clearCookies();
@@ -66,31 +67,31 @@ test("permitted staff manage organizations through the canonical domain API", as
 
   let representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
   await expect(representativeRow).toContainText("Active");
-  const blockResponse = page.waitForResponse(
+  const removeResponse = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "DELETE",
   );
-  page.once("dialog", (dialog) => dialog.accept());
-  await representativeRow.getByRole("button", { name: "Block Secondary Representative as representative" }).click();
-  expect((await blockResponse).status()).toBe(200);
+  await representativeRow.getByRole("button", { name: "Actions for Secondary Representative" }).click();
+  await page.getByRole("menuitem", { name: "Remove from organization" }).click();
+  await acceptConfirmDialog(page, "Remove from organization");
+  expect((await removeResponse).status()).toBe(200);
 
   representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
-  await expect(representativeRow).toContainText("Blocked");
+  await expect(representativeRow).toContainText("Removed — blocked from re-adding");
   const restoreResponse = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+\/restore$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "POST",
   );
-  page.once("dialog", (dialog) => dialog.accept());
-  await representativeRow.getByRole("button", { name: "Restore Secondary Representative as representative" }).click();
+  await representativeRow.getByRole("button", { name: "Actions for Secondary Representative" }).click();
+  await page.getByRole("menuitem", { name: "Restore" }).click();
+  await acceptConfirmDialog(page, "Restore representative");
   expect((await restoreResponse).status()).toBe(200);
 
   representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
   await expect(representativeRow).toContainText("Active");
-  await expect(
-    representativeRow.getByRole("button", { name: "Block Secondary Representative as representative" }),
-  ).toBeVisible();
+  await expect(representativeRow.getByRole("button", { name: "Actions for Secondary Representative" })).toBeVisible();
 
   expect(canonicalRequests).toEqual(
     expect.arrayContaining([

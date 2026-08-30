@@ -30,7 +30,7 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-system-operations"));
-  await page.getByRole("link", { name: "Administration", exact: true }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("link", { name: "Operations", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "System Operations" })).toBeVisible();

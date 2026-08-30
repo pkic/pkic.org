@@ -13,6 +13,42 @@
     return document.getElementById(targetId);
   }
 
+  var memberCountsLoaded = false;
+  var memberCountsLoading = false;
+
+  function fetchMemberCount(group) {
+    return fetch('/api/v1/members?group=' + encodeURIComponent(group) + '&limit=1', {
+      headers: { accept: 'application/json' },
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Unable to load member counts');
+      return response.json();
+    }).then(function (payload) {
+      var total = payload && payload.page && payload.page.total;
+      if (!Number.isSafeInteger(total) || total < 0) throw new Error('Invalid member count');
+      return total;
+    });
+  }
+
+  function hydrateMemberCounts() {
+    if (memberCountsLoaded || memberCountsLoading) return;
+    memberCountsLoading = true;
+
+    Promise.all([fetchMemberCount('organization'), fetchMemberCount('independent')])
+      .then(function (counts) {
+        var organizationCount = document.querySelector('[data-member-count="organization"]');
+        var independentCount = document.querySelector('[data-member-count="independent"]');
+        if (organizationCount) organizationCount.textContent = String(counts[0]);
+        if (independentCount) independentCount.textContent = String(counts[1]);
+        memberCountsLoaded = true;
+      })
+      .catch(function () {
+        // Keep the honest unknown state and retry the next time the menu opens.
+      })
+      .finally(function () {
+        memberCountsLoading = false;
+      });
+  }
+
   function resetMegaVisualState() {
     allPanels.forEach(function (panel) { panel.classList.remove('is-open'); });
     document.querySelectorAll('.pkic-mega-chevron').forEach(function (chevron) {
@@ -33,6 +69,7 @@
     // Open this one
     panel.classList.add('is-open');
     backdrop.classList.add('is-open');
+    if (targetId === 'pkic-members-mega') hydrateMemberCounts();
     var chevron = triggerEl.querySelector('.pkic-mega-chevron');
     if (chevron) { chevron.classList.add('is-open'); chevron.setAttribute('aria-expanded', 'true'); }
     triggerEl.querySelectorAll('.nav-link').forEach(function (l) { l.classList.add('is-active'); });

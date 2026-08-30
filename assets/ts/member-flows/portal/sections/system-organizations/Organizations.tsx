@@ -86,16 +86,9 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
 
   return (
     <section aria-labelledby="system-organizations-heading">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-        <h5 id="system-organizations-heading" class="mb-0">
-          Organizations
-        </h5>
-        {canCreate && (
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setShowCreate((current) => !current)}>
-            {showCreate ? "Cancel" : "Add organization"}
-          </button>
-        )}
-      </div>
+      <h5 id="system-organizations-heading" class="mb-3">
+        Organizations
+      </h5>
 
       {showCreate && canCreate && (
         <OrganizationCreateForm
@@ -115,11 +108,12 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         paginate
         actionsRef={actionsRef}
         searchPlaceholder="organization name"
+        createAction={canCreate ? { label: "Add organization", onSelect: () => setShowCreate(true) } : undefined}
         columns={columns}
         empty="No organizations found"
         rowKey={(organization) => organization.id}
         rowClass={() => "adm-user-row"}
-        onRowClick={(organization) => navigate(`/system/organizations/${encodeURIComponent(organization.id)}`)}
+        onRowClick={(organization) => navigate(`/organizations/${encodeURIComponent(organization.id)}`)}
       />
     </section>
   );

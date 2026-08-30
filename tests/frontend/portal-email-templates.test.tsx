@@ -135,8 +135,9 @@ describe("portal email templates", () => {
     document.body.append(container);
     await act(() => render(<EmailTemplates canWrite />, container!));
     await settle();
+    expect(container.querySelector("#email-template-key")).toBeNull();
     const newTemplateButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("New Template"),
+      button.textContent?.includes("New template"),
     );
     await act(() => newTemplateButton!.click());
 

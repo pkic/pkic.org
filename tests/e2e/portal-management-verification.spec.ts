@@ -500,6 +500,41 @@ test.describe("Portal management browser-verification pass", () => {
     expect(legacyRequests).toEqual([]);
   });
 
+  // Regression: `/events/:slug/proposals/:proposalId` used to sit ahead of
+  // `/events/:slug/:tab/:subTab` in the route Switch, so this sub-tab URL
+  // was captured as a proposal id and rendered "Proposal not found" instead
+  // of the Responses sub-tab. Detail URLs now live under a reserved
+  // `detail` segment (`/events/:slug/proposals/detail/:proposalId`).
+  test("event proposals: /proposals/responses renders the Responses sub-tab, not a proposal detail", async ({
+    page,
+  }) => {
+    const proposalDetailRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname === "/api/v1/proposals/responses") proposalDetailRequests.push(`${request.method()} ${pathname}`);
+    });
+
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/proposals/responses`);
+    await expect(page.getByRole("tab", { name: "Responses", exact: true })).toHaveAttribute("aria-selected", "true", {
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Proposal not found")).toHaveCount(0);
+    expect(proposalDetailRequests).toEqual([]);
+  });
+
+  // Same route-precedence regression for registrations: `/events/:slug/registrations/:registrationId`
+  // used to capture every Registrations sub-tab (responses, email, the
+  // attendance-change presets) as a registration id.
+  test("event registrations: /registrations/responses renders the Responses sub-tab, not a registration detail", async ({
+    page,
+  }) => {
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations/responses`);
+    await expect(page.getByRole("tab", { name: "Responses", exact: true })).toHaveAttribute("aria-selected", "true", {
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Registration not found")).toHaveCount(0);
+  });
+
   test("organization content review: a real member edit is diffed and approved in the portal", async ({ page }) => {
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];
@@ -545,7 +580,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.reload();
     await expectStaffSessionLanding(page);
     await page.goto("/portal/#/system/organization-content-reviews");
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
     await page.getByRole("button", { name: orgName }).click();
 
@@ -573,7 +608,7 @@ test.describe("Portal management browser-verification pass", () => {
 
     await page.goto("/portal/#/system/organization-content-reviews");
     await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     expect(legacyRequests).toEqual([]);
   });
 
@@ -596,7 +631,7 @@ test.describe("Portal management browser-verification pass", () => {
       orgName: `E2E Users Org ${stamp}`,
     });
 
-    await page.goto("/portal/#/system/users");
+    await page.goto("/portal/#/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
     await page.getByPlaceholder("email or name").press("Enter");
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
@@ -655,9 +690,9 @@ test.describe("Portal management browser-verification pass", () => {
     await page.reload();
     await expectStaffSessionLanding(page);
 
-    await page.goto("/portal/#/system/membership-applications");
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Membership Applications" })).toHaveAttribute("aria-current", "page");
+    await page.goto("/portal/#/membership/applications");
+    await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveClass(/active/);
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter is sufficient here because every earlier fixture has
     // already moved out of ec_review.

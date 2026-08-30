@@ -64,6 +64,7 @@ beforeEach(() => {
         location.origin,
       );
       if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/users/current/organizations") return json(emptyPage("organizations"));
       if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
       throw new Error(`Unexpected request: ${url.pathname}`);
     }),
@@ -171,6 +172,7 @@ describe("portal navigation shell", () => {
           page: { limit: 12, offset: 0, total: 2, hasMore: false },
         });
       }
+      if (url.pathname === "/api/v1/users/current/organizations") return json(emptyPage("organizations"));
       throw new Error(`Unexpected request: ${url.pathname}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -202,7 +204,94 @@ describe("portal navigation shell", () => {
     void act(() => userButton.click());
     await settle();
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(["Account settings", "Sign out"]);
+    expect(items).toEqual(["My profile", "My participation", "Account settings", "Sign out"]);
+  });
+
+  it("nests subgroups beneath their listed parent and names an absent parent as context", async () => {
+    const parent = group("10000000-0000-4000-8000-000000000001", "Post-Quantum Cryptography");
+    const child = {
+      ...group("10000000-0000-4000-8000-000000000002", "Hybrid Certificates"),
+      parentGroup: {
+        id: parent.id as string,
+        slug: parent.slug as string,
+        name: parent.name as string,
+        type: parent.type,
+      },
+    };
+    const orphan = {
+      ...group("10000000-0000-4000-8000-000000000003", "Task Force X"),
+      parentGroup: {
+        id: "10000000-0000-4000-8000-000000000099",
+        slug: "unlisted-parent",
+        name: "Unlisted Parent",
+        type: parent.type,
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname === "/api/v1/groups") {
+        return json({ groups: [parent, child, orphan], page: { limit: 12, offset: 0, total: 3, hasMore: false } });
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    mountNavigation(portalSessionFixture({ staff: true }));
+    await settle();
+    await settle();
+
+    const groupsList = container.querySelector(".portal-sidebar-groups")!;
+    const nested = groupsList.querySelector(".portal-sidebar-subgroups")!;
+    expect(nested).toBeTruthy();
+    // The child renders inside its parent's list item, not as a sibling.
+    expect(nested.closest("li")?.querySelector("a")?.textContent).toBe("Post-Quantum Cryptography");
+    expect(nested.querySelector("a")?.textContent).toBe("Hybrid Certificates");
+    // The orphaned child stays top-level and names its unlisted parent.
+    const orphanLink = [...groupsList.querySelectorAll("a")].find((a) => a.textContent?.includes("Task Force X"))!;
+    expect(orphanLink.querySelector(".portal-sidebar-group-context")?.textContent).toBe("Unlisted Parent");
+    expect(orphanLink.closest(".portal-sidebar-subgroups")).toBeNull();
+  });
+
+  it("lists represented organizations in the account menu with workspace deep links", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
+      if (url.pathname === "/api/v1/users/current/organizations") {
+        return json({
+          organizations: [
+            {
+              organizationId: "50000000-0000-4000-8000-000000000001",
+              memberId: "30000000-0000-4000-8000-000000000001",
+              name: "Example Trust Services",
+              membershipCategory: "A",
+              isOrgContact: true,
+              isPrimaryContact: false,
+              hasPendingReview: false,
+            },
+          ],
+          page: { limit: 12, offset: 0, total: 1, hasMore: false },
+        });
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    mountNavigation(portalSessionFixture({ staff: true, member: true }));
+    await settle();
+    await settle();
+
+    const userButton = container.querySelector<HTMLButtonElement>(".portal-sidebar-user")!;
+    void act(() => userButton.click());
+    await settle();
+    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(items).toEqual(["My profile", "Example Trust Services", "My participation", "Account settings", "Sign out"]);
   });
 
   it("shows the headshot in the user button when one is available", async () => {

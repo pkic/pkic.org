@@ -75,6 +75,8 @@ export const groupSchema = z.object({
   active: z.boolean(),
   revision: groupRevisionSchema,
   membershipCapacityCount: z.number().int().min(0),
+  /** Distinct Members (organizations and individual members) with an active capacity. */
+  representedMemberCount: z.number().int().min(0).default(0),
   participantCount: z.number().int().min(0),
   childCount: z.number().int().min(0),
   createdAt: z.string(),
@@ -97,6 +99,8 @@ export type PublicGroup = z.infer<typeof publicGroupSchema>;
 export const authenticatedGroupSchema = publicGroupSchema.extend({
   active: z.boolean(),
   membershipCapacityCount: z.number().int().min(0),
+  /** Distinct Members (organizations and individual members) with an active capacity. */
+  representedMemberCount: z.number().int().min(0).default(0),
   participantCount: z.number().int().min(0),
   childCount: z.number().int().min(0),
 });
@@ -267,6 +271,8 @@ export type GroupLeadershipListResponse = z.infer<typeof groupLeadershipListResp
 
 export const GROUP_SORT_COLUMNS = ["name", "slug", "type", "participant_count", "created_at"] as const;
 export const groupsListQuerySchema = listQuerySchema(GROUP_SORT_COLUMNS).extend({
+  /** Restrict the page to one exact group; composes with the participation views. */
+  id: groupIdSchema.optional(),
   /** Restricts the page to groups the authenticated management identity may update. */
   manageable: booleanQueryFlagSchema.optional(),
   active: booleanQueryFlagSchema.optional(),

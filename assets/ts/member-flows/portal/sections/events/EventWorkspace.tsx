@@ -1,8 +1,14 @@
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
+import { portalSession } from "../../state";
+import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
+import type { PortalSession } from "../../types";
 
 const EventList = lazy(() => import("./EventList").then((module) => ({ default: module.EventList })));
+const ProposalPrograms = lazy(() =>
+  import("../management/ProposalPrograms").then((module) => ({ default: module.ProposalPrograms })),
+);
 const EventDetailView = lazy(() =>
   import("./detail/EventDetail").then((module) => ({ default: module.EventDetailView })),
 );
@@ -28,12 +34,27 @@ function WorkspaceSection({ title, children }: { title: string; children: Compon
   );
 }
 
+/**
+ * ProposalPrograms is the proposal-only surface for identities that cannot
+ * see the events management list at all; an events:read holder manages
+ * proposals through the event detail workspace instead, so showing both
+ * here would duplicate the same proposals twice.
+ */
+export function eventListShowsProposalPrograms(session: PortalSession | null): boolean {
+  return !portalHasPermissionAtAnyScope(session, "events:read");
+}
+
 export function EventWorkspace(props: EventWorkspaceProps) {
   let content: ComponentChildren;
   let title: string;
   if (props.view === "list") {
     title = "Events";
-    content = <EventList />;
+    content = (
+      <div class="d-flex flex-column gap-3">
+        <EventList />
+        {eventListShowsProposalPrograms(portalSession.value) && <ProposalPrograms />}
+      </div>
+    );
   } else if (props.view === "proposal") {
     title = "Proposal";
     content = <ProposalDetailPage slug={props.slug} proposalId={props.resourceId} />;

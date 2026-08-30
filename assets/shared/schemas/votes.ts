@@ -7,6 +7,7 @@ import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, type PaginationDefaults } from "./pagination";
 import { membershipCategorySelectionSchema } from "./membership-categories";
+import { formFieldDefinitionSchema } from "./forms";
 import { groupIdSchema } from "./groups";
 import { publicOperation } from "./route-contract";
 
@@ -56,6 +57,35 @@ export const voteBallotCountsSchema = z.object({
   abstain: z.number().int().nonnegative(),
 });
 
+/**
+ * The consultation's form, in the same projection every other form uses, so
+ * the portal renders it with the ordinary form components rather than a
+ * second field renderer that would drift from them.
+ */
+export const consultationFormSchema = z.object({
+  id: databaseIdSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+  fields: z.array(formFieldDefinitionSchema),
+});
+
+export const consultationQuestionResultSchema = z.object({
+  fieldId: databaseIdSchema,
+  key: z.string(),
+  label: z.string(),
+  counts: z.record(z.string(), z.number().int().nonnegative()),
+  leadingOption: z.string().nullable(),
+  answered: z.number().int().nonnegative(),
+});
+
+export const consultationVoteResultSchema = z.object({
+  formId: databaseIdSchema,
+  questions: z.array(consultationQuestionResultSchema),
+  totalResponses: z.number().int().nonnegative(),
+  quorum: z.lazy(() => voteQuorumSchema).nullable(),
+  quorumMet: z.boolean(),
+});
+
 export const voteQuorumSchema = z.object({
   percent: z.number().int().min(1).max(100),
   eligible: z.number().int().nonnegative(),
@@ -96,7 +126,11 @@ export const electionVoteResultSchema = z.object({
 });
 
 /** Full-detail closed-vote result, as returned by the staff-only ballots/results endpoints. */
-export const voteFullResultSchema = z.union([motionVoteResultSchema, electionVoteResultSchema]);
+export const voteFullResultSchema = z.union([
+  motionVoteResultSchema,
+  electionVoteResultSchema,
+  consultationVoteResultSchema,
+]);
 
 /**
  * Redacted shape returned when a public vote's publicDetailLevel is
@@ -134,6 +168,7 @@ export const voteSummaryFieldsSchema = {
   ownerGroupName: z.string(),
   electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
+  questionFormId: databaseIdSchema.nullable().default(null),
   quorumPercent: z.number().int().min(1).max(100).nullable().default(null),
   tieBreakMode: z.enum(["none", "chair"]).default("none"),
   excludedMemberIds: z.array(databaseIdSchema).max(200).nullable().default(null),
@@ -167,6 +202,8 @@ export const memberVoteSchema = z.object({
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
   memberBallots: z.array(eligibleMemberBallotSchema).nullable(),
+  /** Present only for a consultation that asks a form. */
+  questionForm: consultationFormSchema.nullable().default(null),
   result: voteResultSchema,
 });
 
@@ -175,6 +212,10 @@ export type PublicVotesListResponse = z.infer<typeof publicVotesListResponseSche
 
 export const publicVoteGetResponseSchema = z.object({ vote: publicVoteSchema });
 export type PublicVoteGetResponse = z.infer<typeof publicVoteGetResponseSchema>;
+
+/** `GET /api/v1/users/current/votes` — the self-participation projection over `memberVoteSchema`. */
+export const currentUserVotesListResponseSchema = paginatedResponseSchema("votes", memberVoteSchema);
+export type CurrentUserVotesListResponse = z.infer<typeof currentUserVotesListResponseSchema>;
 
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
@@ -262,6 +303,16 @@ export const submitBallotSchema = z.object({
   choice: z.string().trim().min(1).max(100),
 });
 export const submitBallotResponseSchema = successResponseSchema;
+
+/**
+ * A consultation is answered with the form's own answers, keyed by field, so
+ * the payload is the same shape every other form submission uses.
+ */
+export const submitConsultationResponseSchema = z.object({
+  memberId: databaseIdSchema.nullable().optional(),
+  answers: z.record(z.string(), z.unknown()),
+});
+export const submitConsultationResponseResponseSchema = successResponseSchema;
 
 // ── Vote proposals (authenticated voting-category members) ──────────
 

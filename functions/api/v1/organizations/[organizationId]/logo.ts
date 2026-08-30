@@ -23,7 +23,7 @@ import {
   processStorageDeletionForKey,
   withStorageUploadCompensation,
 } from "../../../../_lib/services/storage-deletion-outbox";
-import { imageExtension, putUploadedImage, readValidatedUploadedImage } from "../../../../_lib/utils/image-upload";
+import { imageExtension, putUploadedImage, readValidatedUploadedSvgLogo } from "../../../../_lib/utils/image-upload";
 import { requireOrganizationMemberMutation } from "../authorization";
 
 export const { onPut, onDelete, onRequest } = buildOrganizationLogoHandlers({
@@ -44,7 +44,7 @@ export const OrganizationLogoReviewPost = openApiRoute(
     const bucket = c.env.ASSETS_BUCKET;
     if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
 
-    const image = await readValidatedUploadedImage(c.req.raw, "Logo");
+    const image = await readValidatedUploadedSvgLogo(c.req.raw);
     const extension = imageExtension(image.contentType);
     const r2Key = `org-logos/${organization.id}/staging-${crypto.randomUUID()}.${extension}`;
     const reviewUrl = buildManagementLink(getConfig(c.env, c.req.raw).appBaseUrl, {

@@ -2,6 +2,8 @@ import { useEffect, useState } from "preact/hooks";
 import type { GroupParticipationCapacity, SelfGroup } from "../../../../shared/schemas/group-participation";
 import { groupMembershipMutationResponseSchema } from "../../../../shared/schemas/groups";
 import { ApiClientError, postJson } from "../../../shared/api-client";
+import { confirmAction } from "../../../components/ConfirmDialog";
+import { RowActions } from "../../../components/RowActions";
 import { fmt, toast } from "../ui";
 
 function affiliationLabel(capacity: GroupParticipationCapacity): string {
@@ -53,12 +55,24 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
   }
 
   async function removeCapacity(memberId: string, label: string): Promise<void> {
-    if (!confirm(`Stop participating in ${group.name} on behalf of ${label}?`)) return;
+    const confirmed = await confirmAction({
+      title: `Stop participating in ${group.name} on behalf of ${label}?`,
+      consequences: [`${label} loses this group's access`, `You can rejoin ${group.name} on their behalf later`],
+      confirmLabel: "Stop participating",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     await mutate("leave", { mode: "selected", memberIds: [memberId] }, `Updated ${group.name} participation`);
   }
 
   async function leaveAll(): Promise<void> {
-    if (!confirm(`Leave ${group.name} for every affiliation?`)) return;
+    const confirmed = await confirmAction({
+      title: `Leave ${group.name} for every affiliation?`,
+      consequences: ["Every affiliation loses this group's access", `You can rejoin ${group.name} later`],
+      confirmLabel: "Leave group",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     await mutate("leave", { mode: "all" }, `Left ${group.name}`);
   }
 
@@ -91,15 +105,17 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
                     <span>
                       {label} <span class="text-muted">since {fmt(membership.joinedAt)}</span>
                     </span>
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-danger"
-                      disabled={busy}
-                      onClick={() => void removeCapacity(membership.memberId, label)}
-                      aria-label={`Stop participating in ${group.name} on behalf of ${label}`}
-                    >
-                      Remove
-                    </button>
+                    <RowActions
+                      label={`Actions for ${label}`}
+                      actions={[
+                        {
+                          key: "remove",
+                          label: "Remove",
+                          disabled: busy,
+                          onSelect: () => void removeCapacity(membership.memberId, label),
+                        },
+                      ]}
+                    />
                   </li>
                 );
               })}

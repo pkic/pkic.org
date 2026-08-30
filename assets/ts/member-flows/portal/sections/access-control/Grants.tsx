@@ -1,11 +1,15 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { EmptyState } from "../../../../components/EmptyState";
+import { RowActions } from "../../../../components/RowActions";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../ui";
 import { PERMISSIONS } from "../../../../../shared/schemas/permissions";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { TargetPicker, type PickedTarget } from "./TargetPicker";
+import type { AccessGrant } from "../../../../../shared/schemas/access-control";
 import {
   accessGrantCreateResponseSchema,
   accessGrantsListResponseSchema,
@@ -14,16 +18,22 @@ import {
 /** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
 export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
   const tableRef = useRef<ApiTableActions | null>(null);
+  const [creating, setCreating] = useState(false);
   const [user, setUser] = useState<PickedUser | null>(null);
   const [permission, setPermission] = useState<string>(PERMISSIONS[0]);
   const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleRevoke(id: string) {
-    if (!confirm("Revoke this permission grant?")) return;
+  async function handleRevoke(grant: AccessGrant) {
+    const confirmed = await confirmAction({
+      title: `Revoke the "${grant.permission}" grant from ${grant.userEmail}?`,
+      consequences: [`${grant.userEmail} immediately loses this permission`],
+      confirmLabel: "Revoke grant",
+    });
+    if (!confirmed) return;
     try {
-      await deleteJson(`/api/v1/permissions/grants/${id}`, successResponseSchema);
+      await deleteJson(`/api/v1/permissions/grants/${grant.id}`, successResponseSchema);
       toast("Grant revoked", "success");
       await tableRef.current?.reload();
     } catch (error) {
@@ -58,6 +68,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
       setUser(null);
       setTarget({ targetType: null, targetId: null });
       setExpiresAt("");
+      setCreating(false);
       await tableRef.current?.reload();
     } catch (error) {
       toast((error as Error).message, "error");
@@ -68,7 +79,15 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
 
   return (
     <div>
-      {canGrant && (
+      {canGrant && !creating && (
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+          <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
+            New grant
+          </button>
+        </div>
+      )}
+
+      {canGrant && creating && (
         <div class="card border-0 shadow-sm mb-3">
           <div class="card-header bg-white fw-semibold">Grant a permission</div>
           <div class="card-body">
@@ -111,9 +130,17 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
                   disabled={submitting}
                 />
               </div>
-              <div class="col-12">
+              <div class="col-12 d-flex gap-2">
                 <button type="submit" class="btn btn-sm btn-success" disabled={submitting}>
                   {submitting ? "Granting…" : "Grant permission"}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  onClick={() => setCreating(false)}
+                  disabled={submitting}
+                >
+                  Cancel
                 </button>
               </div>
             </form>
@@ -162,13 +189,23 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
             header: "",
             cell: (g) =>
               canRevoke ? (
-                <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(g.id)}>
-                  Revoke
-                </button>
+                <RowActions
+                  actions={[{ key: "revoke", label: "Revoke grant", onSelect: () => void handleRevoke(g) }]}
+                />
               ) : null,
           },
         ]}
-        empty="No permission grants"
+        empty={
+          canGrant ? (
+            <EmptyState
+              title="No permission grants yet"
+              body="Grant a permission to give someone access without assigning a full role."
+              action={{ label: "New grant", onSelect: () => setCreating(true) }}
+            />
+          ) : (
+            <EmptyState title="No permission grants yet" />
+          )
+        }
         rowKey={(g) => g.id}
       />
     </div>

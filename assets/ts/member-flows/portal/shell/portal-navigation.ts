@@ -25,18 +25,6 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     permission: "analytics:read",
   },
   {
-    path: "/system/donations",
-    section: "system",
-    label: "Donations",
-    permissions: ["donations:read", "donations:sync"],
-  },
-  {
-    path: "/system/membership-applications",
-    section: "system",
-    label: "Membership Applications",
-    permission: "membership:read",
-  },
-  {
     path: "/system/membership-settings",
     section: "system",
     label: "Membership Settings",
@@ -47,18 +35,6 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     section: "system",
     label: "Content Reviews",
     permission: "organizations:content-review",
-  },
-  {
-    path: "/system/organizations",
-    section: "system",
-    label: "Organizations",
-    permissions: ["organizations:read", "membership:write"],
-  },
-  {
-    path: "/system/users",
-    section: "system",
-    label: "Users",
-    permission: "users:read",
   },
   { path: "/system/audit-log", section: "system", label: "Audit Log", permission: "audit:read" },
   {
@@ -135,7 +111,21 @@ export function portalHasSponsorWorkspace(session: PortalSession | null): boolea
 }
 
 export type PortalSectionKey =
-  "groups" | "events" | "sponsors" | "forms" | "profile" | "organization" | "application" | "system" | "account";
+  | "home"
+  | "participation"
+  | "groups"
+  | "events"
+  | "organizations"
+  | "membership"
+  | "users"
+  | "donations"
+  | "sponsors"
+  | "forms"
+  | "profile"
+  | "organization"
+  | "application"
+  | "system"
+  | "account";
 
 interface PortalSectionDef {
   /** Stable key; equal to the first URL segment the section owns. */
@@ -145,9 +135,18 @@ interface PortalSectionDef {
   label: string;
   sidebar: boolean;
   access: (session: PortalSession | null) => boolean;
+  /** Narrower sidebar visibility when routes are reachable more broadly than the entry is shown. */
+  sidebarAccess?: (session: PortalSession | null) => boolean;
 }
 
 const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
+  {
+    section: "home",
+    path: "/home",
+    label: "Home",
+    sidebar: true,
+    access: (session) => Boolean(session?.member || session?.staff),
+  },
   {
     section: "groups",
     path: "/groups",
@@ -156,11 +155,47 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => Boolean(session?.member || session?.staff),
   },
   {
+    // Program-committee reviewers reach their proposal programs through the
+    // Events domain even without a generic event grant.
     section: "events",
     path: "/events",
     label: "Events",
     sidebar: true,
-    access: (session) => portalHasPermissionAtAnyScope(session, "events:read"),
+    access: (session) =>
+      portalHasPermissionAtAnyScope(session, "events:read") || portalHasPermissionAtAnyScope(session, "proposals:read"),
+  },
+  {
+    // Representatives reach their organizations from the avatar menu and the
+    // Groups-style workspace routes; the sidebar entry is the directory for
+    // identities with the global permissions.
+    section: "organizations",
+    path: "/organizations",
+    label: "Organizations",
+    sidebar: true,
+    access: (session) =>
+      Boolean(session?.member) || portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]),
+    sidebarAccess: (session) => portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]),
+  },
+  {
+    section: "membership",
+    path: "/membership/applications",
+    label: "Membership",
+    sidebar: true,
+    access: (session) => portalHasGlobalPermission(session, "membership:read"),
+  },
+  {
+    section: "users",
+    path: "/users",
+    label: "Users",
+    sidebar: true,
+    access: (session) => portalHasGlobalPermission(session, "users:read"),
+  },
+  {
+    section: "donations",
+    path: "/donations",
+    label: "Donations",
+    sidebar: true,
+    access: (session) => portalHasAnyGlobalPermission(session, ["donations:read", "donations:sync"]),
   },
   {
     section: "sponsors",
@@ -177,30 +212,41 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => portalHasGlobalPermission(session, "forms:read"),
   },
   {
+    // Identity destinations live in the avatar menu, not the sidebar.
     section: "profile",
     path: "/profile",
     label: "My Profile",
-    sidebar: true,
+    sidebar: false,
     access: (session) => Boolean(session?.member),
   },
   {
+    // Participation records for any authenticated identity, member or not.
+    section: "participation",
+    path: "/participation",
+    label: "My participation",
+    sidebar: false,
+    access: (session) => Boolean(session?.member || session?.staff || session?.sponsors.length),
+  },
+  {
+    // Superseded by the organization workspaces; the route redirects there.
     section: "organization",
     path: "/organization",
     label: "My Organization",
-    sidebar: true,
+    sidebar: false,
     access: (session) => Boolean(session?.member),
   },
   {
+    // Reached from the dashboard and the participation view, not the sidebar.
     section: "application",
     path: "/application",
     label: "My Application",
-    sidebar: true,
+    sidebar: false,
     access: (session) => Boolean(session?.member),
   },
   {
     section: "system",
     path: "/system",
-    label: "Administration",
+    label: "Settings",
     sidebar: true,
     access: portalHasSystemManagement,
   },
@@ -238,7 +284,7 @@ export function portalSectionEnabled(session: PortalSession | null, section: Por
 }
 
 export function portalNavigationItems(session: PortalSession | null): PortalNavItem[] {
-  return PORTAL_SECTIONS.filter((def) => def.sidebar && def.access(session)).map((def) => {
+  return PORTAL_SECTIONS.filter((def) => def.sidebar && (def.sidebarAccess ?? def.access)(session)).map((def) => {
     if (def.section === "system") {
       const home = portalSystemNavigationItems(session)[0];
       return { path: home?.path ?? def.path, section: def.section, label: def.label };
@@ -248,7 +294,7 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
 }
 
 export function portalDefaultPath(session: PortalSession | null): string {
-  if (session?.member || session?.staff) return "/groups";
+  if (session?.member || session?.staff) return "/home";
   if (session?.sponsors.length) return "/sponsors";
   return "/";
 }

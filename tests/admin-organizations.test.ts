@@ -283,6 +283,34 @@ describe("Organization management — membership category on the aggregate (Phas
     expect(body.organization.memberSince).toBe("2026-01-15");
   });
 
+  it("rejects one person holding both contact roles, in one request or across two", async () => {
+    const { organizationId, userId, revision } = await createOrg();
+
+    const bothAtOnce = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ primaryContactUserId: userId, secondaryContactUserId: userId, revision }),
+    });
+    expect(bothAtOnce.status).toBe(400);
+    await expect(bothAtOnce.json()).resolves.toMatchObject({ error: { code: "CONTACT_ROLES_MUST_DIFFER" } });
+
+    const primaryOnly = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ primaryContactUserId: userId, revision }),
+    });
+    expect(primaryOnly.status, await primaryOnly.clone().text()).toBe(200);
+    const updated = (await primaryOnly.json()) as { organization: { updatedAt: string } };
+
+    // The retained primary role must block a colliding secondary update.
+    const collidingSecondary = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ secondaryContactUserId: userId, revision: updated.organization.updatedAt }),
+    });
+    expect(collidingSecondary.status).toBe(400);
+    await expect(collidingSecondary.json()).resolves.toMatchObject({
+      error: { code: "CONTACT_ROLES_MUST_DIFFER" },
+    });
+  });
+
   it("PATCH org memberSince updates the aggregate's stored value", async () => {
     const { organizationId, revision } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);

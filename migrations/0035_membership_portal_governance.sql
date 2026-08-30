@@ -3341,11 +3341,11 @@ You have joined {{groupName}}. If this group has meetings, you can view upcoming
   (
     lower(hex(randomblob(16))), 'user_magic_link', 1,
     'Your PKI Consortium sign-in link',
-    'Use the secure link below to sign in. It expires in **{{expiresInMinutes}} minutes** and can only be used once.
+    'A sign-in link was requested for the **PKI Consortium portal**.
 
-[Sign in]({{magicLinkUrl}})
+<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to the portal &rarr;</a></div>
 
-If you did not request this link, you can safely ignore this email.',
+<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
@@ -4879,6 +4879,18 @@ CREATE TABLE votes (
   -- means eligibility follows the owning group's membership policy.
   threshold_type        TEXT NOT NULL,
   -- allowed: simple_majority | supermajority | successive_elimination
+  question_form_id      TEXT REFERENCES forms(id),
+  -- A consultation asks a form, not a single question: "would you support
+  -- this, and how would you want it done" is two questions and one opinion.
+  -- Linking the form gives it everything forms already provide — several
+  -- questions, stable field and option identities, labels that may be
+  -- reworded after responses exist, and options archived without
+  -- invalidating an answer already given — while the vote keeps what a vote
+  -- owns: who is eligible, the window, and one response per represented
+  -- Member. Deliberately not constrained to `vote_type = 'consultation'` in
+  -- SQL: which vote types may carry a form is product policy that can evolve,
+  -- and belongs in the shared schema rather than a table constraint a future
+  -- change has to rebuild.
   quorum_percent        INTEGER CHECK (quorum_percent IS NULL OR (quorum_percent BETWEEN 1 AND 100)),
   -- NULL is the bylaw default: Article 10 decides a matter "by majority vote
   -- of the members ... who cast a vote", so the denominator is ballots cast
@@ -4966,6 +4978,34 @@ CREATE INDEX idx_vote_candidates_vote ON vote_candidates(vote_id);
 CREATE INDEX idx_vote_candidates_standing
   ON vote_candidates(vote_id, sort_order, id)
   WHERE eliminated_round IS NULL;
+
+-- ── Consultation responses ────────────────────────────────────────
+-- A consultation's answers are ordinary form submissions, so form editing,
+-- answer history, and response statistics all apply unchanged. This table
+-- owns only what a vote owns: which represented Member a submission speaks
+-- for, and that there is exactly one of them per round. Keeping it separate
+-- means `form_submissions` never learns about electorates.
+CREATE TABLE vote_consultation_responses (
+  id            TEXT NOT NULL PRIMARY KEY,
+  vote_id       TEXT NOT NULL REFERENCES votes(id),
+  user_id       TEXT NOT NULL REFERENCES users(id),
+  member_id     TEXT REFERENCES members(id),
+  -- member electorate: the represented Member this response speaks for;
+  -- person electorate: NULL, exactly as vote_ballots does it.
+  submission_id TEXT NOT NULL REFERENCES form_submissions(id),
+  round         INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX uq_vote_consultation_responses_member
+  ON vote_consultation_responses(vote_id, member_id, round)
+  WHERE member_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_vote_consultation_responses_person
+  ON vote_consultation_responses(vote_id, user_id, round)
+  WHERE member_id IS NULL;
+CREATE INDEX idx_vote_consultation_responses_submission
+  ON vote_consultation_responses(submission_id);
 
 CREATE TABLE vote_ballots (
   id           TEXT NOT NULL PRIMARY KEY,

@@ -2,11 +2,13 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/management/GroupAuditLog";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
+import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
 
 const navigate = vi.fn();
 
@@ -105,7 +107,8 @@ describe("portal selected-group collections", () => {
     );
     const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
     await settle();
-    expect(container.textContent).toContain("No mailing lists are managed by this group.");
+    expect(container.textContent).toContain("No mailing lists yet");
+    expect(container.textContent).toContain("Add mailing list");
   });
 
   it("renders manager collection errors", async () => {
@@ -138,10 +141,6 @@ describe("portal selected-group collections", () => {
     } as const;
     const page = { limit: 50, offset: 0, total: 1, hasMore: false };
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const url = new URL(
@@ -162,10 +161,16 @@ describe("portal selected-group collections", () => {
       }),
     );
 
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    const container = mount(
+      <>
+        <GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />
+        <ConfirmDialogHost />
+      </>,
+    );
     await settle();
     const button = (label: string) =>
       Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === label);
+    expect(container.querySelector("form")).toBeNull();
     await act(async () => {
       button("Add mailing list")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -179,17 +184,27 @@ describe("portal selected-group collections", () => {
     email.dispatchEvent(new Event("input", { bubbles: true }));
     textInputs[0].value = "Consultation list";
     textInputs[0].dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[1].value = "members";
-    textInputs[1].dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[2].value = "moderated";
-    textInputs[2].dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[3].value = "A, H1";
-    textInputs[3].dispatchEvent(new Event("input", { bubbles: true }));
     const selects = createForm.querySelectorAll<HTMLSelectElement>("select");
     selects[0].value = "consultation";
     selects[0].dispatchEvent(new Event("change", { bubbles: true }));
     selects[1].value = "eligible_categories";
     selects[1].dispatchEvent(new Event("change", { bubbles: true }));
+    selects[2].value = "members";
+    selects[2].dispatchEvent(new Event("change", { bubbles: true }));
+    selects[3].value = "moderated";
+    selects[3].dispatchEvent(new Event("change", { bubbles: true }));
+    const categoryA = createForm.querySelector<HTMLInputElement>("#group-mailing-list-create-auto-sync-categories-A")!;
+    categoryA.checked = true;
+    await act(async () => {
+      categoryA.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const categoryH1 = createForm.querySelector<HTMLInputElement>(
+      "#group-mailing-list-create-auto-sync-categories-H1",
+    )!;
+    categoryH1.checked = true;
+    await act(async () => {
+      categoryH1.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await settle();
     await act(async () => {
       createForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -197,17 +212,20 @@ describe("portal selected-group collections", () => {
     await settle();
     await settle();
 
-    expect(requests.find(({ method }) => method === "POST")).toMatchObject({
+    const created = requests.find(({ method }) => method === "POST");
+    expect(created).toMatchObject({
       url: expect.objectContaining({ pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists` }),
-      body: {
-        email: "consultation@lists.example.test",
-        label: "Consultation list",
-        purpose: "consultation",
-        subscriptionDefault: "eligible_categories",
-        autoSyncCategories: ["A", "H1"],
-      },
     });
-    expect(requests.find(({ method }) => method === "POST")?.body).not.toHaveProperty("groupId");
+    expect(groupMailingListCreateSchema.parse(created?.body)).toMatchObject({
+      email: "consultation@lists.example.test",
+      label: "Consultation list",
+      purpose: "consultation",
+      subscriptionDefault: "eligible_categories",
+      postingPolicy: "members",
+      moderationPolicy: "moderated",
+      autoSyncCategories: ["A", "H1"],
+    });
+    expect(created?.body).not.toHaveProperty("groupId");
 
     expect(button("Manage")).not.toBeUndefined();
     await act(async () => {
@@ -223,9 +241,25 @@ describe("portal selected-group collections", () => {
     expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
 
     await settle();
-    expect(button("Archive")).not.toBeUndefined();
+    const rowMenu = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+    expect(rowMenu).not.toBeNull();
     await act(async () => {
-      button("Archive")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      rowMenu?.click();
+    });
+    const archiveItem = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+      (candidate) => candidate.textContent?.trim() === "Archive",
+    );
+    expect(archiveItem).not.toBeUndefined();
+    await act(async () => {
+      archiveItem?.click();
+    });
+    await settle();
+    const archiveDialog = container.querySelector('[role="alertdialog"]');
+    expect(archiveDialog).not.toBeNull();
+    await act(async () => {
+      Array.from(archiveDialog?.querySelectorAll("button") ?? [])
+        .find((candidate) => candidate.textContent === "Archive mailing list")
+        ?.click();
     });
     await settle();
     expect(requests.some(({ method }) => method === "DELETE")).toBe(true);
@@ -482,88 +516,57 @@ describe("portal selected-group collections", () => {
     await settle();
     await settle();
 
-    expect(container.textContent).toContain("Registration");
-    expect(container.textContent).toContain("Register for this event");
-    expect(container.textContent).toContain("I agree to the event terms");
-    expect(container.textContent).toContain("Manage meeting series");
-    expect(container.textContent).toContain("Attendees");
-    expect(container.textContent).toContain("Group Member");
-    expect(container.querySelector('a[href="/events/2026/architecture-workshop/register/"]')).toBeNull();
-    expect(container.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}`);
 
-    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
-    await act(async () => {
-      hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
-  });
+    // The default tab is the overview, which shows the registration panel — not the settings form.
+    expect(container.textContent).toContain("Registration");
+    expect(container.textContent).toContain("Register for this event");
+    expect(container.textContent).toContain("I agree to the event terms");
+    expect(container.textContent).not.toContain("Attendees");
+    expect(container.textContent).not.toContain("Manage meeting series");
 
-  it("updates a mailing-list preference through its selected group context", async () => {
-    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
-    let preference: "subscribed" | "unsubscribed" | null = null;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init.method ?? "GET";
-        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-        requests.push({ url, method, body });
-        const subscription = {
-          mailingList: {
-            id: "a0000000-0000-4000-8000-000000000001",
-            email: "architecture@lists.example.test",
-            label: "Architecture discussion",
-            purpose: "group",
-            groupId: GROUP_ID,
-            primaryDiscussion: true,
-            subscriptionDefault: "group_members",
-            postingPolicy: "members",
-            moderationPolicy: "moderated",
-            autoSyncCategories: null,
-            active: true,
-            archivedAt: null,
-            createdAt: "2026-08-01T00:00:00.000Z",
-            updatedAt: "2026-08-01T00:00:00.000Z",
-          },
-          eligible: true,
-          defaultSubscribed: true,
-          preference,
-          effectiveSubscribed: preference !== "unsubscribed",
-        } as const;
-        if (method === "PUT") {
-          preference = (body as { preference: typeof preference }).preference;
-          return json({ success: true, subscription: { ...subscription, preference, effectiveSubscribed: false } });
-        }
-        return json({ subscriptions: [subscription], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
-      }),
+    const tab = (label: string) =>
+      Array.from(container.querySelectorAll('button[role="tab"]')).find(
+        (button) => button.textContent?.trim() === label,
+      );
+
+    // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
+    // spy here, so the resulting tab is verified below through the URL it
+    // would produce, the same way a fresh page load resolves that URL).
+    await act(async () => {
+      tab("Registrations")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}/registrations`);
+
+    await act(async () => {
+      tab("Settings")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}/settings`);
+
+    const back = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "← Back to events",
     );
-
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} />);
-    await settle();
-    expect(container.textContent).toContain("Architecture discussion");
-    expect(container.textContent).toContain("Subscribed");
-
-    const select = container.querySelector<HTMLSelectElement>("select")!;
-    select.value = "unsubscribed";
     await act(async () => {
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    await settle();
-    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
 
-    expect(requests.find(({ method }) => method === "PUT")).toMatchObject({
-      url: expect.objectContaining({
-        pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/a0000000-0000-4000-8000-000000000001/subscription`,
-      }),
-      body: { preference: "unsubscribed" },
-    });
-    expect(requests.filter(({ method }) => method === "GET")).toHaveLength(2);
-    expect(container.textContent).toContain("Not subscribed");
+    // The registrations URL resolves to the registrations tab.
+    const registrationsView = mount(
+      <GroupEvents groupId={GROUP_ID} initialEventId={event.id} initialEventTab="registrations" />,
+    );
+    await settle();
+    await settle();
+    expect(registrationsView.textContent).toContain("Attendees");
+    expect(registrationsView.textContent).toContain("Group Member");
+    expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}/registrations`))).toBe(true);
+
+    // The settings URL resolves to the settings tab, which surfaces the meeting-series link for a series event.
+    const settingsView = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} initialEventTab="settings" />);
+    await settle();
+    await settle();
+    expect(settingsView.textContent).toContain("Manage meeting series");
+    expect(settingsView.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
   });
 });

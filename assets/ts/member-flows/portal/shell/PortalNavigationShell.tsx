@@ -3,9 +3,11 @@ import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { Menu } from "../../../components/Menu";
 import { MenuIcon } from "../../../components/MenuIcon";
-import { postJson } from "../../../shared/api-client";
+import { useData } from "../../../hooks/useData";
+import { getJson, postJson } from "../../../shared/api-client";
 import { clearAuth } from "../state";
 import type { PortalSession } from "../types";
 import { portalActiveSection, portalNavigationItems, portalSectionEnabled } from "./portal-navigation";
@@ -32,6 +34,15 @@ export function portalAvatarInitials(displayName: string): string {
 export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
   const [location, navigate] = useHashLocation();
   const [navigationOpen, setNavigationOpen] = useState(false);
+  // The identity's organizations live in the account menu, not the sidebar:
+  // each one deep-links into its organization workspace.
+  const organizations = useData(
+    () =>
+      session?.member
+        ? getJson("/api/v1/users/current/organizations?limit=12", userOrganizationsListResponseSchema)
+        : Promise.resolve(null),
+    [Boolean(session?.member)],
+  );
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const closeNavigation = () => setNavigationOpen(false);
 
@@ -120,6 +131,38 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
               </>
             }
             actions={[
+              ...(portalSectionEnabled(session, "profile")
+                ? [
+                    {
+                      key: "profile",
+                      label: "My profile",
+                      onSelect: () => {
+                        closeNavigation();
+                        navigate("/profile");
+                      },
+                    },
+                  ]
+                : []),
+              ...(organizations.data?.organizations ?? []).map((organization) => ({
+                key: `organization-${organization.organizationId}`,
+                label: organization.name,
+                onSelect: () => {
+                  closeNavigation();
+                  navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`);
+                },
+              })),
+              ...(portalSectionEnabled(session, "participation")
+                ? [
+                    {
+                      key: "participation",
+                      label: "My participation",
+                      onSelect: () => {
+                        closeNavigation();
+                        navigate("/participation");
+                      },
+                    },
+                  ]
+                : []),
               ...(portalSectionEnabled(session, "account")
                 ? [
                     {

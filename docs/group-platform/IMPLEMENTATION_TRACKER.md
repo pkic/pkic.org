@@ -2013,11 +2013,174 @@ Status: In progress (2026-08-30)
 - [x] Close the bundle blind spots: a named `vendor` chunk (Rolldown
       `codeSplitting.groups`), a CSS budget gate wired into `pnpm check`, and
       dev artifacts in `public/js/built` cleaned before every build.
-- [ ] Update the Playwright suites to the new navigation and re-run the
+- [x] Update the Playwright suites to the new navigation and re-run the
       affected projects; refresh the persona and system specs that asserted
       the retired Management and System entries.
-- [ ] Extend group event, meeting, and form detail views to the URL-addressed
+- [x] Extend group event, meeting, and form detail views to the URL-addressed
       resource pattern already used by votes.
+- [x] Show role and permission context in the account view instead of the
+      navigation: the sidebar group list carries names only, the user button
+      is an avatar (member headshot with initials fallback), and the account
+      view summarizes member capacities, staff permissions with scopes, and
+      sponsor capacities.
+- [x] Dissolve the administrative grouping into domain-first navigation:
+      Users, Organizations, Membership applications, and Donations are
+      permission-gated sidebar domains at `/users`, `/organizations`,
+      `/membership/applications`, and `/donations`; superseded
+      `/portal/#/system/...` URLs redirect; the residual grouping is the
+      "Settings" entry (analytics, membership settings, content reviews,
+      audit log, email templates, operations, access control, leadership
+      positions). The membership-application notification link emits the
+      canonical domain URL.
+- [ ] Organization workspaces for representatives: authorize organization
+      self-service by active representation instead of the acting session
+      capacity, add the `/api/v1/users/current/organizations` feed, reach
+      each represented organization from the avatar menu at
+      `/portal/#/organizations/:organizationId`, and retire the acting-capacity
+      "My Organization" special case.
+- [ ] Root-level surfaces are projections, canonical homes are groups: the
+      portal /events (and any root meeting surface) becomes a cross-group
+      overview — upcoming events from the audience feed with the viewer's
+      own registration state, linking to public pages and into the owning
+      group's event workspace for management — while the group event
+      workspace absorbs the global-only tabs (promoters, analytics, team,
+      sponsor tiers, full settings editor). The /events/:slug management
+      workspace then retires behind an owner-group redirect. Verify that
+      event-scoped grant holders without group membership reach the group
+      event routes through the resource-grant evaluator before retiring the
+      global management surface. This resolves the audit's duplicated-
+      surface cluster toward the group context and aligns portal placement
+      with the API's ownership model.
+- [ ] Execute the portal UX audit (2026-08-30; ~249 findings across 78
+      files, catalogued per house rule with file:line) in four waves:
+      Wave 1 landed 2026-08-30: shared `ConfirmDialog` (promise-based,
+      consequence list, typed confirmation for irreversible operations —
+      user anonymization requires retyping the email, retention redaction
+      requires typing REDACT), `RowActions` (status + ⋯ menu cell), and
+      `EmptyState`/labeled `Spinner` primitives exist with tests; every
+      portal `window.confirm` call and inline destructive row button is
+      converted except the events detail surfaces (Team revoke, proposal
+      cancel-accepted) and `assets/ts/shared/headshot/controller.ts`, which
+      is shared with public event-flows pages that do not mount
+      `ConfirmDialogHost` (TODO comment in place; mount a host per
+      event-flow root or keep native confirm there). A signed-in visual
+      walkthrough of the seeded portal validated the dialogs live and its
+      findings (legacy `main h5` uppercase leak — fixed with a portal-scope
+      reset; menu focus scrolling the document — fixed with preventScroll;
+      row-menu popups clipped by the table overflow wrapper — fixed with
+      fixed-position popups; layout/empty-dashboard/machine-vocabulary
+      items) are recorded in the audit artifact's walkthrough section.
+      Follow-up feedback landed 2026-08-30: the recurrence editor now
+      composes a shape with a free interval (every N weeks/months, N <= 26)
+      instead of fixed presets, and supports ad-hoc single meetings through
+      "Does not repeat", stored as the RFC 5545 sentinel `FREQ=DAILY;COUNT=1`
+      so the `event_series.recurrence_rule NOT NULL` column and the
+      ICAL.Recur expansion stay untouched (expands to exactly one occurrence;
+      covered in tests/event-series-platform.test.ts). The group workspace
+      now titles itself by the group's name (generic "Group" heading
+      removed), orders tabs by user priority (people and activity before
+      administration), and its Overview surfaces upcoming events and open
+      votes as links into their owning tabs.
+      Live-reported navigation defects fixed 2026-08-30: the group surface
+      collapsed onto ONE route (`/groups/:groupId/*` parsed inside the shell)
+      so moving between views, event sub-tabs, and groups changes props on
+      the same mounted GroupWorkspace instead of unmounting across three
+      route patterns (which blanked the screen with no spinner on
+      cross-pattern moves such as browser Back into an event). Switching
+      groups now treats the previous group's retained data as absent —
+      "Loading group…" renders immediately instead of the stale workspace,
+      whose still-mounted tab bar previously linked BACK into the group
+      being left (fast click on Events after a sidebar switch landed in the
+      old group's events). Tab hrefs now derive from the route's groupId,
+      never fetched data. Regression tests:
+      tests/frontend/portal-group-switching.test.tsx. The duplicated
+      workspace screenshot could not be reproduced against a production
+      build (scripted browser walkthrough + jsdom harness) and is attributed
+      to vite dev HMR remounting after hot edits.
+      Create-behind-action landed 2026-08-30: `ApiDataTable` gained an
+      optional `createAction` rendered in the same toolbar row as search and
+      refresh (the interim placement until the design update), and every
+      list's New/Add affordance moved there; default-visible create forms
+      (group members, leadership, meeting guests, meeting series, event
+      team, coworkers) now render only behind their action with a Cancel.
+      Organization and sponsorship logos became SVG-only with sanitize-by-reconstruction:
+      uploads are reparsed through resvg's usvg tree (scripts, handlers,
+      metadata, comments, DOCTYPEs, and editor cruft cannot survive),
+      embedded rasters and entity declarations are rejected outright,
+      paint-order-first full-canvas background rects are dropped, the
+      viewBox is cropped to the rendered content's bounding box, and root
+      width/height are removed for responsive embedding
+      (functions/_lib/utils/svg-logo.ts). The pipeline is proven shared
+      three ways: one reader used by all three upload routes, a
+      parametrized backend matrix demanding byte-identical stored output
+      across the organization and sponsorship endpoints
+      (tests/svg-logo-uploads.test.ts), and a real-browser Playwright
+      spec from file picker to served bytes
+      (tests/e2e/svg-logo-upload.spec.ts) — which immediately caught
+      that the staff organization uploader had been JSON-stringifying
+      the File (the original "upload fails" defect); it now uses the
+      shared replaceFile helper.
+      The portal page also stopped inheriting public-site chrome (member
+      logo wall, edit-on-GitHub) and the login card breathes on mobile;
+      passkeys correctly hide on non-secure origins such as LAN http.
+      Remaining waves:
+      (1 residue) events-surface confirms after the projection slice;
+      (2) EmptyState + labeled Spinner + DetailsSummary
+      close the blank/raw-payload states through the shared table and error
+      components; (3) routed Tabs and query-param ApiDataTable state make
+      tabs, filters, sorts, and pages shareable URLs; (4) PersonCell +
+      EntityLink close the dead-end and faceless-people findings, including
+      audit-log actors and entity references. Duplicated surfaces (§10)
+      collapse onto the group-context implementations as each is touched.
+- [ ] Close the request-contract blind spot: `lint:api-contracts` verifies
+      response schemas but request bodies leave the client unparsed, so a
+      frontend can emit a contract-violating request with every gate green
+      (caught 2026-08-30 when the representative link form sent
+      `kind: "user"` instead of `kind: "existing_user"`). Add a
+      request-parsing client helper (body validated through the shared
+      request schema before send), migrate mutating call sites, and extend
+      the contract lint to require it; until then, mock-based frontend tests
+      parse captured bodies through the shared schemas (rule added to
+      tests/AGENTS.md).
+- [ ] Add an index for `session_proposals.proposer_user_id` in the
+      consolidated branch migration: the new `/users/current/proposals`
+      submitter branch currently scans the table (flagged by its
+      explain-plan check; the speaker branch uses the existing unique
+      index).
+- [ ] Per-representation profiles: a person representing several
+      organizations has one global user profile today (job title, links,
+      email); decide which fields become per-representation overrides on
+      `organization_representatives` (job title is the clear candidate;
+      contact email possibly; bio probably stays global) and surface them in
+      the organization workspace and public profiles.
+- [ ] Retire or repurpose the dormant `users.role` value `guest`: only
+      `admin` has behavior (full-access short-circuit); `user` is the
+      default; `guest` has zero behavioral references. Either it becomes the
+      role of identity-first auto-provisioned participants or it leaves the
+      vocabulary. Move role editing out of the users table's inline dropdown
+      into the user detail access panel with confirmation — changing
+      admin-ness is a high-impact act, not a row-level toggle.
+- [ ] Identity-first participation: participation flows (event registration,
+      proposals, guest invitations, donations) auto-provision a user record
+      for the participant; sign-in eligibility becomes "a user record
+      exists", with no stored credential by default — the enumeration-safe
+      magic link to the verified address activates a session, and passkeys
+      stay optional. A capacity-less guest session sees only its own
+      participation records and the account view; capability links remain
+      the no-account fallback and never become sessions. New
+      participation-record feeds under `/api/v1/users/current` gate on the
+      authenticated user, not member capacity, so guests inherit them, and
+      the guest dashboard carries the become-a-member invitation.
+- [ ] Participation records: a "My participation" view reached from the
+      avatar menu over self feeds (applications, donations, registrations,
+      proposals as a read-only projection with resend-capability-link
+      actions, ballot history); the sidebar drops the always-visible My
+      Application entry while the Home dashboard keeps surfacing active
+      items.
+- [ ] Sign-in dashboard ("your consortium this week"): self-scoped
+      participation feeds for votes, upcoming meetings, and open forms under
+      `/api/v1/users/current/...`, composed with groups, events, applications,
+      and pending organization reviews into the default landing view.
 
 ## Manual test checklist
 

@@ -4,8 +4,10 @@ import {
   groupMembershipsListResponseSchema,
   type GroupMembership,
 } from "../../../../../shared/schemas/groups";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
+import { RowActions } from "../../../../components/RowActions";
 import { Spinner } from "../../../../components/Spinner";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { ApiClientError, deleteJson } from "../../../../shared/api-client";
@@ -21,6 +23,7 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
   const [search, setSearch] = useState("");
   const [endingId, setEndingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const page = useApiPage(
     `/api/v1/groups/${encodeURIComponent(groupId)}/memberships`,
     { active: "true", sort: "user_name", ...(search ? { q: search } : {}) },
@@ -31,7 +34,18 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
 
   async function endMembership(membership: GroupMembership): Promise<void> {
     const label = `${membership.userName} on behalf of ${capacityLabel(membership)}`;
-    if (!confirm(`End group participation for ${label}?`)) return;
+    if (
+      !(await confirmAction({
+        title: `End group participation for ${label}?`,
+        body: "This ends only this membership capacity; other capacities held by the same person are not affected.",
+        consequences: [
+          `${membership.userName} immediately loses access granted through this capacity`,
+          "They can be added back later if their participation resumes",
+        ],
+        confirmLabel: "End participation",
+      }))
+    )
+      return;
     setEndingId(membership.id);
     setMutationError(null);
     try {
@@ -47,7 +61,7 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
     }
   }
 
-  if (!page.data && page.loading) return <Spinner />;
+  if (!page.data && page.loading) return <Spinner label="Loading membership capacities…" />;
 
   return (
     <div class="card border-0 shadow-sm">
@@ -57,35 +71,44 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
           Each row is one person participating through one Member. A person representing multiple organizations may
           therefore appear more than once.
         </p>
-        <GroupMemberAddForm
-          groupId={groupId}
-          onAdded={async () => {
-            await Promise.all([page.reload(), onChanged()]);
-          }}
-        />
-        <form
-          class="d-flex gap-2 portal-management-search"
-          role="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSearch(pendingSearch.trim());
-          }}
-        >
-          <label class="visually-hidden" for="managed-group-member-search">
-            Search membership capacities
-          </label>
-          <input
-            id="managed-group-member-search"
-            type="search"
-            class="form-control"
-            placeholder="Search name, email, organization, or category…"
-            value={pendingSearch}
-            onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
+        {showAddForm && (
+          <GroupMemberAddForm
+            groupId={groupId}
+            onAdded={async () => {
+              await Promise.all([page.reload(), onChanged()]);
+              setShowAddForm(false);
+            }}
+            onCancel={() => setShowAddForm(false)}
           />
-          <button type="submit" class="btn btn-outline-secondary">
-            Search
+        )}
+        <div class="d-flex gap-2 align-items-center flex-wrap portal-management-search">
+          <form
+            class="d-flex gap-2 flex-grow-1"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSearch(pendingSearch.trim());
+            }}
+          >
+            <label class="visually-hidden" for="managed-group-member-search">
+              Search membership capacities
+            </label>
+            <input
+              id="managed-group-member-search"
+              type="search"
+              class="form-control"
+              placeholder="Search name, email, organization, or category…"
+              value={pendingSearch}
+              onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
+            />
+            <button type="submit" class="btn btn-outline-secondary">
+              Search
+            </button>
+          </form>
+          <button type="button" class="btn btn-sm btn-success" onClick={() => setShowAddForm(true)}>
+            Add person
           </button>
-        </form>
+        </div>
         {page.error && <ErrorAlert error={page.error.message} />}
         {mutationError && <ErrorAlert error={mutationError} />}
         {page.data && page.data.memberships.length === 0 ? (
@@ -118,14 +141,17 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
                     </td>
                     <td>{membership.source.replaceAll("_", " ")}</td>
                     <td class="text-end">
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline-danger"
-                        disabled={endingId !== null}
-                        onClick={() => void endMembership(membership)}
-                      >
-                        {endingId === membership.id ? "Removing…" : "Remove"}
-                      </button>
+                      <RowActions
+                        label={`Actions for ${membership.userName}`}
+                        actions={[
+                          {
+                            key: "remove",
+                            label: endingId === membership.id ? "Removing…" : "Remove",
+                            onSelect: () => void endMembership(membership),
+                            disabled: endingId !== null,
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}

@@ -1,7 +1,8 @@
 import { logoUploadResponseSchema } from "../../../../../shared/schemas/images";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { LogoManager } from "../../../../components/LogoManager";
-import { deleteJson, putJson } from "../../../../shared/api-client";
+import { deleteJson } from "../../../../shared/api-client";
+import { replaceFile } from "../../../../shared/file-upload";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { toast } from "../../ui";
 
@@ -33,10 +34,15 @@ export function OrganizationLogo({
       placeholderClass="d-flex align-items-center justify-content-center mb-2 border rounded bg-light text-muted adm-organization-logo-placeholder"
       removeConfirmation="Remove this organization's logo?"
       removeLabel="Remove"
+      accept="image/svg+xml"
+      hint="SVG only. The logo is sanitized, cropped to its content, and made responsive automatically."
       onUpload={(file) =>
-        putJson(`/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`, file, logoUploadResponseSchema, {
-          "Content-Type": file.type || "application/octet-stream",
-        })
+        replaceFile(
+          `/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`,
+          file,
+          logoUploadResponseSchema,
+          "Could not upload the organization logo.",
+        )
       }
       onRemove={() =>
         deleteJson(`/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`, successResponseSchema)

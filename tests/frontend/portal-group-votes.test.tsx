@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -114,10 +115,6 @@ describe("selected-group vote participation", () => {
   it("closes a managed vote through the selected group and reloads its state", async () => {
     const requests: Array<{ path: string; method: string; body?: unknown }> = [];
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const url = new URL(
@@ -155,7 +152,15 @@ describe("selected-group vote participation", () => {
 
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVotes groupId={GROUP_ID} canManage canParticipate />, container));
+    await act(() =>
+      render(
+        <>
+          <GroupVotes groupId={GROUP_ID} canManage canParticipate />
+          <ConfirmDialogHost />
+        </>,
+        container,
+      ),
+    );
     await settle();
     await act(() =>
       (
@@ -169,6 +174,16 @@ describe("selected-group vote participation", () => {
       (
         Array.from(container.querySelectorAll("button")).find(
           (button) => button.textContent === "Close current round",
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+    const closeDialog = container.querySelector('[role="alertdialog"]');
+    expect(closeDialog).not.toBeNull();
+    await act(() =>
+      (
+        Array.from(closeDialog?.querySelectorAll("button") ?? []).find((button) =>
+          button.textContent?.startsWith("Close"),
         ) as HTMLButtonElement
       ).click(),
     );

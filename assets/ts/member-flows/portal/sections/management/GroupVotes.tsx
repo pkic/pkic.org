@@ -68,18 +68,6 @@ export function GroupVotes({
           <GroupVoteProposals groupId={groupId} canParticipate={canParticipate} />
         ) : (
           <>
-            {canManage && (
-              <div class="mb-3">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-primary"
-                  aria-expanded={showCreate}
-                  onClick={() => setShowCreate((shown) => !shown)}
-                >
-                  {showCreate ? "Hide vote form" : "Create vote"}
-                </button>
-              </div>
-            )}
             {showCreate && (
               <GroupVoteCreateForm
                 groupId={groupId}
@@ -87,6 +75,7 @@ export function GroupVotes({
                   setShowCreate(false);
                   await tableActions.current?.reload();
                 }}
+                onCancel={() => setShowCreate(false)}
               />
             )}
             <ApiDataTable
@@ -95,6 +84,7 @@ export function GroupVotes({
               resolve={(response) => response.votes}
               resolvePage={(response) => response.page}
               paginate
+              createAction={canManage ? { label: "Create vote", onSelect: () => setShowCreate(true) } : undefined}
               searchPlaceholder="Search votes…"
               initialSort="-closes_at"
               actionsRef={tableActions}

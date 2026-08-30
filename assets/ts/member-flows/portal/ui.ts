@@ -1,4 +1,11 @@
-import { formatDateTime, showToast, type ToastType } from "../../shared/ui";
+import {
+  formatDateRange,
+  formatDateTime,
+  formatEventWhen,
+  formatRelativeDays,
+  showToast,
+  type ToastType,
+} from "../../shared/ui";
 import { formatStatusLabel } from "../../shared/form/helpers";
 export type { ToastType } from "../../shared/ui";
 
@@ -10,6 +17,8 @@ export function toast(message: string, type: ToastType = "info"): void {
 export function fmt(value: string | null | undefined): string {
   return formatDateTime(value);
 }
+
+export { formatDateRange, formatEventWhen, formatRelativeDays };
 
 /** "in_review" -> "In Review" */
 export function formatStageLabel(stage: string): string {

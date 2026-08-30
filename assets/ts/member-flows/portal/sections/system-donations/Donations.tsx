@@ -18,9 +18,12 @@ import {
   type DonationPromoter as PromoterRow,
 } from "../../../../../shared/schemas/donation-management";
 import { formatDonationAmount, type DonationRow } from "./model";
+import { DonationAnalytics } from "./DonationAnalytics";
 import { useServerCollection, type CollectionLoader } from "../../../../hooks/useServerCollection";
 import { promoterRankCardClass, promoterRankTier } from "../../../../shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../../../hooks/useOffsetPager";
+import { portalSession } from "../../state";
+import { portalHasGlobalPermission } from "../../shell/portal-navigation";
 
 const FILTERS = ["", "pending", "awaiting_payment", "completed", "expired", "failed"] as const;
 const loadPortalCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
@@ -248,7 +251,8 @@ export function Donations({
 }
 
 function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean }) {
-  const tab = subTab === "promoters" ? "promoters" : "list";
+  const canReadAnalytics = portalHasGlobalPermission(portalSession.value, "analytics:read");
+  const tab = subTab === "promoters" ? "promoters" : subTab === "stats" && canReadAnalytics ? "stats" : "list";
   const [statusFilter, setStatusFilter] = useState("");
   const [summary, setSummary] = useState<DonationManagementListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
   const [, navigate] = useHashLocation();
@@ -310,9 +314,12 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
         items={[
           { key: "list", label: "Donations" },
           { key: "promoters", label: "Share Links" },
+          ...(canReadAnalytics ? [{ key: "stats", label: "Stats" }] : []),
         ]}
         active={tab}
-        onChange={(k) => navigate(k === "list" ? "/system/donations" : "/system/donations/promoters")}
+        onChange={(k) =>
+          navigate(k === "list" ? "/donations" : k === "promoters" ? "/donations/promoters" : "/donations/stats")
+        }
       />
 
       {tab === "list" && (
@@ -367,12 +374,14 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
             empty="No donations found"
             className="align-middle"
             rowKey={(d) => d.id}
-            onRowClick={(d) => navigate(`/system/donations/detail/${d.id}`)}
+            onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
           />
         </>
       )}
 
       {tab === "promoters" && <PromotersTab />}
+
+      {tab === "stats" && canReadAnalytics && <DonationAnalytics />}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { buildUserIdentitySearchFilter } from "./user-search";
+import { publicUserHeadshotPath } from "./user-headshot";
 
 interface UserRow {
   id: string;
@@ -21,6 +22,7 @@ interface UserRow {
   active: number;
   created_at: string;
   links_json: string | null;
+  headshot_r2_key: string | null;
   member_id: string | null;
   member_category: string | null;
   member_status: string | null;
@@ -65,7 +67,7 @@ export function buildUsersPageQuery(query: UsersListQuery) {
   return {
     source: {
       selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
-              u.links_json,
+              u.links_json, u.headshot_r2_key,
               COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
               COALESCE(m.status, mi.status) AS member_status,
               m.organization_id AS member_organization_id, o.name AS member_organization_name,
@@ -91,21 +93,29 @@ export function buildUsersPageQuery(query: UsersListQuery) {
 export async function listUsers(db: DatabaseLike, query: UsersListQuery) {
   const { rows: users, total } = await queryPage<UserRow>(db, buildUsersPageQuery(query));
 
-  const results = users.map(({ links_json: linksJson, event_participation_count: participationCount, ...row }) => ({
-    ...row,
-    links: parseLinksJson(linksJson),
-    membership: row.member_id
-      ? {
-          memberId: row.member_id,
-          membershipCategory: row.member_category,
-          status: row.member_status,
-          organizationId: row.member_organization_id,
-          organizationName: row.member_organization_name,
-        }
-      : null,
-    type: row.member_id ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
-    eventParticipationCount: participationCount,
-  }));
+  const results = users.map(
+    ({
+      links_json: linksJson,
+      headshot_r2_key: headshotR2Key,
+      event_participation_count: participationCount,
+      ...row
+    }) => ({
+      ...row,
+      links: parseLinksJson(linksJson),
+      headshotUrl: publicUserHeadshotPath(headshotR2Key),
+      membership: row.member_id
+        ? {
+            memberId: row.member_id,
+            membershipCategory: row.member_category,
+            status: row.member_status,
+            organizationId: row.member_organization_id,
+            organizationName: row.member_organization_name,
+          }
+        : null,
+      type: row.member_id ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
+      eventParticipationCount: participationCount,
+    }),
+  );
   return usersListResponseSchema.parse({
     users: results,
     page: buildPageInfo(query.limit, query.offset, total, results.length),

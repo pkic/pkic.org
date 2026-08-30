@@ -6,7 +6,10 @@ import {
 } from "../../../../../shared/schemas/mailing-lists";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { RowActions } from "../../../../components/RowActions";
 import { deleteJson, patchJson, postJson } from "../../../../shared/api-client";
 import { MailingListForm } from "../../../../components/mailing-lists/MailingListForm";
 import {
@@ -66,7 +69,18 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
   }
 
   async function archiveList(list: MailingList): Promise<void> {
-    if (!window.confirm(`Archive ${list.label}?`)) return;
+    if (
+      !(await confirmAction({
+        title: `Archive ${list.label}?`,
+        body: "Archiving stops the list from accepting new mail.",
+        consequences: [
+          "Members can no longer send to or receive from this list",
+          "The list's configuration and history are kept, so it can be referenced later",
+        ],
+        confirmLabel: "Archive mailing list",
+      }))
+    )
+      return;
     setError(null);
     try {
       await deleteJson(
@@ -87,17 +101,17 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
 
   return (
     <section class="card border-0 shadow-sm mb-3" aria-label="Mailing-list management">
-      <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <span class="fw-semibold">Managed mailing lists</span>
-        <button type="button" class="btn btn-sm btn-primary" onClick={() => setShowCreate((value) => !value)}>
-          {showCreate ? "Cancel" : "Add mailing list"}
-        </button>
-      </div>
+      <div class="card-header bg-white fw-semibold">Managed mailing lists</div>
       <div class="card-body">
         {error && <ErrorAlert error={error} />}
         {showCreate && (
           <form class="card card-body bg-body-tertiary mb-3" onSubmit={(event) => void createList(event)}>
-            <h6 class="card-title">New group mailing list</h6>
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <h6 class="card-title">New group mailing list</h6>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setShowCreate(false)}>
+                Cancel
+              </button>
+            </div>
             <MailingListForm
               draft={newDraft}
               onChange={(patch) => setNewDraft((current) => ({ ...current, ...patch }))}
@@ -117,6 +131,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
           resolve={(response) => response.mailingLists}
           resolvePage={(response) => response.page}
           paginate
+          createAction={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
           searchPlaceholder="Search managed mailing lists…"
           initialSort="label"
           columns={[
@@ -140,7 +155,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
               header: "",
               className: "text-end",
               cell: (list) => (
-                <div class="d-flex justify-content-end gap-2">
+                <div class="d-flex justify-content-end align-items-center gap-2">
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-secondary"
@@ -149,14 +164,17 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
                   >
                     {selectedListId === list.id ? "Close" : "Manage"}
                   </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-danger"
-                    disabled={!list.active}
-                    onClick={() => void archiveList(list)}
-                  >
-                    Archive
-                  </button>
+                  <RowActions
+                    label={`Actions for ${list.label}`}
+                    actions={[
+                      {
+                        key: "archive",
+                        label: "Archive",
+                        onSelect: () => void archiveList(list),
+                        disabled: !list.active,
+                      },
+                    ]}
+                  />
                 </div>
               ),
             },
@@ -197,7 +215,13 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
               </div>
             ) : null
           }
-          empty="No mailing lists are managed by this group."
+          empty={
+            <EmptyState
+              title="No mailing lists yet"
+              body="Create a mailing list to start managing this group's lists."
+              action={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
+            />
+          }
         />
       </div>
     </section>

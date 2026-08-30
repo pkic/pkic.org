@@ -8,9 +8,6 @@ const OrganizationContentReviews = lazy(() =>
   import("./OrganizationContentReviews").then((module) => ({ default: module.OrganizationContentReviews })),
 );
 const SystemAuditLog = lazy(() => import("./SystemAuditLog").then((module) => ({ default: module.SystemAuditLog })));
-const MembershipApplications = lazy(() =>
-  import("./membership-applications").then((module) => ({ default: module.MembershipApplications })),
-);
 const MembershipConfiguration = lazy(() =>
   import("./MembershipConfiguration").then((module) => ({ default: module.MembershipConfiguration })),
 );
@@ -22,15 +19,7 @@ const Leadership = lazy(() => import("./leadership/Leadership").then((module) =>
 const SystemAnalytics = lazy(() =>
   import("./system-analytics/SystemAnalytics").then((module) => ({ default: module.SystemAnalytics })),
 );
-const Donations = lazy(() => import("./system-donations/Donations").then((module) => ({ default: module.Donations })));
 const Operations = lazy(() => import("./system-operations").then((module) => ({ default: module.Operations })));
-const Organizations = lazy(() =>
-  import("./system-organizations/Organizations").then((module) => ({ default: module.Organizations })),
-);
-const OrganizationDetail = lazy(() =>
-  import("./system-organizations/OrganizationDetail").then((module) => ({ default: module.OrganizationDetail })),
-);
-const Users = lazy(() => import("./system-users/Users").then((module) => ({ default: module.Users })));
 
 export function SystemManagement({
   session,
@@ -72,47 +61,10 @@ export function SystemManagement({
       <Suspense fallback={<Spinner />}>
         {selected.path === "/system/analytics" ? (
           <SystemAnalytics initialTab={resourceId} />
-        ) : selected.path === "/system/donations" ? (
-          <Donations
-            subTab={resourceId}
-            canRead={portalHasGlobalPermission(session, "donations:read")}
-            canSync={portalHasGlobalPermission(session, "donations:sync")}
-          />
-        ) : selected.path === "/system/membership-applications" ? (
-          <MembershipApplications
-            initialApplicationId={resourceId}
-            canWrite={portalHasGlobalPermission(session, "membership:write")}
-            canApprove={portalHasGlobalPermission(session, "membership:approve")}
-          />
         ) : selected.path === "/system/membership-settings" ? (
           <MembershipConfiguration canWrite={portalHasGlobalPermission(session, "membership:write")} />
         ) : selected.path === "/system/organization-content-reviews" ? (
           <OrganizationContentReviews />
-        ) : selected.path === "/system/organizations" ? (
-          resourceId ? (
-            <OrganizationDetail
-              organizationId={resourceId}
-              canRead={portalHasGlobalPermission(session, "organizations:read")}
-              canWrite={portalHasGlobalPermission(session, "organizations:write")}
-              canManageRepresentatives={portalHasGlobalPermission(session, "membership:write")}
-            />
-          ) : (
-            <Organizations
-              canRead={portalHasGlobalPermission(session, "organizations:read")}
-              canCreate={portalHasGlobalPermission(session, "membership:write")}
-            />
-          )
-        ) : selected.path === "/system/users" ? (
-          <Users
-            userId={resourceId}
-            permissions={{
-              canRead: portalHasGlobalPermission(session, "users:read"),
-              canWrite: portalHasGlobalPermission(session, "users:write"),
-              canGrantAccess: portalHasGlobalPermission(session, "access:grant"),
-              canAnonymize: portalHasGlobalPermission(session, "users:anonymize"),
-              canManageMembership: portalHasGlobalPermission(session, "membership:write"),
-            }}
-          />
         ) : selected.path === "/system/audit-log" ? (
           <section aria-labelledby="system-audit-log-heading">
             <h5 id="system-audit-log-heading" class="mb-3">
@@ -141,6 +93,7 @@ export function SystemManagement({
           <AccessControl
             canGrant={portalHasGlobalPermission(session, "access:grant")}
             canRevoke={portalHasGlobalPermission(session, "access:revoke")}
+            resourceId={resourceId}
           />
         ) : selected.path === "/system/leadership" ? (
           <Leadership

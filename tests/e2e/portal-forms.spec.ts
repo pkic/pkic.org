@@ -31,6 +31,20 @@ test("permitted staff manage global forms through the canonical Forms resource",
   const formKey = `e2e-form-${Date.now()}-${test.info().workerIndex}`;
   const formTitle = `E2E global form ${formKey}`;
   await page.getByRole("button", { name: "New form", exact: true }).click();
+
+  // Creation is its own view: the forms table is gone, not layered below
+  // the editor, and "new" is a reserved key in the /forms/:formKey route.
+  await expect(page).toHaveURL(/\/portal\/#\/forms\/new$/);
+  await expect(page.locator("tbody tr")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New form", exact: true })).toHaveCount(0);
+
+  // Cancel returns to the list without creating anything.
+  await page.getByRole("button", { name: "← All forms", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/forms$/);
+  await expect(page.getByRole("button", { name: "New form", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/forms\/new$/);
   const editor = page.locator("form").filter({ has: page.getByRole("button", { name: "Create form", exact: true }) });
   await editor.getByLabel("Key", { exact: true }).fill(formKey);
   await editor.getByLabel("Purpose", { exact: true }).selectOption("survey");
@@ -44,6 +58,7 @@ test("permitted staff manage global forms through the canonical Forms resource",
   await editor.getByRole("button", { name: "Create form", exact: true }).click();
   expect((await createResponse).status()).toBe(201);
 
+  // Success navigates straight to the created form's own detail view.
   await expect(page.getByText(formTitle, { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/portal/#/forms/${formKey.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}$`));
 

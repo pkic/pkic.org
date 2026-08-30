@@ -5,6 +5,22 @@ function sha256Hex(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function buildMigrationBaselineUpdate(template) {
+  return `
+UPDATE email_template_versions
+SET subject_template = ${toSqlNullableTextPreservingWhitespace(template.subjectTemplate)},
+    body = ${sqlString(template.content)},
+    content_type = ${sqlString(template.contentType ?? "markdown")},
+    r2_object_key = NULL,
+    checksum_sha256 = ${sqlString(sha256Hex(template.content))}
+WHERE template_key = ${sqlString(template.key)}
+  AND version = 1
+  AND status = 'active'
+  AND created_by_user_id IS NULL
+  AND checksum_sha256 = '';
+`;
+}
+
 function buildTemplateVersionInsert(template, normalizedAdminEmail, onlyWhenMissing) {
   const missingGuard = onlyWhenMissing
     ? `
@@ -42,7 +58,12 @@ export function buildTemplateSqlStatements(cli, templates) {
   const normalizedAdminEmail = cli.adminEmail.trim().toLowerCase();
 
   for (const template of templates) {
-    if (!cli.ifMissing) {
+    if (cli.ifMissing) {
+      // Migrations establish deliberately small version-1 fallbacks so email
+      // delivery works before seeding. Refresh only those untouched rows; any
+      // portal-authored or checksum-bearing version remains authoritative.
+      statements.push(buildMigrationBaselineUpdate(template));
+    } else {
       statements.push(`
 UPDATE email_template_versions
 SET status = 'archived'

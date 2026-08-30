@@ -5,9 +5,13 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { ActivityChartCard } from "../../assets/ts/components/analytics/ActivityChartCard";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
+import { EnumSelect } from "../../assets/ts/components/EnumSelect";
 import { FilterSelect } from "../../assets/ts/components/FilterSelect";
 import { EventScheduleFields } from "../../assets/ts/components/EventScheduleFields";
 import { FormActions } from "../../assets/ts/components/FormActions";
+import { MembershipCategoryPicker } from "../../assets/ts/components/MembershipCategoryPicker";
+import { TimeZoneSelect } from "../../assets/ts/components/TimeZoneSelect";
+import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { RegistrationActionCard } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationActionCard";
 import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SettingsEditor";
 import { Tabs } from "../../assets/ts/components/Tabs";
@@ -248,5 +252,91 @@ describe("shared management presentation components", () => {
     expect(container.textContent).toContain("System");
     expect(container.querySelector("strong")?.textContent).toBe("updated");
     expect(container.textContent).toContain("domain details");
+  });
+
+  it("EnumSelect renders human labels for machine values and reports the machine value on change", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <EnumSelect
+        id="widget-status"
+        label="Status"
+        value="draft"
+        options={[
+          { value: "draft", label: "Draft" },
+          { value: "published", label: "Published" },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    const select = container.querySelector<HTMLSelectElement>("#widget-status")!;
+    expect(select.options).toHaveLength(2);
+    expect(select.options[1].textContent).toBe("Published");
+    select.value = "published";
+    void act(() => {
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith("published");
+  });
+
+  it("TimeZoneSelect keeps the submitted value as the raw IANA identifier typed or picked", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <TimeZoneSelect id="series-timezone" label="Time zone" value="Europe/Amsterdam" onChange={onChange} />,
+    );
+    const input = container.querySelector<HTMLInputElement>("#series-timezone")!;
+    expect(input.value).toBe("Europe/Amsterdam");
+    expect(container.querySelector(`#${input.getAttribute("list")}`)).not.toBeNull();
+    input.value = "America/New_York";
+    void act(() => {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith("America/New_York");
+  });
+
+  it("MembershipCategoryPicker treats an empty selection as every category", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <MembershipCategoryPicker idPrefix="sync" label="Auto-sync categories" selected={[]} onChange={onChange} />,
+    );
+    expect(container.textContent).toContain("Leave every box unchecked to include all membership categories.");
+    for (const category of MEMBERSHIP_CATEGORIES) {
+      expect(container.querySelector<HTMLInputElement>(`#sync-${category}`)?.checked).toBe(false);
+    }
+
+    const categoryG = container.querySelector<HTMLInputElement>("#sync-G")!;
+    categoryG.checked = true;
+    void act(() => {
+      categoryG.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(["G"]);
+  });
+
+  it("MembershipCategoryPicker reports a newly checked category in canonical vocabulary order, not click order", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <MembershipCategoryPicker idPrefix="sync" label="Auto-sync categories" selected={["G"]} onChange={onChange} />,
+    );
+    const categoryB = container.querySelector<HTMLInputElement>("#sync-B")!;
+    expect(categoryB.checked).toBe(false);
+    categoryB.checked = true;
+    void act(() => {
+      categoryB.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(["B", "G"]);
+  });
+
+  it("MembershipCategoryPicker unchecking the last selected category returns to the empty (all) selection", () => {
+    const onChange = vi.fn();
+    const selected: MembershipCategory[] = ["A"];
+    const container = mount(
+      <MembershipCategoryPicker idPrefix="sync" label="Auto-sync categories" selected={selected} onChange={onChange} />,
+    );
+    const categoryA = container.querySelector<HTMLInputElement>("#sync-A")!;
+    expect(categoryA.checked).toBe(true);
+    categoryA.checked = false;
+    void act(() => {
+      categoryA.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith([]);
   });
 });

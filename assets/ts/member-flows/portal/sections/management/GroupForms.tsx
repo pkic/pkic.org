@@ -34,18 +34,6 @@ export function GroupForms({
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Forms</div>
       <div class="card-body">
-        {canManage && (
-          <div class="mb-3">
-            <button
-              type="button"
-              class="btn btn-sm btn-primary"
-              aria-expanded={showCreate}
-              onClick={() => setShowCreate((shown) => !shown)}
-            >
-              {showCreate ? "Hide form editor" : "Create form"}
-            </button>
-          </div>
-        )}
         {showCreate && (
           <div class="card mb-3">
             <div class="card-header fw-semibold">New group form</div>
@@ -69,6 +57,7 @@ export function GroupForms({
           resolvePage={(response) => response.page}
           paginate
           actionsRef={tableActions}
+          createAction={canManage ? { label: "New form", onSelect: () => setShowCreate(true) } : undefined}
           searchPlaceholder="Search forms…"
           initialSort="title"
           columns={[

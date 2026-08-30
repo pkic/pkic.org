@@ -93,6 +93,7 @@
  *   --dry-run                    skip execution; only write the .sql + report
  *   --skip-logos                  don't upload logos/photos to R2 (on by default)
  *   --logo-bucket <name>          R2 bucket for logo uploads (default: pkic-assets)
+ *   --logo-concurrency <1-16>     simultaneous R2 uploads (default: 4)
  *   --out <dir>                    report output directory (default: ignore/)
  */
 import fs from "node:fs";
@@ -107,7 +108,7 @@ export { buildMigration };
 
 const ROOT = process.cwd();
 
-function main() {
+async function main() {
   const cli = parseArgs(process.argv.slice(2), ROOT);
   const { sql, report, logoUploads } = buildMigration({
     uploadLogos: cli.uploadLogos,
@@ -137,13 +138,18 @@ function main() {
   runWranglerD1(ROOT, ENVS[cli.env], cli, sql);
 
   if (cli.uploadLogos && logoUploads.length > 0) {
-    console.log(`Uploading ${logoUploads.length} organization logos to R2 bucket ${cli.logoBucket}...`);
-    uploadLogosToR2(ROOT, ENVS[cli.env], cli, logoUploads);
+    console.log(
+      `Uploading ${logoUploads.length} member images to R2 bucket ${cli.logoBucket} with concurrency ${cli.logoConcurrency}...`,
+    );
+    await uploadLogosToR2(ROOT, ENVS[cli.env], cli, logoUploads);
   }
 }
 
 // Guarded so this module can be imported (e.g. by the fresh-D1 smoke test
 // in tests/tools/migrate-members-importer.test.ts) without executing the CLI.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
 }

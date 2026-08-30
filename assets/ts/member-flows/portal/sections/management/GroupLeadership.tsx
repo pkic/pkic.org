@@ -3,7 +3,9 @@ import {
   groupLeadershipListResponseSchema,
   type GroupLeadershipAssignment,
 } from "../../../../../shared/schemas/groups";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { RowActions } from "../../../../components/RowActions";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson } from "../../../../shared/api-client";
@@ -18,10 +20,19 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
   );
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   async function revoke(assignment: GroupLeadershipAssignment): Promise<void> {
     if (assignment.inherited) return;
-    if (!confirm(`Remove ${assignment.userName} as ${GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId].toLowerCase()}?`))
+    const roleLabel = GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId].toLowerCase();
+    if (
+      !(await confirmAction({
+        title: `Remove ${assignment.userName} as ${roleLabel}?`,
+        body: "This removes only this local assignment; leadership inherited from a parent group is not affected.",
+        consequences: [`${assignment.userName} immediately loses ${roleLabel} authority in this group`],
+        confirmLabel: "Remove from role",
+      }))
+    )
       return;
     setRevokingId(assignment.userRoleId);
     setMutationError(null);
@@ -40,17 +51,22 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
     }
   }
 
-  if (leadership.loading && !leadership.data) return <Spinner />;
+  if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
 
   return (
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white d-flex flex-wrap justify-content-between gap-2">
+      <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
         <span class="fw-semibold">Effective leadership</span>
-        {leadership.data && (
-          <span class="small text-muted">
-            {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
-          </span>
-        )}
+        <div class="d-flex align-items-center gap-2">
+          {leadership.data && (
+            <span class="small text-muted">
+              {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
+            </span>
+          )}
+          <button type="button" class="btn btn-sm btn-success" onClick={() => setShowAddForm(true)}>
+            Add leadership
+          </button>
+        </div>
       </div>
       <div class="card-body d-flex flex-column gap-3">
         <p class="text-muted small mb-0">
@@ -77,19 +93,31 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
                 </div>
               </div>
               {!assignment.inherited && (
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger"
-                  disabled={revokingId !== null}
-                  onClick={() => void revoke(assignment)}
-                >
-                  {revokingId === assignment.userRoleId ? "Removing…" : "Remove"}
-                </button>
+                <RowActions
+                  label={`Actions for ${assignment.userName}`}
+                  actions={[
+                    {
+                      key: "remove",
+                      label: revokingId === assignment.userRoleId ? "Removing…" : "Remove",
+                      onSelect: () => void revoke(assignment),
+                      disabled: revokingId !== null,
+                    },
+                  ]}
+                />
               )}
             </div>
           ))}
         </div>
-        <GroupLeadershipAssignmentForm groupId={groupId} onAssigned={leadership.reload} />
+        {showAddForm && (
+          <GroupLeadershipAssignmentForm
+            groupId={groupId}
+            onAssigned={async () => {
+              await leadership.reload();
+              setShowAddForm(false);
+            }}
+            onCancel={() => setShowAddForm(false)}
+          />
+        )}
       </div>
     </div>
   );

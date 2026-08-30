@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { postJson } from "../../../../shared/api-client";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { toast } from "../../ui";
 import { emailReminderRunResponseSchema } from "../../../../../shared/schemas/email-reminders";
 import {
@@ -55,6 +56,25 @@ export function OperationActions({
     return mode === "preview"
       ? `${result.processed} reminder candidate(s) resolved.`
       : `${result.processed} reminder action(s) queued.`;
+  }
+
+  async function runRetention(): Promise<void> {
+    const confirmed = await confirmAction({
+      title: "Run retention redaction for every currently eligible event and user?",
+      body: "This is permanent and cannot be undone.",
+      consequences: [
+        "Personal data on eligible past-event registrations is permanently redacted",
+        "Eligible user accounts past their retention window are permanently redacted",
+        "Redacted records cannot be recovered afterward",
+      ],
+      confirmLabel: "Run retention redaction",
+      typedConfirmation: "REDACT",
+    });
+    if (!confirmed) return;
+    await run("retention", async () => {
+      const result = await postJson("/api/v1/retention/runs", { mode: "execute" }, retentionRunResponseSchema);
+      return `Redacted ${result.redactedRegistrations} registration(s) and ${result.redactedUsers} user(s).`;
+    });
   }
 
   async function membershipBatch(batchKey: MembershipBatchKey): Promise<string> {
@@ -122,17 +142,7 @@ export function OperationActions({
             type="button"
             class="btn btn-sm btn-outline-danger"
             disabled={busy !== null}
-            onClick={() => {
-              if (!window.confirm("Run retention redaction for every currently eligible event and user?")) return;
-              void run("retention", async () => {
-                const result = await postJson(
-                  "/api/v1/retention/runs",
-                  { mode: "execute" },
-                  retentionRunResponseSchema,
-                );
-                return `Redacted ${result.redactedRegistrations} registration(s) and ${result.redactedUsers} user(s).`;
-              });
-            }}
+            onClick={() => void runRetention()}
           >
             Run retention redaction
           </button>

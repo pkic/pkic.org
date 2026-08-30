@@ -23,6 +23,7 @@ import { organizationContentReviewSchema } from "../../../shared/schemas/organiz
 import type {
   voteTypeSchema,
   candidateSummarySchema,
+  consultationFormSchema,
   memberVoteSchema,
   proposalSummarySchema,
   motionVoteResultSchema,
@@ -55,3 +56,6 @@ export type ElectionVoteResult = z.infer<typeof electionVoteResultSchema>;
 export type MemberVote = z.infer<typeof memberVoteSchema>;
 
 export type VoteProposal = z.infer<typeof proposalSummarySchema>;
+
+/** A consultation's form, as the member vote detail returns it. */
+export type ConsultationFormDefinition = z.infer<typeof consultationFormSchema>;

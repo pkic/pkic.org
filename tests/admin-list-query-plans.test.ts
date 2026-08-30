@@ -9,8 +9,10 @@ import {
   buildManagedEventsPageQuery,
 } from "../functions/_lib/services/events/catalog";
 import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
+import { buildUserOrganizationsPageQuery } from "../functions/_lib/services/user-organizations";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
+import { insertOrganization, insertUser, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 
 async function explainOffsetPage(query: OffsetPageQuery) {
   const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
@@ -128,5 +130,24 @@ describe("admin list D1 query plans", () => {
     const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
     expect(projectionPlan).toContain("idx_group_memberships_group_active");
     expect(projectionPlan).toContain("idx_groups_parent_active");
+  });
+
+  it("counts a user's represented organizations through the representative-user index", async () => {
+    const userId = await insertUser(env.DB, "query-plan-user@example.test");
+    const organizationId = await insertOrganization(env.DB, "Query Plan Org");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
+
+    const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(
+      buildUserOrganizationsPageQuery(userId, { q: "Query", sort: "name", limit: 10, offset: 0 }),
+    );
+
+    expect(pageSql).toMatch(/member_category_assignments/i);
+    expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM organization_representatives r/i);
+    expect(countSql).not.toMatch(/member_category_assignments/i);
+    expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
+    expect(countBindings).toEqual(bindings);
+    const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
+    expect(projectionPlan).toContain("idx_organization_representatives_user_active");
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   formCreateResponseSchema,
   formDeleteResponseSchema,
@@ -21,7 +21,8 @@ import {
   eventRegistrationStatusLabel,
 } from "../../../../shared/schemas/event-registrations";
 import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-client";
-import { ApiDataTable, type ApiTableActions } from "../../ApiDataTable";
+import { ApiDataTable } from "../../ApiDataTable";
+import { confirmAction } from "../../ConfirmDialog";
 import { ErrorAlert } from "../../ErrorAlert";
 import { Spinner } from "../../Spinner";
 import { Tabs } from "../../Tabs";
@@ -152,7 +153,16 @@ export function FormManagementDetail({
   }, [load]);
 
   async function remove(): Promise<void> {
-    if (!window.confirm(`Archive or delete form ${formKey}?`)) return;
+    const confirmed = await confirmAction({
+      title: `Archive or delete "${detail?.form.title ?? formKey}"?`,
+      consequences: [
+        "A form with existing responses is archived and kept for records",
+        "A form with no responses is deleted permanently",
+      ],
+      confirmLabel: "Archive or delete form",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try {
       const result = await deleteJson(base, formDeleteResponseSchema);
       notify?.(result.message ?? `Form ${result.action}`, "success");
@@ -163,7 +173,7 @@ export function FormManagementDetail({
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading form…" />;
   if (error) return <ErrorAlert error={error} />;
   if (!detail) return null;
   const canManageForm = canWrite && detail.form.scope_type !== "community";
@@ -233,48 +243,53 @@ export function FormManagementDetail({
   );
 }
 
+/** Distinct create-form view: replaces the forms list rather than layering above it. */
+export function FormManagementCreate({
+  onCreated,
+  onCancel,
+  notify,
+}: {
+  onCreated: (formKey: string) => void;
+  onCancel: () => void;
+  notify?: (message: string, kind: "success" | "error") => void;
+}) {
+  return (
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+          ← All forms
+        </button>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">New form</h6>
+        </div>
+        <div class="card-body">
+          <FormDefinitionManagementEditor
+            mode="create"
+            detail={null}
+            createEndpoint="/api/v1/forms"
+            onSaved={onCreated}
+            onCancel={onCancel}
+            notify={notify}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FormManagementList({
   canWrite,
   onOpenForm,
-  notify,
+  onCreateNew,
 }: {
   canWrite: boolean;
   onOpenForm: (formKey: string) => void;
-  notify?: (message: string, kind: "success" | "error") => void;
+  onCreateNew?: () => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const actions = useRef<ApiTableActions | null>(null);
-
   return (
     <div>
-      {canWrite && (
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
-            New form
-          </button>
-        </div>
-      )}
-      {creating && (
-        <div class="card mb-3">
-          <div class="card-header">
-            <h6 class="mb-0">New form</h6>
-          </div>
-          <div class="card-body">
-            <FormDefinitionManagementEditor
-              mode="create"
-              detail={null}
-              createEndpoint="/api/v1/forms"
-              onSaved={(key) => {
-                setCreating(false);
-                void actions.current?.reload();
-                onOpenForm(key);
-              }}
-              onCancel={() => setCreating(false)}
-              notify={notify}
-            />
-          </div>
-        </div>
-      )}
       <ApiDataTable
         endpoint="/api/v1/forms"
         responseSchema={formsListResponseSchema}
@@ -284,7 +299,7 @@ export function FormManagementList({
         initialPageSize={25}
         initialSort="title"
         searchPlaceholder="Search forms…"
-        actionsRef={actions}
+        createAction={canWrite && onCreateNew ? { label: "New form", onSelect: onCreateNew } : undefined}
         columns={[
           { header: "Key", cell: (form: FormSummary) => <span class="mono small">{form.key}</span> },
           {

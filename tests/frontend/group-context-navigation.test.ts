@@ -7,8 +7,8 @@ describe("selected-group capability navigation", () => {
       "overview",
       "events",
       "meetings",
-      "forms",
       "votes",
+      "forms",
       "mailing-lists",
     ]);
   });
@@ -16,16 +16,16 @@ describe("selected-group capability navigation", () => {
   it("exposes management views without manufacturing participation", () => {
     expect(groupContextNavigation(["view", "manage"]).map((item) => item.key)).toEqual([
       "overview",
+      "members",
       "events",
       "meetings",
-      "forms",
       "votes",
-      "stats",
+      "forms",
       "mailing-lists",
+      "leadership",
+      "stats",
       "audit",
       "settings",
-      "members",
-      "leadership",
     ]);
   });
 

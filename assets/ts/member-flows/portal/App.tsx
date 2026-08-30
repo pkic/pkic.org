@@ -18,6 +18,7 @@ import {
   clearAuth,
 } from "./state";
 import { Login } from "./shell/Login";
+import { ConfirmDialogHost } from "../../components/ConfirmDialog";
 import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
@@ -110,7 +111,12 @@ export function App() {
   }
 
   if (isAuthed.value) {
-    return <PortalShell />;
+    return (
+      <>
+        <PortalShell />
+        <ConfirmDialogHost />
+      </>
+    );
   }
 
   if (portalHashPath(window.location.hash).startsWith("/sponsors")) {
