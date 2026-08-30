@@ -8,6 +8,8 @@ import {
   memberVoteSchema,
   submitBallotResponseSchema,
   submitBallotSchema,
+  submitConsultationResponseSchema,
+  submitConsultationResponseResponseSchema,
   voteFullResultSchema,
   voteSummaryFieldsSchema,
   votesListQuerySchema,
@@ -86,6 +88,28 @@ export const groupVoteBallotRouteSchema = {
     "403": jsonErrorResponse("The selected group does not provide participation access."),
     "409": jsonErrorResponse("Vote eligibility or state changed."),
     "422": jsonErrorResponse("Invalid ballot."),
+  },
+};
+
+export const groupVoteConsultationResponseRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Record a consultation response through one group context",
+  description:
+    "A consultation is answered by submitting its form. Eligibility, the window, and one response per represented Member are the same rules a ballot follows; only what is recorded differs.",
+  request: {
+    params: groupVoteParamsSchema,
+    body: { content: { "application/json": { schema: submitConsultationResponseSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Response recorded.",
+      content: { "application/json": { schema: submitConsultationResponseResponseSchema } },
+    },
+    "403": jsonErrorResponse("The selected group does not provide participation access."),
+    "409": jsonErrorResponse("Vote eligibility or state changed."),
+    "400": jsonErrorResponse("The answers do not satisfy the form, reported exactly as any other form submission."),
+    "422": jsonErrorResponse("This vote takes a ballot rather than a form response."),
   },
 };
 

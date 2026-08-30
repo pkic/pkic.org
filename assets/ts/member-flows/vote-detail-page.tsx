@@ -50,7 +50,10 @@ function formatDate(iso: string): string {
 }
 
 function MotionResult({ result }: { result: MotionResultData }) {
-  const { outcome } = result;
+  // A consultation result carries no outcome at all — it gathers preference
+  // rather than deciding anything — so read it defensively rather than
+  // assuming every result shape has one.
+  const outcome = "outcome" in result ? result.outcome : undefined;
   const counts = "counts" in result ? result.counts : undefined;
   const totalBallots = "totalBallots" in result ? result.totalBallots : undefined;
 

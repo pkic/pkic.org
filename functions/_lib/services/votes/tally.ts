@@ -158,3 +158,93 @@ export function tallyElectionRoundFromCounts(
   const eliminatedCandidateIds = lowestIds.length === standingCandidateIds.length ? [] : lowestIds;
   return { round, counts: normalizedCounts, eliminatedCandidateIds, winnerCandidateId: null };
 }
+
+/**
+ * A consultation is counted per question, per option.
+ *
+ * There is no threshold and no outcome: a consultation gathers preference, it
+ * does not carry a motion, so reporting a decision would invent one nobody
+ * took. Free-text questions are recorded as responses but never tallied —
+ * counting distinct prose would be noise, not a result.
+ */
+export interface ConsultationQuestionResult {
+  fieldId: string;
+  key: string;
+  label: string;
+  counts: Record<string, number>;
+  /** Null when nothing was answered, or when the top options tie. */
+  leadingOption: string | null;
+  answered: number;
+}
+
+export interface ConsultationResult {
+  formId: string;
+  questions: ConsultationQuestionResult[];
+  /** Responses, not answers: one per represented Member who took part. */
+  totalResponses: number;
+  quorum: { percent: number; eligible: number; required: number; met: boolean } | null;
+  quorumMet: boolean;
+}
+
+export interface ConsultationTallyQuestion {
+  fieldId: string;
+  key: string;
+  label: string;
+  optionValues: string[];
+  multiple: boolean;
+}
+
+export function computeConsultationResult(
+  formId: string,
+  questions: ConsultationTallyQuestion[],
+  responses: Array<Record<string, unknown>>,
+  quorum: QuorumRequirement | null = null,
+): ConsultationResult {
+  const questionResults = questions.map((question) => {
+    const counts: Record<string, number> = Object.fromEntries(question.optionValues.map((value) => [value, 0]));
+    let answered = 0;
+    for (const response of responses) {
+      const answer = response[question.key];
+      if (answer === undefined || answer === null) continue;
+      const chosen = question.multiple ? (Array.isArray(answer) ? answer : []) : [answer];
+      if (chosen.length === 0) continue;
+      answered += 1;
+      for (const value of chosen) {
+        if (typeof value !== "string") continue;
+        // An answer naming an option that has since been removed entirely is
+        // still reported: the person did answer, and dropping it would change
+        // the counts and the participation silently.
+        counts[value] = (counts[value] ?? 0) + 1;
+      }
+    }
+    const highest = Math.max(0, ...Object.values(counts));
+    const leaders = Object.entries(counts).filter(([, count]) => count === highest && count > 0);
+    return {
+      fieldId: question.fieldId,
+      key: question.key,
+      label: question.label,
+      counts,
+      leadingOption: leaders.length === 1 ? leaders[0][0] : null,
+      answered,
+    };
+  });
+
+  const totalResponses = responses.length;
+  const quorumState = quorum
+    ? {
+        percent: quorum.percent,
+        eligible: quorum.eligible,
+        required: Math.ceil((quorum.eligible * quorum.percent) / 100),
+        met: false,
+      }
+    : null;
+  if (quorumState) quorumState.met = totalResponses >= quorumState.required;
+
+  return {
+    formId,
+    questions: questionResults,
+    totalResponses,
+    quorum: quorumState,
+    quorumMet: quorumState ? quorumState.met : true,
+  };
+}

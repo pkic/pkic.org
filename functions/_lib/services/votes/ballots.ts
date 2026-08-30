@@ -9,13 +9,14 @@ import { MOTION_CHOICES, eligibleCategoriesOf, getVoteRowOrThrow, type BallotCho
 import { exactVoteGroupMembership, voteParticipationGroupPredicate } from "./vote-access";
 import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import { voteCategoryEligibilitySql, voteMemberNotExcludedSql } from "./electorate";
+import { loadConsultationForm } from "./question";
 
-interface EligibleCapacity {
+export interface EligibleCapacity {
   memberId: string;
   membershipCategory: string;
 }
 
-interface BallotActor {
+export interface BallotActor {
   userId: string;
 }
 
@@ -27,12 +28,26 @@ async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: 
       [choice, vote.id],
     );
     if (!candidate) throw new AppError(422, "INVALID_CHOICE", "choice must be a standing candidate id");
-  } else if (!MOTION_CHOICES.has(choice as BallotChoice)) {
+    return;
+  }
+
+  // A consultation that asks a form does not take a single choice at all —
+  // its answers are a form submission, recorded through the consultation
+  // response path rather than as a ballot.
+  if (await loadConsultationForm(db, vote)) {
+    throw new AppError(
+      422,
+      "VOTE_TAKES_A_FORM_RESPONSE",
+      "This consultation is answered by submitting its form, not by casting a single choice",
+    );
+  }
+
+  if (!MOTION_CHOICES.has(choice as BallotChoice)) {
     throw new AppError(422, "INVALID_CHOICE", "choice must be one of in_favor, opposed, abstain");
   }
 }
 
-function assertVoteOpen(vote: VoteRow, now: string): void {
+export function assertVoteOpen(vote: VoteRow, now: string): void {
   if (!isVoteAcceptingBallots(vote, now)) {
     throw new AppError(409, "VOTE_NOT_OPEN", "This vote is not currently open for ballots");
   }
@@ -43,7 +58,7 @@ function categoryAllowed(vote: VoteRow, category: string): boolean {
   return !restriction || restriction.includes(category);
 }
 
-async function resolvePerMemberCapacity(
+export async function resolvePerMemberCapacity(
   db: DatabaseLike,
   vote: VoteRow,
   member: BallotActor,
@@ -88,7 +103,7 @@ async function resolvePerMemberCapacity(
   return { memberId: capacity.member_id, membershipCategory: capacity.category_code };
 }
 
-async function resolvePerPersonCapacity(
+export async function resolvePerPersonCapacity(
   db: DatabaseLike,
   vote: VoteRow,
   member: BallotActor,

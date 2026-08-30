@@ -22,6 +22,8 @@ function voteSummary() {
     ownerGroupName: "Architecture Committee",
     electorateMode: "per_member" as const,
     thresholdType: "simple_majority" as const,
+    questionFormId: null,
+    questionForm: null,
     quorumPercent: null,
     tieBreakMode: "none" as const,
     excludedMemberIds: null,
