@@ -46,7 +46,9 @@ interface GrantRow {
 /**
  * Resolves the full set of contextual permissions for a user from
  * `user_roles` (via `role_permissions`) and `permission_grants`, excluding
- * expired/revoked rows. Roles are bound only to immutable `user_id` values;
+ * expired/revoked rows. Roles are bound to immutable `user_id` values, and
+ * capacity-bound group leadership additionally binds the represented
+ * `member_id`;
  * pre-provisioning creates a minimal user rather than attaching authorization
  * to a reusable email address (see consolidated migration 0035).
  *

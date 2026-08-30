@@ -28,6 +28,7 @@ import {
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
 } from "../../../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike, StatementLike } from "../../../types";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
 
 export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
@@ -44,6 +45,7 @@ export interface CreateMemberApplicationInput {
   appBaseUrl: string;
   joinCapabilityId: string;
   applicantKind: "organization" | "individual";
+  applicantUserId: string | null;
 }
 
 export interface CreateMemberApplicationResult {
@@ -116,17 +118,37 @@ export async function createMemberApplication(
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
   const statements: StatementLike[] = [
+    ...(input.applicantUserId
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 FROM users user
+                   WHERE user.id = ? AND user.active = 1
+                     AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+                     AND (
+                       user.normalized_email = ?
+                       OR EXISTS (
+                         SELECT 1 FROM user_emails alias
+                          WHERE alias.user_id = user.id
+                            AND alias.normalized_email = ?
+                            AND alias.verified_at IS NOT NULL
+                       )
+                     )`,
+            bindings: [input.applicantUserId, input.applicantEmail, input.applicantEmail],
+          }),
+        ]
+      : []),
     ...formSubmission.statements,
     db
       .prepare(
         `INSERT INTO member_applications
-           (id, applicant_email, applicant_name, organization_name, organization_domain,
+           (id, applicant_user_id, applicant_email, applicant_name, organization_name, organization_domain,
             membership_category, form_submission_id, join_capability_id, stage, stage_entered_at,
             manage_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
       )
       .bind(
         id,
+        input.applicantUserId,
         input.applicantEmail,
         input.applicantName,
         isIndividual ? null : (input.organizationName ?? null),
@@ -186,6 +208,13 @@ export async function createMemberApplication(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "MEMBER_JOIN_IDENTITY_CHANGED",
+        "The verified account email changed before the application was submitted",
+      );
+    }
     return translateDomainClaimConflict(db, organizationDomain, id, error);
   }
 

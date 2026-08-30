@@ -191,7 +191,8 @@ export async function approveApplication(
     db
       .prepare(
         `UPDATE member_applications
-         SET stage = 'approved', stage_entered_at = ?, transition_revision = transition_revision + 1,
+         SET stage = 'approved', applicant_user_id = ?, member_id = ?, stage_entered_at = ?,
+             transition_revision = transition_revision + 1,
              on_hold_reminder_sent_at = NULL, updated_at = ?
          WHERE id = ? AND stage = ? AND transition_revision = ?
            AND (? = 0 OR NOT EXISTS (
@@ -199,7 +200,16 @@ export async function approveApplication(
              WHERE application_id = member_applications.id AND decision = 'decline'
            ))`,
       )
-      .bind(now, now, application.id, fromStage, application.transition_revision, requireNoEcDecline ? 1 : 0),
+      .bind(
+        member.userId,
+        member.membershipId,
+        now,
+        now,
+        application.id,
+        fromStage,
+        application.transition_revision,
+        requireNoEcDecline ? 1 : 0,
+      ),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)

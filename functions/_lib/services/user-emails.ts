@@ -37,6 +37,7 @@ const USER_EMAIL_SORT_EXPRESSIONS: Record<(typeof USER_EMAILS_SORT_COLUMNS)[numb
 export interface UserEmailOwner {
   userId: string;
   kind: "primary" | "secondary" | "pending";
+  verified: number;
 }
 
 /** Recognizes database-boundary collisions for the shared email namespace. */
@@ -86,15 +87,15 @@ export async function listUserEmails(
 export async function findUserEmailOwner(db: DatabaseLike, normalizedEmail: string): Promise<UserEmailOwner | null> {
   return first<UserEmailOwner>(
     db,
-    `SELECT id AS userId, 'primary' AS kind
+    `SELECT id AS userId, 'primary' AS kind, email_verified_at IS NOT NULL AS verified
        FROM users
       WHERE normalized_email = ?
       UNION ALL
-     SELECT user_id AS userId, 'secondary' AS kind
+     SELECT user_id AS userId, 'secondary' AS kind, verified_at IS NOT NULL AS verified
        FROM user_emails
       WHERE normalized_email = ?
       UNION ALL
-     SELECT id AS userId, 'pending' AS kind
+     SELECT id AS userId, 'pending' AS kind, 0 AS verified
        FROM users
       WHERE pending_email = ?
       LIMIT 1`,
@@ -166,15 +167,40 @@ export async function removeUserEmail(
   userId: string,
   emailId: string,
 ): Promise<void> {
-  const existing = await first<{ id: string }>(db, "SELECT id FROM user_emails WHERE id = ? AND user_id = ?", [
-    emailId,
-    userId,
-  ]);
+  const existing = await first<{ id: string; email: string }>(
+    db,
+    "SELECT id, email FROM user_emails WHERE id = ? AND user_id = ?",
+    [emailId, userId],
+  );
   if (!existing) throw new AppError(404, "EMAIL_NOT_FOUND", "Secondary email not found for this user");
 
+  const now = nowIso();
   const authorizedDb = authorizedUserMutationDb(db, actor, ["users:write"]);
-  await authorizedDb.batch([
-    authorizedDb.prepare("DELETE FROM user_emails WHERE id = ? AND user_id = ?").bind(emailId, userId),
-    prepareAuditLogAfterOneChange(authorizedDb, "admin", actor.id, "user_email_removed", "user", userId, { emailId }),
-  ]);
+  try {
+    await authorizedDb.batch([
+      authorizedDb
+        .prepare(
+          `UPDATE organization_representatives
+              SET email_id = NULL, updated_at = ?
+            WHERE email_id = ? AND user_id = ?`,
+        )
+        .bind(now, emailId, userId),
+      authorizedDb.prepare("DELETE FROM user_emails WHERE id = ? AND user_id = ?").bind(emailId, userId),
+      prepareAuditLogAfterOneChange(
+        authorizedDb,
+        "admin",
+        actor.id,
+        "user_email_removed",
+        "user",
+        userId,
+        { emailId, email: existing.email, representationEmailFallback: "primary" },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "EMAIL_CHANGED", "The secondary email changed while it was being removed");
+    }
+    throw error;
+  }
 }

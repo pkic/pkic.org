@@ -11,7 +11,6 @@ import { nowIso } from "../utils/time";
 import { stringifyJson, parseJsonSafe } from "../utils/json";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
 import { AppError } from "../errors";
-import { normalizeEmail } from "../validation";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
@@ -351,7 +350,7 @@ export async function listMyApplications(
     ? buildD1TextSearchFilter(params.q, ["membership_category", "stage", "organization_name"])
     : null;
   const where = search ? ` AND ${search.sql}` : "";
-  const bindings = [member.email, ...(search?.bindings ?? [])];
+  const bindings = [member.memberId, member.userId, ...(search?.bindings ?? [])];
   const orderBy = resolveMappedOrderBy(
     params.sort,
     { createdAt: "created_at", stage: "stage" },
@@ -366,7 +365,7 @@ export async function listMyApplications(
   }>(db, {
     sql: `SELECT id, stage, membership_category, created_at
             FROM member_applications
-            WHERE applicant_email = ?${where}`,
+            WHERE (member_id = ? OR (member_id IS NULL AND applicant_user_id = ?))${where}`,
     bindings,
     orderBy,
     limit: params.limit,
@@ -412,8 +411,8 @@ export interface MyApplicationDetail {
 /**
  * "My Application" tab: original application, status history, and
  * timeline. Scoped to the caller's own application(s) by matching
- * `applicant_email` against the member session's email — current-user routes
- * never accepts a target id that isn't independently ownership-checked
+ * `member_id` against the selected Member capacity — current-user routes
+ * never accept a target id that isn't independently ownership-checked
  * (see this file's header comment).
  */
 export async function getMyApplicationDetail(
@@ -422,7 +421,10 @@ export async function getMyApplicationDetail(
   applicationId: string,
 ): Promise<MyApplicationDetail> {
   const application = await getMemberApplicationById(db, applicationId);
-  if (!application || normalizeEmail(application.applicant_email) !== normalizeEmail(member.email)) {
+  const ownedBySelectedCapacity = application?.member_id === member.memberId;
+  const ownedByIdentityBeforeCapacityExists =
+    application?.member_id === null && application.applicant_user_id === member.userId;
+  if (!application || (!ownedBySelectedCapacity && !ownedByIdentityBeforeCapacityExists)) {
     throw new AppError(404, "NOT_FOUND", "Application not found");
   }
 

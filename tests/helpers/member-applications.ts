@@ -46,12 +46,14 @@ export async function verifiedMemberApplicationPayload<T extends Record<string, 
   );
   return {
     ...payload,
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, capability, 15 * 60),
+    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId: null }, 15 * 60),
   };
 }
 
 export interface SeedMemberApplicationOptions {
   id?: string;
+  applicantUserId?: string | null;
+  memberId?: string | null;
   applicantEmail?: string;
   applicantName?: string;
   organizationName?: string | null;
@@ -80,13 +82,15 @@ export async function seedMemberApplication(options: SeedMemberApplicationOption
 
   await env.DB.prepare(
     `INSERT INTO member_applications
-       (id, applicant_email, applicant_name, organization_name, organization_domain,
+       (id, applicant_user_id, member_id, applicant_email, applicant_name, organization_name, organization_domain,
         membership_category, form_submission_id, stage, stage_entered_at,
         manage_token_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
+      options.applicantUserId ?? null,
+      options.memberId ?? null,
       applicantEmail,
       options.applicantName ?? "Applicant Name",
       options.organizationName === undefined ? "Example Org" : options.organizationName,
