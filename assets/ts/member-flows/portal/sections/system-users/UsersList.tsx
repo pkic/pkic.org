@@ -1,8 +1,9 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { normalizeProfileLinks } from "../../../../shared/widgets/profile-links";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
+import { RowActions } from "../../../../components/RowActions";
 import { patchJson } from "../../../../shared/api-client";
-import { portalAvatarInitials } from "../../shell/PortalNavigationShell";
 import { fmt, toast } from "../../ui";
 import {
   userUpdateResponseSchema,
@@ -10,7 +11,12 @@ import {
   type UserListItem,
 } from "../../../../../shared/schemas/user-management";
 
-const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
+/** Only noteworthy roles get a label; the default "user" stays quiet. */
+function roleStatus(role: string): string | null {
+  if (role === "admin") return "Administrator";
+  if (role === "guest") return "Guest";
+  return null;
+}
 
 export function UsersList({
   onViewUser,
@@ -25,15 +31,38 @@ export function UsersList({
   const [typeFilter, setTypeFilter] = useState("");
   const tableRef = useRef<ApiTableActions | null>(null);
 
-  async function updateRole(userId: string, newRole: string, select: HTMLSelectElement) {
-    const previousRole = select.dataset.currentRole ?? select.value;
+  async function updateRole(user: UserListItem, newRole: "admin" | "user"): Promise<void> {
+    const name = personDisplayName(user.first_name, user.last_name, user.email);
+    const confirmed = await confirmAction(
+      newRole === "admin"
+        ? {
+            title: `Make ${name} an administrator?`,
+            consequences: [
+              "They gain every administrative permission across the portal",
+              "The change takes effect on their next request",
+            ],
+            confirmLabel: "Grant administrator role",
+            tone: "primary",
+          }
+        : {
+            title: `Remove the administrator role from ${name}?`,
+            consequences: [
+              "They keep their account and any individually granted permissions",
+              "They lose the blanket administrative access immediately",
+            ],
+            confirmLabel: "Revoke administrator role",
+          },
+    );
+    if (!confirmed) return;
     try {
-      await patchJson(`/api/v1/users/${encodeURIComponent(userId)}`, { role: newRole }, userUpdateResponseSchema);
-      select.dataset.currentRole = newRole;
-      toast(`Role updated to '${newRole}'`, "success");
+      await patchJson(`/api/v1/users/${encodeURIComponent(user.id)}`, { role: newRole }, userUpdateResponseSchema);
+      toast(
+        newRole === "admin" ? `${name} is now an administrator` : `Administrator role removed from ${name}`,
+        "success",
+      );
+      await tableRef.current?.reload();
     } catch (error) {
       toast((error as Error).message, "error");
-      select.value = previousRole;
     }
   }
 
@@ -51,6 +80,7 @@ export function UsersList({
         <>
           <select
             class="form-select form-select-sm w-auto"
+            aria-label="Filter by role"
             value={roleFilter}
             onChange={(event) => {
               setRoleFilter((event.target as HTMLSelectElement).value);
@@ -58,12 +88,13 @@ export function UsersList({
             }}
           >
             <option value="">All roles</option>
-            <option value="admin">Admin</option>
-            <option value="user">User</option>
-            <option value="guest">Guest</option>
+            <option value="admin">Administrators</option>
+            <option value="user">Users</option>
+            <option value="guest">Guests</option>
           </select>
           <select
             class="form-select form-select-sm w-auto"
+            aria-label="Filter by participation"
             value={typeFilter}
             onChange={(event) => {
               setTypeFilter((event.target as HTMLSelectElement).value);
@@ -79,25 +110,15 @@ export function UsersList({
       )}
       columns={[
         {
-          header: "Email",
-          cell: (user) => <span>{user.email}</span>,
-          className: "mono adm-user-email",
-          sort: { asc: "email", desc: "-email" },
-        },
-        {
-          header: "Name",
-          cell: (user) => {
-            const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
-            return (
-              <div class="d-flex align-items-center gap-2">
-                <span class="portal-user-avatar portal-user-avatar--table" aria-hidden="true">
-                  {user.headshotUrl ? <img src={user.headshotUrl} alt="" /> : portalAvatarInitials(name)}
-                </span>
-                <span>{[user.first_name, user.last_name].filter(Boolean).join(" ") || "—"}</span>
-              </div>
-            );
-          },
-          className: "fw-semibold",
+          header: "Person",
+          cell: (user) => (
+            <PersonCell
+              firstName={user.first_name}
+              lastName={user.last_name}
+              email={user.email}
+              headshotUrl={user.headshotUrl}
+            />
+          ),
           sort: { asc: "last_name", desc: "-last_name" },
         },
         {
@@ -107,12 +128,12 @@ export function UsersList({
           sort: { asc: "organization_name", desc: "-organization_name" },
         },
         {
-          header: "Type",
+          header: "Participation",
           cell: (user) => {
             if (user.membership) {
               return (
                 <>
-                  <span class="badge text-bg-success mono">{user.membership.membershipCategory}</span>
+                  <span class="badge text-bg-success">{user.membership.membershipCategory}</span>
                   {user.membership.organizationName && (
                     <>
                       {" "}
@@ -124,67 +145,48 @@ export function UsersList({
             }
             if (user.type === "event_attendee") {
               return (
-                <span class="badge text-bg-info">
+                <span class="small">
                   Event attendee · {user.eventParticipationCount} event{user.eventParticipationCount === 1 ? "" : "s"}
                 </span>
               );
             }
-            return <span class="text-muted small fst-italic">Contact</span>;
+            return <span class="text-muted small">Contact only</span>;
           },
-        },
-        {
-          header: "Links",
-          cell: (user) => {
-            const count = normalizeProfileLinks(user.links).length;
-            return count > 0 ? (
-              <span class="badge text-bg-info" title={`${count} profile link${count === 1 ? "" : "s"}`}>
-                {count}
-              </span>
-            ) : (
-              <span class="text-muted small">—</span>
-            );
-          },
-          className: "text-center",
-        },
-        {
-          header: "Role",
-          cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>,
-          sort: { asc: "role", desc: "-role" },
         },
         {
           header: "Since",
           cell: (user) => fmt(user.created_at),
-          className: "mono",
+          className: "small text-muted",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
-        ...(canWrite && canGrantAccess
-          ? [
-              {
-                header: "",
-                cell: (user: UserListItem) => (
-                  <div onClick={(event) => event.stopPropagation()}>
-                    <select
-                      class="form-select form-select-sm d-inline-block adm-user-role-select"
-                      value={user.role}
-                      data-current-role={user.role}
-                      onChange={(event) => {
-                        event.stopPropagation();
-                        void updateRole(
-                          user.id,
-                          (event.target as HTMLSelectElement).value,
-                          event.target as HTMLSelectElement,
-                        );
-                      }}
-                    >
-                      <option value="admin">admin</option>
-                      <option value="user">user</option>
-                      <option value="guest">guest</option>
-                    </select>
-                  </div>
-                ),
-              },
-            ]
-          : []),
+        {
+          header: "",
+          cell: (user) => (
+            <RowActions
+              label={`Actions for ${personDisplayName(user.first_name, user.last_name, user.email)}`}
+              status={roleStatus(user.role)}
+              actions={
+                canWrite && canGrantAccess
+                  ? user.role === "admin"
+                    ? [
+                        {
+                          key: "revoke-admin",
+                          label: "Revoke administrator role",
+                          onSelect: () => void updateRole(user, "user"),
+                        },
+                      ]
+                    : [
+                        {
+                          key: "grant-admin",
+                          label: "Grant administrator role",
+                          onSelect: () => void updateRole(user, "admin"),
+                        },
+                      ]
+                  : []
+              }
+            />
+          ),
+        },
       ]}
       empty="No users found"
       rowKey={(user) => user.id}

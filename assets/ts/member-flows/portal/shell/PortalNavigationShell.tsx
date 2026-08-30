@@ -21,15 +21,10 @@ interface PortalNavigationShellProps {
 }
 
 /** First letters of the first two name words; falls back to the first character. */
-export function portalAvatarInitials(displayName: string): string {
-  const words = displayName.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  return words
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase();
-}
+import { personInitials } from "../../../components/PersonCell";
+
+/** Kept as the shell-local name; the shared implementation lives in PersonCell. */
+export const portalAvatarInitials = personInitials;
 
 export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
   const [location, navigate] = useHashLocation();

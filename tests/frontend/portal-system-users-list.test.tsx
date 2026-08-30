@@ -63,16 +63,21 @@ afterEach(() => {
 });
 
 describe("portal System Users list permissions", () => {
-  it("hides the role action for users:write without access:grant", async () => {
+  it("hides the role actions for users:write without access:grant", async () => {
     const container = mount(false);
     await settle();
-    expect(container.querySelector(".adm-user-role-select")).toBeNull();
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
   });
 
-  it("shows the role action only when both permissions are present", async () => {
+  it("offers the administrator-role action only when both permissions are present", async () => {
     const container = mount(true);
     await settle();
-    expect(container.querySelector(".adm-user-role-select")).not.toBeNull();
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    trigger!.click();
+    await settle();
+    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(items).toEqual(["Grant administrator role"]);
   });
 
   it("renders initials when a user has no headshot, and an image when one is set", async () => {
