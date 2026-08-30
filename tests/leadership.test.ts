@@ -12,6 +12,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
@@ -299,14 +300,11 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
   // non-admin-role actor holding an access:grant permission_grant is allowed
   // to use the same leadership resource as an administrator.
   it("a non-admin-role staff user holding an access:grant permission_grant CAN create and list leadership positions", async () => {
-    const staffUserId = await insertUser("staff-with-grant@example.test");
+    // Someone who may hand out access but holds no admin role: the leadership
+    // resource must treat that grant as sufficient on its own.
+    const granter = await seedPersona(env.DB, "accessGranter");
+    const staffUserId = granter.userId;
     const targetUserId = await insertUser("board-target@example.test");
-    await env.DB.prepare(
-      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), staffUserId, adminId)
-      .run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-with-grant-token");
 
     const createResponse = await call(staffToken, "/api/v1/leadership/positions", {

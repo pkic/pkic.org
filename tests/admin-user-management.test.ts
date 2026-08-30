@@ -4,6 +4,8 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
+import { onlyPersona } from "./personas/catalog";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
@@ -158,19 +160,11 @@ describe("admin user deactivation", () => {
 
   it("does not let a users:write-only staff actor promote another account to admin", async () => {
     await setup();
-    const staffId = await seedUser(env.DB, "users-writer@example.test");
+    // Editing user records is not the same authority as making an
+    // administrator; only the first is granted here.
+    const writer = await seedPersona(env.DB, onlyPersona("users:write"));
     const targetId = await seedUser(env.DB, "promotion-target@example.test");
-    await env.DB.prepare(
-      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
-       VALUES (?, ?, 'users:write', ?, datetime('now'))`,
-    )
-      .bind(
-        crypto.randomUUID(),
-        staffId,
-        (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0].id,
-      )
-      .run();
-    const staffToken = await createAdminSession(env.DB, staffId, "users-writer-session");
+    const staffToken = writer.token!;
 
     const response = await app.fetch(
       adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }, staffToken),
