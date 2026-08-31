@@ -30,7 +30,7 @@ const root = process.cwd();
  * Deliberately NOT a baseline of tolerated violations — a surface is added
  * only after its violations are gone, so the gate always demands zero.
  */
-const scanned = ["assets/ts/ui", "assets/design"];
+const scanned = ["assets/ts/ui", "assets/design", "layouts/design"];
 
 /** Everything still on Bootstrap, measured by `--report` so the remaining
  *  distance is visible without pretending it is acceptable. */

@@ -91,6 +91,45 @@ browser fetches it only when the component is actually reached.
 Test what a visual specimen cannot show: what the control exposes to assistive
 technology, and what it does under keyboard.
 
+## Static-first constraints (phase 3)
+
+The endgame in the phase plan is that the same components serve the
+authenticated portal client-side and the public pages server-side, rendered by
+the application rather than the build. That only stays possible if every
+component is written for it from the start — retrofitting it means rewriting
+the library.
+
+Four rules, each with a test behind it rather than a promise:
+
+1. **No DOM access during render.** No `window`, `document`, `matchMedia` or
+   `localStorage` at module scope or in the render path. Reach for them in an
+   effect, which never runs on a server, and guard them even there:
+   `matchMedia` is absent in jsdom and in a Worker.
+   *Enforced by* `tests/frontend/design-ssr.test.tsx`, which renders every
+   primitive in a plain Node environment with no DOM globals at all.
+
+2. **Render purely from typed props.** A component takes its data as
+   parameters and fetches nothing. The same component then works with data
+   baked in at render time or fetched at runtime, which is what lets a page be
+   pre-rendered and hydrated.
+
+3. **Styles are plain CSS files addressable by URL.** No CSS-in-JS, no
+   build-coupled styling, and no inline `style` attributes — a server-rendered
+   page links the same stylesheets the client does.
+   *Enforced by* the SSR suite, which asserts no primitive emits a `style`
+   attribute, and by `scripts/check-design-isolation.mjs`.
+
+4. **The accessibility contract survives serialization.** ARIA relationships
+   are attributes, not runtime wiring, so they must be present in the markup
+   before any JavaScript runs.
+   *Enforced by* the SSR suite, which asserts `aria-invalid`,
+   `aria-describedby`, `aria-sort` and `<caption>` appear in the rendered
+   string.
+
+Interactivity is the one thing that legitimately needs the client: a Menu that
+never opens and a Dialog that never traps focus are correct server output. The
+markup must be right; the behaviour attaches on hydration.
+
 ## Gates
 
 | Command | What it protects |
