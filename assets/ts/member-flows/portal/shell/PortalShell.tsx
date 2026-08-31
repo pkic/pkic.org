@@ -445,7 +445,7 @@ export function PortalShell() {
                 path="/groups/:groupId/*?"
                 component={({ params }: { params: { groupId: string; "*"?: string } }) => {
                   const segments = (params["*"] ?? "").split("/").filter(Boolean).map(decodeURIComponent);
-                  const [view, resourceId, resourceTab] = segments;
+                  const [view, resourceId, resourceTab, resourceDetailId] = segments;
                   return (
                     <SectionWrapper>
                       <GroupWorkspace
@@ -453,6 +453,7 @@ export function PortalShell() {
                         view={view}
                         resourceId={resourceId}
                         resourceTab={resourceTab}
+                        resourceDetailId={resourceDetailId}
                       />
                     </SectionWrapper>
                   );

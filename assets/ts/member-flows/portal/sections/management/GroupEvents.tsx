@@ -21,11 +21,13 @@ export function GroupEvents({
   canManage = false,
   initialEventId,
   initialEventTab,
+  initialEventDetailId,
 }: {
   groupId: string;
   canManage?: boolean;
   initialEventId?: string;
   initialEventTab?: string;
+  initialEventDetailId?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
@@ -61,6 +63,7 @@ export function GroupEvents({
             event={detail.data.event}
             groupId={groupId}
             tab={initialEventTab}
+            detailId={initialEventDetailId}
             onUpdated={detail.reload}
           />
         )}

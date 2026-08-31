@@ -32,7 +32,7 @@ function attendanceTypeLabel(t: string): string {
 
 // ─── Main detail page ─────────────────────────────────────────────────────────
 
-export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: string }) {
+export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; regId: string; onBack?: () => void }) {
   const [, navigate] = usePortalHashLocation();
   const [resendStatus, setResendStatus] = useState("");
   const [openingManage, setOpeningManage] = useState(false);
@@ -109,7 +109,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     <div>
       {/* Back + header */}
       <div class="d-flex align-items-center gap-2 mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(eventRegistrationsViewPath(slug))}>
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          onClick={() => (onBack ? onBack() : navigate(eventRegistrationsViewPath(slug)))}
+        >
           ← Back
         </button>
         <h5 class="mb-0">{name}</h5>

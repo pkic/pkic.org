@@ -8,6 +8,10 @@ import { GroupEventProposals } from "../../assets/ts/member-flows/portal/section
 import { ProposalCoSpeakerInviteForm } from "../../assets/ts/components/proposals/ProposalCoSpeakerInviteForm";
 import type { ProposalReview } from "../../assets/shared/schemas/proposal-reviews";
 
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", vi.fn()],
+}));
+
 let container: HTMLElement | null = null;
 
 afterEach(() => {

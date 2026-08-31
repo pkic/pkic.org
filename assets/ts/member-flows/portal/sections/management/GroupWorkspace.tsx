@@ -106,12 +106,15 @@ export function GroupWorkspace({
   view = OVERVIEW_VIEW,
   resourceId,
   resourceTab,
+  resourceDetailId,
 }: {
   groupId: string;
   view?: string;
   resourceId?: string;
   /** A second URL segment below `resourceId`: the events, forms, and meetings views forward it as the resource's initial tab. */
   resourceTab?: string;
+  /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
+  resourceDetailId?: string;
 }) {
   const detail = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
@@ -180,6 +183,7 @@ export function GroupWorkspace({
                 canManage={canManage}
                 initialEventId={resourceId}
                 initialEventTab={resourceTab}
+                initialEventDetailId={resourceDetailId}
               />
             )}
             {view === "meetings" && (

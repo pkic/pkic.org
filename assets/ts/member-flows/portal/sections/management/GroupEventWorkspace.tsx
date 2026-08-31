@@ -15,6 +15,8 @@ import { fmt, formatEventWhen } from "../../ui";
 import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
+import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
+import { RegistrationDetailPage } from "../events/detail/RegistrationDetailPage";
 import { GroupEventCommunications } from "./GroupEventCommunications";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
@@ -72,12 +74,15 @@ export function GroupEventWorkspace({
   event,
   groupId,
   tab,
+  detailId,
   onUpdated,
 }: {
   event: GroupEvent;
   groupId: string;
   /** The URL-addressed tab segment, if any. Undefined selects the default tab. */
   tab?: string;
+  /** A URL-addressed resource inside the tab: a registration or proposal id, or a promoters sub-tab. */
+  detailId?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
   const [, navigate] = usePortalHashLocation();
@@ -181,13 +186,33 @@ export function GroupEventWorkspace({
             </>
           )}
 
-          {activeTab === "registrations" && (
-            <GroupEventRegistrations groupId={groupId} eventId={event.id} canVip={canManage} />
-          )}
+          {activeTab === "registrations" &&
+            (detailId ? (
+              <RegistrationDetailPage
+                slug={event.slug}
+                regId={detailId}
+                onBack={() => navigate(tabPath("registrations"))}
+              />
+            ) : (
+              <GroupEventRegistrations groupId={groupId} eventId={event.id} canVip={canManage} />
+            ))}
 
-          {activeTab === "proposals" && (
-            <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
-          )}
+          {activeTab === "proposals" &&
+            (detailId ? (
+              <ProposalDetailPage
+                slug={event.slug}
+                proposalId={detailId}
+                contextLabel={event.name}
+                onBack={() => navigate(tabPath("proposals"))}
+              />
+            ) : (
+              <GroupEventProposals
+                groupId={groupId}
+                eventId={event.id}
+                eventSlug={event.slug}
+                proposalPathFor={(proposalId) => `${tabPath("proposals")}/${encodeURIComponent(proposalId)}`}
+              />
+            ))}
 
           {activeTab === "invitations" && (
             <>
@@ -200,7 +225,7 @@ export function GroupEventWorkspace({
 
           {activeTab === "team" && <Team slug={event.slug} />}
 
-          {activeTab === "promoters" && <Promoters slug={event.slug} />}
+          {activeTab === "promoters" && <Promoters slug={event.slug} subTab={detailId} />}
 
           {activeTab === "stats" && <EventStats slug={event.slug} />}
 

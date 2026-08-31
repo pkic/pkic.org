@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { usePortalHashLocation } from "../../hash-location";
 import { lazy, Suspense } from "preact/compat";
 import type { EventProposalSummary } from "../../../../../shared/schemas/event-proposals";
 import { proposalProgramsListResponseSchema } from "../../../../../shared/schemas/proposal-programs";
@@ -17,11 +18,15 @@ export function GroupEventProposals({
   groupId,
   eventId,
   eventSlug,
+  proposalPathFor,
 }: {
   groupId: string;
   eventId: string;
   eventSlug?: string;
+  /** URL-addresses proposal selection; without it, selection stays local state. */
+  proposalPathFor?: (proposalId: string) => string;
 }) {
+  const [, navigate] = usePortalHashLocation();
   const [selected, setSelected] = useState<EventProposalSummary | null>(null);
   const programCatalog = useData(
     () =>
@@ -65,7 +70,13 @@ export function GroupEventProposals({
         <EventProposalsTable
           endpoint={`/api/v1/events/${encodeURIComponent(resolvedEventSlug)}/proposals`}
           storageKey={`portal_proposal_filters_${groupId}_${eventId}`}
-          onSelect={setSelected}
+          onSelect={(proposal) => {
+            if (proposalPathFor) {
+              navigate(proposalPathFor(proposal.id));
+            } else {
+              setSelected(proposal);
+            }
+          }}
           empty="No proposals are available through this event."
         />
       ) : (
