@@ -278,6 +278,25 @@ describe("group event proposal portal", () => {
     ).toBe(false);
   });
 
+  it("opens the tab named in a preset hash query instead of the default submission tab", async () => {
+    const previousHash = window.location.hash;
+    window.location.hash = "#/x?proposalTab=reviews";
+    try {
+      const calls: RequestRecord[] = [];
+      stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
+      container = document.createElement("div");
+      document.body.append(container);
+      await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
+      await settle();
+      await settle();
+
+      const activeTab = container.querySelector(".nav-link.active");
+      expect(activeTab?.textContent).toBe("Reviews (0)");
+    } finally {
+      window.location.hash = previousHash;
+    }
+  });
+
   it("does not fetch private reviews or comments for a read-only program identity", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls);

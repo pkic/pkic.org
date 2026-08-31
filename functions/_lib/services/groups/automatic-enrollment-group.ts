@@ -77,10 +77,10 @@ export function prepareAutomaticGroupEnrollmentForGroupStatements(
       .prepare(
         `${ALL_ACTIVE_USER_CAPACITIES_CTE}
          INSERT OR IGNORE INTO group_memberships
-           (id, group_id, user_id, member_id, source, created_by_user_id,
+           (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
             joined_at, left_at, created_at, updated_at)
          SELECT lower(hex(randomblob(16))), group_row.id, capacity.user_id,
-                capacity.member_id, 'automatic_policy', NULL, ?, NULL, ?, ?
+                capacity.identity_id, capacity.member_id, 'automatic_policy', NULL, ?, NULL, ?, ?
            FROM groups group_row
            JOIN group_membership_category_rules rule ON rule.group_id = group_row.id
             AND rule.permits_join = 1 AND rule.automatic_enrollment = 1

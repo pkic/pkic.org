@@ -18,8 +18,8 @@ export interface SeededPersona {
   definition: PersonaDefinition;
   userId: string;
   email: string;
-  /** One entry per represented organization, in creation order. */
-  capacities: Array<{ organizationId: string; memberId: string }>;
+  /** One entry per acting organization identity, in creation order. */
+  capacities: Array<{ organizationId: string; memberId: string; identityId: string }>;
   /** Bearer token, or null for the anonymous persona. */
   token: string | null;
   /**
@@ -120,8 +120,8 @@ export async function seedPersona(
   for (let index = 0; index < definition.organizationCount; index += 1) {
     const organizationId = await insertOrganization(db, `${definition.description} ${index + 1} ${instance}`);
     const memberId = await seedOrganizationAggregate(db, organizationId, definition.membershipCategory ?? "A");
-    await addRepresentative(db, memberId, userId);
-    capacities.push({ organizationId, memberId });
+    const identityId = await addRepresentative(db, memberId, userId);
+    capacities.push({ organizationId, memberId, identityId });
   }
 
   const groupLeadershipRole = definition.roles.some(
@@ -157,12 +157,17 @@ export async function seedPersona(
     await db
       .prepare(
         `INSERT INTO user_roles
-           (id, user_id, member_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+           (id, user_id, identity_id, member_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       )
       .bind(
         roleAssignmentId,
         userId,
+        role.context === "group" && ["role-group_lead", "role-group_deputy_lead"].includes(role.roleId)
+          ? capacities[0]?.identityId
+          : role.context === "organization"
+            ? capacities[0]?.identityId
+            : null,
         role.context === "group" && ["role-group_lead", "role-group_deputy_lead"].includes(role.roleId)
           ? capacities[0]?.memberId
           : null,

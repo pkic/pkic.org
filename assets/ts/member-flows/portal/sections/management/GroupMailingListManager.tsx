@@ -1,5 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import {
+  groupMailingListCreateSchema,
+  groupMailingListUpdateSchema,
   mailingListResponseSchema,
   mailingListsListResponseSchema,
   type MailingList,
@@ -10,7 +12,7 @@ import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { RowActions } from "../../../../components/RowActions";
-import { deleteJson, patchJson, postJson } from "../../../../shared/api-client";
+import { deleteJson, patchValidated, postValidated } from "../../../../shared/api-client";
 import { MailingListForm } from "../../../../components/mailing-lists/MailingListForm";
 import {
   emptyMailingListDraft,
@@ -35,8 +37,9 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
     setSaving(true);
     setError(null);
     try {
-      await postJson(
+      await postValidated(
         `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`,
+        groupMailingListCreateSchema,
         mailingListDraftToPayload(newDraft),
         mailingListResponseSchema,
       );
@@ -54,8 +57,9 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
     setSaving(true);
     setError(null);
     try {
-      await patchJson(
+      await patchValidated(
         `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}`,
+        groupMailingListUpdateSchema,
         mailingListDraftToPayload(editDraft),
         mailingListResponseSchema,
       );
@@ -222,7 +226,6 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             <EmptyState
               title="No mailing lists yet"
               body="Create a mailing list to start managing this group's lists."
-              action={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
             />
           }
         />

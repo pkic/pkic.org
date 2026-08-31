@@ -11,9 +11,10 @@ import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresSession } from "./route-contract";
-import { verifiedEmailIdentitySchema } from "./organization-representation";
+import { verifiedEmailIdentitySchema } from "./identity";
 
-export const myOrganizationRepresentativeSchema = z.object({
+export const myActingIdentitySchema = z.object({
+  identityId: databaseIdSchema,
   userId: databaseIdSchema,
   name: z.string().nullable(),
   email: z.string(),
@@ -25,7 +26,8 @@ export const myOrganizationRepresentativeSchema = z.object({
 // One membership context (own org-less membership, or an organization
 // actively represented) a member can act as. A person can hold more than
 // one at once — see functions/_lib/auth/user-session.ts.
-export const myActiveMembershipSchema = z.object({
+export const myActiveIdentitySchema = z.object({
+  identityId: databaseIdSchema,
   memberId: databaseIdSchema,
   organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
@@ -49,20 +51,19 @@ export const myProfileSchema = z.object({
   memberSince: z.string(),
   showOnOrgProfile: z.boolean(),
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
-  canEditOrganizationName: z.boolean(),
   // Member portal (self-service coworker enrollment): true when this member
   // is their organization's primary or secondary contact. Always false for
   // org-less (H5/H6/H7) members.
   isOrgContact: z.boolean(),
-  // Full representative roster for the caller's organization, or null when
+  // Full active identity roster for the caller's organization, or null when
   // the member has no organization.
-  organizationRepresentatives: z.array(myOrganizationRepresentativeSchema).nullable(),
+  organizationIdentities: z.array(myActingIdentitySchema).nullable(),
   // Every membership context this member is currently eligible to act
   // through. Always at least one entry (the one reflected in the fields
   // above); more than one only when the caller represents multiple
   // organizations (or an organization plus their own individual
   // membership) concurrently.
-  activeMemberships: z.array(myActiveMembershipSchema).min(1),
+  activeIdentities: z.array(myActiveIdentitySchema).min(1),
 });
 
 export const myProfileGetRouteSchema = {
@@ -74,22 +75,22 @@ export const myProfileGetRouteSchema = {
   },
 };
 
-export const myActiveMembershipSwitchSchema = z.object({
-  memberId: databaseIdSchema,
+export const myActiveIdentitySwitchSchema = z.object({
+  identityId: databaseIdSchema,
 });
 
-export const myActiveMembershipSwitchRouteSchema = {
+export const myActiveIdentitySwitchRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Replace the current user's active membership context",
+  summary: "Replace the current user's active acting identity",
   description:
-    "Only meaningful for a user who represents more than one organization (or an organization plus an individual membership) concurrently. Re-verifies memberId against the caller's own live eligible memberships — a user can never select one they don't actually hold — then reissues the shared human session cookie scoped to it.",
+    "Only meaningful for a user with more than one active identity. Re-verifies identityId against the caller's live identities, derives the matching Member aggregate, and reissues the shared human session cookie scoped to that exact identity.",
   request: {
-    body: { content: { "application/json": { schema: myActiveMembershipSwitchSchema } }, required: true },
+    body: { content: { "application/json": { schema: myActiveIdentitySwitchSchema } }, required: true },
   },
   responses: {
     "200": { description: "Switched.", content: { "application/json": { schema: myProfileSchema } } },
-    "403": { description: "The caller does not actively hold this membership." },
+    "403": { description: "The caller does not actively hold this identity." },
   },
 };
 
@@ -101,7 +102,6 @@ export const myProfileUpdateSchema = z.object({
   jobTitle: z.string().trim().max(160).optional(),
   biography: z.string().trim().max(5000).optional(),
   links: linksSchema.optional(),
-  organizationName: z.string().trim().max(200).optional(),
   showOnOrgProfile: z.boolean().optional(),
 });
 
@@ -109,7 +109,8 @@ export const myProfileUpdateRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
   summary: "Update the current user's member profile",
-  description: "organizationName is only honored for org-less categories (H5/H6/H7); ignored otherwise.",
+  description:
+    "Updates global person naming plus the selected identity profile. Individual identities cannot set a job title or organization affiliation.",
   request: {
     body: { content: { "application/json": { schema: myProfileUpdateSchema } }, required: true },
   },

@@ -7,7 +7,7 @@ import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Tabs } from "../../../../components/Tabs";
 import { getJson, postJson } from "../../../../shared/api-client";
-import { fmt, toast } from "../../ui";
+import { fmtDate, toast } from "../../ui";
 import { asyncPaymentWindow } from "../../../../../shared/constants/async-payment-window";
 import { Pager } from "../../../../components/Pager";
 import {
@@ -302,7 +302,7 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
     },
     {
       header: "Date",
-      cell: (d) => fmt(d.completed_at ?? d.created_at),
+      cell: (d) => fmtDate(d.completed_at ?? d.created_at),
       className: "small text-muted text-nowrap",
       sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
     },

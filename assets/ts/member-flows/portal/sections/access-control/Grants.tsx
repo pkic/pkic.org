@@ -5,7 +5,7 @@ import { EmptyState } from "../../../../components/EmptyState";
 import { RowActions } from "../../../../components/RowActions";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
-import { fmt, toast } from "../../ui";
+import { fmt, fmtDate, toast } from "../../ui";
 import { PERMISSIONS } from "../../../../../shared/schemas/permissions";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { TargetPicker, type PickedTarget } from "./TargetPicker";
@@ -182,7 +182,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
           },
           {
             header: "Granted",
-            cell: (g) => fmt(g.createdAt),
+            cell: (g) => fmtDate(g.createdAt),
             className: "small mono",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },

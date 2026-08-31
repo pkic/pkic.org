@@ -5,6 +5,7 @@ import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { membershipCategorySchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { httpOrSameOriginUrlSchema } from "./urls";
 
 export const groupIdSchema = databaseIdSchema;
 export const groupRevisionSchema = z.number().int().min(0);
@@ -203,6 +204,7 @@ export const groupMembershipSchema = z.object({
   id: databaseIdSchema,
   groupId: groupIdSchema,
   userId: databaseIdSchema,
+  identityId: databaseIdSchema,
   memberId: databaseIdSchema,
   memberType: z.enum(["individual", "organization"]),
   userName: z.string(),
@@ -215,6 +217,20 @@ export const groupMembershipSchema = z.object({
   leftAt: z.string().nullable(),
 });
 export type GroupMembership = z.infer<typeof groupMembershipSchema>;
+
+/**
+ * Privacy-reduced roster row for a caller with only the `participate`
+ * capability: identity and affiliation, never email or a capacity/membership
+ * identifier. Mirrors how `eventAudienceDetailSchema` reduces
+ * `eventManagementSummarySchema` for the same manage-vs-participate split.
+ */
+export const groupParticipantSchema = z.object({
+  userId: databaseIdSchema,
+  name: z.string(),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
+  organizationName: z.string().nullable(),
+});
+export type GroupParticipant = z.infer<typeof groupParticipantSchema>;
 
 export const groupCapacitySelectionSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("all_eligible"), confirmed: z.literal(true) }),
@@ -247,6 +263,7 @@ export const groupLeadershipRoleIdSchema = z.enum(GROUP_LEADERSHIP_ROLE_IDS);
 export const groupLeadershipAssignmentSchema = z.object({
   userRoleId: databaseIdSchema,
   userId: databaseIdSchema,
+  identityId: databaseIdSchema,
   memberId: databaseIdSchema,
   memberType: z.enum(["individual", "organization"]),
   organizationName: z.string().nullable(),
@@ -262,7 +279,7 @@ export const groupLeadershipAssignmentSchema = z.object({
 export type GroupLeadershipAssignment = z.infer<typeof groupLeadershipAssignmentSchema>;
 export const groupLeadershipAssignSchema = z.object({
   userId: databaseIdSchema,
-  memberId: databaseIdSchema,
+  identityId: databaseIdSchema,
   roleId: groupLeadershipRoleIdSchema,
   expiresAt: utcInstantSchema.nullable().optional(),
 });
@@ -297,6 +314,8 @@ export const GROUP_MEMBERSHIP_SORT_COLUMNS = [
   "membership_category",
   "joined_at",
 ] as const;
+/** The subset of {@link GROUP_MEMBERSHIP_SORT_COLUMNS} the reduced participant roster may sort by. */
+export const GROUP_PARTICIPANT_SORT_COLUMNS = ["user_name", "organization_name"] as const;
 export const groupMembershipsListQuerySchema = listQuerySchema(GROUP_MEMBERSHIP_SORT_COLUMNS).extend({
   userId: databaseIdSchema.optional(),
   memberId: databaseIdSchema.optional(),
@@ -304,7 +323,25 @@ export const groupMembershipsListQuerySchema = listQuerySchema(GROUP_MEMBERSHIP_
   active: booleanQueryFlagSchema.default(true),
 });
 export type GroupMembershipsListQuery = z.infer<typeof groupMembershipsListQuerySchema>;
-export const groupMembershipsListResponseSchema = paginatedResponseSchema("memberships", groupMembershipSchema);
+export const groupMembershipsManagementListResponseSchema = paginatedResponseSchema(
+  "memberships",
+  groupMembershipSchema,
+);
+export const groupMembershipsParticipantListResponseSchema = paginatedResponseSchema(
+  "memberships",
+  groupParticipantSchema,
+);
+/**
+ * Scope-appropriate membership page payload: an effective group manager gets
+ * every row as the full `groupMembershipSchema`, and a caller with only the
+ * `participate` capability gets every row as the reduced `groupParticipantSchema`.
+ * This is the same one-endpoint, capability-shaped union `eventsListResponseSchema`
+ * uses for the events list.
+ */
+export const groupMembershipsListResponseSchema = z.union([
+  groupMembershipsManagementListResponseSchema,
+  groupMembershipsParticipantListResponseSchema,
+]);
 
 export const groupReferenceParamsSchema = z.object({ groupId: groupReferenceSchema });
 export const groupMembershipParamsSchema = groupReferenceParamsSchema.extend({ membershipId: databaseIdSchema });

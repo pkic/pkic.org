@@ -13,7 +13,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import type { MenuAction } from "../../../../components/Menu";
 import { RowActions } from "../../../../components/RowActions";
 import { postJson } from "../../../../shared/api-client";
-import { fmt, toast } from "../../ui";
+import { fmt, fmtDate, toast } from "../../ui";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../../../shared/timezone";
 import {
@@ -190,7 +190,7 @@ export function GroupEventInvitations({
           },
           {
             header: "Sent",
-            cell: (invite) => fmt(invite.createdAt),
+            cell: (invite) => fmtDate(invite.createdAt),
             className: "text-nowrap",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },

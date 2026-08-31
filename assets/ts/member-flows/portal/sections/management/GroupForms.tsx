@@ -111,11 +111,7 @@ export function GroupForms({
           ]}
           empty={
             canManage ? (
-              <EmptyState
-                title="No forms yet"
-                body="Create a form to get started."
-                action={{ label: "New form", onSelect: () => setShowCreate(true) }}
-              />
+              <EmptyState title="No forms yet" body="Create a form to get started." />
             ) : (
               "No forms are available through this group."
             )

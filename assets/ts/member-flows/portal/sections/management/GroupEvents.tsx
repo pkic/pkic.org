@@ -14,18 +14,19 @@ import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventWorkspace } from "./GroupEventWorkspace";
-import { ResourceCapabilities } from "./ResourceCapabilities";
 
 export function GroupEvents({
   groupId,
   canManage = false,
   initialEventId,
   initialEventTab,
+  initialEventDetailId,
 }: {
   groupId: string;
   canManage?: boolean;
   initialEventId?: string;
   initialEventTab?: string;
+  initialEventDetailId?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
@@ -61,6 +62,7 @@ export function GroupEvents({
             event={detail.data.event}
             groupId={groupId}
             tab={initialEventTab}
+            detailId={initialEventDetailId}
             onUpdated={detail.reload}
           />
         )}
@@ -118,7 +120,6 @@ export function GroupEvents({
               className: "text-nowrap",
               sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
             },
-            { header: "Access", cell: (event) => <ResourceCapabilities capabilities={event.capabilities} /> },
             {
               header: "",
               className: "text-end",
@@ -131,11 +132,7 @@ export function GroupEvents({
           ]}
           empty={
             canManage ? (
-              <EmptyState
-                title="No events yet"
-                body="Create an event to get started."
-                action={{ label: "Create event", onSelect: () => setShowCreate(true) }}
-              />
+              <EmptyState title="No events yet" body="Create an event to get started." />
             ) : (
               "No events are available through this group."
             )

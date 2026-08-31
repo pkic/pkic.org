@@ -231,7 +231,7 @@ export function PortalShell() {
                         organizationId={params.organizationId}
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
                         canWrite={portalHasGlobalPermission(session, "organizations:write")}
-                        canManageRepresentatives={portalHasGlobalPermission(session, "membership:write")}
+                        canManageIdentities={portalHasGlobalPermission(session, "membership:write")}
                       />
                     </SectionWrapper>
                   ) : (
@@ -250,7 +250,10 @@ export function PortalShell() {
                     <SectionWrapper title="Organizations">
                       <Organizations
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
-                        canCreate={portalHasGlobalPermission(session, "membership:write")}
+                        canCreate={
+                          portalHasGlobalPermission(session, "membership:write") &&
+                          portalHasGlobalPermission(session, "identities:activate")
+                        }
                       />
                     </SectionWrapper>
                   ) : (
@@ -288,6 +291,7 @@ export function PortalShell() {
                         canGrantAccess: portalHasGlobalPermission(session, "access:grant"),
                         canAnonymize: portalHasGlobalPermission(session, "users:anonymize"),
                         canManageMembership: portalHasGlobalPermission(session, "membership:write"),
+                        canActivateIdentity: portalHasGlobalPermission(session, "identities:activate"),
                       }}
                     />
                   </SectionWrapper>
@@ -445,7 +449,7 @@ export function PortalShell() {
                 path="/groups/:groupId/*?"
                 component={({ params }: { params: { groupId: string; "*"?: string } }) => {
                   const segments = (params["*"] ?? "").split("/").filter(Boolean).map(decodeURIComponent);
-                  const [view, resourceId, resourceTab] = segments;
+                  const [view, resourceId, resourceTab, resourceDetailId] = segments;
                   return (
                     <SectionWrapper>
                       <GroupWorkspace
@@ -453,6 +457,7 @@ export function PortalShell() {
                         view={view}
                         resourceId={resourceId}
                         resourceTab={resourceTab}
+                        resourceDetailId={resourceDetailId}
                       />
                     </SectionWrapper>
                   );

@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupVoteDetail } from "../../assets/shared/schemas/group-votes";
+import { groupVoteCreateInputSchema } from "../../assets/shared/schemas/group-vote-management";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
 import { GroupVoteManagementControls } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
@@ -126,7 +127,10 @@ describe("selected-group vote management", () => {
 
     expect(requests).toHaveLength(1);
     expect(requests[0]?.path).toBe(`/api/v1/groups/${GROUP_ID}/votes`);
-    expect(requests[0]?.body).toMatchObject({ title: "Architecture motion", voteType: "motion" });
+    expect(groupVoteCreateInputSchema.parse(requests[0]?.body)).toMatchObject({
+      title: "Architecture motion",
+      voteType: "motion",
+    });
     expect(requests[0]?.body).not.toHaveProperty("ownerGroupId");
   });
 

@@ -1,7 +1,12 @@
 import { useState } from "preact/hooks";
-import { patchJson } from "../../../../../shared/api-client";
+import { patchValidated } from "../../../../../shared/api-client";
 import { toast } from "../../../ui";
-import { roleResponseEnvelopeSchema, type Role } from "../../../../../../shared/schemas/access-control";
+import {
+  roleResponseEnvelopeSchema,
+  roleUpdateSchema,
+  type Role,
+} from "../../../../../../shared/schemas/access-control";
+import type { Permission } from "../../../../../../shared/schemas/permissions";
 import { PermissionCheckboxes } from "./RolePermissions";
 
 /** Edits a role's name/description/permission bundle behind an explicit Edit action on RoleDetail. */
@@ -16,10 +21,10 @@ export function RoleEditForm({
 }) {
   const [name, setName] = useState(role.name);
   const [description, setDescription] = useState(role.description ?? "");
-  const [selected, setSelected] = useState<Set<string>>(new Set(role.permissions));
+  const [selected, setSelected] = useState<Set<Permission>>(new Set(role.permissions));
   const [submitting, setSubmitting] = useState(false);
 
-  function toggle(permission: string) {
+  function toggle(permission: Permission) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(permission)) next.delete(permission);
@@ -33,8 +38,9 @@ export function RoleEditForm({
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      const updated = await patchJson(
+      const updated = await patchValidated(
         `/api/v1/roles/${role.id}`,
+        roleUpdateSchema,
         {
           name: name.trim(),
           description: description.trim() || null,

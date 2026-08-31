@@ -107,7 +107,7 @@ describe("representative role grants — singleton per organization", () => {
     const primaryUser = await insertUser(env.DB);
     const secondaryUser = await insertUser(env.DB);
     await addRepresentative(env.DB, memberId, primaryUser);
-    await addRepresentative(env.DB, memberId, secondaryUser);
+    const secondaryIdentityId = await addRepresentative(env.DB, memberId, secondaryUser);
     await assignRepresentativeRole(env.DB, memberId, primaryUser, REPRESENTATIVE_ROLE_IDS.primaryContact);
     await assignRepresentativeRole(env.DB, memberId, secondaryUser, REPRESENTATIVE_ROLE_IDS.secondaryContact);
     await env.DB.prepare(
@@ -148,9 +148,9 @@ describe("representative role grants — singleton per organization", () => {
       .bind(memberId, REPRESENTATIVE_ROLE_IDS.secondaryContact)
       .run();
     await env.DB.prepare(
-      "UPDATE organization_representatives SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+      "UPDATE identities SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND user_id = ? AND ended_at IS NULL",
     )
-      .bind(memberId, secondaryUser)
+      .bind(secondaryIdentityId, secondaryUser)
       .run();
     await expect(
       resolveRepresentativeRoleHolder(env.DB, memberId, REPRESENTATIVE_ROLE_IDS.secondaryContact),
@@ -188,7 +188,7 @@ describe("representative role grants — singleton per organization", () => {
 });
 
 describe("representative role grants — service-layer invariant (replaces the dropped composite FK)", () => {
-  it("rejects granting a representative role to a (user, organization) pair with no active organization_representatives row", async () => {
+  it("rejects granting an organization contact role when the user has no active identity for that organization", async () => {
     const orgId = await insertOrganization(env.DB);
     const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
     const nonRepresentativeUser = await insertUser(env.DB);
@@ -206,12 +206,12 @@ describe("representative role grants — service-layer invariant (replaces the d
     const orgId = await insertOrganization(env.DB);
     const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
     const userId = await insertUser(env.DB);
-    await addRepresentative(env.DB, memberId, userId);
+    const identityId = await addRepresentative(env.DB, memberId, userId);
 
     await env.DB.prepare(
-      "UPDATE organization_representatives SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE member_id = ? AND user_id = ?",
+      "UPDATE identities SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND user_id = ?",
     )
-      .bind(memberId, userId)
+      .bind(identityId, userId)
       .run();
 
     let caught: unknown;
@@ -234,7 +234,7 @@ describe("representative role grants — service-layer invariant (replaces the d
     const currentHolder = await insertUser(env.DB);
     const replacement = await insertUser(env.DB);
     await addRepresentative(env.DB, memberId, currentHolder);
-    await addRepresentative(env.DB, memberId, replacement);
+    const replacementIdentityId = await addRepresentative(env.DB, memberId, replacement);
     await assignRepresentativeRole(env.DB, memberId, currentHolder, REPRESENTATIVE_ROLE_IDS.primaryContact);
 
     const statements = await buildAssignRepresentativeRoleStatements(env.DB, {
@@ -243,12 +243,12 @@ describe("representative role grants — service-layer invariant (replaces the d
       roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
     });
     await env.DB.prepare(
-      "UPDATE organization_representatives SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE member_id = ? AND user_id = ?",
+      "UPDATE identities SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND user_id = ?",
     )
-      .bind(memberId, replacement)
+      .bind(replacementIdentityId, replacement)
       .run();
 
-    await expect(env.DB.batch(statements)).rejects.toThrow("representative role requires an active representative");
+    await expect(env.DB.batch(statements)).rejects.toThrow("organization role requires an active identity");
     expect(
       await queryAll<{ user_id: string }>(
         env.DB,
@@ -263,7 +263,7 @@ describe("representative role grants — service-layer invariant (replaces the d
       env.DB.prepare("UPDATE user_roles SET user_id = ? WHERE user_id = ? AND revoked_at IS NULL")
         .bind(replacement, currentHolder)
         .run(),
-    ).rejects.toThrow("representative role requires an active representative");
+    ).rejects.toThrow("organization role requires an active identity");
     expect(
       await queryAll<{ user_id: string }>(
         env.DB,

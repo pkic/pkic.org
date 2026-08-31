@@ -8,17 +8,10 @@ import {
 import { patchJson, postJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
 import { DataTable } from "../Table";
+import { Badge } from "../Badge";
 
 type DayOption = "none" | string;
 type AttendanceDetail = EventRegistrationAttendanceDetailResponse;
-
-const WAITLIST_STATUS_COLOR: Readonly<Record<string, string>> = {
-  waiting: "warning",
-  offered: "info",
-  accepted: "success",
-  expired: "secondary",
-  removed: "secondary",
-};
 
 export interface DayAttendanceManagerProps {
   dayAttendance: AttendanceDetail["dayAttendance"];
@@ -239,8 +232,8 @@ export function DayAttendanceManager({
             cell: (day) =>
               day.waitlist ? (
                 <div class="small">
-                  <span class={`badge text-bg-${WAITLIST_STATUS_COLOR[day.waitlist.status] ?? "secondary"} me-2`}>
-                    {day.waitlist.status}
+                  <span class="me-2">
+                    <Badge status={day.waitlist.status} />
                   </span>
                   <span class="text-muted">{day.waitlist.priorityLane}</span>
                   {day.waitlist.offerExpiresAt && (

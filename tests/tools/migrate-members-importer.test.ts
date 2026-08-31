@@ -15,7 +15,7 @@
  *   4. Execute the generated SQL against it via `wrangler d1 execute --file`.
  *   5. Assert no missing-column/table errors, and spot-check the rows that
  *      landed match the final schema (organization_domain_claims,
- *      member_category_assignments, organization_representatives,
+ *      member_category_assignments, identities,
  *      role-primary_contact, groups, group_memberships) — the exact shapes 0033-era intermediate
  *      columns (social_*, organizations.membership_category,
  *      primary_contact_user_id) no longer exist to write to.
@@ -108,7 +108,7 @@ describe("migrate-members-yaml-to-d1 importer — fresh-D1 execution smoke test"
 
     // Org-tied member: exercises organizations, organization_domain_claims, the
     // members aggregate + member_category_assignments, users,
-    // organization_representatives, and the role-primary_contact grant.
+    // identities, and the role-primary_contact grant.
     fs.writeFileSync(
       path.join(membersDir, "acme.yaml"),
       `id: acme
@@ -190,13 +190,14 @@ memberType: H5
     );
     expect(categoryAssignments.map((r) => r.category_code)).toEqual(["A", "H5"]);
 
-    const representatives = queryD1(
+    const identities = queryD1(
       persistTo,
-      `SELECT show_on_org_profile, job_title, biography, links_json FROM organization_representatives`,
+      `SELECT show_on_organization_profile, job_title, biography, links_json FROM identities
+        WHERE organization_id IS NOT NULL`,
     );
-    expect(representatives).toHaveLength(1);
-    expect(representatives[0]).toMatchObject({
-      show_on_org_profile: 1,
+    expect(identities).toHaveLength(1);
+    expect(identities[0]).toMatchObject({
+      show_on_organization_profile: 1,
       job_title: "CEO",
       biography: null,
       links_json: JSON.stringify(["https://linkedin.com/in/alice-anderson"]),
@@ -343,10 +344,7 @@ sponsor:
           persistTo,
           "SELECT member_id, category_code FROM member_category_assignments ORDER BY member_id",
         ),
-        representatives: queryD1(
-          persistTo,
-          "SELECT id, member_id, user_id FROM organization_representatives ORDER BY id",
-        ),
+        identities: queryD1(persistTo, "SELECT id, organization_id, user_id FROM identities ORDER BY id"),
         roles: queryD1(
           persistTo,
           "SELECT id, user_id, role_id, context_id FROM user_roles WHERE context_type = 'organization' ORDER BY id",
@@ -370,13 +368,22 @@ sponsor:
     expect(first.organizations).toHaveLength(1);
     expect(first.members).toHaveLength(2);
     expect(first.categoryAssignments).toHaveLength(2);
-    expect(first.representatives).toHaveLength(2);
+    expect(first.identities).toHaveLength(3); // two organization identities + one individual identity
     expect(first.roles.length).toBeGreaterThanOrEqual(2); // primary + secondary contact
     expect(first.sponsorships).toHaveLength(3); // member consortium + member event + non-member event
     expect(first.sponsorships.some((row) => String(row.tier).toLowerCase() === "none")).toBe(false);
     expect(first.groupMemberships).toHaveLength(1);
     expect(first.groupMemberships[0]).toMatchObject({ source: "migration" });
-    expect(first.groupMemberships[0]!.member_id).toBe(first.representatives[0]!.member_id);
+    const enrolledIdentity = first.identities.find(
+      (identity) => identity.user_id === first.groupMemberships[0]!.user_id,
+    );
+    expect(enrolledIdentity).toBeDefined();
+    expect(
+      queryD1(
+        persistTo,
+        `SELECT member_id FROM identity_member_capacities WHERE identity_id = '${String(enrolledIdentity!.id)}'`,
+      )[0]!.member_id,
+    ).toBe(first.groupMemberships[0]!.member_id);
     expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'unresolved@example.test'")).toHaveLength(
       1,
     );

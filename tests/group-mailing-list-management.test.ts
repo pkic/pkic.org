@@ -27,7 +27,11 @@ import { queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
-import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
+import {
+  activeIdentityIdForMember,
+  ensureGroupMembershipCapacity,
+  grantGroupLeadershipCapacity,
+} from "./helpers/group-leadership";
 import { seedPersona } from "./personas/seed";
 
 async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
@@ -45,15 +49,8 @@ async function grantLeadership(
   leader: UserBackedAuthAdmin,
   leadershipId = crypto.randomUUID(),
 ): Promise<string> {
-  const memberId = await ensureGroupMembershipCapacity(env.DB, groupId, leader.id);
-  leader.memberId = memberId;
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(leadershipId, leader.id, memberId, groupId)
-    .run();
+  const leadership = await grantGroupLeadershipCapacity(env.DB, groupId, leader.id, { roleAssignmentId: leadershipId });
+  leader.memberId = leadership.memberId;
   return leadershipId;
 }
 
@@ -192,7 +189,7 @@ describe("group mailing-list management routes", () => {
     localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, globalAdmin, child.id, {
       userId: localLeader.id,
-      memberId: localLeader.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, globalAdmin, child.id, { governanceInheritanceMode: "local_only" });
@@ -246,13 +243,13 @@ describe("group mailing-list management routes", () => {
       await insertOrganization(env.DB, `Mailing list participant ${crypto.randomUUID()}`),
       "A",
     );
-    await addRepresentative(env.DB, memberId, participant);
+    const identityId = await addRepresentative(env.DB, memberId, participant);
     await env.DB.prepare(
       `INSERT INTO group_memberships
-         (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+         (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
     )
-      .bind(crypto.randomUUID(), group.id, participant, memberId)
+      .bind(crypto.randomUUID(), group.id, participant, identityId, memberId)
       .run();
     const memberToken = await createMemberSession(env.DB, participant, crypto.randomUUID());
     const denied = await jsonRequest(

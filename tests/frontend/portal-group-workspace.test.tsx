@@ -202,7 +202,7 @@ describe("portal selected-group workspace", () => {
     await settle();
 
     const tabs = [...container.querySelectorAll("nav a")].map((link) => link.textContent);
-    expect(tabs).toEqual(["Overview", "Events", "Meetings", "Votes", "Forms", "Mailing lists"]);
+    expect(tabs).toEqual(["Overview", "Members", "Events", "Meetings", "Votes", "Forms", "Mailing lists"]);
     expect(container.textContent).toContain("You participate in this group.");
     expect(container.textContent).not.toContain("Save group settings");
   });

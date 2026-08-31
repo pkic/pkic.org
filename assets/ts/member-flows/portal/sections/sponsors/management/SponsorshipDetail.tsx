@@ -12,7 +12,7 @@ import type {
   SponsorshipEvent,
   SponsorshipPipelineStage,
 } from "../../../../../../shared/schemas/sponsorship-management";
-import { stageBadgeClass, stageLabel } from "./shared";
+import { Badge, statusLabel } from "../../../../../components/Badge";
 import { SponsorshipLogo } from "./SponsorshipLogo";
 import { useSponsorshipEventHistory } from "./useSponsorshipEventHistory";
 
@@ -92,7 +92,7 @@ export function SponsorshipDetail({
         { toStage: nextStage, note: stageNote.trim() || null },
         sponsorshipResponseSchema,
       );
-      toast(`Stage advanced to ${stageLabel(nextStage)}`, "success");
+      toast(`Stage advanced to ${statusLabel(nextStage)}`, "success");
       setStageNote("");
       await Promise.all([load(), history.reload()]);
       onChanged?.();
@@ -120,9 +120,7 @@ export function SponsorshipDetail({
               {sponsorship.eventName && <> · {sponsorship.eventName}</>}
             </p>
           </div>
-          <span class={`badge text-capitalize ${stageBadgeClass(sponsorship.pipelineStage)}`}>
-            {stageLabel(sponsorship.pipelineStage)}
-          </span>
+          <Badge status={sponsorship.pipelineStage} />
         </div>
 
         {sponsorship.contactEmail && (
@@ -182,7 +180,7 @@ export function SponsorshipDetail({
               >
                 {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
                   <option value={s} key={s}>
-                    {stageLabel(s)}
+                    {statusLabel(s)}
                   </option>
                 ))}
               </select>
@@ -231,8 +229,8 @@ export function SponsorshipDetail({
                 <time class="text-muted" dateTime={ev.createdAt}>
                   {fmt(ev.createdAt)}
                 </time>{" "}
-                — {ev.fromStage ? `${stageLabel(ev.fromStage)} → ` : ""}
-                <strong>{stageLabel(ev.toStage)}</strong>
+                — {ev.fromStage ? `${statusLabel(ev.fromStage)} → ` : ""}
+                <strong>{statusLabel(ev.toStage)}</strong>
                 {ev.actorName && <span class="text-muted"> by {ev.actorName}</span>}
                 {ev.note && <div class="text-muted fst-italic">{ev.note}</div>}
               </li>

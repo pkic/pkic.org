@@ -11,7 +11,7 @@ import {
   userRolesListResponseSchema,
   type UserRoleAssignment,
 } from "../../../../../shared/schemas/access-control";
-import { fmt, toast } from "../../ui";
+import { fmt, fmtDate, toast } from "../../ui";
 import { TargetPicker, type PickedTarget } from "./TargetPicker";
 import { roleCatalog } from "./catalogs";
 
@@ -166,7 +166,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                 },
                 {
                   header: "Granted",
-                  cell: (assignment) => <span class="small mono">{fmt(assignment.createdAt)}</span>,
+                  cell: (assignment) => <span class="small mono">{fmtDate(assignment.createdAt)}</span>,
                   sort: { asc: "created_at", desc: "-created_at" },
                 },
                 {

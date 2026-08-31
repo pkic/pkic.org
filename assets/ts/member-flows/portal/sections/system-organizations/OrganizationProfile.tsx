@@ -99,7 +99,7 @@ function OrganizationProfileForm({
               </option>
             ))}
           </select>
-          <div class="form-text">This category applies to all representatives.</div>
+          <div class="form-text">This category applies to every active identity for the organization.</div>
         </div>
         <div class="col-md-4">
           <label class="form-label small mb-1" for="organization-profile-member-since">
@@ -220,7 +220,7 @@ function Contacts({ organization, onSaved }: { organization: OrganizationDetail;
                 onChange={(event) => void update(field, (event.target as HTMLSelectElement).value)}
               >
                 <option value="">None</option>
-                {organization.representatives
+                {organization.identities
                   // One person cannot hold both contact roles; the service
                   // enforces it, the select simply hides the collision.
                   .filter(

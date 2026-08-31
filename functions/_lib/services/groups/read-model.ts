@@ -2,9 +2,14 @@ import type {
   Group,
   GroupMembership,
   GroupMembershipsListQuery,
+  GroupParticipant,
   GroupsListQuery,
 } from "../../../../assets/shared/schemas/groups";
-import { GROUP_MEMBERSHIP_SORT_COLUMNS, GROUP_SORT_COLUMNS } from "../../../../assets/shared/schemas/groups";
+import {
+  GROUP_MEMBERSHIP_SORT_COLUMNS,
+  GROUP_PARTICIPANT_SORT_COLUMNS,
+  GROUP_SORT_COLUMNS,
+} from "../../../../assets/shared/schemas/groups";
 import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
@@ -17,6 +22,7 @@ import {
   activeParentGroupMembershipPredicate,
   eligibleGroupCapacityPredicate,
 } from "../membership/capacity-query";
+import { publicUserHeadshotPath } from "../user-headshot";
 
 interface GroupRow {
   id: string;
@@ -329,6 +335,7 @@ interface MembershipRow {
   id: string;
   group_id: string;
   user_id: string;
+  identity_id: string;
   member_id: string;
   member_type: "individual" | "organization";
   first_name: string | null;
@@ -347,6 +354,7 @@ function mapMembership(row: MembershipRow): GroupMembership {
     id: row.id,
     groupId: row.group_id,
     userId: row.user_id,
+    identityId: row.identity_id,
     memberId: row.member_id,
     memberType: row.member_type,
     userName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
@@ -401,7 +409,7 @@ export function buildGroupMembershipsPageQuery(groupId: string, query: GroupMemb
   const fromSql = `${MEMBERSHIP_FROM} WHERE ${conditions.join(" AND ")}`;
   return {
     source: {
-      selectSql: `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+      selectSql: `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
         u.first_name, u.last_name, u.email, o.name AS organization_name,
         mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
         gm.joined_at, gm.left_at`,
@@ -428,6 +436,75 @@ export async function listGroupMemberships(
   return { memberships: rows.map(mapMembership), total };
 }
 
+interface ParticipantRow {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  headshot_r2_key: string | null;
+  organization_name: string | null;
+}
+
+function mapParticipant(row: ParticipantRow): GroupParticipant {
+  return {
+    userId: row.user_id,
+    name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Participant",
+    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
+    organizationName: row.organization_name,
+  };
+}
+
+const PARTICIPANT_SORT_EXPRESSIONS = {
+  user_name: "LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, '') || ' ' || u.email)",
+  organization_name: "LOWER(COALESCE(o.name, ''))",
+} satisfies Record<(typeof GROUP_PARTICIPANT_SORT_COLUMNS)[number], string>;
+
+/**
+ * Privacy-reduced membership roster for a caller with only the group's
+ * `participate` capability. It reuses the exact same active-capacity
+ * predicate as {@link buildGroupMembershipsPageQuery} so a participant never
+ * sees a row a manager would not also see, but selects and searches only
+ * identity and affiliation columns — no email, category, source, or
+ * membership-capacity identifier ever enters the query or the projection.
+ */
+export function buildGroupParticipantsPageQuery(groupId: string, query: GroupMembershipsListQuery): OffsetPageQuery {
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["u.first_name", "u.last_name", "o.name"]) : null;
+  const conditions = ["gm.group_id = ?", "gm.left_at IS NULL"];
+  const bindings: unknown[] = [groupId];
+  if (search) {
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const fromSql = `FROM group_memberships gm
+    JOIN users u ON u.id = gm.user_id
+    JOIN members m ON m.id = gm.member_id
+    LEFT JOIN organizations o ON o.id = m.organization_id
+   WHERE ${conditions.join(" AND ")}`;
+  return {
+    source: {
+      selectSql: `SELECT gm.user_id, u.first_name, u.last_name, u.headshot_r2_key, o.name AS organization_name`,
+      fromSql,
+      bindings,
+    },
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      PARTICIPANT_SORT_EXPRESSIONS,
+      PARTICIPANT_SORT_EXPRESSIONS.user_name,
+      "gm.id ASC",
+    ),
+    limit: query.limit,
+    offset: query.offset,
+  };
+}
+
+export async function listGroupParticipants(
+  db: DatabaseLike,
+  groupId: string,
+  query: GroupMembershipsListQuery,
+): Promise<{ participants: GroupParticipant[]; total: number }> {
+  const { rows, total } = await queryPage<ParticipantRow>(db, buildGroupParticipantsPageQuery(groupId, query));
+  return { participants: rows.map(mapParticipant), total };
+}
+
 export async function listActiveGroupMembershipsForUser(
   db: DatabaseLike,
   groupId: string,
@@ -435,7 +512,7 @@ export async function listActiveGroupMembershipsForUser(
 ): Promise<GroupMembership[]> {
   const rows = await all<MembershipRow>(
     db,
-    `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+    `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
             u.first_name, u.last_name, u.email, o.name AS organization_name,
             mca.category_code AS membership_category, gm.source,
             gm.created_by_user_id, gm.joined_at, gm.left_at
@@ -456,7 +533,7 @@ export async function listActiveGroupMembershipsForGroupsForUser(
   if (groupIds.length === 0) return byGroup;
   const rows = await all<MembershipRow>(
     db,
-    `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+    `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
             u.first_name, u.last_name, u.email, o.name AS organization_name,
             mca.category_code AS membership_category, gm.source,
             gm.created_by_user_id, gm.joined_at, gm.left_at

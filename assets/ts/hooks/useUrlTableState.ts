@@ -17,6 +17,7 @@
  * namespace's own keys for non-router hash changes.
  */
 import { useEffect, useMemo, useRef } from "preact/hooks";
+import { splitHash } from "../shared/hash-query";
 
 export interface UrlTableState {
   q: string;
@@ -26,13 +27,6 @@ export interface UrlTableState {
 }
 
 const KEYS = ["q", "sort", "offset", "size"] as const;
-
-function splitHash(): { path: string; params: URLSearchParams } {
-  const raw = window.location.hash.replace(/^#/, "");
-  const queryIndex = raw.indexOf("?");
-  if (queryIndex === -1) return { path: raw, params: new URLSearchParams() };
-  return { path: raw.slice(0, queryIndex), params: new URLSearchParams(raw.slice(queryIndex + 1)) };
-}
 
 function readParams(namespace: string): Partial<UrlTableState> {
   const { params } = splitHash();

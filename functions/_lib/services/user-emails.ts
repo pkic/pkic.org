@@ -180,7 +180,7 @@ export async function removeUserEmail(
     await authorizedDb.batch([
       authorizedDb
         .prepare(
-          `UPDATE organization_representatives
+          `UPDATE identities
               SET email_id = NULL, updated_at = ?
             WHERE email_id = ? AND user_id = ?`,
         )
@@ -193,7 +193,7 @@ export async function removeUserEmail(
         "user_email_removed",
         "user",
         userId,
-        { emailId, email: existing.email, representationEmailFallback: "primary" },
+        { emailId, email: existing.email, identityEmailFallback: "primary" },
         now,
       ),
     ]);

@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { Spinner } from "../../../../../../components/Spinner";
+import { Badge } from "../../../../../../components/Badge";
 import { getJson, patchJson } from "../../../../../../shared/api-client";
 import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../types";
@@ -9,15 +10,6 @@ import { DetailsSummary } from "../../../../../../components/DetailsSummary";
 import { registrationBadgeResponseSchema } from "../../../../../../../shared/schemas/participant-roles";
 import { eventRegistrationManagementUpdateResponseSchema } from "../../../../../../../shared/schemas/route-contracts-event-registration-management";
 import { eventRegistrationPath, eventRegistrationResourcePath } from "../registration-paths";
-
-const ROLE_BADGE_COLOR: Record<string, string> = {
-  attendee: "primary",
-  speaker: "success",
-  moderator: "warning",
-  panelist: "warning",
-  organizer: "info",
-  staff: "secondary",
-};
 
 export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string }) {
   const [info, setInfo] = useState<BadgeRoleInfo | null>(null);
@@ -56,12 +48,11 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 
   if (!info) return loading ? <Spinner /> : null;
 
-  const color = ROLE_BADGE_COLOR[info.effective_role] ?? "secondary";
   return (
     <div>
       <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
         <span class="small text-muted">Effective:</span>
-        <span class={`badge text-bg-${color}`}>{info.effective_role}</span>
+        <Badge status={info.effective_role} />
         {info.admin_override ? (
           <span class="small text-muted ms-1">(forced; auto would be {info.auto_detected})</span>
         ) : (

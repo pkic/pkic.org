@@ -4,7 +4,7 @@
  * capacity (see functions/api/v1/organizations/authorization.ts). Powers
  * the avatar-menu organization switcher and dashboard.
  *
- * Set-based: one page+count query over the caller's active representative
+ * Set-based: one page+count query over the caller's active organization identity
  * rows joined to organizations, then one enrichment query for contact roles
  * and one for pending content reviews — never a per-organization loop.
  */
@@ -13,7 +13,7 @@ import { queryPage, type OffsetPageQuery } from "../db/pagination";
 import { buildD1JsonMembershipFilter } from "../db/json-membership";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
-import { REPRESENTATIVE_ROLE_IDS, representativeRoleActivePredicate } from "./membership/representative-roles";
+import { REPRESENTATIVE_ROLE_IDS, organizationContactRoleActivePredicate } from "./membership/representative-roles";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike } from "../types";
 import type { UserOrganization, UserOrganizationsListQuery } from "../../../assets/shared/schemas/user-organizations";
@@ -26,14 +26,21 @@ interface UserOrganizationRow {
 }
 
 const USER_ORGANIZATIONS_FROM = `
-  FROM organization_representatives r
-  JOIN members m ON m.id = r.member_id AND m.status = 'active' AND m.organization_id IS NOT NULL
+  FROM identities identity
+  JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+  JOIN members m ON m.id = capacity.member_id AND m.status = 'active' AND m.organization_id IS NOT NULL
   JOIN organizations o ON o.id = m.organization_id`;
 
 /** Exported separately so an EXPLAIN QUERY PLAN test can assert index use (tests/admin-list-query-plans.test.ts). */
 export function buildUserOrganizationsPageQuery(userId: string, params: UserOrganizationsListQuery): OffsetPageQuery {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
-  const conditions = ["r.user_id = ?", "r.left_at IS NULL", ...(search ? [search.sql] : [])];
+  const conditions = [
+    "identity.user_id = ?",
+    "identity.started_at IS NOT NULL",
+    "identity.ended_at IS NULL",
+    "identity.blocked_at IS NULL",
+    ...(search ? [search.sql] : []),
+  ];
   const bindings = [userId, ...(search?.bindings ?? [])];
   const where = `WHERE ${conditions.join(" AND ")}`;
   const orderBy = resolveMappedOrderBy(params.sort, { name: "o.name" }, "o.name ASC", "o.id ASC");
@@ -69,13 +76,14 @@ async function resolveContactRoles(
     `SELECT ur.context_id AS member_id, ur.role_id
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     JOIN organization_representatives rep
-       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+     JOIN identity_member_capacities capacity ON capacity.member_id = ur.context_id
+     JOIN identities identity
+       ON identity.id = capacity.identity_id AND identity.user_id = ur.user_id
      WHERE ur.context_type = 'organization'
        AND ur.user_id = ?
        AND ur.role_id IN (?, ?)
        AND ${memberFilter.sql}
-       AND ${representativeRoleActivePredicate()}`,
+       AND ${organizationContactRoleActivePredicate()}`,
     [
       userId,
       REPRESENTATIVE_ROLE_IDS.primaryContact,

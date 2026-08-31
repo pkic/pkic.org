@@ -1,20 +1,14 @@
 import { useRef, useState } from "preact/hooks";
+import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { Spinner } from "../../../../../../components/Spinner";
 import { presentationUploadRequest } from "../../../../../../../shared/presentation-upload";
 import { deleteJson, postJson, requestJson } from "../../../../../../shared/api-client";
 import { presentationVersionResponseSchema } from "../../../../../../../shared/schemas/presentation-versions";
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../../../ui";
+import { Badge } from "../../../../../../components/Badge";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
 import { proposalResourcePath } from "./proposal-api";
-
-function reviewStatusLabel(status: PresentationVersionReview["status"]): string {
-  return { approved: "Approved", rejected: "Rejected", needs_revision: "Needs revision" }[status] ?? status;
-}
-
-function reviewStatusBadgeClass(status: PresentationVersionReview["status"]): string {
-  return { approved: "success", rejected: "danger", needs_revision: "warning" }[status] ?? "secondary";
-}
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";
@@ -89,12 +83,22 @@ export function PresentationVersionsTab({
     }
   }
 
-  async function handleDelete(versionId: string) {
-    if (!confirm("Delete this presentation version? This cannot be undone.")) return;
-    setDeletingId(versionId);
+  async function handleDelete(version: PresentationVersion) {
+    if (
+      !(await confirmAction({
+        title: `Delete presentation version ${version.versionNumber}?`,
+        consequences: [
+          "The uploaded file is deleted and this version no longer appears here",
+          ...(version.isCurrent ? ["The next most recent version becomes the current version"] : []),
+        ],
+        confirmLabel: "Delete version",
+      }))
+    )
+      return;
+    setDeletingId(version.id);
     try {
       await deleteJson(
-        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}`),
+        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}`),
         successResponseSchema,
       );
       toast("Version deleted", "success");
@@ -150,11 +154,8 @@ export function PresentationVersionsTab({
             <span class="fw-semibold">Version {version.versionNumber}</span>
             {version.isCurrent && <span class="badge text-bg-primary">Current</span>}
             {version.latestReview && (
-              <span
-                class={`badge text-bg-${reviewStatusBadgeClass(version.latestReview.status)}`}
-                data-presentation-review-status
-              >
-                {reviewStatusLabel(version.latestReview.status)}
+              <span data-presentation-review-status>
+                <Badge status={version.latestReview.status} />
               </span>
             )}
             <span class="small text-muted ms-auto">
@@ -193,7 +194,7 @@ export function PresentationVersionsTab({
                   <button
                     class="btn btn-sm btn-outline-danger"
                     disabled={deletingId === version.id}
-                    onClick={() => void handleDelete(version.id)}
+                    onClick={() => void handleDelete(version)}
                   >
                     {deletingId === version.id ? "Deleting…" : "Delete"}
                   </button>

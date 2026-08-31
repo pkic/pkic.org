@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   groupMembershipsListQuerySchema,
+  groupMembershipsManagementListResponseSchema,
+  groupMembershipsParticipantListResponseSchema,
   groupCategoryRulesResponseSchema,
   groupJoinSchema,
   authenticatedGroupDetailResponseSchema,
@@ -13,6 +15,7 @@ import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../functions/_lib/type
 import {
   assignLocalGroupLeadership,
   buildGroupMembershipsPageQuery,
+  buildGroupParticipantsPageQuery,
   buildGroupsPageQuery,
   canManageGroup,
   createGroup,
@@ -36,7 +39,7 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
-import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
+import { activeIdentityIdForMember, ensureGroupMembershipCapacity } from "./helpers/group-leadership";
 
 async function insertActor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
@@ -47,14 +50,15 @@ async function insertActor(email: string, role = "user"): Promise<UserBackedAuth
 async function grantGroupLeadership(groupId: string, actor: AuthAdmin, roleId = "role-group_lead"): Promise<string> {
   if (actor.identityType !== "user") throw new Error("Test group leadership requires a user-backed actor");
   const memberId = await ensureGroupMembershipCapacity(env.DB, groupId, actor.id);
+  const identityId = await activeIdentityIdForMember(env.DB, actor.id, memberId);
   actor.memberId = memberId;
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO user_roles
-       (id, user_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, ?, ?, 'group', ?, 0, datetime('now'))`,
+       (id, user_id, identity_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
+     VALUES (?, ?, ?, ?, ?, 'group', ?, 0, datetime('now'))`,
   )
-    .bind(id, actor.id, memberId, roleId, groupId)
+    .bind(id, actor.id, identityId, memberId, roleId, groupId)
     .run();
   return id;
 }
@@ -114,6 +118,23 @@ describe("group visibility", () => {
       .join("\n");
     expect(membershipDetails).toMatch(/idx_group_memberships_group_active/);
     expect(membershipDetails).not.toMatch(/SCAN group_memberships\b/);
+
+    const participantsQuery = buildGroupParticipantsPageQuery(
+      "10000000-0000-4000-8000-000000000001",
+      groupMembershipsListQuerySchema.parse({ active: true, limit: 25 }),
+    );
+    const participantsSql = buildOffsetPageSql(participantsQuery);
+    const participantsPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${participantsSql.pageSql}`)
+      .bind(...participantsSql.bindings, participantsQuery.limit, participantsQuery.offset)
+      .all<{ detail: string }>();
+    const participantsCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${participantsSql.countSql}`)
+      .bind(...participantsSql.countBindings)
+      .all<{ detail: string }>();
+    const participantsDetails = [...participantsPagePlan.results, ...participantsCountPlan.results]
+      .map((row) => row.detail)
+      .join("\n");
+    expect(participantsDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(participantsDetails).not.toMatch(/SCAN group_memberships\b/);
   });
 });
 
@@ -713,21 +734,24 @@ describe("group leadership inheritance", () => {
     const orgBId = await insertOrganization(env.DB, "Leadership Org B");
     const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
     const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
-    await addRepresentative(env.DB, memberAId, representative.id);
-    await addRepresentative(env.DB, memberBId, representative.id);
+    const identityAId = await addRepresentative(env.DB, memberAId, representative.id);
+    const identityBId = await addRepresentative(env.DB, memberBId, representative.id);
     await env.DB.batch(
-      [memberAId, memberBId].map((memberId) =>
+      [
+        { memberId: memberAId, identityId: identityAId },
+        { memberId: memberBId, identityId: identityBId },
+      ].map(({ memberId, identityId }) =>
         env.DB.prepare(
           `INSERT INTO group_memberships
-               (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
-        ).bind(crypto.randomUUID(), group.id, representative.id, memberId),
+               (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+        ).bind(crypto.randomUUID(), group.id, representative.id, identityId, memberId),
       ),
     );
 
     await assignLocalGroupLeadership(env.DB, globalAdmin, group.id, {
       userId: representative.id,
-      memberId: memberAId,
+      identityId: identityAId,
       roleId: "role-group_lead",
     });
 
@@ -816,7 +840,7 @@ describe("group leadership inheritance", () => {
     localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, parentLeader, child.id, {
       userId: localLeader.id,
-      memberId: localLeader.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, parentLeader, child.id, { governanceInheritanceMode: "local_only" });
@@ -906,7 +930,7 @@ describe("group leadership inheritance", () => {
     localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, localOnly.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, globalAdmin, localOnly.id, {
       userId: localLeader.id,
-      memberId: localLeader.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, globalAdmin, localOnly.id, { governanceInheritanceMode: "local_only" });
@@ -968,7 +992,7 @@ describe("group leadership inheritance", () => {
     await expect(
       assignLocalGroupLeadership(mutateBeforeNextBatch(env.DB, revokeManagement), parentLeader, child.id, {
         userId: candidate.id,
-        memberId: candidate.memberId,
+        identityId: await activeIdentityIdForMember(env.DB, candidate.id, candidate.memberId!),
         roleId: "role-group_lead",
       }),
     ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_CHANGED" });
@@ -999,7 +1023,7 @@ describe("group leadership inheritance", () => {
 
     await assignLocalGroupLeadership(env.DB, serviceActor, group.id, {
       userId: candidate.id,
-      memberId: candidate.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, candidate.id, candidate.memberId!),
       roleId: "role-group_lead",
     });
     expect(
@@ -1177,6 +1201,83 @@ describe("group route contracts", () => {
       headers: { authorization: `Bearer ${leaderToken}` },
     });
     expect(retiredContext.status).toBe(404);
+  });
+
+  it("shapes the membership listing by capability: reduced roster for a participant, full roster for a manager, none for neither", async () => {
+    const globalAdmin = await insertActor("membership-shape-admin@example.test", "admin");
+    const group = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Membership Shape Group",
+      eligibilityMode: "open",
+    });
+
+    const manager = await insertActor("membership-shape-manager@example.test");
+    await grantGroupLeadership(group.id, manager);
+    const managerToken = await createAdminSession(env.DB, manager.id, "membership-shape-manager-token");
+
+    const participantEmail = "membership-shape-participant@example.test";
+    const participantUserId = await insertUser(env.DB, participantEmail);
+    const participantMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Membership Shape Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, participantMemberId, participantUserId);
+    await joinGroup(env.DB, group.id, {
+      actorUserId: participantUserId,
+      targetUserId: participantUserId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const participantToken = await createMemberSession(env.DB, participantUserId, "membership-shape-participant-token");
+
+    const outsiderUserId = await insertUser(env.DB, "membership-shape-outsider@example.test");
+    const outsiderMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Membership Shape Outsider Organization"),
+      "B",
+    );
+    await addRepresentative(env.DB, outsiderMemberId, outsiderUserId);
+    const outsiderToken = await createMemberSession(env.DB, outsiderUserId, "membership-shape-outsider-token");
+
+    // (a) A participant (not a manager) receives the reduced roster: exactly
+    // identity and affiliation fields, no email address and no
+    // capacity/membership identifier anywhere in the raw payload.
+    const participantResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${participantToken}` },
+    });
+    expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
+    const participantRaw = (await participantResponse.json()) as { memberships: Record<string, unknown>[] };
+    const participantPayload = groupMembershipsParticipantListResponseSchema.parse(participantRaw);
+    const participantRow = participantRaw.memberships.find(
+      (row) => row.organizationName === "Membership Shape Organization",
+    );
+    expect(participantRow).toBeDefined();
+    expect(Object.keys(participantRow!).sort()).toEqual(["headshotUrl", "name", "organizationName", "userId"].sort());
+    expect(JSON.stringify(participantRaw)).not.toContain(participantEmail);
+    expect(
+      participantPayload.memberships.find((row) => row.organizationName === "Membership Shape Organization"),
+    ).toMatchObject({ userId: participantUserId, organizationName: "Membership Shape Organization" });
+
+    // (c) An effective group manager keeps the full capacity roster, email included.
+    const managerResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(managerResponse.status, await managerResponse.clone().text()).toBe(200);
+    const managerPayload = groupMembershipsManagementListResponseSchema.parse(await managerResponse.json());
+    expect(managerPayload.memberships).toContainEqual(
+      expect.objectContaining({ userId: participantUserId, email: participantEmail }),
+    );
+
+    // (b) A caller with neither capability is refused outright.
+    const outsiderResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${outsiderToken}` },
+    });
+    expect([403, 404]).toContain(outsiderResponse.status);
+
+    const unauthenticatedResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`);
+    expect(unauthenticatedResponse.status).toBe(401);
   });
 
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {

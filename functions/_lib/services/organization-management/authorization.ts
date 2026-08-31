@@ -1,16 +1,18 @@
 import { guardPermissionMutationDatabase } from "../../auth/permissions";
+import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import { AppError } from "../../errors";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 
 export function authorizedOrganizationMutationDb(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
-  permission: "organizations:write" | "membership:write",
+  permission: Permission | readonly Permission[],
 ): DatabaseLike {
+  const permissions = Array.isArray(permission) ? permission : [permission];
   return guardPermissionMutationDatabase(
     db,
     actor,
-    [{ permission }],
+    permissions.map((item) => ({ permission: item })),
     () =>
       new AppError(
         409,

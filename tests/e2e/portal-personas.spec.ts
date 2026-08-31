@@ -13,6 +13,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "20000000-0000-4000-8000-000000000001";
 const MEMBER_ID = "30000000-0000-4000-8000-000000000001";
+const IDENTITY_ID = "30000000-0000-4000-8000-000000000002";
 
 const group = {
   id: GROUP_ID,
@@ -151,9 +152,10 @@ function profileFor(persona: Persona): Record<string, unknown> {
     headshotUrl: null,
     canEditOrganizationName: false,
     isOrgContact: false,
-    organizationRepresentatives: null,
-    activeMemberships: [
+    organizationIdentities: null,
+    activeIdentities: [
       {
+        identityId: IDENTITY_ID,
         memberId: MEMBER_ID,
         organizationId: null,
         organizationName: null,

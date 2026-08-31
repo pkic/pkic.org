@@ -12,8 +12,8 @@ import { findEmailReviewCard } from "../../assets/ts/event-flows/registration-pa
 import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
 import { useAsyncSubmission } from "../../assets/ts/hooks/useAsyncSubmission";
 import { useMagicLinkRequest } from "../../assets/ts/hooks/useMagicLinkRequest";
-import { RepresentativeSelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
-import { formatStageLabel } from "../../assets/ts/member-flows/portal/ui";
+import { IdentitySelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
+import { statusLabel } from "../../assets/ts/components/Badge";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { classifyDonationPollResult } from "../../assets/ts/shared/donation/session-poll";
 import { uploadFile } from "../../assets/ts/shared/file-upload";
@@ -167,7 +167,7 @@ describe("public shared frontend abstractions", () => {
 
   it("shares member initials, not-found, verification, menu, and organization labels", () => {
     expect(memberInitials("Ada Byron Lovelace IV")).toBe("ABL");
-    expect(formatStageLabel("in_consultation")).toBe("In Consultation");
+    expect(statusLabel("in_consultation")).toBe("In consultation");
     expect(ORGANIZATION_CONTENT_FIELD_LABELS.blogFeedUrl).toBe("Blog feed URL");
     const container = mount(
       <>
@@ -204,12 +204,12 @@ describe("public shared frontend abstractions", () => {
   it("renders representative choices through the shared selector", () => {
     const onChange = vi.fn();
     const container = mount(
-      <RepresentativeSelect
+      <IdentitySelect
         className="representative-test"
         value=""
         disabled={false}
         emptyLabel="Primary contact"
-        representatives={[{ userId: "user-1", name: "Ada", email: "ada@example.test" }]}
+        identities={[{ userId: "user-1", name: "Ada", email: "ada@example.test" }]}
         onChange={onChange}
       />,
     );

@@ -42,7 +42,7 @@ function AffiliationPicker({
   userId: string | null;
   initialValue: string | null | undefined;
   value: string | null | undefined;
-  onChange: (memberId: string | null | undefined) => void;
+  onChange: (identityId: string | null | undefined) => void;
   disabled: boolean;
 }) {
   const [affiliations, setAffiliations] = useState<LeadershipAffiliation[]>([]);
@@ -65,11 +65,11 @@ function AffiliationPicker({
         setAffiliations(next);
         if (
           initialValue === null ||
-          (initialValue !== undefined && next.some((item) => item.memberId === initialValue))
+          (initialValue !== undefined && next.some((item) => item.identityId === initialValue))
         ) {
           onChange(initialValue);
         } else if (next.length === 1) {
-          onChange(next[0].memberId);
+          onChange(next[0].identityId);
         } else if (next.length === 0) {
           onChange(null);
         }
@@ -102,7 +102,7 @@ function AffiliationPicker({
       {value === undefined && <option value="">Select affiliation…</option>}
       <option value="none">No affiliation</option>
       {affiliations.map((affiliation) => (
-        <option key={affiliation.memberId} value={affiliation.memberId}>
+        <option key={affiliation.identityId} value={affiliation.identityId}>
           {affiliation.organizationName ?? "Individual membership"} ({affiliation.membershipCategory})
         </option>
       ))}
@@ -112,7 +112,7 @@ function AffiliationPicker({
 
 function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board" | "executive_council" }) {
   const [picked, setPicked] = useState<PickedUser | null>(null);
-  const [memberId, setMemberId] = useState<string | null | undefined>(undefined);
+  const [identityId, setIdentityId] = useState<string | null | undefined>(undefined);
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
@@ -120,7 +120,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
 
   async function submit(e: Event) {
     e.preventDefault();
-    if (!picked || memberId === undefined || !title.trim() || !startsAt) return;
+    if (!picked || identityId === undefined || !title.trim() || !startsAt) return;
     setBusy(true);
     try {
       await postJson(
@@ -128,7 +128,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         {
           body,
           userId: picked.id,
-          memberId,
+          identityId,
           title: title.trim(),
           startsAt,
           endsAt: endsAt || null,
@@ -137,7 +137,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
       );
       toast("Position added", "success");
       setPicked(null);
-      setMemberId(undefined);
+      setIdentityId(undefined);
       setTitle("");
       setStartsAt("");
       setEndsAt("");
@@ -157,7 +157,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
           value={picked}
           onChange={(user) => {
             setPicked(user);
-            setMemberId(undefined);
+            setIdentityId(undefined);
           }}
           disabled={busy}
         />
@@ -165,8 +165,8 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
       <AffiliationPicker
         userId={picked?.id ?? null}
         initialValue={undefined}
-        value={memberId}
-        onChange={setMemberId}
+        value={identityId}
+        onChange={setIdentityId}
         disabled={busy}
       />
       <input
@@ -197,7 +197,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
       <button
         type="submit"
         class="btn btn-sm btn-success"
-        disabled={busy || !picked || memberId === undefined || !title.trim() || !startsAt}
+        disabled={busy || !picked || identityId === undefined || !title.trim() || !startsAt}
       >
         Add
       </button>
@@ -218,14 +218,14 @@ function PositionRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(position.title);
-  const [memberId, setMemberId] = useState<string | null | undefined>(position.memberId);
+  const [identityId, setIdentityId] = useState<string | null | undefined>(position.identityId);
   const [startsAt, setStartsAt] = useState(position.startsAt);
   const [endsAt, setEndsAt] = useState(position.endsAt ?? "");
   const [busy, setBusy] = useState(false);
 
   function startEdit() {
     setTitle(position.title);
-    setMemberId(position.memberId);
+    setIdentityId(position.identityId);
     setStartsAt(position.startsAt);
     setEndsAt(position.endsAt ?? "");
     setEditing(true);
@@ -237,7 +237,7 @@ function PositionRow({
     try {
       await patchJson(
         `${API_BASE}/${encodeURIComponent(position.id)}`,
-        { memberId, title: title.trim(), startsAt, endsAt: endsAt || null },
+        { identityId, title: title.trim(), startsAt, endsAt: endsAt || null },
         leadershipPositionResponseSchema,
       );
       toast("Position updated", "success");
@@ -275,9 +275,9 @@ function PositionRow({
         <span class="small fw-semibold portal-leadership-name">{position.name}</span>
         <AffiliationPicker
           userId={position.userId}
-          initialValue={position.memberId}
-          value={memberId}
-          onChange={setMemberId}
+          initialValue={position.identityId}
+          value={identityId}
+          onChange={setIdentityId}
           disabled={busy}
         />
         <input
@@ -306,7 +306,7 @@ function PositionRow({
         <button
           type="submit"
           class="btn btn-sm btn-success"
-          disabled={busy || memberId === undefined || !title.trim() || !startsAt}
+          disabled={busy || identityId === undefined || !title.trim() || !startsAt}
         >
           Save
         </button>

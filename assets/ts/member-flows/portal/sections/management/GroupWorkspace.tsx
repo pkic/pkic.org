@@ -12,6 +12,7 @@ import {
   type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
+import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -50,7 +51,7 @@ function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
           <div class="d-flex flex-wrap align-items-center gap-2">
             <h4 class="portal-context-title mb-0">{group.name}</h4>
             <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
-            {!group.active && <span class="badge text-bg-warning">Inactive</span>}
+            {!group.active && <Badge status="inactive" />}
           </div>
           {group.parentGroup && <p class="text-muted small mb-0 mt-1">Part of {group.parentGroup.name}</p>}
         </div>
@@ -106,12 +107,15 @@ export function GroupWorkspace({
   view = OVERVIEW_VIEW,
   resourceId,
   resourceTab,
+  resourceDetailId,
 }: {
   groupId: string;
   view?: string;
   resourceId?: string;
   /** A second URL segment below `resourceId`: the events, forms, and meetings views forward it as the resource's initial tab. */
   resourceTab?: string;
+  /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
+  resourceDetailId?: string;
 }) {
   const detail = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
@@ -169,8 +173,8 @@ export function GroupWorkspace({
                 <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
               </div>
             )}
-            {view === "members" && canManage && (
-              <GroupMembers key={group.id} groupId={group.id} onChanged={detail.reload} />
+            {view === "members" && (canManage || canParticipate) && (
+              <GroupMembers key={group.id} groupId={group.id} canManage={canManage} onChanged={detail.reload} />
             )}
             {view === "leadership" && canManage && <GroupLeadership key={group.id} groupId={group.id} />}
             {view === "events" && (
@@ -180,6 +184,7 @@ export function GroupWorkspace({
                 canManage={canManage}
                 initialEventId={resourceId}
                 initialEventTab={resourceTab}
+                initialEventDetailId={resourceDetailId}
               />
             )}
             {view === "meetings" && (

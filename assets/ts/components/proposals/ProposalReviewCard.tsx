@@ -1,11 +1,10 @@
 import type { ProposalReview } from "../../../shared/schemas/proposal-reviews";
 import { Markdown } from "../Markdown";
+import { Badge } from "../Badge";
 import { formatDateTime } from "../../shared/ui";
 
 /** Displays one review consistently wherever a program committee works. */
 export function ProposalReviewCard({ review }: { review: ProposalReview }) {
-  const recommendationColor =
-    { accept: "success", reject: "danger", "needs-work": "warning" }[review.recommendation] ?? "secondary";
   const reviewer =
     [review.reviewer_first_name, review.reviewer_last_name].filter(Boolean).join(" ") ||
     review.reviewer_email ||
@@ -15,7 +14,7 @@ export function ProposalReviewCard({ review }: { review: ProposalReview }) {
     <div class="card mb-2">
       <div class="card-body py-2 px-3">
         <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
-          <span class={`badge text-bg-${recommendationColor}`}>{review.recommendation}</span>
+          <Badge status={review.recommendation} />
           {review.score != null && <span class="badge text-bg-light border text-body">Score {review.score}/10</span>}
           <span class="small text-muted">{reviewer}</span>
           <span class="small text-muted ms-auto">{formatDateTime(review.updated_at)}</span>

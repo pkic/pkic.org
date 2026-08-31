@@ -15,6 +15,12 @@ export function formatDateTime(value: string | null | undefined): string {
   return new Date(value).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 }
 
+/** Format an instant as a date only (no time of day) in the viewer's own locale, or an em dash. */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, { dateStyle: "medium" });
+}
+
 /**
  * A friendly calendar span in the viewer's locale — "1–3 December 2026" style,
  * collapsing to a single date when the range covers one day. Dates render in

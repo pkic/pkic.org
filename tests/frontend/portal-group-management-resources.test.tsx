@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
+import { groupMemberAddSchema } from "../../assets/shared/schemas/groups";
 
 const navigate = vi.fn();
 
@@ -316,7 +317,7 @@ describe("portal group management resources", () => {
     await settle();
     await settle();
 
-    expect(container.textContent).toContain("HTTP 500");
+    expect(container.textContent).toContain("on our side");
   });
 
   it("searches and removes exact membership capacities through canonical group routes", async () => {
@@ -352,6 +353,7 @@ describe("portal group management resources", () => {
                   id: MEMBERSHIP_ID,
                   groupId: GROUP_ID,
                   userId: "40000000-0000-4000-8000-000000000001",
+                  identityId: "50000000-0000-4000-8000-000000000011",
                   memberId: "50000000-0000-4000-8000-000000000001",
                   memberType: "organization",
                   userName: "Member Person",
@@ -372,7 +374,7 @@ describe("portal group management resources", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <GroupMembers groupId={GROUP_ID} onChanged={onChanged} />
+        <GroupMembers groupId={GROUP_ID} canManage onChanged={onChanged} />
       </>,
     );
     await settle();
@@ -435,7 +437,7 @@ describe("portal group management resources", () => {
       }),
     );
     const onChanged = vi.fn(async () => {});
-    const container = mount(<GroupMembers groupId={GROUP_ID} onChanged={onChanged} />);
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={onChanged} />);
     await settle();
 
     expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
@@ -452,12 +454,41 @@ describe("portal group management resources", () => {
     await settle();
     await settle();
 
-    expect(
-      requests.find(
-        ({ url, method }) => method === "POST" && url.pathname === `/api/v1/groups/${GROUP_ID}/memberships/${userId}`,
-      )?.body,
-    ).toEqual({ capacitySelection: { mode: "all_eligible", confirmed: true } });
+    const addRequest = requests.find(
+      ({ url, method }) => method === "POST" && url.pathname === `/api/v1/groups/${GROUP_ID}/memberships/${userId}`,
+    );
+    expect(groupMemberAddSchema.omit({ userId: true }).parse(addRequest?.body)).toEqual({
+      capacitySelection: { mode: "all_eligible", confirmed: true },
+    });
     expect(onChanged).toHaveBeenCalledOnce();
     expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
+  });
+
+  it("renders the read-only participant roster instead of the management table when the caller cannot manage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          memberships: [
+            {
+              userId: "40000000-0000-4000-8000-000000000002",
+              name: "Roster Person",
+              headshotUrl: null,
+              organizationName: "Roster Organization",
+            },
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+    const onChanged = vi.fn(async () => {});
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage={false} onChanged={onChanged} />);
+    await settle();
+
+    expect(container.textContent).toContain("Roster Person");
+    expect(container.textContent).toContain("Roster Organization");
+    // No management affordances: no add-person action and no per-row menu.
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Add person")).toBe(false);
+    expect(container.querySelector('button[aria-label^="Actions for"]')).toBeNull();
   });
 });

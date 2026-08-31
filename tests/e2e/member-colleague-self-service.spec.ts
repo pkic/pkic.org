@@ -1,7 +1,7 @@
 /**
  * What a member can do for themselves and for their colleagues.
  *
- * Staff-side representative management is covered. The member-side equivalent
+ * Staff-side identity management is covered. The member-side equivalent
  * is not, and it is the path most people actually use: an organization contact
  * adding a colleague from their own profile, and — the half that was missing
  * entirely — taking that access away again. Joining and leaving a working
@@ -12,29 +12,29 @@ import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
-import { approveMemberThroughReview, readActiveMemberships, uniqueSuffix } from "./helpers/membership";
+import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./helpers/membership";
 
 /** An open working group anyone eligible may join without an invitation. */
 const OPEN_WORKING_GROUP = "20000000-0000-4000-8000-000000000003";
 const ALL_MEMBERS_GROUP = "20000000-0000-4000-8000-000000000001";
 
 /**
- * The profile lists only *active* representatives, so a blocked colleague
+ * The profile lists only active organization identities, so an ended identity
  * disappears from it entirely. Presence is therefore the signal, and it is a
  * stronger one than a status flag: it is what the rest of the portal reads.
  */
-async function activeRepresentativeEmails(page: Page): Promise<string[]> {
+async function activeIdentityEmails(page: Page): Promise<string[]> {
   const result = await page.evaluate(async () => {
     const response = await fetch("/api/v1/users/current", { credentials: "same-origin" });
     return {
       status: response.status,
       body: (await response.json()) as {
-        organizationRepresentatives: Array<{ email: string }> | null;
+        organizationIdentities: Array<{ email: string }> | null;
       },
     };
   });
   expect(result.status, JSON.stringify(result.body)).toBe(200);
-  return (result.body.organizationRepresentatives ?? []).map((representative) => representative.email);
+  return (result.body.organizationIdentities ?? []).map((identity) => identity.email);
 }
 
 test("an organization contact adds a colleague and can take the access away again", async ({ page }) => {
@@ -58,23 +58,34 @@ test("an organization contact adds a colleague and can take the access away agai
   // Adding a colleague is a member action, not a staff one.
   const addCoworker = page.getByRole("button", { name: "Add coworker" });
   await expect(addCoworker).toBeVisible({ timeout: 15_000 });
-  const form = page.locator("form").filter({ has: addCoworker });
+  await addCoworker.click();
+  const form = page.locator("form").filter({ has: page.locator('input[name="email"]') });
+  await expect(form).toBeVisible();
   await form.locator('input[name="name"]').fill(`Colleague ${suffix}`);
   await form.locator('input[name="email"]').fill(colleagueEmail);
   const added = page.waitForResponse(
     (response) =>
-      /\/api\/v1\/organizations\/[^/]+\/representatives$/.test(new URL(response.url()).pathname) &&
+      /\/api\/v1\/organizations\/[^/]+\/identities$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "POST",
   );
-  await addCoworker.click();
+  await form.getByRole("button", { name: "Add coworker" }).click();
   expect((await added).status()).toBe(201);
   await expect(page.getByText(colleagueEmail, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
-  // The colleague really gained organization-derived membership, not just a
-  // row in a roster.
+  // The invitation does not grant capacity until the exact colleague accepts it.
   await page.context().clearCookies();
   await signInToPortal(page, colleagueEmail);
-  const colleagueMemberships = await readActiveMemberships(page);
+  await page.goto("/portal/#/account");
+  const accepted = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/users\/current\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Accept identity" }).click();
+  expect((await accepted).status()).toBe(200);
+
+  // The accepted identity now grants organization-derived membership.
+  const colleagueMemberships = await readActiveIdentities(page);
   expect(
     colleagueMemberships.map((membership) => membership.organizationName),
     JSON.stringify(colleagueMemberships),
@@ -87,18 +98,12 @@ test("an organization contact adds a colleague and can take the access away agai
   const actionsButton = page.getByRole("button", { name: new RegExp(`Actions for Colleague ${suffix}`) });
   await expect(actionsButton).toBeVisible({ timeout: 15_000 });
   await actionsButton.click();
-  await page.getByRole("menuitem", { name: "Remove from organization" }).click();
-  await acceptConfirmDialog(page, "Remove from organization");
-  await expect(page.locator(".my-toast", { hasText: "Representative removed" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("menuitem", { name: "End identity" }).click();
+  await acceptConfirmDialog(page, "End identity");
+  await expect(page.locator(".my-toast", { hasText: "Identity ended" })).toBeVisible({ timeout: 15_000 });
 
-  await expect.poll(async () => await activeRepresentativeEmails(page)).not.toContain(colleagueEmail);
-
-  // A removal is a consent decision that persists until it is explicitly undone.
-  await actionsButton.click();
-  await page.getByRole("menuitem", { name: "Restore" }).click();
-  await acceptConfirmDialog(page, "Restore representative");
-  await expect(page.locator(".my-toast", { hasText: "Representative restored" })).toBeVisible({ timeout: 15_000 });
-  await expect.poll(async () => await activeRepresentativeEmails(page)).toContain(colleagueEmail);
+  // Ended history is immutable; a later role period requires a successor identity.
+  await expect.poll(async () => await activeIdentityEmails(page)).not.toContain(colleagueEmail);
 });
 
 test("a member joins an open working group, sets their mail preference, and leaves again", async ({ page }) => {
@@ -115,7 +120,7 @@ test("a member joins an open working group, sets their mail preference, and leav
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  const memberships = await readActiveMemberships(page);
+  const memberships = await readActiveIdentities(page);
   expect(memberships.length).toBeGreaterThan(0);
 
   const joined = await page.evaluate(async (groupId) => {

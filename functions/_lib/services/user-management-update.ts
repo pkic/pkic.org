@@ -1,6 +1,5 @@
 import type { z } from "zod";
 import { userUpdateSchema } from "../../../assets/shared/schemas/user-management";
-import { serializeLinks } from "../../../assets/shared/schemas/links";
 import { all, first } from "../db/queries";
 import { hasPermission, requirePermission } from "../auth/permissions";
 import { AppError } from "../errors";
@@ -24,10 +23,6 @@ interface UserUpdateRow {
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
-  organization_name: string | null;
-  job_title: string | null;
-  biography: string | null;
-  links_json: string | null;
   role: string;
   active: number;
   is_ec_member: number;
@@ -43,12 +38,6 @@ function profilePatch(input: UserUpdateInput): UserProfilePatch {
     ...(input.firstName !== undefined ? { firstName: input.firstName || null } : {}),
     ...(input.lastName !== undefined ? { lastName: input.lastName || null } : {}),
     ...(input.preferredName !== undefined ? { preferredName: input.preferredName || null } : {}),
-    ...(input.organizationName !== undefined ? { organizationName: input.organizationName || null } : {}),
-    ...(input.jobTitle !== undefined ? { jobTitle: input.jobTitle || null } : {}),
-    ...(input.biography !== undefined ? { biography: input.biography || null } : {}),
-    ...(input.links !== undefined
-      ? { linksJson: input.links && input.links.length > 0 ? serializeLinks(input.links) : null }
-      : {}),
   };
 }
 
@@ -57,19 +46,11 @@ function changedProfileFields(user: UserUpdateRow, patch: UserProfilePatch): str
     ["firstName", "first_name"],
     ["lastName", "last_name"],
     ["preferredName", "preferred_name"],
-    ["organizationName", "organization_name"],
-    ["jobTitle", "job_title"],
-    ["biography", "biography"],
-    ["links", "links_json"],
   ] as const;
   const patchValues = {
     firstName: patch.firstName,
     lastName: patch.lastName,
     preferredName: patch.preferredName,
-    organizationName: patch.organizationName,
-    jobTitle: patch.jobTitle,
-    biography: patch.biography,
-    links: patch.linksJson,
   };
   return fields
     .filter(([inputKey, column]) => patchValues[inputKey] !== undefined && patchValues[inputKey] !== user[column])
@@ -127,8 +108,8 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   }
   const user = await first<UserUpdateRow>(
     db,
-    `SELECT id, email, first_name, last_name, preferred_name, organization_name,
-            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at,
+    `SELECT id, email, first_name, last_name, preferred_name,
+            role, active, is_ec_member, pii_redacted_at,
             merged_into_user_id, pending_email, pending_email_change_registration_id, updated_at
      FROM users WHERE id = ?`,
     [userId],

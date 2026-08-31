@@ -19,7 +19,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
-import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
+import { activeIdentityIdForMember, ensureGroupMembershipCapacity } from "./helpers/group-leadership";
 import {
   addResourceGrantGroupLeader as addGroupLeader,
   addResourceGrantParticipant as addParticipant,
@@ -296,7 +296,7 @@ describe("shared resource grant management", () => {
     localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, parentLeader, child.id, {
       userId: localLeader.id,
-      memberId: localLeader.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     const eventId = crypto.randomUUID();

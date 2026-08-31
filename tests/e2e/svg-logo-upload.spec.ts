@@ -28,8 +28,8 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   await page.locator("#organization-create-name").fill(organizationName);
   await page.locator("#organization-create-category").selectOption("F");
   await page.locator("#organization-create-member-since").fill("2026-01-15");
-  await page.locator("#organization-create-representative-name-0").fill("Logo Representative");
-  await page.locator("#organization-create-representative-email-0").fill(`svg-logo-${suffix}@example.invalid`);
+  await page.locator("#organization-create-identity-name-0").fill("Logo Representative");
+  await page.locator("#organization-create-identity-email-0").fill(`svg-logo-${suffix}@example.invalid`);
   await page.getByRole("button", { name: "Create organization" }).click();
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
 

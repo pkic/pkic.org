@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
 import { PERSONAS, type PersonaKey } from "../../personas/catalog";
 import { signInToPortal } from "./portal-auth";
-import { approveMemberThroughReview, readActiveMemberships, uniqueSuffix } from "./membership";
+import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./membership";
 
 /**
  * The same persona catalog the mounted Worker suites use, provisioned the way
@@ -71,7 +71,8 @@ export async function provisionPersona(
               name: organizationName,
               membershipCategory: category,
               memberSince: "2026-01-15",
-              representatives: [{ name: "Persona Representative", email, jobTitle: "Delegate" }],
+              identities: [{ name: "Persona Representative", email, jobTitle: "Delegate" }],
+              activationReason: "E2E persona setup",
             }),
           });
           return { status: response.status, body: await response.json() };
@@ -116,5 +117,5 @@ export async function signInAsPersona(
   await page.context().clearCookies();
   if (key === "anonymous") return persona;
   await signInToPortal(page, persona.email);
-  return { ...persona, memberships: await readActiveMemberships(page) };
+  return { ...persona, memberships: await readActiveIdentities(page) };
 }

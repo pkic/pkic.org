@@ -4,8 +4,8 @@ import { votingMembershipCategoryExistsSql } from "../membership/categories";
  * One definition of who is entitled to a ballot.
  *
  * The per-member and per-person electorates legitimately differ in their
- * joins — only a per-member ballot runs through an organization
- * representative — but the *policy* conditions are identical, and previously
+ * joins — only a per-member ballot requires an organizational identity — but
+ * the *policy* conditions are identical, and previously
  * each branch restated them. Quorum needs to count exactly the electorate
  * that may cast, so a second restatement would have made a drifting count the
  * most likely bug in the feature.
@@ -68,11 +68,13 @@ export const ELIGIBLE_MEMBER_COUNT_QUERY = `
      AND membership.left_at IS NULL
     JOIN members represented_member ON represented_member.id = membership.member_id
     JOIN member_category_assignments category ON category.member_id = represented_member.id
-    JOIN organization_representatives representative
-      ON representative.member_id = represented_member.id
-     AND representative.user_id = membership.user_id
-     AND representative.left_at IS NULL
-     AND representative.blocked_at IS NULL
+    JOIN identities identity
+      ON identity.id = membership.identity_id
+     AND identity.user_id = membership.user_id
+     AND identity.organization_id = represented_member.organization_id
+     AND identity.started_at IS NOT NULL
+     AND identity.ended_at IS NULL
+     AND identity.blocked_at IS NULL
     JOIN users representative_user
       ON representative_user.id = membership.user_id
      AND representative_user.active = 1

@@ -323,15 +323,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
         },
       ]}
       empty={
-        canWrite ? (
-          <EmptyState
-            title="No templates yet"
-            body="Create a template to get started."
-            action={{ label: "New template", onSelect: () => setView("create") }}
-          />
-        ) : (
-          "No templates"
-        )
+        canWrite ? <EmptyState title="No templates yet" body="Create a template to get started." /> : "No templates"
       }
       rowKey={(t) => t.template_key}
     />

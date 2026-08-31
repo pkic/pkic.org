@@ -124,11 +124,7 @@ export function RoleList({
         ]}
         empty={
           canGrant ? (
-            <EmptyState
-              title="No roles yet"
-              body="Create a role to bundle permissions you assign together."
-              action={{ label: "New role", onSelect: onCreateNew }}
-            />
+            <EmptyState title="No roles yet" body="Create a role to bundle permissions you assign together." />
           ) : (
             <EmptyState title="No roles yet" />
           )

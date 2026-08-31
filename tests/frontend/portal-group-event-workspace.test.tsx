@@ -107,7 +107,28 @@ describe("group event workspace", () => {
     const event = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
-    expect(tabLabels(container)).toEqual(["Overview", "Registrations", "Invitations", "Communications", "Settings"]);
+    expect(tabLabels(container)).toEqual([
+      "Overview",
+      "Registrations",
+      "Invitations",
+      "Communications",
+      "Team",
+      "Promoters",
+      "Analytics",
+      "Settings",
+    ]);
+  });
+
+  it("shows Team, Promoters, and Analytics for a manage-capable event, but not for a view-only one", () => {
+    const manager = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
+    const managerContainer = mount(<GroupEventWorkspace event={manager} groupId={GROUP_ID} />);
+    expect(tabLabels(managerContainer)).toEqual(expect.arrayContaining(["Team", "Promoters", "Analytics"]));
+
+    const viewer = baseEvent({ capabilities: ["view"] });
+    const viewerContainer = mount(<GroupEventWorkspace event={viewer} groupId={GROUP_ID} />);
+    expect(tabLabels(viewerContainer)).not.toEqual(expect.arrayContaining(["Team"]));
+    expect(tabLabels(viewerContainer)).not.toEqual(expect.arrayContaining(["Promoters"]));
+    expect(tabLabels(viewerContainer)).not.toEqual(expect.arrayContaining(["Analytics"]));
   });
 
   it("filters tabs by capability: a participant with only register sees overview only", async () => {
@@ -150,6 +171,44 @@ describe("group event workspace", () => {
     });
     const container = mount(<GroupEventWorkspace event={withAccess} groupId={GROUP_ID} />);
     expect(tabLabels(container)).toEqual(["Overview", "Proposals"]);
+  });
+
+  it("renders the absorbed Team tab against the event's own slug-driven endpoint", async () => {
+    const event = baseEvent({ capabilities: ["view", "manage_attendance", "manage"], slug: "architecture-workshop" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/events/architecture-workshop/roles") {
+          return json({
+            roles: [
+              {
+                id: "10000000-0000-4000-8000-000000000009",
+                userEmail: "crew@example.test",
+                userId: "10000000-0000-4000-8000-000000000010",
+                role: "volunteer",
+                grantedByUserId: null,
+                expiresAt: null,
+                createdAt: "2026-08-29T10:00:00.000Z",
+                granterEmail: null,
+              },
+            ],
+            page: { limit: 100, offset: 0, total: 1, hasMore: false },
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="team" />);
+    await settle();
+    await settle();
+
+    expect(tab(container, "Team")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("crew@example.test");
   });
 
   it("navigates to the canonical URL when a tab is clicked, and back to the overview URL for the overview tab", async () => {

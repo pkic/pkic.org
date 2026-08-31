@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   ApiClientError,
+  patchValidated,
   postJson,
+  postValidated,
+  putValidated,
   requestJson,
   setErrorPayloadInterceptor,
   setUnauthorizedHandler,
@@ -137,6 +140,64 @@ describe("shared API client", () => {
       message: "Fix the highlighted fields.",
       details: { fieldErrors: {} },
     } satisfies Partial<ApiClientError>);
+  });
+
+  describe("request-validated helpers", () => {
+    const exampleRequestSchema = z.object({
+      name: z.string().trim().min(1),
+      active: z.boolean().default(true),
+    });
+
+    it("parses the body through the request schema before sending, applying schema defaults", async () => {
+      let capturedBody: unknown;
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string);
+        return Response.json({ success: true });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await postValidated("/api/v1/example", exampleRequestSchema, { name: "  widget  " }, successResponseSchema);
+
+      expect(exampleRequestSchema.parse(capturedBody)).toEqual({ name: "widget", active: true });
+      expect(capturedBody).toEqual({ name: "widget", active: true });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws synchronously naming the endpoint and never calls fetch when the body is invalid", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      expect(() => postValidated("/api/v1/example", exampleRequestSchema, { name: "" }, successResponseSchema)).toThrow(
+        "/api/v1/example",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("parses the body for patchValidated and putValidated too", async () => {
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(JSON.parse(init?.body as string)).toEqual({ name: "widget", active: true });
+        return Response.json({ success: true });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await patchValidated("/api/v1/example", exampleRequestSchema, { name: "widget" }, successResponseSchema);
+      await putValidated("/api/v1/example", exampleRequestSchema, { name: "widget" }, successResponseSchema);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("rejects patchValidated and putValidated bodies before any fetch when invalid", () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      expect(() =>
+        patchValidated("/api/v1/example/patch", exampleRequestSchema, { name: "" }, successResponseSchema),
+      ).toThrow("/api/v1/example/patch");
+      expect(() =>
+        putValidated("/api/v1/example/put", exampleRequestSchema, { name: "" }, successResponseSchema),
+      ).toThrow("/api/v1/example/put");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("global interceptors", () => {

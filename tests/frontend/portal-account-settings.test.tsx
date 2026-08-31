@@ -56,17 +56,18 @@ function memberProfile(): NonNullable<typeof profile.value> {
     memberSince: "2026-08-01",
     showOnOrgProfile: false,
     headshotUrl: null,
-    canEditOrganizationName: false,
     isOrgContact: false,
-    organizationRepresentatives: null,
-    activeMemberships: [
+    organizationIdentities: null,
+    activeIdentities: [
       {
+        identityId: "00000000-0000-4000-8000-000000000004",
         memberId: "00000000-0000-4000-8000-000000000002",
         organizationId: "00000000-0000-4000-8000-000000000010",
         organizationName: "Example Org",
         membershipCategory: "A",
       },
       {
+        identityId: "00000000-0000-4000-8000-000000000005",
         memberId: "00000000-0000-4000-8000-000000000003",
         organizationId: null,
         organizationName: null,
@@ -91,6 +92,33 @@ afterEach(() => {
 });
 
 describe("portal account settings capacity cutover", () => {
+  it("lets a pending-only identity review invitations without calling active-capacity account APIs", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(`${url.pathname}${url.search}`);
+        if (url.pathname === "/api/v1/users/current/identities") {
+          return jsonResponse({ identities: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+        }
+        throw new Error(`Unexpected active-capacity request: ${url}`);
+      }),
+    );
+    portalSession.value = portalSessionFixture({ pendingIdentityCount: 1 });
+
+    mount(<AccountSettings />);
+    await settle();
+
+    expect(container.textContent).toContain("Identity invitations");
+    expect(container.textContent).toContain("No pending identity invitations.");
+    expect(container.textContent).not.toContain("Passkeys");
+    expect(requests).toEqual(["/api/v1/users/current/identities?active=false&limit=100"]);
+  });
+
   it("renders for a staff-only identity without calling member-only APIs", async () => {
     const requests: string[] = [];
     vi.stubGlobal(

@@ -1,19 +1,13 @@
 import { useCallback } from "preact/hooks";
 import type { VoteCandidate, ElectionVoteResult, MotionVoteResult } from "../../types";
-
-const MOTION_OUTCOME_BADGE: Record<MotionVoteResult["outcome"], { label: string; className: string }> = {
-  passed: { label: "Passed", className: "text-bg-success" },
-  failed: { label: "Failed", className: "text-bg-danger" },
-  // Not a rejection: too few members took part for the question to be
-  // settled, which is what the reader needs to know before re-running it.
-  not_quorate: { label: "Not decided — turnout too low", className: "text-bg-warning" },
-};
+import { Badge } from "../../../../components/Badge";
 
 export function MotionResultView({ result }: { result: MotionVoteResult }) {
-  const badge = MOTION_OUTCOME_BADGE[result.outcome];
   return (
     <div>
-      <span class={`badge me-2 ${badge.className}`}>{badge.label}</span>
+      <span class="me-2">
+        <Badge status={result.outcome} />
+      </span>
       <span class="text-muted small">
         {result.counts.in_favor} in favor · {result.counts.opposed} opposed · {result.counts.abstain} abstained (
         {result.totalBallots} ballots cast)

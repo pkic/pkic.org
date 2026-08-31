@@ -1,8 +1,7 @@
 /**
  * My Profile — edit. Editable fields: first
- * name, last name, preferred name, job title, biography, social links.
- * Organization name is only editable for org-less (H5/H6/H7) members
- * (profile.canEditOrganizationName). Headshot upload and the org-page
+ * name, last name, preferred name, and identity-owned profile fields.
+ * Headshot upload and the organization-page
  * visibility toggle live in the same tab nav table.
  */
 import { useRef, useState } from "preact/hooks";
@@ -16,9 +15,9 @@ import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
 import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
-import { representativeMutationResponseSchema } from "../../../../shared/schemas/organization-representation";
+import { identityMutationResponseSchema } from "../../../../shared/schemas/identity";
 import type { ApiTableActions } from "../../../components/ApiDataTable";
-import { OrganizationRepresentativeDirectory } from "./OrganizationRepresentativeDirectory";
+import { ActingIdentityDirectory } from "./OrganizationIdentityDirectory";
 
 const CURRENT_USER_API = "/api/v1/users/current";
 
@@ -37,7 +36,6 @@ export function MyProfile() {
     jobTitle: current?.jobTitle ?? "",
     biography: current?.biography ?? "",
     linksText: linksToText(current?.links ?? []),
-    organizationName: current?.organizationName ?? "",
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,15 +52,12 @@ export function MyProfile() {
         firstName: form.firstName.trim() || undefined,
         lastName: form.lastName.trim() || undefined,
         preferredName: form.preferredName.trim(),
-        jobTitle: form.jobTitle.trim(),
         biography: form.biography.trim(),
         links: textToLinks(form.linksText),
       };
       if (current!.organizationId) {
         input.emailId = form.emailId || null;
-      }
-      if (current!.canEditOrganizationName) {
-        input.organizationName = form.organizationName.trim();
+        input.jobTitle = form.jobTitle.trim();
       }
       const updated = await patchJson(CURRENT_USER_API, input, myProfileSchema);
       saveProfile(updated);
@@ -132,7 +127,7 @@ export function MyProfile() {
           </div>
         )}
 
-        {current.activeMemberships.length > 1 && <ActiveMembershipSwitcher current={current} />}
+        {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
       </div>
 
       <div class="col-md-8">
@@ -155,12 +150,12 @@ export function MyProfile() {
                 </div>
                 {current.organizationId && (
                   <div class="col-sm-6">
-                    <label class="form-label fw-semibold small" for="portal-representation-email">
+                    <label class="form-label fw-semibold small" for="portal-identity-email">
                       Email for this organization
                     </label>
                     <select
                       class="form-select"
-                      id="portal-representation-email"
+                      id="portal-identity-email"
                       value={form.emailId}
                       onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
                     >
@@ -192,26 +187,16 @@ export function MyProfile() {
                     placeholder="Shown instead of first/last name if set"
                   />
                 </div>
-                <div class="col-sm-6">
-                  <label class="form-label fw-semibold small" for="portal-profile-job-title">
-                    Job title
-                  </label>
-                  <input
-                    id="portal-profile-job-title"
-                    class="form-control"
-                    value={form.jobTitle}
-                    onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
-                  />
-                </div>
-                {current.canEditOrganizationName && (
-                  <div class="col-12">
-                    <label class="form-label fw-semibold small">Organization</label>
+                {current.organizationId && (
+                  <div class="col-sm-6">
+                    <label class="form-label fw-semibold small" for="portal-profile-job-title">
+                      Job title for this organization
+                    </label>
                     <input
+                      id="portal-profile-job-title"
                       class="form-control"
-                      value={form.organizationName}
-                      onInput={(e) =>
-                        setForm((f) => ({ ...f, organizationName: (e.target as HTMLInputElement).value }))
-                      }
+                      value={form.jobTitle}
+                      onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
                     />
                   </div>
                 )}
@@ -264,25 +249,23 @@ export function MyProfile() {
           </div>
         </div>
 
-        {current.organizationRepresentatives && <OrganizationRepresentativesCard current={current} />}
+        {current.organizationIdentities && <OrganizationIdentitiesCard current={current} />}
       </div>
     </div>
   );
 }
 
-function OrganizationRepresentativesCard({ current }: { current: MyProfileType }) {
+function OrganizationIdentitiesCard({ current }: { current: MyProfileType }) {
   const directoryRef = useRef<ApiTableActions | null>(null);
   const [showAddCoworker, setShowAddCoworker] = useState(false);
 
-  if (!current.organizationId || !current.organizationRepresentatives) return null;
-  const primaryContactUserId = current.organizationRepresentatives.find(
-    (representative) => representative.isPrimaryContact,
-  )?.userId;
+  if (!current.organizationId || !current.organizationIdentities) return null;
+  const primaryContactUserId = current.organizationIdentities.find((identity) => identity.isPrimaryContact)?.userId;
 
   return (
     <div class="card border-0 shadow-sm mt-3">
       <div class="card-body">
-        <h3 class="h6 mb-3">Organization representatives</h3>
+        <h3 class="h6 mb-3">Organization identities</h3>
         {current.isOrgContact && showAddCoworker && (
           <AddCoworkerForm
             organizationId={current.organizationId}
@@ -294,9 +277,9 @@ function OrganizationRepresentativesCard({ current }: { current: MyProfileType }
             }}
           />
         )}
-        <OrganizationRepresentativeDirectory
+        <ActingIdentityDirectory
           organizationId={current.organizationId}
-          activeRepresentatives={current.organizationRepresentatives}
+          activeIdentities={current.organizationIdentities}
           canManage={current.isOrgContact}
           canBlock={(userId) => userId !== current.userId && userId !== primaryContactUserId}
           onChanged={refreshProfile}
@@ -315,27 +298,28 @@ function OrganizationRepresentativesCard({ current }: { current: MyProfileType }
  * an organization plus their own individual membership) concurrently —
  * lets them pick which membership context the rest of the portal (working
  * groups, votes, applications, etc.) acts as. Switching reissues the
- * session cookie server-side (PUT /api/v1/users/current/memberships/active) and then
+ * session cookie server-side (PUT /api/v1/users/current/identities/active) and then
  * does a full navigation rather than a signal update, so every other
  * org-scoped screen re-fetches under the new context instead of holding
  * stale state from the previous one.
  */
-function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
+function ActiveIdentitySwitcher({ current }: { current: MyProfileType }) {
   const [switching, setSwitching] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // The currently-active entry is whichever membership matches the
   // organization (or org-less-ness) the rest of this profile response is
   // already scoped to.
-  const activeMemberId =
-    current.activeMemberships.find((m) => m.organizationId === current.organizationId)?.memberId ?? null;
+  const activeIdentityId = current.activeIdentities.find(
+    (identity) => identity.organizationId === current.organizationId,
+  )?.identityId;
 
-  async function handleSwitch(memberId: string): Promise<void> {
-    if (memberId === activeMemberId) return;
+  async function handleSwitch(identityId: string): Promise<void> {
+    if (identityId === activeIdentityId) return;
     setError(null);
-    setSwitching(memberId);
+    setSwitching(identityId);
     try {
-      await putJson(`${CURRENT_USER_API}/memberships/active`, { memberId }, myProfileSchema);
+      await putJson(`${CURRENT_USER_API}/identities/active`, { identityId }, myProfileSchema);
       // A full reload, not window.location.assign to this same route — the
       // caller is already on #/profile, so assigning that same URL is a
       // no-op and would leave every other org-scoped screen (working
@@ -353,16 +337,19 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
       <div class="card-body">
         <h3 class="h6 mb-2">Acting as</h3>
         <p class="text-muted small mb-2">
-          You represent more than one membership. Switch which one the portal acts as below.
+          You hold more than one active identity. Switch which exact identity the portal acts as below.
         </p>
         <ul class="list-group list-group-flush">
-          {current.activeMemberships.map((m) => {
-            const isActive = m.memberId === activeMemberId;
+          {current.activeIdentities.map((identity) => {
+            const isActive = identity.identityId === activeIdentityId;
             return (
-              <li key={m.memberId} class="list-group-item d-flex justify-content-between align-items-center px-0">
+              <li
+                key={identity.identityId}
+                class="list-group-item d-flex justify-content-between align-items-center px-0"
+              >
                 <span>
-                  {m.organizationName ?? "My own membership"}{" "}
-                  <span class="text-muted small">({m.membershipCategory})</span>
+                  {identity.organizationName ?? "My individual identity"}{" "}
+                  <span class="text-muted small">({identity.membershipCategory})</span>
                 </span>
                 {isActive ? (
                   <span class="badge text-bg-success">Current</span>
@@ -371,9 +358,9 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
                     type="button"
                     class="btn btn-sm btn-outline-success"
                     disabled={switching !== null}
-                    onClick={() => void handleSwitch(m.memberId)}
+                    onClick={() => void handleSwitch(identity.identityId)}
                   >
-                    {switching === m.memberId ? "Switching…" : "Switch"}
+                    {switching === identity.identityId ? "Switching…" : "Switch"}
                   </button>
                 )}
               </li>
@@ -410,11 +397,17 @@ function AddCoworkerForm({
     setSubmitting(true);
     try {
       await postJson(
-        `/api/v1/organizations/${encodeURIComponent(organizationId)}/representatives`,
-        { kind: "email", name, email, showOnOrganizationProfile: true },
-        representativeMutationResponseSchema,
+        `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`,
+        {
+          userReference: "email",
+          name,
+          email,
+          activation: { mode: "invitation" },
+          showOnOrganizationProfile: true,
+        },
+        identityMutationResponseSchema,
       );
-      setSuccess(`${name} (${email}) was added to your organization.`);
+      setSuccess(`${name} (${email}) was invited to accept an identity for your organization.`);
       form.reset();
       await onAdded();
     } catch (err) {

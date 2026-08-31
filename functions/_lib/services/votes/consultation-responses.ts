@@ -34,9 +34,11 @@ export async function submitConsultationResponse(
   }
 
   let memberId: string | null = null;
+  let identityId = member.identityId;
   if (vote.electorate_mode === "per_member") {
     const capacity = await resolvePerMemberCapacity(db, vote, member, requestedMemberId, throughGroupId);
     memberId = capacity.memberId;
+    identityId = capacity.identityId;
   } else {
     if (requestedMemberId != null) {
       throw new AppError(422, "MEMBER_ID_NOT_ALLOWED", "Per-person votes do not accept a Member selection");
@@ -77,17 +79,17 @@ export async function submitConsultationResponse(
       ? db
           .prepare(
             `UPDATE vote_consultation_responses
-                SET submission_id = ?, user_id = ?, updated_at = ?
+                SET submission_id = ?, user_id = ?, identity_id = ?, updated_at = ?
               WHERE id = ?`,
           )
-          .bind(submission.id, member.userId, now, existing.id)
+          .bind(submission.id, member.userId, identityId, now, existing.id)
       : db
           .prepare(
             `INSERT INTO vote_consultation_responses
-               (id, vote_id, user_id, member_id, submission_id, round, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+               (id, vote_id, user_id, identity_id, member_id, submission_id, round, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .bind(linkId, vote.id, member.userId, memberId, submission.id, vote.current_round, now, now),
+          .bind(linkId, vote.id, member.userId, identityId, memberId, submission.id, vote.current_round, now, now),
   ]);
 }
 

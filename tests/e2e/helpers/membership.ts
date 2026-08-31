@@ -187,19 +187,19 @@ export async function approveMemberThroughReview(
   return { email: options.email, userId: approved.body.userId, applicationId: application.applicationId };
 }
 
-/** The membership contexts the signed-in person may currently act through. */
-export async function readActiveMemberships(
+/** The exact approved identities the signed-in person may currently act through. */
+export async function readActiveIdentities(
   page: Page,
-): Promise<Array<{ memberId: string; organizationName: string | null }>> {
+): Promise<Array<{ identityId: string; memberId: string; organizationName: string | null }>> {
   const result = await page.evaluate(async () => {
     const response = await fetch("/api/v1/users/current", { credentials: "same-origin" });
     return {
       status: response.status,
       body: (await response.json()) as {
-        activeMemberships: Array<{ memberId: string; organizationName: string | null }>;
+        activeIdentities: Array<{ identityId: string; memberId: string; organizationName: string | null }>;
       },
     };
   });
   expect(result.status, JSON.stringify(result.body)).toBe(200);
-  return result.body.activeMemberships;
+  return result.body.activeIdentities;
 }

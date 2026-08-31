@@ -1,4 +1,4 @@
-import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
+import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
 import { all, first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
@@ -69,6 +69,7 @@ export interface MemberEligibleUserRow {
   email: string;
   normalized_email: string;
   active: number;
+  identity_id: string;
   member_id: string;
   organization_id: string | null;
   organization_name: string | null;
@@ -78,15 +79,27 @@ export interface MemberEligibleUserRow {
 }
 
 export const MEMBER_ELIGIBLE_USER_COLUMNS =
-  "id, email, normalized_email, active, member_id, organization_id, organization_name, " +
+  "id, email, normalized_email, active, identity_id, member_id, organization_id, organization_name, " +
   "membership_category, is_ec_member, sort_key";
 
 export const MEMBER_ELIGIBLE_USER_SELECT = `
-  SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
+  SELECT u.id, COALESCE(selected_email.email, u.email) AS email,
+         COALESCE(selected_email.normalized_email, u.normalized_email) AS normalized_email,
+         u.active, u.is_ec_member, identity.id AS identity_id,
          m.id AS member_id, NULL AS organization_id, NULL AS organization_name,
          mca.category_code AS membership_category,
-         '0_' || m.created_at AS sort_key
+         '0_' || identity.started_at AS sort_key
   FROM users u
+  JOIN identities identity
+    ON identity.user_id = u.id
+   AND identity.organization_id IS NULL
+   AND identity.started_at IS NOT NULL
+   AND identity.ended_at IS NULL
+   AND identity.blocked_at IS NULL
+  LEFT JOIN user_emails selected_email
+    ON selected_email.id = identity.email_id
+   AND selected_email.user_id = u.id
+   AND selected_email.verified_at IS NOT NULL
   JOIN members m ON m.user_id = u.id AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
 
@@ -94,17 +107,22 @@ export const MEMBER_ELIGIBLE_USER_SELECT = `
 
   SELECT u.id, COALESCE(selected_email.email, u.email) AS email,
          COALESCE(selected_email.normalized_email, u.normalized_email) AS normalized_email,
-         u.active, u.is_ec_member,
+         u.active, u.is_ec_member, identity.id AS identity_id,
          m.id AS member_id, m.organization_id, o.name AS organization_name,
          mca.category_code AS membership_category,
-         '1_' || r.joined_at AS sort_key
+         '1_' || identity.started_at AS sort_key
   FROM users u
-  JOIN organization_representatives r ON r.user_id = u.id AND r.left_at IS NULL
+  JOIN identities identity
+    ON identity.user_id = u.id
+   AND identity.organization_id IS NOT NULL
+   AND identity.started_at IS NOT NULL
+   AND identity.ended_at IS NULL
+   AND identity.blocked_at IS NULL
   LEFT JOIN user_emails selected_email
-    ON selected_email.id = r.email_id
+    ON selected_email.id = identity.email_id
    AND selected_email.user_id = u.id
    AND selected_email.verified_at IS NOT NULL
-  JOIN members m ON m.id = r.member_id AND m.status = 'active'
+  JOIN members m ON m.organization_id = identity.organization_id AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
   JOIN organizations o ON o.id = m.organization_id
 `;
@@ -138,19 +156,20 @@ export function memberSessionAuthorizationEvidence(member: AuthMember): Authoriz
             FROM sessions session
             JOIN (${MEMBER_ELIGIBLE_USER_SELECT}) eligible
               ON eligible.id = session.user_id
-             AND eligible.member_id = ?
+             AND eligible.identity_id = ?
              AND eligible.active = 1
            WHERE session.id = ?
              AND session.user_id = ?
              AND session.revoked_at IS NULL
              AND session.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')
            LIMIT 1`,
-    bindings: [member.memberId, member.sessionId, member.userId],
+    bindings: [member.identityId, member.sessionId, member.userId],
   };
 }
 
-function toEligibleMembership(row: MemberEligibleUserRow): EligibleMembership {
+function toEligibleIdentity(row: MemberEligibleUserRow): EligibleIdentity {
   return {
+    identityId: row.identity_id,
     memberId: row.member_id,
     organizationId: row.organization_id,
     organizationName: row.organization_name,
@@ -158,16 +177,17 @@ function toEligibleMembership(row: MemberEligibleUserRow): EligibleMembership {
   };
 }
 
-export function toAuthMember(rows: MemberEligibleUserRow[], preferredMemberId?: string | null): AuthMember {
-  const selected = (preferredMemberId && rows.find((row) => row.member_id === preferredMemberId)) || rows[0];
+export function toAuthMember(rows: MemberEligibleUserRow[], preferredIdentityId?: string | null): AuthMember {
+  const selected = (preferredIdentityId && rows.find((row) => row.identity_id === preferredIdentityId)) || rows[0];
   return {
     userId: selected.id,
+    identityId: selected.identity_id,
     email: selected.email,
     memberId: selected.member_id,
     organizationId: selected.organization_id,
     membershipCategory: selected.membership_category,
     isEcMember: selected.is_ec_member === 1,
-    activeMemberships: rows.map(toEligibleMembership),
+    activeIdentities: rows.map(toEligibleIdentity),
   };
 }
 
@@ -188,10 +208,10 @@ export async function resolveEligibleMembershipRows(
 export async function findEligibleMemberById(
   db: DatabaseLike,
   userId: string,
-  preferredMemberId?: string | null,
+  preferredIdentityId?: string | null,
 ): Promise<AuthMember | null> {
   const rows = await resolveEligibleMembershipRows(db, userId);
-  return rows.length ? toAuthMember(rows, preferredMemberId) : null;
+  return rows.length ? toAuthMember(rows, preferredIdentityId) : null;
 }
 
 export async function findEligibleMemberByEmail(db: DatabaseLike, email: string): Promise<AuthMember | null> {
@@ -206,6 +226,49 @@ export async function findEligibleMemberByEmail(db: DatabaseLike, email: string)
   return row ? toAuthMember([row]) : null;
 }
 
+export async function countPendingIdentitiesForUser(db: DatabaseLike, userId: string): Promise<number> {
+  const row = await first<{ total: number }>(
+    db,
+    `SELECT COUNT(*) AS total
+       FROM identities
+      WHERE user_id = ?
+        AND started_at IS NULL
+        AND ended_at IS NULL
+        AND blocked_at IS NULL`,
+    [userId],
+  );
+  return Number(row?.total ?? 0);
+}
+
+export function pendingIdentitySignInAuthorizationEvidence(
+  userId: string,
+  normalizedEmail: string,
+): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+            FROM users user
+           WHERE user.id = ?
+             AND user.active = 1
+             AND (
+               user.normalized_email = ?
+               OR EXISTS (
+                 SELECT 1 FROM user_emails email
+                  WHERE email.user_id = user.id
+                    AND email.normalized_email = ?
+                    AND email.verified_at IS NOT NULL
+               )
+             )
+             AND EXISTS (
+               SELECT 1 FROM identities identity
+                WHERE identity.user_id = user.id
+                  AND identity.started_at IS NULL
+                  AND identity.ended_at IS NULL
+                  AND identity.blocked_at IS NULL
+             )`,
+    bindings: [userId, normalizedEmail, normalizedEmail],
+  };
+}
+
 export interface IdentityCapacity {
   id: string;
   email: string;
@@ -216,17 +279,21 @@ export interface IdentityCapacityResolution {
   staff: EligibleStaffUser | null;
   member: AuthMember | null;
   sponsors: SponsorCapacity[];
+  pendingIdentityCount: number;
 }
 
 export async function resolveIdentityCapacities(
   db: DatabaseLike,
   userId: string,
 ): Promise<IdentityCapacityResolution | null> {
-  const [identity, staff, member, sponsors] = await Promise.all([
+  const [identity, staff, member, sponsors, pendingIdentityCount] = await Promise.all([
     first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
     findEligibleStaffUserById(db, userId),
     findEligibleMemberById(db, userId),
     findActiveSponsorCapacitiesByUserId(db, userId),
+    countPendingIdentitiesForUser(db, userId),
   ]);
-  return identity && (staff || member || sponsors.length > 0) ? { identity, staff, member, sponsors } : null;
+  return identity && (staff || member || sponsors.length > 0 || pendingIdentityCount > 0)
+    ? { identity, staff, member, sponsors, pendingIdentityCount }
+    : null;
 }

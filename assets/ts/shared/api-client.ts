@@ -151,3 +151,56 @@ export function deleteJson<Schema extends z.ZodType>(
 ): Promise<z.output<Schema>> {
   return requestJson(url, schema, { method: "DELETE", headers });
 }
+
+/**
+ * Parses `body` through `requestSchema` before it is sent. A parse failure
+ * throws synchronously (not as a rejected promise) with a message naming the
+ * endpoint — an invalid request body is a programmer error, not something a
+ * user triggered by typing in a form, so it must fail loudly during
+ * development/testing rather than round-trip to the server first.
+ *
+ * Parsing (rather than merely type-checking) also means schema defaults and
+ * transforms are applied before the request leaves the client, so the sent
+ * body matches exactly what the shared contract says the server will see.
+ */
+function parseRequestBody<RequestSchema extends z.ZodType>(
+  endpoint: string,
+  requestSchema: RequestSchema,
+  body: z.input<RequestSchema>,
+): z.output<RequestSchema> {
+  const result = requestSchema.safeParse(body);
+  if (!result.success) {
+    throw new Error(`Invalid request body for ${endpoint}: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+export function postValidated<RequestSchema extends z.ZodType, ResponseSchema extends z.ZodType>(
+  url: string,
+  requestSchema: RequestSchema,
+  body: z.input<RequestSchema>,
+  responseSchema: ResponseSchema,
+  headers?: Record<string, string>,
+): Promise<z.output<ResponseSchema>> {
+  return postJson(url, parseRequestBody(url, requestSchema, body), responseSchema, headers);
+}
+
+export function patchValidated<RequestSchema extends z.ZodType, ResponseSchema extends z.ZodType>(
+  url: string,
+  requestSchema: RequestSchema,
+  body: z.input<RequestSchema>,
+  responseSchema: ResponseSchema,
+  headers?: Record<string, string>,
+): Promise<z.output<ResponseSchema>> {
+  return patchJson(url, parseRequestBody(url, requestSchema, body), responseSchema, headers);
+}
+
+export function putValidated<RequestSchema extends z.ZodType, ResponseSchema extends z.ZodType>(
+  url: string,
+  requestSchema: RequestSchema,
+  body: z.input<RequestSchema>,
+  responseSchema: ResponseSchema,
+  headers?: Record<string, string>,
+): Promise<z.output<ResponseSchema>> {
+  return putJson(url, parseRequestBody(url, requestSchema, body), responseSchema, headers);
+}

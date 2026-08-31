@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "preact/hooks";
+import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
 import {
   eventEmailCampaignPreviewResponseSchema,
@@ -62,7 +63,8 @@ export function EventEmailCampaign({
 
   // preview state
   const [preview, setPreview] = useState<EventEmailCampaignPreviewResponse | null>(null);
-  const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
+  const [rawPreviewTab, setPreviewTab] = useHashQueryParam("campaignTab", "html");
+  const previewTab: EmailPreviewTab = rawPreviewTab === "text" ? "text" : "html";
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [status, setStatus] = useState("Preview required before sending.");
   const [sending, setSending] = useState(false);
@@ -443,7 +445,7 @@ export function EventEmailCampaign({
             <Tabs
               items={EMAIL_PREVIEW_TABS}
               active={previewTab}
-              onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
+              onChange={(key) => setPreviewTab(key)}
               className="mb-2"
             />
             {previewTab === "html" && <iframe srcdoc={preview.html} sandbox="" class="adm-email-preview-frame" />}

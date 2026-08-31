@@ -24,8 +24,8 @@ import type {
  * Design note: `members` holds exactly one aggregate row per organization
  * (base schema plus consolidated migration 0035) — a public directory entry is one row per
  * *organization* (or one row per individual, org-less member), with N
- * `organization_representatives` rows resolved separately for the detail
- * view's representative roster (see `loadRepresentatives`).
+ * active organizational identities resolved separately for the detail
+ * view's identity roster (see `loadPublicIdentities`).
  */
 
 interface OrgDataJson {
@@ -35,7 +35,7 @@ interface OrgDataJson {
   slogan?: string;
 }
 
-export interface PublicMemberRepresentative {
+export interface PublicMemberIdentity {
   name: string;
   jobTitle: string | null;
   bio: string | null;
@@ -102,12 +102,21 @@ const DIRECTORY_SELECT = `
   SELECT m.id AS member_id, m.organization_id, o.slug AS org_slug, o.name AS org_name, o.data_json AS org_data_json,
          o.description AS org_description, o.website AS org_website, o.slogan AS org_slogan,
          o.logo_r2_key AS org_logo_r2_key,
-         u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key,
+         u.first_name, u.last_name,
+         CASE WHEN m.organization_id IS NULL THEN mc.label ELSE NULL END AS job_title,
+         individual_identity.biography, individual_identity.links_json, u.headshot_r2_key,
          mca.category_code, m.tier, m.member_since, m.created_at
   FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
   LEFT JOIN users u ON u.id = m.user_id
   JOIN member_category_assignments mca ON mca.member_id = m.id
+  JOIN membership_categories mc ON mc.code = mca.category_code
+  LEFT JOIN identities individual_identity
+    ON individual_identity.user_id = m.user_id
+   AND individual_identity.organization_id IS NULL
+   AND individual_identity.started_at IS NOT NULL
+   AND individual_identity.ended_at IS NULL
+   AND individual_identity.blocked_at IS NULL
   WHERE m.status = 'active'
 `;
 
@@ -158,9 +167,10 @@ export async function listPublicMembers(
   return { members: rows.map(toSummary), total };
 }
 
-async function loadRepresentatives(db: DatabaseLike, organizationId: string): Promise<PublicMemberRepresentative[]> {
+async function loadPublicIdentities(db: DatabaseLike, organizationId: string): Promise<PublicMemberIdentity[]> {
   const rows = await all<{
-    representative_id: string;
+    identity_id: string;
+    user_id: string;
     first_name: string | null;
     last_name: string | null;
     job_title: string | null;
@@ -169,12 +179,15 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
     headshot_r2_key: string | null;
   }>(
     db,
-    `SELECT r.id AS representative_id, u.first_name, u.last_name,
-            r.job_title, r.biography, r.links_json, u.headshot_r2_key
-     FROM organization_representatives r
-     JOIN members m ON m.id = r.member_id
-     JOIN users u ON u.id = r.user_id
-     WHERE m.organization_id = ? AND r.left_at IS NULL AND r.show_on_org_profile = 1
+    `SELECT identity.id AS identity_id, u.id AS user_id, u.first_name, u.last_name,
+            identity.job_title, identity.biography, identity.links_json, u.headshot_r2_key
+     FROM identities identity
+     JOIN users u ON u.id = identity.user_id
+     WHERE identity.organization_id = ?
+       AND identity.started_at IS NOT NULL
+       AND identity.ended_at IS NULL
+       AND identity.blocked_at IS NULL
+       AND identity.show_on_organization_profile = 1
      ORDER BY u.last_name ASC, u.first_name ASC`,
     [organizationId],
   );
@@ -184,7 +197,7 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
     jobTitle: r.job_title,
     bio: r.biography,
     linkedin: findLinkedinUrl(parseLinksJson(r.links_json)),
-    photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.representative_id}/logo` : null,
+    photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.identity_id}/logo` : null,
   }));
 }
 
@@ -201,7 +214,7 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
 
   const summary = toSummary(row);
   const userLinks = parseLinksJson(row.links_json);
-  const representatives = row.organization_id ? await loadRepresentatives(db, row.organization_id) : [];
+  const identities = row.organization_id ? await loadPublicIdentities(db, row.organization_id) : [];
 
   const orgRow = row.organization_id
     ? await first<{
@@ -229,7 +242,7 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
     pressFeedUrl: sanitizeLegacyHttpUrl(orgRow?.press_feed_url),
     careersUrl: sanitizeLegacyHttpUrl(orgRow?.careers_url),
     links: row.organization_id ? parseLinksJson(orgRow?.links_json ?? null) : userLinks,
-    representatives,
+    identities,
     jobTitle: row.organization_id ? null : row.job_title,
     linkedin: row.organization_id ? null : findLinkedinUrl(userLinks),
   };
@@ -238,11 +251,9 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
 /**
  * `id` matches the directory `id` field for organizations and org-less
  * individuals (H5/H6/H7) — see `toSummary` — but is also called with a
- * representative's own `organization_representatives.id` (see
- * `loadRepresentatives`'s `photoUrl`), since an org-tied representative has
- * no `organizations` row of their own to key a logo off of. In every
- * non-organization case the photo lives on `users.headshot_r2_key` (the
- * same column self-service headshot uploads use).
+ * identity's own id (see `loadPublicIdentities`'s `photoUrl`), since an
+ * organization identity has no organization logo row of its own. In every
+ * non-organization case the photo lives on `users.headshot_r2_key`.
  */
 export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<string | null> {
   const orgRow = await first<{ logo_r2_key: string | null }>(db, `SELECT logo_r2_key FROM organizations WHERE id = ?`, [
@@ -260,15 +271,15 @@ export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<
   );
   if (individualRow) return individualRow.headshot_r2_key ?? null;
 
-  const representativeRow = await first<{ headshot_r2_key: string | null }>(
+  const identityRow = await first<{ headshot_r2_key: string | null }>(
     db,
     `SELECT u.headshot_r2_key AS headshot_r2_key
-     FROM organization_representatives r
-     JOIN users u ON u.id = r.user_id
-     WHERE r.id = ?`,
+     FROM identities identity
+     JOIN users u ON u.id = identity.user_id
+     WHERE identity.id = ?`,
     [id],
   );
-  return representativeRow?.headshot_r2_key ?? null;
+  return identityRow?.headshot_r2_key ?? null;
 }
 
 // ── Working groups ──────────────────────────────────────────────────────────

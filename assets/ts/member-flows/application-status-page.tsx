@@ -8,7 +8,8 @@
  */
 import { render } from "preact";
 import { getJson } from "../shared/api-client";
-import { setStatus, formatStatusLabel, statusBadgeClass } from "../shared/form/helpers";
+import { setStatus } from "../shared/form/helpers";
+import { Badge } from "../components/Badge";
 import {
   memberApplicationStatusResponseSchema,
   type MemberApplicationStatusResponse,
@@ -37,7 +38,7 @@ function StatusSummary({ data }: { data: ApplicationStatus }) {
     <div class="event-flow-success">
       <h2 class="h4">Application status</h2>
       <p>
-        <span class={`badge ${statusBadgeClass(data.stage)}`}>{formatStatusLabel(data.stage)}</span>
+        <Badge status={data.stage} />
       </p>
       <p class="text-muted small">
         Submitted {new Date(data.createdAt).toLocaleDateString()} — last updated{" "}

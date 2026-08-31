@@ -4,9 +4,9 @@ import { PROPOSAL_SPEAKER_ROLES, type ProposalSpeakerRole } from "../../../share
 import type { EventInviteWindow } from "../../../shared/schemas/event-invite-validity";
 import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../shared/timezone";
 import { postJson } from "../../shared/api-client";
-import { formatStatusLabel } from "../../shared/form/helpers";
 import type { ToastType } from "../../shared/ui";
 import { ErrorAlert } from "../ErrorAlert";
+import { statusLabel } from "../Badge";
 import type { z } from "zod";
 
 const INVITABLE_ROLES = PROPOSAL_SPEAKER_ROLES.filter(
@@ -124,7 +124,7 @@ export function ProposalCoSpeakerInviteForm({
           >
             {INVITABLE_ROLES.map((option) => (
               <option key={option} value={option}>
-                {formatStatusLabel(option)}
+                {statusLabel(option)}
               </option>
             ))}
           </select>

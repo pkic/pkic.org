@@ -9,10 +9,6 @@ interface UserDetailRow {
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
-  organization_name: string | null;
-  job_title: string | null;
-  biography: string | null;
-  links_json: string | null;
   role: string;
   active: number;
   is_ec_member: number;
@@ -40,7 +36,7 @@ interface MembershipRow {
 }
 
 interface MembershipGroupRow {
-  member_id: string;
+  identity_id: string;
   id: string;
   name: string;
   slug: string;
@@ -55,46 +51,41 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     db
       .prepare(
         `SELECT id, email, first_name, last_name, preferred_name,
-                organization_name, job_title, biography, links_json, role, active, is_ec_member,
+                role, active, is_ec_member,
                 headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
          FROM users WHERE id = ?`,
       )
       .bind(userId),
     db
       .prepare(
-        `SELECT m.id, m.id AS capacity_member_id, mca.category_code, m.status, 1 AS show_on_org_profile,
-                NULL AS organization_id, NULL AS organization_name,
-                NULL AS email_id, u.email AS capacity_email,
-                u.job_title, u.biography, u.links_json, m.created_at,
-                '0_' || m.created_at AS sort_key
-         FROM members m
-         JOIN users u ON u.id = m.user_id
-         JOIN member_category_assignments mca ON mca.member_id = m.id
-         WHERE m.user_id = ?
-
-         UNION ALL
-
-         SELECT r.id, m.id AS capacity_member_id, mca.category_code, m.status, r.show_on_org_profile,
+        `SELECT identity.id, m.id AS capacity_member_id, mca.category_code, m.status,
+                identity.show_on_organization_profile AS show_on_org_profile,
                 m.organization_id, o.name AS organization_name,
-                r.email_id, COALESCE(selected_email.email, u.email) AS capacity_email,
-                r.job_title, r.biography, r.links_json, r.created_at,
-                '1_' || r.joined_at AS sort_key
-         FROM organization_representatives r
-         JOIN members m ON m.id = r.member_id
-         JOIN organizations o ON o.id = m.organization_id
-         JOIN users u ON u.id = r.user_id
+                identity.email_id, COALESCE(selected_email.email, u.email) AS capacity_email,
+                CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
+                identity.biography, identity.links_json, identity.created_at,
+                CASE WHEN m.organization_id IS NULL THEN '0_' ELSE '1_' END || identity.started_at AS sort_key
+         FROM identities identity
+         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+         JOIN members m ON m.id = capacity.member_id
+         LEFT JOIN organizations o ON o.id = m.organization_id
+         JOIN users u ON u.id = identity.user_id
          LEFT JOIN user_emails selected_email
-           ON selected_email.id = r.email_id
-          AND selected_email.user_id = r.user_id
+           ON selected_email.id = identity.email_id
+          AND selected_email.user_id = identity.user_id
           AND selected_email.verified_at IS NOT NULL
          JOIN member_category_assignments mca ON mca.member_id = m.id
-         WHERE r.user_id = ? AND r.left_at IS NULL
+         JOIN membership_categories category ON category.code = mca.category_code
+         WHERE identity.user_id = ?
+           AND identity.started_at IS NOT NULL
+           AND identity.ended_at IS NULL
+           AND identity.blocked_at IS NULL
          ORDER BY sort_key ASC`,
       )
-      .bind(userId, userId),
+      .bind(userId),
     db
       .prepare(
-        `SELECT membership.member_id, g.id, g.name, g.slug, g.type_key,
+        `SELECT membership.identity_id, g.id, g.name, g.slug, g.type_key,
                 type.singular_label AS type_singular_label,
                 type.plural_label AS type_plural_label
            FROM group_memberships membership
@@ -107,26 +98,27 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
   ]);
   const user = batchFirst<UserDetailRow>(userResult);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
-  const groupsByMemberId = new Map<string, MembershipGroupRow[]>();
+  const groupsByIdentityId = new Map<string, MembershipGroupRow[]>();
   for (const group of batchRows<MembershipGroupRow>(groupsResult)) {
-    const groups = groupsByMemberId.get(group.member_id) ?? [];
+    const groups = groupsByIdentityId.get(group.identity_id) ?? [];
     groups.push(group);
-    groupsByMemberId.set(group.member_id, groups);
+    groupsByIdentityId.set(group.identity_id, groups);
   }
-  const memberships = batchRows<MembershipRow>(membershipResult).map((membership) => ({
-    memberId: membership.id,
-    membershipCategory: membership.category_code,
-    status: membership.status,
-    showOnOrgProfile: membership.show_on_org_profile === 1,
-    organizationId: membership.organization_id,
-    organizationName: membership.organization_name,
-    emailId: membership.email_id,
-    email: membership.capacity_email,
-    jobTitle: membership.job_title,
-    biography: membership.biography,
-    links: parseLinksJson(membership.links_json),
-    createdAt: membership.created_at,
-    groups: (groupsByMemberId.get(membership.capacity_member_id) ?? []).map((group) => ({
+  const identities = batchRows<MembershipRow>(membershipResult).map((identity) => ({
+    identityId: identity.id,
+    memberId: identity.capacity_member_id,
+    membershipCategory: identity.category_code,
+    status: identity.status,
+    showOnOrgProfile: identity.show_on_org_profile === 1,
+    organizationId: identity.organization_id,
+    organizationName: identity.organization_name,
+    emailId: identity.email_id,
+    email: identity.capacity_email,
+    jobTitle: identity.job_title,
+    biography: identity.biography,
+    links: parseLinksJson(identity.links_json),
+    createdAt: identity.created_at,
+    groups: (groupsByIdentityId.get(identity.id) ?? []).map((group) => ({
       id: group.id,
       slug: group.slug,
       name: group.name,
@@ -147,8 +139,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     ...publicUser,
     active: Boolean(user.active),
     isEcMember: Boolean(user.is_ec_member),
-    links: parseLinksJson(user.links_json),
     headshotUrl,
-    memberships,
+    identities,
   };
 }

@@ -5,7 +5,7 @@ import {
   schedulerJobStateResponseSchema,
   type ScheduledJobResource,
 } from "../../../../../shared/schemas/scheduler";
-import { Badge } from "../../../../components/Badge";
+import { Badge, statusLabel } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
@@ -81,7 +81,7 @@ export function ScheduledJobs() {
       );
       await load();
       toast(
-        `${titleFromKey(job.jobKey)} finished with status ${result.status.replace(/_/g, " ")}.`,
+        `${titleFromKey(job.jobKey)} finished with status ${statusLabel(result.status).toLowerCase()}.`,
         result.status === "succeeded" ? "success" : "error",
       );
     } catch (runError) {

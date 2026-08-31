@@ -3,12 +3,10 @@ import {
   usersListResponseSchema,
   type UsersListQuery,
 } from "../../../assets/shared/schemas/user-management";
-import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
 import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
-import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { buildUserIdentitySearchFilter } from "./user-search";
 import { publicUserHeadshotPath } from "./user-headshot";
 
@@ -17,26 +15,21 @@ interface UserRow {
   email: string;
   first_name: string | null;
   last_name: string | null;
-  organization_name: string | null;
   role: string;
   active: number;
   created_at: string;
-  links_json: string | null;
   headshot_r2_key: string | null;
-  member_id: string | null;
-  member_category: string | null;
-  member_status: string | null;
-  member_organization_id: string | null;
-  member_organization_name: string | null;
+  active_identity_count: number;
   event_participation_count: number;
 }
 
 const USER_HAS_MEMBERSHIP = `(EXISTS (
-    SELECT 1 FROM members direct_member WHERE direct_member.user_id = u.id
-  ) OR EXISTS (
     SELECT 1
-      FROM organization_representatives member_rep
-     WHERE member_rep.user_id = u.id AND member_rep.left_at IS NULL
+      FROM identities member_identity
+     WHERE member_identity.user_id = u.id
+       AND member_identity.started_at IS NOT NULL
+       AND member_identity.ended_at IS NULL
+       AND member_identity.blocked_at IS NULL
   ))`;
 
 const USER_HAS_EVENT_PARTICIPATION = "EXISTS (SELECT 1 FROM event_participant_role_sources ep WHERE ep.user_id = u.id)";
@@ -61,26 +54,21 @@ export function buildUsersPageQuery(query: UsersListQuery) {
     bindings.push(...search.bindings);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const representativeJoin = deterministicRepresentativeJoinSql("u.id");
   const orderBy = resolveOrderBy(query.sort, USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC", "u.id ASC");
 
   return {
     source: {
-      selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
-              u.links_json, u.headshot_r2_key,
-              COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
-              COALESCE(m.status, mi.status) AS member_status,
-              m.organization_id AS member_organization_id, o.name AS member_organization_name,
+      selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.active, u.created_at,
+              u.headshot_r2_key,
+              (SELECT COUNT(*) FROM identities active_identity
+                WHERE active_identity.user_id = u.id
+                  AND active_identity.started_at IS NOT NULL
+                  AND active_identity.ended_at IS NULL
+                  AND active_identity.blocked_at IS NULL) AS active_identity_count,
               (SELECT COUNT(DISTINCT ep.event_id)
                  FROM event_participant_role_sources ep
                 WHERE ep.user_id = u.id) AS event_participation_count`,
-      fromSql: `FROM users u
-       ${representativeJoin}
-       LEFT JOIN members m ON m.id = rep.member_id
-       LEFT JOIN members mi ON mi.user_id = u.id
-       LEFT JOIN organizations o ON o.id = m.organization_id
-       LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
-       ${where}`,
+      fromSql: `FROM users u ${where}`,
       countFromSql: `FROM users u ${where}`,
       bindings,
     },
@@ -94,25 +82,11 @@ export async function listUsers(db: DatabaseLike, query: UsersListQuery) {
   const { rows: users, total } = await queryPage<UserRow>(db, buildUsersPageQuery(query));
 
   const results = users.map(
-    ({
-      links_json: linksJson,
-      headshot_r2_key: headshotR2Key,
-      event_participation_count: participationCount,
-      ...row
-    }) => ({
+    ({ headshot_r2_key: headshotR2Key, event_participation_count: participationCount, ...row }) => ({
       ...row,
-      links: parseLinksJson(linksJson),
       headshotUrl: publicUserHeadshotPath(headshotR2Key),
-      membership: row.member_id
-        ? {
-            memberId: row.member_id,
-            membershipCategory: row.member_category,
-            status: row.member_status,
-            organizationId: row.member_organization_id,
-            organizationName: row.member_organization_name,
-          }
-        : null,
-      type: row.member_id ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
+      activeIdentityCount: row.active_identity_count,
+      type: row.active_identity_count > 0 ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
       eventParticipationCount: participationCount,
     }),
   );

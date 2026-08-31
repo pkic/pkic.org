@@ -5,6 +5,7 @@ import { usePortalHashLocation } from "../hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema } from "../../../../shared/schemas/group-participation";
 import { ApiDataTable } from "../../../components/ApiDataTable";
+import { Badge } from "../../../components/Badge";
 import { EmptyState } from "../../../components/EmptyState";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
@@ -90,8 +91,7 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
             },
             {
               header: "Status",
-              cell: (group: Group) =>
-                group.active ? <span class="text-muted">—</span> : <span class="badge text-bg-warning">Inactive</span>,
+              cell: (group: Group) => (group.active ? <span class="text-muted">—</span> : <Badge status="inactive" />),
             },
             {
               header: "",
@@ -101,11 +101,7 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
           ]}
           empty={
             onCreate ? (
-              <EmptyState
-                title="No groups yet"
-                body="Create a group to get started."
-                action={{ label: "New group", onSelect: onCreate }}
-              />
+              <EmptyState title="No groups yet" body="Create a group to get started." />
             ) : (
               "No groups are visible to your identity."
             )

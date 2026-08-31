@@ -10,7 +10,7 @@ import {
 } from "../functions/_lib/services/wg-chair-digest";
 import type { Env } from "../functions/_lib/types";
 import { queryAll } from "./helpers/context";
-import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { ensureGroupMembershipCapacity, grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { resetDb } from "./helpers/reset-db";
 
 const env = workerEnv as unknown as Env;
@@ -75,19 +75,13 @@ async function insertMembership(
   joinedAt: string,
   leftAt: string | null = null,
 ): Promise<void> {
-  const memberId = crypto.randomUUID();
+  const memberId = await ensureGroupMembershipCapacity(env.DB, workingGroupId, userId);
   await env.DB.prepare(
-    `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-     VALUES (?, 'individual', ?, 'active', ?, ?)`,
+    `UPDATE group_memberships
+        SET joined_at = ?, left_at = ?, created_at = ?, updated_at = ?
+      WHERE group_id = ? AND user_id = ? AND member_id = ?`,
   )
-    .bind(memberId, userId, joinedAt, joinedAt)
-    .run();
-  await env.DB.prepare(
-    `INSERT INTO group_memberships
-       (id, group_id, user_id, member_id, source, joined_at, left_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'staff', ?, ?, ?, ?)`,
-  )
-    .bind(crypto.randomUUID(), workingGroupId, userId, memberId, joinedAt, leftAt, joinedAt, joinedAt)
+    .bind(joinedAt, leftAt, joinedAt, joinedAt, workingGroupId, userId, memberId)
     .run();
 }
 

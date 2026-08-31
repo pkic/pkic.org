@@ -24,10 +24,6 @@ const user: UserDetail = {
   first_name: "Ada",
   last_name: "Lovelace",
   preferred_name: null,
-  organization_name: null,
-  job_title: null,
-  biography: null,
-  links: [],
   role: "user",
   active: true,
   isEcMember: false,
@@ -35,7 +31,7 @@ const user: UserDetail = {
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
   pii_redacted_at: null,
-  memberships: [],
+  identities: [],
 };
 
 function mount(canGrantAccess: boolean): HTMLElement {
@@ -60,7 +56,7 @@ afterEach(() => {
 describe("portal System Users profile permissions", () => {
   it("lets users:write edit profile fields without exposing access-control fields", () => {
     const container = mount(false);
-    expect(container.querySelectorAll('input[type="text"]')).toHaveLength(5);
+    expect(container.querySelectorAll('input[type="text"]')).toHaveLength(3);
     expect(container.querySelector('input[type="email"]')).toBeNull();
     expect(container.querySelector('input[name="edit-role"]')).toBeNull();
   });
@@ -71,35 +67,32 @@ describe("portal System Users profile permissions", () => {
     expect(container.querySelector('input[name="edit-role"]')).not.toBeNull();
   });
 
-  it("shows existing profile links and preserves them in the profile command", async () => {
+  it("stores preferred names on the user rather than an acting identity", async () => {
     apiClient.patchJson.mockResolvedValue({
       success: true,
       user: { id: user.id, email: user.email, role: user.role, active: true, isEcMember: false },
     });
-    const linkedUser = { ...user, links: ["https://www.example.test/profile"] };
+    const linkedUser = { ...user, preferred_name: "Ada" };
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
     void act(() => render(<UserProfileEditor user={linkedUser} canGrantAccess={false} onSaved={vi.fn()} />, container));
     void act(() => (container.querySelector("button") as HTMLButtonElement).click());
-    expect(container.textContent).toContain("example.test");
+    expect(container.querySelector<HTMLInputElement>("#user-preferredName")?.value).toBe("Ada");
     await act(async () => (container.querySelector(".btn-primary") as HTMLButtonElement).click());
     expect(apiClient.patchJson).toHaveBeenCalledWith(
       `/api/v1/users/${user.id}`,
-      expect.objectContaining({ links: ["https://www.example.test/profile"] }),
+      expect.objectContaining({ preferredName: "Ada" }),
       expect.anything(),
     );
   });
 
-  it("does not expose stale user-wide organization profile fields for an organization representative", async () => {
+  it("does not expose acting-identity profile fields in the user-wide profile editor", async () => {
     const representedUser: UserDetail = {
       ...user,
-      organization_name: "Stale organization",
-      job_title: "Stale title",
-      biography: "Stale biography",
-      links: ["https://stale.example.test/profile"],
-      memberships: [
+      identities: [
         {
+          identityId: "identity-1",
           memberId: "representative-1",
           membershipCategory: "A",
           status: "active",
@@ -127,7 +120,7 @@ describe("portal System Users profile permissions", () => {
     expect(container.querySelector("#user-organizationName")).toBeNull();
     expect(container.querySelector("#user-jobTitle")).toBeNull();
     expect(container.querySelector("#user-biography")).toBeNull();
-    expect(container.textContent).not.toContain("Stale organization");
+    expect(container.textContent).not.toContain("Canonical Organization");
   });
 });
 
@@ -147,10 +140,6 @@ describe("portal System Users anonymize confirmation", () => {
       first_name: "Dana",
       last_name: "Yu",
       preferred_name: null,
-      organization_name: null,
-      job_title: null,
-      biography: null,
-      links: [],
       role: "user",
       active: true,
       isEcMember: false,
@@ -158,7 +147,7 @@ describe("portal System Users anonymize confirmation", () => {
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-01T00:00:00.000Z",
       pii_redacted_at: null,
-      memberships: [],
+      identities: [],
     };
 
     apiClient.getJson.mockReset();
@@ -190,6 +179,7 @@ describe("portal System Users anonymize confirmation", () => {
               canGrantAccess: false,
               canAnonymize: true,
               canManageMembership: false,
+              canActivateIdentity: false,
             }}
           />
         </>,

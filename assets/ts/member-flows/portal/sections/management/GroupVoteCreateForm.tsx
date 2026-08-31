@@ -3,16 +3,18 @@ import {
   groupVoteCreateInputSchema,
   groupVoteMutationResponseSchema,
 } from "../../../../../shared/schemas/group-vote-management";
-import { VOTE_ELECTORATE_MODES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
+import { THRESHOLD_TYPES, VOTE_ELECTORATE_MODES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { postJson } from "../../../../shared/api-client";
+import { postValidated } from "../../../../shared/api-client";
 
 interface CandidateDraft {
   name: string;
   bio: string;
 }
 
-function thresholdOptions(voteType: (typeof VOTE_TYPES)[number]) {
+function thresholdOptions(
+  voteType: (typeof VOTE_TYPES)[number],
+): { value: (typeof THRESHOLD_TYPES)[number]; label: string }[] {
   return voteType === "election"
     ? [
         { value: "simple_majority", label: "Simple majority (two candidates)" },
@@ -37,7 +39,7 @@ export function GroupVoteCreateForm({
   const [description, setDescription] = useState("");
   const [voteType, setVoteType] = useState<(typeof VOTE_TYPES)[number]>("motion");
   const [electorateMode, setElectorateMode] = useState<(typeof VOTE_ELECTORATE_MODES)[number]>("per_member");
-  const [thresholdType, setThresholdType] = useState("simple_majority");
+  const [thresholdType, setThresholdType] = useState<(typeof THRESHOLD_TYPES)[number]>("simple_majority");
   const [opensAt, setOpensAt] = useState("");
   const [quorumPercent, setQuorumPercent] = useState("");
   const [tieBreakMode, setTieBreakMode] = useState<"none" | "chair">("none");
@@ -60,24 +62,28 @@ export function GroupVoteCreateForm({
     setSaving(true);
     setError(null);
     try {
-      const input = groupVoteCreateInputSchema.parse({
-        title,
-        description: description || undefined,
-        voteType,
-        electorateMode,
-        thresholdType,
-        opensAt: opensAt ? new Date(opensAt).toISOString() : undefined,
-        quorumPercent: quorumPercent ? Number(quorumPercent) : null,
-        tieBreakMode,
-        closesAt: new Date(closesAt).toISOString(),
-        candidates:
-          voteType === "election"
-            ? candidates
-                .filter((candidate) => candidate.name.trim())
-                .map((candidate) => ({ name: candidate.name, bio: candidate.bio || undefined }))
-            : undefined,
-      });
-      await postJson(`/api/v1/groups/${encodeURIComponent(groupId)}/votes`, input, groupVoteMutationResponseSchema);
+      await postValidated(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/votes`,
+        groupVoteCreateInputSchema,
+        {
+          title,
+          description: description || undefined,
+          voteType,
+          electorateMode,
+          thresholdType,
+          opensAt: opensAt ? new Date(opensAt).toISOString() : undefined,
+          quorumPercent: quorumPercent ? Number(quorumPercent) : null,
+          tieBreakMode,
+          closesAt: new Date(closesAt).toISOString(),
+          candidates:
+            voteType === "election"
+              ? candidates
+                  .filter((candidate) => candidate.name.trim())
+                  .map((candidate) => ({ name: candidate.name, bio: candidate.bio || undefined }))
+              : undefined,
+        },
+        groupVoteMutationResponseSchema,
+      );
       setTitle("");
       setDescription("");
       setOpensAt("");
@@ -168,7 +174,7 @@ export function GroupVoteCreateForm({
             class="form-select"
             value={thresholdType}
             disabled={saving}
-            onChange={(event) => setThresholdType(event.currentTarget.value)}
+            onChange={(event) => setThresholdType(event.currentTarget.value as (typeof THRESHOLD_TYPES)[number])}
           >
             {thresholdOptions(voteType).map((option) => (
               <option value={option.value}>{option.label}</option>

@@ -95,7 +95,7 @@ describe("URL-addressed group sub-resources", () => {
     const container = mount(<GroupEvents groupId={GROUP_ID} initialEventId={eventId} />);
     await settle();
 
-    expect(container.textContent).toContain("HTTP 403");
+    expect(container.textContent).toContain("don't have access");
   });
 
   it("navigates to and from a form placement's canonical URL and reports its detail load", async () => {
@@ -215,7 +215,7 @@ describe("URL-addressed group sub-resources", () => {
     await settle();
     await settle();
 
-    expect(container.textContent).toContain("HTTP 403");
+    expect(container.textContent).toContain("don't have access");
   });
 
   it("threads the group form's resourceTab through GroupForms so a responses deep link opens the responses tab", async () => {

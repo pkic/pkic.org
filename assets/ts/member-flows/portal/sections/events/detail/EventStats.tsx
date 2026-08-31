@@ -1,6 +1,7 @@
 import { StatCard } from "../../../../../components/StatCard";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
+import { Badge } from "../../../../../components/Badge";
 import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
@@ -11,17 +12,10 @@ import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
 
 const ATT_COLORS: Record<string, string> = { in_person: "#0d6efd", virtual: "#198754", on_demand: "#fd7e14" };
 const ATT_LIGHT_COLORS: Record<string, string> = { in_person: "#9ec5fe", virtual: "#a3cfbb", on_demand: "#fed8b1" };
-const INVITE_BADGE: Record<string, [string, string]> = {
-  sent: ["info", "Pending"],
-  accepted: ["success", "Accepted"],
-  declined: ["danger", "Declined"],
-  expired: ["secondary", "Expired"],
-  revoked: ["warning", "Revoked"],
-};
 
+/** "sent" reads as "Pending" from an invite-recipient's point of view — override the default status label. */
 function inviteBadge(status: string) {
-  const [colour, label] = INVITE_BADGE[status] ?? ["secondary", status];
-  return <span class={`badge text-bg-${colour}`}>{label}</span>;
+  return <Badge status={status} label={status === "sent" ? "Pending" : undefined} />;
 }
 
 export function EventStats({ slug }: { slug: string }) {

@@ -135,34 +135,35 @@ Status: Complete
       and service leadership writes keep the non-user identity out of users(id)
       foreign keys. The focused group-platform suite passes 20 tests.
 
-## 3. Organization representatives
+## 3. Acting identities
 
 Status: Complete
 
 - [x] Reuse organization_domain_claims as the sole exact domain owner.
 - [x] Record verification evidence for all email identities used in matching.
-- [x] Automatically associate exact verified custom-domain matches.
+- [x] Use exact verified custom-domain matches as evidence for an organization identity.
 - [x] Never automatically associate free, personal, disposable, unclaimed, or
       ambiguous domains.
-- [x] Show a warning for addresses that cannot establish representation.
-- [x] Permit primary and secondary contacts to associate a representative.
-- [x] Permit primary and secondary contacts to remove a representative.
-- [x] Persist a removal block until an authorized contact restores it.
-- [x] End all active group capacities for the removed organization atomically.
+- [x] Show a warning for addresses that cannot establish an organization identity.
+- [x] Permit primary and secondary contacts to invite an organization identity.
+- [x] Require the exact user to accept an ordinary identity invitation.
+- [x] Require `membership:write`, `identities:activate`, an activation reason,
+      and same-batch authorization for exceptional immediate activation.
+- [x] Permit contacts to end an identity while preserving immutable history.
+- [x] Record a later role period as a successor identity rather than restoring history.
+- [x] End all active group capacities for the ended identity atomically.
 - [x] Revoke affected organization roles atomically.
 - [x] Preserve historical activity and audit evidence.
-- [x] Verify authorization against current representative state on every action.
+- [x] Verify authorization against the session's exact live identity on every action.
 - [x] Cover domain normalization, unverified email, claimed-domain collision,
-      explicit association, blocking, restoration, and concurrent reconciliation.
-      Evidence: organization-representation-platform.test.ts,
-      organization-representation-endpoints.test.ts,
-      organization-representatives.test.ts, magic-link-purpose.test.ts, and
-      registration-email-change.test.ts pass 40 focused tests. D1 uniqueness makes
-      one exact verified custom-domain claim a strong automatic association
-      signal; free, personal, disposable, unclaimed, and ambiguous domains warn
-      and remain fail-closed. The mounted API proves contact-authorized explicit
-      association, persistent removal blocks, immediate capacity and role
-      revocation, restoration, and shared response contracts.
+      invitation, acceptance, lifecycle races, alias removal, and concurrent activation.
+      Evidence: the identity invitation, organization identity, multi-identity
+      context, session, membership provisioning, group-capacity, and email-alias
+      suites cover the shared contracts and D1 guards. Free, personal,
+      disposable, unclaimed, and ambiguous domains remain fail-closed. The
+      mounted API proves that pending invitations grant no capacity, exact-user
+      acceptance activates it, and ending atomically revokes derived capacity
+      without erasing history.
 
 ## 4. Conditional enrollment and mailing lists
 
@@ -448,7 +449,7 @@ Status: Complete
       vote, round, and Member, and appends every accepted replacement to the
       shared audit log. Per-person electorates use the same command with a
       distinct uniqueness key. Mounted and direct-service voting tests cover
-      multi-organization representatives, explicit capacity selection, latest
+      multi-organization identities, explicit identity selection, latest
       ballot replacement, representative removal, concurrent replacement and
       close races, election rounds, and tally correctness.
 
@@ -1492,26 +1493,29 @@ Status: Complete
       `/api/v1/organizations`. System is an interface grouping, not an
       authorization boundary. List and detail reads retain
       `organizations:read`; profile, contact, and logo mutations retain
-      `organizations:write`; organization creation and staff representative
-      provisioning retain `membership:write`; and primary or secondary
-      organization contacts retain their existing organization-scoped
-      representative controls. The portal renders each allowed action from
+      `organizations:write`; organization creation and staff identity
+      invitations retain `membership:write`; immediate activation additionally
+      requires `identities:activate`; and primary or secondary organization
+      contacts retain their existing organization-scoped identity controls. The portal renders each allowed action from
       the live permission set, including organization creation without a
       directory read. One neutral schema and service boundary own the D1-side
       search, allowlisted sorting, counting, pagination, revision
       compare-and-swap, organization aggregate, flexible links, contacts,
-      logo, and representative transitions. Primary and secondary contacts can
-      add coworkers with the minimum identity fields needed for representation;
-      user-backed staff with `membership:write` may additionally provision
-      profile metadata. Neither path verifies the mailbox or enqueues mail.
+      logo, and identity transitions. Primary and secondary contacts can invite
+      coworkers with the minimum identity fields needed for an acting identity;
+      the exact user must accept before capacity begins. User-backed staff with
+      both `membership:write` and `identities:activate` may activate immediately
+      only with a reason. Lifecycle changes and invitations enqueue their notices
+      transactionally.
       Every mutation repeats its live permission and exact state predicates in
       the same D1 batch as the write and attributed audit record. The former
       admin Organization components, API handlers, route mount, and
       admin-prefixed schema/service aliases are removed; old bookmarks return 404. Mounted permission, API-key denial,
       revocation-race, revision-race, contract, query-plan, profile-contact,
       and frontend tests cover the cutover. A focused real Worker/D1 browser
-      journey creates an organization, adds a representative, then signs in as
-      its primary contact to block and explicitly restore that representative.
+      journey creates an organization, invites an identity, then signs in as
+      that exact user to accept it. Ending the identity is immutable; a later
+      role period creates a successor rather than restoring the old row.
       It also verifies the retired admin URL returns 404 and observes no legacy
       organization request.
       User and membership-capacity management now also appears under the
@@ -1556,7 +1560,7 @@ Status: Complete
       headshot, group participation, and membership applications. Explicit
       `/api/v1/organizations/:organizationId` subresources own organization
       profile visibility, content reviews, logo staging, active sponsorship,
-      representatives, and secondary-contact nomination. The former
+      identities, and secondary-contact nomination. The former
       `/api/v1/me` router and its EC-decision action endpoint are removed;
       self EC decisions use the same membership-application decision resource
       as staff overrides. Every self-service mutation repeats the exact live
@@ -1735,12 +1739,12 @@ Status: Complete
       foreign-key checks without rebuilding members or organizations and
       preserves unattributed historical event-form projections.
 - [x] Run migration tests against empty databases.
-- [x] Run representative authorization security tests.
-      Evidence: the canonical representative-management predicate is reused for
+- [x] Run identity authorization security tests.
+      Evidence: the canonical identity-management predicate is reused for
       preflight and an atomic D1 write guard. Race tests revoke an organization
       contact role and demote a staff administrator after preflight but before
       commit; both commands return a bounded conflict and roll back the
-      representative change, audit record, notification, and enrollment
+      identity change, audit record, notification, and enrollment
       fallout. Association compare-and-set conflicts and an indexed query plan
       are also covered. The focused platform and mounted endpoint selection
       passes 13 tests.
@@ -1783,8 +1787,8 @@ Status: Complete
 - [x] Run mutable-form concurrency and historical-integrity tests.
 - [x] Run the complete pnpm run check gate.
       Current evidence: the complete gate passes on the exact architecture and
-      browser-evidence state with 2,393 passing backend tests (one skipped),
-      340 frontend tests, and 88 tooling tests. Type
+      browser-evidence state with 2,514 passing backend tests (one skipped),
+      512 frontend tests, and 98 tooling tests. Type
       checks, ESLint, SQL projection,
       dependency architecture, API-contract, changed-scope duplication,
       formatting, frontend/Hugo builds, max-lines, and filename gates also pass.
@@ -2032,7 +2036,7 @@ Status: In progress (2026-08-30)
       audit log, email templates, operations, access control, leadership
       positions). The membership-application notification link emits the
       canonical domain URL.
-- [ ] Organization workspaces for representatives: authorize organization
+- [ ] Organization workspaces for acting identities: authorize organization
       self-service by active representation instead of the acting session
       capacity, add the `/api/v1/users/current/organizations` feed, reach
       each represented organization from the avatar menu at
@@ -2159,6 +2163,37 @@ Status: In progress (2026-08-30)
       sub-tabs, occurrence detail tabs, and the communications/campaign
       editors (no route homes yet; queued with the events projection
       consolidation).
+      Events projection consolidation, first two slices, landed
+      2026-08-31: the root /events list became the audience overview —
+      upcoming events with humanized venue-aware dates, relative time, the
+      viewer's own registration state (per-day chips), the owning group as
+      a link, and an Upcoming/Past toggle; slugs, ISO dates, the Mode
+      column, admin count columns, capability chips, and per-row Manage
+      buttons are gone (row click opens the event's public page; a row
+      menu offers "Open in group workspace" for management-shaped rows).
+      The group event workspace absorbed the standalone surface's Team,
+      Promoters, and Analytics tabs by reusing the slug-driven detail
+      components — Promoters/Analytics gated on manage_attendance rather
+      than the bare view floor, since view is the visibility minimum every
+      accessible event carries. The last native confirms on the events
+      surfaces (team-role revoke, presentation-version delete, proposal
+      moderation flags) moved to the shared dialog; "Cancel accepted
+      session" turned out to already be a deliberate comment+checkbox form
+      and was left as designed. A duplicate-affordance defect from the
+      create-behind-action pass was fixed globally: EmptyStates no longer
+      repeat the toolbar's create button (one affordance, one place), which
+      also restored strict-mode e2e locators. Closing slice landed the same day: the group route parses a fourth
+      segment, so registration and proposal details render inside the group
+      event workspace (/groups/:g/events/:e/registrations/:rid and
+      /proposals/:pid) with URL-addressed selection; every standalone
+      /events/:slug management view resolves the owning group and redirects
+      into the group workspace (replace navigation), while events without
+      an owning group keep the standalone surface as the deliberate
+      fallback. Two more Wave-1 e2e misses surfaced and were fixed
+      (invitation resend/revoke through the row menu, the two approve
+      confirms), a duplicate-affordance defect was corrected globally
+      (EmptyStates no longer repeat the toolbar create button), and the
+      row menu now repositions on scroll instead of dismissing.
       All four waves are complete. Residuals folded into the events
       projection consolidation:
       (1 residue) events-surface confirms after the projection slice;
@@ -2173,31 +2208,66 @@ Status: In progress (2026-08-30)
       response schemas but request bodies leave the client unparsed, so a
       frontend can emit a contract-violating request with every gate green
       (caught 2026-08-30 when the representative link form sent
-      `kind: "user"` instead of `kind: "existing_user"`). Add a
-      request-parsing client helper (body validated through the shared
-      request schema before send), migrate mutating call sites, and extend
-      the contract lint to require it; until then, mock-based frontend tests
-      parse captured bodies through the shared schemas (rule added to
+      `kind: "user"` instead of `kind: "existing_user"`). Helper landed
+      2026-08-31: `postValidated`/`patchValidated`/`putValidated` in
+      `assets/ts/shared/api-client.ts` parse the body through the shared
+      request schema synchronously before fetch and adoption covered the
+      representative roster, group member add, vote create, mailing lists,
+      and role forms (the stricter inferred types immediately replaced
+      loose `Set<string>`/string fields with the `Permission` union).
+      Remaining: migrate the rest of the mutating call sites and extend the
+      contract lint to require the validated helpers for any request whose
+      shared schema exists; until then, mock-based frontend tests parse
+      captured bodies through the shared schemas (rule added to
       tests/AGENTS.md).
+      Consistency batch landed 2026-08-31: `Badge` became the canonical
+      status registry — `statusLabel`/`statusColor` are exported and every
+      ad-hoc `STATUS_*`/`ROLE_*` map, title-casing helper, and duplicated
+      stage formatter across the portal was folded onto it (fixing the
+      literal "Ec Review" class of label; application stages now match the
+      real `ApplicationStage` vocabulary, and waitlist, sponsorship
+      pipeline, vote outcome, scheduled-job, and speaker-role statuses are
+      registered). `ErrorAlert` now maps transport errors
+      (401/403/404/409/429/5xx) to plain-language sentences via
+      `friendlyErrorMessage`; raw "HTTP nnn" strings no longer reach users.
+      Inner tabs without route homes (form management, campaign editors,
+      proposal detail, occurrence detail) moved onto
+      `useHashQueryParam` — hash-internal query params
+      (`#/path?formTab=edit`) that initialize from the URL, mirror on
+      change, and clean up on unmount, making the last local tabs
+      shareable and fixing a latent proposal deep-link reset. Date-only
+      columns portal-wide render through `formatDate` (no meaningless
+      midnight times).
+- [x] Member-visible group roster (2026-08-31): participants can now see
+      who is in their group. `GET /api/v1/groups/:groupId/memberships`
+      branches on the caller's live capabilities — `manage` keeps the full
+      membership rows; `participate` receives a reduced projection
+      (`userId`, `name`, `headshotUrl`, `organizationName`) whose SQL never
+      selects email, category, source, or timestamps; anyone else gets 403.
+      The Members tab shows for participants as a read-only, searchable
+      PersonCell roster (organization as the second line, never email) with
+      no management affordances. Authorization tests prove the participant
+      payload carries no email in the raw JSON and the query-plan test
+      confirms the roster query stays on
+      `idx_group_memberships_group_active`.
 - [ ] Add an index for `session_proposals.proposer_user_id` in the
       consolidated branch migration: the new `/users/current/proposals`
       submitter branch currently scans the table (flagged by its
       explain-plan check; the speaker branch uses the existing unique
       index).
 - [x] Keep one canonical user while making organization profiles and authority
-      representation-scoped. `organization_representatives` now owns the
-      selected verified `user_emails` identity, job title, biography, and links;
-      individual Members retain the global user profile. Verified aliases sign
-      into the same user and are rechecked in the redemption batch; removing a
-      selected alias atomically falls affected representations back to the
-      primary address. Membership-application history binds to the canonical
-      user before approval and the resulting Member afterward, never to a
-      reusable email string. Group lead and deputy assignments require an exact
-      active `(group, user, Member)` participation capacity, are filtered by the
-      session-selected Member, and are revoked when that participation or
-      representation ends. Current-user, organization management, public
+      identity-scoped. `identities` owns the selected verified `user_emails`
+      address, job title, biography, and links; organization-less identities are
+      limited to approved H5/H6/H7 Members and cannot self-assert an affiliation
+      or job title. Verified aliases sign into the same user and are rechecked in
+      the redemption batch; removing a selected alias atomically falls affected
+      identities back to the primary address. Membership-application history
+      binds to the canonical user before approval and the resulting identity and
+      Member afterward, never to a reusable email string. Group participation,
+      leadership, and session authority require an exact active identity and
+      are revoked when it ends. Current-user, organization management, public
       directory/leadership, digest, importer, frontend, authorization-race,
-      application-ownership, alias-lifecycle, and multi-organization regressions
+      application-ownership, alias-lifecycle, and multi-identity regressions
       cover the boundary.
 - [ ] Retire or repurpose the dormant `users.role` value `guest`: only
       `admin` has behavior (full-access short-circuit); `user` is the
@@ -2364,14 +2434,14 @@ The final PR description must include, at minimum:
   and Due Work bookmarks also return 404;
 - inspect Organizations with separate `organizations:read`,
   `organizations:write`, and `membership:write` staff identities, confirming
-  list/detail, profile/logo/contact, and create/representative actions appear
+  list/detail, profile/logo/contact, and create/identity actions appear
   only with their exact permissions;
-- create an organization with multiple representatives, job titles, flexible
+- create an organization with multiple identities, identity-scoped job titles, flexible
   profile links, and a membership category; then edit its profile and contacts,
-  add, block, and explicitly restore a representative, and confirm stale
+  invite and accept an identity, end it, create a successor for a later role period, and confirm stale
   revisions and permission revocation cannot leave partial state or audit records;
 - confirm a primary or secondary organization contact can manage allowed
-  representative visibility, blocking, and restoration from My Profile without
+  identity visibility and ending from My Profile without
   gaining the global organization directory or staff-only direct-email provisioning;
 - verify `/api/v1/admin/organizations` and nested paths return 404 and the old
   Organizations bookmark also returns 404;
@@ -2386,7 +2456,7 @@ The final PR description must include, at minimum:
   confirm the old address cannot authenticate, while an authorized staff
   correction retains its intended behavior and revokes affected sessions and
   capabilities;
-- create, update, and remove individual and organization-representative
+- create, update, and end individual and organization identities
   capacities through `/api/v1/members`, then race identity deactivation,
   anonymization, or permission revocation and confirm no partial capacity or
   audit state is retained;

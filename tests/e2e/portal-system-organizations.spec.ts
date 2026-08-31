@@ -20,14 +20,15 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.goto("/portal/#/organizations");
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Add organization", exact: true }).click();
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
   await page.locator("#organization-create-name").fill(organizationName);
   await page.locator("#organization-create-category").selectOption("F");
   await page.locator("#organization-create-member-since").fill("2026-01-15");
   await page.locator("#organization-create-website").fill("https://example.invalid");
-  await page.locator("#organization-create-representative-name-0").fill("Primary Representative");
-  await page.locator("#organization-create-representative-email-0").fill(primaryEmail);
-  await page.locator("#organization-create-representative-title-0").fill("Security Engineer");
+  await page.locator("#organization-create-identity-name-0").fill("Primary Representative");
+  await page.locator("#organization-create-identity-email-0").fill(primaryEmail);
+  await page.locator("#organization-create-identity-title-0").fill("Security Engineer");
+  await page.locator("#organization-create-activation-reason").fill("E2E organization setup");
 
   const createResponse = page.waitForResponse(
     (response) =>
@@ -43,27 +44,43 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Add new person", exact: true }).click();
-  await page.locator("#organization-representative-name").fill("Secondary Representative");
-  await page.locator("#organization-representative-email").fill(secondaryEmail);
-  await page.locator("#organization-representative-job-title").fill("Program Manager");
+  await page.locator("#organization-identity-name").fill("Secondary Representative");
+  await page.locator("#organization-identity-email").fill(secondaryEmail);
+  await page.locator("#organization-identity-job-title").fill("Program Manager");
   const associateResponse = page.waitForResponse(
     (response) =>
-      /\/api\/v1\/organizations\/[^/]+\/representatives$/.test(new URL(response.url()).pathname) &&
+      /\/api\/v1\/organizations\/[^/]+\/identities$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Add", exact: true }).click();
   expect((await associateResponse).status()).toBe(201);
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
-  await expect(page.getByText("Program Manager", { exact: true })).toBeVisible();
+
+  // Ordinary additions are invitations. The exact user must accept before
+  // this identity grants organization or group capacity or exposes its
+  // organization profile fields.
+  await page.context().clearCookies();
+  await signInToPortal(page, secondaryEmail);
+  await page.goto("/portal/#/account");
+  const accepted = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/users\/current\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Accept identity" }).click();
+  expect((await accepted).status()).toBe(200);
 
   // The System Users view must read the canonical representation capacity,
   // not the legacy user-wide organization/job-title columns.
+  await page.context().clearCookies();
+  await signInToPortal(page, e2eAdminEmail("portal-organizations"));
   await page.goto("/portal/#/users");
   const userSearch = page.getByPlaceholder("email or name");
   await userSearch.fill(secondaryEmail);
   await userSearch.press("Enter");
   const secondaryUserRow = page.locator("tr").filter({ hasText: secondaryEmail });
-  await expect(secondaryUserRow).toContainText(organizationName);
+  await expect(secondaryUserRow).toContainText("Member · 1 active identity");
+  await expect(secondaryUserRow).not.toContainText(organizationName);
   await secondaryUserRow.click();
   await expect(page.locator(".page-heading")).toHaveText("Secondary Representative");
   const capacityCard = page.locator(".border.rounded.p-3").filter({ hasText: organizationName });
@@ -80,44 +97,31 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.context().clearCookies();
   await signInToPortal(page, primaryEmail);
   await page.goto("/portal/#/profile");
-  await expect(page.getByRole("heading", { name: "Organization representatives", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Organization identities", exact: true })).toBeVisible();
 
   let representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
   await expect(representativeRow).toContainText("Active");
   const removeResponse = page.waitForResponse(
     (response) =>
-      /\/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+$/.test(new URL(response.url()).pathname) &&
-      response.request().method() === "DELETE",
+      /\/api\/v1\/organizations\/[^/]+\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PATCH",
   );
   await representativeRow.getByRole("button", { name: "Actions for Secondary Representative" }).click();
-  await page.getByRole("menuitem", { name: "Remove from organization" }).click();
-  await acceptConfirmDialog(page, "Remove from organization");
+  await page.getByRole("menuitem", { name: "End identity" }).click();
+  await acceptConfirmDialog(page, "End identity");
   expect((await removeResponse).status()).toBe(200);
 
   representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
-  await expect(representativeRow).toContainText("Removed — blocked from re-adding");
-  const restoreResponse = page.waitForResponse(
-    (response) =>
-      /\/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+\/restore$/.test(new URL(response.url()).pathname) &&
-      response.request().method() === "POST",
-  );
-  await representativeRow.getByRole("button", { name: "Actions for Secondary Representative" }).click();
-  await page.getByRole("menuitem", { name: "Restore" }).click();
-  await acceptConfirmDialog(page, "Restore representative");
-  expect((await restoreResponse).status()).toBe(200);
-
-  representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
-  await expect(representativeRow).toContainText("Active");
-  await expect(representativeRow.getByRole("button", { name: "Actions for Secondary Representative" })).toBeVisible();
+  await expect(representativeRow).toContainText("Ended");
+  await expect(representativeRow.getByRole("button", { name: "Actions for Secondary Representative" })).toHaveCount(0);
 
   expect(canonicalRequests).toEqual(
     expect.arrayContaining([
       "GET /api/v1/organizations",
       "POST /api/v1/organizations",
       expect.stringMatching(/^GET \/api\/v1\/organizations\/[^/]+$/),
-      expect.stringMatching(/^POST \/api\/v1\/organizations\/[^/]+\/representatives$/),
-      expect.stringMatching(/^DELETE \/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+$/),
-      expect.stringMatching(/^POST \/api\/v1\/organizations\/[^/]+\/representatives\/[^/]+\/restore$/),
+      expect.stringMatching(/^POST \/api\/v1\/organizations\/[^/]+\/identities$/),
+      expect.stringMatching(/^PATCH \/api\/v1\/organizations\/[^/]+\/identities\/[^/]+$/),
     ]),
   );
   expect(legacyRequests).toEqual([]);

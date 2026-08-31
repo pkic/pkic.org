@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { groupDirectoryResponseSchema } from "../assets/shared/schemas/group-directory";
 import { callApi } from "./helpers/app";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 async function insertGroup(options: {
@@ -54,6 +55,11 @@ async function insertLeader(
   )
     .bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null, jobTitle)
     .run();
+  if (jobTitle !== null) {
+    const organizationId = await insertOrganization(env.DB, `${name} Organization`);
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId, { jobTitle });
+  }
   await grantGroupLeadershipCapacity(env.DB, groupId, userId, { roleId });
   return userId;
 }

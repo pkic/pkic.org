@@ -6,7 +6,7 @@ import { nowIso } from "../../../utils/time";
 import { buildFindOrCreateUserStatement } from "../../users";
 import { findUserEmailOwner, isEmailReservationConflict } from "../../user-emails";
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
-import { prepareVerifiedDomainAssociationStatements } from "../../organization-representations";
+import { prepareExplicitVerifiedDomainIdentityStatements } from "../../identities";
 import { prepareAuditLog } from "../../audit";
 import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
@@ -15,6 +15,7 @@ import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } fr
 
 interface ClaimedMemberRow {
   member_id: string;
+  organization_id: string;
 }
 
 async function issueApplicationContinuation(
@@ -39,12 +40,20 @@ export async function verifyMemberJoin(
   | {
       status: "organization_session_ready";
       userId: string;
+      identityId: string;
       memberId: string;
       sessionId: string;
       expiresAt: string;
     }
 > {
   const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
+  if (
+    await first<{ id: string }>(db, "SELECT id FROM audit_log WHERE idempotency_key = ?", [
+      `membership_join_link_consumed:${capability.capabilityId}`,
+    ])
+  ) {
+    throw new AppError(409, "MEMBER_JOIN_LINK_USED", "Membership verification link already used");
+  }
   const domain = emailDomainOf(capability.email);
   const owner = await findUserEmailOwner(db, capability.email);
   // A previously verified alias is an authentication identity for the same
@@ -56,7 +65,7 @@ export async function verifyMemberJoin(
   }
   const claimedMember = await first<ClaimedMemberRow>(
     db,
-    `SELECT member.id AS member_id
+    `SELECT member.id AS member_id, member.organization_id
        FROM organization_domain_claims claim
        JOIN members member
          ON member.organization_id = claim.organization_id
@@ -68,14 +77,14 @@ export async function verifyMemberJoin(
   if (!claimedMember) {
     if (capability.applicantKind === "individual") {
       if (owner) {
-        const activeRepresentation = await first<{ id: string }>(
+        const activeIdentity = await first<{ id: string }>(
           db,
-          `SELECT id FROM organization_representatives
-            WHERE user_id = ? AND left_at IS NULL AND blocked_at IS NULL
+          `SELECT id FROM identities
+            WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
             LIMIT 1`,
           [owner.userId],
         );
-        if (activeRepresentation) return { status: "support_required" };
+        if (activeIdentity) return { status: "support_required" };
       }
     }
     return issueApplicationContinuation(
@@ -94,9 +103,9 @@ export async function verifyMemberJoin(
 
   const blocked = await first<{ id: string }>(
     db,
-    `SELECT id FROM organization_representatives
-      WHERE member_id = ? AND user_id = ? AND blocked_at IS NOT NULL`,
-    [claimedMember.member_id, preparedUser.user.id],
+    `SELECT id FROM identities
+      WHERE organization_id = ? AND user_id = ? AND blocked_at IS NOT NULL`,
+    [claimedMember.organization_id, preparedUser.user.id],
   );
   if (blocked) return { status: "support_required" };
 
@@ -110,8 +119,9 @@ export async function verifyMemberJoin(
         method: "magic_link",
         verifiedAt,
       }),
-      ...(await prepareVerifiedDomainAssociationStatements(db, {
+      ...(await prepareExplicitVerifiedDomainIdentityStatements(db, {
         userId: preparedUser.user.id,
+        organizationId: claimedMember.organization_id,
         normalizedEmail: capability.email,
         at: verifiedAt,
       })),
@@ -133,13 +143,14 @@ export async function verifyMemberJoin(
     throw error;
   }
 
-  const activeRepresentative = await first<{ id: string }>(
+  const activeIdentity = await first<{ id: string }>(
     db,
-    `SELECT id FROM organization_representatives
-      WHERE member_id = ? AND user_id = ? AND left_at IS NULL AND blocked_at IS NULL`,
-    [claimedMember.member_id, preparedUser.user.id],
+    `SELECT id FROM identities
+      WHERE organization_id = ? AND user_id = ?
+        AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+    [claimedMember.organization_id, preparedUser.user.id],
   );
-  if (!activeRepresentative) return { status: "support_required" };
+  if (!activeIdentity) return { status: "support_required" };
 
   const session = await prepareUserSession(db, preparedUser.user.id, input.sessionTtlHours);
   try {
@@ -170,6 +181,7 @@ export async function verifyMemberJoin(
   return {
     status: "organization_session_ready",
     userId: preparedUser.user.id,
+    identityId: activeIdentity.id,
     memberId: claimedMember.member_id,
     sessionId: session.sessionId,
     expiresAt: session.expiresAt,

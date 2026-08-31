@@ -1,6 +1,9 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
+import { RowActions } from "../../../../../components/RowActions";
+import { Badge } from "../../../../../components/Badge";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
@@ -8,6 +11,7 @@ import {
   eventTeamRoleCreateResponseSchema,
   eventTeamRolesResponseSchema,
   type EventTeamRole,
+  type EventTeamRoleAssignment,
 } from "../../../../../../shared/schemas/event-team";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { performAction } from "../../../actions";
@@ -27,12 +31,22 @@ export function Team({ slug }: { slug: string }) {
   const [newExpiresAt, setNewExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
   const [addStatus, setAddStatus] = useState("");
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  async function handleRevoke(roleAssignmentId: string) {
-    if (!confirm("Remove this team member?")) return;
+  async function handleRevoke(assignment: EventTeamRoleAssignment) {
+    const roleLabel = ROLE_LABELS[assignment.role];
+    if (
+      !(await confirmAction({
+        title: `Revoke the ${roleLabel} role from ${assignment.userEmail}?`,
+        consequences: [`${assignment.userEmail} loses ${roleLabel.toLowerCase()} access to this event`],
+        confirmLabel: "Revoke role",
+      }))
+    )
+      return;
     await performAction({
+      setBusy: (busy) => setRevokingId(busy ? assignment.id : null),
       request: () =>
-        deleteJson(`/api/v1/events/${encodeURIComponent(slug)}/roles/${roleAssignmentId}`, successResponseSchema),
+        deleteJson(`/api/v1/events/${encodeURIComponent(slug)}/roles/${assignment.id}`, successResponseSchema),
       successMessage: "Role revoked",
       afterSuccess: () => tableRef.current?.reload(),
     });
@@ -150,7 +164,7 @@ export function Team({ slug }: { slug: string }) {
           { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },
           {
             header: "Role",
-            cell: (assignment) => <span class="badge text-bg-secondary">{ROLE_LABELS[assignment.role]}</span>,
+            cell: (assignment) => <Badge status={assignment.role} label={ROLE_LABELS[assignment.role]} />,
             sort: { asc: "role", desc: "-role" },
           },
           { header: "Added by", cell: (role) => role.granterEmail ?? "—", className: "small text-muted" },
@@ -176,19 +190,21 @@ export function Team({ slug }: { slug: string }) {
           {
             header: "",
             cell: (role) => (
-              <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(role.id)}>
-                Revoke
-              </button>
+              <RowActions
+                label={`Actions for ${role.userEmail}`}
+                actions={[
+                  {
+                    key: "revoke",
+                    label: revokingId === role.id ? "Revoking…" : "Revoke",
+                    onSelect: () => void handleRevoke(role),
+                    disabled: revokingId !== null,
+                  },
+                ]}
+              />
             ),
           },
         ]}
-        empty={
-          <EmptyState
-            title="No team members yet"
-            body="Add a team member to get started."
-            action={{ label: "Add team member", onSelect: () => setShowAddForm(true) }}
-          />
-        }
+        empty={<EmptyState title="No team members yet" body="Add a team member to get started." />}
         rowKey={(role) => role.id}
       />
     </div>

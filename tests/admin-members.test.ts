@@ -1,8 +1,9 @@
 /**
  * Membership provisioning and capacity management —
  * POST /api/v1/members and GET /api/v1/members/capacities, gated by
- * the existing `membership:write`/`membership:read`
- * permission (held by `admin` and `membership_processor` roles).
+ * `membership:write`/`membership:read` permissions. Immediate identity
+ * activation additionally requires the separately granted
+ * `identities:activate` permission.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -68,7 +69,7 @@ async function seedWorkingGroup(slug: string, name: string): Promise<void> {
 }
 
 async function provisioningRowCounts(): Promise<Record<string, number>> {
-  const tables = ["organizations", "members", "users", "organization_representatives", "group_memberships"];
+  const tables = ["organizations", "members", "users", "identities", "group_memberships"];
   return Object.fromEntries(
     await Promise.all(
       tables.map(async (table) => {
@@ -86,7 +87,7 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
     description: "A test organization",
     membershipCategory: "F",
     memberSince: "2026-01-15",
-    representatives: [
+    identities: [
       {
         name: "Jane Doe",
         email: "jane@acme.test",
@@ -95,6 +96,7 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
       },
     ],
     workingGroupSlugs: ["pqc"],
+    activationReason: "Verified staff provisioning fixture",
     ...overrides,
   };
 }
@@ -161,22 +163,22 @@ describe("membership provisioning and capacities", () => {
     );
     expect(primaryContactRows[0].user_id).toBe(body.members[0].userId);
 
-    // body.members[0].id is this representative's own organization_representatives.id
-    // — not the shared aggregate id.
-    const repRows = await queryAll<{ show_on_org_profile: number; left_at: string | null }>(
+    // body.members[0].id is the exact acting identity, not the shared Member
+    // aggregate id.
+    const identityRows = await queryAll<{ show_on_organization_profile: number; ended_at: string | null }>(
       env.DB,
-      "SELECT show_on_org_profile, left_at FROM organization_representatives WHERE id = ?",
+      "SELECT show_on_organization_profile, ended_at FROM identities WHERE id = ?",
       body.members[0].id,
     );
-    expect(repRows[0].show_on_org_profile).toBe(1);
-    expect(repRows[0].left_at).toBeNull();
+    expect(identityRows[0].show_on_organization_profile).toBe(1);
+    expect(identityRows[0].ended_at).toBeNull();
 
-    const [representative] = await queryAll<{ links_json: string | null }>(
+    const [identity] = await queryAll<{ links_json: string | null }>(
       env.DB,
-      "SELECT links_json FROM organization_representatives WHERE id = ?",
+      "SELECT links_json FROM identities WHERE id = ?",
       body.members[0].id,
     );
-    expect(JSON.parse(representative.links_json as string)).toEqual([
+    expect(JSON.parse(identity.links_json as string)).toEqual([
       "https://linkedin.com/in/janedoe",
       "https://github.com/janedoe",
     ]);
@@ -200,7 +202,7 @@ describe("membership provisioning and capacities", () => {
         orgMemberBody({
           organizationName: undefined,
           membershipCategory: "H6",
-          representatives: [{ name: "Solo Consultant", email: "solo@example.test" }],
+          identities: [{ name: "Solo Consultant", email: "solo@example.test" }],
         }),
       ),
     });
@@ -238,7 +240,7 @@ describe("membership provisioning and capacities", () => {
           orgMemberBody({
             membershipCategory: category,
             organizationName,
-            representatives: [representative],
+            identities: [representative],
             workingGroupSlugs: ["ca"],
           }),
         ),
@@ -262,7 +264,7 @@ describe("membership provisioning and capacities", () => {
       body: JSON.stringify(
         orgMemberBody({
           membershipCategory: "A",
-          representatives: [{ name: "Eligible Representative", email: "eligible@example.test" }],
+          identities: [{ name: "Eligible Representative", email: "eligible@example.test" }],
           workingGroupSlugs: ["ca", "ca", "unknown-working-group"],
         }),
       ),
@@ -298,7 +300,7 @@ describe("membership provisioning and capacities", () => {
 
     const second = await call(adminToken, "/api/v1/members", {
       method: "POST",
-      body: JSON.stringify(orgMemberBody({ representatives: [{ name: "Second Rep", email: "second@acme.test" }] })),
+      body: JSON.stringify(orgMemberBody({ identities: [{ name: "Second Rep", email: "second@acme.test" }] })),
     });
     expect(second.status).toBe(201);
     const secondBody = (await second.json()) as { organizationId: string };
@@ -313,7 +315,7 @@ describe("membership provisioning and capacities", () => {
       method: "POST",
       body: JSON.stringify(
         orgMemberBody({
-          representatives: [
+          identities: [
             { name: "Jane Doe", email: "jane@acme.test" },
             { name: "Second Rep", email: "second@acme.test" },
           ],
@@ -374,7 +376,7 @@ describe("membership provisioning and capacities", () => {
     expect(body.members[0].email).toBe("jane@acme.test");
   });
 
-  it("membership_processor role (non-admin) can create and list members", async () => {
+  it("membership_processor can list members but needs identities:activate for immediate provisioning", async () => {
     const staffId = await insertUser("staff-membership@example.test");
     await assignRole(staffId, "role-membership_processor", adminId);
     const staffToken = await createAdminSession(env.DB, staffId, "staff-membership-token");
@@ -383,10 +385,24 @@ describe("membership provisioning and capacities", () => {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });
-    expect(createResponse.status).toBe(201);
+    expect(createResponse.status).toBe(403);
 
     const listResponse = await call(staffToken, "/api/v1/members/capacities");
     expect(listResponse.status).toBe(200);
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'identities:activate', NULL, NULL, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffId, adminId)
+      .run();
+
+    const authorizedCreateResponse = await call(staffToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(authorizedCreateResponse.status).toBe(201);
   });
 
   it("a group lead is denied consortium-wide membership:write", async () => {

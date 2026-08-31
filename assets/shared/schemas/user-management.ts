@@ -24,10 +24,6 @@ export const userUpdateSchema = z
     firstName: z.string().trim().max(80).nullable().optional(),
     lastName: z.string().trim().max(120).nullable().optional(),
     preferredName: z.string().trim().max(80).nullable().optional(),
-    organizationName: z.string().trim().max(200).nullable().optional(),
-    jobTitle: z.string().trim().max(200).nullable().optional(),
-    biography: z.string().trim().max(5000).nullable().optional(),
-    links: linksSchema.nullable().optional(),
     isEcMember: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
@@ -35,7 +31,7 @@ export const userUpdateSchema = z
   });
 
 /** Allowlisted sort columns for GET /api/v1/users — unqualified, matching the route's SELECT-list aliases. */
-export const USERS_SORT_COLUMNS = ["last_name", "email", "organization_name", "role", "created_at"] as const;
+export const USERS_SORT_COLUMNS = ["last_name", "email", "role", "created_at"] as const;
 
 /**
  * GET /api/v1/users `type` filter — computed from membership and the
@@ -55,35 +51,19 @@ export const usersListQuerySchema = listQuerySchema(USERS_SORT_COLUMNS).extend({
 });
 export type UsersListQuery = z.infer<typeof usersListQuerySchema>;
 
-export const userMembershipSchema = z.object({
-  memberId: z.string(),
-  membershipCategory: membershipCategorySchema.nullable(),
-  status: memberStatusSchema.nullable(),
-  organizationId: z.string().nullable(),
-  organizationName: z.string().nullable(),
-});
-export type UserMembership = z.infer<typeof userMembershipSchema>;
-
 const userResponseBaseSchema = z.object({
   id: z.string(),
   email: z.string(),
   first_name: z.string().nullable(),
   last_name: z.string().nullable(),
-  organization_name: z.string().nullable(),
   role: userRoleValueSchema,
   created_at: z.string(),
-  links: linksSchema,
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 
 export const userListItemSchema = userResponseBaseSchema.extend({
   active: z.union([z.literal(0), z.literal(1)]),
-  member_id: z.string().nullable(),
-  member_category: membershipCategorySchema.nullable(),
-  member_status: memberStatusSchema.nullable(),
-  member_organization_id: z.string().nullable(),
-  member_organization_name: z.string().nullable(),
-  membership: userMembershipSchema.nullable(),
+  activeIdentityCount: z.number().int().nonnegative(),
   type: z.enum(USER_TYPE_VALUES),
   eventParticipationCount: z.number(),
 });
@@ -91,7 +71,8 @@ export type UserListItem = z.infer<typeof userListItemSchema>;
 
 export const usersListResponseSchema = paginatedResponseSchema("users", userListItemSchema);
 
-export const userMembershipDetailSchema = z.object({
+export const userIdentityDetailSchema = z.object({
+  identityId: z.string(),
   memberId: z.string(),
   membershipCategory: membershipCategorySchema,
   status: memberStatusSchema,
@@ -108,13 +89,11 @@ export const userMembershipDetailSchema = z.object({
 });
 export const userDetailSchema = userResponseBaseSchema.extend({
   preferred_name: z.string().nullable(),
-  job_title: z.string().nullable(),
-  biography: z.string().nullable(),
   active: z.boolean(),
   isEcMember: z.boolean(),
   updated_at: z.string(),
   pii_redacted_at: z.string().nullable(),
-  memberships: z.array(userMembershipDetailSchema),
+  identities: z.array(userIdentityDetailSchema),
 });
 export const userDetailResponseSchema = z.object({ user: userDetailSchema });
 
