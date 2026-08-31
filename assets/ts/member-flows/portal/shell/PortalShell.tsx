@@ -103,6 +103,24 @@ function PortalRouteRedirect({ to }: { to: string }) {
   return null;
 }
 
+// Hash navigation keeps the document's scroll position — and the browser's
+// automatic scroll restoration re-applies remembered offsets to revisited
+// hash entries — so moving from a scrolled list to another section would
+// land the reader mid-page. The portal owns its scroll instead.
+function ScrollResetOnNavigate() {
+  const [path] = usePortalHashLocation();
+  useEffect(() => {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  }, []);
+  useEffect(() => {
+    // "instant" sidesteps the site's `scroll-behavior: smooth`, whose
+    // animation the route swap cancels before it reaches the top.
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.getElementById("portal-main")?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [path]);
+  return null;
+}
+
 export function PortalShell() {
   const session = portalSession.value;
   const hasGroupsAccess = portalSectionEnabled(session, "groups");
@@ -127,6 +145,7 @@ export function PortalShell() {
     "";
   return (
     <Router hook={usePortalHashLocation}>
+      <ScrollResetOnNavigate />
       <PortalNavigationShell
         session={session}
         displayName={displayName}

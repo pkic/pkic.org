@@ -543,6 +543,8 @@ $portal-sidebar-width: 240px;
 
   #portal-main {
     width: 100%;
-    padding: 1.25rem;
+    // Narrow screens get slim gutters; tables bleed across them via a
+    // matching negative margin in _management-workspace.scss.
+    padding: 1.25rem 0.5rem;
   }
 }

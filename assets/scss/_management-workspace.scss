@@ -794,6 +794,16 @@ $adm-danger: #dc3545;
     border: 1px solid $adm-border;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 
+    // Full-bleed across the slim 0.5rem mobile gutters set on #portal-main
+    // in _portal.scss — tables get the whole narrow viewport.
+    @media (max-width: 900px) {
+      border-left-width: 0;
+      border-radius: 0;
+      border-right-width: 0;
+      margin-left: -0.5rem;
+      margin-right: -0.5rem;
+    }
+
     table {
       margin: 0;
       min-width: 500px;

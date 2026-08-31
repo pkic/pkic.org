@@ -15,3 +15,8 @@ export function usePortalHashLocation(): ReturnType<typeof useHashLocation> {
   const [raw, navigate] = useHashLocation();
   return [raw.split("?", 1)[0], navigate];
 }
+
+// wouter's Router formats <Link> hrefs through the location hook's `hrefs`
+// static; without it links render bare paths that 404 when opened in a new
+// tab or copied.
+usePortalHashLocation.hrefs = (href: string): string => `#${href}`;
