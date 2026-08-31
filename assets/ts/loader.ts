@@ -15,6 +15,10 @@
  * [data-module] element is present on the page.
  */
 
+// Tokens and the base layer ship with the entry: every page needs them and
+// they are small. Component CSS rides its own lazy chunk instead.
+import "./design-system";
+
 // Each value is a function returning a dynamic import — esbuild turns each
 // import() into a separate chunk. Only the chunk requested by the page is
 // ever fetched by the browser.

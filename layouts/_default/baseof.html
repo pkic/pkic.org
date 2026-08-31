@@ -7,6 +7,13 @@
     {{ $style := partial "site-stylesheet.html" . }}
     {{ if eq hugo.Environment "production" }}{{ $style = $style | resources.Fingerprint }}{{ end }}
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if eq hugo.Environment "production" }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
+    {{- /* Design-system tokens and base layer, emitted by the frontend bundle.
+         Linked in the head rather than injected by script so the first paint
+         already has them; component stylesheets ride their own lazy chunks. */ -}}
+    {{- with index (index hugo.Data "asset-manifest") "loader" -}}
+      {{- $entry := . -}}
+      {{- with index $entry "css" }}<link rel="stylesheet" href="{{ . }}"{{ with index $entry "cssIntegrity" }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}>{{ end -}}
+    {{- end }}
     {{ block "head_extra" . }}{{ end }}
   </head>
   <body {{ printf "style=%q" $themeVars | safeHTMLAttr }}>

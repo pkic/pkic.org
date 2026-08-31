@@ -1,0 +1,117 @@
+/*
+ * Element defaults, built on the tokens.
+ *
+ * Everything here sits in `@layer base`, between the tokens and the
+ * components. Two consequences worth knowing:
+ *
+ *   - It loses to every component rule regardless of specificity, so a
+ *     component never has to undo a base rule.
+ *   - It beats the whole quarantined legacy stylesheet, so a surface that
+ *     opts into the design system stops inheriting Bootstrap's reboot without
+ *     needing a single `!important`.
+ *
+ * Scope is deliberate: these rules apply only inside `.pk`, so adopting the
+ * system is a per-surface decision rather than a site-wide flag day.
+ */
+
+@layer base {
+  .pk {
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-md);
+    line-height: 1.55;
+    color: var(--pk-ink);
+    background: var(--pk-canvas);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .pk *,
+  .pk *::before,
+  .pk *::after {
+    box-sizing: border-box;
+  }
+
+  .pk h1,
+  .pk h2,
+  .pk h3,
+  .pk h4,
+  .pk h5,
+  .pk h6 {
+    margin: 0;
+    line-height: 1.18;
+    text-wrap: balance;
+    font-weight: 700;
+  }
+
+  .pk h1 {
+    font-size: var(--pk-text-2xl);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  .pk h2 {
+    font-size: var(--pk-text-xl);
+    letter-spacing: -0.01em;
+  }
+  .pk h3 {
+    font-size: var(--pk-text-lg);
+  }
+
+  .pk p {
+    margin: var(--pk-2) 0;
+  }
+
+  .pk a {
+    color: var(--pk-accent-ink);
+    text-underline-offset: 2px;
+  }
+
+  .pk :where(ul, ol) {
+    margin: var(--pk-2) 0;
+    padding-left: 1.2rem;
+  }
+
+  .pk :where(code, kbd, samp, pre) {
+    font-family: var(--pk-font-mono);
+    font-size: 0.9em;
+  }
+
+  /* Digits that sit in columns line up. Applied here because it is a property
+     of the typeface's use, not of any one component. */
+  .pk :where(table, .pk-num) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pk :where(img, svg, video, canvas) {
+    max-width: 100%;
+    display: block;
+  }
+
+  .pk :where(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* One focus treatment for the whole system. Components may reposition the
+     ring but must not remove it. */
+  .pk :focus-visible {
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+
+  .pk :where([hidden]) {
+    display: none !important;
+  }
+
+  /* Honour the setting rather than merely shortening durations: a vestibular
+     trigger is the movement itself, not its length. */
+  @media (prefers-reduced-motion: reduce) {
+    .pk *,
+    .pk *::before,
+    .pk *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
