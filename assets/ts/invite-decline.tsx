@@ -106,12 +106,21 @@ function $(selector: string, root: Element | Document = document): HTMLElement |
   return root.querySelector<HTMLElement>(selector);
 }
 
+/*
+ * Visibility uses the `hidden` property rather than a utility class.
+ *
+ * The markup declares its initially-hidden regions with the `hidden`
+ * attribute, so toggling a class would leave the attribute in place and the
+ * element hidden forever. Using the property keeps one mechanism, and it is
+ * the platform's own — it also removes this module's last dependency on
+ * Bootstrap's display utilities.
+ */
 function show(el: HTMLElement | null): void {
-  el?.classList.remove("d-none");
+  if (el) el.hidden = false;
 }
 
 function hide(el: HTMLElement | null): void {
-  el?.classList.add("d-none");
+  if (el) el.hidden = true;
 }
 
 // ── Initialize ────────────────────────────────────────────────────────────────
@@ -334,8 +343,8 @@ function boot(): void {
           noteOptional.textContent = isOther ? " (required)" : " (optional)";
           noteOptional.className = isOther ? "fw-normal text-danger" : "text-muted fw-normal";
         }
-        noteError?.classList.add("d-none");
-        $("[data-reason-error]", root!)?.classList.add("d-none");
+        hide(noteError);
+        hide($("[data-reason-error]", root!));
       });
     });
   }
@@ -457,11 +466,11 @@ function boot(): void {
       const checkedReason = formEl.querySelector<HTMLInputElement>("input[name='reasonCode']:checked");
       const reasonError = $("[data-reason-error]", root!);
       if (!checkedReason) {
-        reasonError?.classList.remove("d-none");
+        show(reasonError);
         formEl.querySelector<HTMLElement>("input[name='reasonCode']")?.focus();
         return;
       }
-      reasonError?.classList.add("d-none");
+      hide(reasonError);
 
       const reasonCode = checkedReason.value;
 
@@ -477,11 +486,11 @@ function boot(): void {
       // Validate "other" requires note
       const noteError = $("[data-note-error]", root!);
       if (reasonCode === "other" && !reasonNote) {
-        noteError?.classList.remove("d-none");
+        show(noteError);
         ($("[data-reason-note]", root!) as HTMLElement | null)?.focus();
         return;
       }
-      noteError?.classList.add("d-none");
+      hide(noteError);
 
       // Collect forwards
       const forwardRows = root!.querySelectorAll<HTMLElement>("[data-forward-row]");

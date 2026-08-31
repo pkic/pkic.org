@@ -110,6 +110,28 @@ Public layouts follow, then `assets/scss` shrinks as the partials it holds stop
 being referenced. `go.mod` loses the Hugo Module last, once
 `report:bootstrap` reads zero.
 
+## Classes that JavaScript owns
+
+Some classes are not styling — they are state that a script toggles. Replacing
+one of those in the template without changing the script silently breaks the
+surface, and nothing in the build or the test suite will say so.
+
+This happened once already: `invite-decline.html` swapped `d-none` for the
+`hidden` attribute while `invite-decline.tsx` was still calling
+`classList.add("d-none")`, so its error messages and pivot panels could no
+longer be shown or hidden at all.
+
+Before removing any class, grep for it:
+
+```bash
+grep -rn "classList.*\"the-class\"" assets/ts assets/js
+```
+
+If a script touches it, migrate both sides in the same change. For visibility
+specifically, prefer the platform: `el.hidden = true` works with the `hidden`
+attribute the markup already uses, needs no class at all, and is what the
+migrated modules now do.
+
 ## What not to do
 
 - Do not add a tolerated-violations baseline. The gate demands zero for
