@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import { groupMemberAddSchema, groupMembershipMutationResponseSchema } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
-import { ApiClientError, postJson } from "../../../../shared/api-client";
+import { ApiClientError, postValidated } from "../../../../shared/api-client";
 
 export function GroupMemberAddForm({
   groupId,
@@ -29,8 +29,9 @@ export function GroupMemberAddForm({
         userId: user.id,
         capacitySelection: { mode: "all_eligible", confirmed: true },
       });
-      await postJson(
+      await postValidated(
         `/api/v1/groups/${encodeURIComponent(groupId)}/memberships/${encodeURIComponent(input.userId)}`,
+        groupMemberAddSchema.omit({ userId: true }),
         { capacitySelection: input.capacitySelection },
         groupMembershipMutationResponseSchema,
       );

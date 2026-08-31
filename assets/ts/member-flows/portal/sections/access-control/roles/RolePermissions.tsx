@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "../../../../../../shared/schemas/permissions";
+import { PERMISSIONS, type Permission } from "../../../../../../shared/schemas/permissions";
 
 /** Shared permission-bundle checkbox grid used by both role creation and editing. */
 export function PermissionCheckboxes({
@@ -6,8 +6,8 @@ export function PermissionCheckboxes({
   onToggle,
   disabled,
 }: {
-  selected: Set<string>;
-  onToggle: (permission: string) => void;
+  selected: Set<Permission>;
+  onToggle: (permission: Permission) => void;
   disabled?: boolean;
 }) {
   return (

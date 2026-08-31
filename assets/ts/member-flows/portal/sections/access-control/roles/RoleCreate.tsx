@@ -1,17 +1,18 @@
 import { useState } from "preact/hooks";
-import { postJson } from "../../../../../shared/api-client";
+import { postValidated } from "../../../../../shared/api-client";
 import { toast } from "../../../ui";
-import { roleResponseEnvelopeSchema } from "../../../../../../shared/schemas/access-control";
+import { roleCreateSchema, roleResponseEnvelopeSchema } from "../../../../../../shared/schemas/access-control";
+import type { Permission } from "../../../../../../shared/schemas/permissions";
 import { PermissionCheckboxes } from "./RolePermissions";
 
 /** Distinct create-role view: replaces the roles list rather than layering above it. */
 export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<Permission>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
-  function toggle(permission: string) {
+  function toggle(permission: Permission) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(permission)) next.delete(permission);
@@ -25,8 +26,9 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      const created = await postJson(
+      const created = await postValidated(
         "/api/v1/roles",
+        roleCreateSchema,
         {
           name: name.trim(),
           description: description.trim() || undefined,

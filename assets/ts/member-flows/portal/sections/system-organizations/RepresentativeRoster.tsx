@@ -1,11 +1,14 @@
 import { useRef, useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
-import { representativeMutationResponseSchema } from "../../../../../shared/schemas/organization-representation";
+import {
+  representativeAssociateSchema,
+  representativeMutationResponseSchema,
+} from "../../../../../shared/schemas/organization-representation";
 import { FormActions } from "../../../../components/FormActions";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
-import { postJson } from "../../../../shared/api-client";
+import { postValidated } from "../../../../shared/api-client";
 import { OrganizationRepresentativeDirectory } from "../OrganizationRepresentativeDirectory";
 import { toast } from "../../ui";
 
@@ -29,8 +32,9 @@ function LinkExistingUserForm({
     setBusy(true);
     setError("");
     try {
-      await postJson(
+      await postValidated(
         `/api/v1/organizations/${encodeURIComponent(organizationId)}/representatives`,
+        representativeAssociateSchema,
         { kind: "existing_user", userId: user.id, showOnOrganizationProfile: true },
         representativeMutationResponseSchema,
       );
@@ -79,8 +83,9 @@ function AddRepresentativeForm({
     setBusy(true);
     setError("");
     try {
-      await postJson(
+      await postValidated(
         `/api/v1/organizations/${encodeURIComponent(organizationId)}/representatives`,
+        representativeAssociateSchema,
         {
           kind: "email",
           name: name.trim(),

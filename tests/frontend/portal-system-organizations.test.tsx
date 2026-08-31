@@ -7,7 +7,10 @@ import {
   organizationDetailResponseSchema,
   organizationsListResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
-import { organizationRepresentativesListResponseSchema } from "../../assets/shared/schemas/organization-representation";
+import {
+  organizationRepresentativesListResponseSchema,
+  representativeAssociateSchema,
+} from "../../assets/shared/schemas/organization-representation";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
@@ -274,16 +277,14 @@ describe("portal System Organizations", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(requests.find((request) => request.method === "POST")).toEqual({
-      method: "POST",
-      path: `/api/v1/organizations/${organizationId}/representatives`,
-      body: {
-        kind: "email",
-        name: "Grace Hopper",
-        email: "grace@example.test",
-        jobTitle: "Engineer",
-        showOnOrganizationProfile: true,
-      },
+    const posted = requests.find((request) => request.method === "POST");
+    expect(posted?.path).toBe(`/api/v1/organizations/${organizationId}/representatives`);
+    expect(representativeAssociateSchema.parse(posted?.body)).toEqual({
+      kind: "email",
+      name: "Grace Hopper",
+      email: "grace@example.test",
+      jobTitle: "Engineer",
+      showOnOrganizationProfile: true,
     });
   });
 
