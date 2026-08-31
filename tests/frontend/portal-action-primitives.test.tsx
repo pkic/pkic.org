@@ -4,6 +4,7 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { confirmAction, ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { confirmationConsequences, requestClose, typedConfirmationInput } from "./helpers/confirm-dialog";
 import { EmptyState } from "../../assets/ts/components/EmptyState";
 import { RowActions } from "../../assets/ts/components/RowActions";
 import { Spinner } from "../../assets/ts/components/Spinner";
@@ -47,7 +48,7 @@ describe("ConfirmDialog", () => {
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Remove Dana Yu from Example Corp?");
     expect(dialog?.textContent).toContain("their user account is kept");
-    expect(container.querySelectorAll(".pkic-confirm-consequences li")).toHaveLength(2);
+    expect(confirmationConsequences(container)).toHaveLength(2);
     // The confirm button names the action instead of a generic "OK".
     await act(() => {
       dialogButton(container, "Remove from organization").click();
@@ -71,9 +72,7 @@ describe("ConfirmDialog", () => {
     await act(() => {
       second = confirmAction({ title: "Revoke invitation?", confirmLabel: "Revoke invitation" });
     });
-    await act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
+    await act(() => requestClose(container));
     await expect(second).resolves.toBe(false);
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
@@ -90,7 +89,7 @@ describe("ConfirmDialog", () => {
     });
     const confirm = dialogButton(container, "Anonymize user");
     expect(confirm.disabled).toBe(true);
-    const input = container.querySelector<HTMLInputElement>("#pkic-confirm-typed");
+    const input = typedConfirmationInput(container);
     if (!input) throw new Error("missing typed-confirmation input");
     await act(() => {
       input.value = "dana@example";
@@ -118,9 +117,7 @@ describe("ConfirmDialog", () => {
     });
     await expect(first).resolves.toBe(false);
     expect(document.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
-    await act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
+    await act(() => requestClose());
   });
 });
 

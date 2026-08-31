@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
+import { openConfirmation } from "./helpers/confirm-dialog";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
@@ -178,7 +179,7 @@ describe("selected-group vote participation", () => {
       ).click(),
     );
     await settle();
-    const closeDialog = container.querySelector('[role="alertdialog"]');
+    const closeDialog = openConfirmation(container);
     expect(closeDialog).not.toBeNull();
     await act(() =>
       (

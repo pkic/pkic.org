@@ -34,7 +34,7 @@ export interface DialogProps {
   description?: string;
   /** The specific, irreversible effects. Rendered as a list. */
   consequences?: readonly string[];
-  /** Requires the operator to type this exactly before confirming. */
+  /** Requires the operator to type this before confirming. Compared trimmed. */
   confirmPhrase?: string;
   /** Label above the confirmation input. Ignored without `confirmPhrase`. */
   confirmPrompt?: string;
@@ -67,7 +67,10 @@ export function Dialog({
   const openerRef = useRef<Element | null>(null);
   const [typed, setTyped] = useState("");
 
-  const confirmable = !confirmPhrase || typed === confirmPhrase;
+  // Trimmed, because the phrase is usually pasted — an organization's name, an
+  // email address — and a trailing space is not a sign that the operator meant
+  // something else.
+  const confirmable = !confirmPhrase || typed.trim() === confirmPhrase;
 
   const restoreFocus = useCallback(() => {
     const opener = openerRef.current;
@@ -123,6 +126,13 @@ export function Dialog({
     <dialog
       ref={ref}
       class={["pk-dialog", destructive ? "pk-dialog--destructive" : null].filter(Boolean).join(" ")}
+      /*
+       * A destructive dialog is an alertdialog: it interrupts to report a
+       * consequence, and screen readers announce its description immediately
+       * rather than waiting for focus to reach it. A neutral confirmation is
+       * an ordinary dialog and should not claim the alert treatment.
+       */
+      role={destructive ? "alertdialog" : undefined}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
     >

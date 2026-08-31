@@ -7,6 +7,7 @@ import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system
 import { ScheduledJobs } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledJobs";
 import type { ScheduledJobResource } from "../../assets/shared/schemas/scheduler";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { typedConfirmationInput } from "./helpers/confirm-dialog";
 
 let container: HTMLDivElement | null = null;
 
@@ -571,7 +572,7 @@ describe("portal Operations retention redaction confirmation", () => {
     // The confirm button stays disabled until the safety word is typed exactly.
     const confirmButton = dialogButton("Run retention redaction");
     expect(confirmButton.disabled).toBe(true);
-    const typed = container.querySelector<HTMLInputElement>("#pkic-confirm-typed")!;
+    const typed = typedConfirmationInput(container)!;
     await act(() => {
       typed.value = "redact";
       typed.dispatchEvent(new Event("input", { bubbles: true }));
@@ -585,7 +586,7 @@ describe("portal Operations retention redaction confirmation", () => {
 
     // Confirm with the exact typed word: the run executes.
     await act(() => runButton.click());
-    const retryped = container.querySelector<HTMLInputElement>("#pkic-confirm-typed")!;
+    const retryped = typedConfirmationInput(container)!;
     await act(() => {
       retryped.value = "REDACT";
       retryped.dispatchEvent(new Event("input", { bubbles: true }));

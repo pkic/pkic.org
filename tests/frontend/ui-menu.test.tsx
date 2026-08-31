@@ -132,12 +132,154 @@ describe("Menu", () => {
     expect(document.activeElement).toBe(trigger(container));
   });
 
-  it("omits disabled items rather than offering focus to something inert", () => {
+  it("shows a disabled item rather than hiding it, so the menu keeps its shape", () => {
     const container = mount(<Menu label="Actions" items={items([{}, { disabled: true }])} />);
     void act(() => trigger(container).click());
-    const labels = menuItems(container).map((item) => item.textContent);
-    expect(labels).not.toContain("Resend invitation");
-    expect(labels).toHaveLength(2);
+    const rendered = menuItems(container);
+    expect(rendered.map((item) => item.textContent)).toContain("Resend invitation");
+    expect(rendered[1].disabled).toBe(true);
+  });
+
+  it("steps over a disabled item instead of parking focus on something inert", () => {
+    const container = mount(<Menu label="Actions" items={items([{}, { disabled: true }])} />);
+    press(trigger(container), "ArrowDown");
+    expect(document.activeElement).toBe(menuItems(container)[0]);
+    press(menuItems(container)[0], "ArrowDown");
+    expect(document.activeElement).toBe(menuItems(container)[2]);
+  });
+
+  it("does not run a disabled item's action if it is somehow clicked", () => {
+    const onSelect = vi.fn();
+    const container = mount(<Menu label="Actions" items={items([{}, { disabled: true, onSelect }])} />);
+    void act(() => trigger(container).click());
+    void act(() => menuItems(container)[1].click());
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("opens onto the last ENABLED item with ArrowUp, not the last rendered one", () => {
+    const container = mount(<Menu label="Actions" items={items([{}, {}, { disabled: true }])} />);
+    press(trigger(container), "ArrowUp");
+    expect(document.activeElement).toBe(menuItems(container)[1]);
+  });
+
+  /*
+   * Placement. jsdom reports every rect as zero, so each case stubs the two
+   * measurements the component actually reads — the trigger's rect and the
+   * popup's own size — and asserts the geometry it writes back. That is the
+   * part that has broken on real screens; the rest is the browser's job.
+   */
+  describe("placement", () => {
+    function withRects(triggerRect: Partial<DOMRect>, popupSize: { width: number; height: number }) {
+      const original = Element.prototype.getBoundingClientRect;
+      Element.prototype.getBoundingClientRect = function (this: Element) {
+        const isPopup = this.getAttribute("role") === "menu";
+        const box = isPopup
+          ? { top: 0, left: 0, right: popupSize.width, bottom: popupSize.height, ...popupSize }
+          : { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, ...triggerRect };
+        return { ...box, x: box.left, y: box.top, toJSON: () => box } as DOMRect;
+      };
+      return () => {
+        Element.prototype.getBoundingClientRect = original;
+      };
+    }
+
+    function popup(container: HTMLElement): HTMLElement {
+      const found = container.querySelector<HTMLElement>('[role="menu"]');
+      if (!found) throw new Error("menu is not open");
+      return found;
+    }
+
+    it("hangs below the trigger when there is room", () => {
+      const restore = withRects({ top: 100, bottom: 130, left: 40, right: 70, width: 30 }, { width: 200, height: 150 });
+      try {
+        const container = mount(<Menu label="Actions" items={items()} />);
+        void act(() => trigger(container).click());
+        expect(popup(container).style.top).toBe("134px");
+        expect(popup(container).style.left).toBe("40px");
+      } finally {
+        restore();
+      }
+    });
+
+    it("flips above the trigger in the last row of a table, where below would fall off", () => {
+      // jsdom's viewport is 768 tall. A trigger at 700 leaves no room below.
+      const restore = withRects({ top: 700, bottom: 730, left: 40, right: 70, width: 30 }, { width: 200, height: 150 });
+      try {
+        const container = mount(<Menu label="Actions" items={items()} />);
+        void act(() => trigger(container).click());
+        expect(popup(container).style.top).toBe(`${700 - 4 - 150}px`);
+      } finally {
+        restore();
+      }
+    });
+
+    it("stays below when flipping would land it in an even smaller gap", () => {
+      const restore = withRects({ top: 20, bottom: 50, left: 40, right: 70, width: 30 }, { width: 200, height: 700 });
+      try {
+        const container = mount(<Menu label="Actions" items={items()} />);
+        void act(() => trigger(container).click());
+        expect(popup(container).style.top).toBe("54px");
+      } finally {
+        restore();
+      }
+    });
+
+    it("clamps into the viewport rather than pushing the page sideways", () => {
+      // jsdom's viewport is 1024 wide. End-aligning a 400px popup to a trigger
+      // at the right edge would put its left edge past the margin.
+      const restore = withRects(
+        { top: 100, bottom: 130, left: 1000, right: 1020, width: 20 },
+        { width: 400, height: 150 },
+      );
+      try {
+        const container = mount(<Menu label="Actions" items={items()} align="end" />);
+        void act(() => trigger(container).click());
+        expect(popup(container).style.left).toBe(`${1024 - 400 - 8}px`);
+      } finally {
+        restore();
+      }
+    });
+
+    it("is never narrower than the trigger it hangs from", () => {
+      const restore = withRects(
+        { top: 100, bottom: 130, left: 40, right: 340, width: 300 },
+        { width: 200, height: 80 },
+      );
+      try {
+        const container = mount(<Menu label="Actions" items={items()} />);
+        void act(() => trigger(container).click());
+        expect(popup(container).style.minWidth).toBe("300px");
+      } finally {
+        restore();
+      }
+    });
+
+    it("follows its trigger on scroll instead of closing, so momentum cannot eat it", () => {
+      let top = 300;
+      const original = Element.prototype.getBoundingClientRect;
+      Element.prototype.getBoundingClientRect = function (this: Element) {
+        const isPopup = this.getAttribute("role") === "menu";
+        const box = isPopup
+          ? { top: 0, left: 0, right: 200, bottom: 100, width: 200, height: 100 }
+          : { top, left: 40, right: 70, bottom: top + 30, width: 30, height: 30 };
+        return { ...box, x: box.left, y: box.top, toJSON: () => box } as DOMRect;
+      };
+      try {
+        const container = mount(<Menu label="Actions" items={items()} />);
+        void act(() => trigger(container).click());
+        expect(popup(container).style.top).toBe("334px");
+
+        top = 200;
+        void act(() => {
+          document.dispatchEvent(new Event("scroll", { bubbles: true }));
+        });
+
+        expect(container.querySelector('[role="menu"]')).not.toBeNull();
+        expect(popup(container).style.top).toBe("234px");
+      } finally {
+        Element.prototype.getBoundingClientRect = original;
+      }
+    });
   });
 
   it("closes when a pointer goes down outside it", () => {

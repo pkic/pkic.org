@@ -309,67 +309,19 @@ $portal-sidebar-width: 240px;
 }
 
 // The public site uppercases every `main h5` for its editorial look; inside
-// the application that style shouts from card headers and dialog titles.
-// Restore sentence case for all portal headings.
+// the application that style shouts from card headers.
 #portal-root h5,
-#portal-root .h5,
-.pkic-confirm-dialog h5 {
+#portal-root .h5 {
   text-transform: none;
   letter-spacing: normal;
   color: inherit;
 }
 
-.pkic-confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1080;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(33, 37, 41, 0.45);
-}
-
-.pkic-confirm-dialog {
-  width: 100%;
-  max-width: 420px;
-  padding: 1.25rem 1.5rem;
-  background: #fff;
-  border-radius: 0.5rem;
-  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.25);
-}
-
-.pkic-confirm-title {
-  margin-bottom: 0.5rem;
-}
-
-.pkic-confirm-body {
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  color: #495057;
-}
-
-.pkic-confirm-consequences {
-  margin: 0 0 0.75rem;
-  padding-left: 1.25rem;
-  font-size: 0.8125rem;
-  color: #495057;
-
-  li + li {
-    margin-top: 0.25rem;
-  }
-}
-
-.pkic-confirm-typed {
-  margin-bottom: 0.75rem;
-}
-
-.pkic-confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
+// The confirmation dialog's styles are gone: it is now the design system's
+// `Dialog`, a native <dialog> whose CSS lives with the component in
+// assets/ts/ui/Dialog.css. What was here reproduced a modal's appearance
+// around markup that was not modal — no focus trap, nothing inert behind it —
+// in hard-coded greys that had no dark theme.
 
 .pkic-row-actions {
   display: inline-flex;

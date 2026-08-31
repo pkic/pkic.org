@@ -26,6 +26,19 @@
     line-height: 1;
   }
 
+  /*
+   * A trigger that is something other than a button — an avatar and a name in
+   * the sidebar, a summary cell in a row. It keeps the interactive affordances
+   * and drops the square-icon geometry, so the caller's content defines the
+   * shape without having to override anything from outside the component.
+   */
+  .pk-menu__trigger--plain {
+    padding: 0;
+    aspect-ratio: auto;
+    color: inherit;
+    text-align: left;
+  }
+
   .pk-menu__trigger:hover,
   .pk-menu__trigger[aria-expanded="true"] {
     background: var(--pk-surface-sunk);
@@ -70,15 +83,26 @@
     cursor: pointer;
   }
 
-  .pk-menu__item:hover {
+  .pk-menu__item:hover:not(:disabled) {
     background: var(--pk-surface-sunk);
+  }
+
+  /*
+   * Disabled items are shown, not removed. Keeping the menu's shape stable
+   * across permission levels means a reader who has used it before can still
+   * aim at the right row, and an unavailable action explains itself where a
+   * missing one cannot.
+   */
+  .pk-menu__item:disabled {
+    color: var(--pk-ink-faint);
+    cursor: not-allowed;
   }
 
   .pk-menu__item--danger {
     color: var(--pk-danger-ink);
   }
 
-  .pk-menu__item--danger:hover {
+  .pk-menu__item--danger:hover:not(:disabled) {
     background: var(--pk-danger-soft);
   }
 }

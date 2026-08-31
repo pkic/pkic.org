@@ -6,6 +6,7 @@ import { UserProfileEditor } from "../../assets/ts/member-flows/portal/sections/
 import { UserDetail as UserDetailView } from "../../assets/ts/member-flows/portal/sections/system-users/UserDetail";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
+import { typedConfirmationInput } from "./helpers/confirm-dialog";
 
 const apiClient = vi.hoisted(() => ({
   patchJson: vi.fn(),
@@ -199,7 +200,7 @@ describe("portal System Users anonymize confirmation", () => {
 
     const confirmButton = dialogButton("Anonymize user");
     expect(confirmButton.disabled).toBe(true);
-    const typed = container.querySelector<HTMLInputElement>("#pkic-confirm-typed")!;
+    const typed = typedConfirmationInput(container)!;
     await act(() => {
       typed.value = "not-the-email";
       typed.dispatchEvent(new Event("input", { bubbles: true }));
@@ -213,7 +214,7 @@ describe("portal System Users anonymize confirmation", () => {
 
     // Confirm with the exact typed email: the anonymize request is sent.
     await act(() => dialogButton("Anonymize user").click());
-    const retyped = container.querySelector<HTMLInputElement>("#pkic-confirm-typed")!;
+    const retyped = typedConfirmationInput(container)!;
     await act(() => {
       retyped.value = email;
       retyped.dispatchEvent(new Event("input", { bubbles: true }));

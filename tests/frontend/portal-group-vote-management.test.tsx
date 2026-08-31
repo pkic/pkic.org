@@ -8,6 +8,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
 import { GroupVoteManagementControls } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
 import { GroupVoteProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
+import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
@@ -89,9 +90,8 @@ function setValue(element: HTMLInputElement | HTMLTextAreaElement, value: string
 }
 
 function confirmDialogButton(label: string): HTMLButtonElement {
-  const dialog = document.querySelector('[role="alertdialog"]');
-  if (!dialog) throw new Error("no confirm dialog is open");
-  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!openConfirmation()) throw new Error("no confirm dialog is open");
+  const button = confirmationButton(label);
   if (!button) throw new Error(`missing confirm dialog button: ${label}`);
   return button;
 }
