@@ -2159,6 +2159,29 @@ Status: In progress (2026-08-30)
       sub-tabs, occurrence detail tabs, and the communications/campaign
       editors (no route homes yet; queued with the events projection
       consolidation).
+      Events projection consolidation, first two slices, landed
+      2026-08-31: the root /events list became the audience overview —
+      upcoming events with humanized venue-aware dates, relative time, the
+      viewer's own registration state (per-day chips), the owning group as
+      a link, and an Upcoming/Past toggle; slugs, ISO dates, the Mode
+      column, admin count columns, capability chips, and per-row Manage
+      buttons are gone (row click opens the event's public page; a row
+      menu offers "Open in group workspace" for management-shaped rows).
+      The group event workspace absorbed the standalone surface's Team,
+      Promoters, and Analytics tabs by reusing the slug-driven detail
+      components — Promoters/Analytics gated on manage_attendance rather
+      than the bare view floor, since view is the visibility minimum every
+      accessible event carries. The last native confirms on the events
+      surfaces (team-role revoke, presentation-version delete, proposal
+      moderation flags) moved to the shared dialog; "Cancel accepted
+      session" turned out to already be a deliberate comment+checkbox form
+      and was left as designed. A duplicate-affordance defect from the
+      create-behind-action pass was fixed globally: EmptyStates no longer
+      repeat the toolbar's create button (one affordance, one place), which
+      also restored strict-mode e2e locators. Remaining slice: retire
+      /events/:slug/* behind owner-group redirects and move the
+      registration/proposal detail pages under the group route (needs the
+      group route's segment parsing extended one level).
       All four waves are complete. Residuals folded into the events
       projection consolidation:
       (1 residue) events-surface confirms after the projection slice;
