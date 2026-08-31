@@ -2144,7 +2144,9 @@ Status: In progress (2026-08-30)
       group form and meeting-series detail tabs became URL segments through
       the existing `resourceTab` route parsing, and `ApiDataTable` gained
       `urlState` — search, sort, offset, and page size mirror into
-      namespaced query parameters on thirteen primary lists (users, groups,
+      namespaced query parameters carried INSIDE the hash
+      (`#/users?users.q=…`, matching the verify flow's URL shape, so list
+      state never reaches the server) on thirteen primary lists (users, groups,
       organizations, events, donations, templates, sponsorships, forms,
       applications, roles, grants, audit, outbox), initialized from the URL
       on mount and cleaned up on unmount so links are shareable and the
