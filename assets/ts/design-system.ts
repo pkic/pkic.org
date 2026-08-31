@@ -22,3 +22,8 @@ import "../design/utilities.css";
 // should be because a Hugo layout writes the class, not because it is handy.
 import "./ui/Button.css";
 import "./ui/Badge.css";
+// The public shortcodes are largely forms — join, registration, speaker and
+// proposal management — so the field and control styles have to be available
+// to server-rendered markup too. This one addition unblocks roughly 600 of the
+// remaining Bootstrap references in layouts/.
+import "./ui/Field.css";

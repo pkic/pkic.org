@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertCssBudget } from "./lib/frontend-bundle-budget.mjs";
+import { assertCssBudget, DESIGN_ENTRY_CSS_BUDGET } from "./lib/frontend-bundle-budget.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -67,4 +67,23 @@ try {
 
 function relativeToRoot(absolutePath) {
   return absolutePath.slice(root.length + 1);
+}
+
+// The design system's entry stylesheet is emitted by the frontend build rather
+// than by Hugo, so it lives under static/ and is checked separately.
+const designEntry = resolve(root, "static", "js", "built", "loader.css");
+if (existsSync(designEntry)) {
+  try {
+    const design = assertCssBudget(readFileSync(designEntry, "utf8"), DESIGN_ENTRY_CSS_BUDGET);
+    console.log(
+      `[css-budget] ${relativeToRoot(designEntry)} passes: raw ${(design.rawBytes / 1024).toFixed(2)} KiB, gzip ${(design.gzipBytes / 1024).toFixed(2)} KiB`,
+    );
+  } catch (error) {
+    console.error(
+      `[css-budget] ${relativeToRoot(designEntry)}\n${error.message}\n` +
+        "The entry sheet is linked on every page. Move the component back to a lazy chunk,\n" +
+        "or raise the ceiling deliberately in scripts/lib/frontend-bundle-budget.mjs.",
+    );
+    process.exit(1);
+  }
 }

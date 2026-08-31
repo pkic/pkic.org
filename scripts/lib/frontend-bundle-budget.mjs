@@ -11,6 +11,14 @@ export const FRONTEND_BUNDLE_BUDGETS = Object.freeze({
 // once the Bootstrap migration trims the compiled stylesheet.
 export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 640 * 1024, gzipBytes: 88 * 1024 });
 
+// The design system's entry stylesheet: tokens, the base layer, the utilities,
+// and the few primitives whose class names appear in server-rendered Hugo
+// markup. It is linked on every page, so it has to stay small — and the
+// pressure on it is one-directional, because adding "just one more" component
+// is always locally convenient. This ceiling is what makes that a decision
+// rather than a drift.
+export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 32 * 1024, gzipBytes: 9 * 1024 });
+
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;
 }

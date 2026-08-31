@@ -35,6 +35,15 @@ A migration that swaps class names without doing this produces unstyled markup
 that looks fine in review — because Bootstrap is still loaded on the page —
 and breaks the moment the surface drops `main.scss`.
 
+**Hugo templates are the exception.** A server-rendered page linked from the
+head cannot wait for a lazy chunk without flashing unstyled content, so the
+primitives whose class names appear in Hugo markup ship with the entry
+stylesheet instead: currently `Button`, `Badge` and `Field` (which carries
+`pk-input` and the checkbox, radio and validation styles). Anything outside
+that list — `pk-panel`, `pk-alert`, `pk-table` — must not be written into a
+Hugo template, because its CSS will not be there. Keep the list short and add
+to it only when a layout genuinely needs the class.
+
 ## Class mapping
 
 Bootstrap on the left, the design system on the right. Where the right-hand
