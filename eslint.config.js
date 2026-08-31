@@ -8,6 +8,7 @@ const sourceTypeScriptFiles = [
   "functions/**/*.ts",
   "assets/ts/**/*.{ts,tsx}",
   "assets/shared/**/*.ts",
+  "assets/design/**/*.ts",
   "tests/**/*.{ts,tsx}",
 ];
 const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
