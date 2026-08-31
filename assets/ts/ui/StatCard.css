@@ -1,0 +1,53 @@
+@layer components {
+  .pk-stat-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pk-stat-card__label {
+    font-size: var(--pk-text-2xs);
+    font-weight: 600;
+    letter-spacing: var(--pk-tracking-label);
+    color: var(--pk-ink-faint);
+    text-transform: uppercase;
+    margin-bottom: var(--pk-2);
+  }
+
+  .pk-stat-card__value {
+    font-size: var(--pk-text-3xl);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    color: var(--pk-ink);
+    line-height: 1.2;
+    margin-bottom: var(--pk-2);
+  }
+
+  .pk-stat-card__note {
+    font-size: var(--pk-text-xs);
+    line-height: 1.35;
+  }
+
+  .pk-stat-card__note--up {
+    color: var(--pk-ok-ink);
+  }
+
+  .pk-stat-card__note--down {
+    color: var(--pk-danger-ink);
+  }
+
+  .pk-stat-card__note--flat {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-stat-card__trend-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}

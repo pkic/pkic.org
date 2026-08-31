@@ -1,0 +1,38 @@
+@layer components {
+  .pk-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--pk-avatar-size);
+    height: var(--pk-avatar-size);
+    border-radius: 50%;
+    background: var(--pk-accent-soft);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .pk-avatar--sm {
+    --pk-avatar-size: 2rem;
+  }
+
+  .pk-avatar--md {
+    --pk-avatar-size: 2.5rem;
+  }
+
+  .pk-avatar--lg {
+    --pk-avatar-size: 3rem;
+  }
+
+  .pk-avatar__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .pk-avatar__initials {
+    font-size: 0.65em;
+    font-weight: 700;
+    color: var(--pk-accent-ink);
+    line-height: 1;
+  }
+}

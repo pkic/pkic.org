@@ -159,9 +159,18 @@ export const constants = {
   "dur-slow": "520ms",
   ease: "cubic-bezier(0.16, 0.84, 0.28, 1)",
 
+  // A spinner turns at its own pace, unrelated to a transition's duration.
+  "dur-spin": "700ms",
+  // The reduced-motion clamp. Named rather than inlined so the one place that
+  // is allowed to shorten motion is visible in the token list.
+  "dur-instant": "1ms",
+
   focus: "0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent)",
 
-  "accent-on": "#ffffff",
+  // Text on any saturated solid fill — an accent button, a danger button.
+  // Constant across themes: a filled control keeps its own contrast.
+  "on-solid": "#ffffff",
+  "accent-on": "var(--pk-on-solid)",
   "grad-tonal": "linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift))",
   "grad-duo": "linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%)",
   "grad-brand": `linear-gradient(135deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,

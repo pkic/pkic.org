@@ -1,0 +1,153 @@
+/*
+ * Field, and the controls that sit inside one.
+ *
+ * The three validation states set a single local `--state` colour, so the
+ * border, the in-field mark and the message all move together and there is one
+ * place to change if a tone is retuned.
+ */
+
+@layer components {
+  .pk-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .pk-field__label {
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    color: var(--pk-ink);
+  }
+
+  .pk-field__required {
+    color: var(--pk-danger-ink);
+  }
+
+  /* The asterisk is decorative; the word behind it is what gets announced. */
+  .pk-field__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .pk-field__control {
+    position: relative;
+    display: flex;
+  }
+
+  .pk-field__help {
+    margin: 0;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-field__message {
+    margin: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.3rem;
+    font-size: var(--pk-text-xs);
+    color: var(--state-ink);
+  }
+
+  .pk-field__message-icon {
+    width: 0.9rem;
+    height: 0.9rem;
+    flex: none;
+    margin-top: 0.15rem;
+  }
+
+  .pk-field__state {
+    position: absolute;
+    right: 0.6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.05rem;
+    height: 1.05rem;
+    color: var(--state);
+    pointer-events: none;
+  }
+
+  .pk-field--ok {
+    --state: var(--pk-ok);
+    --state-ink: var(--pk-ok-ink);
+  }
+  .pk-field--advisory {
+    --state: var(--pk-warn);
+    --state-ink: var(--pk-warn-ink);
+  }
+  .pk-field--invalid {
+    --state: var(--pk-danger);
+    --state-ink: var(--pk-danger-ink);
+  }
+
+  /* ── Controls ───────────────────────────────────────────────────────── */
+
+  .pk-input {
+    width: 100%;
+    min-width: 0;
+    padding: var(--pk-control-y) var(--pk-control-x);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-md);
+    transition:
+      border-color var(--pk-dur-fast),
+      box-shadow var(--pk-dur-fast);
+  }
+
+  .pk-input::placeholder {
+    color: var(--pk-ink-faint);
+  }
+
+  .pk-input:disabled {
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink-faint);
+    cursor: not-allowed;
+  }
+
+  /* Reserve room for the state mark so the value never slides under it. */
+  .pk-field--ok .pk-input,
+  .pk-field--advisory .pk-input,
+  .pk-field--invalid .pk-input {
+    border-color: var(--state);
+    padding-right: 2.2rem;
+  }
+
+  .pk-input--textarea {
+    min-height: 5rem;
+    resize: vertical;
+  }
+
+  .pk-input--select {
+    appearance: none;
+    padding-right: 2rem;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position:
+      right 1rem center,
+      right 0.7rem center;
+    background-size:
+      5px 5px,
+      5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  /* A select carrying a state mark needs room for both it and the chevron. */
+  .pk-field--ok .pk-input--select,
+  .pk-field--advisory .pk-input--select,
+  .pk-field--invalid .pk-input--select {
+    padding-right: 3.4rem;
+    background-position:
+      right 2.4rem center,
+      right 2.1rem center;
+  }
+}

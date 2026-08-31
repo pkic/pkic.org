@@ -1,0 +1,28 @@
+/*
+ * Kicker.
+ *
+ * The brand's uppercase label device with a glowing accent dot.
+ */
+
+@layer components {
+  .pk-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: var(--pk-tracking-label);
+    color: var(--pk-accent-ink);
+    text-transform: uppercase;
+  }
+
+  .pk-kicker::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    background: var(--pk-accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--pk-accent);
+  }
+}

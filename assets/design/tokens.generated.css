@@ -55,8 +55,11 @@
     --pk-dur: 220ms;
     --pk-dur-slow: 520ms;
     --pk-ease: cubic-bezier(0.16, 0.84, 0.28, 1);
+    --pk-dur-spin: 700ms;
+    --pk-dur-instant: 1ms;
     --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent);
-    --pk-accent-on: #ffffff;
+    --pk-on-solid: #ffffff;
+    --pk-accent-on: var(--pk-on-solid);
     --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
     --pk-grad-duo: linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%);
     --pk-grad-brand: linear-gradient(135deg, #198754 0%, #5a9bd5 50%, #ed7d31 100%);

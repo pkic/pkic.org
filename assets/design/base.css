@@ -108,9 +108,9 @@
     .pk *,
     .pk *::before,
     .pk *::after {
-      animation-duration: 1ms !important;
+      animation-duration: var(--pk-dur-instant) !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 1ms !important;
+      transition-duration: var(--pk-dur-instant) !important;
       scroll-behavior: auto !important;
     }
   }
