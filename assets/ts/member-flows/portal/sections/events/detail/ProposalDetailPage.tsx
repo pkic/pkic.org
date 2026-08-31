@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
+import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Tabs } from "../../../../../components/Tabs";
@@ -144,8 +145,19 @@ export function ProposalDetailPage({
   ];
 
   async function handleFlag(action: "spam" | "duplicate" | "delete") {
-    const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
-    if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
+    const verb = action === "delete" ? "Delete" : action === "spam" ? "Mark as spam" : "Mark as duplicate";
+    const consequence =
+      action === "delete"
+        ? "The proposal is soft-deleted and no longer appears in proposal listings"
+        : `The proposal status changes to "${action}"`;
+    if (
+      !(await confirmAction({
+        title: `${verb} "${proposal.title}"?`,
+        consequences: [consequence, "This is not easily reversible"],
+        confirmLabel: verb,
+      }))
+    )
+      return;
     try {
       await postJson(proposalResourcePath(proposalId, "moderations"), { action }, proposalFlagResponseSchema);
       toast(`Proposal ${action === "delete" ? "deleted" : `marked as ${action}`}`, "success");

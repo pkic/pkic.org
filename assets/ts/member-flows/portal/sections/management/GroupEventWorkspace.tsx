@@ -12,6 +12,9 @@ import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
 import { fmt, formatEventWhen } from "../../ui";
+import { EventStats } from "../events/detail/EventStats";
+import { Promoters } from "../events/detail/Promoters";
+import { Team } from "../events/detail/Team";
 import { GroupEventCommunications } from "./GroupEventCommunications";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
@@ -49,6 +52,12 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     visible: (event) => event.capabilities.includes("manage") || event.proposalAccess?.canFinalize === true,
   },
   { key: "communications", label: "Communications", visible: (event) => event.capabilities.includes("manage") },
+  { key: "team", label: "Team", visible: (event) => event.capabilities.includes("manage") },
+  // "manage_attendance" is the lowest manager-tier capability for a group event — the same tier
+  // that gates Registrations — mirroring the "read" capability that gates Promoters and Analytics
+  // on the standalone event detail view (its lowest staff-facing tier, not the plain-viewer tier).
+  { key: "promoters", label: "Promoters", visible: (event) => event.capabilities.includes("manage_attendance") },
+  { key: "stats", label: "Analytics", visible: (event) => event.capabilities.includes("manage_attendance") },
   { key: "settings", label: "Settings", visible: (event) => event.capabilities.includes("manage") },
 ];
 
@@ -188,6 +197,12 @@ export function GroupEventWorkspace({
           )}
 
           {activeTab === "communications" && <GroupEventCommunications groupId={groupId} eventId={event.id} />}
+
+          {activeTab === "team" && <Team slug={event.slug} />}
+
+          {activeTab === "promoters" && <Promoters slug={event.slug} />}
+
+          {activeTab === "stats" && <EventStats slug={event.slug} />}
 
           {activeTab === "settings" && (
             <>

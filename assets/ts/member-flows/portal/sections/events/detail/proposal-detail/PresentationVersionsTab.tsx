@@ -1,4 +1,5 @@
 import { useRef, useState } from "preact/hooks";
+import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { Spinner } from "../../../../../../components/Spinner";
 import { presentationUploadRequest } from "../../../../../../../shared/presentation-upload";
 import { deleteJson, postJson, requestJson } from "../../../../../../shared/api-client";
@@ -89,12 +90,22 @@ export function PresentationVersionsTab({
     }
   }
 
-  async function handleDelete(versionId: string) {
-    if (!confirm("Delete this presentation version? This cannot be undone.")) return;
-    setDeletingId(versionId);
+  async function handleDelete(version: PresentationVersion) {
+    if (
+      !(await confirmAction({
+        title: `Delete presentation version ${version.versionNumber}?`,
+        consequences: [
+          "The uploaded file is deleted and this version no longer appears here",
+          ...(version.isCurrent ? ["The next most recent version becomes the current version"] : []),
+        ],
+        confirmLabel: "Delete version",
+      }))
+    )
+      return;
+    setDeletingId(version.id);
     try {
       await deleteJson(
-        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}`),
+        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}`),
         successResponseSchema,
       );
       toast("Version deleted", "success");
@@ -193,7 +204,7 @@ export function PresentationVersionsTab({
                   <button
                     class="btn btn-sm btn-outline-danger"
                     disabled={deletingId === version.id}
-                    onClick={() => void handleDelete(version.id)}
+                    onClick={() => void handleDelete(version)}
                   >
                     {deletingId === version.id ? "Deleting…" : "Delete"}
                   </button>

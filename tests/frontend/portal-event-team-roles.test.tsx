@@ -6,6 +6,7 @@ import {
   eventTeamRoleCreateResponseSchema,
   eventTeamRolesResponseSchema,
 } from "../../assets/shared/schemas/event-team";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { Team } from "../../assets/ts/member-flows/portal/sections/events/detail/Team";
 
 const ROLE_ID = "10000000-0000-4000-8000-000000000001";
@@ -39,8 +40,22 @@ function mount(): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
-  void act(() => render(<Team slug="architecture-workshop" />, container));
+  void act(() =>
+    render(
+      <>
+        <ConfirmDialogHost />
+        <Team slug="architecture-workshop" />
+      </>,
+      container,
+    ),
+  );
   return container;
+}
+
+function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing button: ${label}`);
+  return button;
 }
 
 async function settle(): Promise<void> {
@@ -60,10 +75,6 @@ afterEach(() => {
 describe("event team role management", () => {
   it("lists, assigns, and revokes roles through the canonical event resource", async () => {
     const requests: Array<{ path: string; method: string; body?: unknown }> = [];
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -101,9 +112,22 @@ describe("event team role management", () => {
     expect(container.textContent).toContain("Moderator");
     expect(requests.some(({ path }) => path.includes("/api/v1/admin/"))).toBe(false);
 
-    const revoke = [...container.querySelectorAll("button")].find((button) => button.textContent === "Revoke");
+    const menuTrigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+    expect(menuTrigger).not.toBeNull();
+    await act(async () => menuTrigger!.click());
+    const revoke = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (button) => button.textContent === "Revoke",
+    );
     expect(revoke).toBeDefined();
     await act(async () => revoke!.click());
+
+    const dialog = container.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain("Revoke the Moderator role from moderator@example.test?");
+    expect(dialog?.textContent).toContain("moderator@example.test loses moderator access to this event");
+
+    await act(async () => {
+      dialogButton(container, "Revoke role").click();
+    });
     await settle();
 
     expect(requests.find(({ method }) => method === "DELETE")).toEqual({

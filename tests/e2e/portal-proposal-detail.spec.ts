@@ -66,6 +66,23 @@ test("renders the portal proposal detail workflow with submission answers and op
     }) as typeof window.open;
   });
 
+  // The staff sidebar fetches group feeds on boot; unmocked they hit the real
+  // server unauthenticated, and the resulting 401 clears the mocked session.
+  await page.route("**/api/v1/groups**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } }),
+    });
+  });
+  await page.route("**/api/v1/users/current/groups**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } }),
+    });
+  });
+
   await page.route("**/api/v1/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -494,6 +511,23 @@ test("renders the portal proposal detail workflow with submission answers and op
 
 test("offers event presentation archives only with proposal read access", async ({ page }) => {
   let canReadPresentations = false;
+  // The staff sidebar fetches group feeds on boot; unmocked they hit the real
+  // server unauthenticated, and the resulting 401 clears the mocked session.
+  await page.route("**/api/v1/groups**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } }),
+    });
+  });
+  await page.route("**/api/v1/users/current/groups**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } }),
+    });
+  });
+
   await page.route("**/api/v1/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
