@@ -123,12 +123,6 @@ export function UsersList({
           sort: { asc: "last_name", desc: "-last_name" },
         },
         {
-          header: "Organization",
-          cell: (user) => user.organization_name ?? "—",
-          className: "small text-muted",
-          sort: { asc: "organization_name", desc: "-organization_name" },
-        },
-        {
           header: "Participation",
           cell: (user) => {
             if (user.membership) {

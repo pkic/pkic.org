@@ -24,6 +24,11 @@ function membership(
     showOnOrgProfile: true,
     organizationId: `organization-${memberId}`,
     organizationName,
+    emailId: null,
+    email: `${memberId}@example.test`,
+    jobTitle: null,
+    biography: null,
+    links: [],
     createdAt: "2026-08-01T00:00:00.000Z",
     groups: [
       {
@@ -117,7 +122,10 @@ describe("UserMembershipPanel", () => {
     document.body.append(container);
     mounted.push(container);
     void act(() =>
-      render(<UserMembershipCard membership={individual} onChanged={async () => {}} canManage />, container),
+      render(
+        <UserMembershipCard userId="user-1" membership={individual} onChanged={async () => {}} canManage />,
+        container,
+      ),
     );
     const category = container.querySelector("select") as HTMLSelectElement;
     category.value = "H6";
@@ -125,6 +133,65 @@ describe("UserMembershipPanel", () => {
       category.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(requests[0]?.pathname).toBe("/api/v1/members/capacities/member-individual");
+  });
+
+  it("renders and edits organization-specific profile fields through the representative route", async () => {
+    const requests: Array<{ pathname: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          "https://app.test",
+        );
+        requests.push({ pathname: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : null });
+        return new Response(JSON.stringify({ success: true, representativeId: "representative-a" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const org = membership("representative-a", "Organization A", "A", "pqc", "PQC Working Group");
+    org.email = "role@organization-a.example";
+    org.jobTitle = "Standards lead";
+    org.biography = "Represents Organization A.";
+    org.links = ["https://organization-a.example/profile"];
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() =>
+      render(<UserMembershipCard userId="user-1" membership={org} onChanged={async () => {}} canManage />, container),
+    );
+
+    expect(container.textContent).toContain("Organization A");
+    expect(container.textContent).toContain("role@organization-a.example");
+    expect(container.textContent).toContain("Standards lead");
+    expect(container.textContent).toContain("Represents Organization A.");
+
+    const edit = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Edit representation profile",
+    )!;
+    void act(() => edit.click());
+    const title = container.querySelector<HTMLInputElement>("#representation-job-title-representative-a")!;
+    await act(() => {
+      title.value = "Updated standards lead";
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const save = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save representation profile",
+    )!;
+    await act(() => save.click());
+
+    expect(requests).toEqual([
+      {
+        pathname: "/api/v1/organizations/organization-representative-a/representatives/user-1",
+        body: {
+          jobTitle: "Updated standards lead",
+          biography: "Represents Organization A.",
+          links: ["https://organization-a.example/profile"],
+        },
+      },
+    ]);
   });
 
   it("only removes a membership through the confirm dialog when the removal is confirmed", async () => {
@@ -151,7 +218,7 @@ describe("UserMembershipPanel", () => {
       render(
         <>
           <ConfirmDialogHost />
-          <UserMembershipCard membership={org} onChanged={async () => {}} canManage />
+          <UserMembershipCard userId="user-1" membership={org} onChanged={async () => {}} canManage />
         </>,
         container,
       ),

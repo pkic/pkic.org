@@ -208,6 +208,7 @@ export function UserMembershipPanel({
             {user.memberships.map((membership) => (
               <UserMembershipCard
                 key={membership.memberId}
+                userId={user.id}
                 membership={membership}
                 onChanged={onChanged}
                 canManage={canManage}

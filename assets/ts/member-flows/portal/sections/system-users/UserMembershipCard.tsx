@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
@@ -8,19 +9,26 @@ import {
 import { MEMBER_STATUSES } from "../../../../../shared/schemas/membership-categories";
 import { deleteJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
+import { representativeMutationResponseSchema } from "../../../../../shared/schemas/organization-representation";
 import { fmt, toast } from "../../ui";
 import type { UserMembership } from "./model";
 
 export function UserMembershipCard({
+  userId,
   membership,
   onChanged,
   canManage,
 }: {
+  userId: string;
   membership: UserMembership;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [jobTitle, setJobTitle] = useState(membership.jobTitle ?? "");
+  const [biography, setBiography] = useState(membership.biography ?? "");
+  const [links, setLinks] = useState(membership.links);
 
   async function patchMember(body: Record<string, unknown>) {
     setBusy(true);
@@ -63,6 +71,38 @@ export function UserMembershipCard({
     }
   }
 
+  async function saveRepresentationProfile() {
+    if (!membership.organizationId) return;
+    setBusy(true);
+    try {
+      await patchJson(
+        `/api/v1/organizations/${encodeURIComponent(membership.organizationId)}/representatives/${encodeURIComponent(userId)}`,
+        {
+          jobTitle: jobTitle.trim() || null,
+          biography: biography.trim() || null,
+          links,
+        },
+        representativeMutationResponseSchema,
+      );
+      toast("Representation profile updated", "success");
+      setEditingProfile(false);
+      await onChanged();
+    } catch (error) {
+      toast((error as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleRepresentationEditor() {
+    if (!editingProfile) {
+      setJobTitle(membership.jobTitle ?? "");
+      setBiography(membership.biography ?? "");
+      setLinks(membership.links);
+    }
+    setEditingProfile((current) => !current);
+  }
+
   return (
     <div class="border rounded p-3">
       <table class="table table-sm table-borderless mb-2">
@@ -71,6 +111,36 @@ export function UserMembershipCard({
             <th class="text-muted small adm-user-info-label">Organization</th>
             <td>{membership.organizationName ?? <span class="fst-italic text-muted">Individual member</span>}</td>
           </tr>
+          {membership.organizationId && (
+            <tr>
+              <th class="text-muted small adm-user-info-label">Representation email</th>
+              <td>{membership.email}</td>
+            </tr>
+          )}
+          {membership.organizationId && (
+            <tr>
+              <th class="text-muted small adm-user-info-label">Job title</th>
+              <td>{membership.jobTitle || "—"}</td>
+            </tr>
+          )}
+          {membership.organizationId && membership.biography && (
+            <tr>
+              <th class="text-muted small adm-user-info-label">Biography</th>
+              <td>{membership.biography}</td>
+            </tr>
+          )}
+          {membership.organizationId && membership.links.length > 0 && (
+            <tr>
+              <th class="text-muted small adm-user-info-label">Links</th>
+              <td>
+                {membership.links.map((url) => (
+                  <a class="d-block small" key={url} href={url} target="_blank" rel="noreferrer">
+                    {url}
+                  </a>
+                ))}
+              </td>
+            </tr>
+          )}
           <tr>
             <th class="text-muted small adm-user-info-label">Category</th>
             <td>
@@ -143,10 +213,76 @@ export function UserMembershipCard({
           </tr>
         </tbody>
       </table>
+      {editingProfile && membership.organizationId && (
+        <div class="border-top pt-3 mb-3">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label small" for={`representation-job-title-${membership.memberId}`}>
+                Job title for {membership.organizationName ?? "this organization"}
+              </label>
+              <input
+                id={`representation-job-title-${membership.memberId}`}
+                class="form-control form-control-sm"
+                value={jobTitle}
+                onInput={(event) => setJobTitle(event.currentTarget.value)}
+                disabled={busy}
+              />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">
+                Profile links for {membership.organizationName ?? "this organization"}
+              </label>
+              <ProfileLinksInput
+                fieldName={`representation.${membership.memberId}.links`}
+                value={links}
+                onChange={setLinks}
+              />
+            </div>
+            <div class="col-12">
+              <label class="form-label small" for={`representation-biography-${membership.memberId}`}>
+                Biography for {membership.organizationName ?? "this organization"}
+              </label>
+              <textarea
+                id={`representation-biography-${membership.memberId}`}
+                class="form-control form-control-sm"
+                rows={3}
+                value={biography}
+                onInput={(event) => setBiography(event.currentTarget.value)}
+                disabled={busy}
+              />
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-primary" type="button" disabled={busy} onClick={saveRepresentationProfile}>
+              {busy ? "Saving…" : "Save representation profile"}
+            </button>
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => setEditingProfile(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {canManage && (
-        <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={removeMembership}>
-          Remove membership
-        </button>
+        <div class="d-flex gap-2">
+          {membership.organizationId && (
+            <button
+              class="btn btn-sm btn-outline-primary"
+              type="button"
+              disabled={busy}
+              onClick={toggleRepresentationEditor}
+            >
+              {editingProfile ? "Close representation editor" : "Edit representation profile"}
+            </button>
+          )}
+          <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={removeMembership}>
+            Remove membership
+          </button>
+        </div>
       )}
     </div>
   );

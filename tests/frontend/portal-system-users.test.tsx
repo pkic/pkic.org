@@ -90,6 +90,45 @@ describe("portal System Users profile permissions", () => {
       expect.anything(),
     );
   });
+
+  it("does not expose stale user-wide organization profile fields for an organization representative", async () => {
+    const representedUser: UserDetail = {
+      ...user,
+      organization_name: "Stale organization",
+      job_title: "Stale title",
+      biography: "Stale biography",
+      links: ["https://stale.example.test/profile"],
+      memberships: [
+        {
+          memberId: "representative-1",
+          membershipCategory: "A",
+          status: "active",
+          showOnOrgProfile: true,
+          organizationId: "organization-1",
+          organizationName: "Canonical Organization",
+          emailId: null,
+          email: "role@canonical.example",
+          jobTitle: "Canonical role",
+          biography: "Canonical biography",
+          links: ["https://canonical.example/profile"],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          groups: [],
+        },
+      ],
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() =>
+      render(<UserProfileEditor user={representedUser} canGrantAccess={false} onSaved={vi.fn()} />, container),
+    );
+    void act(() => (container.querySelector("button") as HTMLButtonElement).click());
+
+    expect(container.querySelector("#user-organizationName")).toBeNull();
+    expect(container.querySelector("#user-jobTitle")).toBeNull();
+    expect(container.querySelector("#user-biography")).toBeNull();
+    expect(container.textContent).not.toContain("Stale organization");
+  });
 });
 
 describe("portal System Users anonymize confirmation", () => {

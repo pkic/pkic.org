@@ -37,6 +37,18 @@ describe("admin user membership capacities", () => {
     const memberB = await seedOrganizationAggregate(env.DB, organizationB, "B");
     await addRepresentative(env.DB, memberA, userId);
     await addRepresentative(env.DB, memberB, userId);
+    await env.DB.prepare(
+      `UPDATE organization_representatives
+          SET job_title = CASE member_id WHEN ? THEN 'Organization A role' ELSE 'Organization B role' END,
+              biography = CASE member_id WHEN ? THEN 'Organization A bio' ELSE 'Organization B bio' END,
+              links_json = CASE member_id
+                WHEN ? THEN '["https://a.example.test/profile"]'
+                ELSE '["https://b.example.test/profile"]'
+              END
+        WHERE user_id = ?`,
+    )
+      .bind(memberA, memberA, memberA, userId)
+      .run();
     await joinGroup("20000000-0000-4000-8000-000000000003", userId, memberA);
     await joinGroup("20000000-0000-4000-8000-000000000004", userId, memberB);
 
@@ -46,6 +58,18 @@ describe("admin user membership capacities", () => {
     const byOrganization = new Map(detail.memberships.map((membership) => [membership.organizationName, membership]));
     expect(byOrganization.get("Capacity Organization A")?.groups.map((group) => group.slug)).toEqual(["pqc"]);
     expect(byOrganization.get("Capacity Organization B")?.groups.map((group) => group.slug)).toEqual(["cm"]);
+    expect(byOrganization.get("Capacity Organization A")).toMatchObject({
+      email: "multiple-organizations@example.test",
+      jobTitle: "Organization A role",
+      biography: "Organization A bio",
+      links: ["https://a.example.test/profile"],
+    });
+    expect(byOrganization.get("Capacity Organization B")).toMatchObject({
+      email: "multiple-organizations@example.test",
+      jobTitle: "Organization B role",
+      biography: "Organization B bio",
+      links: ["https://b.example.test/profile"],
+    });
   });
 
   it("rejects granting an individual membership to an active organization representative", async () => {

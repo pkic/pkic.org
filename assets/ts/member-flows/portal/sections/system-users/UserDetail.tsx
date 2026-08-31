@@ -121,6 +121,7 @@ export function UserDetail({
   if (!user) return null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  const hasOrganizationCapacity = user.memberships.some((membership) => membership.organizationId !== null);
   const profileLinks = normalizeProfileLinks(user.links);
   const editable = permissions.canWrite && !user.pii_redacted_at;
 
@@ -168,8 +169,12 @@ export function UserDetail({
                       ["First name", user.first_name],
                       ["Last name", user.last_name],
                       ["Preferred name", user.preferred_name],
-                      ["Organization", user.organization_name],
-                      ["Job title", user.job_title],
+                      ...(!hasOrganizationCapacity
+                        ? [
+                            ["Organization", user.organization_name],
+                            ["Job title", user.job_title],
+                          ]
+                        : []),
                     ] as Array<[string, string | null | undefined]>
                   ).map(([label, value]) => (
                     <tr key={label}>
@@ -191,13 +196,13 @@ export function UserDetail({
                     <th class="text-muted small adm-user-info-label">Created</th>
                     <td>{new Date(user.created_at).toLocaleString("en-US")}</td>
                   </tr>
-                  {user.biography && (
+                  {!hasOrganizationCapacity && user.biography && (
                     <tr>
                       <th class="text-muted small adm-user-info-label">Biography</th>
                       <td class="small">{user.biography}</td>
                     </tr>
                   )}
-                  {profileLinks.length > 0 && (
+                  {!hasOrganizationCapacity && profileLinks.length > 0 && (
                     <tr>
                       <th class="text-muted small adm-user-info-label">Links</th>
                       <td>
