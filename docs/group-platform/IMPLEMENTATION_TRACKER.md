@@ -2178,10 +2178,18 @@ Status: In progress (2026-08-30)
       and was left as designed. A duplicate-affordance defect from the
       create-behind-action pass was fixed globally: EmptyStates no longer
       repeat the toolbar's create button (one affordance, one place), which
-      also restored strict-mode e2e locators. Remaining slice: retire
-      /events/:slug/* behind owner-group redirects and move the
-      registration/proposal detail pages under the group route (needs the
-      group route's segment parsing extended one level).
+      also restored strict-mode e2e locators. Closing slice landed the same day: the group route parses a fourth
+      segment, so registration and proposal details render inside the group
+      event workspace (/groups/:g/events/:e/registrations/:rid and
+      /proposals/:pid) with URL-addressed selection; every standalone
+      /events/:slug management view resolves the owning group and redirects
+      into the group workspace (replace navigation), while events without
+      an owning group keep the standalone surface as the deliberate
+      fallback. Two more Wave-1 e2e misses surfaced and were fixed
+      (invitation resend/revoke through the row menu, the two approve
+      confirms), a duplicate-affordance defect was corrected globally
+      (EmptyStates no longer repeat the toolbar create button), and the
+      row menu now repositions on scroll instead of dismissing.
       All four waves are complete. Residuals folded into the events
       projection consolidation:
       (1 residue) events-surface confirms after the projection slice;
