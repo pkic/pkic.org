@@ -136,6 +136,59 @@ for (const dir of scanned) {
   }
 }
 
+function countIn(text) {
+  let hits = 0;
+  for (const match of text.matchAll(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/g)) {
+    hits += match[1]
+      .split(/\s+/)
+      .filter((token) => token.length > 0 && !token.startsWith("pk-"))
+      .filter((token) => BOOTSTRAP_CLASS.test(token)).length;
+  }
+  return hits + (text.match(/--bs-/g) ?? []).length;
+}
+
+/**
+ * `--by-file` ranks what is left, so a migration can be planned against the
+ * actual distribution rather than a guess. The work is very unevenly spread:
+ * a handful of files carry most of it.
+ */
+if (process.argv.includes("--by-file")) {
+  const rows = [];
+  const visit = (current) => {
+    for (const entry of readdirSync(current)) {
+      const full = join(current, entry);
+      if (statSync(full).isDirectory()) {
+        visit(full);
+        continue;
+      }
+      if (!/\.(css|scss|tsx?|js|html)$/.test(entry)) continue;
+      const rel = relative(root, full);
+      if (scanned.some((adopted) => rel.startsWith(`${adopted}/`))) continue;
+      const hits = countIn(readFileSync(full, "utf8"));
+      if (hits > 0) rows.push({ rel, hits });
+    }
+  };
+  for (const dir of remaining) {
+    try {
+      visit(resolve(root, dir));
+    } catch {
+      // Absent directories contribute nothing.
+    }
+  }
+  rows.sort((left, right) => right.hits - left.hits);
+
+  const total = rows.reduce((sum, row) => sum + row.hits, 0);
+  const shown = rows.slice(0, 25);
+  const covered = shown.reduce((sum, row) => sum + row.hits, 0);
+
+  console.log(`[design-isolation] ${String(rows.length)} files still reference Bootstrap (${String(total)} refs).`);
+  console.log(`The 25 heaviest carry ${String(covered)} of them (${String(Math.round((covered / total) * 100))}%):\n`);
+  for (const row of shown) {
+    console.log(`  ${String(row.hits).padStart(5)}  ${row.rel}`);
+  }
+  process.exit(0);
+}
+
 if (process.argv.includes("--report")) {
   const counts = remaining
     .map((dir) => {
