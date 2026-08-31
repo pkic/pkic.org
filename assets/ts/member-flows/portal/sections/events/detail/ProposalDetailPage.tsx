@@ -1,4 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
+import { useHashQueryParam } from "../../../../../hooks/useHashQueryParam";
 import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
@@ -28,6 +29,8 @@ import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellatio
 import { proposalResourcePath } from "./proposal-detail/proposal-api";
 import { ProposalSpeakersPanel } from "../../../../../components/proposals/ProposalSpeakersPanel";
 
+const DETAIL_TABS: DetailTab[] = ["submission", "speakers", "reviews", "presentation", "audit-log", "decision"];
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function ProposalDetailPage({
@@ -42,7 +45,9 @@ export function ProposalDetailPage({
   onBack?: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
-  const [activeTab, setActiveTab] = useState<DetailTab>("submission");
+  const [rawTab, setRawTab] = useHashQueryParam("proposalTab", "submission");
+  const activeTab: DetailTab = (DETAIL_TABS as string[]).includes(rawTab) ? (rawTab as DetailTab) : "submission";
+  const setActiveTab = (next: DetailTab) => setRawTab(next);
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
     async () => getJson(proposalResourcePath(proposalId), eventProposalDetailResponseSchema),
@@ -98,7 +103,7 @@ export function ProposalDetailPage({
   }, [activeTab, data?.proposal]);
 
   useEffect(() => {
-    if (!data?.access.canReview && (activeTab === "reviews" || activeTab === "audit-log")) {
+    if (data && !data.access.canReview && (activeTab === "reviews" || activeTab === "audit-log")) {
       setActiveTab("submission");
     }
   }, [activeTab, data?.access.canReview]);

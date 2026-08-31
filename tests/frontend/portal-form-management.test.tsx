@@ -7,6 +7,7 @@ import {
   formCreateResponseSchema,
   formDetailResponseSchema,
   formSubmissionStatsResponseSchema,
+  formSubmissionsResponseSchema,
   formsListResponseSchema,
 } from "../../assets/shared/schemas/form-management";
 import {
@@ -99,6 +100,19 @@ function emptyStatsResponse(): Response {
         },
         total: 0,
         stats: [],
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function emptySubmissionsResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formSubmissionsResponseSchema.parse({
+        form: { id: "form-4", key: "member-feedback", title: "Member feedback", purpose: "feedback", placement: null },
+        submissions: [],
+        page: { limit: 25, offset: 0, total: 0, hasMore: false },
       }),
     ),
     { status: 200, headers: { "content-type": "application/json" } },
@@ -207,6 +221,33 @@ describe("portal form management", () => {
     expect(container.textContent).toContain("Community survey");
     expect(container.textContent).not.toContain("Edit");
     expect(container.textContent).not.toContain("Archive/Delete");
+  });
+
+  it("opens the tab named in a preset hash query instead of the default statistics tab", async () => {
+    const previousHash = window.location.hash;
+    window.location.hash = "#/forms/member-feedback?formTab=responses";
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = new URL(
+            typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+            location.origin,
+          );
+          if (url.pathname.endsWith("/submissions/stats")) return emptyStatsResponse();
+          if (url.pathname.endsWith("/submissions")) return emptySubmissionsResponse();
+          return globalFormDetailResponse();
+        }),
+      );
+
+      const container = mount(<FormManagementDetail formKey="member-feedback" canWrite={false} onBack={vi.fn()} />);
+      await settle();
+
+      const activeTab = container.querySelector(".nav-link.active");
+      expect(activeTab?.textContent).toBe("Responses");
+    } finally {
+      window.location.hash = previousHash;
+    }
   });
 
   it("uses the event-owned catalogue rather than the global form resource for event responses", async () => {

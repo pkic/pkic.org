@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { EventEmailCampaign } from "../../../../components/events/EventEmailCampaign";
 import { Tabs } from "../../../../components/Tabs";
 import { toast } from "../../ui";
@@ -6,7 +6,8 @@ import { toast } from "../../ui";
 type Audience = "attendees" | "speakers";
 
 export function GroupEventCommunications({ groupId, eventId }: { groupId: string; eventId: string }) {
-  const [audience, setAudience] = useState<Audience>("attendees");
+  const [rawAudience, setAudience] = useHashQueryParam("commsTab", "attendees");
+  const audience: Audience = rawAudience === "speakers" ? "speakers" : "attendees";
   const eventPath = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
   return (
     <details class="border-top pt-3">
@@ -18,7 +19,7 @@ export function GroupEventCommunications({ groupId, eventId }: { groupId: string
             { key: "speakers", label: "Speakers" },
           ]}
           active={audience}
-          onChange={(key) => setAudience(key as Audience)}
+          onChange={(key) => setAudience(key)}
         />
         <EventEmailCampaign
           campaignsPath={`${eventPath}/email/campaigns`}

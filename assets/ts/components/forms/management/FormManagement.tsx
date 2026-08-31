@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../hooks/useHashQueryParam";
 import {
   formCreateResponseSchema,
   formDeleteResponseSchema,
@@ -26,6 +27,7 @@ import { confirmAction } from "../../ConfirmDialog";
 import { ErrorAlert } from "../../ErrorAlert";
 import { Spinner } from "../../Spinner";
 import { Tabs } from "../../Tabs";
+import { Badge } from "../../Badge";
 import { FormDefinitionEditor, type EditableFormDetail } from "../FormDefinitionEditor";
 import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "../FormResponseViews";
 
@@ -119,7 +121,8 @@ export function FormManagementDetail({
   submissionParams?: Record<string, string>;
   formEndpoint?: string;
 }) {
-  const [tab, setTab] = useState<FormTab>("statistics");
+  const [rawTab, setTab] = useHashQueryParam("formTab", "statistics");
+  const tab: FormTab = rawTab === "responses" || rawTab === "edit" ? rawTab : "statistics";
   const [detail, setDetail] = useState<FormDetailResponse | null>(null);
   const [stats, setStats] = useState<ServerFieldStat[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
@@ -177,6 +180,7 @@ export function FormManagementDetail({
   if (error) return <ErrorAlert error={error} />;
   if (!detail) return null;
   const canManageForm = canWrite && detail.form.scope_type !== "community";
+  const effectiveTab: FormTab = tab === "edit" && !canManageForm ? "statistics" : tab;
 
   return (
     <div>
@@ -210,12 +214,14 @@ export function FormManagementDetail({
               { key: "responses", label: "Responses" },
               ...(canManageForm ? [{ key: "edit", label: "Edit" }] : []),
             ]}
-            active={tab}
-            onChange={(key) => setTab(key as FormTab)}
+            active={effectiveTab}
+            onChange={(key) => setTab(key)}
             className="mb-3"
           />
-          {tab === "statistics" && <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />}
-          {tab === "responses" && (
+          {effectiveTab === "statistics" && (
+            <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />
+          )}
+          {effectiveTab === "responses" && (
             <FormSubmissionsTable
               fields={detail.fields}
               endpoint={`${base}/submissions`}
@@ -223,7 +229,7 @@ export function FormManagementDetail({
               params={submissionParams}
             />
           )}
-          {tab === "edit" && canManageForm && (
+          {effectiveTab === "edit" && canManageForm && (
             <FormDefinitionManagementEditor
               mode="edit"
               detail={detail}
@@ -308,7 +314,7 @@ export function FormManagementList({
             cell: (form: FormSummary) => form.purpose.replace(/_/g, " "),
             className: "small",
           },
-          { header: "Status", cell: (form: FormSummary) => <span class="badge text-bg-secondary">{form.status}</span> },
+          { header: "Status", cell: (form: FormSummary) => <Badge status={form.status} /> },
           { header: "Scope", cell: (form: FormSummary) => formScopeLabel(form), className: "small" },
           {
             header: { label: "Fields", className: "text-end" },
