@@ -4,8 +4,7 @@
   <head>
     {{ partial "header.html" . }}
 
-    {{ $sass := resources.Get "scss/main.scss" }}
-    {{ $style := $sass | css.Sass }}
+    {{ $style := partial "site-stylesheet.html" . }}
     {{ if eq hugo.Environment "production" }}{{ $style = $style | resources.Fingerprint }}{{ end }}
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if eq hugo.Environment "production" }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
     {{ block "head_extra" . }}{{ end }}
