@@ -6,7 +6,7 @@ import { RowActions } from "../../../../../components/RowActions";
 import { Spinner } from "../../../../../components/Spinner";
 import { deleteJson, getJson } from "../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
-import { fmt, toast } from "../../../ui";
+import { fmt, fmtDate, toast } from "../../../ui";
 import {
   SYSTEM_ROLE_IDS,
   roleAssignmentsListResponseSchema,
@@ -182,7 +182,7 @@ export function RoleDetail({
                   },
                   {
                     header: "Granted",
-                    cell: (assignment) => <span class="small mono">{fmt(assignment.createdAt)}</span>,
+                    cell: (assignment) => <span class="small mono">{fmtDate(assignment.createdAt)}</span>,
                     sort: { asc: "created_at", desc: "-created_at" },
                   },
                   {

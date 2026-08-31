@@ -67,8 +67,7 @@ export function GroupMeetingSeriesList({
         },
         {
           header: "Status",
-          cell: (series) =>
-            series.active ? <span class="text-muted">—</span> : <span class="badge text-bg-warning">Inactive</span>,
+          cell: (series) => (series.active ? <span class="text-muted">—</span> : <Badge status="inactive" />),
         },
         { header: "Access", cell: (series) => <ResourceCapabilities capabilities={series.capabilities} /> },
         {

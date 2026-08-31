@@ -6,16 +6,9 @@ import { deleteJson, postJson, requestJson } from "../../../../../../shared/api-
 import { presentationVersionResponseSchema } from "../../../../../../../shared/schemas/presentation-versions";
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../../../ui";
+import { Badge } from "../../../../../../components/Badge";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
 import { proposalResourcePath } from "./proposal-api";
-
-function reviewStatusLabel(status: PresentationVersionReview["status"]): string {
-  return { approved: "Approved", rejected: "Rejected", needs_revision: "Needs revision" }[status] ?? status;
-}
-
-function reviewStatusBadgeClass(status: PresentationVersionReview["status"]): string {
-  return { approved: "success", rejected: "danger", needs_revision: "warning" }[status] ?? "secondary";
-}
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";
@@ -161,11 +154,8 @@ export function PresentationVersionsTab({
             <span class="fw-semibold">Version {version.versionNumber}</span>
             {version.isCurrent && <span class="badge text-bg-primary">Current</span>}
             {version.latestReview && (
-              <span
-                class={`badge text-bg-${reviewStatusBadgeClass(version.latestReview.status)}`}
-                data-presentation-review-status
-              >
-                {reviewStatusLabel(version.latestReview.status)}
+              <span data-presentation-review-status>
+                <Badge status={version.latestReview.status} />
               </span>
             )}
             <span class="small text-muted ms-auto">

@@ -6,7 +6,7 @@ import {
   userEmailsListResponseSchema,
   type UserEmailRecord,
 } from "../../../../../shared/schemas/user-emails";
-import { fmt, toast } from "../../ui";
+import { fmtDate, toast } from "../../ui";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { RowActions } from "../../../../components/RowActions";
@@ -110,7 +110,7 @@ export function UserEmailAddressesPanel({
             },
             {
               header: "Added",
-              cell: (email) => <span class="small mono">{fmt(email.createdAt)}</span>,
+              cell: (email) => <span class="small mono">{fmtDate(email.createdAt)}</span>,
               sort: { asc: "created_at", desc: "-created_at" },
             },
             ...(canWrite

@@ -3,6 +3,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../../../components/Ap
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
 import { RowActions } from "../../../../../components/RowActions";
+import { Badge } from "../../../../../components/Badge";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
@@ -163,7 +164,7 @@ export function Team({ slug }: { slug: string }) {
           { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },
           {
             header: "Role",
-            cell: (assignment) => <span class="badge text-bg-secondary">{ROLE_LABELS[assignment.role]}</span>,
+            cell: (assignment) => <Badge status={assignment.role} label={ROLE_LABELS[assignment.role]} />,
             sort: { asc: "role", desc: "-role" },
           },
           { header: "Added by", cell: (role) => role.granterEmail ?? "—", className: "small text-muted" },

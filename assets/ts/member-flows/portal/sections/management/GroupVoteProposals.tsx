@@ -16,7 +16,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { deleteJson, getJson, postJson } from "../../../../shared/api-client";
-import { fmt } from "../../ui";
+import { fmtDate } from "../../ui";
 import { GroupVoteProposalForm } from "./GroupVoteProposalForm";
 
 function GroupVoteProposalDetail({
@@ -212,7 +212,7 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
           },
           {
             header: "Created",
-            cell: (proposal) => fmt(proposal.createdAt),
+            cell: (proposal) => fmtDate(proposal.createdAt),
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
           {

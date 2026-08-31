@@ -7,7 +7,7 @@ import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
 import { postJson } from "../../../../../shared/api-client";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
-import { fmt, toast } from "../../../ui";
+import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { EventFormResponses } from "./Forms";
@@ -186,7 +186,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "small text-muted" },
           {
             header: "Registered",
-            cell: (r: Registration) => fmt(r.created_at),
+            cell: (r: Registration) => fmtDate(r.created_at),
             className: "mono small",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" as const },
           },

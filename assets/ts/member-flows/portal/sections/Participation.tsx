@@ -17,7 +17,7 @@ import { Spinner } from "../../../components/Spinner";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
 import { portalSession } from "../state";
-import { fmt, formatDateRange, formatStageLabel } from "../ui";
+import { fmt, fmtDate, formatDateRange } from "../ui";
 
 type MemberVote = z.infer<typeof currentUserVotesListResponseSchema>["votes"][number];
 
@@ -67,7 +67,7 @@ function ApplicationsCard() {
         {rows.map((application) => (
           <li key={application.id} class="small">
             <Link href="/application">Application from {fmt(application.createdAt)}</Link>
-            <Badge status={application.stage} label={formatStageLabel(application.stage)} />
+            <Badge status={application.stage} />
           </li>
         ))}
       </ul>
@@ -133,9 +133,9 @@ function RegistrationsCard() {
             <span class="text-muted ms-2">
               {formatDateRange(registration.event.startsAt, registration.event.endsAt, registration.event.timezone)}
             </span>
-            <Badge status={registration.status} label={label(registration.status)} />
+            <Badge status={registration.status} />
             <span class="text-muted ms-2">{label(registration.attendanceType)}</span>
-            {registration.waitlisted && <Badge status="waitlisted" label="Waitlisted" />}
+            {registration.waitlisted && <Badge status="waitlisted" />}
           </li>
         ))}
       </ul>
@@ -163,8 +163,8 @@ function DonationsCard() {
             <span class="fw-semibold">
               {donation.currency} {(donation.grossAmount / 100).toFixed(2)}
             </span>
-            <Badge status={donation.status} label={label(donation.status)} />
-            <span class="text-muted ms-2">{fmt(donation.createdAt)}</span>
+            <Badge status={donation.status} />
+            <span class="text-muted ms-2">{fmtDate(donation.createdAt)}</span>
           </li>
         ))}
       </ul>
@@ -194,7 +194,7 @@ function ProposalsCard() {
           <li key={proposal.id} class="small">
             <span class="fw-semibold">{proposal.title}</span>
             <span class="text-muted ms-2">{proposal.event.name}</span>
-            <Badge status={proposal.status} label={label(proposal.status)} />
+            <Badge status={proposal.status} />
             <span class="text-muted ms-2">{label(proposal.role)}</span>
           </li>
         ))}

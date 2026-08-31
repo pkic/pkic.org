@@ -5,6 +5,7 @@ import type { FormFieldDefinition } from "../../../shared/schemas/forms";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import { formatDateTime } from "../../shared/ui";
 import { ApiDataTable } from "../ApiDataTable";
+import { Badge } from "../Badge";
 
 export interface FormAnswerRow {
   key: string;
@@ -520,7 +521,7 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
         },
         {
           header: "Status",
-          cell: (submission) => <span class="badge text-bg-secondary">{submission.status}</span>,
+          cell: (submission) => <Badge status={submission.status} />,
           sort: { asc: "status", desc: "-status" },
         },
         {

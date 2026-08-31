@@ -7,7 +7,7 @@ import {
   organizationsListResponseSchema,
   type OrganizationSummary,
 } from "../../../../../shared/schemas/organization-management";
-import { fmt } from "../../ui";
+import { fmtDate } from "../../ui";
 import { OrganizationCreateForm } from "./OrganizationCreateForm";
 
 export function Organizations({ canRead, canCreate }: { canRead: boolean; canCreate: boolean }) {
@@ -76,7 +76,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
     },
     {
       header: "Created",
-      cell: (organization) => fmt(organization.createdAt),
+      cell: (organization) => fmtDate(organization.createdAt),
       className: "mono small text-nowrap",
       sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
     },

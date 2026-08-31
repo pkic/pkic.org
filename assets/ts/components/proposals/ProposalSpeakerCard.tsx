@@ -180,7 +180,7 @@ export function ProposalSpeakerCard({
             <div class="d-flex gap-2 align-items-center flex-wrap mb-1">
               <strong>{name}</strong>
               {name !== speaker.email && <span class="text-muted small">{speaker.email}</span>}
-              <span class="badge text-bg-secondary text-capitalize">{speaker.role.replace(/_/g, " ")}</span>
+              <Badge status={speaker.role} />
               <Badge status={speaker.status} />
             </div>
             {(speaker.organizationName || speaker.jobTitle) && (

@@ -14,8 +14,7 @@ import { UserEmailAddressesPanel } from "./UserAccountPanels";
 import { UserMembershipPanel } from "./UserMembershipPanel";
 import { UserProfileEditor } from "./UserProfileEditor";
 import type { UserDetail as UserDetailModel } from "./model";
-
-const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
+import { Badge } from "../../../../components/Badge";
 
 export interface UserPermissions {
   canRead: boolean;
@@ -185,7 +184,7 @@ export function UserDetail({
                   <tr>
                     <th class="text-muted small adm-user-info-label">Role</th>
                     <td>
-                      <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>
+                      <Badge status={user.role} />
                     </td>
                   </tr>
                   <tr>

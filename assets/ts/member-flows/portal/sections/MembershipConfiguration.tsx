@@ -19,6 +19,7 @@ import {
 } from "../../../../shared/schemas/membership-application-form";
 import type { FormDefinitionUpdateInput } from "../../../../shared/schemas/forms";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { Badge } from "../../../components/Badge";
 import { Spinner } from "../../../components/Spinner";
 import { FormDefinitionEditor, type EditableFormDetail } from "../../../components/forms/FormDefinitionEditor";
 import { getJson, patchJson } from "../../../shared/api-client";
@@ -113,7 +114,7 @@ function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {
               <div>
                 <div class="d-flex gap-2 align-items-center mb-2">
                   <strong>{detail.form.title}</strong>
-                  <span class="badge text-bg-secondary">{detail.form.status}</span>
+                  <Badge status={detail.form.status} />
                 </div>
                 {detail.form.description && <p class="small text-muted">{detail.form.description}</p>}
                 <ul class="list-group list-group-flush" aria-label="Membership application form fields">

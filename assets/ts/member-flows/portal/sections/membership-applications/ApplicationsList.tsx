@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { Badge } from "../../../../components/Badge";
+import { Badge, statusLabel } from "../../../../components/Badge";
 import { getJson } from "../../../../shared/api-client";
-import { fmt } from "../../ui";
+import { fmtDate } from "../../ui";
 import { APPLICATION_STAGES } from "../../../../../shared/schemas/member-applications";
 import { membershipApplicationsListResponseSchema } from "../../../../../shared/schemas/membership-application-management";
 
@@ -73,7 +73,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
             <option value="">All stages</option>
             {APPLICATION_STAGES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {statusLabel(s)}
               </option>
             ))}
           </select>
@@ -111,7 +111,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
           },
           {
             header: "Submitted",
-            cell: (a) => fmt(a.createdAt),
+            cell: (a) => fmtDate(a.createdAt),
             className: "mono small text-nowrap",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },

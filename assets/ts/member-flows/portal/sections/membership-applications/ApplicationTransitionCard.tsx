@@ -5,6 +5,7 @@ import {
   type ApplicationStage,
 } from "../../../../../shared/schemas/member-applications";
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
+import { statusLabel } from "../../../../components/Badge";
 
 export function ApplicationTransitionCard({
   detail,
@@ -63,7 +64,7 @@ export function ApplicationTransitionCard({
                   <option value="">Select…</option>
                   {availableTransitions.map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {statusLabel(s)}
                     </option>
                   ))}
                 </select>

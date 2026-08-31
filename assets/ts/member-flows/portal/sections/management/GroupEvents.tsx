@@ -14,7 +14,6 @@ import { getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventWorkspace } from "./GroupEventWorkspace";
-import { ResourceCapabilities } from "./ResourceCapabilities";
 
 export function GroupEvents({
   groupId,
@@ -121,7 +120,6 @@ export function GroupEvents({
               className: "text-nowrap",
               sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
             },
-            { header: "Access", cell: (event) => <ResourceCapabilities capabilities={event.capabilities} /> },
             {
               header: "",
               className: "text-end",

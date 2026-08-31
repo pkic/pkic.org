@@ -33,7 +33,7 @@ import {
   type SponsorshipCompany,
   type SponsorshipPipelineStage,
 } from "../../../../../../shared/schemas/sponsorship-management";
-import { stageBadgeClass, stageLabel } from "./shared";
+import { Badge, statusLabel } from "../../../../../components/Badge";
 import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
 import { CompanyDetailPanel } from "./CompanyDetailPanel";
 import { useCompanySponsorships } from "./useCompanySponsorships";
@@ -147,9 +147,7 @@ export function Sponsorships({
       cell: (c) => (
         <span class="d-flex gap-1 flex-wrap">
           {c.stages.split(",").map((s) => (
-            <span key={s} class={`badge text-capitalize ${stageBadgeClass(s as SponsorshipPipelineStage)}`}>
-              {stageLabel(s)}
-            </span>
+            <Badge key={s} status={s} />
           ))}
         </span>
       ),
@@ -183,7 +181,7 @@ export function Sponsorships({
           <option value="">All stages</option>
           {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
             <option value={s} key={s}>
-              {stageLabel(s)}
+              {statusLabel(s)}
             </option>
           ))}
         </select>

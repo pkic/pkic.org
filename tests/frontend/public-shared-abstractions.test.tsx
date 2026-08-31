@@ -13,7 +13,7 @@ import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-re
 import { useAsyncSubmission } from "../../assets/ts/hooks/useAsyncSubmission";
 import { useMagicLinkRequest } from "../../assets/ts/hooks/useMagicLinkRequest";
 import { RepresentativeSelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
-import { formatStageLabel } from "../../assets/ts/member-flows/portal/ui";
+import { statusLabel } from "../../assets/ts/components/Badge";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { classifyDonationPollResult } from "../../assets/ts/shared/donation/session-poll";
 import { uploadFile } from "../../assets/ts/shared/file-upload";
@@ -167,7 +167,7 @@ describe("public shared frontend abstractions", () => {
 
   it("shares member initials, not-found, verification, menu, and organization labels", () => {
     expect(memberInitials("Ada Byron Lovelace IV")).toBe("ABL");
-    expect(formatStageLabel("in_consultation")).toBe("In Consultation");
+    expect(statusLabel("in_consultation")).toBe("In consultation");
     expect(ORGANIZATION_CONTENT_FIELD_LABELS.blogFeedUrl).toBe("Blog feed URL");
     const container = mount(
       <>

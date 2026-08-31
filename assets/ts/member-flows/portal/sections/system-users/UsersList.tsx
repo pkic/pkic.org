@@ -4,7 +4,7 @@ import { confirmAction } from "../../../../components/ConfirmDialog";
 import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
 import { RowActions } from "../../../../components/RowActions";
 import { patchJson } from "../../../../shared/api-client";
-import { fmt, toast } from "../../ui";
+import { fmtDate, toast } from "../../ui";
 import {
   userUpdateResponseSchema,
   usersListResponseSchema,
@@ -150,7 +150,7 @@ export function UsersList({
         },
         {
           header: "Since",
-          cell: (user) => fmt(user.created_at),
+          cell: (user) => fmtDate(user.created_at),
           className: "small text-muted",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },

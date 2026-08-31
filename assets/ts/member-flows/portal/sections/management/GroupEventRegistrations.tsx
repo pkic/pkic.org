@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { eventAttendanceRegistrationsListResponseSchema } from "../../../../../shared/schemas/event-registrations";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { fmt } from "../../ui";
+import { fmtDate } from "../../ui";
 import { GroupEventRegistrationAttendance } from "./GroupEventRegistrationAttendance";
 
 export function GroupEventRegistrations({
@@ -58,7 +58,7 @@ export function GroupEventRegistrations({
           },
           {
             header: "Registered",
-            cell: (registration) => fmt(registration.created_at),
+            cell: (registration) => fmtDate(registration.created_at),
             className: "text-nowrap",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },

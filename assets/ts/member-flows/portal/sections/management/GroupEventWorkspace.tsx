@@ -120,7 +120,6 @@ export function GroupEventWorkspace({
           ← Back to events
         </button>
         <h5 class="mb-1">{event.name}</h5>
-        <p class="small text-muted mb-0">{event.slug}</p>
         <p class="small text-muted mb-0">
           {formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}
           {event.location ? ` · ${event.location}` : ""}

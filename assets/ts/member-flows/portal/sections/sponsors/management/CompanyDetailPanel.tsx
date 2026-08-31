@@ -1,7 +1,7 @@
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import type { SponsorshipCompany } from "../../../../../../shared/schemas/sponsorship-management";
-import { stageBadgeClass, stageLabel } from "./shared";
+import { Badge } from "../../../../../components/Badge";
 import { SponsorshipDetail } from "./SponsorshipDetail";
 import type { useCompanySponsorships } from "./useCompanySponsorships";
 
@@ -51,9 +51,7 @@ export function CompanyDetailPanel({
                       {s.tier ?? "no tier"}
                       {s.eventName && <> — {s.eventName}</>}
                     </span>
-                    <span class={`badge text-capitalize ${stageBadgeClass(s.pipelineStage)}`}>
-                      {stageLabel(s.pipelineStage)}
-                    </span>
+                    <Badge status={s.pipelineStage} />
                   </div>
                   <div class="small text-muted">{s.sponsorType}</div>
                 </button>

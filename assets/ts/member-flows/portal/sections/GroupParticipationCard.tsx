@@ -4,7 +4,7 @@ import { groupMembershipMutationResponseSchema } from "../../../../shared/schema
 import { ApiClientError, postJson } from "../../../shared/api-client";
 import { confirmAction } from "../../../components/ConfirmDialog";
 import { RowActions } from "../../../components/RowActions";
-import { fmt, toast } from "../ui";
+import { fmtDate, toast } from "../ui";
 
 function affiliationLabel(capacity: GroupParticipationCapacity): string {
   return capacity.organizationName ?? `Individual membership (${capacity.membershipCategory})`;
@@ -103,7 +103,7 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
                 return (
                   <li key={membership.id} class="d-flex align-items-center justify-content-between gap-2 small">
                     <span>
-                      {label} <span class="text-muted">since {fmt(membership.joinedAt)}</span>
+                      {label} <span class="text-muted">since {fmtDate(membership.joinedAt)}</span>
                     </span>
                     <RowActions
                       label={`Actions for ${label}`}

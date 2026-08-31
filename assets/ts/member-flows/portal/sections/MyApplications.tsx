@@ -13,7 +13,8 @@ import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
 import { useApiPage } from "../../../hooks/useApiPage";
-import { fmt, formatStageLabel, stageBadgeClass } from "../ui";
+import { fmt, fmtDate } from "../ui";
+import { Badge, statusLabel } from "../../../components/Badge";
 import type { MyApplicationDetail } from "../types";
 
 function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void }) {
@@ -54,7 +55,7 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
                       {detail.organizationName ?? "Individual applicant"} — Category {detail.membershipCategory}
                     </p>
                   </div>
-                  <span class={`badge ${stageBadgeClass(detail.stage)}`}>{formatStageLabel(detail.stage)}</span>
+                  <Badge status={detail.stage} />
                 </div>
                 <p class="text-muted small mt-2 mb-0">
                   Submitted {fmt(detail.createdAt)} — last updated {fmt(detail.stageEnteredAt)}
@@ -69,8 +70,8 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
                   <li key={i} class="list-group-item">
                     <div class="d-flex justify-content-between">
                       <span>
-                        {entry.fromStage ? `${formatStageLabel(entry.fromStage)} → ` : ""}
-                        <strong>{formatStageLabel(entry.toStage)}</strong>
+                        {entry.fromStage ? `${statusLabel(entry.fromStage)} → ` : ""}
+                        <strong>{statusLabel(entry.toStage)}</strong>
                       </span>
                       <span class="text-muted small">{fmt(entry.createdAt)}</span>
                     </div>
@@ -145,9 +146,9 @@ export function MyApplications() {
               <tr key={app.id} class="is-clickable" onClick={() => setSelectedId(app.id)}>
                 <td>{app.membershipCategory}</td>
                 <td>
-                  <span class={`badge ${stageBadgeClass(app.stage)}`}>{formatStageLabel(app.stage)}</span>
+                  <Badge status={app.stage} />
                 </td>
-                <td class="small">{fmt(app.createdAt)}</td>
+                <td class="small">{fmtDate(app.createdAt)}</td>
                 <td>
                   <button class="btn btn-sm btn-outline-secondary" onClick={() => setSelectedId(app.id)}>
                     View

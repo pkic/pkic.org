@@ -126,7 +126,7 @@ describe("portal selected-group collections", () => {
     );
     const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
     await settle();
-    expect(container.textContent).toContain("HTTP 403");
+    expect(container.textContent).toContain("don't have access");
   });
 
   it("creates, edits, and archives a fully configured group list without moving ownership", async () => {

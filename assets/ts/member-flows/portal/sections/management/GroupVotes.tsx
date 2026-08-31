@@ -51,7 +51,7 @@ export function GroupVotes({
         <ul class="nav nav-tabs mb-3">
           <li class="nav-item">
             <button type="button" class={`nav-link${tab === "votes" ? " active" : ""}`} onClick={() => setTab("votes")}>
-              Votes
+              All votes
             </button>
           </li>
           <li class="nav-item">

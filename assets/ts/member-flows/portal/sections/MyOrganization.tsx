@@ -31,25 +31,13 @@ import {
   organizationMemberProfileResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
+import { Badge } from "../../../components/Badge";
 
 export { RepresentativeSelect } from "./MyOrganizationGovernance";
 
 const organizationPath = (organizationId: string) => `/api/v1/organizations/${encodeURIComponent(organizationId)}`;
 
 const URL_FIELD_ORDER = ["website", "blogUrl", "blogFeedUrl", "pressUrl", "pressFeedUrl", "careersUrl"] as const;
-
-function reviewStatusBadgeClass(status: string): string {
-  switch (status) {
-    case "approved":
-      return "text-bg-success";
-    case "rejected":
-      return "text-bg-danger";
-    case "withdrawn":
-      return "text-bg-secondary";
-    default:
-      return "text-bg-info";
-  }
-}
 
 function LogoUploader({
   organizationId,
@@ -412,9 +400,7 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
               {reviews.map((review: MyOrganizationReview) => (
                 <li key={review.id} class="list-group-item px-0">
                   <div class="d-flex justify-content-between align-items-center">
-                    <span class={`badge text-capitalize ${reviewStatusBadgeClass(review.status)}`}>
-                      {review.status}
-                    </span>
+                    <Badge status={review.status} />
                     <span class="text-muted small">{fmt(review.submittedAt)}</span>
                   </div>
                   {review.reviewerNote && <p class="small text-muted mb-0 mt-1">{review.reviewerNote}</p>}

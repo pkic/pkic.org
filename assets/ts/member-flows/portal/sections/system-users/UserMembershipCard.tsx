@@ -10,7 +10,8 @@ import { MEMBER_STATUSES } from "../../../../../shared/schemas/membership-catego
 import { deleteJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { representativeMutationResponseSchema } from "../../../../../shared/schemas/organization-representation";
-import { fmt, toast } from "../../ui";
+import { fmtDate, toast } from "../../ui";
+import { Badge, statusLabel } from "../../../../components/Badge";
 import type { UserMembership } from "./model";
 
 export function UserMembershipCard({
@@ -170,7 +171,7 @@ export function UserMembershipCard({
             <th class="text-muted small adm-user-info-label">Status</th>
             <td>
               {membership.organizationId ? (
-                <span class="badge text-bg-secondary">{membership.status}</span>
+                <Badge status={membership.status} />
               ) : (
                 <select
                   class="form-select form-select-sm d-inline-block w-auto"
@@ -180,7 +181,7 @@ export function UserMembershipCard({
                 >
                   {MEMBER_STATUSES.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {statusLabel(status)}
                     </option>
                   ))}
                 </select>
@@ -209,7 +210,7 @@ export function UserMembershipCard({
           </tr>
           <tr>
             <th class="text-muted small adm-user-info-label">Member since</th>
-            <td>{fmt(membership.createdAt)}</td>
+            <td>{fmtDate(membership.createdAt)}</td>
           </tr>
         </tbody>
       </table>
