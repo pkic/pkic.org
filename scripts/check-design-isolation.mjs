@@ -40,6 +40,8 @@ const scanned = [
   "layouts/wg/section.html",
   "layouts/shortcodes/joinform.html",
   "layouts/shortcodes/invite-decline.html",
+  "assets/ts/member-flows/portal/sections/AccountSettings.tsx",
+  "assets/ts/components/proposals/ProposalDecisionPanel.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */
@@ -71,6 +73,38 @@ function isBootstrapClassList(value) {
 /** A colour literal in any of the forms a stylesheet accepts. */
 const COLOUR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\blab\()/;
 
+/**
+ * Every `pk-` class the stylesheets actually define. A component referencing a
+ * class nobody wrote renders unstyled and nothing complains — the markup is
+ * valid, the build passes, and the surface is just quietly wrong. This has
+ * already happened once, with an invented `pk-field--checkbox`.
+ */
+function definedClasses() {
+  const names = new Set();
+  const collect = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        collect(full);
+        continue;
+      }
+      if (!entry.endsWith(".css")) continue;
+      for (const match of readFileSync(full, "utf8").matchAll(/\.(pk-[a-z0-9_-]+)/g)) {
+        names.add(match[1]);
+      }
+    }
+  };
+  for (const dir of ["assets/ts/ui", "assets/design"]) {
+    try {
+      collect(resolve(root, dir));
+    } catch {
+      // Nothing to collect.
+    }
+  }
+  return names;
+}
+
+const known = definedClasses();
 const failures = [];
 
 function walk(dir) {
@@ -108,6 +142,21 @@ function inspect(file) {
       const classAttr = code.match(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/);
       if (classAttr && isBootstrapClassList(classAttr[1])) {
         report(file, lineNumber, line, "uses a Bootstrap class name");
+      }
+
+      // A `pk-` class nobody defined renders unstyled and passes every other
+      // check, so the reference itself is the failure.
+      if (classAttr) {
+        for (const token of classAttr[1].split(/\s+/)) {
+          if (!token.startsWith("pk-") || known.has(token)) continue;
+          report(file, lineNumber, line, `references "${token}", which no stylesheet defines`);
+        }
+      }
+
+      // The repository forbids style attributes (assets/AGENTS.md). A dynamic
+      // value belongs in a modifier class or a custom property in a stylesheet.
+      if (/\sstyle\s*=\s*[{"']/.test(code)) {
+        report(file, lineNumber, line, "uses an inline style attribute");
       }
 
       if (file.endsWith(".css") && !isGeneratedTokens && COLOUR_LITERAL.test(code)) {

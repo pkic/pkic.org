@@ -43,6 +43,21 @@
     gap: var(--pk-gap, var(--pk-4));
   }
 
+  /* Tighter rhythms, as classes. A surface that needs a smaller gap picks one
+     of these rather than writing an inline custom property — the repository
+     forbids style attributes, and a class keeps the value on the scale. */
+  .pk-stack--tight {
+    --pk-gap: var(--pk-1);
+  }
+
+  .pk-stack--snug {
+    --pk-gap: var(--pk-2);
+  }
+
+  .pk-stack--loose {
+    --pk-gap: var(--pk-5);
+  }
+
   /* A horizontal group that wraps. Buttons in a toolbar, tags under a title. */
   .pk-cluster {
     display: flex;
@@ -174,5 +189,38 @@
     to {
       background-position: 0 0;
     }
+  }
+
+  /* A required marker beside a label. Its colour is the danger state, because
+     that is what it means, not because red was handy. */
+  .pk-required {
+    color: var(--pk-danger-ink);
+  }
+
+  /* An inline caution beside a control, short of a full Alert. */
+  .pk-warning-note {
+    color: var(--pk-warn-ink);
+  }
+
+  /* Long unbroken strings — a token, a URL — that would otherwise widen their
+     container past the viewport. */
+  .pk-break {
+    overflow-wrap: anywhere;
+  }
+
+  /* A bordered box for preformatted or scrollable content. */
+  .pk-code-block {
+    padding: var(--pk-2);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    overflow: auto;
+  }
+
+  /* A full-width framed region, e.g. an embedded preview. */
+  .pk-framed {
+    width: 100%;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
   }
 }

@@ -236,6 +236,12 @@
     align-items: stretch;
   }
 
+  /* A narrow column for specimens that look wrong at full width — a single
+     form field stretched across a desktop tells you nothing useful. */
+  .pk-preview__narrow {
+    max-width: 24rem;
+  }
+
   .pk-preview__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));

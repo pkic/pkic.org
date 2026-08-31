@@ -156,6 +156,12 @@
     border-top: 2px solid var(--pk-on-solid);
   }
 
+  /* Placeholder rows are inert: they carry no data and must not respond to a
+     pointer, or a click lands on a row that does not exist yet. */
+  .pk-table__placeholder {
+    pointer-events: none;
+  }
+
   .pk-table__skeleton {
     display: block;
     height: 0.7rem;

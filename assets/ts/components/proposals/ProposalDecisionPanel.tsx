@@ -7,9 +7,14 @@ import {
   isProposalDecisionTransitionAllowed,
   PROPOSAL_DECISION_STATUSES,
 } from "../../../shared/schemas/proposal-status";
-import { Badge } from "../Badge";
-import { Markdown } from "../Markdown";
+import { Alert } from "../../ui/Alert";
+import { Badge } from "../../ui/Badge";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { Select, Textarea } from "../../ui/TextControl";
 import { Tabs } from "../Tabs";
+import { Markdown } from "../Markdown";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import type { ToastType } from "../../shared/ui";
 
@@ -134,64 +139,80 @@ export function ProposalDecisionPanel({
   }
 
   return (
-    <div class="card">
-      <div class="card-header">
-        <h6 class="mb-0">Final decision</h6>
-      </div>
-      <div class="card-body">
-        {proposal.decision_status && (
-          <div class={`alert alert-info${canRecordDecision ? " mb-3" : " mb-0"}`}>
-            <div class="d-flex gap-2 align-items-center mb-1">
-              <strong>Decision recorded:</strong>
-              <Badge status={proposal.decision_status} />
-            </div>
-            {proposal.decision_note && <Markdown markdown={proposal.decision_note} className="small mt-2 mb-0" />}
-            {proposal.decision_decided_at && (
-              <div class="small text-muted mt-2">Recorded {formatDate(proposal.decision_decided_at)}</div>
-            )}
-          </div>
-        )}
-        {!canRecordDecision && !proposal.decision_status && (
-          <div class="alert alert-warning mb-0">This proposal is not in a state that can receive a decision.</div>
-        )}
-        {canRecordDecision && (
-          <>
-            {!quorumMet && !loading && (
-              <div class="alert alert-warning">
-                <strong>Quorum not met.</strong> {reviewCount} of {minReviewsRequired} required review
-                {minReviewsRequired !== 1 ? "s" : ""} completed. Add more reviews before finalizing.
-              </div>
-            )}
-            <form onSubmit={(event) => void handleDecision(event)}>
-              <div class="row g-3">
-                <div class="col-md-4">
-                  <label class="form-label fw-semibold">Decision</label>
-                  <select
-                    class="form-select"
-                    value={decisionStatus}
-                    onChange={(event) =>
-                      setDecisionStatus(
-                        (event.target as HTMLSelectElement).value as ProposalDecisionInput["finalStatus"],
-                      )
+    <div class="pk">
+      <Panel>
+        <PanelHeader title="Final decision" headingLevel={2} />
+        <PanelBody>
+          {proposal.decision_status && (
+            <Alert tone="info">
+              <div class="pk-stack">
+                <div class="pk-cluster">
+                  <strong>Decision recorded:</strong>
+                  <Badge
+                    tone={
+                      proposal.decision_status === "accepted"
+                        ? "ok"
+                        : proposal.decision_status === "needs-work"
+                          ? "warn"
+                          : "danger"
                     }
                   >
-                    <option value="">— select —</option>
-                    {availableDecisionStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {{ accepted: "Accepted", "needs-work": "Needs work", rejected: "Rejected" }[status]}
-                      </option>
-                    ))}
-                  </select>
+                    {{ accepted: "Accepted", "needs-work": "Needs work", rejected: "Rejected" }[
+                      proposal.decision_status
+                    ] || proposal.decision_status}
+                  </Badge>
                 </div>
-                <div class="col-12">
-                  <label class="form-label fw-semibold">
+                {proposal.decision_note && <Markdown markdown={proposal.decision_note} className="pk-small" />}
+                {proposal.decision_decided_at && (
+                  <div class="pk-small">Recorded {formatDate(proposal.decision_decided_at)}</div>
+                )}
+              </div>
+            </Alert>
+          )}
+          {!canRecordDecision && !proposal.decision_status && (
+            <Alert tone="warn">This proposal is not in a state that can receive a decision.</Alert>
+          )}
+          {canRecordDecision && (
+            <>
+              {!quorumMet && !loading && (
+                <Alert tone="warn">
+                  <strong>Quorum not met.</strong> {reviewCount} of {minReviewsRequired} required review
+                  {minReviewsRequired !== 1 ? "s" : ""} completed. Add more reviews before finalizing.
+                </Alert>
+              )}
+              <form onSubmit={(event) => void handleDecision(event)} class="pk-stack">
+                <Field label="Decision">
+                  {(c) => (
+                    <Select
+                      {...c}
+                      value={decisionStatus}
+                      onChange={(event) =>
+                        setDecisionStatus(
+                          (event.target as HTMLSelectElement).value as ProposalDecisionInput["finalStatus"],
+                        )
+                      }
+                    >
+                      <option value="">— select —</option>
+                      {availableDecisionStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {{ accepted: "Accepted", "needs-work": "Needs work", rejected: "Rejected" }[status]}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <div>
+                  <label class="pk-strong">
                     Note to applicant
-                    {decisionStatus === "needs-work" && <span class="text-danger ms-1">* required</span>}
-                    <span class="text-muted fw-normal ms-2 small">Sent in the decision email · Markdown supported</span>
+                    {decisionStatus === "needs-work" && (
+                      <span class="pk-required">
+                        <span aria-hidden="true">*</span>
+                        <span class="pk-sr-only">(required)</span>
+                      </span>
+                    )}
                   </label>
-                  <textarea
-                    class={`form-control${needsWorkRequiresNote ? " is-invalid" : ""}`}
-                    rows={4}
+                  <div class="pk-small pk-muted">Sent in the decision email · Markdown supported</div>
+                  <Textarea
                     value={decisionNote}
                     onInput={(event) => setDecisionNote((event.target as HTMLTextAreaElement).value)}
                     placeholder={
@@ -199,141 +220,137 @@ export function ProposalDecisionPanel({
                         ? "Describe the changes or clarifications needed…"
                         : "Optional feedback for the proposer…"
                     }
+                    aria-invalid={needsWorkRequiresNote ? "true" : undefined}
                   />
                   {needsWorkRequiresNote && (
-                    <div class="invalid-feedback">A note is required when requesting changes.</div>
+                    <div class="pk-field__message" role="alert">
+                      A note is required when requesting changes.
+                    </div>
                   )}
                 </div>
-                <div class="col-12">
-                  <div class="d-flex gap-2 align-items-center flex-wrap">
-                    <button
-                      type="button"
-                      class="btn btn-outline-primary"
-                      onClick={() => void handlePreview()}
-                      disabled={previewing || !decisionStatus || needsWorkRequiresNote}
-                    >
-                      {previewing ? "Previewing…" : "Preview emails"}
-                    </button>
-                    {preview && (
-                      <span class="small text-muted">
-                        {preview.emailCount} email{preview.emailCount === 1 ? "" : "s"} to {preview.recipientCount}{" "}
-                        recipient
-                        {preview.recipientCount === 1 ? "" : "s"}
-                        {(preview.layoutMissing || preview.missingTemplateKeys.length > 0) && (
-                          <span class="text-warning ms-2">Configuration issues — see preview</span>
-                        )}
-                      </span>
-                    )}
-                  </div>
+                <div class="pk-cluster">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void handlePreview()}
+                    disabled={previewing || !decisionStatus || needsWorkRequiresNote}
+                    loading={previewing}
+                  >
+                    {previewing ? "Previewing…" : "Preview emails"}
+                  </Button>
+                  {preview && (
+                    <span class="pk-small">
+                      {preview.emailCount} email{preview.emailCount === 1 ? "" : "s"} to {preview.recipientCount}{" "}
+                      recipient
+                      {preview.recipientCount === 1 ? "" : "s"}
+                      {(preview.layoutMissing || preview.missingTemplateKeys.length > 0) && (
+                        <span class="pk-warning-note">Configuration issues — see preview</span>
+                      )}
+                    </span>
+                  )}
                 </div>
                 {preview && selectedPreview && (
-                  <div class="col-12">
-                    <div class="card border">
-                      <div class="card-header bg-light small fw-semibold">Email preview</div>
-                      <div class="card-body">
-                        {preview.layoutMissing && (
-                          <div class="alert alert-warning small py-2 mb-3">
-                            <strong>Email layout template not configured.</strong> Emails will render without the
-                            branded layout until the <code>email_layout</code> template is configured.
+                  <Panel>
+                    <PanelHeader title="Email preview" headingLevel={3} />
+                    <PanelBody class="pk-stack">
+                      {preview.layoutMissing && (
+                        <Alert tone="warn">
+                          <strong>Email layout template not configured.</strong> Emails will render without the branded
+                          layout until the <code>email_layout</code> template is configured.
+                        </Alert>
+                      )}
+                      {preview.missingTemplateKeys.length > 0 && (
+                        <Alert tone="warn">
+                          <strong>Missing email template{preview.missingTemplateKeys.length > 1 ? "s" : ""}:</strong>{" "}
+                          <code>{preview.missingTemplateKeys.join(", ")}</code>. Those notifications will not be sent
+                          until the templates are configured.
+                        </Alert>
+                      )}
+                      <div class="pk-grid">
+                        <div>
+                          <div class="pk-small pk-muted">Outgoing emails</div>
+                          <div class="pk-stack pk-stack--tight">
+                            {preview.messages.map((message) => (
+                              <button
+                                key={message.id}
+                                type="button"
+                                class={`list-group-item list-group-item-action${message.id === selectedPreview.id ? " active" : ""}`}
+                                onClick={() => setSelectedPreviewId(message.id)}
+                              >
+                                <div class="pk-strong pk-small">{decisionEmailLabel(message.templateKey)}</div>
+                                <div class="pk-small">{message.recipientLabel}</div>
+                                <div class="pk-small pk-break">{message.recipientEmail}</div>
+                              </button>
+                            ))}
                           </div>
-                        )}
-                        {preview.missingTemplateKeys.length > 0 && (
-                          <div class="alert alert-warning small py-2 mb-3">
-                            <strong>Missing email template{preview.missingTemplateKeys.length > 1 ? "s" : ""}:</strong>{" "}
-                            <code>{preview.missingTemplateKeys.join(", ")}</code>. Those notifications will not be sent
-                            until the templates are configured.
+                        </div>
+                        <div>
+                          <div class="pk-small pk-muted">To</div>
+                          <div class="pk-strong">
+                            {selectedPreview.recipientLabel} &lt;{selectedPreview.recipientEmail}&gt;
                           </div>
-                        )}
-                        <div class="row g-3">
-                          <div class="col-lg-4">
-                            <div class="small text-muted mb-2">Outgoing emails</div>
-                            <div class="list-group">
-                              {preview.messages.map((message) => (
-                                <button
-                                  key={message.id}
-                                  type="button"
-                                  class={`list-group-item list-group-item-action${message.id === selectedPreview.id ? " active" : ""}`}
-                                  onClick={() => setSelectedPreviewId(message.id)}
-                                >
-                                  <div class="fw-semibold small">{decisionEmailLabel(message.templateKey)}</div>
-                                  <div class="small">{message.recipientLabel}</div>
-                                  <div class="small text-break">{message.recipientEmail}</div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div class="col-lg-8">
-                            <div class="small text-muted">To</div>
-                            <div class="fw-semibold mb-2">
-                              {selectedPreview.recipientLabel} &lt;{selectedPreview.recipientEmail}&gt;
-                            </div>
-                            <div class="small text-muted">Subject</div>
-                            <div class="fw-semibold mb-2">{selectedPreview.subject}</div>
-                            <Tabs
-                              items={EMAIL_PREVIEW_TABS}
-                              active={previewTab}
-                              onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
-                              className="mb-2"
-                            />
-                            {previewTab === "html" &&
-                              (selectedPreview.templateMissing ? (
-                                <div class="alert alert-warning small mb-0">
-                                  Email template <code>{selectedPreview.templateKey}</code> is not configured. This
-                                  notification will not be sent until the template is activated.
-                                </div>
-                              ) : (
-                                <iframe
-                                  title="Decision email preview"
-                                  srcdoc={selectedPreview.html}
-                                  sandbox=""
-                                  class="w-100 border rounded"
-                                  height={420}
-                                />
-                              ))}
-                            {previewTab === "text" && (
-                              <pre class="border rounded p-2 mb-0 small overflow-auto">{selectedPreview.text}</pre>
-                            )}
-                            <div class="form-check mt-2">
-                              <input
-                                class="form-check-input"
-                                type="checkbox"
-                                id="proposal-decision-preview-confirm"
-                                checked={previewConfirmed}
-                                onChange={(event) => setPreviewConfirmed((event.target as HTMLInputElement).checked)}
+                          <div class="pk-small pk-muted">Subject</div>
+                          <div class="pk-strong">{selectedPreview.subject}</div>
+                          <Tabs
+                            items={EMAIL_PREVIEW_TABS}
+                            active={previewTab}
+                            onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
+                          />
+                          {previewTab === "html" &&
+                            (selectedPreview.templateMissing ? (
+                              <Alert tone="warn">
+                                Email template <code>{selectedPreview.templateKey}</code> is not configured. This
+                                notification will not be sent until the template is activated.
+                              </Alert>
+                            ) : (
+                              <iframe
+                                title="Decision email preview"
+                                srcdoc={selectedPreview.html}
+                                sandbox=""
+                                class="pk-framed"
+                                height={420}
                               />
-                              <label class="form-check-label small" for="proposal-decision-preview-confirm">
-                                I reviewed the outgoing email preview and confirm this decision send.
-                              </label>
-                            </div>
+                            ))}
+                          {previewTab === "text" && <pre class="pk-code-block pk-small">{selectedPreview.text}</pre>}
+                          <div class="pk-check">
+                            <input
+                              class="pk-check__input"
+                              type="checkbox"
+                              id="proposal-decision-preview-confirm"
+                              checked={previewConfirmed}
+                              onChange={(event) => setPreviewConfirmed((event.target as HTMLInputElement).checked)}
+                            />
+                            <label class="pk-check__label pk-small" for="proposal-decision-preview-confirm">
+                              I reviewed the outgoing email preview and confirm this decision send.
+                            </label>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    </PanelBody>
+                  </Panel>
                 )}
-                <div class="col-12">
-                  <button
-                    type="submit"
-                    class="btn btn-primary"
-                    disabled={
-                      saving ||
-                      !canRecordDecision ||
-                      !decisionStatus ||
-                      !quorumMet ||
-                      needsWorkRequiresNote ||
-                      !preview ||
-                      !previewConfirmed
-                    }
-                    title={!quorumMet ? `Requires ${minReviewsRequired} reviews` : undefined}
-                  >
-                    {saving ? "Saving…" : "Record Decision"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </>
-        )}
-      </div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={
+                    saving ||
+                    !canRecordDecision ||
+                    !decisionStatus ||
+                    !quorumMet ||
+                    needsWorkRequiresNote ||
+                    !preview ||
+                    !previewConfirmed
+                  }
+                  loading={saving}
+                  title={!quorumMet ? `Requires ${minReviewsRequired} reviews` : undefined}
+                >
+                  {saving ? "Saving…" : "Record Decision"}
+                </Button>
+              </form>
+            </>
+          )}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

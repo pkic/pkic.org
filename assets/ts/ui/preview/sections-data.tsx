@@ -57,7 +57,7 @@ export const dataSections: PreviewSection[] = [
     note: "Form controls with labels, validation states, and help text.",
     render: () => (
       <div class="pk-preview__shelf--stack">
-        <div style={{ maxWidth: "24rem" }}>
+        <div class="pk-preview__narrow">
           <Field label="Email address" help="We'll never share your email.">
             {(props) => <TextInput {...props} type="email" placeholder="alice@example.com" />}
           </Field>

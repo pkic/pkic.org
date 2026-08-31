@@ -181,6 +181,8 @@
 
   // Link card behaviour
   &.bento-card-link {
+  // Was an inline style on the working-group template; belongs with the card.
+  min-height: 120px;
     text-decoration: none;
     color: inherit;
     cursor: pointer;
