@@ -59,6 +59,7 @@ function stubList(): void {
 function table(createAction?: { label: string; onSelect: () => void; disabled?: boolean }) {
   return (
     <ApiDataTable
+      caption="Things"
       endpoint="/api/v1/things"
       responseSchema={responseSchema}
       resolve={(response) => response.items}
@@ -77,9 +78,12 @@ describe("ApiDataTable createAction", () => {
     const container = mount(table({ label: "New thing", onSelect: () => (created += 1) }));
     await settle();
 
-    const toolbar = container.querySelector(".d-flex.gap-2");
+    // The toolbar is found by its role and by the name the caption gives it,
+    // so the assertion survives the next change of presentational classes.
+    const toolbar = container.querySelector('[role="toolbar"]');
+    expect(toolbar?.getAttribute("aria-label")).toBe("Things controls");
     const buttons = [...(toolbar?.querySelectorAll("button") ?? [])].map((button) => button.textContent);
-    expect(buttons).toEqual(["New thing", "↺ Refresh"]);
+    expect(buttons).toEqual(["New thing", "Refresh"]);
     expect(toolbar?.querySelector("input[type=search]")).not.toBeNull();
 
     await act(() => {
@@ -92,7 +96,7 @@ describe("ApiDataTable createAction", () => {
     stubList();
     const container = mount(table(undefined));
     await settle();
-    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["↺ Refresh"]);
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Refresh"]);
   });
 
   it("disables the create button when the action is disabled", async () => {

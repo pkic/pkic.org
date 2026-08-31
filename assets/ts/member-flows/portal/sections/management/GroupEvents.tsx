@@ -90,6 +90,7 @@ export function GroupEvents({
           </div>
         )}
         <ApiDataTable
+          caption="Group events"
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
           responseSchema={groupEventsListResponseSchema}
           resolve={(response) => response.events}

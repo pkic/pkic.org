@@ -38,7 +38,7 @@ export function RegistrationAnalytics() {
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="text-uppercase small fw-bold text-muted mb-3">By Status</h6>
-              <StatusTable entries={Object.entries(registrations.byStatus)} />
+              <StatusTable caption="Registrations by status" entries={Object.entries(registrations.byStatus)} />
             </div>
           </div>
         </div>
@@ -47,6 +47,7 @@ export function RegistrationAnalytics() {
             <div class="card-body">
               <h6 class="text-uppercase small fw-bold text-muted mb-3">By Attendance Type</h6>
               <SimpleTable
+                caption="Registrations by attendance type"
                 rows={Object.entries(registrations.byAttendanceType).map(([key, count]) => [
                   ATTENDANCE_LABELS[key] ?? key,
                   String(count),
@@ -62,6 +63,7 @@ export function RegistrationAnalytics() {
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Weekly (last 12 weeks)</h6>
           <div dangerouslySetInnerHTML={{ __html: weeklyChart }} />
           <SimpleTable
+            caption="Registrations per week"
             rows={registrations.weekly.map((period) => [period.week, String(period.count)])}
             heads={["Week", "Count"]}
           />
@@ -72,6 +74,7 @@ export function RegistrationAnalytics() {
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Monthly (last 12 months)</h6>
           <div dangerouslySetInnerHTML={{ __html: monthlyChart }} />
           <SimpleTable
+            caption="Registrations per month"
             rows={registrations.monthly.map((period) => [period.month, String(period.count)])}
             heads={["Month", "Count"]}
           />

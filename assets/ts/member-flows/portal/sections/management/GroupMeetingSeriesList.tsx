@@ -38,6 +38,7 @@ export function GroupMeetingSeriesList({
 
   return (
     <ApiDataTable
+      caption="Meeting series"
       endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`}
       responseSchema={eventSeriesListResponseSchema}
       resolve={(response) => response.series}

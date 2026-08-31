@@ -326,6 +326,7 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
       {tab === "list" && (
         <>
           <ApiDataTable
+            caption="Donations"
             urlState="donations"
             endpoint="/api/v1/donations"
             responseSchema={donationsListResponseSchema}
@@ -374,9 +375,11 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
             )}
             columns={columns}
             empty="No donations recorded yet"
-            className="align-middle"
             rowKey={(d) => d.id}
-            onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
+            rowAction={(d) => ({
+              label: `Open the donation from ${d.name}`,
+              href: `#/donations/detail/${encodeURIComponent(d.id)}`,
+            })}
           />
         </>
       )}

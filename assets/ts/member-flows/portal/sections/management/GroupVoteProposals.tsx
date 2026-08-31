@@ -181,6 +181,7 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
       )}
       {showCreate && <GroupVoteProposalForm groupId={groupId} onCreated={reload} />}
       <ApiDataTable
+        caption="Vote proposals"
         actionsRef={actions}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/vote-proposals`}
         responseSchema={groupVoteProposalsListResponseSchema}

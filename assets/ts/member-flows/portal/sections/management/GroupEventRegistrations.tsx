@@ -27,6 +27,7 @@ export function GroupEventRegistrations({
         </div>
       )}
       <ApiDataTable
+        caption="Event attendees"
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`}
         responseSchema={eventAttendanceRegistrationsListResponseSchema}
         resolve={(response) => response.registrations}

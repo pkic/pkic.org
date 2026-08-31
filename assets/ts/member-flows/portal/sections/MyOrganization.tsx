@@ -41,6 +41,7 @@ import {
   organizationMemberProfileResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
+import "../../../ui/Content.css";
 
 export { IdentitySelect } from "./MyOrganizationGovernance";
 

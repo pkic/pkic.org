@@ -179,6 +179,7 @@ export function DayAttendanceManager({
         </div>
       )}
       <DataTable
+        caption="Attendance by event day"
         columns={[
           { header: "Date", cell: (day) => day.dayDate, className: "mono small" },
           { header: "Day", cell: (day) => day.label ?? "—", className: "small" },
@@ -289,7 +290,6 @@ export function DayAttendanceManager({
           },
         ]}
         data={rows}
-        className="align-middle"
         rowKey={(day) => day.dayDate}
       />
       <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">

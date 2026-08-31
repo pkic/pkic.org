@@ -199,6 +199,7 @@ export function Sponsorships({
 
       {!selectedCompany && (
         <ApiDataTable
+          caption="Sponsoring companies"
           urlState="sponsorships"
           endpoint="/api/v1/sponsors/companies"
           responseSchema={sponsorshipCompaniesListResponseSchema}
@@ -210,7 +211,7 @@ export function Sponsorships({
           columns={companyColumns}
           params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
           rowKey={(c) => c.key}
-          onRowClick={selectCompany}
+          rowAction={(c) => ({ label: `View sponsorships for ${c.label}`, onSelect: () => selectCompany(c) })}
           empty={
             canWrite ? (
               <EmptyState title="No sponsorships found" body="Create a sponsorship, or adjust the filters above." />

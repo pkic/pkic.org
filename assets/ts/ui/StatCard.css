@@ -56,4 +56,37 @@
     white-space: nowrap;
     border-width: 0;
   }
+
+  /*
+   * A card that leads to the rows behind its number. The anchor covers the
+   * card through its ::after rather than wrapping the content, so the whole
+   * card is a target while the link's accessible name is just the label.
+   */
+  .pk-stat-card--link {
+    position: relative;
+  }
+
+  .pk-stat-card--link:hover {
+    border-color: var(--pk-accent);
+  }
+
+  .pk-stat-card--link:focus-within {
+    outline: var(--pk-focus);
+    outline-offset: 2px;
+  }
+
+  .pk-stat-card__link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .pk-stat-card__link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .pk-stat-card__link:focus-visible {
+    outline: none;
+  }
 }

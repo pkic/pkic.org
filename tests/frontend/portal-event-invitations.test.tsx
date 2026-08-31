@@ -202,7 +202,10 @@ describe("portal event invitations", () => {
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("status")).toBe("sent");
 
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search invitations…"]')!;
+    // Located through its label, which now names the list it searches, because
+    // a page with several collections used to offer several fields all called
+    // "Search".
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!;
     search.value = "ada";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     await settle();

@@ -15,6 +15,7 @@ editing tokens.
 | `assets/design/tokens.generated.css` | Generated, committed, drift-checked. |
 | `assets/design/base.css` | Element defaults in `@layer base`, scoped to `.pk`. |
 | `assets/ts/ui/` | The primitives. One `.tsx` plus one co-located `.css` each. |
+| `assets/ts/ui/chart.ts` | SVG chart builders. Emit a hidden data table beside every plot. |
 | `assets/ts/ui/preview/` | The live preview at `/design/`. |
 
 ## The cascade
@@ -149,6 +150,26 @@ The gate is deliberately narrow about sizes. A gap or an icon's width is
 legitimately local; a type size, a corner radius or a duration is not, because
 those are what make separate components look like one system. A gate that
 cries wolf gets switched off.
+
+## The layer between the system and the surfaces
+
+`assets/ts/components/` holds a small number of components that every surface
+renders and that the design system deliberately does not know about:
+
+- **`Badge`** maps the product's ninety status names onto the system's six
+  tones. The system owns what a tone looks like; this owns what `ec_review`
+  means.
+- **`Table`** translates the portal's column shape and the server's opaque
+  sort strings into `ui/DataTable`'s.
+- **`ApiDataTable`** is the one server-collection controller: URL-addressed
+  search, sort, paging and reload, resolved into one bounded request.
+- **`Pager`** translates offsets, which the endpoints take, into page numbers,
+  which readers click.
+- **`ConfirmDialog`** turns a promise-based `confirmAction()` into a `Dialog`.
+
+These are translations, not second implementations. Anything that is a second
+implementation — the old row menu, the old modal, the old chart renderers —
+has been deleted rather than kept beside the system's version.
 
 ## Removing Bootstrap (phase 5)
 

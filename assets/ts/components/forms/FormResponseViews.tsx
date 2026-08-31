@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useMemo, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { FormSubmission } from "../../../shared/schemas/form-management";
@@ -6,6 +7,7 @@ import type { PageInfo } from "../../../shared/schemas/pagination";
 import { formatDateTime } from "../../shared/ui";
 import { ApiDataTable } from "../ApiDataTable";
 import { Badge } from "../Badge";
+import "../../ui/Content.css";
 
 export interface FormAnswerRow {
   key: string;
@@ -125,35 +127,38 @@ export function FormAnswerTable({
 }) {
   const rows = buildFormAnswerRows(answers, fields);
 
-  if (!rows.length) return <p class="small text-body-secondary fst-italic mb-0">{empty}</p>;
+  if (!rows.length) return <p class="pk-small">{empty}</p>;
 
+  /*
+   * A description list, not a table.
+   *
+   * These are one submission's answers — label and value, once each — which is
+   * what a `dl` is for. It was a two-column `<table>` with no caption, and
+   * because it renders inside another table's expanded row, a screen reader
+   * found a named table containing an unnamed one and announced a grid where
+   * there was only a list of answers.
+   */
   return (
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <th class="text-muted fw-semibold ps-3 adm-table-label-col" scope="row">
-                {row.label}
-              </th>
-              <td class="pe-3">
-                {row.kind === "list" ? (
-                  <ul class="small mb-0 ps-3">
-                    {row.values.map((value, index) => (
-                      <li key={index}>{value}</li>
-                    ))}
-                  </ul>
-                ) : row.kind === "pre" ? (
-                  <pre class="small bg-light border rounded p-2 mb-0 adm-pre-wrap">{row.values[0]}</pre>
-                ) : (
-                  <span class="small">{row.values[0]}</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <dl class="pk-datalist pk-small">
+      {rows.map((row) => (
+        <Fragment key={row.key}>
+          <dt>{row.label}</dt>
+          <dd>
+            {row.kind === "list" ? (
+              <ul class="pk-answer-list">
+                {row.values.map((value, index) => (
+                  <li key={index}>{value}</li>
+                ))}
+              </ul>
+            ) : row.kind === "pre" ? (
+              <pre class="pk-code-block pk-answer-pre">{row.values[0]}</pre>
+            ) : (
+              row.values[0]
+            )}
+          </dd>
+        </Fragment>
+      ))}
+    </dl>
   );
 }
 
@@ -482,6 +487,7 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
 
   return (
     <ApiDataTable
+      caption="Form responses"
       endpoint={endpoint}
       responseSchema={responseSchema}
       resolve={(data) => data.submissions}

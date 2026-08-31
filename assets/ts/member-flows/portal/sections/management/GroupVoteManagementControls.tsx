@@ -198,6 +198,7 @@ export function GroupVoteManagementControls({
       {showBallots && (
         <div class="mt-3">
           <ApiDataTable
+            caption="Identifiable ballots"
             actionsRef={ballotActions}
             endpoint={`${base}/ballots`}
             responseSchema={groupVoteBallotsAuditResponseSchema}
@@ -223,7 +224,6 @@ export function GroupVoteManagementControls({
             ]}
             empty="No ballots have been submitted."
             rowKey={(ballot) => ballot.id}
-            className="table-sm"
           />
         </div>
       )}

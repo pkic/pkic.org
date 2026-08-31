@@ -8,6 +8,7 @@ export function ApplicationDocumentsCard({ applicationId }: { applicationId: str
       <div class="card-header bg-white fw-semibold">Documents</div>
       <div class="card-body">
         <ApiDataTable
+          caption="Application documents"
           endpoint={`/api/v1/members/applications/${applicationId}/documents`}
           responseSchema={staffApplicationDocumentsListResponseSchema}
           resolve={(response) => response.documents}

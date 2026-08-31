@@ -63,6 +63,26 @@ const portalEvent = {
   settings: { forms: { event_registration: "legacy-attendee-form" } },
 } as EventDetail;
 
+/** The same event seen by someone who is allowed to change it. */
+const writableEvent = { ...portalEvent, capabilities: ["read", "write"] } as EventDetail;
+
+/** The only request the general tab makes before a save is the form catalog. */
+function stubFormCatalog(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } })),
+  );
+}
+
+async function submitForm(container: HTMLElement): Promise<void> {
+  const form = container.querySelector("form");
+  expect(form).not.toBeNull();
+  await act(async () => {
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -86,8 +106,107 @@ describe("admin event general settings", () => {
     const container = mount(<GeneralTab event={portalEvent} onUpdated={onUpdated} />);
     await settle();
     expect(container.textContent).not.toContain("Registration form");
-    expect(container.textContent).not.toContain("Registration Mode");
+    expect(container.textContent).not.toContain("Registration mode");
     expect(container.textContent).toContain("Proposal form");
+  });
+
+  it("labels every control it renders and marks the one the form requires", async () => {
+    stubFormCatalog();
+
+    const container = mount(<GeneralTab event={writableEvent} onUpdated={vi.fn()} />);
+    await settle();
+
+    // A Field's label must point at a control that exists. An orphaned `for`
+    // is invisible in a screenshot and leaves the control unnamed in a screen
+    // reader's list of form fields.
+    // `useId` produces ids containing characters a CSS selector would have to
+    // escape, and `CSS.escape` is absent in jsdom, so the lookup walks ids.
+    const byId = (id: string): HTMLElement | null =>
+      [...container.querySelectorAll<HTMLElement>("[id]")].find((element) => element.id === id) ?? null;
+
+    const labels = [...container.querySelectorAll<HTMLLabelElement>("label.pk-field__label")];
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels) {
+      const target = label.htmlFor ? byId(label.htmlFor) : null;
+      expect(target, `label "${label.textContent ?? ""}" points at nothing`).not.toBeNull();
+    }
+
+    const named = (text: string): HTMLElement | null => {
+      const label = labels.find((candidate) => (candidate.textContent ?? "").startsWith(text));
+      return label?.htmlFor ? byId(label.htmlFor) : null;
+    };
+
+    const eventName = named("Event name");
+    expect(eventName).toBeInstanceOf(HTMLInputElement);
+    expect((eventName as HTMLInputElement).required).toBe(true);
+    // The asterisk is decorative; the word behind it is what gets announced.
+    expect(labels.find((label) => (label.textContent ?? "").startsWith("Event name"))?.textContent).toContain(
+      "(required)",
+    );
+
+    // The slug is shown but not editable, and it says why rather than only
+    // looking greyed out.
+    const slug = named("Slug") as HTMLInputElement | null;
+    expect(slug?.value).toBe("portal-workshop");
+    expect(slug?.disabled).toBe(true);
+    const describedBy = slug?.getAttribute("aria-describedby") ?? "";
+    expect(describedBy).not.toBe("");
+    expect(byId(describedBy)?.textContent).toContain("cannot be changed here");
+
+    // The session-type toggle is the design system's drawn checkbox with its
+    // own label, not a bare box beside loose text.
+    const check = container.querySelector<HTMLInputElement>("input.pk-check__input");
+    expect(check?.type).toBe("checkbox");
+    expect(check?.closest("label.pk-check")?.textContent).toContain("Requires presentation");
+  });
+
+  it("announces a rejected save rather than tinting the message red", async () => {
+    const attempts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if ((init?.method ?? "GET") === "PATCH") {
+          attempts.push(url.pathname);
+          return new Response(
+            JSON.stringify({ error: { code: "CONFLICT", message: "Someone else changed this event." } }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          );
+        }
+        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const onUpdated = vi.fn();
+    const container = mount(<GeneralTab event={writableEvent} onUpdated={onUpdated} />);
+    await settle();
+
+    await submitForm(container);
+
+    expect(attempts).toEqual(["/api/v1/events/portal-workshop/settings"]);
+    // role="alert" interrupts; a `text-danger` span says nothing at all to a
+    // reader who cannot separate the hue from the success message's.
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Someone else changed this event.");
+    expect(onUpdated).not.toHaveBeenCalled();
+    // The form is left usable so the conflict can be resolved.
+    expect(container.querySelector("fieldset")?.disabled).toBe(false);
+  });
+
+  it("tells a reader why the form is inert instead of only greying it out", async () => {
+    stubFormCatalog();
+
+    const container = mount(<GeneralTab event={portalEvent} onUpdated={vi.fn()} />);
+    await settle();
+
+    const notice = container.querySelector('[role="status"]');
+    expect(notice?.textContent).toContain("Read-only");
+    expect(notice?.textContent).toContain("You can view these settings but not change them.");
+    expect(container.querySelector("fieldset")?.disabled).toBe(true);
+    expect([...container.querySelectorAll("button")].some((button) => button.type === "submit")).toBe(false);
   });
 
   it("shows team management only with the exact event-management capability", async () => {
@@ -169,7 +288,7 @@ describe("admin event general settings", () => {
     const container = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} />);
     await settle();
 
-    expect(container.textContent).not.toContain("Event Name");
+    expect(container.textContent).not.toContain("Event name");
     expect(container.textContent).toContain("managed by a meeting series");
     const link = container.querySelector<HTMLAnchorElement>("a:not([role='tab'])");
     expect(link?.getAttribute("href")).toBe(

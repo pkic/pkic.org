@@ -28,6 +28,11 @@ import { successResponseSchema } from "../../../../../shared/schemas/api-common"
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
 import { EMAIL_TEMPLATES_API } from "../../../../shared/email-template-catalog";
 
+// The syntax-highlight backdrop rides this chunk rather than the entry
+// stylesheet, because only the two template editors use it.
+import "../../../../ui/OverlayEditor.css";
+import "../../../../ui/Content.css";
+
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 
@@ -484,6 +489,7 @@ export function TemplateEditor({
         <PanelHeader title="Version History" headingLevel={2} />
         <PanelBody>
           <ApiDataTable
+            caption="Email template versions"
             endpoint={`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`}
             responseSchema={emailTemplateVersionsListResponseSchema}
             resolve={(response) => response.versions}

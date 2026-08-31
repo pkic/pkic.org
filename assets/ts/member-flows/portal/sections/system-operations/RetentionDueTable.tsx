@@ -45,6 +45,8 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
           redacted.
         </p>
         <ApiDataTable
+          caption="Events due for retention redaction"
+          showCaption
           endpoint="/api/v1/retention/due"
           responseSchema={retentionDueListResponseSchema}
           resolve={(data) => data.items}
@@ -57,7 +59,6 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
           load={loadPortalCollection}
           columns={columns}
           empty="Nothing is due for retention redaction."
-          className="align-middle"
         />
       </div>
     </div>

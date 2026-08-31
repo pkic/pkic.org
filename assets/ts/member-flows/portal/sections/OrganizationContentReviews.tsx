@@ -173,6 +173,7 @@ export function OrganizationContentReviews() {
   return (
     <div>
       <ApiDataTable
+        caption="Organization content reviews"
         endpoint={API_BASE}
         responseSchema={organizationContentReviewsListResponseSchema}
         resolve={(data) => data.reviews}
@@ -238,7 +239,6 @@ export function OrganizationContentReviews() {
           },
         ]}
         empty={`No ${status} organization content submissions.`}
-        className="align-middle"
         rowKey={(review) => review.id}
       />
 

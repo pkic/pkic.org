@@ -260,4 +260,105 @@ describe("DataTable", () => {
     expect(actions?.textContent).toBe("Actions");
     expect(actions?.querySelector(".pk-table__sr")).not.toBeNull();
   });
+
+  /*
+   * Row activation. Fourteen portal list surfaces put an onClick on the <tr>,
+   * which no keyboard can reach: a row is not focusable and takes no Enter
+   * key. These assert the replacement is a real control.
+   */
+  describe("row activation", () => {
+    it("renders a focusable, named link rather than a click handler on the row", () => {
+      const container = mount(
+        <DataTable
+          caption="Organizations"
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          rowAction={(row) => ({ label: `Open ${row.name}`, href: `/organizations/${row.id}` })}
+        />,
+      );
+
+      const link = container.querySelector<HTMLAnchorElement>("tbody a");
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute("href")).toBe("/organizations/mh");
+      expect(link?.textContent).toBe("Open Marit Halvorsen");
+      // A link is reachable by Tab and openable in a new tab; a <tr> is neither.
+      expect(link?.tabIndex).toBe(0);
+    });
+
+    it("uses a button when the row selects rather than navigates", () => {
+      const onSelect = vi.fn();
+      const container = mount(
+        <DataTable
+          caption="Users"
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          rowAction={(row) => ({ label: `View ${row.name}`, onSelect })}
+        />,
+      );
+
+      const button = container.querySelector<HTMLButtonElement>("tbody button");
+      expect(button?.type).toBe("button");
+      expect(button?.textContent).toBe("View Marit Halvorsen");
+      void act(() => button!.click());
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it("puts the control in the first cell, ahead of the row's own actions", () => {
+      const container = mount(
+        <DataTable
+          caption="Users"
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          rowAction={() => ({ label: "Open", href: "/x" })}
+        />,
+      );
+      const firstCell = container.querySelector("tbody td");
+      expect(firstCell?.querySelector("a")).not.toBeNull();
+    });
+
+    it("leaves rows alone when no action is given for them", () => {
+      const container = mount(
+        <DataTable
+          caption="Users"
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          rowAction={(row) => (row.id === "mh" ? { label: "Open", href: "/x" } : undefined)}
+        />,
+      );
+      const rendered = [...container.querySelectorAll("tbody tr")];
+      expect(rendered[0].className).toContain("pk-table__row--action");
+      expect(rendered[1].className).not.toContain("pk-table__row--action");
+      expect(rendered[1].querySelector("a")).toBeNull();
+    });
+  });
+
+  describe("detail rows", () => {
+    it("spans every column, including the selection column", () => {
+      const container = mount(
+        <DataTable
+          caption="Users"
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          selection={{ selected: new Set(), onChange: vi.fn(), rowLabel: (key) => `Select ${key}` }}
+          detailRow={(row) => (row.id === "mh" ? <p>Joined in 2019</p> : null)}
+        />,
+      );
+
+      const detail = container.querySelector(".pk-table__detail");
+      expect(detail?.textContent).toBe("Joined in 2019");
+      expect(detail?.querySelector("td")?.getAttribute("colspan")).toBe(String(columns.length + 1));
+    });
+
+    it("emits no row at all for records that have no detail", () => {
+      const container = mount(
+        <DataTable caption="Users" columns={columns} rows={rows} rowKey={(row) => row.id} detailRow={() => null} />,
+      );
+      expect(container.querySelector(".pk-table__detail")).toBeNull();
+    });
+  });
 });

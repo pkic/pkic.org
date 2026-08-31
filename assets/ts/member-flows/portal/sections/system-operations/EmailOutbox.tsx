@@ -154,6 +154,7 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         {!canManage && <span class="badge text-bg-light border text-dark">Read only</span>}
       </div>
       <ApiDataTable
+        caption="Email outbox messages"
         urlState="outbox"
         endpoint="/api/v1/email/outbox"
         responseSchema={emailOutboxResponseSchema}
@@ -199,7 +200,6 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         }
         load={loadPortalCollection}
         empty="No outbox rows match the current filters."
-        className="align-middle"
         rowKey={(row) => row.id}
       />
     </div>

@@ -34,12 +34,20 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
   const statusEl = root.querySelector<HTMLElement>(statusSelector);
   const emailInput = root.querySelector<HTMLInputElement>(emailSelector);
 
-  if (loadingEl) loadingEl.classList.add("d-none");
-  if (sectionEl) sectionEl.classList.remove("d-none");
+  // `hidden` is what the migrated templates use; the `d-none` toggle is still
+  // needed by the flows that have not moved yet.
+  if (loadingEl) {
+    loadingEl.hidden = true;
+    loadingEl.classList.add("d-none");
+  }
+  if (sectionEl) {
+    sectionEl.hidden = false;
+    sectionEl.classList.remove("d-none");
+  }
 
   if (introMessage && statusEl) {
     statusEl.textContent = introMessage;
-    statusEl.className = "mt-2 small text-muted";
+    statusEl.className = "pk-small";
   }
 
   if (!resendBtn) return;
@@ -51,7 +59,7 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
     if (!email) {
       if (statusEl) {
         statusEl.textContent = "Please enter your email address.";
-        statusEl.className = "mt-2 small text-danger";
+        statusEl.className = "pk-alert pk-alert--danger";
       }
       return;
     }
@@ -60,12 +68,12 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
     try {
       await postJson(endpoint, { email }, successResponseSchema);
       if (sectionEl) {
-        render(<p class="alert alert-success">{successMessage}</p>, sectionEl);
+        render(<p class="pk-alert pk-alert--ok">{successMessage}</p>, sectionEl);
       }
     } catch {
       if (statusEl) {
         statusEl.textContent = "Something went wrong. Please try again.";
-        statusEl.className = "mt-2 small text-danger";
+        statusEl.className = "pk-alert pk-alert--danger";
       }
       resetButton(resendBtn);
     }

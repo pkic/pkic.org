@@ -71,6 +71,7 @@ export function AnalyticsOverview() {
             <div class="card-body">
               <h6 class="text-uppercase small fw-bold text-muted mb-3">Top Events</h6>
               <DataTable
+                caption="Top events by registrations"
                 columns={[
                   { header: "Event", cell: (event) => event.name },
                   {

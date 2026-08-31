@@ -142,6 +142,7 @@ export function GroupEventInvitations({
       )}
       <ErrorAlert error={error} />
       <ApiDataTable
+        caption={`${label} invitations`}
         actionsRef={tableActions}
         endpoint={endpoint}
         responseSchema={

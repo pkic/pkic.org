@@ -25,6 +25,7 @@ import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../sha
 import { identityMutationResponseSchema } from "../../../../shared/schemas/identity";
 import type { ApiTableActions } from "../../../components/ApiDataTable";
 import { ActingIdentityDirectory } from "./OrganizationIdentityDirectory";
+import "../../../ui/Content.css";
 
 const CURRENT_USER_API = "/api/v1/users/current";
 

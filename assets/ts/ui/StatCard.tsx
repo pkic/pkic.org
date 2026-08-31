@@ -9,10 +9,19 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
   value: string;
   note?: string;
   trend?: StatCardTrend;
+  /**
+   * Makes the whole card a link to the rows behind the number.
+   *
+   * The link wraps only the label, then stretches over the card, so the card
+   * is clickable everywhere while the accessible name stays "Registrations",
+   * not "Registrations 412 6 this quarter" — which is what wrapping the whole
+   * card in an anchor would announce.
+   */
+  href?: string;
 }
 
-export function StatCard({ label, value, note, trend, class: className, ...rest }: StatCardProps) {
-  const classes = ["pk-stat-card", className].filter(Boolean).join(" ");
+export function StatCard({ label, value, note, trend, href, class: className, ...rest }: StatCardProps) {
+  const classes = ["pk-stat-card", href ? "pk-stat-card--link" : null, className].filter(Boolean).join(" ");
 
   const TREND_LABEL: Record<StatCardTrend, string> = {
     up: "trending up",
@@ -24,7 +33,15 @@ export function StatCard({ label, value, note, trend, class: className, ...rest 
 
   return (
     <div class={classes} {...rest}>
-      <div class="pk-stat-card__label">{label}</div>
+      <div class="pk-stat-card__label">
+        {href ? (
+          <a class="pk-stat-card__link" href={href}>
+            {label}
+          </a>
+        ) : (
+          label
+        )}
+      </div>
       <div class="pk-stat-card__value">{value}</div>
       {note && (
         <div class={noteClasses}>

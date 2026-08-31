@@ -297,6 +297,7 @@ export function FormManagementList({
   return (
     <div>
       <ApiDataTable
+        caption="Configured forms"
         urlState="forms"
         endpoint="/api/v1/forms"
         responseSchema={formsListResponseSchema}
@@ -420,6 +421,7 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
       </div>
       {!selectedKey ? (
         <ApiDataTable
+          caption="Forms linked to this event"
           endpoint={formsEndpoint}
           responseSchema={formsListResponseSchema}
           resolve={(response) => response.forms}

@@ -68,6 +68,7 @@ export function UsersList({
 
   return (
     <ApiDataTable
+      caption="User accounts"
       urlState="users"
       endpoint="/api/v1/users"
       responseSchema={usersListResponseSchema}
@@ -180,8 +181,10 @@ export function UsersList({
       ]}
       empty="No users found"
       rowKey={(user) => user.id}
-      rowClass={() => "adm-user-row"}
-      onRowClick={(user) => onViewUser(user.id)}
+      rowAction={(user) => ({
+        label: `View ${personDisplayName(user.first_name, user.last_name, user.email)}`,
+        onSelect: () => onViewUser(user.id),
+      })}
     />
   );
 }

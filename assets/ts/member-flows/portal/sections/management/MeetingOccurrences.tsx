@@ -103,6 +103,7 @@ export function MeetingOccurrences({
         </form>
       )}
       <ApiDataTable
+        caption={`Scheduled occurrences of ${series.eventName}`}
         endpoint={`${base}/occurrences`}
         responseSchema={eventOccurrencesListResponseSchema}
         resolve={(response) => response.occurrences}

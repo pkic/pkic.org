@@ -40,6 +40,9 @@ const scanned = [
   "layouts/wg/section.html",
   "layouts/shortcodes/joinform.html",
   "layouts/shortcodes/invite-decline.html",
+  "layouts/shortcodes/event-proposal.html",
+  "layouts/shortcodes/event-proposal-manage.html",
+  "layouts/shortcodes/event-sponsor-checkout.html",
   "assets/ts/member-flows/portal/sections/AccountSettings.tsx",
   "assets/ts/components/proposals/ProposalDecisionPanel.tsx",
   // The shared components every surface renders. Migrating their internals
@@ -52,6 +55,13 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/email-templates/EmailTemplateEditor.tsx",
   "assets/ts/member-flows/portal/sections/MyProfile.tsx",
   "assets/ts/member-flows/portal/sections/MyOrganization.tsx",
+  "assets/ts/components/forms/FormFieldConfigEditor.tsx",
+  "assets/ts/components/events/EventEmailCampaign.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/AttendanceChangeDashboard.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/settings/GeneralTab.tsx",
+  "assets/ts/components/Table.tsx",
+  "assets/ts/components/ApiDataTable.tsx",
+  "assets/ts/components/Pager.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

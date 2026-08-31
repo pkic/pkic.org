@@ -91,6 +91,7 @@ export function UserEmailAddressesPanel({
           </form>
         )}
         <ApiDataTable
+          caption="Secondary email addresses"
           endpoint={`/api/v1/users/${encodeURIComponent(userId)}/emails`}
           responseSchema={userEmailsListResponseSchema}
           resolve={(response) => response.emails}

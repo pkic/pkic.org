@@ -236,4 +236,23 @@ describe("StatCard", () => {
     expect(noteSpans[0]?.getAttribute("aria-hidden")).toBeNull();
     expect(container.querySelector(".pk-stat-card__note")?.className).not.toContain("--flat");
   });
+
+  it("links to the rows behind the number without swallowing them into the name", () => {
+    const container = mount(
+      <StatCard label="Registrations" value="412" note="6 this quarter" href="/events/x/registrations" />,
+    );
+    const link = container.querySelector<HTMLAnchorElement>(".pk-stat-card__link");
+    expect(link?.getAttribute("href")).toBe("/events/x/registrations");
+    // Wrapping the whole card would announce "Registrations 412 6 this
+    // quarter" as the link's name. The label alone is the name; the ::after
+    // makes the card the target.
+    expect(link?.textContent).toBe("Registrations");
+    expect(container.querySelector(".pk-stat-card")?.className).toContain("pk-stat-card--link");
+  });
+
+  it("stays a plain card when there is nowhere to go", () => {
+    const container = mount(<StatCard label="Registrations" value="412" />);
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector(".pk-stat-card")?.className).not.toContain("pk-stat-card--link");
+  });
 });

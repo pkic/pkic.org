@@ -61,6 +61,7 @@ function stubList(urls: string[]): void {
 function table() {
   return (
     <ApiDataTable
+      caption="Things"
       endpoint="/api/v1/things"
       responseSchema={responseSchema}
       resolve={(response) => response.items}

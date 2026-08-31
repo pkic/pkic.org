@@ -96,7 +96,7 @@ async function assertPagedAuditLog(
   expect(container.textContent).toContain(firstRendered);
   expect(container.textContent).not.toContain(secondRendered);
 
-  const next = container.querySelector(".adm-pager .page-item:last-child button");
+  const next = container.querySelector('button[aria-label="Next page"]');
   expect(next).toBeInstanceOf(HTMLButtonElement);
   await act(() => (next as HTMLButtonElement).click());
   await settle();

@@ -44,6 +44,7 @@ export function SystemAuditLog() {
 
   return (
     <ApiDataTable
+      caption="System audit log"
       urlState="audit"
       endpoint="/api/v1/audit-log"
       responseSchema={auditLogListResponseSchema}
@@ -146,7 +147,6 @@ export function SystemAuditLog() {
         },
       ]}
       empty="No entries match the current filters."
-      className="align-middle"
       rowKey={(entry) => entry.id}
     />
   );

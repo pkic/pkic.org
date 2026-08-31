@@ -96,4 +96,27 @@
     min-width: auto;
     padding: 0 0.5rem;
   }
+
+  /* The page-size control sits with the page numbers, not above the table:
+     it is the same decision seen from the other end. */
+  .pk-pager__size {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-pager__size-label {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-pager__size-select {
+    padding: var(--pk-1) var(--pk-2);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink);
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-sm);
+  }
 }

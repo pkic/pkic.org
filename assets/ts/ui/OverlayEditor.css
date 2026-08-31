@@ -1,0 +1,58 @@
+/*
+ * OverlayEditor — a syntax-highlighted text control.
+ *
+ * Two email-template editors use this and nothing else does, so it lives here
+ * rather than in `utilities.css`: the utilities file is the entry stylesheet
+ * that every page on the site links from its head, and this is a hundred lines
+ * of styling for two authenticated screens. The CSS budget gate caught it.
+ */
+
+@layer components {
+  /*
+   * A syntax-highlight backdrop behind a text control.
+   *
+   * A highlighted copy of the value is painted in a `pre` underneath a
+   * transparent input, so the coloured spans line up with the characters the
+   * user is typing. The two boxes therefore have to agree exactly — one pixel
+   * of padding or a different type size and every highlight drifts off its
+   * token — which is why both read the same `--pk-control-*` and type tokens
+   * rather than restating numbers. Spacing utilities cannot express this:
+   * the requirement is not a gap, it is two elements sharing one box.
+   */
+  .pk-overlay-editor {
+    position: relative;
+  }
+
+  .pk-overlay-editor__backdrop {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: var(--pk-control-y) var(--pk-control-x);
+    /* Transparent rather than absent, so the border still occupies the same
+       pixel the control's border does. */
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-md);
+    line-height: inherit;
+    /* Only the token backgrounds show; the visible text is the control's own. */
+    color: transparent;
+    background: none;
+    white-space: pre;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* The multi-line half wraps the way its textarea does; the single-line half
+     scrolls sideways instead. */
+  .pk-overlay-editor__backdrop--wrap {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  .pk-overlay-editor__input {
+    position: relative;
+    display: block;
+    background: transparent;
+  }
+}

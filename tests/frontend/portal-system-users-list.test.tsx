@@ -97,13 +97,20 @@ describe("portal System Users list permissions", () => {
     );
   });
 
-  it("navigates to the user detail page when a row is clicked", async () => {
+  it("opens the user through a named control a keyboard can reach, not a click on the row", async () => {
     const onViewUser = vi.fn();
     const container = mount(true, null, onViewUser);
     await settle();
-    const row = container.querySelector<HTMLTableRowElement>(".adm-user-row");
-    expect(row).not.toBeNull();
-    row!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    // The row used to carry the click handler, which meant this list could be
+    // operated with a mouse and not at all with a keyboard. The control is now
+    // a real button, named after the person it opens.
+    const open = container.querySelector<HTMLButtonElement>("tbody .pk-table__row-link");
+    expect(open).not.toBeNull();
+    expect(open?.tagName).toBe("BUTTON");
+    expect(open?.textContent).toContain("Ada");
+
+    open!.click();
     expect(onViewUser).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
   });
 });

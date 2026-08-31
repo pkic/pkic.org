@@ -7,6 +7,8 @@
  * where pages are omitted.
  */
 
+import { useId } from "preact/hooks";
+
 import "./Pager.css";
 
 /**
@@ -58,6 +60,19 @@ export function pageWindow(page: number, pageCount: number): ReadonlyArray<numbe
   return pages;
 }
 
+/**
+ * How many rows a page holds.
+ *
+ * This belongs with the pager rather than beside it: it is the other half of
+ * the same decision, and a reader looking for "show me more at once" looks
+ * where the page numbers are.
+ */
+export interface PagerPageSize {
+  value: number;
+  options: readonly number[];
+  onChange: (size: number) => void;
+}
+
 export interface PagerProps {
   page: number;
   pageCount: number;
@@ -66,9 +81,20 @@ export interface PagerProps {
   rangeEnd: number;
   onSelect: (page: number) => void;
   label?: string;
+  pageSize?: PagerPageSize;
 }
 
-export function Pager({ page, pageCount, total, rangeStart, rangeEnd, onSelect, label = "Pagination" }: PagerProps) {
+export function Pager({
+  page,
+  pageCount,
+  total,
+  rangeStart,
+  rangeEnd,
+  onSelect,
+  label = "Pagination",
+  pageSize,
+}: PagerProps) {
+  const sizeId = useId();
   const pages = pageWindow(page, pageCount);
   const isPrevDisabled = page <= 1;
   const isNextDisabled = page >= pageCount;
@@ -142,6 +168,26 @@ export function Pager({ page, pageCount, total, rangeStart, rangeEnd, onSelect, 
           </button>
         </li>
       </ol>
+
+      {pageSize && (
+        <div class="pk-pager__size">
+          <label for={sizeId} class="pk-pager__size-label">
+            Rows per page
+          </label>
+          <select
+            id={sizeId}
+            class="pk-pager__size-select"
+            value={pageSize.value}
+            onChange={(event) => pageSize.onChange(Number((event.target as HTMLSelectElement).value))}
+          >
+            {pageSize.options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </nav>
   );
 }

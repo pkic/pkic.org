@@ -54,6 +54,7 @@ export function GroupForms({
           </div>
         )}
         <ApiDataTable
+          caption="Group forms"
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/forms`}
           responseSchema={groupFormsListResponseSchema}
           resolve={(response) => response.forms}

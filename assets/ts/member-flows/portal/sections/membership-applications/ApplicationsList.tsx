@@ -51,6 +51,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
     <div>
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable
+        caption="Membership applications"
         urlState="applications"
         endpoint="/api/v1/members/applications"
         responseSchema={membershipApplicationsListResponseSchema}
@@ -118,7 +119,10 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
         ]}
         empty="No membership applications have been submitted yet"
         rowKey={(a) => a.id}
-        onRowClick={(a) => onViewApplication(a.id)}
+        rowAction={(a) => ({
+          label: `Review the application from ${a.applicantName}`,
+          onSelect: () => onViewApplication(a.id),
+        })}
       />
     </div>
   );

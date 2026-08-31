@@ -58,7 +58,6 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
   const [consentFilter, setConsentFilter] = useState("");
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
-  const [, navigate] = usePortalHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
 
   async function runWaitlistPromotions() {
@@ -235,6 +234,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         </div>
       )}
       <ApiDataTable
+        caption="Event registrations"
         endpoint={eventRegistrationsPath(slug)}
         responseSchema={eventRegistrationsListResponseSchema}
         resolve={(data) => data.registrations}
@@ -314,8 +314,10 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         columns={columns}
         empty={attendanceChangeFilter ? "No attendees match this attendance change" : "No registrations yet"}
         rowKey={(r) => r.id}
-        rowClass={() => "adm-reg-row"}
-        onRowClick={(r) => navigate(eventRegistrationViewPath(slug, r.id))}
+        rowAction={(r) => ({
+          label: `View registration for ${r.display_name ?? r.user_email ?? "this attendee"}`,
+          href: usePortalHashLocation.hrefs(eventRegistrationViewPath(slug, r.id)),
+        })}
       />
     </div>
   );

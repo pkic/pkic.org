@@ -112,6 +112,25 @@
     padding-block: var(--pk-7);
   }
 
+  /*
+   * A fieldset carrying no visible frame.
+   *
+   * `disabled` on a fieldset is the only way to take a whole form out of play
+   * in one attribute — including controls the surface renders through a child
+   * component it cannot pass a prop to — but the element arrives with the user
+   * agent's groove border, its own padding, and `min-inline-size: min-content`,
+   * which stops it shrinking inside a grid or flex parent. `base.css` resets
+   * headings and lists, not this, so the reset lives here rather than being
+   * re-derived by every form that needs the disabled behaviour. Padding is
+   * removed rather than tokenised: the spacing belongs to the parent's `gap`.
+   */
+  .pk-fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+  }
+
   /* The few text utilities worth having, all reading tokens. */
   .pk-muted {
     color: var(--pk-ink-muted);
@@ -128,10 +147,6 @@
   /* Monospace for a control whose value is code — a template, a JSON blob.
      `base.css` already gives `code`, `kbd`, `samp` and `pre` the mono family,
      but a form control takes `font: inherit`, so it has to be told. */
-  .pk-mono {
-    font-family: var(--pk-font-mono);
-  }
-
   /* An introductory paragraph, and its opposite. Both read the type scale so
      a page cannot invent its own "slightly bigger" text. */
   .pk-lede {
@@ -166,7 +181,15 @@
     inset: 0;
   }
 
-  /* The visually-hidden pattern, defined once rather than per component. */
+  /*
+   * The visually-hidden pattern, defined once rather than per component.
+   *
+   * It is absolutely positioned, which means an ancestor's `overflow: auto`
+   * does NOT clip it unless that ancestor is also positioned. Put one of these
+   * inside a horizontally scrolling region whose container is static and it
+   * will stretch the whole document sideways from wherever it happens to land.
+   * Any scroll container that can hold one needs `position: relative`.
+   */
   .pk-sr-only {
     position: absolute;
     width: 1px;
@@ -223,94 +246,18 @@
     overflow-wrap: anywhere;
   }
 
-  /* A bordered box for preformatted or scrollable content. */
-  .pk-code-block {
-    padding: var(--pk-2);
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius);
-    background: var(--pk-surface-sunk);
-    overflow: auto;
-  }
-
-  /*
-   * A name/value list — the metadata block under a profile, a record, an
-   * order. `base.css` resets headings and lists but not a description list,
-   * so a `dl` still arrives with the user agent's block margin and a 40px
-   * indent on every `dd`: spacing no parent `gap` can explain or override.
-   * Defining the pair once here keeps every metadata block on the space
-   * scale instead of each surface re-deriving the same reset.
-   */
-  .pk-datalist {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--pk-1) var(--pk-3);
-    margin: 0;
-  }
-
-  .pk-datalist > dt {
-    color: var(--pk-ink-muted);
-  }
-
   /* The value keeps the ink and the term recedes, so the pair reads as a pair
      even inside `.pk-small`, which would otherwise mute both halves into one
      another. */
-  .pk-datalist > dd {
-    margin: 0;
-    color: var(--pk-ink);
+  /* Keeps a short value - a date, a count, a status - on one line, so a
+     narrow column does not break it in two and make every row taller. */
+  .pk-nowrap {
+    white-space: nowrap;
   }
 
-  /* A full-width framed region, e.g. an embedded preview. */
-  .pk-framed {
-    width: 100%;
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius);
-  }
-
-  /*
-   * A syntax-highlight backdrop behind a text control.
-   *
-   * A highlighted copy of the value is painted in a `pre` underneath a
-   * transparent input, so the coloured spans line up with the characters the
-   * user is typing. The two boxes therefore have to agree exactly — one pixel
-   * of padding or a different type size and every highlight drifts off its
-   * token — which is why both read the same `--pk-control-*` and type tokens
-   * rather than restating numbers. Spacing utilities cannot express this:
-   * the requirement is not a gap, it is two elements sharing one box.
-   */
-  .pk-overlay-editor {
-    position: relative;
-  }
-
-  .pk-overlay-editor__backdrop {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    padding: var(--pk-control-y) var(--pk-control-x);
-    /* Transparent rather than absent, so the border still occupies the same
-       pixel the control's border does. */
-    border: 1px solid transparent;
-    border-radius: var(--pk-radius);
-    font-family: var(--pk-font-mono);
-    font-size: var(--pk-text-md);
-    line-height: inherit;
-    /* Only the token backgrounds show; the visible text is the control's own. */
-    color: transparent;
-    background: none;
-    white-space: pre;
-    overflow: hidden;
-    pointer-events: none;
-  }
-
-  /* The multi-line half wraps the way its textarea does; the single-line half
-     scrolls sideways instead. */
-  .pk-overlay-editor__backdrop--wrap {
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-  }
-
-  .pk-overlay-editor__input {
-    position: relative;
-    display: block;
-    background: transparent;
-  }
+  /* A list of values inside a description list's `dd` — several selected
+     options, several uploaded files. Keeps the bullet without the browser's
+     40px indent, which would push the values out of line with their term. */
+  /* Preformatted text that must still wrap: a long free-text answer has no
+     line breaks of its own and would otherwise scroll sideways forever. */
 }

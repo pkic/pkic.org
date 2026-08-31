@@ -105,7 +105,9 @@ describe("portal membership-application management", () => {
     expect(requests[0]?.searchParams.get("sort")).toBe("-created_at");
     expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
 
-    void act(() => (page.querySelector("tbody tr") as HTMLTableRowElement).click());
+    // The row's control, not the row: the `<tr>` click handler this replaced
+    // was unreachable by keyboard.
+    void act(() => (page.querySelector("tbody .pk-table__row-link") as HTMLElement).click());
     expect(open).toHaveBeenCalledWith(APPLICATION_ID);
   });
 

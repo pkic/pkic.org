@@ -107,6 +107,7 @@ export function EventProposalsTable({
     <div>
       {stats && <ProposalStatsSummary stats={stats} />}
       <ApiDataTable
+        caption="Event proposals"
         endpoint={endpoint}
         responseSchema={eventProposalsResponseSchema}
         resolve={(response) => response.proposals}
@@ -225,15 +226,10 @@ export function EventProposalsTable({
             className: "small",
             sort: { asc: "submittedAt", desc: "-submittedAt" },
           },
-          {
-            header: "",
-            className: "text-end",
-            cell: () => <span class="btn btn-sm btn-outline-secondary">Details</span>,
-          },
         ]}
         empty={empty}
         rowKey={(proposal) => proposal.id}
-        onRowClick={onSelect}
+        rowAction={(proposal) => ({ label: `Open ${proposal.title}`, onSelect: () => onSelect(proposal) })}
       />
     </div>
   );

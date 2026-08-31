@@ -229,6 +229,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Opens a proposal the way a person does.
+ *
+ * These used to dispatch a click at the `<tr>`, which matched the old
+ * implementation's handler on the row — an affordance no keyboard could reach.
+ * The row's control is now a real button; clicking that is both what a mouse
+ * does and what Enter does.
+ */
+function rowControl(container: HTMLElement): HTMLElement {
+  const control = container.querySelector<HTMLElement>("tbody .pk-table__row-link");
+  if (!control) throw new Error("the table row offers no control to activate");
+  return control;
+}
+
 describe("group event proposal portal", () => {
   it("uses the same canonical detail implementation from the event route", async () => {
     const calls: RequestRecord[] = [];
@@ -306,9 +320,7 @@ describe("group event proposal portal", () => {
     await settle();
     await settle();
 
-    const row = container.querySelector<HTMLTableRowElement>("tbody tr");
-    expect(row).not.toBeNull();
-    await act(async () => row?.click());
+    await act(async () => rowControl(container!).click());
     await settle();
     await settle();
 
@@ -329,8 +341,7 @@ describe("group event proposal portal", () => {
     await act(() => render(<GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />, container!));
     await settle();
     await settle();
-    const row = container.querySelector<HTMLTableRowElement>("tbody tr");
-    await act(async () => row?.click());
+    await act(async () => rowControl(container!).click());
     await settle();
     await settle();
 
@@ -400,7 +411,7 @@ describe("group event proposal portal", () => {
     );
     await settle();
     await settle();
-    await act(async () => container!.querySelector<HTMLTableRowElement>("tbody tr")?.click());
+    await act(async () => rowControl(container!).click());
     await settle();
     await settle();
 

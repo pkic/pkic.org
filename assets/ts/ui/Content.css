@@ -1,0 +1,67 @@
+/*
+ * Content shapes — a monospaced value, a framed region, a term/value list, a
+ * scrollable preformatted block.
+ *
+ * These were in `utilities.css` and pushed the entry stylesheet — the one
+ * every page on the site links from its head — past its budget. They are not
+ * layout primitives that every surface needs; they are small components that a
+ * handful of authenticated screens use, so they belong in a chunk those
+ * screens pull in. Import this from any module that writes these class names.
+ */
+
+@layer components {
+  .pk-mono {
+    font-family: var(--pk-font-mono);
+  }
+
+  /* A bordered box for preformatted or scrollable content. */
+  .pk-code-block {
+    padding: var(--pk-2);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    overflow: auto;
+  }
+
+  /* A full-width framed region, e.g. an embedded preview. */
+  .pk-framed {
+    width: 100%;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+  }
+
+  /*
+   * A name/value list — the metadata block under a profile, a record, an
+   * order. `base.css` resets headings and lists but not a description list,
+   * so a `dl` still arrives with the user agent's block margin and a 40px
+   * indent on every `dd`: spacing no parent `gap` can explain or override.
+   * Defining the pair once here keeps every metadata block on the space
+   * scale instead of each surface re-deriving the same reset.
+   */
+  .pk-datalist {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--pk-1) var(--pk-3);
+    margin: 0;
+  }
+
+  .pk-datalist > dt {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-datalist > dd {
+    margin: 0;
+    color: var(--pk-ink);
+  }
+
+  .pk-answer-list {
+    margin: 0;
+    padding-left: var(--pk-4);
+  }
+
+  .pk-answer-pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

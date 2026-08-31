@@ -113,6 +113,7 @@ export function DonationAnalytics() {
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations by Status and Currency</h6>
           <DataTable
+            caption="Donations by status and currency"
             columns={[
               { header: "Status", cell: (row) => <Badge status={row.status} /> },
               { header: "Currency", cell: (row) => row.currency.toUpperCase(), className: "mono" },
@@ -160,7 +161,7 @@ function PeriodCard({ title, chart, rows }: { title: string; chart: string; rows
       <div class="card-body">
         <h6 class="text-uppercase small fw-bold text-muted mb-3">{title}</h6>
         {chart && <div dangerouslySetInnerHTML={{ __html: chart }} />}
-        <DataTable columns={periodColumns} data={rows} empty="No donations recorded for this period" />
+        <DataTable caption={title} columns={periodColumns} data={rows} empty="No donations recorded for this period" />
       </div>
     </div>
   );

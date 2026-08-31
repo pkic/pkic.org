@@ -1,5 +1,15 @@
 @layer components {
   .pk-avatar {
+    /*
+     * The default size lives on the base class, not only on `--md`.
+     *
+     * Avatar emits a modifier only for the NON-default sizes, so a plain
+     * <Avatar name="..." /> carried just `pk-avatar`. With no
+     * `--pk-avatar-size` set, `width: var(--pk-avatar-size)` is invalid and
+     * falls back to `auto` — and inside a stretching column that made a
+     * 300-pixel circle. Every default-size avatar on the site was doing this.
+     */
+    --pk-avatar-size: 2.5rem;
     display: flex;
     align-items: center;
     justify-content: center;

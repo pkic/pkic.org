@@ -11,6 +11,8 @@ import { EmptyState } from "../../../components/EmptyState";
 import { type MenuItem } from "../../../ui/Menu";
 import { RowActions } from "../../../ui/RowActions";
 import { confirmAction } from "../../../components/ConfirmDialog";
+import type { DataTableRowAction } from "../../../ui/DataTable";
+import { portalEntityHref } from "../entity-links";
 import { Link } from "wouter";
 import { patchJson } from "../../../shared/api-client";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
@@ -68,11 +70,15 @@ function statusLabel(identity: ActingIdentity): string {
   return "Active";
 }
 
-/** Navigates rows into user administration only when the viewer can actually see that page. */
-function useIdentityRowNavigation() {
-  const [, navigate] = usePortalHashLocation();
-  const canNavigate = portalHasGlobalPermission(portalSession.value, "users:read");
-  return canNavigate ? (userId: string) => navigate(`/users/${encodeURIComponent(userId)}`) : undefined;
+/**
+ * The row's activation: a link into user administration, offered only when the
+ * viewer can actually reach that page. `portalEntityHref` already applies the
+ * `users:read` rule, so permission is decided in one place rather than here.
+ */
+function identityRowAction(userId: string, name: string): DataTableRowAction | undefined {
+  const path = portalEntityHref("user", userId);
+  if (!path) return undefined;
+  return { label: `Open ${name}'s user account`, href: usePortalHashLocation.hrefs(path) };
 }
 
 function activeColumns(): Column<ActiveActingIdentity>[] {
@@ -121,7 +127,6 @@ export function ActingIdentityDirectory({
   const localTableRef = useRef<ApiTableActions | null>(null);
   const tableRef = actionsRef ?? localTableRef;
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const onRowNavigate = useIdentityRowNavigation();
   const activeByIdentityId = useMemo(
     () => new Map(activeIdentities.map((identity) => [identity.identityId, identity])),
     [activeIdentities],
@@ -130,11 +135,12 @@ export function ActingIdentityDirectory({
   if (!canManage) {
     return (
       <DataTable
+        caption="Organization identities"
         columns={activeColumns()}
         data={activeIdentities}
         empty="No identities yet"
         rowKey={(identity) => identity.userId}
-        onRowClick={onRowNavigate ? (identity) => onRowNavigate(identity.userId) : undefined}
+        rowAction={(identity) => identityRowAction(identity.userId, identity.name ?? identity.email)}
       />
     );
   }
@@ -215,6 +221,7 @@ export function ActingIdentityDirectory({
 
   return (
     <ApiDataTable
+      caption="Organization identities"
       endpoint={`/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`}
       responseSchema={identitiesListResponseSchema}
       resolve={(response) => response.identities}
@@ -225,7 +232,7 @@ export function ActingIdentityDirectory({
       searchPlaceholder="name or email"
       actionsRef={tableRef}
       createAction={createAction}
-      onRowClick={onRowNavigate ? (identity) => onRowNavigate(identity.userId) : undefined}
+      rowAction={(identity) => identityRowAction(identity.userId, identity.userName)}
       columns={[
         {
           header: "Name",

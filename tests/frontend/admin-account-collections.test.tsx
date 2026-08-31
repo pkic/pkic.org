@@ -137,11 +137,9 @@ describe("portal access-control collection pagination", () => {
     expect(initial?.searchParams.get("limit")).toBe("25");
     expect(initial?.searchParams.get("offset")).toBe("0");
     expect(initial?.searchParams.get("sort")).toBe("-created_at");
-    expect(container.querySelector(".adm-pager-range")?.textContent).toBe("1–1 of 26");
+    expect(container.querySelector(".pk-pager__summary")?.textContent).toBe("1–1 of 26");
 
-    void act(() =>
-      (container.querySelector(".adm-pager .pagination .page-item:last-child button") as HTMLButtonElement).click(),
-    );
+    void act(() => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     await settle();
     const roleRequests = requests.filter((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`);
     expect(roleRequests.at(-1)?.searchParams.get("offset")).toBe("25");
@@ -187,11 +185,9 @@ describe("portal access-control collection pagination", () => {
     expect(requests[0].searchParams.get("limit")).toBe("10");
     expect(requests[0].searchParams.get("offset")).toBe("0");
     expect(requests[0].searchParams.get("sort")).toBe("email");
-    expect(container.querySelector(".adm-pager-range")?.textContent).toBe("1–1 of 11");
+    expect(container.querySelector(".pk-pager__summary")?.textContent).toBe("1–1 of 11");
 
-    void act(() =>
-      (container.querySelector(".adm-pager .pagination .page-item:last-child button") as HTMLButtonElement).click(),
-    );
+    void act(() => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     await settle();
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("10");
 

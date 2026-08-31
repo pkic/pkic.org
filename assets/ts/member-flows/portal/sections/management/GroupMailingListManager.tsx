@@ -129,6 +129,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
           </form>
         )}
         <ApiDataTable
+          caption="Managed mailing lists"
           actionsRef={actions}
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/management`}
           responseSchema={mailingListsListResponseSchema}

@@ -99,6 +99,7 @@ export function EventList() {
         // Remounting on scope change resets pagination and default sort
         // together, so "Past" reliably opens on most-recent-first.
         key={scope}
+        caption={scope === "past" ? "Past events" : "Upcoming events"}
         urlState="events"
         endpoint="/api/v1/events"
         responseSchema={eventsListResponseSchema}
@@ -147,9 +148,7 @@ export function EventList() {
             cell: (e) => <RowActions label={`Actions for ${e.name}`} actions={workspaceActions(e, navigate)} />,
           },
         ]}
-        onRowClick={(e) => {
-          if (e.basePath) window.location.assign(e.basePath);
-        }}
+        rowAction={(e) => (e.basePath ? { label: `Open ${e.name}`, href: e.basePath } : undefined)}
         empty={
           <EmptyState
             title={scope === "past" ? "No past events" : "No upcoming events"}

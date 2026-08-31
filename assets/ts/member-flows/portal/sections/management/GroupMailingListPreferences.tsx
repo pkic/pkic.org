@@ -67,6 +67,7 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
       <div class="card-body">
         {error && <ErrorAlert error={error} />}
         <ApiDataTable
+          caption="My mailing-list preferences"
           actionsRef={actions}
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`}
           responseSchema={effectiveMailingListSubscriptionsResponseSchema}

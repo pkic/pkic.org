@@ -33,6 +33,7 @@ export function MeetingAttendance({ base, occurrence }: { base: string; occurren
 
   return (
     <ApiDataTable
+      caption="Meeting attendance"
       endpoint={endpoint}
       responseSchema={eventAttendanceListResponseSchema}
       resolve={(response) => response.confirmations}

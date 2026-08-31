@@ -79,6 +79,7 @@ export function GroupVotes({
               />
             )}
             <ApiDataTable
+              caption="All votes"
               endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes`}
               responseSchema={groupVotesListResponseSchema}
               resolve={(response) => response.votes}

@@ -11,6 +11,8 @@ import {
   type CollectionLoader,
 } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
+import { Button } from "../ui/Button";
+import { Toolbar } from "../ui/Toolbar";
 import { ErrorAlert } from "./ErrorAlert";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { Spinner } from "./Spinner";
@@ -64,11 +66,11 @@ export function ApiDataTable<T, Response = unknown>({
   searchPlaceholder,
   initialPageSize,
   empty,
-  className,
   rowKey,
-  rowClass,
-  onRowClick,
+  rowAction,
   detailRow,
+  caption,
+  showCaption,
   initialSort = "",
   toolbar,
   createAction,
@@ -136,41 +138,37 @@ export function ApiDataTable<T, Response = unknown>({
   });
 
   return (
-    <div>
+    <div class="pk pk-stack pk-stack--snug">
       {(searchPlaceholder || toolbar || createAction) && (
-        <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
-          {searchPlaceholder && (
-            <input
-              type="search"
-              class="form-control form-control-sm w-auto"
-              placeholder={searchPlaceholder}
-              aria-label={searchPlaceholder}
-              value={pendingSearch}
-              onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") applySearch();
-              }}
-            />
-          )}
+        // The toolbar is named after the list it controls, so a page with
+        // several collections does not present several toolbars called
+        // "Toolbar".
+        <Toolbar
+          label={`${caption} controls`}
+          search={
+            searchPlaceholder
+              ? {
+                  value: pendingSearch,
+                  placeholder: searchPlaceholder,
+                  onInput: setPendingSearch,
+                  label: `Search ${caption.toLowerCase()}`,
+                }
+              : undefined
+          }
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key === "Enter") applySearch();
+          }}
+        >
           {toolbar?.(actions)}
           {createAction && (
-            <button
-              type="button"
-              class="btn btn-sm btn-success ms-auto"
-              disabled={createAction.disabled}
-              onClick={createAction.onSelect}
-            >
+            <Button size="sm" onClick={createAction.onSelect} disabled={createAction.disabled}>
               {createAction.label}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            class={`btn btn-sm btn-outline-secondary${createAction ? "" : " ms-auto"}`}
-            onClick={collection.reload}
-          >
-            ↺ Refresh
-          </button>
-        </div>
+          <Button size="sm" variant="secondary" onClick={() => void collection.reload()}>
+            Refresh
+          </Button>
+        </Toolbar>
       )}
 
       {collection.loading ? (
@@ -180,13 +178,13 @@ export function ApiDataTable<T, Response = unknown>({
       ) : (
         <>
           <DataTable
+            caption={caption}
+            showCaption={showCaption}
             columns={columns}
             data={rows}
             empty={empty}
-            className={className}
             rowKey={rowKey}
-            rowClass={rowClass}
-            onRowClick={onRowClick}
+            rowAction={rowAction}
             detailRow={detailRow}
             currentSort={sort}
             onSort={applySort}

@@ -1,4 +1,3 @@
-import { usePortalHashLocation } from "../../hash-location";
 import {
   proposalProgramSchema,
   proposalProgramsListResponseSchema,
@@ -19,8 +18,6 @@ function capabilityLabel(program: ProposalProgram): string {
 
 /** Server-derived catalog for program committee work not tied to generic group membership or management. */
 export function ProposalPrograms() {
-  const [, navigate] = usePortalHashLocation();
-
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Proposal programs</div>
@@ -30,6 +27,7 @@ export function ProposalPrograms() {
           independent, and this does not grant access to other group resources.
         </p>
         <ApiDataTable
+          caption="Proposal programs"
           endpoint="/api/v1/proposals/programs"
           responseSchema={proposalProgramsListResponseSchema}
           resolve={(response) => response.programs}
@@ -63,19 +61,13 @@ export function ProposalPrograms() {
                 />
               ),
             },
-            {
-              header: "",
-              className: "text-end",
-              cell: () => <span class="btn btn-sm btn-outline-secondary">Open</span>,
-            },
           ]}
           empty="No proposal programs are available to your current identity."
           rowKey={(program) => `${program.group.id}:${program.event.id}`}
-          onRowClick={(program) =>
-            navigate(
-              `/groups/${encodeURIComponent(program.group.id)}/events/${encodeURIComponent(program.event.id)}/proposals`,
-            )
-          }
+          rowAction={(program) => ({
+            label: `Open proposals for ${program.event.name}`,
+            href: `#/groups/${encodeURIComponent(program.group.id)}/events/${encodeURIComponent(program.event.id)}/proposals`,
+          })}
         />
       </div>
     </div>

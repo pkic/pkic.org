@@ -4,6 +4,37 @@ Phase 5. The route to zero is per-surface: migrate a surface, add it to the
 gate's scope, and it can never regress. There is no big-bang step and no
 moment where the site is half-converted globally.
 
+## Migrate the shared components first
+
+The fastest route to zero is not the heaviest file. It is the handful of
+components that every surface renders:
+
+| Component | Surfaces that render it |
+| --- | --- |
+| `components/ErrorAlert` | 71 |
+| `components/Spinner` | 56 |
+| `components/Badge` | 53 |
+| `components/ConfirmDialog` | 49 |
+| `components/ApiDataTable` | 45 |
+| `components/EmptyState` | 17 |
+| `components/Tabs` | 15 |
+| `components/Pager` | 12 |
+
+Rewriting one of those internals converts every one of its consumers without
+touching a single call site. All of the above except `EmptyState` and `Tabs`
+are done; each took one small file and removed hundreds of references.
+
+Three of them are not duplicates of a design-system primitive and should not
+be deleted, because they own something the system cannot:
+
+- `components/Badge` owns the product's status vocabulary — ninety statuses
+  mapped to six tones. A `Badge` that knew what `ec_review` means could not be
+  reused anywhere else.
+- `components/Table` translates the portal's column API and the server's
+  opaque sort strings (`created_desc`) into the design system's shape.
+- `components/ApiDataTable` is the server-collection controller: URL-addressed
+  list state, paging, search and sort, resolved into one bounded request.
+
 ## Plan against the real distribution
 
 ```bash
@@ -71,7 +102,10 @@ accessibility contract with it.
 | `modal`, `modal-dialog` | `Dialog` |
 | `toast` | `Toast` |
 | `progress`, `progress-bar` | `Meter` |
-| `visually-hidden` | the clip-path pattern already in the primitives |
+| `visually-hidden` | `pk-sr-only`, or the pattern already in the primitives |
+| `form-check`, `form-check-input`, `form-check-label` | `pk-check` **and** `pk-check__input` **and** `pk-check__label` — all three |
+| `<tr onClick>` | `rowAction` on the table, never a handler on the row |
+| a chart's colours | `assets/ts/ui/chart.ts`, which reads tokens |
 | `row`, `col-*`, `g-*` | CSS grid or flex on the surface, with `--pk-*` gaps |
 | `d-flex`, `justify-content-*`, `align-items-*` | plain flex declarations |
 | `mb-*`, `mt-*`, `p-*` | `gap` on the parent, using `--pk-1` … `--pk-8` |
@@ -149,6 +183,27 @@ node scripts/check-e2e-selectors.mjs card btn   # just the ones you are removing
 If a class you are about to delete appears, fix the spec in the same change —
 preferably by switching it to a role or an accessible name, which will not
 break the next time either.
+
+## Three things the gate cannot see
+
+**A `pk-` class you got half right.** `class="pk-check"` on a label with no
+`pk-check__input` on the input inside it passes every check — both classes
+exist — and renders an operating-system default checkbox. The same is true of
+`pk-stat-card` without its parts, or `pk-table` without `pk-table__scroll`.
+When you adopt a block class, adopt its elements.
+
+**A control that only a mouse can reach.** `onClick` on a `<tr>`, a `<div>`
+or a `<span>` type-checks, lints, renders and works — for anyone with a
+mouse. Fourteen portal list surfaces were built that way. If something is
+activated, it is a `<button>` or an `<a>`; the design system's `rowAction`
+and the `pk-stretched` utility exist so a whole row or card can still be the
+target.
+
+**A table, chart, region or icon with no name.** A `<table>` without a
+`<caption>` is announced as "table"; four of them on a page are announced as
+four tables. An SVG with `aria-hidden` and no alternative says nothing at
+all. `DataTable` requires `caption`; the chart builders require `caption` and
+emit a hidden data table beside the picture.
 
 ## What not to do
 

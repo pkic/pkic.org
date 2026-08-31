@@ -11,7 +11,6 @@ import { fmtDate } from "../../ui";
 import { OrganizationCreateForm } from "./OrganizationCreateForm";
 
 export function Organizations({ canRead, canCreate }: { canRead: boolean; canCreate: boolean }) {
-  const [, navigate] = usePortalHashLocation();
   const [showCreate, setShowCreate] = useState(false);
   const actionsRef = useRef<ApiTableActions | null>(null);
 
@@ -66,7 +65,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
       header: "Website",
       cell: (organization) =>
         organization.website ? (
-          <a href={organization.website} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+          <a href={organization.website} target="_blank" rel="noreferrer">
             {organization.website.replace(/^https?:\/\//, "")}
           </a>
         ) : (
@@ -95,6 +94,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
       )}
 
       <ApiDataTable
+        caption="Organizations"
         urlState="organizations"
         endpoint="/api/v1/organizations"
         responseSchema={organizationsListResponseSchema}
@@ -113,8 +113,10 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
           )
         }
         rowKey={(organization) => organization.id}
-        rowClass={() => "adm-user-row"}
-        onRowClick={(organization) => navigate(`/organizations/${encodeURIComponent(organization.id)}`)}
+        rowAction={(organization) => ({
+          label: `Open ${organization.name}`,
+          href: usePortalHashLocation.hrefs(`/organizations/${encodeURIComponent(organization.id)}`),
+        })}
       />
     </section>
   );

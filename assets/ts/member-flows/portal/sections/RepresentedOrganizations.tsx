@@ -13,13 +13,12 @@ import { Badge } from "../../../components/Badge";
 type UserOrganization = z.infer<typeof userOrganizationsListResponseSchema>["organizations"][number];
 
 export function RepresentedOrganizations() {
-  const [, navigate] = usePortalHashLocation();
-
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Your organizations</div>
       <div class="card-body">
         <ApiDataTable
+          caption="Your organizations"
           endpoint="/api/v1/users/current/organizations"
           responseSchema={userOrganizationsListResponseSchema}
           resolve={(response) => response.organizations}
@@ -60,9 +59,10 @@ export function RepresentedOrganizations() {
           ]}
           empty="You do not represent any organizations right now."
           rowKey={(organization: UserOrganization) => organization.organizationId}
-          onRowClick={(organization: UserOrganization) =>
-            navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`)
-          }
+          rowAction={(organization: UserOrganization) => ({
+            label: `Open ${organization.name}`,
+            href: usePortalHashLocation.hrefs(`/organizations/${encodeURIComponent(organization.organizationId)}`),
+          })}
         />
       </div>
     </div>

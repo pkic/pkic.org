@@ -62,13 +62,12 @@ function MemberGroupCatalog() {
 }
 
 function AllGroups({ onCreate }: { onCreate?: () => void }) {
-  const [, navigate] = usePortalHashLocation();
-
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">All groups</div>
       <div class="card-body">
         <ApiDataTable
+          caption="All groups"
           urlState="groups"
           endpoint="/api/v1/groups"
           responseSchema={groupsListResponseSchema}
@@ -93,11 +92,6 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
               header: "Status",
               cell: (group: Group) => (group.active ? <span class="text-muted">—</span> : <Badge status="inactive" />),
             },
-            {
-              header: "",
-              className: "text-end",
-              cell: () => <span class="btn btn-sm btn-outline-secondary">Open</span>,
-            },
           ]}
           empty={
             onCreate ? (
@@ -107,7 +101,10 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
             )
           }
           rowKey={(group: Group) => group.id}
-          onRowClick={(group: Group) => navigate(`/groups/${encodeURIComponent(group.id)}/overview`)}
+          rowAction={(group: Group) => ({
+            label: `Open ${group.name}`,
+            href: `#/groups/${encodeURIComponent(group.id)}/overview`,
+          })}
         />
       </div>
     </div>

@@ -136,6 +136,7 @@ export function RoleDetail({
                 <RoleAssignForm roleId={role.id} onAssigned={() => void assignmentsRef.current?.reload()} />
               ) : null}
               <ApiDataTable
+                caption={`${role.name} assignees`}
                 endpoint={`/api/v1/roles/${encodeURIComponent(role.id)}/assignments`}
                 responseSchema={roleAssignmentsListResponseSchema}
                 resolve={(data) => data.assignments}

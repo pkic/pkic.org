@@ -6,7 +6,14 @@ import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { readField, setField, formatStatusLabel, statusBadgeClass, q, findSubmitButton } from "../shared/form/helpers";
+import {
+  readField,
+  setField,
+  formatStatusLabel,
+  statusBadgeToneClass,
+  q,
+  findSubmitButton,
+} from "../shared/form/helpers";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../shared/widgets/profile-links";
@@ -34,7 +41,8 @@ function showResendProposalManageLinkForm(
   eventSlug: string,
   introMessage: string,
 ): void {
-  root.querySelector<HTMLElement>("[data-proposal-manage-content]")?.classList.add("d-none");
+  const content = root.querySelector<HTMLElement>("[data-proposal-manage-content]");
+  if (content) content.hidden = true;
   showManageLinkRecoveryForm({
     root,
     loadingSelector: "[data-proposal-manage-loading]",
@@ -172,10 +180,10 @@ export function ProposalManageSpeakerCard({
   const roleLabel = speaker.role.replace(/_/g, " ");
 
   return (
-    <div class="card shadow-sm mb-3" data-speaker-card data-speaker-email={speaker.email}>
-      <div class="card-body">
-        <div class="d-flex flex-column flex-lg-row gap-3">
-          <div class="flex-shrink-0">
+    <div class="pk-panel" data-speaker-card data-speaker-email={speaker.email}>
+      <div class="pk-panel__body">
+        <div class="pk-stack">
+          <div>
             <AdminHeadshotManager
               initialUrl={speaker.headshotUrl ?? null}
               alt={speakerName}
@@ -200,71 +208,69 @@ export function ProposalManageSpeakerCard({
             />
           </div>
 
-          <div class="flex-fill">
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-              <strong>{speakerName}</strong>
-              {speakerName !== speaker.email && <span class="text-muted small">&lt;{speaker.email}&gt;</span>}
-              <span class="badge bg-secondary text-capitalize">{roleLabel}</span>
-              <span class={`badge rounded-pill px-2 py-1 ${statusBadgeClass(speaker.status)}`}>
-                {formatStatusLabel(speaker.status)}
-              </span>
-              {(speaker.status === "invited" || speaker.status === "confirmed") && (
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary btn-sm ms-lg-auto"
-                  disabled={reminding}
-                  onClick={() => void sendReminder()}
-                >
-                  {reminding
-                    ? "Sending…"
-                    : speaker.status === "invited"
-                      ? "Send invitation reminder"
-                      : "Request speaker to review or update their profile"}
-                </button>
-              )}
-              {!isCurrentProposer && (
-                <button
-                  type="button"
-                  class="btn btn-outline-danger btn-sm"
-                  data-remove-proposal-speaker
-                  disabled={removing}
-                  onClick={() => void removeSpeaker()}
-                >
-                  {removing ? "Removing…" : "Remove speaker"}
-                </button>
-              )}
-            </div>
+          <div class="pk-cluster">
+            <strong>{speakerName}</strong>
+            {speakerName !== speaker.email && <span class="pk-small">&lt;{speaker.email}&gt;</span>}
+            <span class="pk-badge pk-badge--neutral">{roleLabel}</span>
+            <span class={statusBadgeToneClass(speaker.status)}>{formatStatusLabel(speaker.status)}</span>
+            {(speaker.status === "invited" || speaker.status === "confirmed") && (
+              <button
+                type="button"
+                class="pk-btn pk-btn--secondary pk-btn--sm"
+                disabled={reminding}
+                onClick={() => void sendReminder()}
+              >
+                {reminding
+                  ? "Sending…"
+                  : speaker.status === "invited"
+                    ? "Send invitation reminder"
+                    : "Request speaker to review or update their profile"}
+              </button>
+            )}
+            {!isCurrentProposer && (
+              <button
+                type="button"
+                class="pk-btn pk-btn--danger-quiet pk-btn--sm"
+                data-remove-proposal-speaker
+                disabled={removing}
+                onClick={() => void removeSpeaker()}
+              >
+                {removing ? "Removing…" : "Remove speaker"}
+              </button>
+            )}
+          </div>
 
-            <form class="row g-3" onSubmit={(event) => void saveProfile(event)}>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-first-name-${speaker.userId}`}>
+          <form class="pk-stack" onSubmit={(event) => void saveProfile(event)}>
+            <div class="pk-grid">
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-first-name-${speaker.userId}`}>
                   First name
                 </label>
                 <input
                   id={`speaker-first-name-${speaker.userId}`}
-                  class="form-control"
+                  class="pk-input"
                   value={firstName}
                   onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-last-name-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-last-name-${speaker.userId}`}>
                   Last name
                 </label>
                 <input
                   id={`speaker-last-name-${speaker.userId}`}
-                  class="form-control"
+                  class="pk-input"
                   value={lastName}
                   onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-role-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-role-${speaker.userId}`}>
                   Role
                 </label>
                 <select
                   id={`speaker-role-${speaker.userId}`}
-                  class="form-select"
+                  class="pk-input pk-input--select"
                   value={role}
                   onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
@@ -277,51 +283,51 @@ export function ProposalManageSpeakerCard({
                   )}
                 </select>
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-organization-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-organization-${speaker.userId}`}>
                   Organization
                 </label>
                 <input
                   id={`speaker-organization-${speaker.userId}`}
-                  class="form-control"
+                  class="pk-input"
                   value={organizationName}
                   onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-job-title-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-job-title-${speaker.userId}`}>
                   Job title
                 </label>
                 <input
                   id={`speaker-job-title-${speaker.userId}`}
-                  class="form-control"
+                  class="pk-input"
                   value={jobTitle}
                   onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12">
-                <label class="form-label" for={`speaker-bio-${speaker.userId}`}>
-                  Biography
-                </label>
-                <textarea
-                  id={`speaker-bio-${speaker.userId}`}
-                  class="form-control"
-                  rows={4}
-                  value={biography}
-                  onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
-                />
-                <div class="form-text">Visible to attendees on the event program.</div>
-              </div>
-              <div class="col-12">
-                <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
-              </div>
-              <div class="col-12">
-                <button type="submit" class="btn btn-success btn-sm" disabled={saving}>
-                  {saving ? "Saving…" : "Save speaker details"}
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+            <div class="pk-field">
+              <label class="pk-field__label" for={`speaker-bio-${speaker.userId}`}>
+                Biography
+              </label>
+              <textarea
+                id={`speaker-bio-${speaker.userId}`}
+                class="pk-input pk-input--textarea"
+                rows={4}
+                value={biography}
+                onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
+              />
+              <div class="pk-field__help">Visible to attendees on the event program.</div>
+            </div>
+            <div>
+              <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
+            </div>
+            <div class="pk-cluster">
+              <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm" disabled={saving}>
+                {saving ? "Saving…" : "Save speaker details"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -344,7 +350,7 @@ function SpeakerList({
   onStatus: (message: string, isError?: boolean) => void;
 }) {
   if (!speakers.length) {
-    return <p class="text-muted small">No speakers added yet.</p>;
+    return <p class="pk-small">No speakers added yet.</p>;
   }
   return (
     <div>
@@ -418,10 +424,7 @@ async function main(): Promise<void> {
       refreshed.proposal.proposer_user_id,
       reloadSpeakers,
       (message, isError) => {
-        if (csStatus) {
-          csStatus.textContent = message;
-          csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
-        }
+        if (csStatus) setStatus(csStatus, message, isError);
       },
     );
   }
@@ -442,8 +445,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  boot.root.querySelector<HTMLElement>("[data-proposal-manage-loading]")?.classList.add("d-none");
-  boot.root.querySelector<HTMLElement>("[data-proposal-manage-content]")?.classList.remove("d-none");
+  const loadingEl = boot.root.querySelector<HTMLElement>("[data-proposal-manage-loading]");
+  if (loadingEl) loadingEl.hidden = true;
+  const contentEl = boot.root.querySelector<HTMLElement>("[data-proposal-manage-content]");
+  if (contentEl) contentEl.hidden = false;
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -494,10 +499,7 @@ async function main(): Promise<void> {
     proposalData.proposal.proposer_user_id,
     reloadSpeakers,
     (message, isError) => {
-      if (csStatus) {
-        csStatus.textContent = message;
-        csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
-      }
+      if (csStatus) setStatus(csStatus, message, isError);
     },
   );
 
@@ -508,10 +510,7 @@ async function main(): Promise<void> {
     const role = q<HTMLSelectElement>("#cs-role", boot.root)?.value ?? "speaker";
 
     if (!email) {
-      if (csStatus) {
-        csStatus.textContent = "Please enter an email address.";
-        csStatus.className = "mt-2 small text-danger";
-      }
+      if (csStatus) setStatus(csStatus, "Please enter an email address.", true);
       return;
     }
 
@@ -523,8 +522,7 @@ async function main(): Promise<void> {
           coSpeakerInviteResponseSchema,
         );
         if (csStatus) {
-          csStatus.textContent = invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`;
-          csStatus.className = "mt-2 small text-success";
+          setStatus(csStatus, invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`);
         }
         const emailEl = q<HTMLInputElement>("#cs-email", boot.root);
         const firstEl = q<HTMLInputElement>("#cs-first-name", boot.root);
@@ -535,10 +533,7 @@ async function main(): Promise<void> {
         await reloadSpeakers();
       } catch (error) {
         const normalized = normalizeValidation(error);
-        if (csStatus) {
-          csStatus.textContent = normalized.globalMessage;
-          csStatus.className = "mt-2 small text-danger";
-        }
+        if (csStatus) setStatus(csStatus, normalized.globalMessage, true);
       }
     });
   });

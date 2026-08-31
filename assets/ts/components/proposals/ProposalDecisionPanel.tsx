@@ -17,6 +17,7 @@ import { Tabs } from "../Tabs";
 import { Markdown } from "../Markdown";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import type { ToastType } from "../../shared/ui";
+import "../../ui/Content.css";
 
 type ProposalDecisionInput = z.infer<typeof finalizeProposalSchema>;
 type ProposalDecisionRecord = Pick<

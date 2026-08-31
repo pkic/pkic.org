@@ -19,12 +19,23 @@ export function findSubmitButton(form: HTMLFormElement): HTMLButtonElement | nul
 }
 
 /**
- * Shows a status message in a Bootstrap alert element.
- * Used by event-flow pages after form submissions or API calls.
+ * Shows a status message in the flow's alert element.
+ *
+ * Two vocabularies are in play while the site migrates off Bootstrap: a
+ * surface still on `alert visually-hidden`, and one already on the design
+ * system's `pk-alert pk-sr-only`. The element says which it is, so a template
+ * can move to the design system without its banner becoming one that nothing
+ * ever reveals.
  */
 export function setStatus(target: HTMLElement, message: string, isError = false): void {
   target.textContent = message;
   target.dataset.state = isError ? "error" : "ok";
+  target.hidden = false;
+  if (target.classList.contains("pk-alert")) {
+    target.classList.remove("pk-sr-only", "pk-alert--ok", "pk-alert--danger");
+    target.classList.add(isError ? "pk-alert--danger" : "pk-alert--ok");
+    return;
+  }
   target.classList.remove("visually-hidden", "alert-success", "alert-danger");
   target.classList.add(isError ? "alert-danger" : "alert-success");
 }
@@ -91,21 +102,51 @@ export function emailFromSubmitEvent(event: Event): string {
 }
 
 /**
- * Returns a Bootstrap badge CSS class for a workflow status value.
+ * The tone a workflow status carries. Defined once so the Bootstrap and the
+ * design-system spellings below can never drift apart while surfaces migrate.
  */
-export function statusBadgeClass(status: string): string {
+type StatusTone = "warn" | "ok" | "danger" | "info" | "neutral";
+
+function statusTone(status: string): StatusTone {
   switch (status) {
     case "invited":
-      return "bg-warning text-dark";
+      return "warn";
     case "confirmed":
     case "accepted":
-      return "bg-success";
+      return "ok";
     case "declined":
     case "rejected":
-      return "bg-danger";
+      return "danger";
     case "submitted":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
+/**
+ * Returns a Bootstrap badge CSS class for a workflow status value.
+ * Used by surfaces that have not yet moved to the design system's Badge.
+ */
+export function statusBadgeClass(status: string): string {
+  switch (statusTone(status)) {
+    case "warn":
+      return "bg-warning text-dark";
+    case "ok":
+      return "bg-success";
+    case "danger":
+      return "bg-danger";
+    case "info":
       return "bg-info text-dark";
     default:
       return "bg-secondary";
   }
+}
+
+/**
+ * The same mapping in the design system's vocabulary — `pk-badge` plus its
+ * tone modifier, both of which ship with the entry stylesheet.
+ */
+export function statusBadgeToneClass(status: string): string {
+  return `pk-badge pk-badge--${statusTone(status)}`;
 }

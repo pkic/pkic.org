@@ -198,6 +198,7 @@ export function ResourceSharingEditor({
         )}
         <ErrorAlert error={error} />
         <ApiDataTable
+          caption={`Groups this ${resourceLabel} is shared with`}
           endpoint={endpoint}
           responseSchema={config.listResponseSchema}
           resolve={(response) => response.grants}

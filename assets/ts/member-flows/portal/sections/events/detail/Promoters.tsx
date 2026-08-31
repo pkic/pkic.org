@@ -202,6 +202,7 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
 
       {tab === "codes" && (
         <DataTable
+          caption="Referral codes"
           columns={[
             { header: "Code", cell: (c) => <span class="adm-referral-code">{c.code}</span> },
             {

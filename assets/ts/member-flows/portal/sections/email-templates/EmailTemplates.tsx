@@ -273,6 +273,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
 
   return (
     <ApiDataTable
+      caption="Email templates"
       urlState="templates"
       endpoint={EMAIL_TEMPLATES_API}
       responseSchema={emailTemplatesListResponseSchema}
@@ -285,7 +286,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
         {
           header: "Template Key",
           cell: (t) => t.template_key,
-          className: "mono adm-template-key",
+          className: "mono small",
           sort: { asc: "template_key", desc: "-template_key" },
         },
         {

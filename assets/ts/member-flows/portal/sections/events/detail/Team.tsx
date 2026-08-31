@@ -152,6 +152,7 @@ export function Team({ slug }: { slug: string }) {
       )}
 
       <ApiDataTable
+        caption="Event team members"
         endpoint={`/api/v1/events/${encodeURIComponent(slug)}/roles`}
         responseSchema={eventTeamRolesResponseSchema}
         resolve={(data) => data.roles}

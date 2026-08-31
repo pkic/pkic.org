@@ -184,6 +184,7 @@ export function MeetingGuests({
         </form>
       )}
       <ApiDataTable
+        caption="External guests for this meeting occurrence"
         endpoint={endpoint}
         responseSchema={eventOccurrenceGuestsListResponseSchema}
         resolve={(response) => response.guests}

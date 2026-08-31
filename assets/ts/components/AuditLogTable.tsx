@@ -27,13 +27,28 @@ export interface AuditLogTableProps {
   load?: CollectionLoader;
   /** Resolves an audit entry's actor to a route the viewer can reach; omit to keep actor names as plain text. */
   entityHref?: (entityType: string, entityId: string) => string | null;
+  /**
+   * Names this table for assistive technology. A surface that shows history
+   * beside other tables should say whose history it is — "Registration
+   * history", "Proposal history" — so the page does not offer several tables
+   * all called the same thing.
+   */
+  caption?: string;
 }
 
-export function AuditLogTable({ endpoint, actionCell, detailsCell, load, entityHref }: AuditLogTableProps) {
+export function AuditLogTable({
+  endpoint,
+  actionCell,
+  detailsCell,
+  load,
+  entityHref,
+  caption = "Audit history",
+}: AuditLogTableProps) {
   return (
     <ApiDataTable
       load={load}
       endpoint={endpoint}
+      caption={caption}
       responseSchema={scopedAuditLogResponseSchema}
       resolve={(response) => response.auditLog}
       resolvePage={(response) => response.page}
@@ -57,7 +72,6 @@ export function AuditLogTable({ endpoint, actionCell, detailsCell, load, entityH
         { header: "Action", cell: actionCell, sort: { asc: "action", desc: "-action" } },
         { header: "Details", cell: detailsCell },
       ]}
-      className="align-middle"
       empty="No audit log entries."
       rowKey={(entry) => entry.id}
     />

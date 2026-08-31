@@ -14,11 +14,16 @@ function applyEmailWarning(field: HTMLInputElement, form: HTMLFormElement): void
   if (isPersonal) {
     // data attribute lets CSS neutralise Bootstrap's green :valid ring
     field.dataset.personalEmail = "true";
-    if (warningEl) warningEl.classList.remove("d-none");
   } else {
     delete field.dataset.personalEmail;
-    if (warningEl) warningEl.classList.add("d-none");
   }
+
+  if (!warningEl) return;
+  // The platform attribute is what the migrated templates use; the `d-none`
+  // toggle is still needed by the surfaces that have not moved yet, and is
+  // harmless on the ones that have.
+  warningEl.hidden = !isPersonal;
+  warningEl.classList.toggle("d-none", !isPersonal);
 }
 
 function applyEmailValidity(field: HTMLInputElement): void {
@@ -121,12 +126,18 @@ export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElem
  * Call this when the user corrects their input and successfully advances a step.
  */
 export function clearStatus(target: HTMLElement): void {
-  if (target.dataset.state === "error") {
-    target.textContent = "";
+  if (target.dataset.state !== "error") return;
+  target.textContent = "";
+  // Mirrors setStatus: the element's own class list says which vocabulary it
+  // speaks, so a migrated banner is re-hidden rather than left showing.
+  if (target.classList.contains("pk-alert")) {
+    target.classList.add("pk-sr-only");
+    target.classList.remove("pk-alert--danger", "pk-alert--ok");
+  } else {
     target.classList.add("visually-hidden");
     target.classList.remove("alert-danger", "alert-success");
-    delete target.dataset.state;
   }
+  delete target.dataset.state;
 }
 
 export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLElement): boolean {

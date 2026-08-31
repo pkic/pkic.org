@@ -11,9 +11,10 @@
  * state that is announced rather than mimed by grey rectangles.
  */
 
-import type { ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 
 import "./DataTable.css";
+import "./Content.css";
 
 export type SortDirection = "asc" | "desc";
 
@@ -23,9 +24,36 @@ export interface DataTableColumn<Row> {
   /** Omit to render nothing for this column. */
   cell: (row: Row) => ComponentChildren;
   sortable?: boolean;
-  align?: "start" | "end";
+  align?: "start" | "center" | "end";
+  /**
+   * Utilities for the cells in this column - `pk-mono` for identifiers,
+   * `pk-small`, `pk-muted`, `pk-nowrap`. Design-system classes only; the
+   * isolation gate rejects anything else in an adopted surface.
+   */
+  cellClass?: string;
   /** Renders the header for assistive technology only, e.g. an actions column. */
   headerHidden?: boolean;
+}
+
+/**
+ * What activating a row does.
+ *
+ * This exists instead of an `onRowClick` on the `<tr>`, which is how the
+ * portal's fourteen list surfaces used to do it and which no keyboard could
+ * reach: a table row is not focusable and takes no Enter key. The action is
+ * rendered as a real link or button inside the first cell and then stretched
+ * over the whole row, so the row is clickable anywhere, reachable by Tab,
+ * activated by Enter, and announced with a name.
+ *
+ * `label` is that name. It should say where the row goes or what it opens —
+ * "Open Example Corp", not "View".
+ */
+export interface DataTableRowAction {
+  label: string;
+  /** A navigation. Preferred: it is a link, so it can be opened in a new tab. */
+  href?: string;
+  /** A selection that stays on the page. Used when there is no URL for it. */
+  onSelect?: () => void;
 }
 
 export interface DataTableSelection {
@@ -49,6 +77,38 @@ export interface DataTableProps<Row> {
   loadingRows?: number;
   /** Shown instead of the body when there are no rows and nothing is loading. */
   empty?: ComponentChildren;
+  /** Makes the whole row activate one thing. See DataTableRowAction. */
+  rowAction?: (row: Row) => DataTableRowAction | undefined;
+  /**
+   * An expanded region belonging to the row above it, spanning every column.
+   * Return nothing for rows that have none.
+   */
+  detailRow?: (row: Row) => ComponentChildren;
+}
+
+/**
+ * The row's activation, as a real control. Its own text is for assistive
+ * technology only - what a sighted reader sees is the row.
+ */
+function RowActionControl({ action }: { action: DataTableRowAction }) {
+  if (action.href) {
+    return (
+      <a class="pk-table__row-link" href={action.href}>
+        <span class="pk-table__sr">{action.label}</span>
+      </a>
+    );
+  }
+  return (
+    <button type="button" class="pk-table__row-link" onClick={action.onSelect}>
+      <span class="pk-table__sr">{action.label}</span>
+    </button>
+  );
+}
+
+function alignClass(align: DataTableColumn<unknown>["align"]): string | undefined {
+  if (align === "end") return "pk-table__cell--end";
+  if (align === "center") return "pk-table__cell--center";
+  return undefined;
 }
 
 function nextDirection(sort: DataTableProps<unknown>["sort"], columnId: string): SortDirection {
@@ -68,11 +128,14 @@ export function DataTable<Row>({
   loading = false,
   loadingRows = 3,
   empty,
+  rowAction,
+  detailRow,
 }: DataTableProps<Row>) {
   const keys = rows.map(rowKey);
   const allSelected = Boolean(selection) && keys.length > 0 && keys.every((key) => selection?.selected.has(key));
   const someSelected = Boolean(selection) && keys.some((key) => selection?.selected.has(key));
   const isEmpty = !loading && rows.length === 0;
+  const columnCount = columns.length + (selection ? 1 : 0);
 
   function toggleAll() {
     if (!selection) return;
@@ -115,7 +178,7 @@ export function DataTable<Row>({
                 <th
                   key={column.id}
                   scope="col"
-                  class={column.align === "end" ? "pk-table__cell--end" : undefined}
+                  class={alignClass(column.align)}
                   aria-sort={sorted ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
                   {column.sortable && onSort ? (
@@ -142,25 +205,45 @@ export function DataTable<Row>({
           {rows.map((row) => {
             const key = rowKey(row);
             const selected = Boolean(selection?.selected.has(key));
+            const action = rowAction?.(row);
+            const detail = detailRow?.(row);
             return (
-              <tr key={key} aria-selected={selection ? selected : undefined}>
-                {selection && (
-                  <td class="pk-table__select">
-                    <input
-                      type="checkbox"
-                      class="pk-table__checkbox"
-                      checked={selected}
-                      aria-label={selection.rowLabel(key)}
-                      onChange={() => toggleRow(key)}
-                    />
-                  </td>
+              <Fragment key={key}>
+                <tr
+                  aria-selected={selection ? selected : undefined}
+                  class={action ? "pk-table__row--action" : undefined}
+                >
+                  {selection && (
+                    <td class="pk-table__select">
+                      <input
+                        type="checkbox"
+                        class="pk-table__checkbox"
+                        checked={selected}
+                        aria-label={selection.rowLabel(key)}
+                        onChange={() => toggleRow(key)}
+                      />
+                    </td>
+                  )}
+                  {columns.map((column, index) => (
+                    <td
+                      key={column.id}
+                      class={[alignClass(column.align), column.cellClass].filter(Boolean).join(" ") || undefined}
+                    >
+                      {/* The stretched control goes in the first cell so it
+                          precedes the row's content in the tab order, and so a
+                          cell that already holds its own buttons - the actions
+                          column - is not covered by it. */}
+                      {index === 0 && action && <RowActionControl action={action} />}
+                      {column.cell(row)}
+                    </td>
+                  ))}
+                </tr>
+                {detail !== undefined && detail !== null && detail !== false && (
+                  <tr class="pk-table__detail">
+                    <td colSpan={columnCount}>{detail}</td>
+                  </tr>
                 )}
-                {columns.map((column) => (
-                  <td key={column.id} class={column.align === "end" ? "pk-table__cell--end" : undefined}>
-                    {column.cell(row)}
-                  </td>
-                ))}
-              </tr>
+              </Fragment>
             );
           })}
 

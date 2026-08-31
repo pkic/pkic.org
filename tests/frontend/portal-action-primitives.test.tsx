@@ -169,16 +169,21 @@ describe("EmptyState", () => {
     expect(created).toBe(1);
   });
 
-  it("renders inside a table empty slot without the placeholder italics", () => {
+  it("renders in the table's empty slot rather than as a fake data row", () => {
     const container = mount(
       <DataTable
+        caption="Group members"
         columns={[{ header: { label: "Name" }, cell: () => null }]}
         data={[]}
         empty={<EmptyState title="No people found" />}
       />,
     );
-    expect(container.querySelector(".pkic-empty-state-title")?.textContent).toBe("No people found");
-    expect(container.querySelector("td")?.className).not.toContain("fst-italic");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("No people found");
+    // The absence is a status beside the table, not a row a reader could
+    // mistake for data — the table body stays empty.
+    expect(container.querySelector("tbody tr")).toBeNull();
+    // The table is still named, so it is identifiable when it holds nothing.
+    expect(container.querySelector("caption")?.textContent).toBe("Group members");
   });
 });
 

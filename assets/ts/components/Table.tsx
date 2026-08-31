@@ -1,90 +1,40 @@
-import { Fragment, type ComponentChildren } from "preact";
+/**
+ * The portal's column API, rendered by the design system's table.
+ *
+ * This is a translation layer, not a second table. The portal describes a
+ * column as `{ header, cell, className, sort: { asc, desc } }`, where the sort
+ * keys are the opaque strings the D1 query understands; the design system
+ * describes one as `{ id, header, cell, sortable, align }` and reports sort as
+ * a column plus a direction. Neither shape is wrong: the server's vocabulary
+ * belongs to the server, and a reusable table cannot know it. This maps one
+ * onto the other in one place instead of at fifty call sites.
+ *
+ * What the version it replaces got wrong, and what moves with this change:
+ *
+ *   - `onRowClick` put a click handler on the `<tr>`. A table row is not
+ *     focusable and takes no Enter key, so fourteen portal lists could be
+ *     used with a mouse and not with a keyboard. Row activation is now a real
+ *     control, stretched over the row by the design system.
+ *   - Tables had no caption, so a screen reader listing the tables on a page
+ *     got a list of unnamed tables. `caption` is required here.
+ *   - `className` on a column carried Bootstrap (`text-end`, `mono`,
+ *     `text-nowrap`). That vocabulary is closed and small, so it is
+ *     translated rather than passed through.
+ */
 
-// ─── Shared types ─────────────────────────────────────────────────────────────
+import type { ComponentChildren } from "preact";
 
-type HeadCell = string | { label: string; className?: string };
-type SortDirection = "asc" | "desc";
+import { DataTable as SystemDataTable, type DataTableColumn, type SortDirection } from "../ui/DataTable";
+import "../ui/Content.css";
+
+export type HeadCell = string | { label: string; className?: string };
 
 export interface ColumnSort {
+  /** The `sort` query value that orders this column ascending. */
   asc: string;
   desc: string;
   defaultDirection?: SortDirection;
 }
-
-function renderHead(
-  h: HeadCell,
-  i: number,
-  sort?: ColumnSort,
-  currentSort?: string,
-  onSort?: (nextSort: string) => void,
-) {
-  const cell = typeof h === "string" ? { label: h } : h;
-  const isAsc = sort ? currentSort === sort.asc : false;
-  const isDesc = sort ? currentSort === sort.desc : false;
-  const active = isAsc || isDesc;
-  const nextSort = sort ? (isDesc ? sort.asc : isAsc ? sort.desc : sort[sort.defaultDirection ?? "desc"]) : "";
-
-  return (
-    <th key={i} class={cell.className}>
-      {sort && onSort ? (
-        <button
-          type="button"
-          class={`tbl-sort-btn${active ? " is-active" : ""}`}
-          onClick={() => onSort(nextSort)}
-          aria-sort={isAsc ? "ascending" : isDesc ? "descending" : "none"}
-        >
-          <span>{cell.label}</span>
-          <span aria-hidden="true" class="tbl-sort-indicator">
-            {isAsc ? "▲" : isDesc ? "▼" : "↕"}
-          </span>
-        </button>
-      ) : (
-        cell.label
-      )}
-    </th>
-  );
-}
-
-// A plain-string empty message keeps the muted placeholder look; a rendered
-// empty state (e.g. <EmptyState/>) styles itself.
-function emptyCellClass(empty: ComponentChildren): string {
-  return typeof empty === "string" ? "text-center text-muted fst-italic py-3" : "p-0";
-}
-
-// ─── Children-based Table (for complex row rendering) ─────────────────────────
-
-interface TableProps {
-  heads: HeadCell[];
-  empty?: ComponentChildren;
-  className?: string;
-  children?: ComponentChildren;
-}
-
-export function Table({ heads, empty = "No data", className, children }: TableProps) {
-  const hasRows = children !== undefined && children !== null && children !== false;
-  return (
-    <div class="tbl-wrap">
-      <table class={`table table-sm table-hover mb-0${className ? ` ${className}` : ""}`}>
-        <thead class="table-dark">
-          <tr>{heads.map((head, i) => renderHead(head, i))}</tr>
-        </thead>
-        <tbody>
-          {hasRows ? (
-            children
-          ) : (
-            <tr>
-              <td colspan={heads.length} class={emptyCellClass(empty)}>
-                {empty}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── Column-based DataTable ───────────────────────────────────────────────────
 
 export interface Column<T> {
   header: HeadCell;
@@ -93,75 +43,130 @@ export interface Column<T> {
   sort?: ColumnSort;
 }
 
+/**
+ * The presentational vocabulary a column's `className` was allowed to use.
+ * Anything outside this is dropped rather than passed through, because a
+ * class the design system does not define renders unstyled once the surface
+ * stops loading Bootstrap.
+ */
+const CELL_UTILITY: Record<string, string> = {
+  mono: "pk-mono",
+  small: "pk-small",
+  "text-muted": "pk-muted",
+  "text-nowrap": "pk-nowrap",
+  "pk-mono": "pk-mono",
+  "pk-small": "pk-small",
+  "pk-muted": "pk-muted",
+  "pk-nowrap": "pk-nowrap",
+};
+
+function headLabel(head: HeadCell): string {
+  return typeof head === "string" ? head : head.label;
+}
+
+function headClass(head: HeadCell): string {
+  return typeof head === "string" ? "" : (head.className ?? "");
+}
+
+function alignOf(...classNames: string[]): DataTableColumn<unknown>["align"] {
+  const tokens = classNames.join(" ").split(/\s+/);
+  if (tokens.includes("text-end")) return "end";
+  if (tokens.includes("text-center")) return "center";
+  return undefined;
+}
+
+function utilitiesOf(className: string | undefined): string | undefined {
+  if (!className) return undefined;
+  const mapped = className
+    .split(/\s+/)
+    .map((token) => CELL_UTILITY[token])
+    .filter(Boolean);
+  return mapped.length > 0 ? [...new Set(mapped)].join(" ") : undefined;
+}
+
 export interface DataTableProps<T> {
+  /** Names the table. Hidden unless `showCaption`, but always announced. */
+  caption: string;
+  showCaption?: boolean;
   columns: Column<T>[];
   data: T[];
   empty?: ComponentChildren;
-  className?: string;
   rowKey?: (row: T, index: number) => string | number;
-  rowClass?: (row: T, index: number) => string | undefined;
-  onRowClick?: (row: T) => void;
   detailRow?: (row: T, index: number) => ComponentChildren;
+  /**
+   * What activating a row does. Prefer `href`: a link can be opened in a new
+   * tab, and it says where it goes.
+   */
+  rowAction?: (row: T, index: number) => { label: string; href?: string; onSelect?: () => void } | undefined;
+  /** The current `sort` query value, as the server understands it. */
   currentSort?: string;
   onSort?: (nextSort: string) => void;
+  loading?: boolean;
 }
 
 export function DataTable<T>({
+  caption,
+  showCaption,
   columns,
   data,
   empty = "No data",
-  className,
   rowKey,
-  rowClass,
-  onRowClick,
   detailRow,
+  rowAction,
   currentSort,
   onSort,
+  loading,
 }: DataTableProps<T>) {
+  // Row identity is by index when the caller has no key, so `rowKey` here is
+  // an index lookup rather than a value the design system interprets.
+  const indexOf = new Map<T, number>();
+  data.forEach((row, index) => indexOf.set(row, index));
+  const keyFor = (row: T) => {
+    const index = indexOf.get(row) ?? 0;
+    return String(rowKey ? rowKey(row, index) : index);
+  };
+
+  const systemColumns: DataTableColumn<T>[] = columns.map((column, index) => ({
+    id: `column-${String(index)}`,
+    header: headLabel(column.header),
+    cell: (row) => column.cell(row, indexOf.get(row) ?? 0),
+    sortable: Boolean(column.sort),
+    align: alignOf(headClass(column.header), column.className ?? ""),
+    cellClass: utilitiesOf(column.className),
+  }));
+
+  // Which column the server's opaque sort string belongs to, and which way.
+  let sort: { columnId: string; direction: SortDirection } | undefined;
+  for (const [index, column] of columns.entries()) {
+    if (!column.sort || !currentSort) continue;
+    if (currentSort === column.sort.asc) sort = { columnId: `column-${String(index)}`, direction: "asc" };
+    else if (currentSort === column.sort.desc) sort = { columnId: `column-${String(index)}`, direction: "desc" };
+  }
+
+  function handleSort(columnId: string, direction: SortDirection) {
+    const index = Number(columnId.replace("column-", ""));
+    const column = columns[index];
+    if (!column?.sort || !onSort) return;
+    // A column the reader has not sorted yet opens on its natural direction —
+    // newest first for a date, A–Z for a name — rather than always ascending.
+    const untouched = !sort || sort.columnId !== columnId;
+    const next = untouched ? column.sort[column.sort.defaultDirection ?? "desc"] : column.sort[direction];
+    onSort(next);
+  }
+
   return (
-    <div class="tbl-wrap">
-      <table class={`table table-sm table-hover mb-0${className ? ` ${className}` : ""}`}>
-        <thead class="table-dark">
-          <tr>{columns.map((col, i) => renderHead(col.header, i, col.sort, currentSort, onSort))}</tr>
-        </thead>
-        <tbody>
-          {data.length === 0 ? (
-            <tr>
-              <td colspan={columns.length} class={emptyCellClass(empty)}>
-                {empty}
-              </td>
-            </tr>
-          ) : (
-            data.map((row, i) => {
-              const key = rowKey ? rowKey(row, i) : i;
-              const detail = detailRow?.(row, i);
-              return (
-                <Fragment key={key}>
-                  <tr
-                    class={
-                      [rowClass?.(row, i), onRowClick ? "tbl-row-link" : ""].filter(Boolean).join(" ") || undefined
-                    }
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  >
-                    {columns.map((col, ci) => (
-                      <td key={ci} class={col.className}>
-                        {col.cell(row, i)}
-                      </td>
-                    ))}
-                  </tr>
-                  {detail && (
-                    <tr>
-                      <td colspan={columns.length} class="p-0">
-                        {detail}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
+    <SystemDataTable
+      caption={caption}
+      showCaption={showCaption}
+      columns={systemColumns}
+      rows={data}
+      rowKey={keyFor}
+      sort={sort}
+      onSort={onSort ? handleSort : undefined}
+      rowAction={rowAction ? (row) => rowAction(row, indexOf.get(row) ?? 0) : undefined}
+      detailRow={detailRow ? (row) => detailRow(row, indexOf.get(row) ?? 0) : undefined}
+      loading={loading}
+      empty={empty}
+    />
   );
 }

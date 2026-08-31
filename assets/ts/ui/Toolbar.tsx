@@ -18,6 +18,14 @@ export interface ToolbarProps extends JSX.HTMLAttributes<HTMLDivElement> {
     value: string;
     placeholder?: string;
     onInput: (value: string) => void;
+    /**
+     * Names the field — "Search members", not "Search".
+     *
+     * A page can hold several collections, and several inputs all called
+     * "Search" are indistinguishable to anyone navigating by form controls.
+     * The visible label stays short; the accessible name says which list.
+     */
+    label?: string;
   };
   children?: ComponentChildren;
 }
@@ -31,7 +39,7 @@ export function Toolbar({ label, search, class: className, children, ...rest }: 
       {search && (
         <div class="pk-toolbar__search">
           <label htmlFor={searchId} class="pk-toolbar__search-label">
-            Search
+            {search.label ?? "Search"}
           </label>
           <input
             id={searchId}

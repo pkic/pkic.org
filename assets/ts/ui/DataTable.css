@@ -15,6 +15,17 @@
        scrolling within itself. */
     min-width: 0;
     max-width: 100%;
+    /*
+     * And this is why it needs to be positioned. `overflow` does not clip an
+     * absolutely positioned descendant unless the scroller is also that
+     * descendant's containing block. The visually hidden header spans are
+     * absolutely positioned, so on a phone one of them sat 600px from the
+     * viewport's left edge, outside this container, and stretched the DOCUMENT
+     * by 222px — a page that scrolled sideways with nothing visible out there
+     * to explain it. The table itself was clipped correctly the whole time,
+     * which is what made it hard to see.
+     */
+    position: relative;
   }
 
   .pk-table {
@@ -77,6 +88,10 @@
 
   .pk-table tbody tr[aria-selected="true"]:hover {
     background: color-mix(in oklab, var(--pk-accent) 10%, var(--pk-surface));
+  }
+
+  .pk-table__cell--center {
+    text-align: center;
   }
 
   .pk-table__cell--end {
@@ -182,5 +197,58 @@
 
   .pk-table__empty {
     padding: var(--pk-6) var(--pk-4);
+  }
+
+  /*
+   * A row that activates something. The control is a real link or button in
+   * the first cell, stretched over the whole row by its ::after, so the row is
+   * clickable everywhere while remaining one focusable, named, Enter-activated
+   * control. A `<tr onClick>` is none of those things.
+   */
+  .pk-table__row--action {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .pk-table__row--action:hover {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-table__row-link {
+    position: static;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .pk-table__row-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Anything the row's own cells offer - a menu, a link - must sit above the
+     stretched control, or the row swallows every click meant for it. */
+  .pk-table__row--action td > *:not(.pk-table__row-link) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .pk-table__row--action:focus-within {
+    outline: var(--pk-focus);
+    outline-offset: -2px;
+  }
+
+  .pk-table__row-link:focus-visible {
+    outline: none;
+  }
+
+  /* An expanded region belonging to the row above it. */
+  .pk-table__detail > td {
+    padding: 0;
+    background: var(--pk-surface-sunk);
   }
 }
