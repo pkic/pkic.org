@@ -4,16 +4,16 @@
 
       {{/* ── Loading skeleton ───────────────────────────────────── */}}
       <div data-decline-loading>
-        <p class="placeholder-glow"><span class="placeholder"></span></p>
-        <p class="placeholder-glow"><span class="placeholder"></span></p>
-        <p class="placeholder-glow"><span class="placeholder"></span></p>
-        <p class="placeholder-glow"><span class="placeholder placeholder-lg"></span></p>
+        <p class="pk-stack"><span class="pk-skeleton"></span></p>
+        <p class="pk-stack"><span class="pk-skeleton"></span></p>
+        <p class="pk-stack"><span class="pk-skeleton"></span></p>
+        <p class="pk-stack"><span class="pk-skeleton pk-skeleton--lg"></span></p>
       </div>
 
       {{/* ── Status states (invalid / expired / already processed) ─ */}}
       <div data-decline-status hidden>
-        <div class="alert" data-status-alert role="alert">
-          <h2 class="h5 alert-heading pk-strong" data-status-title></h2>
+        <div class="pk-alert pk-alert--info" data-status-alert role="alert">
+          <h2 class="pk-alert__title" data-status-title></h2>
           <p data-status-body></p>
         </div>
         <div data-resend-invite-section hidden>
@@ -38,24 +38,24 @@
           </p>
         </div>
 
-        <div data-error-banner class="alert alert-danger" hidden role="alert"></div>
+        <div data-error-banner class="pk-alert pk-alert--danger" hidden role="alert"></div>
 
         {{/* ── Virtual / hybrid pivot (travel barrier) ───────────── */}}
-        <div data-virtual-pivot data-attendee-only class="alert alert-info border-0" hidden role="region" aria-label="Virtual attendance option">
+        <div data-virtual-pivot data-attendee-only class="pk-alert pk-alert--info" hidden role="region" aria-label="Virtual attendance option">
           <strong>Can&rsquo;t make it in person?</strong> The event also has a virtual live-stream option.
           You can attend from anywhere in the world at no extra cost.<br>
           <a data-registration-link href="#" class="pk-btn pk-btn--sm pk-btn--primary">Register for the Virtual Stream &rarr;</a>
         </div>
 
         {{/* ── On-demand pivot (schedule conflict) ────────────────── */}}
-        <div data-on-demand-pivot data-attendee-only class="alert alert-info border-0" hidden role="region" aria-label="On-demand access option">
+        <div data-on-demand-pivot data-attendee-only class="pk-alert pk-alert--info" hidden role="region" aria-label="On-demand access option">
           <strong>Can&rsquo;t make this date?</strong> A live stream won&rsquo;t help if the timing doesn&rsquo;t work either.
           Register for on-demand access and you&rsquo;ll get all the session recordings on your own schedule after the event.<br>
           <a data-registration-link href="#" class="pk-btn pk-btn--sm pk-btn--primary">Register for On-Demand Access &rarr;</a>
         </div>
 
         {{/* ── Convince-my-boss section ─────────────────────────── */}}
-        <div data-convince-boss data-attendee-only class="alert alert-light border" hidden role="region">
+        <div data-convince-boss data-attendee-only class="pk-alert pk-alert--info" hidden role="region">
           <strong>Need to convince your organisation?</strong> Attendees consistently cite
           peer-to-peer networking and access to pre-release standards as the top reasons
           their organisations approve attendance. Virtual attendance is also available —
@@ -69,35 +69,35 @@
             <legend class="pk-strong">Reason for declining</legend>
             <div data-reason-options>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="schedule_conflict">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="schedule_conflict">
                 <span data-reason-label="schedule_conflict">Schedule conflict &mdash; I have another commitment</span>
               </label>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="travel_not_possible">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="travel_not_possible">
                 <span data-reason-label="travel_not_possible">Travel is not possible for me</span>
               </label>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="content_not_relevant">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="content_not_relevant">
                 <span data-reason-label="content_not_relevant">Content is not relevant to my role</span>
               </label>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="organization_policy">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="organization_policy">
                 <span data-reason-label="organization_policy">Organisation policy prevents me from attending</span>
               </label>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="not_interested">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="not_interested">
                 <span data-reason-label="not_interested">This event doesn&rsquo;t match my current focus</span>
               </label>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="already_registered">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="already_registered">
                 <span data-reason-label="already_registered">I&rsquo;m already registered through another link</span>
               </label>
               <label>
-                <input class="form-check-input" type="radio" name="reasonCode" value="other">
+                <input class="pk-check__input" type="radio" name="reasonCode" value="other">
                 Other reason
               </label>
             </div>
-            <div data-reason-error class="invalid-feedback" hidden>Please select a reason before submitting.</div>
+            <div data-reason-error class="pk-field__message" hidden>Please select a reason before submitting.</div>
           </fieldset>
 
           {{/* ── Topic gap analysis (shown when content_not_relevant) */}}
@@ -118,7 +118,7 @@
             </label>
             <textarea id="reasonNote" data-reason-note class="pk-input pk-input--textarea"
               rows="3" maxlength="2000" placeholder="Any details that might help us improve…"></textarea>
-            <div data-note-error class="invalid-feedback" hidden>
+            <div data-note-error class="pk-field__message" hidden>
               Please add a brief explanation for &ldquo;Other reason&rdquo;.
             </div>
           </div>
@@ -202,7 +202,7 @@
         <p class="pk-muted" data-copy-target="success-body">We hope to see you at a future event!</p>
 
         {{/* Parting gift: content hook */}}
-        <div class="card border-0 bg-light">
+        <div class="pk-panel">
           <p class="pk-strong">In the meantime, stay up to date:</p>
           <ul>
             <li><a href="/resources/" target="_blank" rel="noopener">Browse our PKI resources library</a></li>

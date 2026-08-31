@@ -39,6 +39,7 @@ const scanned = [
   "layouts/wg/wg-sub.html",
   "layouts/wg/section.html",
   "layouts/shortcodes/joinform.html",
+  "layouts/shortcodes/invite-decline.html",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */
