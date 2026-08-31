@@ -27,3 +27,8 @@ import "./ui/Badge.css";
 // to server-rendered markup too. This one addition unblocks roughly 600 of the
 // remaining Bootstrap references in layouts/.
 import "./ui/Field.css";
+// Cards and inline messages are pervasive in the public shortcodes, so these
+// two follow for the same reason. The budget in check-css-budget.mjs is what
+// keeps this list from growing on convenience alone.
+import "./ui/Panel.css";
+import "./ui/Alert.css";

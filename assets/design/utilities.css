@@ -102,6 +102,18 @@
     font-weight: 700;
   }
 
+  /* An introductory paragraph, and its opposite. Both read the type scale so
+     a page cannot invent its own "slightly bigger" text. */
+  .pk-lede {
+    font-size: var(--pk-text-lg);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-small {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
   /* Fills the remaining space in a flex parent — replaces `mt-auto`/`ms-auto`
      without needing a direction-specific class for each. */
   .pk-push {

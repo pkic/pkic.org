@@ -38,6 +38,7 @@ const scanned = [
   // rather than waiting for every file in it to be migrated at once.
   "layouts/wg/wg-sub.html",
   "layouts/wg/section.html",
+  "layouts/shortcodes/joinform.html",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */
@@ -56,7 +57,7 @@ const remaining = ["assets/ts", "assets/js", "assets/scss", "layouts"];
  * containing "table", and a gate that cries wolf gets switched off.
  */
 const BOOTSTRAP_CLASS =
-  /^(btn|btn-[a-z0-9-]+|card|card-[a-z]+|row|col(-[a-z0-9]+)*|d-(none|block|flex|inline|inline-block|grid)|form-(control|select|check|label|text)|input-group|alert|alert-[a-z]+|badge|table|table-[a-z]+|nav|navbar|nav-[a-z]+|modal|modal-[a-z]+|dropdown|dropdown-[a-z]+|spinner-border|visually-hidden|text-(muted|center|start|end)|bg-[a-z]+|fw-[a-z]+|[mp][xytbse]?-[0-5]|g-[0-5]|w-100|h-100|justify-content-[a-z]+|align-items-[a-z]+|border|border-[a-z0-9]+|rounded|rounded-[a-z0-9]+|small|lead|container|container-fluid)$/;
+  /^(btn|btn-[a-z0-9-]+|card|card-[a-z-]+|row|col(-[a-z0-9]+)*|d-[a-z]+(-[a-z]+)*|flex-[a-z-]+|order-[a-z0-9-]+|form-[a-z-]+|input-group[a-z-]*|alert|alert-[a-z-]+|badge|table|table-[a-z-]+|nav|navbar|navbar-[a-z-]+|nav-[a-z-]+|modal|modal-[a-z-]+|offcanvas[a-z-]*|dropdown|dropdown-[a-z-]+|accordion[a-z-]*|carousel[a-z-]*|toast[a-z-]*|tooltip|popover|progress|progress-bar|list-group[a-z-]*|breadcrumb[a-z-]*|pagination|page-[a-z]+|spinner-[a-z-]+|placeholder|ratio|ratio-[a-z0-9x]+|visually-hidden(-focusable)?|stretched-link|text-(muted|center|start|end|nowrap|truncate|uppercase|lowercase|capitalize|decoration-[a-z]+|break|wrap)|text-bg-[a-z]+|link-[a-z]+|bg-[a-z-]+|fw-[a-z]+|fst-[a-z]+|fs-[0-6]|lh-[a-z0-9]+|[mp][xytbse]?-(auto|[0-5])|[mp][xytbse]?-(sm|md|lg|xl|xxl)-(auto|[0-5])|g[xy]?-[0-5]|gap-[0-5]|w-(25|50|75|100|auto)|h-(25|50|75|100|auto)|m[wh]-100|justify-content-[a-z-]+|align-(items|self|content)-[a-z-]+|border|border-[a-z0-9-]+|rounded|rounded-[a-z0-9-]+|shadow|shadow-[a-z]+|position-[a-z]+|top-[0-9]+|start-[0-9]+|end-[0-9]+|bottom-[0-9]+|float-[a-z]+|overflow-[a-z]+|user-select-[a-z]+|small|lead|display-[1-6]|container|container-[a-z]+|sticky-[a-z]+|fixed-[a-z]+|invalid-feedback|valid-feedback|is-(in)?valid|was-validated|clearfix|vstack|hstack)$/;
 
 /** Our own classes are never a violation, whatever word they contain. */
 function isBootstrapClassList(value) {

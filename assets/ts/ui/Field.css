@@ -151,4 +151,78 @@
       right 2.4rem center,
       right 2.1rem center;
   }
+
+  /* ── Choice controls ────────────────────────────────────────────────
+     Checkboxes and radios are drawn rather than inherited, because the
+     operating system's default is a different accent from ours and the two
+     sitting side by side in one form reads as a bug. The control keeps its
+     native element, so it keeps its native semantics and keyboard behaviour. */
+  .pk-check {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: var(--pk-text-md);
+  }
+
+  .pk-check__input {
+    appearance: none;
+    margin: 0;
+    flex: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin-top: 0.15rem;
+    position: relative;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line-strong);
+    cursor: pointer;
+  }
+
+  .pk-check__input[type="checkbox"] {
+    border-radius: var(--pk-radius-sm);
+  }
+
+  .pk-check__input[type="radio"] {
+    border-radius: 50%;
+  }
+
+  .pk-check__input:checked {
+    background: var(--pk-accent-strong);
+    border-color: var(--pk-accent-strong);
+  }
+
+  .pk-check__input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.1rem;
+    width: 0.28rem;
+    height: 0.55rem;
+    border: solid var(--pk-on-solid);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .pk-check__input[type="radio"]:checked::after {
+    content: "";
+    position: absolute;
+    inset: 0.22rem;
+    border-radius: 50%;
+    background: var(--pk-on-solid);
+  }
+
+  .pk-check__input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .pk-check__label {
+    display: block;
+  }
+
+  .pk-check__hint {
+    display: block;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
 }
