@@ -2204,12 +2204,48 @@ Status: In progress (2026-08-30)
       response schemas but request bodies leave the client unparsed, so a
       frontend can emit a contract-violating request with every gate green
       (caught 2026-08-30 when the representative link form sent
-      `kind: "user"` instead of `kind: "existing_user"`). Add a
-      request-parsing client helper (body validated through the shared
-      request schema before send), migrate mutating call sites, and extend
-      the contract lint to require it; until then, mock-based frontend tests
-      parse captured bodies through the shared schemas (rule added to
+      `kind: "user"` instead of `kind: "existing_user"`). Helper landed
+      2026-08-31: `postValidated`/`patchValidated`/`putValidated` in
+      `assets/ts/shared/api-client.ts` parse the body through the shared
+      request schema synchronously before fetch and adoption covered the
+      representative roster, group member add, vote create, mailing lists,
+      and role forms (the stricter inferred types immediately replaced
+      loose `Set<string>`/string fields with the `Permission` union).
+      Remaining: migrate the rest of the mutating call sites and extend the
+      contract lint to require the validated helpers for any request whose
+      shared schema exists; until then, mock-based frontend tests parse
+      captured bodies through the shared schemas (rule added to
       tests/AGENTS.md).
+      Consistency batch landed 2026-08-31: `Badge` became the canonical
+      status registry — `statusLabel`/`statusColor` are exported and every
+      ad-hoc `STATUS_*`/`ROLE_*` map, title-casing helper, and duplicated
+      stage formatter across the portal was folded onto it (fixing the
+      literal "Ec Review" class of label; application stages now match the
+      real `ApplicationStage` vocabulary, and waitlist, sponsorship
+      pipeline, vote outcome, scheduled-job, and speaker-role statuses are
+      registered). `ErrorAlert` now maps transport errors
+      (401/403/404/409/429/5xx) to plain-language sentences via
+      `friendlyErrorMessage`; raw "HTTP nnn" strings no longer reach users.
+      Inner tabs without route homes (form management, campaign editors,
+      proposal detail, occurrence detail) moved onto
+      `useHashQueryParam` — hash-internal query params
+      (`#/path?formTab=edit`) that initialize from the URL, mirror on
+      change, and clean up on unmount, making the last local tabs
+      shareable and fixing a latent proposal deep-link reset. Date-only
+      columns portal-wide render through `formatDate` (no meaningless
+      midnight times).
+- [x] Member-visible group roster (2026-08-31): participants can now see
+      who is in their group. `GET /api/v1/groups/:groupId/memberships`
+      branches on the caller's live capabilities — `manage` keeps the full
+      membership rows; `participate` receives a reduced projection
+      (`userId`, `name`, `headshotUrl`, `organizationName`) whose SQL never
+      selects email, category, source, or timestamps; anyone else gets 403.
+      The Members tab shows for participants as a read-only, searchable
+      PersonCell roster (organization as the second line, never email) with
+      no management affordances. Authorization tests prove the participant
+      payload carries no email in the raw JSON and the query-plan test
+      confirms the roster query stays on
+      `idx_group_memberships_group_active`.
 - [ ] Add an index for `session_proposals.proposer_user_id` in the
       consolidated branch migration: the new `/users/current/proposals`
       submitter branch currently scans the table (flagged by its
