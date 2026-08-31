@@ -18,6 +18,7 @@ function membership(
   groupName: string,
 ): UserMembership {
   return {
+    identityId: `identity-${memberId}`,
     memberId,
     membershipCategory: category,
     status: "active",
@@ -58,10 +59,6 @@ describe("UserMembershipPanel", () => {
       first_name: "Multiple",
       last_name: "Representative",
       preferred_name: null,
-      organization_name: null,
-      job_title: null,
-      biography: null,
-      links: [],
       role: "user",
       active: true,
       isEcMember: false,
@@ -69,7 +66,7 @@ describe("UserMembershipPanel", () => {
       created_at: "2026-08-01T00:00:00.000Z",
       updated_at: "2026-08-01T00:00:00.000Z",
       pii_redacted_at: null,
-      memberships: [
+      identities: [
         membership("member-a", "Organization A", "A", "pqc", "PQC Working Group"),
         membership("member-b", "Organization B", "B", "cm", "Cryptographic Module Working Group"),
       ],
@@ -78,13 +75,13 @@ describe("UserMembershipPanel", () => {
     document.body.append(container);
     mounted.push(container);
 
-    void act(() => render(<UserMembershipPanel user={user} onChanged={vi.fn()} canManage />, container));
+    void act(() => render(<UserMembershipPanel user={user} onChanged={vi.fn()} canManage canActivate />, container));
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("PQC Working Group");
     expect(container.textContent).toContain("Organization B");
     expect(container.textContent).toContain("Cryptographic Module Working Group");
-    expect(container.textContent).toContain("Add organization representation");
+    expect(container.textContent).toContain("Add identity");
     expect(container.querySelectorAll("select")).toHaveLength(0);
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
   });
@@ -122,10 +119,7 @@ describe("UserMembershipPanel", () => {
     document.body.append(container);
     mounted.push(container);
     void act(() =>
-      render(
-        <UserMembershipCard userId="user-1" membership={individual} onChanged={async () => {}} canManage />,
-        container,
-      ),
+      render(<UserMembershipCard membership={individual} onChanged={async () => {}} canManage />, container),
     );
     const category = container.querySelector("select") as HTMLSelectElement;
     category.value = "H6";
@@ -135,7 +129,7 @@ describe("UserMembershipPanel", () => {
     expect(requests[0]?.pathname).toBe("/api/v1/members/capacities/member-individual");
   });
 
-  it("renders and edits organization-specific profile fields through the representative route", async () => {
+  it("renders and edits organization-specific profile fields through the identity route", async () => {
     const requests: Array<{ pathname: string; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -145,10 +139,13 @@ describe("UserMembershipPanel", () => {
           "https://app.test",
         );
         requests.push({ pathname: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : null });
-        return new Response(JSON.stringify({ success: true, representativeId: "representative-a" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ success: true, identityId: "identity-representative-a", state: "active" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
       }),
     );
     const org = membership("representative-a", "Organization A", "A", "pqc", "PQC Working Group");
@@ -159,9 +156,7 @@ describe("UserMembershipPanel", () => {
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
-    void act(() =>
-      render(<UserMembershipCard userId="user-1" membership={org} onChanged={async () => {}} canManage />, container),
-    );
+    void act(() => render(<UserMembershipCard membership={org} onChanged={async () => {}} canManage />, container));
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("role@organization-a.example");
@@ -169,26 +164,28 @@ describe("UserMembershipPanel", () => {
     expect(container.textContent).toContain("Represents Organization A.");
 
     const edit = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Edit representation profile",
+      (button) => button.textContent === "Edit identity profile",
     )!;
     void act(() => edit.click());
-    const title = container.querySelector<HTMLInputElement>("#representation-job-title-representative-a")!;
+    const title = container.querySelector<HTMLInputElement>("#identity-job-title-identity-representative-a")!;
     await act(() => {
       title.value = "Updated standards lead";
       title.dispatchEvent(new Event("input", { bubbles: true }));
     });
     const save = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Save representation profile",
+      (button) => button.textContent === "Save identity profile",
     )!;
     await act(() => save.click());
 
     expect(requests).toEqual([
       {
-        pathname: "/api/v1/organizations/organization-representative-a/representatives/user-1",
+        pathname: "/api/v1/organizations/organization-representative-a/identities/identity-representative-a",
         body: {
-          jobTitle: "Updated standards lead",
-          biography: "Represents Organization A.",
-          links: ["https://organization-a.example/profile"],
+          profile: {
+            jobTitle: "Updated standards lead",
+            biography: "Represents Organization A.",
+            links: ["https://organization-a.example/profile"],
+          },
         },
       },
     ]);
@@ -218,7 +215,7 @@ describe("UserMembershipPanel", () => {
       render(
         <>
           <ConfirmDialogHost />
-          <UserMembershipCard userId="user-1" membership={org} onChanged={async () => {}} canManage />
+          <UserMembershipCard membership={org} onChanged={async () => {}} canManage />
         </>,
         container,
       ),
@@ -230,16 +227,19 @@ describe("UserMembershipPanel", () => {
       return button;
     }
 
-    void act(() => dialogButton("Remove membership").click());
-    expect(container.textContent).toContain("Remove the membership for Organization A?");
+    void act(() => dialogButton("End identity").click());
+    expect(container.textContent).toContain("End the identity for Organization A?");
     void act(() => dialogButton("Cancel").click());
     await act(async () => {
       await Promise.resolve();
     });
     expect(requests).toHaveLength(0);
 
-    void act(() => dialogButton("Remove membership").click());
-    await act(() => dialogButton("Remove membership").click());
-    expect(requests[0]).toMatchObject({ method: "DELETE", pathname: "/api/v1/members/capacities/member-org" });
+    void act(() => dialogButton("End identity").click());
+    await act(() => dialogButton("End identity").click());
+    expect(requests[0]).toMatchObject({
+      method: "PATCH",
+      pathname: "/api/v1/organizations/organization-member-org/identities/identity-member-org",
+    });
   });
 });

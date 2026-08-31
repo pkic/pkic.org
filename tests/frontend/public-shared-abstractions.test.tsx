@@ -12,7 +12,7 @@ import { findEmailReviewCard } from "../../assets/ts/event-flows/registration-pa
 import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
 import { useAsyncSubmission } from "../../assets/ts/hooks/useAsyncSubmission";
 import { useMagicLinkRequest } from "../../assets/ts/hooks/useMagicLinkRequest";
-import { RepresentativeSelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
+import { IdentitySelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
 import { formatStageLabel } from "../../assets/ts/member-flows/portal/ui";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { classifyDonationPollResult } from "../../assets/ts/shared/donation/session-poll";
@@ -204,12 +204,12 @@ describe("public shared frontend abstractions", () => {
   it("renders representative choices through the shared selector", () => {
     const onChange = vi.fn();
     const container = mount(
-      <RepresentativeSelect
+      <IdentitySelect
         className="representative-test"
         value=""
         disabled={false}
         emptyLabel="Primary contact"
-        representatives={[{ userId: "user-1", name: "Ada", email: "ada@example.test" }]}
+        identities={[{ userId: "user-1", name: "Ada", email: "ada@example.test" }]}
         onChange={onChange}
       />,
     );

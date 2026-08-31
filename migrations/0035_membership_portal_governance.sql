@@ -1371,20 +1371,20 @@ CREATE TABLE leadership_positions (
   id         TEXT NOT NULL PRIMARY KEY,
   body       TEXT NOT NULL,
   user_id    TEXT NOT NULL,
-  member_id  TEXT,
+  identity_id TEXT,
   title      TEXT NOT NULL,
   starts_at  TEXT NOT NULL,
   ends_at    TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(member_id) REFERENCES members(id)
+  FOREIGN KEY(identity_id) REFERENCES identities(id)
 );
 
 -- Public roster lookups by represented Member, and Member deletes.
-CREATE INDEX idx_leadership_positions_member
-  ON leadership_positions(member_id)
-  WHERE member_id IS NOT NULL;
+CREATE INDEX idx_leadership_positions_identity
+  ON leadership_positions(identity_id)
+  WHERE identity_id IS NOT NULL;
 
 CREATE INDEX idx_leadership_positions_body_dates
   ON leadership_positions(body, ends_at, starts_at DESC, id);
@@ -1481,6 +1481,7 @@ CREATE TABLE group_memberships (
   id                 TEXT NOT NULL PRIMARY KEY,
   group_id           TEXT NOT NULL,
   user_id            TEXT NOT NULL,
+  identity_id        TEXT NOT NULL,
   member_id          TEXT NOT NULL,
   source             TEXT NOT NULL DEFAULT 'self_service',
   created_by_user_id TEXT,
@@ -1491,19 +1492,20 @@ CREATE TABLE group_memberships (
   CHECK (left_at IS NULL OR left_at >= joined_at),
   FOREIGN KEY(group_id) REFERENCES groups(id),
   FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(identity_id) REFERENCES identities(id),
   FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(created_by_user_id) REFERENCES users(id)
 );
 
 CREATE UNIQUE INDEX uq_group_memberships_active_capacity
-  ON group_memberships(group_id, user_id, member_id)
+  ON group_memberships(group_id, identity_id)
   WHERE left_at IS NULL;
 CREATE INDEX idx_group_memberships_group_active
-  ON group_memberships(group_id, left_at, user_id, member_id);
+  ON group_memberships(group_id, left_at, identity_id, user_id, member_id);
 CREATE INDEX idx_group_memberships_user_active
-  ON group_memberships(user_id, left_at, group_id, member_id);
+  ON group_memberships(user_id, left_at, group_id, identity_id, member_id);
 CREATE INDEX idx_group_memberships_member_active
-  ON group_memberships(member_id, left_at, group_id, user_id);
+  ON group_memberships(member_id, left_at, group_id, identity_id, user_id);
 CREATE INDEX idx_group_memberships_joined_window
   ON group_memberships(joined_at, group_id);
 CREATE INDEX idx_group_memberships_left_window
@@ -2144,7 +2146,7 @@ A member of our team will follow up with you shortly to discuss next steps.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
--- Section: Membership category assignment + organization representatives
+-- Section: Membership category assignment + acting identities
 --
 -- `members` (migration 0000) already models the aggregate this PR needs —
 -- one row per organization or per individual, mutual exclusivity of
@@ -2177,53 +2179,87 @@ CREATE TABLE member_category_assignments (
 CREATE INDEX idx_member_category_assignments_category
   ON member_category_assignments(category_code);
 
--- ── Organization representatives ─────────────────────────────────────────
--- The N people who represent an organization-tied membership aggregate.
--- One durable row per pair is restored in place so a contact block cannot be
--- bypassed by inserting another active row for the same pair.
-CREATE TABLE organization_representatives (
-  id                  TEXT NOT NULL PRIMARY KEY,
-  member_id           TEXT NOT NULL,
-  -- FK to members.id — the organization's aggregate row
-  user_id             TEXT NOT NULL,
+-- ── Acting identities ────────────────────────────────────────────────────
+-- Sparse, approved Member identities are the single source of truth for the
+-- capacity in which a user acts. Most users have one organization identity;
+-- an organization-less identity exists only for an approved individual
+-- Member. organization_id is the discriminator, so there is no kind column or
+-- copied member_id. Member ownership is derived by the sargable view below.
+CREATE TABLE identities (
+  id                           TEXT NOT NULL PRIMARY KEY,
+  user_id                      TEXT NOT NULL,
+  organization_id              TEXT,
   -- NULL selects the user's primary address. A non-NULL value selects one
-  -- verified address from user_emails; the trigger below proves ownership.
-  -- The address itself is never copied into this relationship row.
-  email_id             TEXT,
-  job_title            TEXT,
-  biography            TEXT,
-  links_json           TEXT,
-  source              TEXT NOT NULL,
-  -- allowed: verified_domain | organization_contact | staff | migration
-  show_on_org_profile INTEGER NOT NULL DEFAULT 1 CHECK (show_on_org_profile IN (0, 1)),
-  joined_at           TEXT NOT NULL,
-  left_at             TEXT,
-  blocked_at          TEXT,
-  blocked_by_user_id  TEXT,
-  created_at          TEXT NOT NULL,
-  updated_at          TEXT NOT NULL,
-  CHECK (left_at IS NULL OR left_at >= joined_at),
-  CHECK (blocked_at IS NULL OR left_at IS NOT NULL),
-  UNIQUE (member_id, user_id),
-  UNIQUE (id, member_id),
-  -- lets a service-layer check prove a representative row belongs to a
-  -- specific member before granting a representative role against it
-  FOREIGN KEY(member_id) REFERENCES members(id),
+  -- verified address from user_emails; the address text is never copied.
+  email_id                      TEXT,
+  -- Individual identities never carry an affiliation or editable job title.
+  job_title                     TEXT,
+  biography                     TEXT,
+  links_json                    TEXT,
+  source                        TEXT NOT NULL,
+  -- allowed: membership_approval | verified_domain | organization_contact |
+  --          staff | migration
+  show_on_organization_profile  INTEGER NOT NULL DEFAULT 1
+                                  CHECK (show_on_organization_profile IN (0, 1)),
+  invited_at                    TEXT NOT NULL,
+  started_at                    TEXT,
+  ended_at                      TEXT,
+  blocked_at                    TEXT,
+  blocked_by_user_id            TEXT,
+  predecessor_identity_id       TEXT,
+  created_at                    TEXT NOT NULL,
+  updated_at                    TEXT NOT NULL,
+  CHECK (started_at IS NULL OR started_at >= invited_at),
+  CHECK (ended_at IS NULL OR ended_at >= COALESCE(started_at, invited_at)),
+  CHECK (blocked_at IS NULL OR ended_at IS NOT NULL),
+  CHECK (
+    organization_id IS NOT NULL
+    OR (job_title IS NULL AND show_on_organization_profile = 0)
+  ),
   FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(organization_id) REFERENCES organizations(id),
   FOREIGN KEY(email_id) REFERENCES user_emails(id) ON DELETE SET NULL,
-  FOREIGN KEY(blocked_by_user_id) REFERENCES users(id)
+  FOREIGN KEY(blocked_by_user_id) REFERENCES users(id),
+  FOREIGN KEY(predecessor_identity_id) REFERENCES identities(id)
 );
 
-CREATE INDEX idx_organization_representatives_member_active
-  ON organization_representatives(member_id, left_at, joined_at);
-CREATE INDEX idx_organization_representatives_user_active
-  ON organization_representatives(user_id, left_at, joined_at);
-CREATE INDEX idx_organization_representatives_email
-  ON organization_representatives(email_id)
-  WHERE email_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_identities_active_organization
+  ON identities(user_id, organization_id)
+  WHERE organization_id IS NOT NULL
+    AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL;
+CREATE UNIQUE INDEX uq_identities_active_individual
+  ON identities(user_id)
+  WHERE organization_id IS NULL
+    AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL;
+CREATE INDEX idx_identities_user_lifecycle
+  ON identities(user_id, ended_at, blocked_at, started_at, invited_at);
+CREATE INDEX idx_identities_organization_lifecycle
+  ON identities(organization_id, ended_at, blocked_at, started_at, invited_at)
+  WHERE organization_id IS NOT NULL;
+CREATE INDEX idx_identities_email ON identities(email_id) WHERE email_id IS NOT NULL;
+CREATE INDEX idx_identities_predecessor
+  ON identities(predecessor_identity_id) WHERE predecessor_identity_id IS NOT NULL;
 
-CREATE TRIGGER trg_organization_representatives_email_insert
-BEFORE INSERT ON organization_representatives
+-- One canonical, index-friendly projection resolves an identity to its unique
+-- Member aggregate without copying member_id into identities.
+CREATE VIEW identity_member_capacities AS
+  SELECT identity.id AS identity_id, identity.user_id, member.id AS member_id,
+         identity.organization_id, member.member_type, member.status AS member_status,
+         category.category_code AS membership_category
+    FROM identities identity
+    JOIN members member ON member.organization_id = identity.organization_id
+    JOIN member_category_assignments category ON category.member_id = member.id
+   WHERE identity.organization_id IS NOT NULL
+  UNION ALL
+  SELECT identity.id, identity.user_id, member.id, NULL,
+         member.member_type, member.status, category.category_code
+    FROM identities identity
+    JOIN members member ON member.user_id = identity.user_id
+    JOIN member_category_assignments category ON category.member_id = member.id
+   WHERE identity.organization_id IS NULL;
+
+CREATE TRIGGER trg_identities_email_insert
+BEFORE INSERT ON identities
 WHEN NEW.email_id IS NOT NULL
  AND NOT EXISTS (
    SELECT 1 FROM user_emails address
@@ -2232,11 +2268,11 @@ WHEN NEW.email_id IS NOT NULL
       AND address.verified_at IS NOT NULL
  )
 BEGIN
-  SELECT RAISE(ABORT, 'REPRESENTATIVE_EMAIL_INVALID');
+  SELECT RAISE(ABORT, 'IDENTITY_EMAIL_INVALID');
 END;
 
-CREATE TRIGGER trg_organization_representatives_email_update
-BEFORE UPDATE OF user_id, email_id ON organization_representatives
+CREATE TRIGGER trg_identities_email_update
+BEFORE UPDATE OF user_id, email_id ON identities
 WHEN NEW.email_id IS NOT NULL
  AND NOT EXISTS (
    SELECT 1 FROM user_emails address
@@ -2245,145 +2281,135 @@ WHEN NEW.email_id IS NOT NULL
       AND address.verified_at IS NOT NULL
  )
 BEGIN
-  SELECT RAISE(ABORT, 'REPRESENTATIVE_EMAIL_INVALID');
+  SELECT RAISE(ABORT, 'IDENTITY_EMAIL_INVALID');
 END;
 
-CREATE TRIGGER trg_organization_representatives_require_org_member_insert
-BEFORE INSERT ON organization_representatives
+CREATE TRIGGER trg_identities_member_scope_insert
+BEFORE INSERT ON identities
 WHEN NOT EXISTS (
-  SELECT 1 FROM members m
-  WHERE m.id = NEW.member_id AND m.organization_id IS NOT NULL
+  SELECT 1
+    FROM members member
+    LEFT JOIN member_category_assignments category ON category.member_id = member.id
+   WHERE (
+     NEW.organization_id IS NOT NULL
+     AND member.organization_id = NEW.organization_id
+     AND member.member_type = 'organization'
+   ) OR (
+     NEW.organization_id IS NULL
+     AND member.user_id = NEW.user_id
+     AND member.member_type = 'individual'
+     AND category.category_code IN ('H5', 'H6', 'H7')
+   )
 )
 BEGIN
-  SELECT RAISE(ABORT, 'organization representative requires an organization membership');
+  SELECT RAISE(ABORT, 'IDENTITY_MEMBER_SCOPE_INVALID');
 END;
 
-CREATE TRIGGER trg_organization_representatives_require_org_member_update
-BEFORE UPDATE OF member_id ON organization_representatives
-WHEN NOT EXISTS (
-  SELECT 1 FROM members m
-  WHERE m.id = NEW.member_id AND m.organization_id IS NOT NULL
-)
+CREATE TRIGGER trg_identities_member_scope_update
+BEFORE UPDATE OF user_id, organization_id ON identities
+WHEN NEW.user_id IS NOT OLD.user_id OR NEW.organization_id IS NOT OLD.organization_id
 BEGIN
-  SELECT RAISE(ABORT, 'organization representative requires an organization membership');
+  SELECT RAISE(ABORT, 'IDENTITY_SCOPE_IMMUTABLE');
 END;
 
--- A person acts either as an individual Member or through one or more
--- organizations, never both. Service checks provide useful errors; these
--- triggers close the concurrent-writer race at the D1 boundary without a
--- restrictive table CHECK or rebuild.
-CREATE TRIGGER trg_organization_representatives_reject_individual_insert
-BEFORE INSERT ON organization_representatives
-WHEN NEW.left_at IS NULL
+-- A person acts either as an approved individual Member or through one or
+-- more organizations, never both. Service checks provide useful errors; these
+-- triggers close concurrent-writer races at the D1 boundary.
+CREATE TRIGGER trg_identities_reject_individual_conflict_insert
+BEFORE INSERT ON identities
+WHEN NEW.started_at IS NOT NULL AND NEW.ended_at IS NULL AND NEW.blocked_at IS NULL
  AND EXISTS (
-   SELECT 1 FROM members individual
-    WHERE individual.user_id = NEW.user_id
-      AND individual.member_type = 'individual'
-      AND individual.status = 'active'
+   SELECT 1 FROM identities active
+    WHERE active.user_id = NEW.user_id
+      AND active.organization_id IS NOT NEW.organization_id
+      AND (active.organization_id IS NULL OR NEW.organization_id IS NULL)
+      AND active.started_at IS NOT NULL
+      AND active.ended_at IS NULL AND active.blocked_at IS NULL
  )
 BEGIN
-  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+  SELECT RAISE(ABORT, 'individual and organization identities are mutually exclusive');
 END;
 
-CREATE TRIGGER trg_organization_representatives_reject_individual_update
-BEFORE UPDATE OF user_id, left_at, blocked_at ON organization_representatives
-WHEN NEW.left_at IS NULL AND NEW.blocked_at IS NULL
+CREATE TRIGGER trg_identities_reject_individual_conflict_update
+BEFORE UPDATE OF started_at, ended_at, blocked_at ON identities
+WHEN NEW.started_at IS NOT NULL AND NEW.ended_at IS NULL AND NEW.blocked_at IS NULL
  AND EXISTS (
-   SELECT 1 FROM members individual
-    WHERE individual.user_id = NEW.user_id
-      AND individual.member_type = 'individual'
-      AND individual.status = 'active'
+   SELECT 1 FROM identities active
+    WHERE active.id <> NEW.id
+      AND active.user_id = NEW.user_id
+      AND active.organization_id IS NOT NEW.organization_id
+      AND (active.organization_id IS NULL OR NEW.organization_id IS NULL)
+      AND active.started_at IS NOT NULL
+      AND active.ended_at IS NULL AND active.blocked_at IS NULL
  )
 BEGIN
-  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+  SELECT RAISE(ABORT, 'individual and organization identities are mutually exclusive');
 END;
 
-CREATE TRIGGER trg_members_reject_representative_capacity_insert
+CREATE TRIGGER trg_members_reject_organization_identity_insert
 BEFORE INSERT ON members
 WHEN NEW.member_type = 'individual' AND NEW.status = 'active'
  AND EXISTS (
-   SELECT 1 FROM organization_representatives representative
-    WHERE representative.user_id = NEW.user_id
-      AND representative.left_at IS NULL
-      AND representative.blocked_at IS NULL
+   SELECT 1 FROM identities identity
+    WHERE identity.user_id = NEW.user_id
+      AND identity.organization_id IS NOT NULL
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
  )
 BEGIN
-  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+  SELECT RAISE(ABORT, 'individual and organization identities are mutually exclusive');
 END;
 
-CREATE TRIGGER trg_members_reject_representative_capacity_update
+CREATE TRIGGER trg_members_reject_organization_identity_update
 BEFORE UPDATE OF user_id, member_type, status ON members
 WHEN NEW.member_type = 'individual' AND NEW.status = 'active'
  AND EXISTS (
-   SELECT 1 FROM organization_representatives representative
-    WHERE representative.user_id = NEW.user_id
-      AND representative.left_at IS NULL
-      AND representative.blocked_at IS NULL
+   SELECT 1 FROM identities identity
+    WHERE identity.user_id = NEW.user_id
+      AND identity.organization_id IS NOT NULL
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
  )
 BEGIN
-  SELECT RAISE(ABORT, 'individual and organization representative capacities are mutually exclusive');
+  SELECT RAISE(ABORT, 'individual and organization identities are mutually exclusive');
 END;
 
--- Closing or blocking a representation immediately removes every active
--- group capacity held for that Member. Historical memberships and actions
--- remain intact.
-CREATE TRIGGER trg_organization_representatives_end_group_capacities
-AFTER UPDATE OF left_at, blocked_at ON organization_representatives
-WHEN (OLD.left_at IS NULL AND NEW.left_at IS NOT NULL)
+-- Closing or blocking an identity immediately removes its active group and
+-- role capacities. Historical memberships and actions remain intact.
+CREATE TRIGGER trg_identities_end_capacities
+AFTER UPDATE OF ended_at, blocked_at ON identities
+WHEN (OLD.ended_at IS NULL AND NEW.ended_at IS NOT NULL)
   OR (OLD.blocked_at IS NULL AND NEW.blocked_at IS NOT NULL)
 BEGIN
   UPDATE group_memberships
-  SET left_at = COALESCE(NEW.left_at, NEW.blocked_at),
+  SET left_at = COALESCE(NEW.ended_at, NEW.blocked_at),
       updated_at = NEW.updated_at
-  WHERE user_id = NEW.user_id
-    AND member_id = NEW.member_id
+  WHERE identity_id = NEW.id
     AND left_at IS NULL;
 
   UPDATE user_roles
-  SET revoked_at = COALESCE(NEW.left_at, NEW.blocked_at)
-  WHERE user_id = NEW.user_id
-    AND (
-      (context_type = 'organization' AND context_id = NEW.member_id)
-      OR member_id = NEW.member_id
-    )
+  SET revoked_at = COALESCE(NEW.ended_at, NEW.blocked_at)
+  WHERE identity_id = NEW.id
     AND revoked_at IS NULL;
 END;
 
--- A group capacity must be held either through the user's own active
--- individual Member or through an active organization representation. Once a
--- user represents any organization, individual group participation is
--- disallowed to avoid ambiguous IPR attribution.
+-- A group capacity must resolve to one active identity. Once a user acts
+-- through an organization, individual group participation is disallowed to
+-- avoid ambiguous IPR attribution.
 CREATE TRIGGER trg_group_memberships_validate_capacity_insert
 BEFORE INSERT ON group_memberships
 BEGIN
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1
-    FROM members m
-    WHERE m.id = NEW.member_id
-      AND m.status = 'active'
-      AND (
-        (
-          m.member_type = 'organization'
-          AND EXISTS (
-            SELECT 1 FROM organization_representatives rep
-            WHERE rep.member_id = m.id
-              AND rep.user_id = NEW.user_id
-              AND rep.left_at IS NULL
-              AND rep.blocked_at IS NULL
-          )
-        )
-        OR (
-          m.member_type = 'individual'
-          AND m.user_id = NEW.user_id
-          AND NOT EXISTS (
-            SELECT 1 FROM organization_representatives rep
-            WHERE rep.user_id = NEW.user_id
-              AND rep.left_at IS NULL
-              AND rep.blocked_at IS NULL
-          )
-        )
-      )
-  ) THEN RAISE(ABORT, 'active representative capacity required') END;
+    FROM identity_member_capacities capacity
+    JOIN identities identity ON identity.id = capacity.identity_id
+    WHERE capacity.identity_id = NEW.identity_id
+      AND capacity.member_id = NEW.member_id
+      AND capacity.user_id = NEW.user_id
+      AND capacity.member_status = 'active'
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+  ) THEN RAISE(ABORT, 'active identity required') END;
 END;
 
 CREATE TRIGGER trg_group_memberships_validate_capacity_reactivate
@@ -2392,38 +2418,22 @@ WHEN OLD.left_at IS NOT NULL AND NEW.left_at IS NULL
 BEGIN
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1
-    FROM members m
-    WHERE m.id = NEW.member_id
-      AND m.status = 'active'
-      AND (
-        (
-          m.member_type = 'organization'
-          AND EXISTS (
-            SELECT 1 FROM organization_representatives rep
-            WHERE rep.member_id = m.id
-              AND rep.user_id = NEW.user_id
-              AND rep.left_at IS NULL
-              AND rep.blocked_at IS NULL
-          )
-        )
-        OR (
-          m.member_type = 'individual'
-          AND m.user_id = NEW.user_id
-          AND NOT EXISTS (
-            SELECT 1 FROM organization_representatives rep
-            WHERE rep.user_id = NEW.user_id
-              AND rep.left_at IS NULL
-              AND rep.blocked_at IS NULL
-          )
-        )
-      )
-  ) THEN RAISE(ABORT, 'active representative capacity required') END;
+    FROM identity_member_capacities capacity
+    JOIN identities identity ON identity.id = capacity.identity_id
+    WHERE capacity.identity_id = NEW.identity_id
+      AND capacity.member_id = NEW.member_id
+      AND capacity.user_id = NEW.user_id
+      AND capacity.member_status = 'active'
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+  ) THEN RAISE(ABORT, 'active identity required') END;
 END;
 
 CREATE TRIGGER trg_group_memberships_identity_immutable
-BEFORE UPDATE OF group_id, user_id, member_id ON group_memberships
+BEFORE UPDATE OF group_id, user_id, identity_id, member_id ON group_memberships
 WHEN NEW.group_id <> OLD.group_id
   OR NEW.user_id <> OLD.user_id
+  OR NEW.identity_id <> OLD.identity_id
   OR NEW.member_id <> OLD.member_id
 BEGIN
   SELECT RAISE(ABORT, 'group membership identity is immutable');
@@ -2503,6 +2513,9 @@ CREATE TABLE user_roles (
   context_type       TEXT,
   -- allowed: 'event' | 'group' | 'organization' | NULL (global)
   context_id         TEXT,
+  -- Exact acting identity for organization-contact and group-leadership roles.
+  -- Global and event staff roles remain person-scoped and leave this NULL.
+  identity_id        TEXT,
   -- Required for group leadership and forbidden for unrelated role types.
   -- It records the one Member capacity on whose behalf the role is held.
   member_id          TEXT,
@@ -2519,6 +2532,7 @@ CREATE TABLE user_roles (
   created_at         TEXT NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(role_id) REFERENCES roles(id),
+  FOREIGN KEY(identity_id) REFERENCES identities(id),
   FOREIGN KEY(member_id) REFERENCES members(id),
   FOREIGN KEY(granted_by_user_id) REFERENCES users(id)
 );
@@ -2528,6 +2542,8 @@ CREATE INDEX idx_user_roles_context ON user_roles(context_type, context_id);
 CREATE INDEX idx_user_roles_role ON user_roles(role_id);
 CREATE INDEX idx_user_roles_member ON user_roles(member_id)
   WHERE member_id IS NOT NULL;
+CREATE INDEX idx_user_roles_identity ON user_roles(identity_id)
+  WHERE identity_id IS NOT NULL;
 CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
   ON user_roles(context_type, context_id, role_id)
   WHERE revoked_at IS NULL AND single_holder_per_context = 1;
@@ -2552,26 +2568,29 @@ WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
     AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead')
     AND (
       NEW.context_type <> 'group'
+      OR NEW.identity_id IS NULL
       OR NEW.member_id IS NULL
       OR NOT EXISTS (
         SELECT 1 FROM group_memberships membership
          WHERE membership.group_id = NEW.context_id
            AND membership.user_id = NEW.user_id
+           AND membership.identity_id = NEW.identity_id
            AND membership.member_id = NEW.member_id
            AND membership.left_at IS NULL
       )
     )
   )
   OR (
-    NEW.member_id IS NOT NULL
+    (NEW.identity_id IS NOT NULL OR NEW.member_id IS NOT NULL)
     AND NOT (NEW.context_type = 'group' AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead'))
+    AND NOT (NEW.context_type = 'organization' AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact'))
   )
 BEGIN
   SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
 END;
 
 CREATE TRIGGER validate_user_role_context_update
-BEFORE UPDATE OF user_id, role_id, context_type, context_id, member_id, revoked_at ON user_roles
+BEFORE UPDATE OF user_id, role_id, context_type, context_id, identity_id, member_id, revoked_at ON user_roles
 FOR EACH ROW
 WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
@@ -2584,67 +2603,77 @@ WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
     AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead')
     AND (
       NEW.context_type <> 'group'
+      OR NEW.identity_id IS NULL
       OR NEW.member_id IS NULL
       OR NOT EXISTS (
         SELECT 1 FROM group_memberships membership
          WHERE membership.group_id = NEW.context_id
            AND membership.user_id = NEW.user_id
+           AND membership.identity_id = NEW.identity_id
            AND membership.member_id = NEW.member_id
            AND membership.left_at IS NULL
       )
     )
   )
   OR (
-    NEW.member_id IS NOT NULL
+    (NEW.identity_id IS NOT NULL OR NEW.member_id IS NOT NULL)
     AND NOT (NEW.context_type = 'group' AND NEW.role_id IN ('role-group_lead', 'role-group_deputy_lead'))
+    AND NOT (NEW.context_type = 'organization' AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact'))
   )
 BEGIN
   SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
 END;
 
--- Representative designations are relationship-owned facts: an organization
--- role grant is valid only while its user has an active
--- organization_representatives row for the same members aggregate. Keep this
+-- Organization-contact designations are identity-owned facts: an organization
+-- role grant is valid only while its user has an active identity resolving to
+-- the same Member aggregate. Keep this
 -- invariant at the D1 write boundary as well as in the service preflight. The
 -- trigger is deliberately aborting rather than silently filtering an INSERT,
 -- so a stale preflight cannot revoke the current holder and report success
 -- without installing the replacement.
-CREATE TRIGGER trg_user_roles_representative_requires_active
+CREATE TRIGGER trg_user_roles_identity_requires_active
 BEFORE INSERT ON user_roles
 WHEN NEW.context_type = 'organization'
   AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact')
   AND NEW.revoked_at IS NULL
   AND NOT EXISTS (
     SELECT 1
-    FROM organization_representatives rep
-    WHERE rep.member_id = NEW.context_id
-      AND rep.user_id = NEW.user_id
-      AND rep.left_at IS NULL
+    FROM identities identity
+    JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+    WHERE capacity.member_id = NEW.context_id
+      AND capacity.identity_id = NEW.identity_id
+      AND identity.user_id = NEW.user_id
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
   )
 BEGIN
-  SELECT RAISE(ABORT, 'representative role requires an active representative');
+  SELECT RAISE(ABORT, 'organization role requires an active identity');
 END;
 
-CREATE TRIGGER trg_user_roles_representative_update_requires_active
-BEFORE UPDATE OF user_id, role_id, context_type, context_id, revoked_at ON user_roles
+CREATE TRIGGER trg_user_roles_identity_update_requires_active
+BEFORE UPDATE OF user_id, role_id, context_type, context_id, identity_id, revoked_at ON user_roles
 WHEN NEW.context_type = 'organization'
   AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact')
   AND NEW.revoked_at IS NULL
   AND NOT EXISTS (
     SELECT 1
-    FROM organization_representatives rep
-    WHERE rep.member_id = NEW.context_id
-      AND rep.user_id = NEW.user_id
-      AND rep.left_at IS NULL
+    FROM identities identity
+    JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+    WHERE capacity.member_id = NEW.context_id
+      AND capacity.identity_id = NEW.identity_id
+      AND identity.user_id = NEW.user_id
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
   )
 BEGIN
-  SELECT RAISE(ABORT, 'representative role requires an active representative');
+  SELECT RAISE(ABORT, 'organization role requires an active identity');
 END;
 
 -- Preserve the active-grant uniqueness that the legacy event_permissions
 -- table enforced and extend it to every non-singleton role assignment.
 CREATE UNIQUE INDEX uq_user_roles_active_user_role_context
-  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id, COALESCE(member_id, ''))
+  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id,
+                COALESCE(identity_id, ''), COALESCE(member_id, ''))
   WHERE revoked_at IS NULL AND single_holder_per_context = 0;
 
 CREATE TABLE permission_grants (
@@ -2799,6 +2828,7 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
 INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'membership:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'membership:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'identities:activate', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'membership:approve', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'events:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'events:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -2903,14 +2933,16 @@ SELECT
     WHEN 'program_committee' THEN 'role-program_committee'
     WHEN 'moderator' THEN 'role-event_moderator'
     WHEN 'volunteer' THEN 'role-event_volunteer'
-  END,
+  END
+  ,
   'event',
   ep.event_id,
   CASE
     WHEN EXISTS (SELECT 1 FROM users grantor WHERE grantor.id = ep.granted_by_id)
       THEN ep.granted_by_id
     ELSE NULL
-  END,
+  END
+  ,
   NULL,
   NULL,
   ep.created_at
@@ -2918,8 +2950,8 @@ FROM event_permissions ep;
 
 DROP TABLE event_permissions;
 
--- ── Organization representative roles ────────────────────────────────────
--- Reuses this same roles/user_roles system for organization representative
+-- ── Organization identity roles ──────────────────────────────────────────
+-- Reuses this same roles/user_roles system for organization identity
 -- designations instead of a bespoke organization_representative_roles
 -- table. Each is a singleton per organization: at most one active
 -- role-primary_contact and one role-secondary_contact grant per (context_type='organization',
@@ -3002,11 +3034,11 @@ CREATE INDEX idx_passkey_challenge_uses_expires
 -- forward now; workflow-only additions (logo_staging_r2_key,
 -- organization_content_reviews) land in consolidated migration 0035.
 --
--- Primary/secondary contact and per-representative profile visibility are
+-- Primary/secondary contact and per-identity profile visibility are
 -- NOT columns here: primary/secondary contact are organization-context
 -- role-primary_contact/role-secondary_contact grants in user_roles
--- (consolidated migration 0035), and per-representative visibility is
--- organization_representatives.show_on_org_profile (consolidated migration 0035) — both
+-- (consolidated migration 0035), and per-identity visibility is
+-- identities.show_on_organization_profile (consolidated migration 0035) — both
 -- are relationship-owned, not organization- or member-owned facts.
 --
 -- Social links use the same canonical `links_json` array
@@ -3599,6 +3631,26 @@ CREATE INDEX idx_user_emails_verified_domain
   ON user_emails(substr(normalized_email, instr(normalized_email, '@') + 1), user_id)
   WHERE verified_at IS NOT NULL;
 
+-- Existing individual Member aggregates receive the one sparse identity they
+-- require. This runs only after user_emails exists because identity email
+-- ownership is guarded at the D1 boundary. Ordinary users and event attendees
+-- receive no identity row.
+INSERT INTO identities (
+  id, user_id, organization_id, email_id, job_title, biography, links_json,
+  source, show_on_organization_profile, invited_at, started_at, ended_at,
+  blocked_at, blocked_by_user_id, predecessor_identity_id, created_at, updated_at
+)
+SELECT 'identity-' || member.id, member.user_id, NULL, NULL, NULL,
+       user.biography, user.links_json, 'migration', 0, member.created_at,
+       CASE WHEN member.status = 'pending' THEN NULL ELSE member.created_at END,
+       CASE WHEN member.status IN ('inactive', 'lapsed') THEN member.updated_at ELSE NULL END,
+       NULL, NULL, NULL, member.created_at, member.updated_at
+  FROM members member
+  JOIN users user ON user.id = member.user_id
+  JOIN member_category_assignments category ON category.member_id = member.id
+ WHERE member.member_type = 'individual'
+   AND category.category_code IN ('H5', 'H6', 'H7');
+
 -- An email is one global reservation whether it is primary, secondary, or
 -- pending verification. Application checks provide useful 409 responses;
 -- these triggers close cross-table races at the database boundary.
@@ -3728,7 +3780,7 @@ ALTER TABLE organizations ADD COLUMN logo_staging_r2_key TEXT;
 -- ── Secondary contact nomination ─────────────────────────────────────────
 -- Workflow state (a pending nomination awaiting staff confirmation), not an
 -- aggregate or representative fact — so it gets its own small table rather
--- than living on organizations or organization_representatives. One
+-- than living on organizations or identities. One
 -- pending nomination per organization at a time.
 CREATE TABLE organization_secondary_contact_nominations (
   id                TEXT NOT NULL PRIMARY KEY,
@@ -5104,6 +5156,7 @@ CREATE TABLE vote_consultation_responses (
   id            TEXT NOT NULL PRIMARY KEY,
   vote_id       TEXT NOT NULL REFERENCES votes(id),
   user_id       TEXT NOT NULL REFERENCES users(id),
+  identity_id   TEXT NOT NULL REFERENCES identities(id),
   member_id     TEXT REFERENCES members(id),
   -- member electorate: the represented Member this response speaks for;
   -- person electorate: NULL, exactly as vote_ballots does it.
@@ -5126,6 +5179,7 @@ CREATE TABLE vote_ballots (
   id           TEXT NOT NULL PRIMARY KEY,
   vote_id      TEXT NOT NULL REFERENCES votes(id),
   user_id      TEXT NOT NULL REFERENCES users(id),
+  identity_id  TEXT NOT NULL REFERENCES identities(id),
   member_id    TEXT REFERENCES members(id),
   -- member electorate: the represented Member whose separate ballot this is;
   -- person electorate: NULL. Every active representative may replace the
@@ -5166,6 +5220,7 @@ CREATE TABLE vote_representative_notification_intents (
   vote_id          TEXT NOT NULL REFERENCES votes(id),
   round            INTEGER NOT NULL,
   member_id        TEXT NOT NULL REFERENCES members(id),
+  identity_id      TEXT NOT NULL REFERENCES identities(id),
   representative_user_id TEXT NOT NULL REFERENCES users(id),
   recipient_email  TEXT NOT NULL,
   representative_name TEXT NOT NULL,
@@ -5175,11 +5230,11 @@ CREATE TABLE vote_representative_notification_intents (
   created_at       TEXT NOT NULL,
   queued_outbox_id TEXT,
   queued_at        TEXT,
-  PRIMARY KEY (vote_id, round, member_id, representative_user_id)
+  PRIMARY KEY (vote_id, round, member_id, identity_id)
 );
 
 CREATE INDEX idx_vote_representative_notification_intents_pending
-  ON vote_representative_notification_intents(created_at, vote_id, round, member_id, representative_user_id)
+  ON vote_representative_notification_intents(created_at, vote_id, round, member_id, identity_id)
   WHERE queued_outbox_id IS NULL;
 
 CREATE UNIQUE INDEX uq_vote_representative_notification_intents_outbox
@@ -5822,13 +5877,13 @@ INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key,
    checksum_sha256, status, created_by_user_id, created_at, message_type)
 VALUES (
-  lower(hex(randomblob(16))), 'organization-representation-changed', 1,
-  'Your organization representation changed',
+  lower(hex(randomblob(16))), 'organization-identity-changed', 1,
+  'Your organization identity changed',
   'Hi {{recipientName}},
 
 {{changeMessage}}
 
-Actions you take in this representative capacity are attributed to {{organizationName}}. No acceptance is required. If this change is unexpected, please contact an authorized contact for the organization.',
+When this identity is active, actions taken in that capacity are attributed to {{organizationName}}. Invitations require the recipient to sign in and accept them. If this change is unexpected, please contact an authorized contact for the organization.',
   'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
 );
 

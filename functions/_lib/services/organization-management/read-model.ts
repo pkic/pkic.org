@@ -1,17 +1,17 @@
 /**
  * Organization-management read model — list/detail projections over the
  * post-approval organization profile (data-bearing columns, pulled forward
- * by consolidated migration 0035) plus its representative roster
- * (`organization_representatives`, consolidated migration 0035). Split from the combined
+ * by consolidated migration 0035) plus its acting-identity roster
+ * (`identities`, consolidated migration 0035). Split from the combined
  * prior combined organization module (PR #1 review, Phase 8) — see profile-update.ts for the
- * profile-update use case and representatives.ts for representative/member
+ * profile-update use case and identity lifecycle commands
  * provisioning; this file owns only reads.
  */
 import { all, first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
-import { resolveOrderBy } from "../../db/sort";
+import { resolveMappedOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import {
   ORGANIZATIONS_SORT_COLUMNS,
@@ -49,7 +49,7 @@ interface OrgSummaryRow {
   membership_category: string | null;
   created_at: string;
   updated_at: string;
-  member_count: number;
+  active_identity_count: number;
   primary_contact_user_id: string | null;
   primary_contact_first_name: string | null;
   primary_contact_last_name: string | null;
@@ -59,8 +59,11 @@ interface OrgSummaryRow {
 const ORG_SUMMARY_SELECT = `
   SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since, o.created_at, o.updated_at,
          mca.category_code AS membership_category,
-         (SELECT COUNT(*) FROM organization_representatives r
-           JOIN members m2 ON m2.id = r.member_id WHERE m2.organization_id = o.id AND r.left_at IS NULL) AS member_count,
+         (SELECT COUNT(*) FROM identities identity
+           WHERE identity.organization_id = o.id
+             AND identity.started_at IS NOT NULL
+             AND identity.ended_at IS NULL
+             AND identity.blocked_at IS NULL) AS active_identity_count,
          primary_contact.user_id AS primary_contact_user_id,
          primary_contact.first_name AS primary_contact_first_name,
          primary_contact.last_name AS primary_contact_last_name,
@@ -83,7 +86,7 @@ function toOrgSummary(row: OrgSummaryRow) {
     // before consolidated migration 0035 added this column (or via a path that never set
     // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
     memberSince: row.member_since ?? row.created_at,
-    memberCount: row.member_count,
+    activeIdentityCount: row.active_identity_count,
     primaryContactName: primaryContactName || null,
     primaryContactEmail: row.primary_contact_email,
     createdAt: row.created_at,
@@ -95,7 +98,17 @@ export function buildOrganizationsPageQuery(params: OrganizationsListQuery) {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
-  const orderBy = resolveOrderBy(params.sort, ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    {
+      name: "o.name",
+      membership_category: "membership_category",
+      created_at: "o.created_at",
+      identity_count: "active_identity_count",
+    } satisfies Record<(typeof ORGANIZATIONS_SORT_COLUMNS)[number], string>,
+    "o.name ASC",
+    "o.id ASC",
+  );
   const now = nowIso();
 
   return {
@@ -134,8 +147,8 @@ export interface OrgDetailRow extends OrgSummaryRow {
   links_json: string | null;
 }
 
-interface RepresentativeRow {
-  representative_id: string;
+interface IdentityRow {
+  identity_id: string;
   member_id: string;
   user_id: string;
   first_name: string | null;
@@ -157,8 +170,11 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
             mca.category_code AS membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
             o.links_json,
-            (SELECT COUNT(*) FROM organization_representatives r
-              JOIN members m2 ON m2.id = r.member_id WHERE m2.organization_id = o.id AND r.left_at IS NULL) AS member_count,
+            (SELECT COUNT(*) FROM identities identity
+              WHERE identity.organization_id = o.id
+                AND identity.started_at IS NOT NULL
+                AND identity.ended_at IS NULL
+                AND identity.blocked_at IS NULL) AS active_identity_count,
             primary_contact.user_id AS primary_contact_user_id,
             primary_contact.first_name AS primary_contact_first_name,
             primary_contact.last_name AS primary_contact_last_name,
@@ -173,29 +189,27 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
   );
 }
 
-async function fetchRepresentatives(db: DatabaseLike, organizationId: string): Promise<RepresentativeRow[]> {
-  return all<RepresentativeRow>(
+async function fetchIdentities(db: DatabaseLike, organizationId: string): Promise<IdentityRow[]> {
+  return all<IdentityRow>(
     db,
-    `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name,
-            COALESCE(selected_email.email, u.email) AS email, r.email_id,
-            u.headshot_r2_key, r.job_title, r.biography, r.links_json,
-            r.show_on_org_profile, r.created_at
-     FROM organization_representatives r
-     JOIN members m ON m.id = r.member_id
-     JOIN users u ON u.id = r.user_id
-     LEFT JOIN user_emails selected_email ON selected_email.id = r.email_id
-     WHERE m.organization_id = ? AND r.left_at IS NULL
-     ORDER BY r.created_at ASC`,
+    `SELECT identity.id AS identity_id, capacity.member_id, identity.user_id, u.first_name, u.last_name,
+            COALESCE(selected_email.email, u.email) AS email, identity.email_id,
+            u.headshot_r2_key, identity.job_title, identity.biography, identity.links_json,
+            identity.show_on_organization_profile AS show_on_org_profile, identity.created_at
+     FROM identities identity
+     JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+     JOIN users u ON u.id = identity.user_id
+     LEFT JOIN user_emails selected_email ON selected_email.id = identity.email_id
+     WHERE identity.organization_id = ?
+       AND identity.started_at IS NOT NULL
+       AND identity.ended_at IS NULL
+       AND identity.blocked_at IS NULL
+     ORDER BY identity.created_at ASC`,
     [organizationId],
   );
 }
 
-async function toOrgDetail(
-  db: DatabaseLike,
-  row: OrgDetailRow,
-  representatives: RepresentativeRow[],
-  memberId: string | null,
-) {
+async function toOrgDetail(db: DatabaseLike, row: OrgDetailRow, identities: IdentityRow[], memberId: string | null) {
   const holders = memberId
     ? await resolveRepresentativeRoleHolders(db, memberId)
     : { primaryContactUserId: null, secondaryContactUserId: null };
@@ -205,13 +219,10 @@ async function toOrgDetail(
     ...toOrganizationExtendedContent(row),
     primaryContactUserId,
     secondaryContactUserId: holders.secondaryContactUserId,
-    representatives: representatives.map((r) => ({
-      // representativeId is this representative's own
-      // organization_representatives.id — the identifier PATCH/DELETE
-      // the canonical representative route expects — never the shared aggregate
-      // members.id (every representative of this organization shares one
-      // aggregate row, exposed separately below as membershipId).
-      representativeId: r.representative_id,
+    identities: identities.map((r) => ({
+      // identityId is identities.id for this exact acting capacity, never the
+      // shared members.id aggregate exposed separately as membershipId.
+      identityId: r.identity_id,
       membershipId: memberId,
       userId: r.user_id,
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
@@ -221,7 +232,7 @@ async function toOrgDetail(
       jobTitle: r.job_title,
       biography: r.biography,
       links: parseLinksJson(r.links_json),
-      status: "active",
+      state: "active",
       showOnOrgProfile: r.show_on_org_profile === 1,
       isPrimaryContact: r.user_id === primaryContactUserId,
       isSecondaryContact: r.user_id === holders.secondaryContactUserId,
@@ -233,6 +244,6 @@ async function toOrgDetail(
 export async function getOrganization(db: DatabaseLike, id: string) {
   const row = await fetchOrgDetailRow(db, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Organization not found");
-  const [representatives, aggregate] = await Promise.all([fetchRepresentatives(db, id), getOrgAggregate(db, id)]);
-  return toOrgDetail(db, row, representatives, aggregate?.id ?? null);
+  const [identities, aggregate] = await Promise.all([fetchIdentities(db, id), getOrgAggregate(db, id)]);
+  return toOrgDetail(db, row, identities, aggregate?.id ?? null);
 }

@@ -81,15 +81,16 @@ Replaces the unreleased working_group_members table.
     id
     group_id -> groups.id
     user_id -> users.id
+    identity_id -> identities.id, required
     member_id -> members.id, required
     source
     created_by_user_id -> users.id, nullable
     joined_at
     left_at
 
-One active row means that one user participates in one group for one canonical
-Member. A user representing multiple organizations has multiple rows in this
-same table.
+One active row means that one user participates through one exact acting
+identity for one canonical Member. A user acting for multiple organizations
+has multiple rows in this same table.
 
 Required constraints and indexes:
 
@@ -97,7 +98,7 @@ Required constraints and indexes:
 - group plus user plus left_at for membership and parent-eligibility checks;
 - group plus Member plus left_at for Member counts and voting;
 - user plus left_at for portal membership;
-- Member plus left_at for representative revocation;
+- identity plus left_at for identity lifecycle revocation;
 - joined and left reporting windows.
 
 member_id is never null. Management permission without membership is expressed
@@ -167,13 +168,13 @@ Effective group authorization combines:
 
 Role assignments are never copied down the tree.
 
-## Organization representation
+## Acting identities
 
 ### organization_domain_claims
 
 The existing canonical exact-domain ownership table remains authoritative.
 Only a domain attached to an approved active organization can establish
-automatic representation.
+automatic identity activation.
 
 ### user_emails
 
@@ -192,50 +193,52 @@ in the session-creation transaction; removing or unverifying it invalidates an
 outstanding sign-in capability. Profile and relationship tables store only the
 address id, never another copy of the email string.
 
-When a selected secondary address is removed, every representation that used
-it falls back atomically to the canonical primary address. The foreign key also
-uses `ON DELETE SET NULL` so internal cleanup paths cannot leave a dangling
-representation reference.
+When a selected secondary address is removed, every identity that used it
+falls back atomically to the canonical primary address. The foreign key also
+uses `ON DELETE SET NULL` so internal cleanup cannot leave a dangling address
+reference.
 
-### organization_representatives
+### identities
 
-The existing table remains the authoritative relationship and is finalized as
-one row per Member and user pair:
+`identities` is the authoritative, sparse record of the exact capacity in
+which a user acts:
 
     id
-    member_id -> members.id
     user_id -> users.id
+    organization_id -> organizations.id, nullable
     email_id -> user_emails.id, nullable (null selects users.email)
     job_title
     biography
     links_json
     source
-    show_on_org_profile
-    joined_at
-    left_at
+    show_on_organization_profile
+    invited_at
+    started_at
+    ended_at
     blocked_at
     blocked_by_user_id -> users.id, nullable
+    predecessor_identity_id -> identities.id, nullable
     created_at
     updated_at
 
-The unique boundary is Member and user. Restoring a relationship updates its
-temporal state instead of creating ambiguous active duplicates.
+An organization identity has `organization_id`; the absence of that value is
+the discriminator for one approved H5, H6, or H7 individual identity. There is
+no `kind` column and no copied `member_id`. The indexed
+`identity_member_capacities` view derives the unique Member aggregate.
 
-source initially distinguishes verified_domain, organization_contact, staff,
-and migration.
+Most users have exactly one organization identity. Ordinary contacts, event
+attendees, and users who have not been approved as Members receive no identity.
+A pending identity is only an invitation and grants no capacity until the
+exact user accepts it. Immediate activation is reserved for membership
+approval or an attributable user-backed action holding both
+`membership:write` and `identities:activate`, with a required reason and
+same-batch authorization guard.
 
-A contact removal sets left_at and blocked_at. Automatic domain reconciliation
-cannot clear blocked_at. An authorized organization contact must explicitly
-restore it.
-
-Closing a representative relationship atomically:
-
-- closes active group_memberships for that Member and user;
-- revokes organization-scoped representative roles held by that user;
-- writes audit history;
-- inserts any required notification into the outbox.
-
-Past actions remain attributed to the original user and Member.
+Ending or blocking an identity is historical, not a reversible toggle. It
+atomically ends that identity's active group memberships, revokes its scoped
+roles, writes audit history, and queues any required notification. A later
+role period is a new identity linked through `predecessor_identity_id`; past
+actions remain attributed to the original identity, user, and Member.
 
 Membership applications retain `applicant_email` only as the historical
 delivery address. Applicant access is bound to `applicant_user_id` before
@@ -243,25 +246,24 @@ approval and to the resulting `member_id` when approval creates the Member
 capacity. Reassignment or reuse of an email address therefore cannot transfer
 application history to another user or represented organization.
 
-Names and the headshot describe the person and remain on users. Job title,
-biography, links, and the selected verified address describe the role in one
-organization and therefore live on organization_representatives. An individual
-Member uses the corresponding global user profile fields. A person representing
-two organizations can consequently present two different profiles without
-duplicating the person or creating linked login accounts.
+Legal name, preferred name, and headshot describe the person and remain on
+`users`. Job title, biography, links, and the selected verified address belong
+to one identity. Individual identities cannot carry an organization or editable
+job title; their category supplies the individual-capacity label. A person with
+two organization identities can therefore present two different role profiles
+without duplicating their login account.
 
-Association, removal, and restoration enqueue an informational notice in the
-same transaction as the relationship mutation. The notice never asks the
-recipient to accept the relationship and cannot become the authorization
-source.
+Invitation, acceptance, ending, and blocking enqueue their informational
+notices in the same transaction as the lifecycle mutation. Email delivery is
+never the authorization source.
 
-An exact verified claimed custom-domain match is a strong representation
+An exact verified claimed custom-domain match is strong identity evidence
 signal and may establish the relationship automatically. Free, personal,
 disposable, unclaimed, or ambiguous domains instead trigger a warning; they
 are not an authorization source. The controlled domain policy is shared by
 browser and Worker code. Without an exact claimed organization domain or
-explicit organization-contact/staff association, no representative row is
-created.
+explicit organization-contact/staff invitation, no organization identity is
+created or activated.
 
 ## Resource ownership and sharing
 
@@ -674,7 +676,7 @@ organizational ballot. One submission never changes two organizations.
 
 ## Deletion and retention
 
-- Historical memberships, representatives, ballots, consent, attendance, and
+- Historical memberships, identities, ballots, consent, attendance, and
   audit rows are ended or redacted, not casually deleted.
 - Group deletion is normally archival. A group with owned resources or children
   cannot be physically removed.
@@ -689,13 +691,13 @@ organizational ballot. One submission never changes two organizations.
 
 ## Required query-plan evidence
 
-Tests must execute representative access patterns with EXPLAIN QUERY PLAN:
+Tests must execute identity access patterns with EXPLAIN QUERY PLAN:
 
 - visible groups for a user with inherited management;
 - active memberships for a group and paginated roster;
 - parent eligibility and descendant revocation;
 - automatic-enrollment reconciliation by category;
-- effective organization representatives by verified email domain;
+- effective organization identities by verified email domain;
 - group-owned upcoming meeting occurrences;
 - one attendee row per occurrence identity;
 - effective ballots per Member;

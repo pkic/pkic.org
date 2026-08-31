@@ -9,7 +9,7 @@ import {
   organizationsListResponseSchema,
   type OrganizationSummary,
 } from "../../../../../shared/schemas/organization-management";
-import { representativeMutationResponseSchema } from "../../../../../shared/schemas/organization-representation";
+import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type { UserDetail } from "./model";
@@ -19,10 +19,12 @@ const GRANT_MODE_ORG_TIED = "__org_tied__";
 
 function GrantMembershipForm({
   user,
+  canActivate,
   onGranted,
   onCancel,
 }: {
   user: UserDetail;
+  canActivate: boolean;
   onGranted: () => void;
   onCancel: () => void;
 }) {
@@ -31,12 +33,14 @@ function GrantMembershipForm({
   const [orgResults, setOrgResults] = useState<OrganizationSummary[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState("");
   const [selectedOrgCategory, setSelectedOrgCategory] = useState<string | null | undefined>(undefined);
+  const [activationReason, setActivationReason] = useState("");
+  const [activateImmediately, setActivateImmediately] = useState(false);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const isIndividual = mode !== GRANT_MODE_ORG_TIED;
-  const mayGrantIndividual = user.memberships.length === 0;
+  const mayGrantIndividual = canActivate && user.identities.length === 0;
 
   async function searchOrgs() {
     setSearching(true);
@@ -75,24 +79,31 @@ function GrantMembershipForm({
       setError("This organization has no membership category set yet — set it in Organizations first.");
       return;
     }
+    if ((isIndividual || activateImmediately) && !activationReason.trim()) {
+      setError("Document why this identity is being activated immediately.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       if (isIndividual) {
         await postJson(
           "/api/v1/members/capacities",
-          { userId: user.id, membershipCategory: mode },
+          { userId: user.id, membershipCategory: mode, activationReason: activationReason.trim() },
           memberCapacityMutationResponseSchema,
         );
       } else {
         await postJson(
-          `/api/v1/organizations/${selectedOrgId}/representatives`,
+          `/api/v1/organizations/${selectedOrgId}/identities`,
           {
-            kind: "existing_user",
+            userReference: "existing_user",
             userId: user.id,
             showOnOrganizationProfile: true,
+            activation: activateImmediately
+              ? { mode: "immediate", reason: activationReason.trim() }
+              : { mode: "invitation" },
           },
-          representativeMutationResponseSchema,
+          identityMutationResponseSchema,
         );
       }
       toast("Membership granted", "success");
@@ -172,6 +183,37 @@ function GrantMembershipForm({
             </div>
           </>
         )}
+        {!isIndividual && canActivate && (
+          <div class="col-md-3">
+            <div class="form-check">
+              <input
+                id="identity-activate-immediately"
+                class="form-check-input"
+                type="checkbox"
+                checked={activateImmediately}
+                onChange={(event) => setActivateImmediately(event.currentTarget.checked)}
+              />
+              <label class="form-check-label small" for="identity-activate-immediately">
+                Activate immediately
+              </label>
+            </div>
+            <div class="form-text">Requires identities:activate. Otherwise the user must accept the invitation.</div>
+          </div>
+        )}
+        {(isIndividual || activateImmediately) && (
+          <div class="col-md-4">
+            <label class="form-label small text-muted mb-1" for="identity-activation-reason">
+              Activation reason
+            </label>
+            <input
+              id="identity-activation-reason"
+              class="form-control form-control-sm"
+              value={activationReason}
+              onInput={(event) => setActivationReason(event.currentTarget.value)}
+              required
+            />
+          </div>
+        )}
         <div class="col-md-2">
           <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
             Grant
@@ -190,25 +232,28 @@ export function UserMembershipPanel({
   user,
   onChanged,
   canManage,
+  canActivate,
 }: {
   user: UserDetail;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
+  canActivate: boolean;
 }) {
   const [showGrantForm, setShowGrantForm] = useState(false);
-  const hasIndividualMembership = user.memberships.some((membership) => membership.organizationId === null);
+  const hasIndividualMembership = user.identities.some((identity) => identity.organizationId === null);
 
   return (
     <div class="card border-0 shadow-sm mt-4">
       <div class="card-header bg-white fw-semibold">Membership</div>
       <div class="card-body p-3">
-        {user.memberships.length === 0 && !showGrantForm && <span class="text-muted fst-italic">Not a member.</span>}
-        {user.memberships.length > 0 && (
+        {user.identities.length === 0 && !showGrantForm && (
+          <span class="text-muted fst-italic">No active identities.</span>
+        )}
+        {user.identities.length > 0 && (
           <div class="d-grid gap-3 mb-3">
-            {user.memberships.map((membership) => (
+            {user.identities.map((membership) => (
               <UserMembershipCard
-                key={membership.memberId}
-                userId={user.id}
+                key={membership.identityId}
                 membership={membership}
                 onChanged={onChanged}
                 canManage={canManage}
@@ -219,6 +264,7 @@ export function UserMembershipPanel({
         {canManage && showGrantForm ? (
           <GrantMembershipForm
             user={user}
+            canActivate={canActivate}
             onGranted={() => {
               setShowGrantForm(false);
               void onChanged();
@@ -227,7 +273,7 @@ export function UserMembershipPanel({
           />
         ) : canManage && !hasIndividualMembership ? (
           <button class="btn btn-sm btn-outline-success ms-2" onClick={() => setShowGrantForm(true)}>
-            {user.memberships.length === 0 ? "Grant membership" : "Add organization representation"}
+            Add identity
           </button>
         ) : null}
       </div>

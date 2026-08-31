@@ -17,21 +17,21 @@ export const ACTIVE_VOTER_MEMBERSHIP_SQL = `EXISTS (
     AND active_member.status = 'active'
     AND active_category.category_code = ?
     AND ${votingMembershipCategoryExistsSql("active_category.category_code")}
-    AND (
-      active_member.user_id = ?
-      OR EXISTS (
-        SELECT 1
-        FROM organization_representatives active_rep
-        WHERE active_rep.member_id = active_member.id
-          AND active_rep.user_id = ?
-          AND active_rep.left_at IS NULL
-          AND active_rep.blocked_at IS NULL
-      )
+    AND EXISTS (
+      SELECT 1
+      FROM identity_member_capacities active_capacity
+      JOIN identities active_identity ON active_identity.id = active_capacity.identity_id
+      WHERE active_capacity.identity_id = ?
+        AND active_capacity.member_id = active_member.id
+        AND active_capacity.user_id = ?
+        AND active_identity.started_at IS NOT NULL
+        AND active_identity.ended_at IS NULL
+        AND active_identity.blocked_at IS NULL
     )
 )`;
 
 export function activeVoterMembershipBindings(member: AuthMember): unknown[] {
-  return [member.userId, member.memberId, member.membershipCategory, member.userId, member.userId];
+  return [member.userId, member.memberId, member.membershipCategory, member.identityId, member.userId];
 }
 
 /** Any current voting-category capacity held by a user in one exact group. */
@@ -56,17 +56,18 @@ export function activeGroupVoterSql(groupIdExpression = "?"): string {
       WHERE active_voter_group.id = ${groupIdExpression}
         AND active_voter_group.active = 1
     )
-    AND (
-      active_group_member.user_id = active_group_membership.user_id
-      OR EXISTS (
-        SELECT 1
-        FROM organization_representatives active_group_rep
-        WHERE active_group_rep.member_id = active_group_member.id
-          AND active_group_rep.user_id = active_group_membership.user_id
-          AND active_group_rep.left_at IS NULL
-          AND active_group_rep.blocked_at IS NULL
-      )
-  )
+    AND EXISTS (
+      SELECT 1
+      FROM identities active_group_identity
+      JOIN identity_member_capacities active_group_capacity
+        ON active_group_capacity.identity_id = active_group_identity.id
+      WHERE active_group_identity.id = active_group_membership.identity_id
+        AND active_group_capacity.member_id = active_group_member.id
+        AND active_group_capacity.user_id = active_group_membership.user_id
+        AND active_group_identity.started_at IS NOT NULL
+        AND active_group_identity.ended_at IS NULL
+        AND active_group_identity.blocked_at IS NULL
+    )
 )`;
 }
 
@@ -109,11 +110,13 @@ export const VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY = `
        AND represented_member.status = 'active'
        AND represented_member.organization_id IS NOT NULL
       JOIN member_category_assignments category ON category.member_id = represented_member.id
-      JOIN organization_representatives representative
-        ON representative.member_id = represented_member.id
-       AND representative.user_id = membership.user_id
-       AND representative.left_at IS NULL
-       AND representative.blocked_at IS NULL
+      JOIN identities identity
+        ON identity.id = membership.identity_id
+       AND identity.user_id = membership.user_id
+       AND identity.organization_id = represented_member.organization_id
+       AND identity.started_at IS NOT NULL
+       AND identity.ended_at IS NULL
+       AND identity.blocked_at IS NULL
       JOIN users participant ON participant.id = membership.user_id AND participant.active = 1
      WHERE target_vote.electorate_mode = 'per_member'
        AND ${votingMembershipCategoryExistsSql("category.category_code")}

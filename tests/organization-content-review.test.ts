@@ -108,16 +108,16 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function seedOrgWithContact(
   email: string,
   category: string,
-): Promise<{ organizationId: string; memberId: string; userId: string }> {
+): Promise<{ organizationId: string; memberId: string; userId: string; identityId: string }> {
   const organizationId = await insertOrganization(env.DB, `Org for ${email}`);
   await env.DB.prepare("UPDATE organizations SET description = 'Old description' WHERE id = ?")
     .bind(organizationId)
     .run();
   const userId = await insertUser(env.DB, email);
   const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
-  await addRepresentativeRow(env.DB, memberId, userId);
+  const identityId = await addRepresentativeRow(env.DB, memberId, userId);
   await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
-  return { organizationId, memberId, userId };
+  return { organizationId, memberId, userId, identityId };
 }
 
 /** Adds another active representative to an org that already has an aggregate. */
@@ -559,17 +559,18 @@ describe("Organization content moderation", () => {
   });
 
   it("drains reviewer intents exactly once with deterministic outbox identity", async () => {
-    const { organizationId, memberId, userId } = await seedOrgWithContact("intent-drain@example.test", "F");
+    const { organizationId, memberId, userId, identityId } = await seedOrgWithContact("intent-drain@example.test", "F");
     await submitOrgContentChange(
       env.DB,
       {
         userId,
+        identityId,
         email: "intent-drain@example.test",
         memberId,
         organizationId,
         membershipCategory: "F",
         isEcMember: false,
-        activeMemberships: [],
+        activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Queue me" },
       "https://app.test/portal/#/system/organization-content-reviews",
@@ -623,17 +624,18 @@ describe("Organization content moderation", () => {
   });
 
   it("leaves reviewer intents pending when the outbox batch fails, then retries", async () => {
-    const { memberId, organizationId, userId } = await seedOrgWithContact("intent-retry@example.test", "F");
+    const { memberId, organizationId, userId, identityId } = await seedOrgWithContact("intent-retry@example.test", "F");
     await submitOrgContentChange(
       env.DB,
       {
         userId,
+        identityId,
         email: "intent-retry@example.test",
         memberId,
         organizationId,
         membershipCategory: "F",
         isEcMember: false,
-        activeMemberships: [],
+        activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Retry me" },
       "https://app.test/portal/#/system/organization-content-reviews",
@@ -664,17 +666,21 @@ describe("Organization content moderation", () => {
   });
 
   it("rolls back intent marking and converges concurrent drains", async () => {
-    const { memberId, organizationId, userId } = await seedOrgWithContact("intent-mark-race@example.test", "F");
+    const { memberId, organizationId, userId, identityId } = await seedOrgWithContact(
+      "intent-mark-race@example.test",
+      "F",
+    );
     await submitOrgContentChange(
       env.DB,
       {
         userId,
+        identityId,
         email: "intent-mark-race@example.test",
         memberId,
         organizationId,
         membershipCategory: "F",
         isEcMember: false,
-        activeMemberships: [],
+        activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Mark race" },
       "https://app.test/portal/#/system/organization-content-reviews",
@@ -712,17 +718,18 @@ describe("Organization content moderation", () => {
   });
 
   it("skips reviewer draining under a low shared D1 budget and still runs downstream selections", async () => {
-    const { memberId, organizationId, userId } = await seedOrgWithContact("low-budget@example.test", "F");
+    const { memberId, organizationId, userId, identityId } = await seedOrgWithContact("low-budget@example.test", "F");
     await submitOrgContentChange(
       env.DB,
       {
         userId,
+        identityId,
         email: "low-budget@example.test",
         memberId,
         organizationId,
         membershipCategory: "F",
         isEcMember: false,
-        activeMemberships: [],
+        activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Wait for the next pass" },
       "https://app.test/portal/#/system/organization-content-reviews",
@@ -1169,7 +1176,7 @@ describe("Secondary contact nomination & confirmation", () => {
     expect(response.status).toBe(422);
   });
 
-  it("auto-clears a pending nomination when the nominee's representative row is removed", async () => {
+  it("auto-clears a pending nomination when the nominee's identity ends", async () => {
     const { organizationId, memberId, userId: primaryUserId } = await seedOrgWithContact("primary11@example.test", "F");
     const nomineeUserId = await addRepresentative(organizationId, "lapsing-nominee@example.test");
     const token = await createMemberSession(env.DB, primaryUserId, "lapse-token");
@@ -1179,15 +1186,18 @@ describe("Secondary contact nomination & confirmation", () => {
       body: JSON.stringify({ userId: nomineeUserId }),
     });
 
-    const nomineeRepRow = (
+    const nomineeIdentity = (
       await queryAll<{ id: string }>(
         env.DB,
-        "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+        `SELECT identity.id
+           FROM identities identity
+           JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+          WHERE capacity.member_id = ? AND identity.user_id = ?`,
         memberId,
         nomineeUserId,
       )
     )[0];
-    const removeResponse = await call(adminToken, `/api/v1/members/capacities/${nomineeRepRow.id}`, {
+    const removeResponse = await call(adminToken, `/api/v1/members/capacities/${nomineeIdentity.id}`, {
       method: "DELETE",
     });
     expect(removeResponse.status).toBe(200);

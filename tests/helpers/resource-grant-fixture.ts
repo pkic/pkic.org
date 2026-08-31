@@ -3,7 +3,7 @@ import { createManagedFormPlacement } from "../../functions/_lib/services/forms"
 import { createGroup, joinGroup } from "../../functions/_lib/services/groups";
 import type { UserBackedAuthAdmin } from "../../functions/_lib/types";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./membership";
-import { ensureGroupMembershipCapacity } from "./group-leadership";
+import { grantGroupLeadershipCapacity } from "./group-leadership";
 
 export interface ResourceGrantFixture {
   owner: Awaited<ReturnType<typeof createGroup>>;
@@ -39,15 +39,8 @@ export async function addResourceGrantParticipant(groupId: string, label: string
 
 export async function addResourceGrantGroupLeader(groupId: string, label: string): Promise<UserBackedAuthAdmin> {
   const actor = await insertResourceGrantActor(label);
-  const memberId = await ensureGroupMembershipCapacity(env.DB, groupId, actor.id);
-  actor.memberId = memberId;
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), actor.id, memberId, groupId)
-    .run();
+  const leadership = await grantGroupLeadershipCapacity(env.DB, groupId, actor.id);
+  actor.memberId = leadership.memberId;
   return actor;
 }
 

@@ -20,14 +20,23 @@ const userCapacityFields = {
   staff: publicStaffCapacitySchema.optional(),
   member: authMemberSchema.optional(),
   sponsors: z.array(sponsorCapacitySchema).default([]),
+  pendingIdentityCount: z.number().int().nonnegative().default(0),
 };
 
 function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
   return schema.refine(
     (value) => {
-      const capacities = value as { staff?: unknown; member?: unknown; sponsors?: unknown[] };
+      const capacities = value as {
+        staff?: unknown;
+        member?: unknown;
+        sponsors?: unknown[];
+        pendingIdentityCount?: number;
+      };
       return (
-        capacities.staff !== undefined || capacities.member !== undefined || (capacities.sponsors?.length ?? 0) > 0
+        capacities.staff !== undefined ||
+        capacities.member !== undefined ||
+        (capacities.sponsors?.length ?? 0) > 0 ||
+        (capacities.pendingIdentityCount ?? 0) > 0
       );
     },
     { message: "At least one user capacity is required" },

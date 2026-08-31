@@ -32,7 +32,6 @@ test("staff walk an application through every review stage in the portal and app
     const pathname = new URL(request.url()).pathname;
     if (pathname.startsWith("/api/v1/admin/")) legacyRequests.push(`${request.method()} ${pathname}`);
   });
-  page.on("dialog", (dialog) => void dialog.accept());
 
   await submitMembershipApplication(page, {
     email,
@@ -68,6 +67,7 @@ test("staff walk an application through every review stage in the portal and app
 
   const sinceApproval = await capturedEmailCount();
   await page.getByRole("button", { name: "Approve & run onboarding" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve & run onboarding", exact: true }).click();
   await expect(page.locator(".my-toast", { hasText: "Application approved" })).toBeVisible({ timeout: 20_000 });
   await expect(stageBadge(page, name).filter({ hasText: "Approved" })).toBeVisible();
 
@@ -88,8 +88,6 @@ test("a declined application is terminal and never reaches onboarding", async ({
   const suffix = uniqueSuffix();
   const email = `declined-${suffix}@declined-${suffix}.test`;
   const name = `Declined Applicant ${suffix}`;
-  page.on("dialog", (dialog) => void dialog.accept());
-
   await submitMembershipApplication(page, {
     email,
     name,

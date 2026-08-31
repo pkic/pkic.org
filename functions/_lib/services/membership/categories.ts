@@ -143,11 +143,14 @@ export const ACTIVE_VOTING_MEMBER_CAPACITY_SELECT = `
        active_voting_member.user_id = active_voting_user.id
        OR EXISTS (
          SELECT 1
-           FROM organization_representatives active_voting_representative
-          WHERE active_voting_representative.member_id = active_voting_member.id
-            AND active_voting_representative.user_id = active_voting_user.id
-            AND active_voting_representative.left_at IS NULL
-            AND active_voting_representative.blocked_at IS NULL
+           FROM identities active_voting_identity
+           JOIN identity_member_capacities active_voting_capacity
+             ON active_voting_capacity.identity_id = active_voting_identity.id
+          WHERE active_voting_capacity.member_id = active_voting_member.id
+            AND active_voting_identity.user_id = active_voting_user.id
+            AND active_voting_identity.started_at IS NOT NULL
+            AND active_voting_identity.ended_at IS NULL
+            AND active_voting_identity.blocked_at IS NULL
        )
      )
    LIMIT 1`;

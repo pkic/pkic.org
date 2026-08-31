@@ -11,6 +11,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { seedMemberApplication } from "./helpers/member-applications";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
@@ -42,13 +43,22 @@ async function createEcReviewApplication(): Promise<{ id: string }> {
 
 async function insertActiveMember(email: string, isEcMember: boolean): Promise<string> {
   const userId = crypto.randomUUID();
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
+  const now = new Date().toISOString();
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", now);
+  const identity = await buildCreateIdentityStatement(env.DB, {
+    userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+    now,
+  });
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
        VALUES (?, ?, ?, 'user', 1, ?, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email, isEcMember ? 1 : 0),
     ...statements,
+    identity.statement,
   ]);
   return userId;
 }

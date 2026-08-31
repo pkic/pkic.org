@@ -59,7 +59,7 @@ export function GroupLeadershipAssignmentForm({
     try {
       const input = groupLeadershipAssignSchema.parse({
         userId: membership.userId,
-        memberId: membership.memberId,
+        identityId: membership.identityId,
         roleId,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       });

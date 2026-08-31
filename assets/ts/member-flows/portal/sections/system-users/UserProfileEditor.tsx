@@ -1,7 +1,5 @@
 import { useState } from "preact/hooks";
-import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { patchJson } from "../../../../shared/api-client";
-import { normalizeProfileLinks } from "../../../../shared/widgets/profile-links";
 import { userRoleValueSchema, userUpdateResponseSchema } from "../../../../../shared/schemas/user-management";
 import { toast } from "../../ui";
 import type { UserDetail } from "./model";
@@ -11,10 +9,6 @@ type EditableUser = {
   firstName: string;
   lastName: string;
   preferredName: string;
-  organizationName: string;
-  jobTitle: string;
-  biography: string;
-  links: string[];
   role: string;
   active: boolean;
   isEcMember: boolean;
@@ -26,10 +20,6 @@ function editFormFor(user: UserDetail): EditableUser {
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",
     preferredName: user.preferred_name ?? "",
-    organizationName: user.organization_name ?? "",
-    jobTitle: user.job_title ?? "",
-    biography: user.biography ?? "",
-    links: normalizeProfileLinks(user.links),
     role: user.role,
     active: user.active,
     isEcMember: user.isEcMember ?? false,
@@ -45,7 +35,6 @@ export function UserProfileEditor({
   canGrantAccess: boolean;
   onSaved: () => Promise<void> | void;
 }) {
-  const hasOrganizationCapacity = user.memberships.some((membership) => membership.organizationId !== null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -68,14 +57,6 @@ export function UserProfileEditor({
           firstName: form.firstName || null,
           lastName: form.lastName || null,
           preferredName: form.preferredName || null,
-          ...(!hasOrganizationCapacity
-            ? {
-                organizationName: form.organizationName || null,
-                jobTitle: form.jobTitle || null,
-                biography: form.biography || null,
-                links: form.links,
-              }
-            : {}),
           active: form.active,
           isEcMember: form.isEcMember,
         },
@@ -107,12 +88,6 @@ export function UserProfileEditor({
             ["First name", "firstName"],
             ["Last name", "lastName"],
             ["Preferred name", "preferredName"],
-            ...(!hasOrganizationCapacity
-              ? ([
-                  ["Organization", "organizationName"],
-                  ["Job title", "jobTitle"],
-                ] as Array<[string, keyof EditableUser]>)
-              : []),
           ] as Array<[string, keyof EditableUser]>
         ).map(([label, field]) => (
           <div key={field} class="col-sm-6">
@@ -129,31 +104,6 @@ export function UserProfileEditor({
             />
           </div>
         ))}
-        {!hasOrganizationCapacity && (
-          <>
-            <div class="col-12">
-              <label class="form-label small mb-1" for="user-biography">
-                Biography
-              </label>
-              <textarea
-                id="user-biography"
-                class="form-control form-control-sm"
-                rows={4}
-                value={form.biography}
-                onInput={(event) => setForm((current) => ({ ...current, biography: event.currentTarget.value }))}
-                disabled={saving}
-              />
-            </div>
-            <div class="col-12">
-              <label class="form-label small mb-1">Profile links</label>
-              <ProfileLinksInput
-                fieldName="userProfileLink"
-                value={form.links}
-                onChange={(links) => setForm((current) => ({ ...current, links }))}
-              />
-            </div>
-          </>
-        )}
         {canGrantAccess && (
           <div class="col-12">
             <label class="form-label small mb-1" for="user-email">

@@ -8,6 +8,7 @@ import { onRequestGet as getMember } from "../functions/api/v1/members/[id]";
 import { onRequestGet as getMemberLogo } from "../functions/api/v1/members/[id]/logo";
 import { seedOrganizationAggregate, addRepresentative as addRepresentativeRow, insertUser } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import {
   membersListResponseSchema,
   memberWallResponseSchema,
@@ -76,7 +77,13 @@ async function seedIndividualMember(params: { userId: string; status: string; ti
     params.tier ?? "H6",
     new Date().toISOString(),
   );
-  await env.DB.batch(statements);
+  const identity = await buildCreateIdentityStatement(env.DB, {
+    userId: params.userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+  });
+  await env.DB.batch([...statements, identity.statement]);
   if (params.status !== "active") {
     await env.DB.prepare("UPDATE members SET status = ? WHERE user_id = ?").bind(params.status, params.userId).run();
   }
@@ -119,7 +126,7 @@ describe("GET /api/v1/members (public directory)", () => {
     expect(body.members[0].website).toBe("https://active-org.test");
   });
 
-  it("surfaces only one directory entry per organization even with multiple representatives", async () => {
+  it("surfaces only one directory entry per organization even with multiple identities", async () => {
     const organizationId = crypto.randomUUID();
     const memberId = await seedOrgMember({
       userId: crypto.randomUUID(),
@@ -381,7 +388,7 @@ describe("GET /api/v1/members/:id", () => {
     expect(body.name).toBe("Slug Org");
   });
 
-  it("includes org content fields and only show_on_org_profile=1 representatives", async () => {
+  it("includes org content fields and only public active identities", async () => {
     const organizationId = crypto.randomUUID();
     const shownUserId = crypto.randomUUID();
     const memberId = await seedOrgMember({
@@ -398,10 +405,8 @@ describe("GET /api/v1/members/:id", () => {
         organizationId,
       )
       .run();
-    await env.DB.prepare(
-      `UPDATE organization_representatives SET job_title = ?, biography = ? WHERE member_id = ? AND user_id = ?`,
-    )
-      .bind("CTO", "Leads engineering.", memberId, shownUserId)
+    await env.DB.prepare(`UPDATE identities SET job_title = ?, biography = ? WHERE organization_id = ? AND user_id = ?`)
+      .bind("CTO", "Leads engineering.", organizationId, shownUserId)
       .run();
 
     const hiddenUserId = await insertUser(env.DB);
@@ -416,13 +421,13 @@ describe("GET /api/v1/members/:id", () => {
       content: string | null;
       blogUrl: string | null;
       links: string[];
-      representatives: Array<{ name: string; jobTitle: string | null; bio: string | null }>;
+      identities: Array<{ name: string; jobTitle: string | null; bio: string | null }>;
     };
     expect(body.content).toBe("## About us");
     expect(body.blogUrl).toBe("https://content-org.test/blog");
     expect(body.links).toEqual(["https://linkedin.com/company/content-org"]);
-    expect(body.representatives).toHaveLength(1);
-    expect(body.representatives[0]).toMatchObject({ name: "Rep Person", jobTitle: "CTO", bio: "Leads engineering." });
+    expect(body.identities).toHaveLength(1);
+    expect(body.identities[0]).toMatchObject({ name: "Rep Person", jobTitle: "CTO", bio: "Leads engineering." });
   });
 
   it("omits unsafe legacy organization detail URLs while preserving valid HTTP links", async () => {
@@ -484,20 +489,20 @@ describe("GET /api/v1/members/:id", () => {
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      representatives: Array<{ name: string; photoUrl: string | null }>;
+      identities: Array<{ name: string; photoUrl: string | null }>;
     };
-    expect(body.representatives).toHaveLength(1);
-    const repRow = await env.DB.prepare(`SELECT id FROM organization_representatives WHERE user_id = ?`)
-      .bind(repUserId)
+    expect(body.identities).toHaveLength(1);
+    const repRow = await env.DB.prepare(`SELECT id FROM identities WHERE user_id = ? AND organization_id = ?`)
+      .bind(repUserId, organizationId)
       .first<{ id: string }>();
-    expect(body.representatives[0].photoUrl).toBe(`/api/v1/members/${repRow!.id}/logo`);
+    expect(body.identities[0].photoUrl).toBe(`/api/v1/members/${repRow!.id}/logo`);
   });
 
-  it("returns the individual member's own bio/job title, with no representatives list", async () => {
+  it("returns the individual member's own bio/job title, with no organization identity list", async () => {
     const userId = crypto.randomUUID();
     await seedIndividualMember({ userId, status: "active", tier: "H6" });
-    await env.DB.prepare(`UPDATE users SET job_title = ?, biography = ? WHERE id = ?`)
-      .bind("Independent Researcher", "Works on PQC migration.", userId)
+    await env.DB.prepare(`UPDATE identities SET biography = ? WHERE user_id = ? AND organization_id IS NULL`)
+      .bind("Works on PQC migration.", userId)
       .run();
     const memberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(userId).first<{
       id: string;
@@ -511,11 +516,11 @@ describe("GET /api/v1/members/:id", () => {
     const body = (await response.json()) as {
       description: string | null;
       jobTitle: string | null;
-      representatives: unknown[];
+      identities: unknown[];
     };
-    expect(body.jobTitle).toBe("Independent Researcher");
+    expect(body.jobTitle).toBe("Unaffiliated independent PKI or cryptography consultants");
     expect(body.description).toBe("Works on PQC migration.");
-    expect(body.representatives).toHaveLength(0);
+    expect(body.identities).toHaveLength(0);
   });
 });
 
@@ -597,7 +602,7 @@ describe("GET /api/v1/members/:id/logo", () => {
     expect(Array.from(buf)).toEqual([5, 6, 7, 8]);
   });
 
-  it("serves an organization representative's photo keyed by their own organization_representatives.id", async () => {
+  it("serves an organization identity holder's photo keyed by their own user id", async () => {
     const organizationId = crypto.randomUUID();
     const repUserId = crypto.randomUUID();
     await seedOrgMember({
@@ -611,8 +616,8 @@ describe("GET /api/v1/members/:id/logo", () => {
     const bytes = new Uint8Array([9, 9, 9]);
     await env.ASSETS_BUCKET!.put(r2Key, bytes);
 
-    const repRow = await env.DB.prepare(`SELECT id FROM organization_representatives WHERE user_id = ?`)
-      .bind(repUserId)
+    const repRow = await env.DB.prepare(`SELECT id FROM identities WHERE user_id = ? AND organization_id = ?`)
+      .bind(repUserId, organizationId)
       .first<{ id: string }>();
 
     // The organization's own id must not resolve to the representative's photo.

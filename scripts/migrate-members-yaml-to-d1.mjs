@@ -15,7 +15,7 @@
  *     org's `member_type='organization'` row, migration 0000) plus a
  *     `member_category_assignments` row for its category (consolidated migration 0035) —
  *     never one `members` row per representative
- *   - upserts one `users` row + one `organization_representatives` row per
+ *   - upserts one `users` row + one organization `identities` row per
  *     representative whose email could be matched against the `pkic.csv`
  *     roster by organization domain (Step 2); the org's primary/secondary
  *     contact are granted as `role-primary_contact`/`role-secondary_contact`
@@ -50,7 +50,7 @@
  *     see scripts/migrate-members/categories.mjs
  *
  * What this script deliberately does NOT do:
- *   - create `organizations`/`users`/`organization_representatives` rows for
+ *   - create `organizations`/`users`/`identities` rows for
  *     org-tied representatives with no domain-matched email at all — see the
  *     "unmatched" report section; these are finished one at a time via the
  *     canonical membership provisioning (`POST /api/v1/members`). (Org-less

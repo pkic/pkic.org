@@ -7,7 +7,7 @@ import {
   organizationDetailResponseSchema,
   organizationsListResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
-import { organizationRepresentativesListResponseSchema } from "../../assets/shared/schemas/organization-representation";
+import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
@@ -17,7 +17,7 @@ vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizat
 const mounted: HTMLElement[] = [];
 const organizationId = "00000000-0000-4000-8000-000000000010";
 const userId = "00000000-0000-4000-8000-000000000011";
-const representativeId = "00000000-0000-4000-8000-000000000012";
+const identityId = "00000000-0000-4000-8000-000000000012";
 const membershipId = "00000000-0000-4000-8000-000000000013";
 
 function mount(node: ComponentChildren): HTMLElement {
@@ -50,7 +50,7 @@ function detail() {
       name: "Example Organization",
       membershipCategory: "F",
       memberSince: "2026-01-01",
-      memberCount: 1,
+      activeIdentityCount: 1,
       primaryContactName: "Ada Lovelace",
       primaryContactEmail: "ada@example.test",
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -68,9 +68,9 @@ function detail() {
       links: [],
       primaryContactUserId: userId,
       secondaryContactUserId: null,
-      representatives: [
+      identities: [
         {
-          representativeId,
+          identityId,
           membershipId,
           userId,
           name: "Ada Lovelace",
@@ -80,7 +80,7 @@ function detail() {
           jobTitle: "Engineer",
           biography: null,
           links: [],
-          status: "active",
+          state: "active",
           showOnOrgProfile: true,
           isPrimaryContact: true,
           isSecondaryContact: false,
@@ -92,13 +92,14 @@ function detail() {
 }
 
 function representativePage() {
-  return organizationRepresentativesListResponseSchema.parse({
-    representatives: [
+  return identitiesListResponseSchema.parse({
+    identities: [
       {
-        id: representativeId,
+        id: identityId,
         memberId: membershipId,
         organizationId,
         organizationName: "Example Organization",
+        membershipCategory: "F",
         userId,
         userName: "Ada Lovelace",
         emailId: null,
@@ -108,11 +109,14 @@ function representativePage() {
         links: [],
         headshotUrl: null,
         source: "staff",
+        state: "active",
         showOnOrganizationProfile: true,
-        joinedAt: "2026-01-01T00:00:00.000Z",
-        leftAt: null,
+        invitedAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        endedAt: null,
         blockedAt: null,
         blockedByUserId: null,
+        predecessorIdentityId: null,
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
@@ -189,12 +193,12 @@ describe("portal System Organizations", () => {
         typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
         location.origin,
       );
-      return json(url.pathname.endsWith("/representatives") ? representativePage() : detail());
+      return json(url.pathname.endsWith("/identities") ? representativePage() : detail());
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const readOnly = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageRepresentatives={false} />,
+      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities={false} />,
     );
     await settle();
     await settle();
@@ -203,9 +207,7 @@ describe("portal System Organizations", () => {
     expect(readOnly.textContent).not.toContain("Link existing user");
     expect(readOnly.textContent).not.toContain("Remove");
 
-    const writer = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />,
-    );
+    const writer = mount(<OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />);
     const menuTrigger = await waitForElement(() =>
       writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
@@ -216,10 +218,10 @@ describe("portal System Organizations", () => {
     expect(writer.textContent).toContain("Active");
 
     await act(async () => menuTrigger!.click());
-    expect(writer.textContent).toContain("Remove from organization");
+    expect(writer.textContent).toContain("End identity");
   });
 
-  it("submits the canonical representative command and accepts its mutation receipt", async () => {
+  it("submits the canonical identity invitation command and accepts its mutation receipt", async () => {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -237,15 +239,19 @@ describe("portal System Organizations", () => {
           body: typeof rawBody === "string" && rawBody ? JSON.parse(rawBody) : null,
         });
         if (method === "POST") {
-          return json({ success: true, representativeId: "00000000-0000-4000-8000-000000000099" });
+          return json({
+            success: true,
+            identityId: "00000000-0000-4000-8000-000000000099",
+            state: "pending",
+          });
         }
-        if (url.pathname.endsWith("/representatives")) return json(representativePage());
+        if (url.pathname.endsWith("/identities")) return json(representativePage());
         return json(detail());
       }),
     );
 
     const container = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageRepresentatives />,
+      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities />,
     );
     await settle();
     const addButton = [...container.querySelectorAll("button")].find(
@@ -254,9 +260,9 @@ describe("portal System Organizations", () => {
     expect(addButton).toBeTruthy();
     await act(async () => addButton?.click());
 
-    const name = container.querySelector<HTMLInputElement>("#organization-representative-name")!;
-    const email = container.querySelector<HTMLInputElement>("#organization-representative-email")!;
-    const jobTitle = container.querySelector<HTMLInputElement>("#organization-representative-job-title")!;
+    const name = container.querySelector<HTMLInputElement>("#organization-identity-name")!;
+    const email = container.querySelector<HTMLInputElement>("#organization-identity-email")!;
+    const jobTitle = container.querySelector<HTMLInputElement>("#organization-identity-job-title")!;
     for (const [input, value] of [
       [name, "Grace Hopper"],
       [email, "grace@example.test"],
@@ -276,9 +282,9 @@ describe("portal System Organizations", () => {
 
     expect(requests.find((request) => request.method === "POST")).toEqual({
       method: "POST",
-      path: `/api/v1/organizations/${organizationId}/representatives`,
+      path: `/api/v1/organizations/${organizationId}/identities`,
       body: {
-        kind: "email",
+        userReference: "email",
         name: "Grace Hopper",
         email: "grace@example.test",
         jobTitle: "Engineer",
@@ -287,7 +293,7 @@ describe("portal System Organizations", () => {
     });
   });
 
-  it("removes a representative through the row menu only after the named confirmation is accepted", async () => {
+  it("ends an identity through the row menu only after the named confirmation is accepted", async () => {
     const requests: Array<{ method: string; path: string }> = [];
     vi.stubGlobal(
       "fetch",
@@ -298,15 +304,15 @@ describe("portal System Organizations", () => {
         );
         const method = init?.method ?? "GET";
         requests.push({ method, path: url.pathname });
-        if (method === "DELETE") return json({ success: true });
-        return json(url.pathname.endsWith("/representatives") ? representativePage() : detail());
+        if (method === "PATCH") return json({ success: true, identityId, state: "ended" });
+        return json(url.pathname.endsWith("/identities") ? representativePage() : detail());
       }),
     );
 
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />
+        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />
       </>,
     );
     const menuTrigger = await waitForElement(() =>
@@ -314,38 +320,38 @@ describe("portal System Organizations", () => {
     );
     await act(async () => menuTrigger!.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "Remove from organization",
+      (candidate) => candidate.textContent === "End identity",
     );
-    if (!removeItem) throw new Error("missing Remove from organization menu item");
+    if (!removeItem) throw new Error("missing End identity menu item");
     await act(async () => removeItem.click());
 
     const dialog = container.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain("Remove Ada Lovelace from this organization?");
-    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
+    expect(dialog?.textContent).toContain("End Ada Lovelace's identity for this organization?");
+    expect(requests.some((request) => request.method === "PATCH")).toBe(false);
 
-    await act(async () => dialogButton(container, "Remove from organization").click());
+    await act(async () => dialogButton(container, "End identity").click());
     await settle();
 
     expect(requests).toContainEqual({
-      method: "DELETE",
-      path: `/api/v1/organizations/${organizationId}/representatives/${userId}`,
+      method: "PATCH",
+      path: `/api/v1/organizations/${organizationId}/identities/${identityId}`,
     });
   });
 
-  it("keeps the representative active when the removal confirmation is cancelled", async () => {
+  it("keeps the identity active when the end confirmation is cancelled", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(
         typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
         location.origin,
       );
-      return json(url.pathname.endsWith("/representatives") ? representativePage() : detail());
+      return json(url.pathname.endsWith("/identities") ? representativePage() : detail());
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageRepresentatives />
+        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />
       </>,
     );
     const menuTrigger = await waitForElement(() =>
@@ -353,9 +359,9 @@ describe("portal System Organizations", () => {
     );
     await act(async () => menuTrigger!.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "Remove from organization",
+      (candidate) => candidate.textContent === "End identity",
     );
-    if (!removeItem) throw new Error("missing Remove from organization menu item");
+    if (!removeItem) throw new Error("missing End identity menu item");
     const callsBeforeCancel = fetchMock.mock.calls.length;
     await act(async () => removeItem.click());
 

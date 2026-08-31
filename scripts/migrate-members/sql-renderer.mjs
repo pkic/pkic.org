@@ -152,7 +152,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 }
 
 /**
- * One durable `organization_representatives` row for each (org, user) pair.
+ * One durable active identity row for each (organization, user) pair.
  * INSERT OR IGNORE keeps the migration importer idempotent without changing
  * an existing association's source or lifecycle state.
  * @param {string} normalizedOrgName
@@ -160,27 +160,29 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
  * @param {boolean} showOnOrgProfile
  * @param {{ jobTitle?: string | null, biography?: string | null, linksJson?: string | null }} [profile]
  */
-export function buildOrganizationRepresentativeStatement(
+export function buildActingIdentityStatement(
   normalizedOrgName,
   normalizedEmail,
   showOnOrgProfile,
   { jobTitle = null, biography = null, linksJson = null } = {},
 ) {
   return `
-INSERT INTO organization_representatives
-  (id, member_id, user_id, email_id, job_title, biography, links_json,
-   source, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, m.id, u.id, NULL,
+INSERT INTO identities
+  (id, user_id, organization_id, email_id, job_title, biography, links_json,
+   source, show_on_organization_profile, invited_at, started_at, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, u.id, o.id, NULL,
        ${toSqlNullableText(jobTitle)}, ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
-       'migration', ${showOnOrgProfile ? 1 : 0}, datetime('now'), NULL, datetime('now'), datetime('now')
-FROM members m
-JOIN organizations o ON o.id = m.organization_id
+       'migration', ${showOnOrgProfile ? 1 : 0}, datetime('now'), datetime('now'), datetime('now'), datetime('now')
+FROM organizations o
 JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
-ON CONFLICT(member_id, user_id) DO UPDATE SET
-  job_title = COALESCE(organization_representatives.job_title, excluded.job_title),
-  biography = COALESCE(organization_representatives.biography, excluded.biography),
-  links_json = COALESCE(organization_representatives.links_json, excluded.links_json),
+ON CONFLICT(user_id, organization_id)
+  WHERE organization_id IS NOT NULL
+    AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
+DO UPDATE SET
+  job_title = COALESCE(identities.job_title, excluded.job_title),
+  biography = COALESCE(identities.biography, excluded.biography),
+  links_json = COALESCE(identities.links_json, excluded.links_json),
   updated_at = datetime('now');
 `;
 }
@@ -194,11 +196,20 @@ ON CONFLICT(member_id, user_id) DO UPDATE SET
  */
 export function buildRepresentativeRoleGrantStatement(normalizedOrgName, normalizedEmail, roleId) {
   return `
-INSERT OR IGNORE INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
-SELECT ${sqlString(randomUUID())}, u.id, ${sqlString(roleId)}, 'organization', m.id, NULL, 1, datetime('now')
+INSERT OR IGNORE INTO user_roles
+  (id, user_id, role_id, context_type, context_id, identity_id,
+   granted_by_user_id, single_holder_per_context, created_at)
+SELECT ${sqlString(randomUUID())}, u.id, ${sqlString(roleId)}, 'organization', m.id,
+       identity.id, NULL, 1, datetime('now')
 FROM members m
 JOIN organizations o ON o.id = m.organization_id
 JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
+JOIN identities identity
+  ON identity.user_id = u.id
+ AND identity.organization_id = o.id
+ AND identity.started_at IS NOT NULL
+ AND identity.ended_at IS NULL
+ AND identity.blocked_at IS NULL
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 `;
 }
@@ -265,7 +276,12 @@ ON CONFLICT(normalized_email) DO UPDATE SET
  * reruns (this script's own callers, unlike a live request, may execute
  * against an aggregate that already exists).
  */
-export function buildIndividualMemberAggregateStatements(normalizedEmail, categoryCode, memberSince) {
+export function buildIndividualMemberAggregateStatements(
+  normalizedEmail,
+  categoryCode,
+  memberSince,
+  { biography = null, linksJson = null } = {},
+) {
   const statements = [
     `
 INSERT OR IGNORE INTO members (id, member_type, user_id, status, member_since, created_at, updated_at)
@@ -284,6 +300,26 @@ INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, cre
 SELECT m.id, ${sqlString(categoryCode)}, datetime('now'), datetime('now')
 FROM members m JOIN users u ON u.id = m.user_id
 WHERE u.normalized_email = ${sqlString(normalizedEmail)};
+`);
+    statements.push(`
+INSERT INTO identities
+  (id, user_id, organization_id, email_id, job_title, biography, links_json,
+   source, show_on_organization_profile, invited_at, started_at, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, u.id, NULL, NULL, NULL,
+       ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
+       'migration', 0, datetime('now'), datetime('now'), datetime('now'), datetime('now')
+  FROM users u
+  JOIN members member ON member.user_id = u.id AND member.member_type = 'individual'
+  JOIN member_category_assignments category ON category.member_id = member.id
+ WHERE u.normalized_email = ${sqlString(normalizedEmail)}
+   AND category.category_code IN ('H5', 'H6', 'H7')
+ON CONFLICT(user_id)
+  WHERE organization_id IS NULL
+    AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
+DO UPDATE SET
+  biography = COALESCE(identities.biography, excluded.biography),
+  links_json = COALESCE(identities.links_json, excluded.links_json),
+  updated_at = datetime('now');
 `);
   }
   return statements;
@@ -376,10 +412,10 @@ export function buildGroupMembershipStatement(groupSlug, email) {
   return `
 ${capacitiesCte}
 INSERT OR IGNORE INTO group_memberships
-  (id, group_id, user_id, member_id, source, created_by_user_id,
+  (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
    joined_at, left_at, created_at, updated_at)
 SELECT lower(hex(randomblob(16))), group_row.id, capacity.user_id,
-       capacity.member_id, 'migration', NULL,
+       capacity.identity_id, capacity.member_id, 'migration', NULL,
        datetime('now'), NULL, datetime('now'), datetime('now')
   FROM active_user_capacities capacity
   JOIN groups group_row

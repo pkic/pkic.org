@@ -49,6 +49,7 @@ export async function requireGroupResourceContext(
     capabilities: context.capabilities,
     viewer: {
       userId: resolved.userId,
+      ...(resolved.member ? { identityId: resolved.member.identityId } : {}),
       ...(resolved.staff ? { admin: resolved.staff } : {}),
     },
     ...(resolved.member ? { member: resolved.member } : {}),

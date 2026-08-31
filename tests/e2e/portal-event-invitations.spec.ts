@@ -142,18 +142,27 @@ async function manageInvitation(
       response.url().endsWith("/resend") &&
       response.request().method() === "POST",
   );
-  await inviteRow.getByRole("button", { name: `Resend invitation to ${inviteeName}` }).click();
+  const rowActions = inviteRow.getByRole("button", { name: `Actions for ${inviteeName}` });
+  await rowActions.focus();
+  await rowActions.press("Enter");
+  const resendAction = page.getByRole("menuitem", { name: "Resend invitation" });
+  await expect(resendAction).toBeVisible();
+  await resendAction.click();
   expect((await resent).status()).toBe(200);
   await expect(detail.getByText(`Invitation resent to ${inviteeName}.`)).toBeVisible();
 
-  page.once("dialog", (dialog) => void dialog.accept());
   const revoked = page.waitForResponse(
     (response) =>
       response.url().includes(`/events/${event.id}/invites/`) &&
       response.url().endsWith("/revoke") &&
       response.request().method() === "POST",
   );
-  await inviteRow.getByRole("button", { name: `Revoke invitation for ${inviteeName}` }).click();
+  await rowActions.focus();
+  await rowActions.press("Enter");
+  const revokeAction = page.getByRole("menuitem", { name: "Revoke invitation" });
+  await expect(revokeAction).toBeVisible();
+  await revokeAction.click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Revoke invitation" }).click();
   expect((await revoked).status()).toBe(200);
   await expect(detail.getByText(`Invitation revoked for ${inviteeName}.`)).toBeVisible();
   await expect(inviteRow.getByText("Revoked", { exact: true })).toBeVisible();

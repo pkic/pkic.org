@@ -38,18 +38,22 @@ async function adminToken(): Promise<{ id: string; token: string }> {
   };
 }
 
-async function grantToken(permission: "membership:write" | "organizations:read" | "organizations:write") {
+async function grantToken(
+  ...permissions: Array<"identities:activate" | "membership:write" | "organizations:read" | "organizations:write">
+) {
   const userId = await insertUser(
     env.DB,
-    `organization-${permission.replace(":", "-")}-${crypto.randomUUID()}@example.test`,
+    `organization-${permissions.join("-").replaceAll(":", "-")}-${crypto.randomUUID()}@example.test`,
   );
-  await env.DB.prepare(
-    `INSERT INTO permission_grants
-       (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
-     VALUES (?, ?, ?, NULL, NULL, ?, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, permission, userId)
-    .run();
+  await env.DB.batch(
+    permissions.map((permission) =>
+      env.DB.prepare(
+        `INSERT INTO permission_grants
+             (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+           VALUES (?, ?, ?, NULL, NULL, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId, permission, userId),
+    ),
+  );
   return {
     userId,
     token: await createAdminSession(env.DB, userId, `organization-staff-${crypto.randomUUID()}`),
@@ -61,8 +65,9 @@ function createBody(name = "Canonical Organization") {
     name,
     membershipCategory: "F",
     memberSince: "2026-01-15",
-    representatives: [{ name: "Jane Doe", email: `${name.toLowerCase().replaceAll(" ", ".")}@example.test` }],
+    identities: [{ name: "Jane Doe", email: `${name.toLowerCase().replaceAll(" ", ".")}@example.test` }],
     workingGroupSlugs: [],
+    activationReason: "Initial verified organization identity",
   };
 }
 
@@ -71,7 +76,7 @@ describe("canonical organization management", () => {
 
   it("uses the domain API with exact read/write permissions and no API-key fallback", async () => {
     const admin = await adminToken();
-    const writer = await grantToken("membership:write");
+    const writer = await grantToken("membership:write", "identities:activate");
     const reader = await grantToken("organizations:read");
 
     const created = await call("/api/v1/organizations", writer.token, {
@@ -132,7 +137,7 @@ describe("canonical organization management", () => {
   it("keeps list search, sorting, and pagination in a single D1 projection", async () => {
     await adminToken();
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(
-      buildOrganizationsPageQuery({ q: "consortium", sort: "-member_count", limit: 25, offset: 0 }),
+      buildOrganizationsPageQuery({ q: "consortium", sort: "-identity_count", limit: 25, offset: 0 }),
     );
     const plans = await Promise.all([
       env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
@@ -143,9 +148,9 @@ describe("canonical organization management", () => {
         .all<{ detail: string }>(),
     ]);
     const detail = plans.flatMap((plan) => plan.results.map((row) => row.detail)).join("\n");
-    expect(pageSql).toMatch(/ORDER BY member_count DESC/i);
+    expect(pageSql).toMatch(/ORDER BY active_identity_count DESC/i);
     expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM organizations o/i);
-    expect(countSql).not.toMatch(/organization_representatives|primary_contact/i);
-    expect(detail).toContain("idx_organization_representatives_member_active");
+    expect(countSql).not.toMatch(/\bidentities\b|primary_contact/i);
+    expect(detail).toContain("idx_identities_organization_lifecycle");
   });
 });

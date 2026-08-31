@@ -57,10 +57,10 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         ),
     },
     {
-      header: "Representatives",
-      cell: (organization) => organization.memberCount,
+      header: "Active identities",
+      cell: (organization) => organization.activeIdentityCount,
       className: "text-center",
-      sort: { asc: "member_count", desc: "-member_count" },
+      sort: { asc: "identity_count", desc: "-identity_count" },
     },
     {
       header: "Website",

@@ -118,13 +118,16 @@ describe("Post-approval onboarding", () => {
     );
     expect(primaryContactRows[0].user_id).toBe(body.userId);
 
-    const repRows = await queryAll<{ user_id: string; left_at: string | null }>(
+    const identityRows = await queryAll<{ user_id: string; ended_at: string | null }>(
       env.DB,
-      "SELECT user_id, left_at FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+      `SELECT identity.user_id, identity.ended_at
+         FROM identities identity
+         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+        WHERE capacity.member_id = ? AND identity.user_id = ?`,
       body.memberId,
       body.userId,
     );
-    expect(repRows[0].left_at).toBeNull();
+    expect(identityRows[0].ended_at).toBeNull();
 
     const domainRows = await queryAll<{ domain: string }>(
       env.DB,
@@ -211,16 +214,16 @@ describe("Post-approval onboarding", () => {
       body.userId,
     );
     expect(userRows).toEqual([{ job_title: null, links_json: null }]);
-    const representations = await queryAll<{ job_title: string | null; links_json: string | null }>(
+    const identities = await queryAll<{ job_title: string | null; links_json: string | null }>(
       env.DB,
       `SELECT job_title, links_json
-         FROM organization_representatives
-        WHERE user_id = ? AND left_at IS NULL`,
+         FROM identities
+        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
       body.userId,
     );
-    expect(representations[0].job_title).toBe("Chief Cryptography Officer");
-    expect(representations[0].links_json).toBeTruthy();
-    const links = JSON.parse(representations[0].links_json as string) as string[];
+    expect(identities[0].job_title).toBe("Chief Cryptography Officer");
+    expect(identities[0].links_json).toBeTruthy();
+    const links = JSON.parse(identities[0].links_json as string) as string[];
     expect(links).toEqual(["https://linkedin.com/in/newmember"]);
   });
 
@@ -471,13 +474,16 @@ describe("Post-approval onboarding", () => {
     const orgCount = await queryAll(env.DB, "SELECT id FROM organizations WHERE name = 'Acme Corp'");
     expect(orgCount).toHaveLength(1);
 
-    const repRows = await queryAll(
+    const identityRows = await queryAll(
       env.DB,
-      "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+      `SELECT identity.id
+         FROM identities identity
+         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+        WHERE capacity.member_id = ? AND identity.user_id = ? AND identity.ended_at IS NULL`,
       body.memberId,
       body.userId,
     );
-    expect(repRows).toHaveLength(1);
+    expect(identityRows).toHaveLength(1);
 
     const auditRows = await queryAll(
       env.DB,

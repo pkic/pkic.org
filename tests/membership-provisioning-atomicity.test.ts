@@ -29,8 +29,9 @@ describe("provisionOrganizationMembership atomicity", () => {
       provisionOrganizationMembership(env.DB, {
         organizationName: orgName,
         membershipCategory: "NOT_A_REAL_CATEGORY",
-        representatives: [{ name: "Alice Anderson", email: `alice-${crypto.randomUUID()}@example.test` }],
-        representationSource: "staff",
+        identities: [{ name: "Alice Anderson", email: `alice-${crypto.randomUUID()}@example.test` }],
+        identitySource: "staff",
+        activateIdentities: true,
         workingGroupSlugs: [],
       }),
     ).rejects.toMatchObject({ status: 422 });
@@ -57,25 +58,22 @@ describe("provisionOrganizationMembership atomicity", () => {
     const result = await provisionOrganizationMembership(env.DB, {
       organizationName: orgName,
       membershipCategory: "A",
-      representatives: [{ name: "Bob Builder", email }],
-      representationSource: "staff",
+      identities: [{ name: "Bob Builder", email }],
+      identitySource: "staff",
+      activateIdentities: true,
       workingGroupSlugs: [],
     });
 
     expect(result.organizationWasCreated).toBe(true);
-    expect(result.representatives).toHaveLength(1);
-    expect(result.representatives[0].assignedContactRole).toBe("primary");
+    expect(result.identities).toHaveLength(1);
+    expect(result.identities[0].assignedContactRole).toBe("primary");
 
     const orgs = await queryAll<{ id: string }>(env.DB, "SELECT id FROM organizations WHERE name = ?", orgName);
     expect(orgs).toHaveLength(1);
     const members = await queryAll(env.DB, "SELECT id FROM members WHERE organization_id = ?", orgs[0]!.id);
     expect(members).toHaveLength(1);
-    const reps = await queryAll(
-      env.DB,
-      "SELECT id FROM organization_representatives WHERE member_id = ?",
-      result.representatives[0].membershipId,
-    );
-    expect(reps).toHaveLength(1);
+    const identities = await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id = ?", orgs[0]!.id);
+    expect(identities).toHaveLength(1);
   });
 
   it("rejects (409, before writing anything) when the pre-existing organization's aggregate has a conflicting category", async () => {
@@ -88,8 +86,9 @@ describe("provisionOrganizationMembership atomicity", () => {
       provisionOrganizationMembership(env.DB, {
         organizationName: org[0]!.name,
         membershipCategory: "B", // conflicts with the existing "A" assignment
-        representatives: [{ name: "Carol Contact", email }],
-        representationSource: "staff",
+        identities: [{ name: "Carol Contact", email }],
+        identitySource: "staff",
+        activateIdentities: true,
         workingGroupSlugs: [],
       }),
     ).rejects.toMatchObject({ status: 409, code: "MEMBER_CATEGORY_CONFLICT" });
@@ -114,13 +113,14 @@ describe("provisionOrganizationMembership atomicity", () => {
       provisionOrganizationMembership(env.DB, {
         organizationName: org[0]!.name,
         membershipCategory: "A",
-        representatives: [{ name: "Existing Rep", email }],
-        representationSource: "staff",
+        identities: [{ name: "Existing Rep", email }],
+        identitySource: "staff",
+        activateIdentities: true,
         workingGroupSlugs: [],
       }),
     ).rejects.toMatchObject({ status: 409, code: "ALREADY_MEMBER" });
 
-    const reps = await queryAll(env.DB, "SELECT id FROM organization_representatives WHERE member_id = ?", memberId);
-    expect(reps).toHaveLength(1); // still just the one seeded above, no duplicate
+    const identities = await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id = ?", orgId);
+    expect(identities).toHaveLength(1); // still just the one seeded above, no duplicate
   });
 });

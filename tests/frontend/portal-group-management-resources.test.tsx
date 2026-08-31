@@ -352,6 +352,7 @@ describe("portal group management resources", () => {
                   id: MEMBERSHIP_ID,
                   groupId: GROUP_ID,
                   userId: "40000000-0000-4000-8000-000000000001",
+                  identityId: "50000000-0000-4000-8000-000000000011",
                   memberId: "50000000-0000-4000-8000-000000000001",
                   memberType: "organization",
                   userName: "Member Person",

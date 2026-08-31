@@ -82,24 +82,24 @@ When the last active parent-group capacity for a user ends, all active
 descendant memberships for that user end in the same use case. Rejoining the
 parent does not silently reactivate former child memberships.
 
-## Membership and representation
+## Membership and acting identities
 
 A group membership is one row representing one user acting for one canonical
 Member in one group:
 
     group + user + represented Member + active interval
 
-A user representing two organizations may therefore have two active rows in
+A user acting for two organizations may therefore have two active rows in
 the same group. There is no separate personal participation, organizational
 participation, and mandate aggregate to synchronize.
 
 The active uniqueness boundary is group, user, and Member. Member is required:
 staff permission to manage a group is not group membership.
 
-Joining defaults to all organizations the user currently represents. The user
-must confirm the list and may select a subset. A later representative
+Joining defaults to all organizations for which the user has an active identity. The user
+must confirm the list and may select a subset. A later identity
 relationship does not silently enroll that organization into existing groups.
-A user with any active organization representation cannot join using an
+A user with any active organization identity cannot join using an
 individual-member capacity.
 
 Person-oriented operations use distinct users:
@@ -115,36 +115,38 @@ Member-oriented operations use distinct Members:
 - voting eligibility and effective ballots;
 - participating-Member statistics.
 
-## Organization representatives
+## Acting identities
 
-An exact match between a verified user email domain and a domain claimed by an
-active Member organization is strong evidence for ordinary representative
-status and establishes it automatically. Free, personal, disposable,
-unclaimed, and otherwise ambiguous email domains produce a warning and never
-establish representation automatically. An authorized primary or secondary
-organization contact may instead add the explicit association.
+An acting identity is the sparse, approved capacity through which a user acts
+for one Member. Most users hold one organization identity. Only approved H5,
+H6, and H7 individual Members hold an organization-less identity; ordinary
+contacts and event attendees do not receive one.
 
-Primary or secondary organization contacts may remove a representative.
-Removal creates a persistent block until an authorized contact restores the
-relationship and immediately ends all active group capacities held for that
-organization. Historical participation and actions remain intact.
+An exact verified email-domain match is evidence that can support an
+organization invitation, but it is never an editable self-asserted affiliation.
+Free, personal, disposable, unclaimed, and ambiguous domains never authorize an
+organization identity. Organization contacts and properly authorized staff may
+invite an identity; the exact user must accept before it grants Member or group
+capacity. Staff may activate immediately only with both `membership:write` and
+`identities:activate`, an explicit reason, audit attribution, and a same-batch
+authorization guard.
 
-All active representatives have equal ordinary participation and contribution
-rights. Primary and secondary contacts additionally manage the organization and
-its representative list.
+Ending or blocking an identity immediately closes its active group capacities
+and revokes identity-scoped roles while preserving historical actions. It is
+not restored in place: a later role period is recorded as a successor identity.
+Primary and secondary organization contacts additionally manage organization
+content and identity invitations.
 
-One user may represent several Members through the same authenticated session.
-The selected Member capacity is an untrusted session hint that every request
-revalidates against live representation state. Organization-specific email,
-job title, biography, and links come from that exact representation; the email
-references a verified user-owned address rather than copying it. Group
-leadership is assigned to an exact active `(group, user, Member)` participation
-row. Selecting another represented Member does not inherit that leadership,
-and ending the participation or representation revokes the assignment.
-Removing a selected alias falls every affected representation back to the
-user's primary address in the same transaction. Membership application access
-uses canonical user and resulting Member identifiers rather than matching the
-historical applicant email.
+One user may hold several identities in the same authenticated account. The
+session selects an exact `identity_id`, and every request revalidates that id
+against live lifecycle state. Organization-specific email, job title,
+biography, and links come from that identity; the email references a verified
+user-owned address rather than copying it. Group participation and leadership
+bind to the exact identity, so switching identities does not inherit another
+capacity's authority. Removing a selected alias falls every affected identity
+back to the user's primary address in the same transaction. Membership
+application access uses canonical user, identity, and Member identifiers rather
+than matching a reusable historical email string.
 
 ## Conditional enrollment
 
@@ -318,12 +320,12 @@ all placements; a divergent questionnaire is created by copying the form.
 ## Voting
 
 Organizational voting has one effective ballot per Member per vote and round.
-Every active representative may submit or replace that ballot. A representative
+Every active identity may submit or replace that ballot. A user with identities
 of multiple organizations sees a separate ballot for each organization.
 
 The latest authorized submission before close is effective. The current ballot
 row records the latest actor and choice; the shared audit log preserves every
-replacement. Removing a representative never deletes history. A primary or
+replacement. Ending an identity never deletes history. A primary or
 secondary contact may submit a corrective ballot.
 
 Vote configuration controls whether an electorate is per Member or per person.

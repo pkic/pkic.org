@@ -2,7 +2,7 @@
  * Step 2 (org-tied branch) + Step 3e (sponsorship reconciliation):
  * processes one org-tied (A-G, H1-H4, H8) YAML record into
  * `organizations`/`organization_domain_claims`/`members`/
- * `member_category_assignments`/`organization_representatives`/
+ * `member_category_assignments`/`identities`/
  * `user_roles`/`sponsorships` statements. Pure with respect to its inputs
  * — all shared mutable state lives on the `ctx` object build-migration.mjs
  * passes in.
@@ -14,7 +14,7 @@ import {
   buildUpsertOrganizationStatement,
   buildOrganizationDomainStatements,
   buildOrganizationMemberAggregateStatements,
-  buildOrganizationRepresentativeStatement,
+  buildActingIdentityStatement,
   buildLinksJson,
   buildRepresentativeRoleGrantStatement,
   buildConsortiumSponsorshipStatements,
@@ -147,7 +147,7 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
       sourceName: rep.name,
     });
     ctx.statements.push(
-      buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, true, {
+      buildActingIdentityStatement(normalizedOrgName, normalizedEmail, true, {
         jobTitle: rep.role ?? null,
         biography: rep.description ?? null,
         linksJson,
@@ -158,7 +158,7 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
 
   // Domain-matched emails not paired to any named representative (or, for
   // orgs with no `representatives` field at all, every matched email)
-  // become anonymous, opted-out representative rows.
+  // become anonymous, profile-hidden organization identities.
   for (let i = 0; i < candidates.length; i += 1) {
     if (matchedCandidateIndices.has(i)) continue;
     const { email } = candidates[i];
@@ -171,7 +171,7 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
       linksJson: null,
     });
     ctx.claimedEmails.add(normalizedEmail);
-    ctx.statements.push(buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, false));
+    ctx.statements.push(buildActingIdentityStatement(normalizedOrgName, normalizedEmail, false));
     contactEmails.push(normalizedEmail);
   }
 

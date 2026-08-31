@@ -53,7 +53,7 @@ async function rotateSessionState(c: Context<RequestDbContext>, sessionDb: Datab
       sub: admin.id,
       sid: admin.sessionId,
       exp: verified.claims.exp,
-      memberId: verified.claims.mid,
+      identityId: verified.claims.iid,
       state,
     });
     const headers = new Headers(c.res.headers);

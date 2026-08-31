@@ -416,15 +416,31 @@ describe("canonical group voting", () => {
       organizationName: "Organization B",
     });
     const secondRepresentativeId = await insertUser(env.DB, "second-representative@example.test");
-    await addRepresentative(env.DB, capacityA.memberId, secondRepresentativeId);
+    const secondRepresentativeIdentityId = await addRepresentative(env.DB, capacityA.memberId, secondRepresentativeId);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacityA.userId, [capacityA.memberId, capacityB.memberId]);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, secondRepresentativeId, [capacityA.memberId]);
     const vote = await createCanonicalVote(env.DB, admin);
-    const firstRepresentative = await resolveAuthMember(env.DB, capacityA.userId);
-    const secondRepresentative = await resolveAuthMember(env.DB, secondRepresentativeId);
+    const firstRepresentativeA = await resolveAuthMember(
+      env.DB,
+      capacityA.userId,
+      crypto.randomUUID(),
+      capacityA.identityId,
+    );
+    const firstRepresentativeB = await resolveAuthMember(
+      env.DB,
+      capacityA.userId,
+      crypto.randomUUID(),
+      capacityB.identityId,
+    );
+    const secondRepresentative = await resolveAuthMember(
+      env.DB,
+      secondRepresentativeId,
+      crypto.randomUUID(),
+      secondRepresentativeIdentityId,
+    );
 
-    await submitBallot(env.DB, firstRepresentative, vote.id, capacityA.memberId, "in_favor", null);
-    await submitBallot(env.DB, firstRepresentative, vote.id, capacityB.memberId, "opposed", null);
+    await submitBallot(env.DB, firstRepresentativeA, vote.id, capacityA.memberId, "in_favor", null);
+    await submitBallot(env.DB, firstRepresentativeB, vote.id, capacityB.memberId, "opposed", null);
     await submitBallot(env.DB, secondRepresentative, vote.id, capacityA.memberId, "abstain", null);
 
     expect(
@@ -444,7 +460,7 @@ describe("canonical group voting", () => {
   it("uses the editable D1 category policy for both per-Member and per-person ballots", async () => {
     const capacity = await createOrganizationCapacity(env.DB, { category: "H1" });
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
-    const member = await resolveAuthMember(env.DB, capacity.userId);
+    const member = await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.identityId);
     const memberVote = await createCanonicalVote(env.DB, admin);
 
     await expect(submitBallot(env.DB, member, memberVote.id, capacity.memberId, "in_favor", null)).rejects.toSatisfy(
@@ -512,11 +528,11 @@ describe("canonical group voting", () => {
     await gate.reached;
     const revokedAt = new Date(Date.now() + 1_000).toISOString();
     await env.DB.prepare(
-      `UPDATE organization_representatives
-       SET left_at = ?, blocked_at = ?
-       WHERE member_id = ? AND user_id = ?`,
+      `UPDATE identities
+       SET ended_at = ?, blocked_at = ?
+       WHERE id = ? AND user_id = ?`,
     )
-      .bind(revokedAt, revokedAt, capacity.memberId, capacity.userId)
+      .bind(revokedAt, revokedAt, capacity.identityId, capacity.userId)
       .run();
     gate.release();
     await expect(pending).rejects.toSatisfy((error: unknown) => isAppError(error) && error.code === "VOTE_CHANGED");
@@ -551,7 +567,7 @@ describe("canonical group voting", () => {
     const capacityB = await createOrganizationCapacity(env.DB, { userId: capacityA.userId, category: "B" });
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacityA.userId, [capacityA.memberId, capacityB.memberId]);
     const vote = await createCanonicalVote(env.DB, admin, { electorateMode: "per_person" });
-    const member = await resolveAuthMember(env.DB, capacityA.userId);
+    const member = await resolveAuthMember(env.DB, capacityA.userId, crypto.randomUUID(), capacityA.identityId);
     await submitBallot(env.DB, member, vote.id, null, "in_favor", null);
     await submitBallot(env.DB, member, vote.id, undefined, "opposed", null);
     expect(await queryAll(env.DB, "SELECT member_id, choice FROM vote_ballots WHERE vote_id = ?", vote.id)).toEqual([
@@ -562,7 +578,7 @@ describe("canonical group voting", () => {
     );
   });
 
-  it("uses all active group capacities rather than the session's first membership for proposals", async () => {
+  it("uses the selected group identity for proposal actions", async () => {
     await env.DB.prepare("UPDATE groups SET min_endorsers_for_ballot = 2 WHERE id = ?").bind(TEST_GROUPS.pqc).run();
     const multiOrganization = await createMultiOrganizationUser(env.DB);
     const endorser = await createOrganizationCapacity(env.DB);
@@ -570,8 +586,13 @@ describe("canonical group voting", () => {
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, multiOrganization.userId, [multiOrganization.groupMemberId]);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, endorser.userId, [endorser.memberId]);
     await joinVotingGroup(env.DB, TEST_GROUPS.cm, outsider.userId, [outsider.memberId]);
-    const proposerMember = await resolveAuthMember(env.DB, multiOrganization.userId);
-    expect(proposerMember.memberId).toBe(multiOrganization.defaultMemberId);
+    const proposerMember = await resolveAuthMember(
+      env.DB,
+      multiOrganization.userId,
+      crypto.randomUUID(),
+      multiOrganization.groupIdentityId,
+    );
+    expect(proposerMember.memberId).toBe(multiOrganization.groupMemberId);
     const proposal = await submitVoteProposal(env.DB, proposerMember, {
       title: "Multi-capacity proposal",
       description: "The active group capacity differs from the default represented organization in the session.",
@@ -1629,11 +1650,10 @@ describe("canonical group voting", () => {
     expect(votingPolicyDetails).toMatch(
       /SEARCH voting_membership_category USING INDEX sqlite_autoindex_membership_categories_1/,
     );
-    expect(votingPolicyDetails).toMatch(
-      /SEARCH active_rep USING INDEX (?:sqlite_autoindex_organization_representatives_2|idx_organization_representatives_member_active)/,
-    );
+    expect(votingPolicyDetails).toMatch(/SEARCH active_identity USING INDEX sqlite_autoindex_identities_1/);
+    expect(votingPolicyDetails).toMatch(/SEARCH identity USING INDEX sqlite_autoindex_identities_1/);
     expect(votingPolicyDetails).not.toMatch(
-      /SCAN (?:members|users|member_category_assignments|membership_categories|organization_representatives)\b/,
+      /SCAN (?:members|users|member_category_assignments|membership_categories|identities)\b/,
     );
     expect(votingPolicyDetails).not.toMatch(/USE TEMP B-TREE/);
   });

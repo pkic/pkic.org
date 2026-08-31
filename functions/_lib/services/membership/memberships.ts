@@ -161,9 +161,9 @@ export function buildCreateIndividualMemberStatements(
     db
       .prepare(
         `INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at)
-         VALUES (?, ?, ?, ?)`,
+         SELECT id, ?, ?, ? FROM members WHERE id = ?`,
       )
-      .bind(memberId, categoryCode, now, now),
+      .bind(categoryCode, now, now, memberId),
   ];
   return { memberId, statements };
 }

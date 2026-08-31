@@ -125,17 +125,12 @@ export function UsersList({
         {
           header: "Participation",
           cell: (user) => {
-            if (user.membership) {
+            if (user.activeIdentityCount > 0) {
               return (
-                <>
-                  <span class="badge text-bg-success">{user.membership.membershipCategory}</span>
-                  {user.membership.organizationName && (
-                    <>
-                      {" "}
-                      <span class="small text-muted">{user.membership.organizationName}</span>
-                    </>
-                  )}
-                </>
+                <span class="small">
+                  Member · {user.activeIdentityCount} active{" "}
+                  {user.activeIdentityCount === 1 ? "identity" : "identities"}
+                </span>
               );
             }
             if (user.type === "event_attendee") {

@@ -17,7 +17,7 @@ interface Profile {
   jobTitle: string | null;
   biography: string | null;
   links: string[];
-  activeMemberships: Array<{ memberId: string; organizationName: string | null }>;
+  activeIdentities: Array<{ identityId: string; memberId: string; organizationName: string | null }>;
 }
 
 async function readProfile(page: Page): Promise<Profile> {
@@ -74,8 +74,8 @@ test("a person representing two organizations can switch between both contexts",
   await signInToPortal(page, staffEmail);
   await approveMemberFor(page, email, firstOrganization);
 
-  // A second organization adds the same person as one of its representatives,
-  // which is how a real second capacity arises.
+  // A second organization records another approved identity for the same
+  // person, which is how a real second capacity arises.
   const created = await page.evaluate(
     async ({ organizationName, email }) => {
       const response = await fetch("/api/v1/organizations", {
@@ -86,7 +86,8 @@ test("a person representing two organizations can switch between both contexts",
           name: organizationName,
           membershipCategory: "F",
           memberSince: "2026-01-15",
-          representatives: [{ name: "Dual Capacity Rep", email, jobTitle: "Delegate" }],
+          identities: [{ name: "Dual Capacity Rep", email, jobTitle: "Delegate" }],
+          activationReason: "E2E dual-identity coverage",
         }),
       });
       return { status: response.status, body: await response.json() };
@@ -99,19 +100,19 @@ test("a person representing two organizations can switch between both contexts",
   await signInToPortal(page, email);
 
   const profile = await readProfile(page);
-  const names = profile.activeMemberships.map((membership) => membership.organizationName);
-  expect(names, JSON.stringify(profile.activeMemberships)).toContain(firstOrganization);
+  const names = profile.activeIdentities.map((identity) => identity.organizationName);
+  expect(names, JSON.stringify(profile.activeIdentities)).toContain(firstOrganization);
   expect(names).toContain(secondOrganization);
 
   // Switching must actually change the acting context, not just report success.
-  const target = profile.activeMemberships.find(
-    (membership) => membership.organizationName !== profile.organizationName,
-  );
+  const target = profile.activeIdentities.find((identity) => identity.organizationName !== profile.organizationName);
   expect(target, "a second distinct context must exist to switch to").toBeTruthy();
 
   await page.goto("/portal/#/profile");
   await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Security lead in the first capacity");
+  await page
+    .getByRole("textbox", { name: "Job title for this organization", exact: true })
+    .fill("Security lead in the first capacity");
   await page
     .getByRole("textbox", { name: "Biography", exact: true })
     .fill("Biography written only for the first represented organization.");
@@ -128,18 +129,22 @@ test("a person representing two organizations can switch between both contexts",
   const targetCapacity = page.getByRole("listitem").filter({ hasText: target!.organizationName! });
   const switched = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/api/v1/users/current/memberships/active") && response.request().method() === "PUT",
+      response.url().endsWith("/api/v1/users/current/identities/active") && response.request().method() === "PUT",
   );
   await targetCapacity.getByRole("button", { name: "Switch" }).click();
   expect((await switched).status()).toBe(200);
-  await expect(page.getByRole("textbox", { name: "Job title", exact: true })).toHaveValue("Delegate");
+  await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
+    "Delegate",
+  );
 
   const after = await readProfile(page);
   expect(after.organizationName).toBe(target!.organizationName);
   // Switching context must not cost the other capacity.
-  expect(after.activeMemberships.map((m) => m.organizationName)).toEqual(expect.arrayContaining(names));
+  expect(after.activeIdentities.map((identity) => identity.organizationName)).toEqual(expect.arrayContaining(names));
 
-  await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Program chair in the second capacity");
+  await page
+    .getByRole("textbox", { name: "Job title for this organization", exact: true })
+    .fill("Program chair in the second capacity");
   await page
     .getByRole("textbox", { name: "Biography", exact: true })
     .fill("A different biography for the second represented organization.");
@@ -161,11 +166,11 @@ test("a person representing two organizations can switch between both contexts",
   const firstCapacity = page.getByRole("listitem").filter({ hasText: profile.organizationName! });
   const switchedBack = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/api/v1/users/current/memberships/active") && response.request().method() === "PUT",
+      response.url().endsWith("/api/v1/users/current/identities/active") && response.request().method() === "PUT",
   );
   await firstCapacity.getByRole("button", { name: "Switch" }).click();
   expect((await switchedBack).status()).toBe(200);
-  await expect(page.getByRole("textbox", { name: "Job title", exact: true })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
     "Security lead in the first capacity",
   );
   await expect(page.getByRole("textbox", { name: "Biography", exact: true })).toHaveValue(
@@ -191,18 +196,18 @@ test("a membership the caller does not hold cannot be selected", async ({ page }
   await page.context().clearCookies();
   await signInToPortal(page, otherEmail);
   const otherProfile = await readProfile(page);
-  const foreignMemberId = otherProfile.activeMemberships[0].memberId;
+  const foreignIdentityId = otherProfile.activeIdentities[0].identityId;
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  const refused = await page.evaluate(async (memberId) => {
-    const response = await fetch("/api/v1/users/current/memberships/active", {
+  const refused = await page.evaluate(async (identityId) => {
+    const response = await fetch("/api/v1/users/current/identities/active", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ memberId }),
+      body: JSON.stringify({ identityId }),
     });
     return response.status;
-  }, foreignMemberId);
-  expect(refused, "a caller must not select a membership they do not hold").toBe(403);
+  }, foreignIdentityId);
+  expect(refused, "a caller must not select an identity they do not hold").toBe(403);
 });

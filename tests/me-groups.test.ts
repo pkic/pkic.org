@@ -54,9 +54,15 @@ describe("generic self-service group catalog", () => {
       await insertOrganization(env.DB, "Self Group Organization B"),
       "B",
     );
-    await addRepresentative(env.DB, memberAId, userId);
+    const identityAId = await addRepresentative(env.DB, memberAId, userId);
     await addRepresentative(env.DB, memberBId, userId);
-    const token = await createMemberSession(env.DB, userId, `self-groups-${crypto.randomUUID()}`);
+    const token = await createMemberSession(
+      env.DB,
+      userId,
+      `self-groups-${crypto.randomUUID()}`,
+      undefined,
+      identityAId,
+    );
 
     const firstResponse = await getAs(
       token,

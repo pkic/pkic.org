@@ -11,7 +11,7 @@ import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { insertUser, insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
-import { findEligibleMemberById, switchActiveMembership } from "../functions/_lib/auth/member";
+import { findEligibleMemberById, switchActiveIdentity } from "../functions/_lib/auth/member";
 import { getMyProfile } from "../functions/_lib/services/member-self-service";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
@@ -44,11 +44,11 @@ describe("member auth — multi-organization membership context", () => {
 
     const member = await findEligibleMemberById(env.DB, userId);
     expect(member).not.toBeNull();
-    const byMemberId = new Map(member!.activeMemberships.map((m) => [m.memberId, m]));
+    const byMemberId = new Map(member!.activeIdentities.map((m) => [m.memberId, m]));
     expect(byMemberId.get(memberAId)?.organizationName).toBe("Org Alpha");
     expect(byMemberId.get(memberBId)?.organizationName).toBe("Org Beta");
-    expect(member!.activeMemberships).toHaveLength(2);
-    expect(new Set(member!.activeMemberships.map((m) => m.memberId))).toEqual(new Set([memberAId, memberBId]));
+    expect(member!.activeIdentities).toHaveLength(2);
+    expect(new Set(member!.activeIdentities.map((m) => m.memberId))).toEqual(new Set([memberAId, memberBId]));
 
     // Deterministic: re-resolving must always select the same default.
     const again = await findEligibleMemberById(env.DB, userId);
@@ -61,16 +61,16 @@ describe("member auth — multi-organization membership context", () => {
     const orgBId = await insertOrganization(env.DB);
     const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
     const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
-    await addRepresentative(env.DB, memberAId, userId);
-    await addRepresentative(env.DB, memberBId, userId);
+    const identityAId = await addRepresentative(env.DB, memberAId, userId);
+    const identityBId = await addRepresentative(env.DB, memberBId, userId);
 
-    const asA = await findEligibleMemberById(env.DB, userId, memberAId);
+    const asA = await findEligibleMemberById(env.DB, userId, identityAId);
     expect(asA!.memberId).toBe(memberAId);
     expect(asA!.organizationId).toBe(orgAId);
     const profileA = await getMyProfile(env.DB, asA!);
     expect(profileA.organizationId).toBe(orgAId);
 
-    const asB = await findEligibleMemberById(env.DB, userId, memberBId);
+    const asB = await findEligibleMemberById(env.DB, userId, identityBId);
     expect(asB!.memberId).toBe(memberBId);
     expect(asB!.organizationId).toBe(orgBId);
     const profileB = await getMyProfile(env.DB, asB!);
@@ -83,8 +83,8 @@ describe("member auth — multi-organization membership context", () => {
     const orgBId = await insertOrganization(env.DB, "Org Beta");
     const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
     const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
-    await addRepresentative(env.DB, memberAId, userId);
-    await addRepresentative(env.DB, memberBId, userId);
+    const identityAId = await addRepresentative(env.DB, memberAId, userId);
+    const identityBId = await addRepresentative(env.DB, memberBId, userId);
     const emailAId = crypto.randomUUID();
     const emailBId = crypto.randomUUID();
     await env.DB.batch([
@@ -99,23 +99,23 @@ describe("member auth — multi-organization membership context", () => {
            VALUES (?, ?, ?, ?, datetime('now'), 'magic_link', datetime('now'))`,
       ).bind(emailBId, userId, "person@beta.example", "person@beta.example"),
       env.DB.prepare(
-        `UPDATE organization_representatives
+        `UPDATE identities
               SET email_id = ?, job_title = 'Alpha standards lead', biography = 'Alpha biography',
                   links_json = '["https://alpha.example/profile"]', updated_at = datetime('now')
-            WHERE member_id = ? AND user_id = ?`,
-      ).bind(emailAId, memberAId, userId),
+            WHERE id = ? AND user_id = ?`,
+      ).bind(emailAId, identityAId, userId),
       env.DB.prepare(
-        `UPDATE organization_representatives
+        `UPDATE identities
               SET email_id = ?, job_title = 'Beta policy lead', biography = 'Beta biography',
                   links_json = '["https://beta.example/profile"]', updated_at = datetime('now')
-            WHERE member_id = ? AND user_id = ?`,
-      ).bind(emailBId, memberBId, userId),
+            WHERE id = ? AND user_id = ?`,
+      ).bind(emailBId, identityBId, userId),
     ]);
 
-    const tokenA = await createMemberSession(env.DB, userId, "multi-org-a", undefined, memberAId);
-    const tokenB = await createMemberSession(env.DB, userId, "multi-org-b", undefined, memberBId);
-    expect((await findEligibleMemberById(env.DB, userId, memberAId))?.email).toBe("person@alpha.example");
-    expect((await findEligibleMemberById(env.DB, userId, memberBId))?.email).toBe("person@beta.example");
+    const tokenA = await createMemberSession(env.DB, userId, "multi-org-a", undefined, identityAId);
+    const tokenB = await createMemberSession(env.DB, userId, "multi-org-b", undefined, identityBId);
+    expect((await findEligibleMemberById(env.DB, userId, identityAId))?.email).toBe("person@alpha.example");
+    expect((await findEligibleMemberById(env.DB, userId, identityBId))?.email).toBe("person@beta.example");
     const profileA = await (await call(tokenA, "/api/v1/users/current")).json<any>();
     const profileB = await (await call(tokenB, "/api/v1/users/current")).json<any>();
     expect(profileA).toMatchObject({
@@ -175,8 +175,8 @@ describe("member auth — multi-organization membership context", () => {
     const orgBId = await insertOrganization(env.DB, "Application Org B");
     const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
     const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
-    await addRepresentative(env.DB, memberAId, userId);
-    await addRepresentative(env.DB, memberBId, userId);
+    const identityAId = await addRepresentative(env.DB, memberAId, userId);
+    const identityBId = await addRepresentative(env.DB, memberBId, userId);
     const applicationAId = await seedMemberApplication({
       memberId: memberAId,
       applicantUserId: userId,
@@ -195,18 +195,18 @@ describe("member auth — multi-organization membership context", () => {
       membershipCategory: "B",
       stage: "approved",
     });
-    const tokenA = await createMemberSession(env.DB, userId, "application-capacity-a", undefined, memberAId);
-    const tokenB = await createMemberSession(env.DB, userId, "application-capacity-b", undefined, memberBId);
+    const tokenA = await createMemberSession(env.DB, userId, "application-capacity-a", undefined, identityAId);
+    const tokenB = await createMemberSession(env.DB, userId, "application-capacity-b", undefined, identityBId);
     const reassignedUserId = await insertUser(env.DB, "formerly-shared@example.test");
     const reassignedOrgId = await insertOrganization(env.DB, "Reassigned Email Organization");
     const reassignedMemberId = await seedOrganizationAggregate(env.DB, reassignedOrgId, "F");
-    await addRepresentative(env.DB, reassignedMemberId, reassignedUserId);
+    const reassignedIdentityId = await addRepresentative(env.DB, reassignedMemberId, reassignedUserId);
     const reassignedToken = await createMemberSession(
       env.DB,
       reassignedUserId,
       "application-reassigned-email",
       undefined,
-      reassignedMemberId,
+      reassignedIdentityId,
     );
 
     const listA = await (await call(tokenA, "/api/v1/users/current/applications")).json<any>();
@@ -225,7 +225,7 @@ describe("member auth — multi-organization membership context", () => {
     expect((await call(reassignedToken, `/api/v1/users/current/applications/${applicationAId}`)).status).toBe(404);
   });
 
-  it("switchActiveMembership authorizes against the caller's own live memberships, not the client's say-so", async () => {
+  it("switchActiveIdentity authorizes against the caller's own live identities, not the client's say-so", async () => {
     const userId = await insertUser(env.DB);
     const otherUserId = await insertUser(env.DB);
     const orgAId = await insertOrganization(env.DB);
@@ -235,19 +235,19 @@ describe("member auth — multi-organization membership context", () => {
     const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
     const memberCId = await seedOrganizationAggregate(env.DB, orgCId, "C");
     await addRepresentative(env.DB, memberAId, userId);
-    await addRepresentative(env.DB, memberBId, userId);
+    const identityBId = await addRepresentative(env.DB, memberBId, userId);
     // memberC is represented by a different user entirely.
-    await addRepresentative(env.DB, memberCId, otherUserId);
+    const identityCId = await addRepresentative(env.DB, memberCId, otherUserId);
 
     const initial = await findEligibleMemberById(env.DB, userId);
-    const switched = await switchActiveMembership(env.DB, initial!, memberBId);
+    const switched = await switchActiveIdentity(env.DB, initial!, identityBId);
     expect(switched.memberId).toBe(memberBId);
     expect(switched.organizationId).toBe(orgBId);
 
-    await expect(switchActiveMembership(env.DB, initial!, memberCId)).rejects.toThrow();
+    await expect(switchActiveIdentity(env.DB, initial!, identityCId)).rejects.toThrow();
   });
 
-  it("falls back to the deterministic default when a stale/tampered mid claim no longer matches an eligible membership", async () => {
+  it("falls back to the deterministic default when a stale/tampered iid claim no longer matches an eligible identity", async () => {
     const userId = await insertUser(env.DB);
     const orgAId = await insertOrganization(env.DB);
     const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");

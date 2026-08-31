@@ -93,10 +93,18 @@ export function buildGroupCapacityJoinStatements(
       db
         .prepare(
           `INSERT OR IGNORE INTO group_memberships
-             (id, group_id, user_id, member_id, source, created_by_user_id,
+             (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
               joined_at, left_at, created_at, updated_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?
-            WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1)`,
+           SELECT ?, ?, ?, capacity.identity_id, ?, ?, ?, ?, NULL, ?, ?
+             FROM identity_member_capacities capacity
+             JOIN identities identity ON identity.id = capacity.identity_id
+             JOIN users user ON user.id = capacity.user_id AND user.active = 1
+            WHERE capacity.user_id = ?
+              AND capacity.member_id = ?
+              AND capacity.member_status = 'active'
+              AND identity.started_at IS NOT NULL
+              AND identity.ended_at IS NULL
+              AND identity.blocked_at IS NULL`,
         )
         .bind(
           id,
@@ -109,6 +117,7 @@ export function buildGroupCapacityJoinStatements(
           options.at,
           options.at,
           options.targetUserId,
+          memberId,
         ),
     ),
   ];

@@ -32,7 +32,7 @@ import {
 } from "../../../../shared/schemas/organization-self-service";
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
 
-export { RepresentativeSelect } from "./MyOrganizationGovernance";
+export { IdentitySelect } from "./MyOrganizationGovernance";
 
 const organizationPath = (organizationId: string) => `/api/v1/organizations/${encodeURIComponent(organizationId)}`;
 

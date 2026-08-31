@@ -28,12 +28,13 @@ describe("group statistics", () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO group_memberships
-           (id, group_id, user_id, member_id, source, joined_at, left_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'migration', ?, NULL, ?, ?)`,
+           (id, group_id, user_id, identity_id, member_id, source, joined_at, left_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'migration', ?, NULL, ?, ?)`,
       ).bind(
         crypto.randomUUID(),
         group.id,
         active.userId,
+        active.identityId,
         active.memberId,
         "2026-01-01T00:00:00.000Z",
         "2026-01-01T00:00:00.000Z",
@@ -41,12 +42,13 @@ describe("group statistics", () => {
       ),
       env.DB.prepare(
         `INSERT INTO group_memberships
-           (id, group_id, user_id, member_id, source, joined_at, left_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'migration', ?, ?, ?, ?)`,
+           (id, group_id, user_id, identity_id, member_id, source, joined_at, left_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'migration', ?, ?, ?, ?)`,
       ).bind(
         crypto.randomUUID(),
         group.id,
         ended.userId,
+        ended.identityId,
         ended.memberId,
         "2026-01-01T00:00:00.000Z",
         "2026-02-01T00:00:00.000Z",

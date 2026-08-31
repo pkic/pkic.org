@@ -229,7 +229,8 @@ export interface PermissionGrant {
  * more than one of these concurrently (multi-organization representation is
  * a supported product case — see functions/_lib/auth/user-session.ts).
  */
-export interface EligibleMembership {
+export interface EligibleIdentity {
+  identityId: string;
   memberId: string;
   organizationId: string | null;
   organizationName: string | null;
@@ -238,6 +239,8 @@ export interface EligibleMembership {
 
 export interface AuthMember {
   userId: string;
+  /** Exact acting identity selected for this request. */
+  identityId: string;
   /** Verified communication address selected for this exact member capacity. */
   email: string;
   memberId: string;
@@ -252,7 +255,7 @@ export interface AuthMember {
    * selected a different one (see selectActiveMembership in
    * functions/_lib/auth/user-session.ts). Always has at least one entry.
    */
-  activeMemberships: EligibleMembership[];
+  activeIdentities: EligibleIdentity[];
   sessionId?: string;
   expiresAt?: string;
 }

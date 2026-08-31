@@ -127,7 +127,7 @@ export const organizationSecondaryContactNominationPutRouteSchema = {
   tags: ["Organizations"],
   "x-pkic-auth": { required: true },
   summary: "Create or replace a secondary-contact nomination",
-  description: "Only the active primary contact may nominate another active representative.",
+  description: "Only the active primary contact may nominate another active organization identity.",
   request: {
     params: organizationSelfServiceParamsSchema,
     body: { content: { "application/json": { schema: organizationSecondaryContactNominationSchema } }, required: true },
@@ -138,7 +138,7 @@ export const organizationSecondaryContactNominationPutRouteSchema = {
       content: { "application/json": { schema: organizationSecondaryContactNominationResponseSchema } },
     },
     "403": { description: "The active primary contact is required." },
-    "422": { description: "The nominee is not an eligible representative." },
+    "422": { description: "The nominee is not an eligible organization identity." },
   },
 };
 export const organizationSecondaryContactNominationDeleteRouteSchema = {
