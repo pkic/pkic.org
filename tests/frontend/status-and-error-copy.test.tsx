@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Badge, statusColor, statusLabel } from "../../assets/ts/components/Badge";
+import { Badge, statusTone, statusLabel } from "../../assets/ts/components/Badge";
 import { ErrorAlert, friendlyErrorMessage } from "../../assets/ts/components/ErrorAlert";
 import { useHashQueryParam } from "../../assets/ts/hooks/useHashQueryParam";
 import { usePortalHashLocation } from "../../assets/ts/member-flows/portal/hash-location";
@@ -38,10 +38,10 @@ describe("canonical status registry", () => {
   });
 
   it("colors every registered status and falls back to neutral", () => {
-    expect(statusColor("approved")).toBe("success");
-    expect(statusColor("ec_review")).toBe("warning");
-    expect(statusColor("closed")).toBe("secondary");
-    expect(statusColor("something_unknown")).toBe("secondary");
+    expect(statusTone("approved")).toBe("ok");
+    expect(statusTone("ec_review")).toBe("warn");
+    expect(statusTone("closed")).toBe("neutral");
+    expect(statusTone("something_unknown")).toBe("neutral");
   });
 
   it("renders the label through Badge", () => {

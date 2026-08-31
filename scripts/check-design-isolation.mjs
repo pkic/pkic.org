@@ -42,6 +42,12 @@ const scanned = [
   "layouts/shortcodes/invite-decline.html",
   "assets/ts/member-flows/portal/sections/AccountSettings.tsx",
   "assets/ts/components/proposals/ProposalDecisionPanel.tsx",
+  // The shared components every surface renders. Migrating their internals
+  // converts every consumer at once, so these are held at zero first.
+  "assets/ts/components/Badge.tsx",
+  "assets/ts/components/Spinner.tsx",
+  "assets/ts/components/ErrorAlert.tsx",
+  "assets/ts/components/ConfirmDialog.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/EventStats.tsx",
   "assets/ts/member-flows/portal/sections/email-templates/EmailTemplateEditor.tsx",
   "assets/ts/member-flows/portal/sections/MyProfile.tsx",

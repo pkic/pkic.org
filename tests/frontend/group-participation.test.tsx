@@ -339,8 +339,8 @@ describe("staff groups collection", () => {
     const inactiveRow = rows.find((row) => row.textContent?.includes("Retired Group"));
     if (!activeRow || !inactiveRow) throw new Error("missing expected group rows");
 
-    expect(activeRow.querySelector(".badge")).toBeNull();
+    expect(activeRow.querySelector(".pk-badge")).toBeNull();
     expect(activeRow.textContent).not.toContain("Active");
-    expect(inactiveRow.querySelector(".badge")?.textContent).toBe("Inactive");
+    expect(inactiveRow.querySelector(".pk-badge")?.textContent).toBe("Inactive");
   });
 });

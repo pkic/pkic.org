@@ -252,8 +252,13 @@ describe("portal event statistics", () => {
     mount(<EventStats slug={SLUG} />);
     await settle();
 
-    const empty = container.querySelector(".pk-empty-state");
-    expect(empty?.textContent).toContain("No registrations yet.");
+    // Scoped to the growth panel: the page renders several empty states when
+    // there is no data at all, and asserting on "the first one" makes this
+    // test depend on the order the panels happen to be in.
+    const growthPanel = [...container.querySelectorAll(".pk-panel")].find((panel) =>
+      panel.textContent?.includes("Registrations received by day"),
+    );
+    expect(growthPanel?.querySelector(".pk-empty-state")?.textContent).toContain("No registrations yet.");
 
     const text = container.textContent ?? "";
     // Sections with no data at all are absent rather than rendered blank.
