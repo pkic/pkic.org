@@ -1,0 +1,139 @@
+/*
+ * Layout utilities.
+ *
+ * Deliberately a handful, not four hundred. Bootstrap's utility set encodes
+ * every value as a class (`mb-3`, `col-md-6`, `d-flex`), which is why the
+ * markup carries ~8,800 of them: each is an independent decision that can
+ * disagree with its neighbours.
+ *
+ * These express the four arrangements almost every page actually uses — a
+ * measured column, a vertical rhythm, a horizontal group, and a responsive
+ * grid — and take their spacing from one custom property. A surface tunes
+ * `--pk-gap` where it needs to instead of picking a different class.
+ *
+ * They live in `@layer utilities`, the last layer, so they beat components by
+ * design: a utility is the escape hatch, and it should win without anyone
+ * reaching for `!important`.
+ */
+
+@layer utilities {
+  /* A measured reading column. One max-width, not twelve breakpoint variants. */
+  .pk-container {
+    width: 100%;
+    max-width: var(--pk-measure, 72rem);
+    margin-inline: auto;
+    padding-inline: var(--pk-4);
+  }
+
+  .pk-container--narrow {
+    --pk-measure: 44rem;
+  }
+
+  .pk-container--wide {
+    --pk-measure: 84rem;
+  }
+
+  /*
+   * Vertical rhythm. The gap goes on the parent, so twelve children cannot
+   * disagree about their spacing the way twelve `mb-*` classes can.
+   */
+  .pk-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-gap, var(--pk-4));
+  }
+
+  /* A horizontal group that wraps. Buttons in a toolbar, tags under a title. */
+  .pk-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /* A cluster whose items align to their tops rather than their centres —
+     an icon beside a wrapping paragraph, where centring looks accidental. */
+  .pk-cluster--start {
+    align-items: flex-start;
+  }
+
+  .pk-cluster--between {
+    justify-content: space-between;
+  }
+
+  .pk-cluster--end {
+    justify-content: flex-end;
+  }
+
+  /*
+   * A responsive grid with no breakpoint classes at all: columns are as many
+   * as fit at `--pk-col-min`, so the same markup works on a phone and a wide
+   * desktop without `col-sm-6 col-lg-3` triplets.
+   */
+  .pk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--pk-col-min, 16rem), 100%), 1fr));
+    gap: var(--pk-gap, var(--pk-4));
+  }
+
+  .pk-grid--tight {
+    --pk-col-min: 11rem;
+  }
+
+  .pk-grid--roomy {
+    --pk-col-min: 22rem;
+  }
+
+  /* Vertical section rhythm, so pages do not each choose their own py-*. */
+  .pk-section {
+    padding-block: var(--pk-7);
+  }
+
+  /* The few text utilities worth having, all reading tokens. */
+  .pk-muted {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-center {
+    text-align: center;
+  }
+
+  .pk-strong {
+    font-weight: 700;
+  }
+
+  /* Fills the remaining space in a flex parent — replaces `mt-auto`/`ms-auto`
+     without needing a direction-specific class for each. */
+  .pk-push {
+    margin-inline-start: auto;
+  }
+
+  .pk-push-block {
+    margin-block-start: auto;
+  }
+
+  /*
+   * Makes a link's nearest positioned ancestor the click target, so a whole
+   * card is clickable without nesting the card's other content inside the
+   * anchor — which would put headings and paragraphs inside a link.
+   * The card itself needs `position: relative`.
+   */
+  .pk-stretched::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  /* The visually-hidden pattern, defined once rather than per component. */
+  .pk-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}

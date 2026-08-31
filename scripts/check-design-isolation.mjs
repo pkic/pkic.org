@@ -30,7 +30,19 @@ const root = process.cwd();
  * Deliberately NOT a baseline of tolerated violations — a surface is added
  * only after its violations are gone, so the gate always demands zero.
  */
-const scanned = ["assets/ts/ui", "assets/design", "layouts/design"];
+const scanned = [
+  "assets/ts/ui",
+  "assets/design",
+  "layouts/design",
+  // Individual files, so a directory can be locked in one surface at a time
+  // rather than waiting for every file in it to be migrated at once.
+  "layouts/wg/wg-sub.html",
+];
+
+/** An entry is either a directory prefix or an exact file path. */
+function isAdopted(rel) {
+  return scanned.some((entry) => rel === entry || rel.startsWith(`${entry}/`));
+}
 
 /** Everything still on Bootstrap, measured by `--report` so the remaining
  *  distance is visible without pretending it is acceptable. */
@@ -127,12 +139,13 @@ function inspect(file) {
     });
 }
 
-for (const dir of scanned) {
-  const full = resolve(root, dir);
+for (const entry of scanned) {
+  const full = resolve(root, entry);
   try {
-    walk(full);
+    if (statSync(full).isDirectory()) walk(full);
+    else inspect(full);
   } catch {
-    // A directory that does not exist yet is not a failure.
+    // An entry that does not exist yet is not a failure.
   }
 }
 
@@ -163,7 +176,7 @@ if (process.argv.includes("--by-file")) {
       }
       if (!/\.(css|scss|tsx?|js|html)$/.test(entry)) continue;
       const rel = relative(root, full);
-      if (scanned.some((adopted) => rel.startsWith(`${adopted}/`))) continue;
+      if (isAdopted(rel)) continue;
       const hits = countIn(readFileSync(full, "utf8"));
       if (hits > 0) rows.push({ rel, hits });
     }
@@ -201,7 +214,7 @@ if (process.argv.includes("--report")) {
             continue;
           }
           if (!/\.(css|scss|tsx?|js|html)$/.test(entry)) continue;
-          if (scanned.some((adopted) => relative(root, full).startsWith(`${adopted}/`))) continue;
+          if (isAdopted(relative(root, full))) continue;
           const text = readFileSync(full, "utf8");
           for (const match of text.matchAll(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/g)) {
             hits += match[1]
