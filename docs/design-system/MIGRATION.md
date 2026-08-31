@@ -132,6 +132,24 @@ specifically, prefer the platform: `el.hidden = true` works with the `hidden`
 attribute the markup already uses, needs no class at all, and is what the
 migrated modules now do.
 
+## Classes the end-to-end tests own
+
+The second place breakage hides. Playwright specs locate elements by class —
+`page.locator(".card")`, `input.form-control-sm`, `.page-item` — and a spec
+written that way keeps passing right up until someone migrates that surface,
+then fails somewhere that looks unrelated. Neither the unit suite nor the
+isolation gate can see it, because the dependency runs from a test file to
+markup in a different tree entirely.
+
+```bash
+node scripts/check-e2e-selectors.mjs            # list every one
+node scripts/check-e2e-selectors.mjs card btn   # just the ones you are removing
+```
+
+If a class you are about to delete appears, fix the spec in the same change —
+preferably by switching it to a role or an accessible name, which will not
+break the next time either.
+
 ## What not to do
 
 - Do not add a tolerated-violations baseline. The gate demands zero for
