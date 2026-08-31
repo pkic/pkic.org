@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Badge, statusColor, statusLabel } from "../../assets/ts/components/Badge";
 import { ErrorAlert, friendlyErrorMessage } from "../../assets/ts/components/ErrorAlert";
 import { useHashQueryParam } from "../../assets/ts/hooks/useHashQueryParam";
+import { usePortalHashLocation } from "../../assets/ts/member-flows/portal/hash-location";
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["/", () => undefined],
+}));
 
 const mounted: HTMLElement[] = [];
 
@@ -59,6 +64,12 @@ describe("error copy", () => {
   it("renders the mapped copy in the alert", () => {
     const container = mount(<ErrorAlert error="HTTP 403" />);
     expect(container.textContent).toContain("don't have access");
+  });
+});
+
+describe("portal location hook", () => {
+  it("formats link hrefs into the hash so open-in-new-tab works", () => {
+    expect(usePortalHashLocation.hrefs("/groups/abc")).toBe("#/groups/abc");
   });
 });
 
