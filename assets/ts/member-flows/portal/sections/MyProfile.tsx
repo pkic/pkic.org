@@ -8,8 +8,15 @@ import { useRef, useState } from "preact/hooks";
 import { getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
 import { replaceFile } from "../../../shared/file-upload";
-import { Spinner } from "../../../components/Spinner";
-import { ErrorAlert } from "../../../components/ErrorAlert";
+import { friendlyErrorMessage } from "../../../components/ErrorAlert";
+import { Alert } from "../../../ui/Alert";
+import { Badge } from "../../../ui/Badge";
+import { Button } from "../../../ui/Button";
+import { Field } from "../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { PersonCell } from "../../../ui/PersonCell";
+import { Spinner } from "../../../ui/Spinner";
+import { Select, Textarea, TextInput } from "../../../ui/TextControl";
 import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
@@ -24,6 +31,12 @@ const CURRENT_USER_API = "/api/v1/users/current";
 async function refreshProfile(): Promise<void> {
   const refreshed = await getJson(CURRENT_USER_API, myProfileSchema);
   saveProfile(refreshed);
+}
+
+/** The name the member is known by, falling back through what they have filled in. */
+function displayName(current: MyProfileType): string {
+  const full = [current.firstName, current.lastName].filter(Boolean).join(" ").trim();
+  return current.preferredName?.trim() || full || current.email;
 }
 
 export function MyProfile() {
@@ -41,7 +54,7 @@ export function MyProfile() {
   const [error, setError] = useState<string | null>(null);
   const [visibilitySaving, setVisibilitySaving] = useState(false);
 
-  if (!current) return <Spinner />;
+  if (!current) return <Spinner label="Loading your profile…" />;
 
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
@@ -87,10 +100,10 @@ export function MyProfile() {
   }
 
   return (
-    <div class="row g-4 content-width-lg">
-      <div class="col-md-4">
-        <div class="card border-0 shadow-sm">
-          <div class="card-body">
+    <div class="pk pk-grid pk-grid--roomy content-width-lg">
+      <div class="pk-stack">
+        <Panel>
+          <PanelBody>
             <AdminHeadshotManager
               initialUrl={current.headshotUrl}
               alt={current.email}
@@ -103,151 +116,152 @@ export function MyProfile() {
                 return { headshotUrl: profileSignal.value?.headshotUrl };
               }}
             />
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
 
         {current.organizationId && (
-          <div class="card border-0 shadow-sm mt-3">
-            <div class="card-body">
-              <div class="form-check form-switch">
+          <Panel>
+            <PanelBody>
+              <label class="pk-check">
                 <input
-                  class="form-check-input"
+                  class="pk-check__input"
                   type="checkbox"
                   role="switch"
-                  id="portal-org-visibility"
                   checked={current.showOnOrgProfile}
                   disabled={visibilitySaving}
                   onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
                 />
-                <label class="form-check-label small" for="portal-org-visibility">
+                <span class="pk-check__label">
                   Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
-                </label>
-              </div>
-            </div>
-          </div>
+                </span>
+              </label>
+            </PanelBody>
+          </Panel>
         )}
 
         {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
       </div>
 
-      <div class="col-md-8">
-        <div class="card border-0 shadow-sm">
-          <div class="card-body">
+      <div class="pk-stack">
+        <Panel>
+          <PanelBody>
             <form
+              class="pk-stack"
               onSubmit={(e) => {
                 void handleSubmit(e);
               }}
             >
-              <div class="row g-3">
-                <div class="col-sm-6">
-                  <label class="form-label fw-semibold small">First name</label>
-                  <input
-                    class="form-control"
-                    value={form.firstName}
-                    onInput={(e) => setForm((f) => ({ ...f, firstName: (e.target as HTMLInputElement).value }))}
-                    required
-                  />
-                </div>
-                {current.organizationId && (
-                  <div class="col-sm-6">
-                    <label class="form-label fw-semibold small" for="portal-identity-email">
-                      Email for this organization
-                    </label>
-                    <select
-                      class="form-select"
-                      id="portal-identity-email"
-                      value={form.emailId}
-                      onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
-                    >
-                      {current.emailAddresses.map((address) => (
-                        <option value={address.id ?? ""} key={address.id ?? "primary"}>
-                          {address.email}
-                          {address.primary ? " (primary)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <div class="form-text">Used for your profile and actions in this organization capacity.</div>
-                  </div>
-                )}
-                <div class="col-sm-6">
-                  <label class="form-label fw-semibold small">Last name</label>
-                  <input
-                    class="form-control"
-                    value={form.lastName}
-                    onInput={(e) => setForm((f) => ({ ...f, lastName: (e.target as HTMLInputElement).value }))}
-                    required
-                  />
-                </div>
-                <div class="col-sm-6">
-                  <label class="form-label fw-semibold small">Preferred name</label>
-                  <input
-                    class="form-control"
-                    value={form.preferredName}
-                    onInput={(e) => setForm((f) => ({ ...f, preferredName: (e.target as HTMLInputElement).value }))}
-                    placeholder="Shown instead of first/last name if set"
-                  />
-                </div>
-                {current.organizationId && (
-                  <div class="col-sm-6">
-                    <label class="form-label fw-semibold small" for="portal-profile-job-title">
-                      Job title for this organization
-                    </label>
-                    <input
-                      id="portal-profile-job-title"
-                      class="form-control"
-                      value={form.jobTitle}
-                      onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
+              <div class="pk-grid pk-grid--tight">
+                <Field label="First name" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={form.firstName}
+                      onInput={(e) => setForm((f) => ({ ...f, firstName: (e.target as HTMLInputElement).value }))}
                     />
-                  </div>
+                  )}
+                </Field>
+                {current.organizationId && (
+                  <Field
+                    label="Email for this organization"
+                    help="Used for your profile and actions in this organization capacity."
+                  >
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={form.emailId}
+                        onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
+                      >
+                        {current.emailAddresses.map((address) => (
+                          <option value={address.id ?? ""} key={address.id ?? "primary"}>
+                            {address.email}
+                            {address.primary ? " (primary)" : ""}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
                 )}
-                <div class="col-12">
-                  <label class="form-label fw-semibold small" for="portal-profile-biography">
-                    Biography
-                  </label>
-                  <textarea
-                    id="portal-profile-biography"
-                    class="form-control"
+                <Field label="Last name" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={form.lastName}
+                      onInput={(e) => setForm((f) => ({ ...f, lastName: (e.target as HTMLInputElement).value }))}
+                    />
+                  )}
+                </Field>
+                <Field label="Preferred name">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={form.preferredName}
+                      onInput={(e) => setForm((f) => ({ ...f, preferredName: (e.target as HTMLInputElement).value }))}
+                      placeholder="Shown instead of first/last name if set"
+                    />
+                  )}
+                </Field>
+                {current.organizationId && (
+                  <Field label="Job title for this organization">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={form.jobTitle}
+                        onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
+                      />
+                    )}
+                  </Field>
+                )}
+              </div>
+
+              <Field label="Biography">
+                {(control) => (
+                  <Textarea
+                    {...control}
                     rows={5}
                     value={form.biography}
                     onInput={(e) => setForm((f) => ({ ...f, biography: (e.target as HTMLTextAreaElement).value }))}
                   />
-                </div>
-                <div class="col-12">
-                  <label class="form-label fw-semibold small" for="portal-profile-links">
-                    Social / profile links
-                  </label>
-                  <textarea
-                    id="portal-profile-links"
-                    class="form-control"
+                )}
+              </Field>
+
+              <Field label="Social / profile links">
+                {(control) => (
+                  <Textarea
+                    {...control}
                     rows={3}
                     placeholder="One URL per line"
                     value={form.linksText}
                     onInput={(e) => setForm((f) => ({ ...f, linksText: (e.target as HTMLTextAreaElement).value }))}
                   />
-                </div>
+                )}
+              </Field>
+
+              {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" loading={saving}>
+                  {saving ? "Saving…" : "Save changes"}
+                </Button>
               </div>
-
-              {error && <ErrorAlert error={error} />}
-
-              <button type="submit" class="btn btn-success mt-3" disabled={saving}>
-                {saving ? "Saving…" : "Save changes"}
-              </button>
             </form>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
 
-        <div class="card border-0 shadow-sm mt-3">
-          <div class="card-body">
-            <dl class="row mb-0 small">
-              <dt class="col-sm-4">Email in this capacity</dt>
-              <dd class="col-sm-8">{current.email}</dd>
-              <dt class="col-sm-4">Membership category</dt>
-              <dd class="col-sm-8">{current.membershipCategory}</dd>
-              <dt class="col-sm-4">Member since</dt>
-              <dd class="col-sm-8">{new Date(current.memberSince).toLocaleDateString()}</dd>
+        <Panel>
+          <PanelHeader title="Membership" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <PersonCell name={displayName(current)} avatarSrc={current.headshotUrl ?? undefined} />
+            <dl class="pk-datalist pk-small">
+              <dt>Email in this capacity</dt>
+              <dd>{current.email}</dd>
+              <dt>Membership category</dt>
+              <dd>{current.membershipCategory}</dd>
+              <dt>Member since</dt>
+              <dd>{new Date(current.memberSince).toLocaleDateString()}</dd>
             </dl>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
 
         {current.organizationIdentities && <OrganizationIdentitiesCard current={current} />}
       </div>
@@ -263,9 +277,9 @@ function OrganizationIdentitiesCard({ current }: { current: MyProfileType }) {
   const primaryContactUserId = current.organizationIdentities.find((identity) => identity.isPrimaryContact)?.userId;
 
   return (
-    <div class="card border-0 shadow-sm mt-3">
-      <div class="card-body">
-        <h3 class="h6 mb-3">Organization identities</h3>
+    <Panel>
+      <PanelHeader title="Organization identities" />
+      <PanelBody class="pk-stack pk-stack--snug">
         {current.isOrgContact && showAddCoworker && (
           <AddCoworkerForm
             organizationId={current.organizationId}
@@ -288,8 +302,8 @@ function OrganizationIdentitiesCard({ current }: { current: MyProfileType }) {
             current.isOrgContact ? { label: "Add coworker", onSelect: () => setShowAddCoworker(true) } : undefined
           }
         />
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -333,43 +347,39 @@ function ActiveIdentitySwitcher({ current }: { current: MyProfileType }) {
   }
 
   return (
-    <div class="card border-0 shadow-sm mt-3">
-      <div class="card-body">
-        <h3 class="h6 mb-2">Acting as</h3>
-        <p class="text-muted small mb-2">
+    <Panel>
+      <PanelHeader title="Acting as" />
+      <PanelBody class="pk-stack pk-stack--snug">
+        <p class="pk-muted pk-small">
           You hold more than one active identity. Switch which exact identity the portal acts as below.
         </p>
-        <ul class="list-group list-group-flush">
+        <ul class="pk-stack pk-stack--tight">
           {current.activeIdentities.map((identity) => {
             const isActive = identity.identityId === activeIdentityId;
             return (
-              <li
-                key={identity.identityId}
-                class="list-group-item d-flex justify-content-between align-items-center px-0"
-              >
+              <li key={identity.identityId} class="pk-cluster pk-cluster--between">
                 <span>
                   {identity.organizationName ?? "My individual identity"}{" "}
-                  <span class="text-muted small">({identity.membershipCategory})</span>
+                  <span class="pk-muted pk-small">({identity.membershipCategory})</span>
                 </span>
                 {isActive ? (
-                  <span class="badge text-bg-success">Current</span>
+                  <Badge tone="ok">Current</Badge>
                 ) : (
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-success"
+                  <Button
+                    size="sm"
                     disabled={switching !== null}
                     onClick={() => void handleSwitch(identity.identityId)}
                   >
                     {switching === identity.identityId ? "Switching…" : "Switch"}
-                  </button>
+                  </Button>
                 )}
               </li>
             );
           })}
         </ul>
-        {error && <div class="alert alert-danger mt-2 small">✕ {error}</div>}
-      </div>
-    </div>
+        {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -418,33 +428,35 @@ function AddCoworkerForm({
   }
 
   return (
-    <div class="mb-4">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <h4 class="h6 mb-0">Add a coworker</h4>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+    <div class="pk-stack pk-stack--snug">
+      <div class="pk-cluster pk-cluster--between">
+        <h4>Add a coworker</h4>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
       <form
+        class="pk-stack pk-stack--snug"
         onSubmit={(e) => {
           void handleSubmit(e);
         }}
-        class="d-flex gap-2 flex-wrap align-items-end"
       >
-        <div>
-          <label class="form-label small mb-1">Name</label>
-          <input class="form-control form-control-sm" type="text" name="name" required />
+        <div class="pk-grid pk-grid--tight">
+          <Field label="Name" required>
+            {(control) => <TextInput {...control} type="text" name="name" />}
+          </Field>
+          <Field label="Email" required>
+            {(control) => <TextInput {...control} type="email" name="email" />}
+          </Field>
         </div>
-        <div>
-          <label class="form-label small mb-1">Email</label>
-          <input class="form-control form-control-sm" type="email" name="email" required />
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" size="sm" loading={submitting}>
+            {submitting ? "Adding…" : "Add coworker"}
+          </Button>
         </div>
-        <button type="submit" class="btn btn-sm btn-success" disabled={submitting}>
-          {submitting ? "Adding…" : "Add coworker"}
-        </button>
       </form>
-      {success && <div class="alert alert-success mt-2 small">✓ {success}</div>}
-      {error && <div class="alert alert-danger mt-2 small">✕ {error}</div>}
+      {success && <Alert tone="ok">{success}</Alert>}
+      {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
     </div>
   );
 }

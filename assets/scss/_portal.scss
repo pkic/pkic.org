@@ -210,8 +210,12 @@ $portal-sidebar-width: 240px;
   margin-top: auto;
 }
 
-.pkic-menu {
-  position: relative;
+// The account menu's trigger is the design system's Menu in its `plain`
+// variant, which contributes no chrome of its own; this styles the content
+// inside it. Transitional — the shell has not been migrated yet.
+.portal-sidebar-footer .pk-menu,
+.portal-sidebar-footer .pk-menu__trigger {
+  width: 100%;
 }
 
 .portal-sidebar-user {
@@ -271,43 +275,6 @@ $portal-sidebar-width: 240px;
   font-size: 0.75rem;
 }
 
-// Positioned to the trigger by Menu.tsx with fixed coordinates so overflow
-// ancestors (scrolling table wrappers) cannot clip it and opening it never
-// scrolls the page.
-.pkic-menu-popup {
-  position: fixed;
-  z-index: 1050;
-  display: flex;
-  flex-direction: column;
-  padding: 0.25rem;
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 0.375rem;
-  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
-}
-
-.pkic-menu-item {
-  display: block;
-  width: 100%;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.8125rem;
-  color: #495057;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: 0.25rem;
-
-  &:hover,
-  &:focus-visible {
-    background: #f0f7f4;
-    color: $portal-green;
-  }
-
-  &:disabled {
-    color: #adb5bd;
-  }
-}
-
 // The public site uppercases every `main h5` for its editorial look; inside
 // the application that style shouts from card headers.
 #portal-root h5,
@@ -323,36 +290,12 @@ $portal-sidebar-width: 240px;
 // around markup that was not modal — no focus trap, nothing inert behind it —
 // in hard-coded greys that had no dark theme.
 
-.pkic-row-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  width: 100%;
-}
-
-.pkic-row-actions-status {
-  font-size: 0.8125rem;
-  color: #495057;
-  white-space: nowrap;
-}
-
-.pkic-row-actions-trigger {
-  padding: 0 0.5rem;
-  font-size: 1rem;
-  line-height: 1.4;
-  color: #495057;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-
-  &:hover,
-  &:focus-visible {
-    background: #f0f7f4;
-    border-color: #dee2e6;
-    color: $portal-green;
-  }
-}
+// The row-actions cell and the menu it opens are now the design system's
+// RowActions and Menu, styled in assets/ts/ui/*.css. What was here was a
+// second implementation of both, in hard-coded greys with no dark theme, and
+// it was the better one: it flipped the popup above the trigger when there was
+// no room below and clamped it into the viewport, which the design-system Menu
+// did not. Those behaviours moved into the primitive rather than being lost.
 
 .pkic-empty-state {
   padding: 2rem 1rem;

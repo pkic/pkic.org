@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { deleteJson, postJson } from "../../../../shared/api-client";
@@ -175,7 +175,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                     canRevoke ? (
                       <RowActions
                         actions={[
-                          { key: "revoke", label: "Revoke role", onSelect: () => void handleRevoke(assignment) },
+                          { id: "revoke", label: "Revoke role", onSelect: () => void handleRevoke(assignment) },
                         ]}
                       />
                     ) : null,

@@ -3,7 +3,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
@@ -333,9 +333,9 @@ function PositionRow({
       {(canGrant || canRevoke) && (
         <RowActions
           actions={[
-            ...(canGrant ? [{ key: "edit", label: "Edit position", onSelect: startEdit, disabled: busy }] : []),
+            ...(canGrant ? [{ id: "edit", label: "Edit position", onSelect: startEdit, disabled: busy }] : []),
             ...(canRevoke
-              ? [{ key: "remove", label: "Remove position", onSelect: () => void remove(), disabled: busy }]
+              ? [{ id: "remove", label: "Remove position", onSelect: () => void remove(), disabled: busy }]
               : []),
           ]}
         />

@@ -9,7 +9,7 @@ import {
 import { fmtDate, toast } from "../../ui";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 
 export function UserEmailAddressesPanel({
   userId,
@@ -121,7 +121,7 @@ export function UserEmailAddressesPanel({
                       <RowActions
                         actions={[
                           {
-                            key: "remove",
+                            id: "remove",
                             label: "Remove email",
                             onSelect: () => void handleRemove(email.id, email.email),
                           },

@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { fmt, fmtDate, toast } from "../../ui";
@@ -190,9 +190,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
             header: "",
             cell: (g) =>
               canRevoke ? (
-                <RowActions
-                  actions={[{ key: "revoke", label: "Revoke grant", onSelect: () => void handleRevoke(g) }]}
-                />
+                <RowActions actions={[{ id: "revoke", label: "Revoke grant", onSelect: () => void handleRevoke(g) }]} />
               ) : null,
           },
         ]}

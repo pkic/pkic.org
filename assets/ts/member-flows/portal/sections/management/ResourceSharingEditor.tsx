@@ -19,7 +19,7 @@ import type { Group } from "../../../../../shared/schemas/groups";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { postJson, deleteJson } from "../../../../shared/api-client";
 import { managedGroupCatalog } from "./catalog";
@@ -219,7 +219,7 @@ export function ResourceSharingEditor({
               cell: (grant) => (
                 <RowActions
                   label={`Actions for ${grant.granteeGroup.name}`}
-                  actions={[{ key: "revoke", label: "Revoke", onSelect: () => void revokeGrant(grant) }]}
+                  actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revokeGrant(grant) }]}
                 />
               ),
             },

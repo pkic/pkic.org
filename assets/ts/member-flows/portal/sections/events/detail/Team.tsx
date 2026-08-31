@@ -2,7 +2,7 @@ import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
-import { RowActions } from "../../../../../components/RowActions";
+import { RowActions } from "../../../../../ui/RowActions";
 import { Badge } from "../../../../../components/Badge";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
@@ -194,7 +194,7 @@ export function Team({ slug }: { slug: string }) {
                 label={`Actions for ${role.userEmail}`}
                 actions={[
                   {
-                    key: "revoke",
+                    id: "revoke",
                     label: revokingId === role.id ? "Revoking…" : "Revoke",
                     onSelect: () => void handleRevoke(role),
                     disabled: revokingId !== null,

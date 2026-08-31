@@ -11,7 +11,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { deleteJson, patchValidated, postValidated } from "../../../../shared/api-client";
 import { MailingListForm } from "../../../../components/mailing-lists/MailingListForm";
 import {
@@ -175,7 +175,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
                     label={`Actions for ${list.label}`}
                     actions={[
                       {
-                        key: "archive",
+                        id: "archive",
                         label: "Archive",
                         onSelect: () => void archiveList(list),
                         disabled: !list.active,

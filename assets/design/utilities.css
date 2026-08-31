@@ -80,6 +80,14 @@
     justify-content: flex-end;
   }
 
+  /* The third main-axis alignment, beside --between and --end: a group
+     centered in the space it is given. A caption inside a fixed-size
+     placeholder box needs both axes, and the cluster already centers the
+     cross axis, so this is the half that was missing. */
+  .pk-cluster--center {
+    justify-content: center;
+  }
+
   /*
    * A responsive grid with no breakpoint classes at all: columns are as many
    * as fit at `--pk-col-min`, so the same markup works on a phone and a wide
@@ -115,6 +123,13 @@
 
   .pk-strong {
     font-weight: 700;
+  }
+
+  /* Monospace for a control whose value is code — a template, a JSON blob.
+     `base.css` already gives `code`, `kbd`, `samp` and `pre` the mono family,
+     but a form control takes `font: inherit`, so it has to be told. */
+  .pk-mono {
+    font-family: var(--pk-font-mono);
   }
 
   /* An introductory paragraph, and its opposite. Both read the type scale so
@@ -217,10 +232,85 @@
     overflow: auto;
   }
 
+  /*
+   * A name/value list — the metadata block under a profile, a record, an
+   * order. `base.css` resets headings and lists but not a description list,
+   * so a `dl` still arrives with the user agent's block margin and a 40px
+   * indent on every `dd`: spacing no parent `gap` can explain or override.
+   * Defining the pair once here keeps every metadata block on the space
+   * scale instead of each surface re-deriving the same reset.
+   */
+  .pk-datalist {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--pk-1) var(--pk-3);
+    margin: 0;
+  }
+
+  .pk-datalist > dt {
+    color: var(--pk-ink-muted);
+  }
+
+  /* The value keeps the ink and the term recedes, so the pair reads as a pair
+     even inside `.pk-small`, which would otherwise mute both halves into one
+     another. */
+  .pk-datalist > dd {
+    margin: 0;
+    color: var(--pk-ink);
+  }
+
   /* A full-width framed region, e.g. an embedded preview. */
   .pk-framed {
     width: 100%;
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius);
+  }
+
+  /*
+   * A syntax-highlight backdrop behind a text control.
+   *
+   * A highlighted copy of the value is painted in a `pre` underneath a
+   * transparent input, so the coloured spans line up with the characters the
+   * user is typing. The two boxes therefore have to agree exactly — one pixel
+   * of padding or a different type size and every highlight drifts off its
+   * token — which is why both read the same `--pk-control-*` and type tokens
+   * rather than restating numbers. Spacing utilities cannot express this:
+   * the requirement is not a gap, it is two elements sharing one box.
+   */
+  .pk-overlay-editor {
+    position: relative;
+  }
+
+  .pk-overlay-editor__backdrop {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: var(--pk-control-y) var(--pk-control-x);
+    /* Transparent rather than absent, so the border still occupies the same
+       pixel the control's border does. */
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-md);
+    line-height: inherit;
+    /* Only the token backgrounds show; the visible text is the control's own. */
+    color: transparent;
+    background: none;
+    white-space: pre;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* The multi-line half wraps the way its textarea does; the single-line half
+     scrolls sideways instead. */
+  .pk-overlay-editor__backdrop--wrap {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  .pk-overlay-editor__input {
+    position: relative;
+    display: block;
+    background: transparent;
   }
 }

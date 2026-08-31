@@ -123,6 +123,7 @@ function NotificationPreferencesCard() {
               {(Object.keys(PREFERENCE_LABELS) as Array<keyof NotificationPreferences>).map((key) => (
                 <label class="pk-check" key={key}>
                   <input
+                    class="pk-check__input"
                     type="checkbox"
                     role="switch"
                     id={`portal-notif-${key}`}
@@ -130,7 +131,7 @@ function NotificationPreferencesCard() {
                     disabled={savingKey === key}
                     onChange={(event) => void toggle(key, (event.target as HTMLInputElement).checked)}
                   />
-                  <span class="pk-small">{PREFERENCE_LABELS[key]}</span>
+                  <span class="pk-check__label pk-small">{PREFERENCE_LABELS[key]}</span>
                 </label>
               ))}
             </div>

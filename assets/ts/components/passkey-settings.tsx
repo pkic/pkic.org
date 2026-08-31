@@ -12,7 +12,7 @@ import { deleteJson, getJson, postJson } from "../shared/api-client";
 import { formatDateTime, showToast } from "../shared/ui";
 import { confirmAction } from "./ConfirmDialog";
 import { ErrorAlert } from "./ErrorAlert";
-import { RowActions } from "./RowActions";
+import { RowActions } from "../ui/RowActions";
 import { Spinner } from "./Spinner";
 
 export function PasskeySettings({
@@ -151,7 +151,7 @@ export function PasskeySettings({
                     <td class="text-end">
                       <RowActions
                         label={`Actions for ${passkey.deviceName ?? "Unnamed passkey"}`}
-                        actions={[{ key: "remove", label: "Remove", onSelect: () => void handleRemove(passkey) }]}
+                        actions={[{ id: "remove", label: "Remove", onSelect: () => void handleRemove(passkey) }]}
                       />
                     </td>
                   </tr>

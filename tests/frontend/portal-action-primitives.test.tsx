@@ -6,7 +6,7 @@ import { act } from "preact/test-utils";
 import { confirmAction, ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { confirmationConsequences, requestClose, typedConfirmationInput } from "./helpers/confirm-dialog";
 import { EmptyState } from "../../assets/ts/components/EmptyState";
-import { RowActions } from "../../assets/ts/components/RowActions";
+import { RowActions } from "../../assets/ts/ui/RowActions";
 import { Spinner } from "../../assets/ts/components/Spinner";
 import { DataTable } from "../../assets/ts/components/Table";
 
@@ -129,7 +129,7 @@ describe("RowActions", () => {
       <div onClick={() => (rowClicked += 1)}>
         <RowActions
           status="Invited"
-          actions={[{ key: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) }]}
+          actions={[{ id: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) }]}
         />
       </div>,
     );

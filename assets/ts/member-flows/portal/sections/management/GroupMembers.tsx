@@ -7,7 +7,7 @@ import {
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { Spinner } from "../../../../components/Spinner";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { ApiClientError, deleteJson } from "../../../../shared/api-client";
@@ -164,7 +164,7 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
                         label={`Actions for ${membership.userName}`}
                         actions={[
                           {
-                            key: "remove",
+                            id: "remove",
                             label: endingId === membership.id ? "Removing…" : "Remove",
                             onSelect: () => void endMembership(membership),
                             disabled: endingId !== null,

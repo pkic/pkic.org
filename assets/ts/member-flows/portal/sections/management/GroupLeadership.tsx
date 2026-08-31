@@ -5,7 +5,7 @@ import {
 } from "../../../../../shared/schemas/groups";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson } from "../../../../shared/api-client";
@@ -97,7 +97,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
                   label={`Actions for ${assignment.userName}`}
                   actions={[
                     {
-                      key: "remove",
+                      id: "remove",
                       label: revokingId === assignment.userRoleId ? "Removing…" : "Remove",
                       onSelect: () => void revoke(assignment),
                       disabled: revokingId !== null,

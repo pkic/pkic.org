@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { RowActions } from "../../../../../components/RowActions";
+import { RowActions } from "../../../../../ui/RowActions";
 import { Spinner } from "../../../../../components/Spinner";
 import { deleteJson, getJson } from "../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
@@ -192,7 +192,7 @@ export function RoleDetail({
                         <RowActions
                           actions={[
                             {
-                              key: "unassign",
+                              id: "unassign",
                               label: "Unassign role",
                               onSelect: () => void handleUnassign(assignment),
                             },

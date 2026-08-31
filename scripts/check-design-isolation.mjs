@@ -42,6 +42,10 @@ const scanned = [
   "layouts/shortcodes/invite-decline.html",
   "assets/ts/member-flows/portal/sections/AccountSettings.tsx",
   "assets/ts/components/proposals/ProposalDecisionPanel.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/EventStats.tsx",
+  "assets/ts/member-flows/portal/sections/email-templates/EmailTemplateEditor.tsx",
+  "assets/ts/member-flows/portal/sections/MyProfile.tsx",
+  "assets/ts/member-flows/portal/sections/MyOrganization.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */
@@ -139,15 +143,18 @@ function inspect(file) {
         report(file, lineNumber, line, "references a Bootstrap custom property");
       }
 
-      const classAttr = code.match(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/);
-      if (classAttr && isBootstrapClassList(classAttr[1])) {
-        report(file, lineNumber, line, "uses a Bootstrap class name");
-      }
+      // Every class list on the line, not just the first. A module that builds
+      // markup as a string — the chart renderers do — puts several on one line,
+      // and checking only the first one silently passed the rest.
+      for (const match of code.matchAll(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/g)) {
+        const classList = match[1];
+        if (isBootstrapClassList(classList)) {
+          report(file, lineNumber, line, "uses a Bootstrap class name");
+        }
 
-      // A `pk-` class nobody defined renders unstyled and passes every other
-      // check, so the reference itself is the failure.
-      if (classAttr) {
-        for (const token of classAttr[1].split(/\s+/)) {
+        // A `pk-` class nobody defined renders unstyled and passes every other
+        // check, so the reference itself is the failure.
+        for (const token of classList.split(/\s+/)) {
           if (!token.startsWith("pk-") || known.has(token)) continue;
           report(file, lineNumber, line, `references "${token}", which no stylesheet defines`);
         }

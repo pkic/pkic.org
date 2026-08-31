@@ -8,8 +8,8 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
 import { EmptyState } from "../../../components/EmptyState";
-import { type MenuAction } from "../../../components/Menu";
-import { RowActions } from "../../../components/RowActions";
+import { type MenuItem } from "../../../ui/Menu";
+import { RowActions } from "../../../ui/RowActions";
 import { confirmAction } from "../../../components/ConfirmDialog";
 import { Link } from "wouter";
 import { patchJson } from "../../../shared/api-client";
@@ -190,13 +190,13 @@ export function ActingIdentityDirectory({
     }
   }
 
-  function rowActions(identity: ActingIdentity): MenuAction[] {
+  function rowActions(identity: ActingIdentity): MenuItem[] {
     const status = statusLabel(identity);
     const busy = busyUserId === identity.id;
     if (status !== "Active") return [];
-    const actions: MenuAction[] = [
+    const actions: MenuItem[] = [
       {
-        key: "toggle-visibility",
+        id: "toggle-visibility",
         label: identity.showOnOrganizationProfile ? "Hide from profile" : "Show on profile",
         disabled: busy,
         onSelect: () => void updateVisibility(identity, !identity.showOnOrganizationProfile),
@@ -204,7 +204,7 @@ export function ActingIdentityDirectory({
     ];
     if (canBlock(identity.userId)) {
       actions.push({
-        key: "end",
+        id: "end",
         label: "End identity",
         disabled: busy,
         onSelect: () => void endIdentity(identity),

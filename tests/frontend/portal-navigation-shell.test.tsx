@@ -196,10 +196,13 @@ describe("portal navigation shell", () => {
     expect([...container.querySelectorAll(".portal-sidebar-link")].map((link) => link.textContent)).not.toContain(
       "Account Settings",
     );
-    const userButton = container.querySelector<HTMLButtonElement>(".portal-sidebar-user")!;
-    expect(userButton.querySelector(".portal-user-name")?.textContent).toBe("Portal Tester");
-    expect(userButton.querySelector(".portal-user-avatar")?.textContent).toBe("PT");
-    expect(userButton.getAttribute("aria-haspopup")).toBe("menu");
+    // Located by what it is — the menu button named "Account menu" — rather
+    // than by the class its content happens to carry, so restyling the trigger
+    // does not break a test about where account settings live.
+    const userButton = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
+    expect(userButton.getAttribute("aria-label")).toBe("Account menu");
+    expect(userButton.textContent).toContain("Portal Tester");
+    expect(userButton.textContent).toContain("PT");
 
     void act(() => userButton.click());
     await settle();

@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { patchJson } from "../../../../shared/api-client";
 import { fmtDate, toast } from "../../ui";
 import {
@@ -160,14 +160,14 @@ export function UsersList({
                   ? user.role === "admin"
                     ? [
                         {
-                          key: "revoke-admin",
+                          id: "revoke-admin",
                           label: "Revoke administrator role",
                           onSelect: () => void updateRole(user, "user"),
                         },
                       ]
                     : [
                         {
-                          key: "grant-admin",
+                          id: "grant-admin",
                           label: "Grant administrator role",
                           onSelect: () => void updateRole(user, "admin"),
                         },

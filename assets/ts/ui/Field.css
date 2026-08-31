@@ -225,4 +225,49 @@
     font-size: var(--pk-text-xs);
     color: var(--pk-ink-muted);
   }
+
+  /*
+   * A switch is a checkbox that says role="switch", so the appearance follows
+   * the semantics rather than a second class the caller has to remember. The
+   * distinction is real: a checkbox selects something for a later submit, a
+   * switch takes effect the moment it moves. Two portal surfaces were already
+   * declaring role="switch" and rendering a square tick box, which announced
+   * "on"/"off" while drawing "checked"/"unchecked".
+   */
+  .pk-check__input[role="switch"] {
+    width: 2.1rem;
+    height: 1.15rem;
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-line-strong);
+    border-color: transparent;
+    transition: background var(--pk-dur-fast) ease;
+  }
+
+  .pk-check__input[role="switch"]::after {
+    content: "";
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 50%;
+    background: var(--pk-on-solid);
+    transition: translate var(--pk-dur-fast) ease;
+  }
+
+  .pk-check__input[role="switch"]:checked {
+    background: var(--pk-accent-strong);
+  }
+
+  /* The knob moves; the tick mark that a checkbox would draw does not apply. */
+  .pk-check__input[role="switch"]:checked::after {
+    border: 0;
+    inset: auto;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 0.85rem;
+    height: 0.85rem;
+    transform: none;
+    translate: 0.95rem 0;
+  }
 }

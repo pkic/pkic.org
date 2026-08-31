@@ -10,8 +10,8 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Badge } from "../../../../components/Badge";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import type { MenuAction } from "../../../../components/Menu";
-import { RowActions } from "../../../../components/RowActions";
+import type { MenuItem } from "../../../../ui/Menu";
+import { RowActions } from "../../../../ui/RowActions";
 import { postJson } from "../../../../shared/api-client";
 import { fmt, fmtDate, toast } from "../../ui";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
@@ -210,10 +210,10 @@ export function GroupEventInvitations({
             className: "text-end",
             cell: (invite) => {
               const busy = busyInviteId === invite.id;
-              const actions: MenuAction[] = [];
+              const actions: MenuItem[] = [];
               if (invite.actions.resend) {
                 actions.push({
-                  key: "resend",
+                  id: "resend",
                   label: "Resend invitation",
                   onSelect: () => void runAction(invite, "resend"),
                   disabled: busy,
@@ -221,7 +221,7 @@ export function GroupEventInvitations({
               }
               if (invite.actions.revoke) {
                 actions.push({
-                  key: "revoke",
+                  id: "revoke",
                   label: "Revoke invitation",
                   onSelect: () => void runAction(invite, "revoke"),
                   disabled: busy,

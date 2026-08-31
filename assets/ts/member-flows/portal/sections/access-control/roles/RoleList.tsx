@@ -2,7 +2,7 @@ import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
-import { RowActions } from "../../../../../components/RowActions";
+import { RowActions } from "../../../../../ui/RowActions";
 import { deleteJson } from "../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { toast } from "../../../ui";
@@ -110,7 +110,7 @@ export function RoleList({
                   <RowActions
                     actions={[
                       {
-                        key: "delete",
+                        id: "delete",
                         label: "Delete role",
                         onSelect: () => void handleDelete(r),
                         disabled: r.isSystemRole,

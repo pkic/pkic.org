@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
-import { Menu } from "../../../components/Menu";
+import { Menu } from "../../../ui/Menu";
 import { MenuIcon } from "../../../components/MenuIcon";
 import { useData } from "../../../hooks/useData";
 import { getJson, postJson } from "../../../shared/api-client";
@@ -114,22 +114,16 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
         ))}
         <div class="portal-sidebar-footer px-1 pt-3">
           {signOutError && <div class="alert alert-danger small">{signOutError}</div>}
+          {/* The trigger is a person, not an icon, so the menu renders it
+              plain and the sidebar's own class styles the content inside. */}
           <Menu
             label="Account menu"
-            buttonClass="portal-sidebar-user"
-            buttonContent={
-              <>
-                <span class="portal-user-avatar" aria-hidden="true">
-                  {headshotUrl ? <img src={headshotUrl} alt="" /> : portalAvatarInitials(displayName)}
-                </span>
-                <span class="portal-user-name">{displayName || "Account"}</span>
-              </>
-            }
-            actions={[
+            variant="plain"
+            items={[
               ...(portalSectionEnabled(session, "profile")
                 ? [
                     {
-                      key: "profile",
+                      id: "profile",
                       label: "My profile",
                       onSelect: () => {
                         closeNavigation();
@@ -139,7 +133,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
                   ]
                 : []),
               ...(organizations.data?.organizations ?? []).map((organization) => ({
-                key: `organization-${organization.organizationId}`,
+                id: `organization-${organization.organizationId}`,
                 label: organization.name,
                 onSelect: () => {
                   closeNavigation();
@@ -149,7 +143,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
               ...(portalSectionEnabled(session, "participation")
                 ? [
                     {
-                      key: "participation",
+                      id: "participation",
                       label: "My participation",
                       onSelect: () => {
                         closeNavigation();
@@ -161,7 +155,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
               ...(portalSectionEnabled(session, "account")
                 ? [
                     {
-                      key: "account",
+                      id: "account",
                       label: "Account settings",
                       onSelect: () => {
                         closeNavigation();
@@ -170,9 +164,16 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
                     },
                   ]
                 : []),
-              { key: "sign-out", label: "Sign out", onSelect: () => void signOut() },
+              { id: "sign-out", label: "Sign out", onSelect: () => void signOut() },
             ]}
-          />
+          >
+            <span class="portal-sidebar-user">
+              <span class="portal-user-avatar" aria-hidden="true">
+                {headshotUrl ? <img src={headshotUrl} alt="" /> : portalAvatarInitials(displayName)}
+              </span>
+              <span class="portal-user-name">{displayName || "Account"}</span>
+            </span>
+          </Menu>
         </div>
       </aside>
       <main id="portal-main">{children}</main>

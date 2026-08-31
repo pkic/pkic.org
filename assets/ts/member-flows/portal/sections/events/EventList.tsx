@@ -2,8 +2,8 @@ import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
-import { RowActions } from "../../../../components/RowActions";
-import type { MenuAction } from "../../../../components/Menu";
+import { RowActions } from "../../../../ui/RowActions";
+import type { MenuItem } from "../../../../ui/Menu";
 import {
   eventAudienceDetailSchema,
   eventManagementSummarySchema,
@@ -49,13 +49,13 @@ function eventWhen(event: EventRow): string {
  * is set. Everyone else — every audience row, and a management row with no
  * owning group — gets no menu at all.
  */
-function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuAction[] {
+function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
   if (isAudienceEvent(event) || !event.ownerGroupId) return [];
   const groupId = event.ownerGroupId;
   const groupLabel = event.ownerGroupName ?? "group";
   return [
     {
-      key: "open-workspace",
+      id: "open-workspace",
       label: `Open in ${groupLabel} workspace`,
       onSelect: () => navigate(`/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`),
     },

@@ -3,7 +3,7 @@ import type { GroupParticipationCapacity, SelfGroup } from "../../../../shared/s
 import { groupMembershipMutationResponseSchema } from "../../../../shared/schemas/groups";
 import { ApiClientError, postJson } from "../../../shared/api-client";
 import { confirmAction } from "../../../components/ConfirmDialog";
-import { RowActions } from "../../../components/RowActions";
+import { RowActions } from "../../../ui/RowActions";
 import { fmtDate, toast } from "../ui";
 
 function affiliationLabel(capacity: GroupParticipationCapacity): string {
@@ -109,7 +109,7 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
                       label={`Actions for ${label}`}
                       actions={[
                         {
-                          key: "remove",
+                          id: "remove",
                           label: "Remove",
                           disabled: busy,
                           onSelect: () => void removeCapacity(membership.memberId, label),

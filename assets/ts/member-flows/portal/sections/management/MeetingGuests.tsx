@@ -12,7 +12,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
@@ -219,7 +219,7 @@ export function MeetingGuests({
               !guest.active ? null : (
                 <RowActions
                   label={`Actions for ${guest.name}`}
-                  actions={[{ key: "revoke", label: "Revoke", onSelect: () => void revoke(guest) }]}
+                  actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revoke(guest) }]}
                 />
               ),
           },
